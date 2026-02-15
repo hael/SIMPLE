@@ -7,8 +7,8 @@ type(ui_program), target :: binarize
 type(ui_program), target :: convert
 type(ui_program), target :: ctf_phaseflip
 type(ui_program), target :: ctfops
+type(ui_program), target :: normalize_
 type(ui_program), target :: scale
-type(ui_program), target :: select_
 type(ui_program), target :: stack
 type(ui_program), target :: stackops
 
@@ -20,8 +20,8 @@ contains
         call new_convert(prgtab)
         call new_ctf_phaseflip(prgtab)
         call new_ctfops(prgtab)
+        call new_normalize(prgtab)
         call new_scale(prgtab)
-        call new_select_(prgtab)
         call new_stack(prgtab)
         call new_stackops(prgtab)
     end subroutine construct_image_programs
@@ -33,8 +33,8 @@ contains
         write(logfhandle,'(A)') convert%name%to_char()
         write(logfhandle,'(A)') ctf_phaseflip%name%to_char()
         write(logfhandle,'(A)') ctfops%name%to_char()
+        write(logfhandle,'(A)') normalize_%name%to_char()
         write(logfhandle,'(A)') scale%name%to_char()
-        write(logfhandle,'(A)') select_%name%to_char()
         write(logfhandle,'(A)') stack%name%to_char()
         write(logfhandle,'(A)') stackops%name%to_char()
         write(logfhandle,'(A)') ''
@@ -167,6 +167,37 @@ contains
         call add_ui_program('ctfops', ctfops, prgtab)
     end subroutine new_ctfops
 
+    subroutine new_normalize( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call normalize_%new(&
+        &'normalize',&                         ! name
+        &'Normalize volume/stack',&            ! descr_short
+        &'is a program for normalization of MRC or SPIDER stacks and volumes',&
+        &'simple_exec',&                       ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call normalize_%add_input(UI_PARM, smpd)
+        call normalize_%add_input(UI_PARM, 'norm',       'binary', 'Normalize',       'Statistical normalization: avg=zero, var=1(yes|no){no}',    '(yes|no){no}', .false., 'no')
+        call normalize_%add_input(UI_PARM, 'noise_norm', 'binary', 'Noise normalize', 'Statistical normalization based on background(yes|no){no}', '(yes|no){no}', .false., 'no')
+        ! alternative inputs
+        call normalize_%add_input(UI_ALT, 'stk',  'file', 'Stack to normalize',  'Stack of images to normalize', 'e.g. imgs.mrc', .false., '')
+        call normalize_%add_input(UI_ALT, 'vol1', 'file', 'Volume to normalize', 'Volume to normalize',          'e.g. vol.mrc',  .false., '')
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call normalize_%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call normalize_%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('normalize', normalize_, prgtab)
+    end subroutine new_normalize
+
     subroutine new_scale( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -203,42 +234,6 @@ contains
         ! add to ui_hash
         call add_ui_program('scale', scale, prgtab)
     end subroutine new_scale
-
-    subroutine new_select_( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call select_%new(&
-        &'select',&                                         ! name
-        &'Select images',&                                  ! descr_short
-        &'is a program for selecting files based on image correlation matching',& ! descr_long
-        &'simple_exec',&                                    ! executable
-        &.false.)                                           ! requires sp_project
-        ! TEMPLATE
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call select_%add_input(UI_IMG, stk )
-        call select_%add_input(UI_IMG, 'stk2',    'file', 'Stack of selected images', 'Stack of selected images', 'e.g. selected(cavgs).mrc', .true., '')
-        call select_%add_input(UI_IMG, 'stk3',    'file', 'Stack of images to select from', 'Stack of images to select from', 'e.g. (cavgs)2selectfrom.mrc', .false., '')
-        call select_%add_input(UI_IMG, 'filetab', 'file', 'List of files to select from', 'List of files to select from', 'e.g. filetab.txt', .false., '')
-        call select_%add_input(UI_IMG, outfile)
-        call select_%add_input(UI_IMG, outstk)
-        call select_%add_input(UI_IMG, 'dir_select', 'dir', 'Directory for selected images', 'Move selected files to here{selected}', 'select dir', .false., '')
-        call select_%add_input(UI_IMG, 'dir_reject', 'dir', 'Directory for rejected images', 'Move rejected files to here{rejected}', 'reject dir', .false., '')
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call select_%add_input(UI_COMP, nthr)
-        ! add to ui_hash
-        call add_ui_program('select_', select_, prgtab)
-    end subroutine new_select_
 
     subroutine new_stack( prgtab )
         class(ui_hash), intent(inout) :: prgtab

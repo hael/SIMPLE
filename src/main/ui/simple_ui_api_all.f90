@@ -19,7 +19,7 @@ use simple_ui_api_preproc
 use simple_ui_api_print
 use simple_ui_api_project
 use simple_ui_api_refine3D
-use simple_ui_api_resolution
+use simple_ui_api_res
 use simple_ui_api_sim
 use simple_ui_api_stream
 use simple_ui_api_symmetry

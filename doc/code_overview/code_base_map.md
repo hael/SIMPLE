@@ -160,7 +160,7 @@
         - `simple_commanders_mask.f90` — masking and auto-masking
         - `simple_commanders_misc.f90` — stuff that didn't fit elsewhere
         - `simple_commanders_mkcavgs.f90` — for producing class averages
-        - `simple_commanders_oris.f90` — for operating on orientations
+        - `simple_commanders_ori.f90` — for operating on orientations
         - `simple_commanders_pick.f90` — for picking, extraction, and making picking references
         - `simple_commanders_preprocess.f90` — for pre-processing (motion correction, CTF estimation etc.)
         - `simple_commanders_project_cls.f90` — project commanders for dealing with 2D class-related things

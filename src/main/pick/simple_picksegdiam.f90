@@ -1,12 +1,11 @@
 !@descr: the abstract data type implementing the version of segmentation-based picking used in the stream
 module simple_picksegdiam
 use simple_core_module_api
-use simple_image,     only: image
-use simple_image_bin, only: image_bin
-use simple_linked_list
-use simple_micproc
-use simple_nrtxtfile
-use simple_syslib
+use simple_image,       only: image
+use simple_image_bin,   only: image_bin
+use simple_linked_list, only: linked_list, list_iterator
+use simple_micproc,     only: read_mic_subtr_backgr_shrink, flag_amorphous_carbon, cascade_filter_biomol, binarize_mic_den
+use simple_nrtxtfile,   only: nrtxtfile
 implicit none
 
 public :: picksegdiam

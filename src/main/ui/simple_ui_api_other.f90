@@ -3,7 +3,7 @@ use simple_ui_api_modules
 implicit none
 
 type(ui_program), target :: mkdir_
-type(ui_program), target :: normalize_
+
 type(ui_program), target :: split_
 type(ui_program), target :: split_stack
 
@@ -12,7 +12,6 @@ contains
     subroutine construct_other_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_mkdir_(prgtab)
-        call new_normalize(prgtab)
         call new_split_(prgtab)
         call new_split_stack(prgtab)
     end subroutine construct_other_programs
@@ -21,7 +20,6 @@ contains
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('OTHER UTILITIES:', C_UNDERLINED)
         write(logfhandle,'(A)') mkdir_%name%to_char()
-        write(logfhandle,'(A)') normalize_%name%to_char()
         write(logfhandle,'(A)') split_%name%to_char()
         write(logfhandle,'(A)') split_stack%name%to_char()
         write(logfhandle,'(A)') ''
@@ -53,37 +51,6 @@ contains
         ! <empty>
         call add_ui_program('mkdir_', mkdir_, prgtab)
     end subroutine new_mkdir_
-
-    subroutine new_normalize( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call normalize_%new(&
-        &'normalize',&                         ! name
-        &'Normalize volume/stack',&            ! descr_short
-        &'is a program for normalization of MRC or SPIDER stacks and volumes',&
-        &'simple_exec',&                       ! executable
-        &.false.)                              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call normalize_%add_input(UI_PARM, smpd)
-        call normalize_%add_input(UI_PARM, 'norm',       'binary', 'Normalize',       'Statistical normalization: avg=zero, var=1(yes|no){no}',    '(yes|no){no}', .false., 'no')
-        call normalize_%add_input(UI_PARM, 'noise_norm', 'binary', 'Noise normalize', 'Statistical normalization based on background(yes|no){no}', '(yes|no){no}', .false., 'no')
-        ! alternative inputs
-        call normalize_%add_input(UI_ALT, 'stk',  'file', 'Stack to normalize',  'Stack of images to normalize', 'e.g. imgs.mrc', .false., '')
-        call normalize_%add_input(UI_ALT, 'vol1', 'file', 'Volume to normalize', 'Volume to normalize',          'e.g. vol.mrc',  .false., '')
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        call normalize_%add_input(UI_MASK, mskdiam)
-        ! computer controls
-        call normalize_%add_input(UI_COMP, nthr)
-        ! add to ui_hash
-        call add_ui_program('normalize', normalize_, prgtab)
-    end subroutine new_normalize
 
     subroutine new_split_( prgtab )
         class(ui_hash), intent(inout) :: prgtab

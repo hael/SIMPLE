@@ -69,7 +69,7 @@ use simple_commanders_project_core, only: commander_aggregate_chunks
 use simple_commanders_misc,         only: commander_kstest, commander_pearsn
 
 ! oris commanders, construction and operations on oris (per-particle parameters)
-use simple_commanders_oris, only: commander_rotmats2oris
+use simple_commanders_ori, only: commander_rotmats2oris
 
 ! tseries commanders, methods operating on time-series data obtained with GLC-EM
 use single_commanders_tseries,    only: commander_tseries_motion_correct

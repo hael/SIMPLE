@@ -7,6 +7,9 @@ use simple_commanders_volops,   only: commander_noisevol
 use simple_commanders_resolest, only: commander_estimate_lpstages
 implicit none
 
+public :: exec_abinitio3D_commander
+private
+
 type(commander_abinitio3D)        :: xabinitio3D
 type(commander_abinitio3D_cavgs)  :: xabinitio3D_cavgs
 type(commander_estimate_lpstages) :: xestimate_lpstages

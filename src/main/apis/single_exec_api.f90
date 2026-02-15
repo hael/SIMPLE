@@ -7,7 +7,7 @@ commander_crys_score, commander_atoms_rmsd, commander_core_atoms_analysis, comma
 use simple_commanders_cavgs,        only: commander_map_cavgs_selection
 use simple_commanders_cluster2D,    only: commander_ppca_denoise_classes
 use simple_commanders_imgproc,      only: commander_estimate_diam
-use simple_commanders_oris,         only: commander_vizoris
+use simple_commanders_ori,         only: commander_vizoris
 use simple_commanders_project_core, only: commander_new_project, commander_update_project, commander_print_project_info, commander_print_project_field,&
 commander_extract_subproj
 use simple_commanders_project_ptcl, only: commander_import_particles, commander_prune_project_distr
