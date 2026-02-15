@@ -1,3 +1,4 @@
+!@descr: execution of preprocessing commanders
 module simple_exec_preproc
 use simple_cmdline,                only: cmdline
 use simple_commanders_starproject, only: commander_assign_optics_groups

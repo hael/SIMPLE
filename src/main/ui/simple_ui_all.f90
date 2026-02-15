@@ -24,7 +24,7 @@ use simple_ui_sim
 use simple_ui_stream
 use simple_ui_sym
 use simple_ui_tests
-use simple_ui_validation
+use simple_ui_validate
 use simple_ui_volume
 use simple_ui_hash
 use simple_ui_program
@@ -37,5 +37,5 @@ use single_ui_nano2D
 use single_ui_nano3D
 use single_ui_trajectory
 use single_ui_tseries
-use single_ui_validation
+use single_ui_validate
 end module simple_ui_all

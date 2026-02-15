@@ -1,3 +1,4 @@
+!@descr: execution of 3D refinement commanders
 module simple_exec_refine3D
 use simple_cmdline,             only: cmdline
 use simple_string,              only: string

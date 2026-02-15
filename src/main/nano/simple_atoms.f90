@@ -108,10 +108,10 @@ type :: atoms
     procedure          :: geometry_analysis_pdb
     procedure          :: find_masscen
     procedure          :: pdb2mrc
-    procedure          :: atom_validation
-    procedure          :: map_validation
-    procedure          :: model_validation
-    procedure          :: model_validation_eo
+    procedure          :: atom_validate
+    procedure          :: map_validate
+    procedure          :: model_validate
+    procedure          :: model_validate_eo
     ! MODIFIERS
     procedure          :: translate
     procedure          :: center_pdbcoord
@@ -1276,7 +1276,7 @@ contains
         THROW_WARN('PDB atomic center moved to the center of the box; center_pdbcoord')
     end subroutine center_pdbcoord
 
-    subroutine map_validation( self, vol1, vol2, filename )
+    subroutine map_validate( self, vol1, vol2, filename )
         use simple_image, only: image
         class(atoms),            intent(inout) :: self
         type(image),             intent(in)    :: vol1, vol2
@@ -1337,9 +1337,9 @@ contains
         if(present(filename))then
             call fclose(funit)
         endif
-    end subroutine map_validation
+    end subroutine map_validate
 
-    subroutine model_validation_eo( self, pdb_file, exp_vol_file, even_vol_file, odd_vol_file, smpd, smpd_target )
+    subroutine model_validate_eo( self, pdb_file, exp_vol_file, even_vol_file, odd_vol_file, smpd, smpd_target )
         use simple_image, only: image
         class(atoms),  intent(inout) :: self
         real,          intent(in)    :: smpd, smpd_target
@@ -1366,15 +1366,15 @@ contains
         call exp_vol%read_and_crop(exp_vol_file, smpd, box_new, smpd_new)
         call even_vol%read_and_crop(even_vol_file, smpd, box_new, smpd_new)
         call odd_vol%read_and_crop(odd_vol_file, smpd, box_new, smpd_new)
-        call self%atom_validation(exp_vol, string('experimental'))
-        call self%atom_validation(even_vol, string('exp-even'))
-        call self%atom_validation(odd_vol, string('exp-odd'))
+        call self%atom_validate(exp_vol, string('experimental'))
+        call self%atom_validate(even_vol, string('exp-even'))
+        call self%atom_validate(odd_vol, string('exp-odd'))
         call exp_vol%kill
         call even_vol%kill
         call odd_vol%kill
-    end subroutine model_validation_eo
+    end subroutine model_validate_eo
 
-    subroutine model_validation( self, pdb_file, exp_vol_file, smpd, smpd_target )
+    subroutine model_validate( self, pdb_file, exp_vol_file, smpd, smpd_target )
         use simple_image, only: image
         class(atoms),  intent(inout) :: self
         class(string), intent(in)    :: pdb_file, exp_vol_file
@@ -1400,11 +1400,11 @@ contains
         endif
         call exp_vol%read_and_crop(exp_vol_file, smpd, box_new, smpd_new)
         call exp_vol%write(upscale_vol_file)
-        call self%atom_validation(exp_vol, string('model_val_corr'))
+        call self%atom_validate(exp_vol, string('model_val_corr'))
         call exp_vol%kill()
-    end subroutine model_validation
+    end subroutine model_validate
 
-    subroutine atom_validation( self, vol, filename )
+    subroutine atom_validate( self, vol, filename )
         use simple_image, only: image
         class(atoms),            intent(inout) :: self
         type(image),             intent(in)    :: vol
@@ -1465,7 +1465,7 @@ contains
             call fclose(funit)
             call self%writepdb(filename//'.pdb')
         endif
-    end subroutine atom_validation
+    end subroutine atom_validate
 
     ! MODIFIERS
 

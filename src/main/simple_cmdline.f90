@@ -1,7 +1,7 @@
 !@descr: the class implementing command line parsing
 module simple_cmdline
 use simple_core_module_api
-use simple_user_interface, only: get_prg_ptr, list_simple_prgs_in_ui, list_stream_prgs_in_ui, list_single_prgs_in_ui
+use simple_ui, only: get_prg_ptr, list_simple_prgs_in_ui, list_stream_prgs_in_ui, list_single_prgs_in_ui
 use simple_ui_program,     only: ui_program
 use simple_args,           only: args
 use simple_private_prgs 
@@ -80,7 +80,7 @@ contains
         prgname = arg(pos+1:)
         if( DEBUG_HERE ) print *, 'prgname from command-line in cmdline class: ', prgname%to_char()
         if( prgname%has_substr('report_selection') ) prgname = 'selection' ! FIX4NOW
-        ! obtain pointer to the program in the simple_user_interface specification
+        ! obtain pointer to the program in the simple_ui specification
         call get_prg_ptr(prgname, ptr2prg)
         if( .not. associated(ptr2prg) ) THROW_HARD(prgname%to_char()//' is not part of any executable in the code base')
         if( DEBUG_HERE ) print *, 'prgname from UI in cmdline class: ', prgname%to_char()
@@ -166,7 +166,7 @@ contains
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
         call cmdline_err(cmdstat, cmdlen, arg, pos)
-        ! obtain pointer to the program in the simple_user_interface specification
+        ! obtain pointer to the program in the simple_ui specification
         call get_prg_ptr(string(arg(pos+1:)), ptr2prg)
         ! decide wether to print the command line instructions or not
         select case(trim(arg(pos+1:)))
@@ -248,7 +248,7 @@ contains
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
         call cmdline_err(cmdstat, cmdlen, arg, pos)
-        ! obtain pointer to the program in the simple_user_interface specification
+        ! obtain pointer to the program in the simple_ui specification
         call get_prg_ptr(string(arg(pos+1:)), ptr2prg)
         ! decide wether to print the command line instructions or not
         select case(trim(arg(pos+1:)))

@@ -170,7 +170,7 @@ verify_enum()
   cout << "EMDL_CTF_ASTIGMATISM = " << EMDL_CTF_ASTIGMATISM << endl;
   cout << "EMDL_CTF_BFACTOR = " << EMDL_CTF_BFACTOR << endl;
   cout << "EMDL_CTF_MAXRES = " << EMDL_CTF_MAXRES << endl;
-  cout << "EMDL_CTF_VALIDATIONSCORE = " << EMDL_CTF_VALIDATIONSCORE << endl;
+  cout << "EMDL_CTF_validateSCORE = " << EMDL_CTF_validateSCORE << endl;
   cout << "EMDL_CTF_SCALEFACTOR = " << EMDL_CTF_SCALEFACTOR << endl;
   cout << "EMDL_CTF_SAMPLING_RATE = " << EMDL_CTF_SAMPLING_RATE << endl;
   cout << "EMDL_CTF_VOLTAGE = " << EMDL_CTF_VOLTAGE << endl;

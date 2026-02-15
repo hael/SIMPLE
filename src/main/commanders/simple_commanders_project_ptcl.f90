@@ -35,10 +35,10 @@ type, extends(commander_base) :: commander_scale_project_distr
     procedure :: execute      => exec_scale_project_distr
 end type commander_scale_project_distr
 
-type, extends(commander_base) :: split_commander_stack
+type, extends(commander_base) :: commander_split_stack
   contains
     procedure :: execute      => exec_split_stack
-end type split_commander_stack
+end type commander_split_stack
 
 contains
 
@@ -777,7 +777,7 @@ contains
     end subroutine exec_scale_project_distr
 
     subroutine exec_split_stack( self, cline )
-        class(split_commander_stack), intent(inout) :: self
+        class(commander_split_stack), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj

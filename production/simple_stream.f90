@@ -5,7 +5,7 @@ use iso_fortran_env,       only: output_unit
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_exec_helpers,   only: script_exec, update_job_descriptions_in_project
 use simple_jiffys,         only: simple_print_git_version, simple_print_timer
-use simple_user_interface, only: make_user_interface, list_stream_prgs_in_ui
+use simple_ui, only: make_ui, list_stream_prgs_in_ui
 use simple_stream_p01_preprocess
 use simple_stream_p02_assign_optics
 use simple_stream_p03_opening2D
@@ -40,7 +40,7 @@ pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
 ! make UI
-call make_user_interface
+call make_ui
 if( str_has_substr(entire_line, 'prg=list') )then
     call list_stream_prgs_in_ui
     stop
@@ -70,7 +70,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('0b2bcd6b')
+call simple_print_git_version('d8d900e0')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

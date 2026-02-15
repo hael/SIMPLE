@@ -1,3 +1,4 @@
+!@descr: execution of symmetry-related commanders
 module simple_exec_sym
 use simple_cmdline,           only: cmdline
 use simple_commanders_volops, only: commander_symaxis_search, commander_symmetry_test, commander_symmetrize_map

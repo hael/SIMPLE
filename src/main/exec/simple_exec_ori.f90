@@ -1,3 +1,4 @@
+!@descr: execution of orientation commanders
 module simple_exec_ori
 use simple_cmdline, only: cmdline
 use simple_commanders_ori, only: commander_make_oris, commander_oriops, commander_oristats, commander_vizoris

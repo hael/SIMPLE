@@ -1,3 +1,4 @@
+!@descr: execution of map docking commanders
 module simple_exec_dock
 use simple_cmdline,           only: cmdline
 use simple_commanders_volops, only: commander_dock_volpair, commander_volanalyze

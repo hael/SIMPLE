@@ -1,11 +1,11 @@
 # perl move_constructors.pl \
-#   --src simple_user_interface.f90 \
+#   --src simple_ui.f90 \
 #   --map /mnt/data/instance_assigments.txt \
 #   --ctors /mnt/data/ui_procedures.txt \
 #   --dry-run
 #
 # perl move_constructors.pl \
-#   --src simple_user_interface.f90 \
+#   --src simple_ui.f90 \
 #   --map /mnt/data/instance_assigments.txt \
 #   --ctors /mnt/data/ui_procedures.txt \
 #   --apply
@@ -19,7 +19,7 @@ use File::Copy qw(copy);
 # --------------------------
 # CLI
 # --------------------------
-my $src      = 'simple_user_interface.f90';
+my $src      = 'simple_ui.f90';
 my $mapfile  = 'instance_assigments.txt';   # note spelling matches your upload path/name
 my $ctors    = 'ui_procedures.txt';
 my $dry_run  = 0;
@@ -31,7 +31,7 @@ GetOptions(
   'ctors=s' => \$ctors,
   'dry-run' => \$dry_run,
   'apply'   => \$apply,
-) or die "Usage: $0 --src simple_user_interface.f90 --map instance_assigments.txt --ctors ui_procedures.txt [--dry-run|--apply]\n";
+) or die "Usage: $0 --src simple_ui.f90 --map instance_assigments.txt --ctors ui_procedures.txt [--dry-run|--apply]\n";
 
 if (!$dry_run && !$apply) {
   $dry_run = 1; # default safe behavior

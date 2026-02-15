@@ -79,7 +79,7 @@ enum EMDLabel
     EMDL_CTF_ASTIGMATISM,
     EMDL_CTF_BFACTOR, ///< B-factor
     EMDL_CTF_MAXRES, ///< Maximum resolution with Thon rings
-    EMDL_CTF_VALIDATIONSCORE, ///< Gctf-based validation score for CTF fit
+    EMDL_CTF_validateSCORE, ///< Gctf-based validation score for CTF fit
     EMDL_CTF_SCALEFACTOR, ///< linear scale-factor
     EMDL_CTF_SAMPLING_RATE, ///< Sampling rate
     EMDL_CTF_VOLTAGE, ///< Microscope voltage (kV)
@@ -551,7 +551,7 @@ private:
         EMDL::addLabel(EMDL_CTF_ASTIGMATISM, EMDL_DOUBLE, "rlnCtfAstigmatism", "Absolute value of the difference between defocus in U- and V-direction (in A)");
         EMDL::addLabel(EMDL_CTF_BFACTOR, EMDL_DOUBLE, "rlnCtfBfactor", "B-factor (in A^2) that describes CTF power spectrum fall-off");
         EMDL::addLabel(EMDL_CTF_MAXRES, EMDL_DOUBLE, "rlnCtfMaxResolution", "Estimated maximum resolution (in A) of significant CTF Thon rings");
-        EMDL::addLabel(EMDL_CTF_VALIDATIONSCORE, EMDL_DOUBLE, "rlnCtfValidationScore", "Gctf-based validation score for the quality of the CTF fit");
+        EMDL::addLabel(EMDL_CTF_validateSCORE, EMDL_DOUBLE, "rlnCtfValidationScore", "Gctf-based validation score for the quality of the CTF fit");
         EMDL::addLabel(EMDL_CTF_SCALEFACTOR, EMDL_DOUBLE, "rlnCtfScalefactor", "Linear scale-factor on the CTF (values between 0 and 1)");
         EMDL::addLabel(EMDL_CTF_VOLTAGE, EMDL_DOUBLE, "rlnVoltage", "Voltage of the microscope (in kV)");
         EMDL::addLabel(EMDL_CTF_DEFOCUSU, EMDL_DOUBLE, "rlnDefocusU", "Defocus in U-direction (in Angstroms, positive values for underfocus)");

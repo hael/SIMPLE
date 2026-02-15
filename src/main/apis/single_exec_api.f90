@@ -14,7 +14,7 @@ use simple_commanders_project_ptcl, only: commander_import_particles, commander_
 use simple_commanders_sim,          only: commander_simulate_atoms
 use simple_exec_helpers,            only: script_exec, update_job_descriptions_in_project, restarted_exec
 use simple_jiffys,                  only: simple_print_git_version, simple_print_timer
-use simple_user_interface,          only: make_user_interface, list_single_prgs_in_ui
+use simple_ui,          only: make_ui, list_single_prgs_in_ui
 use single_commanders_experimental, only: commander_cavgsproc_nano, commander_cavgseoproc_nano, commander_ptclsproc_nano,&
 commander_trajectory_make_projavgs, commander_tsegmaps_core_finder
 use single_commanders_nano2D,       only: commander_analysis2D_nano, commander_center2D_nano, commander_cluster2D_nano

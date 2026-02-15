@@ -1,3 +1,4 @@
+!@descr: execution of printing commanders
 module simple_exec_print
 use simple_cmdline,           only: cmdline
 use simple_commanders_misc,   only: commander_print_fsc, commander_print_magic_boxes, commander_print_dose_weights
