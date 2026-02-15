@@ -12,46 +12,20 @@ use simple_exec_filter,     only: exec_filter_commander
 use simple_exec_image,      only: exec_image_commander
 use simple_exec_mask,       only: exec_mask_commander
 use simple_exec_ori,        only: exec_ori_commander
+use simple_exec_print,      only: exec_print_commander
+use simple_exec_sim,        only: exec_sim_commander
+use simple_exec_volume,     only: exec_volume_commander
+use simple_exec_res,        only: exec_res_commander
+use simple_exec_dock,       only: exec_dock_commander
 implicit none
 #include "simple_local_flags.inc"
 
 ! PARALLEL UTILITIES
 type(commander_split)                       :: xsplit
 
-! PRINT INFO
-type(commander_info_image)                  :: xinfo_image
-type(commander_info_stktab)                 :: xinfo_stktab
-type(commander_print_dose_weights)          :: xprint_dose_weights
-type(commander_print_fsc)                   :: xprint_fsc
-type(commander_print_magic_boxes)           :: xprint_magic_boxes
-
-! RESOLUTION ESTIMATON
-type(commander_clin_fsc)                    :: xclin_fsc
-type(commander_fsc)                         :: xfsc
-
-! SIMULATION
-type(commander_pdb2mrc)                     :: xpdb2mrc
-type(commander_simulate_movie)              :: xsimulate_movie
-type(commander_simulate_noise)              :: xsimulate_noise
-type(commander_simulate_particles)          :: xsimulate_particles
-
 ! STREAM VALIDATION
 type(commander_check_refpick)               :: xcheck_refpick
 type(commander_mini_stream)                 :: xmini_stream
-
-! SYMMETRY
-type(commander_symaxis_search)              :: xsymsrch
-type(commander_symmetrize_map)              :: xsymmetrize_map
-type(commander_symmetry_test)               :: xsymtst
-
-! VOLUME DOCKING
-type(commander_dock_volpair)                :: xdock_volpair
-type(commander_volanalyze)                  :: xvolanalyze
-
-! VOLUME PROCESSING
-type(commander_centervol)                   :: xcenter
-type(commander_reproject)                   :: xreproject
-type(commander_volops)                      :: xvolops
 
 ! MODEL ANALYSIS
 type(commander_model_validation)            :: xmodel_validation
@@ -97,6 +71,11 @@ call exec_filter_commander(trim(prg),     cline, l_silent, l_did_execute)
 call exec_image_commander(trim(prg),      cline, l_silent, l_did_execute)
 call exec_mask_commander(trim(prg),       cline, l_silent, l_did_execute)
 call exec_ori_commander(trim(prg),        cline, l_silent, l_did_execute)
+call exec_print_commander(trim(prg),      cline, l_silent, l_did_execute)
+call exec_sim_commander(trim(prg),        cline, l_silent, l_did_execute)
+call exec_volume_commander(trim(prg),     cline, l_silent, l_did_execute)
+call exec_res_commander(trim(prg),        cline, l_silent, l_did_execute)
+call exec_dock_commander(trim(prg),       cline, l_silent, l_did_execute)
 
 select case(trim(prg))
 
@@ -106,42 +85,7 @@ select case(trim(prg))
     case( 'split' )
         call xsplit%execute(cline)
 
-    !====================================================================
-    ! PRINT INFO
-    !====================================================================
-    case( 'info_image' )
-        call xinfo_image%execute(cline)
-    case( 'info_stktab' )
-        call xinfo_stktab%execute(cline)
-    case( 'print_dose_weights' )
-        call xprint_dose_weights%execute(cline)
-        l_silent = .true.
-    case( 'print_fsc' )
-        call xprint_fsc%execute(cline)
-        l_silent = .true.
-    case( 'print_magic_boxes' )
-        call xprint_magic_boxes%execute(cline)
-        l_silent = .true.
-
-    !====================================================================
-    ! RESOLUTION ESTIMATION
-    !====================================================================
-    case( 'clin_fsc' )
-        call xclin_fsc%execute(cline)
-    case( 'fsc' )
-        call xfsc%execute(cline)
-
-    !====================================================================
-    ! SIMULATION
-    !====================================================================
-    case( 'pdb2mrc' )
-        call xpdb2mrc%execute(cline)
-    case( 'simulate_movie' )
-        call xsimulate_movie%execute(cline)
-    case( 'simulate_noise' )
-        call xsimulate_noise%execute(cline)
-    case( 'simulate_particles' )
-        call xsimulate_particles%execute(cline)
+    
 
     !====================================================================
     ! STREAM VALIDATION
@@ -150,34 +94,6 @@ select case(trim(prg))
         call xcheck_refpick%execute(cline)
     case( 'mini_stream' )
         call xmini_stream%execute(cline)
-
-    !====================================================================
-    ! SYMMETRY
-    !====================================================================
-    case( 'symaxis_search' )
-        call xsymsrch%execute(cline)
-    case( 'symmetrize_map' )
-        call xsymmetrize_map%execute(cline)
-    case( 'symmetry_test' )
-        call xsymtst%execute(cline)
-
-    !====================================================================
-    ! VOLUME DOCKING
-    !====================================================================
-    case( 'dock_volpair' )
-        call xdock_volpair%execute(cline)
-    case( 'volanalyze' )
-        call xvolanalyze%execute(cline)
-
-    !====================================================================
-    ! VOLUME PROCESSING
-    !====================================================================
-    case( 'center' )
-        call xcenter%execute(cline)
-    case( 'reproject' )
-        call xreproject%execute(cline)
-    case( 'volops' )
-        call xvolops%execute(cline)
 
     !====================================================================
     ! MODEL ANALYSIS
@@ -196,7 +112,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('c6603b2e')
+    call simple_print_git_version('0b2bcd6b')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

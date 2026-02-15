@@ -1,11 +1,11 @@
-simple_ui_api_abinitio3D.f90:
+simple_ui_abinitio3D.f90:
 abinitio3D
 abinitio3D_cavgs
 estimate_lpstages
 multivol_assign
 noisevol
 
-simple_ui_api_cluster2D.f90:
+simple_ui_cluster2D.f90:
 abinitio2D
 cleanup2D
 cluster2D
@@ -21,23 +21,23 @@ select_clusters
 write_classes
 write_mic_filetab
 
-simple_ui_api_denoise.f90:
+simple_ui_denoise.f90:
 icm2D
 icm3D
 ppca_denoise
 ppca_denoise_classes
 ppca_volvar
 
-simple_ui_api_dock.f90:
+simple_ui_dock.f90:
 dock_volpair
 volanalyze
 
-simple_ui_api_filter.f90:
+simple_ui_filter.f90:
 filter
 uniform_filter2D
 uniform_filter3D
 
-simple_ui_api_image.f90:
+simple_ui_image.f90:
 binarize
 convert
 ctf_phaseflip
@@ -47,18 +47,18 @@ select_
 stack
 stackops
 
-simple_ui_api_mask.f90:
+simple_ui_mask.f90:
 auto_spher_mask
 automask2D
 mask
 
-simple_ui_api_ori.f90:
+simple_ui_ori.f90:
 make_oris
 oriops
 oristats
 vizoris
 
-simple_ui_api_other.f90:
+simple_ui_other.f90:
 match_stacks
 mkdir_
 normalize_
@@ -66,7 +66,7 @@ print_ui_stream
 split_
 split_stack
 
-simple_ui_api_preproc.f90:
+simple_ui_preproc.f90:
 assign_optics_groups
 ctf_estimate
 extract
@@ -76,14 +76,14 @@ pick
 preprocess
 reextract
 
-simple_ui_api_print.f90:
+simple_ui_print.f90:
 info_image
 info_stktab
 print_dose_weights
 print_fsc
 print_magic_boxes
 
-simple_ui_api_project.f90:
+simple_ui_project.f90:
 export_relion
 export_starproject
 extract_subproj
@@ -102,24 +102,24 @@ selection
 update_project
 zero_project_shifts
 
-simple_ui_api_refine3D.f90:
+simple_ui_refine3D.f90:
 refine3D
 refine3D_auto
 reconstruct3D
 postprocess
 automask
 
-simple_ui_api_res.f90:
+simple_ui_res.f90:
 fsc
 clin_fsc
 
-simple_ui_api_sim.f90:
+simple_ui_sim.f90:
 pdb2mrc
 simulate_movie
 simulate_noise
 simulate_particles
 
-simple_ui_api_stream.f90:
+simple_ui_stream.f90:
 abinitio2D_stream
 assign_optics
 cluster2D_stream
@@ -128,25 +128,25 @@ pick_extract
 preproc
 sieve_cavgs
 
-simple_ui_api_symmetry.f90:
+simple_ui_sym.f90:
 symaxis_search
 symmetrize_map
 symmetry_test
 
-simple_ui_api_tests.f90:
+simple_ui_tests.f90:
 test_sim_workflow
 
-simple_ui_api_validation.f90:
+simple_ui_validation.f90:
 model_validation
 mini_stream
 check_refpick
 
-simple_ui_api_volume.f90:
+simple_ui_volume.f90:
 center
 reproject
 volops
 
-single_ui_api_atom.f90:
+single_ui_atom.f90:
 atoms_register
 atoms_rmsd
 atoms_stats
@@ -155,21 +155,21 @@ crys_score
 detect_atoms
 simulate_atoms
 
-single_ui_api_map.f90:
+single_ui_map.f90:
 conv_atom_denoise
 tsegmaps_core_finder
 
-single_ui_api_nano2D.f90:
+single_ui_nano2D.f90:
 analysis2D_nano
 center2D_nano
 cluster2D_nano
 estimate_diam
 
-single_ui_api_nano3D.f90:
+single_ui_nano3D.f90:
 autorefine3D_nano
 refine3D_nano
 
-single_ui_api_trajectory.f90:
+single_ui_trajectory.f90:
 extract_substk
 graphene_subtr
 trajectory_denoise
@@ -178,13 +178,13 @@ trajectory_make_projavgs
 trajectory_reconstruct3D
 trajectory_swap_stack
 
-single_ui_api_tseries.f90:
+single_ui_tseries.f90:
 track_particles
 tseries_import
 tseries_make_pickavg
 tseries_motion_correct
 
-single_ui_api_validation.f90:
+single_ui_validation.f90:
 cavgseoproc_nano
 cavgsproc_nano
 ptclsproc_nano
