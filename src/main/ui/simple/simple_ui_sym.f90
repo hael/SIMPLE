@@ -1,4 +1,4 @@
-!@descr: "symmetry" UI api (concrete implementation)
+!@descr: module defining the user interfaces for symmetry-related programs in the simple_exec suite
 module simple_ui_sym
 use simple_ui_modules
 implicit none

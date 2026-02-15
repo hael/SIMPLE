@@ -1,4 +1,4 @@
-!@descr: "sim" UI api (concrete implementation)
+!@descr: module defining the user interfaces for simulation programs in the simple_exec suite
 module simple_ui_sim
 use simple_ui_modules
 implicit none

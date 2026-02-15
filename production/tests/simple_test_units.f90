@@ -23,7 +23,7 @@ use simple_ftexp_shsrch,   only: test_ftexp_shsrch
 use simple_ftiter,         only: test_ftiter
 use simple_image,          only: test_image
 use simple_online_var,     only: test_online_var
-use simple_ui, only: validate_ui_json
+use simple_ui,             only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 character(8)          :: datestr

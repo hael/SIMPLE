@@ -1,3 +1,4 @@
+!@descr: module aggregating ui utility modules
 module simple_ui_modules
 use simple_ansi_ctrls
 use simple_core_module_api

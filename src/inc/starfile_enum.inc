@@ -23,7 +23,7 @@
         enumerator :: EMDL_CTF_ASTIGMATISM                             = 17
         enumerator :: EMDL_CTF_BFACTOR                                 = 18 !/< B-factor
         enumerator :: EMDL_CTF_MAXRES                                  = 19 !/< Maximum resolution with Thon rings
-        enumerator :: EMDL_CTF_validateSCORE                         = 20 !/< Gctf-based validation score for CTF fit
+        enumerator :: EMDL_CTF_VALIDATIONSCORE                        = 20 !/< Gctf-based validation score for CTF fit
         enumerator :: EMDL_CTF_SCALEFACTOR                             = 21 !/< linear scale-factor
         enumerator :: EMDL_CTF_SAMPLING_RATE                           = 22 !/< Sampling rate
         enumerator :: EMDL_CTF_VOLTAGE                                 = 23 !/< Microscope voltage (kV)

@@ -1,3 +1,4 @@
+!@descr: module defining the main user interface program type and associated methods
 module simple_ui_program
 use simple_core_module_api
 use simple_ansi_ctrls

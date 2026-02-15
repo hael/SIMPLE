@@ -1,4 +1,4 @@
-!@descr: "single_ui_validate" UI api (concrete implementation)
+!@descr: module defining the user interfaces for validation programs in the single_exec suite
 module single_ui_validate
 use simple_ui_modules
 implicit none

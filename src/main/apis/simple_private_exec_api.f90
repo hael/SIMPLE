@@ -18,7 +18,7 @@ use simple_jiffys,         only: simple_print_timer
 use simple_private_prgs,   only: make_private_ui
 use simple_symanalyzer,    only: print_subgroups
 use simple_syslib,         only: print_slurm_env
-use simple_ui, only: make_ui, print_ui_json, write_ui_json, print_stream_ui_json
+use simple_ui,             only: make_ui, print_ui_json, write_ui_json, print_stream_ui_json
 
 ! pick commanders, picking routines
 use simple_commanders_pick, only: commander_extract, commander_reextract, commander_pick_extract,&

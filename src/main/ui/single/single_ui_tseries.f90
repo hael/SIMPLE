@@ -1,4 +1,4 @@
-!@descr: "single_ui_tseries" UI api (concrete implementation)
+!@descr: module defining the user interfaces for time-series analysis in the single_exec suite
 module single_ui_tseries
 use simple_ui_modules
 implicit none

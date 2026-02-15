@@ -1,4 +1,4 @@
-!@descr: "ui_stream" UI api (concrete implementation)
+!@descr: module defining the user interfaces for streaming workflows in the simple_exec suite
 module simple_ui_stream
 use simple_ui_modules
 implicit none

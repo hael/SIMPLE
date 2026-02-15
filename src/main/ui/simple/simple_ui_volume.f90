@@ -1,4 +1,4 @@
-!@descr: "volume" UI api (concrete implementation)
+!@descr: module defining the user interfaces for volume processing programs in the simple_exec suite
 module simple_ui_volume
 use simple_ui_modules
 implicit none

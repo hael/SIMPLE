@@ -1,3 +1,4 @@
+!@descr: module defining the common parameters for all simple_ui_program interfaces
 module simple_ui_params_common
 use simple_core_module_api
 use simple_ui_param, only: ui_param

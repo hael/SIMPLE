@@ -1,4 +1,4 @@
-!@descr: "image" UI api (concrete implementation)
+!@descr: module defining the user interfaces for general image processing programs in the simple_exec suite
 module simple_ui_image
 use simple_ui_modules
 implicit none

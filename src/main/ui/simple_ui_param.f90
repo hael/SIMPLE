@@ -1,3 +1,4 @@
+!@descr: module defining the ui_param type, which is used to define input parameters for the simple_ui_program interface
 module simple_ui_param
 use simple_string, only: string
 implicit none

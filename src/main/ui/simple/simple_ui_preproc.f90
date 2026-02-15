@@ -1,4 +1,4 @@
-!@descr: "preproc" UI api (concrete implementation)
+!@descr: module defining the user interfaces for pre-processing programs in the simple_exec suite
 module simple_ui_preproc
 use simple_ui_modules
 implicit none

@@ -1,4 +1,4 @@
-!@descr: "single_ui_nano3D" UI api (concrete implementation)
+!@descr: module defining the user interfaces for 3D analysis of nanoparticles in the single_exec suite
 module single_ui_nano3D
 use simple_ui_modules
 implicit none

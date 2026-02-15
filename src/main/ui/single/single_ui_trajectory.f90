@@ -1,4 +1,4 @@
-!@descr: "single_ui_trajectory" UI api (concrete implementation)
+!@descr: module defining the user interfaces for trajectory analysis of nanoparticles in the single_exec suite
 module single_ui_trajectory
 use simple_ui_modules
 implicit none

@@ -1,4 +1,4 @@
-!@descr: "single_ui_map" UI api (concrete implementation)
+!@descr: module defining the user interfaces for map-related programs in the single_exec suite
 module single_ui_map
 use simple_ui_modules
 implicit none

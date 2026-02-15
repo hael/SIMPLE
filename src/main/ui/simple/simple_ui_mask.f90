@@ -1,4 +1,4 @@
-!@descr: "mask" UI api (concrete implementation)
+!@descr: module defining the user interfaces for masking programs in the simple_exec suite
 module simple_ui_mask
 use simple_ui_modules
 implicit none
