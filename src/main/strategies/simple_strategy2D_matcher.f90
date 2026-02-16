@@ -170,6 +170,8 @@ contains
             rt_init = toc(t_init)
             t_prep_pftc = tic()
         endif
+        ! generate particles/references image objects
+        call prep_batch_particles2D(batchsz_max)
         if( l_polar .and. which_iter>1)then
             ! Polar references, on first iteration the references are taken from the input images
             call prep_polar_pftc4align2D( pftc, batchsz_max, which_iter, l_stream )
@@ -190,9 +192,8 @@ contains
         ! SETUP WEIGHTS
         call build_glob%spproj_field%set_all2single('w', 1.0)
 
-        ! GENERATE PARTICLES IMAGE OBJECTS
+        ! GENERATE PARTICLES SEARCH OBJECTS
         allocate(strategy2Dsrch(batchsz_max))
-        call prep_batch_particles2D(batchsz_max)
         if( L_BENCH_GLOB ) rt_prep_pftc = toc(t_prep_pftc)
 
         ! READ THE ASSIGNMENT FOR PROB MODE
@@ -503,7 +504,8 @@ contains
         call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
         call pftc%reallocate_ptcls(nptcls_here, pinds)
-        call ptcl_match_imgs(1)%memoize4polarize(pftc%get_pdim())
+        ! call ptcl_match_imgs(1)%memoize4polarize(pftc%get_pdim())
+        call ptcl_match_imgs_pad(1)%memoize4polarize(pftc%get_pdim())
         ! mask memoization for prepimg4align
         call ptcl_match_imgs(1)%memoize_mask_coords
         ! memoize FT mapping stuff
@@ -567,7 +569,7 @@ contains
         complex,     allocatable :: pft(:,:)
         type(string) :: fname
         real         :: xyz(3)
-        integer      :: icls, pop, pop_even, pop_odd, centype
+        integer      :: icls, pop, pop_even, pop_odd, centype, ithr
         logical      :: do_center, has_been_searched, input_center
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         input_center      = trim(params_glob%center) .eq. 'yes'
@@ -586,7 +588,8 @@ contains
             endif
         endif
         ! prepare the polarizer images
-        call build_glob%img_crop%memoize4polarize(pftc%get_pdim())
+        ! call build_glob%img_crop%memoize4polarize(pftc%get_pdim())
+        call ptcl_match_imgs_pad(1)%memoize4polarize(pftc%get_pdim())
         allocate(match_imgs(params_glob%ncls))
         call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! mask memoization
@@ -595,7 +598,7 @@ contains
         centype = get_centype(params_glob%center_type)
         ! PREPARATION OF REFERENCES IN pftc
         ! read references and transform into polar coordinates
-        !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz,pft)&
+        !$omp parallel do default(shared) private(icls,ithr,pop,pop_even,pop_odd,do_center,xyz,pft)&
         !$omp schedule(static) proc_bind(close)
         do icls=1,params_glob%ncls
             pop      = 1
@@ -606,6 +609,7 @@ contains
                 pop_even = build_glob%spproj_field%get_pop(icls, 'class', eo=0)
                 pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
             endif
+            ithr = omp_get_thread_num() + 1
             if( pop > 0 )then
                 call match_imgs(icls)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
                 ! Calculate center
@@ -625,7 +629,12 @@ contains
                     ! merged class average in both even and odd positions
                     call match_imgs(icls)%copy_fast(cavgs_merged(icls))
                     call prep2Dref(match_imgs(icls), icls, xyz)
-                    call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)      ! 2 polar coords
+                    call match_imgs(icls)%ifft
+                    call ptcl_match_imgs_pad(ithr)%zero_and_unflag_ft
+                    call match_imgs(icls)%pad(ptcl_match_imgs_pad(ithr))
+                    call ptcl_match_imgs_pad(ithr)%fft
+                    call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
+                    ! call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)      ! 2 polar coords
                     call pftc%set_ref_pft(icls, pft, iseven=.true.)
                     call pftc%cp_even2odd_ref(icls)
                 else
@@ -633,17 +642,32 @@ contains
                         ! even & odd
                         call match_imgs(icls)%copy_fast(cavgs_even(icls))
                         call prep2Dref(match_imgs(icls), icls, xyz)
-                        call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call match_imgs(icls)%ifft
+                        call ptcl_match_imgs_pad(ithr)%zero_and_unflag_ft
+                        call match_imgs(icls)%pad(ptcl_match_imgs_pad(ithr))
+                        call ptcl_match_imgs_pad(ithr)%fft
+                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
+                        ! call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)  ! 2 polar coords
                         call pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call match_imgs(icls)%copy_fast(cavgs_odd(icls))
                         call prep2Dref(match_imgs(icls), icls, xyz)
-                        call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call match_imgs(icls)%ifft
+                        call ptcl_match_imgs_pad(ithr)%zero_and_unflag_ft
+                        call match_imgs(icls)%pad(ptcl_match_imgs_pad(ithr))
+                        call ptcl_match_imgs_pad(ithr)%fft
+                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
+                        ! call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)  ! 2 polar coords
                         call pftc%set_ref_pft(icls, pft, iseven=.false.)
                     else
                         ! merged class average in both even and odd positions
                         call match_imgs(icls)%copy_fast(cavgs_merged(icls))
                         call prep2Dref(match_imgs(icls), icls, xyz)
-                        call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call match_imgs(icls)%ifft
+                        call ptcl_match_imgs_pad(ithr)%zero_and_unflag_ft
+                        call match_imgs(icls)%pad(ptcl_match_imgs_pad(ithr))
+                        call ptcl_match_imgs_pad(ithr)%fft
+                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
+                        ! call match_imgs(icls)%polarize(pft, mask=build_glob%l_resmsk)  ! 2 polar coords
                         call pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call pftc%cp_even2odd_ref(icls)
                     endif
