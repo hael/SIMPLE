@@ -180,16 +180,6 @@ contains
         do i = 1, ncls_sel
             resvals(i) = spproj%os_cls2D%get(clsinds(i), 'res')
         enddo
-        ! update junk flags
-        if( ncls /= size(l_non_junk) ) THROW_HARD('ncls and size of junk assignments dont match')
-        call spproj%os_cls3D%set_all2single('junk', 1)
-        call spproj%os_cls2D%set_all2single('junk', 1)
-        do icls = 1, ncls
-            if( l_non_junk(icls) ) then
-                call spproj%os_cls3D%set(icls, 'junk', 0)
-                call spproj%os_cls2D%set(icls, 'junk', 0)
-            endif
-        enddo
         ! ensure correct smpd/box in params class
         params%smpd = smpd
         params%box  = ldim(1)
@@ -546,9 +536,9 @@ contains
         ! identify medoids in reference set
         inds         = (/(i,i=1,nrefs)/)
         medoid_inds  = spprojfile_ref%os_cls2D%get_all_asint('medoid_ind') ! all medoid_inds
-        medoid_inds  = pack(medoid_inds, mask=l_non_junk_ref)          ! all included medoid_inds after junk rejection
-        medoid_map   = pack(inds,        mask=medoid_inds > 0)         ! mapping the medoids to physical class indices
-        medoid_inds  = pack(medoid_inds, mask=medoid_inds > 0)         ! making medoid_inds congruent with medoid_map
+        medoid_inds  = pack(medoid_inds, mask=l_non_junk_ref)              ! all included medoid_inds after junk rejection
+        medoid_map   = pack(inds,        mask=medoid_inds > 0)             ! mapping the medoids to physical class indices
+        medoid_inds  = pack(medoid_inds, mask=medoid_inds > 0)             ! making medoid_inds congruent with medoid_map
         call unique(medoid_inds, medoid_inds_unique)
         if( minval(medoid_inds) < 1            ) THROW_HARD('medoid_inds does not meet expectation (<1)')
         if( maxval(medoid_inds) > nclust       ) THROW_HARD('medoid_inds does not meet expectation (>nclust)')
