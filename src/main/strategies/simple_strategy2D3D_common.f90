@@ -1058,7 +1058,7 @@ contains
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
-                call build_glob%vol_pad%fproject_polar_strided(iref, o_tmp, pftc, iseven=.true., mask=build_glob%l_resmsk)
+                call build_glob%vol_pad%fproject_polar_oversamp(iref, o_tmp, pftc, iseven=.true., mask=build_glob%l_resmsk)
                 call o_tmp%kill
             end do
             !$omp end parallel do
@@ -1082,7 +1082,7 @@ contains
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj
                 call build_glob%eulspace%get_ori(iproj, o_tmp)
-                call build_glob%vol_odd_pad%fproject_polar_strided(iref, o_tmp, pftc, iseven=.false., mask=build_glob%l_resmsk)
+                call build_glob%vol_odd_pad%fproject_polar_oversamp(iref, o_tmp, pftc, iseven=.false., mask=build_glob%l_resmsk)
                 call o_tmp%kill
             end do
             !$omp end parallel do
@@ -1114,7 +1114,7 @@ contains
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
             ! transfer to polar coordinates
             pft = pftc%allocate_pft()
-            call tmp_imgs_pad(ithr)%polarize_strided(pft, mask=build_glob%l_resmsk)
+            call tmp_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
             call pftc%set_ptcl_pft(iptcl, pft)
             deallocate(pft)
             ! e/o flags

@@ -26,8 +26,8 @@ type, extends(image) :: projector
     procedure :: fproject
     procedure :: fproject_serial
     procedure :: fproject_polar
-    procedure :: fproject_polar_strided
-    procedure :: interp_fcomp_strided
+    procedure :: fproject_polar_oversamp
+    procedure :: interp_fcomp_oversamp
     procedure :: interp_fcomp
     ! DESTRUCTOR
     procedure :: kill_expanded
@@ -214,7 +214,7 @@ contains
         end do
     end subroutine fproject_polar
 
-    ! This strided version is correct if all of the following are true:
+    ! This oversampled version is correct if all of the following are true:
     ! ** loc is expressed in the same logical Fourier index units as cmat_exp 
     ! ** self%cmat_exp was built from a padded volume FT, such that the padded logical indices are 
     !    scaled by padding_factor relative to the original lattice. In other words: the padded expanded 
@@ -223,8 +223,8 @@ contains
     !    (i.e., distances measured in “original grid steps”). That matches the goal: keep the same 
     !    interpolation behavior, just fetch samples from the padded FT at exact corresponding points.
     !> \brief  extracts a polar FT from a volume's expanded FT (self),
-    !>         using STRIDED sampling from a PADDED expanded FT.
-    subroutine fproject_polar_strided( self, iref, e, pftc, iseven, mask )
+    !>         using a PADDED expanded FT.
+    subroutine fproject_polar_oversamp( self, iref, e, pftc, iseven, mask )
         class(projector),    intent(inout) :: self
         integer,             intent(in)    :: iref
         class(ori),          intent(in)    :: e
@@ -240,49 +240,49 @@ contains
                 if( mask(k) )then
                     hk  = pftc%get_coord(irot,k)                 !< ORIGINAL (unpadded) 2D Fourier coords
                     loc = matmul([hk(1), hk(2), 0.0], e_rotmat)  !< ORIGINAL 3D logical Fourier coords
-                    call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_strided(loc), iseven)
+                    call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_oversamp(loc), iseven)
                 else
                     call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
                 endif
             end do
         end do
-    end subroutine fproject_polar_strided
+    end subroutine fproject_polar_oversamp
 
-    !> \brief interpolate from PADDED expanded complex matrix, but using ORIGINAL-grid weights.
-    !>        loc is in ORIGINAL logical Fourier units. We fetch samples at stride = padding_factor
-    pure function interp_fcomp_strided( self, loc ) result( comp )
+    !> Interpolate from PADDED expanded FT using PADDED-grid weights (unit steps).
+    !> loc is in ORIGINAL logical Fourier units; internally we work in padded units.
+    pure function interp_fcomp_oversamp( self, loc ) result( comp )
         class(projector), intent(in) :: self
-        real,             intent(in) :: loc(3) ! ORIGINAL logical Fourier coords
+        real,             intent(in) :: loc(3)     ! ORIGINAL logical Fourier coords
         complex :: comp
-        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim), padding_factor_scaling
-        integer :: win0(3), win0p(3), i0(3), off(3), iw, jw, kw, pad_fac
-        integer :: h, k, m, hp, kp, mp
+        integer :: pad_fac
+        real    :: locpd(3), padding_factor_scaling
+        integer :: win0p(3), i0p(3)
+        integer :: iw, jw, kw
+        integer :: hp, kp, mp
+        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
         pad_fac = STRIDE_GRID_PAD_FAC
         padding_factor_scaling = real(pad_fac**3)
-        ! Original center (for window geometry + weights)
-        win0 = nint(loc)
-        i0   = win0 - self%iwinsz
-        ! Padded center (nearest padded lattice point)
-        win0p = nint(loc * real(pad_fac))
-        ! Offset that selects the correct strided sublattice (parity class)
-        off = win0p - pad_fac * win0   ! for pad_fac=2, off is 0 or 1 in each dim
-        call self%kbwin%apod_mat_3d(loc, self%iwinsz, self%wdim, w)
+        ! Work in PADDED logical coordinates
+        locpd = loc * real(pad_fac)
+        ! Window geometry on PADDED lattice
+        win0p = nint(locpd)
+        i0p   = win0p - self%iwinsz
+        ! KB weights evaluated in PADDED coordinates
+        ! (MUST feed locpd here, not loc.)
+        call self%kbwin%apod_mat_3d(locpd, self%iwinsz, self%wdim, w)
         comp = CMPLX_ZERO
         do kw = 1, self%wdim
-            m  = i0(3) + (kw-1)
-            mp = m * pad_fac + off(3)
+            mp = i0p(3) + (kw-1)
             do jw = 1, self%wdim
-                k  = i0(2) + (jw-1)
-                kp = k * pad_fac + off(2)
+                kp = i0p(2) + (jw-1)
                 do iw = 1, self%wdim
-                    h  = i0(1) + (iw-1)
-                    hp = h * pad_fac + off(1)
+                    hp = i0p(1) + (iw-1)
                     comp = comp + w(iw,jw,kw) * self%cmat_exp(hp, kp, mp)
                 end do
             end do
         end do
         comp = comp * padding_factor_scaling
-    end function interp_fcomp_strided
+    end function interp_fcomp_oversamp
 
     !>  \brief is to interpolate from the expanded complex matrix
     pure function interp_fcomp( self, loc )result( comp )

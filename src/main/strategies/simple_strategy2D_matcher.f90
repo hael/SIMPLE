@@ -525,7 +525,7 @@ contains
             ! &rt_prep1, rt_prep2, rt_prep)
             ! t_polarize = tic()
             pft = pftc%allocate_pft()
-            call ptcl_match_imgs_pad(ithr)%polarize_strided(pft, mask=build_glob%l_resmsk)
+            call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
             call pftc%set_ptcl_pft(iptcl, pft)
             deallocate(pft)
             ! rt_polarize = rt_polarize + toc(t_polarize)
