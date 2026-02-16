@@ -27,9 +27,9 @@ real,    allocatable :: mem_msk_cs(:), mem_msk_cs2(:)
 real,    allocatable :: mem_polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
 integer, allocatable :: mem_polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
 integer, allocatable :: mem_polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
-integer              :: mem_polwdim   = 0         !< dimension of K-B window
-integer              :: mem_polwlen   = 0         !< dimension squared of K-B window
-integer              :: mem_poldim(3) = 0         !< Polar-FT matrix dimensions
+integer              :: mem_polwdim      = 0      !< dimension of K-B window
+integer              :: mem_polwlen      = 0      !< dimension squared of K-B window
+integer              :: mem_poldim(3)    = 0      !< Polar-FT matrix dimensions
 
 type :: image
     private
@@ -355,7 +355,7 @@ contains
     ! POLARIZATION, file: simple_image_polar.f90
     procedure          :: memoize4polarize
     procedure          :: polarize
-    procedure          :: polarize_strided
+    procedure          :: polarize_oversamp
     ! GEOMETRICAL, file: simple_image_geom.f90
     ! windowing
     procedure          :: window
@@ -2184,11 +2184,11 @@ interface
         logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
     end subroutine polarize
 
-    module subroutine polarize_strided( self, pft, mask )
+    module subroutine polarize_oversamp( self, pft, mask )
         class(image),      intent(in)    :: self           !< padded image instance to polarize
         complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft (original image dims)
         logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
-    end subroutine polarize_strided
+    end subroutine polarize_oversamp
 
     ! ===== geometric procedure interfaces =====
 

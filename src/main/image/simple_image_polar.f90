@@ -5,56 +5,55 @@ implicit none
 
 contains
 
-    !> \brief  initialises the image polarizer
     module subroutine memoize4polarize( self, pdim, instrfun_img )
-        class(image),           intent(in)    :: self         !< instance
-        integer,                intent(in)    :: pdim(3)      !< pftsz,kfrom,kto
-        class(image), optional, intent(inout) :: instrfun_img !< instrument function
-        type(kbinterpol)  :: kbwin                            !< KB kernel  object
+        class(image), intent(in) :: self
+        integer,      intent(in) :: pdim(3)
+        class(image), optional, intent(inout) :: instrfun_img
+        type(kbinterpol)  :: kbwin
         real, allocatable :: w(:,:)
-        real              :: x, y, d1, d2, dang, ang
-        integer           :: win(2,2), lims(2,3), i, k, l, cnt, f1, f2
+        real :: xpd, ypd, dang, ang
+        integer :: win(2,2), lims(2,3), i, k, l, m, pf, iwinsz, wdim
+        pf = STRIDE_GRID_PAD_FAC
         if( allocated(mem_polweights_mat) ) deallocate(mem_polweights_mat)
         if( allocated(mem_polcyc1_mat)    ) deallocate(mem_polcyc1_mat)
         if( allocated(mem_polcyc2_mat)    ) deallocate(mem_polcyc2_mat)
-        mem_poldim   = pdim
-        lims         = transpose(self%loop_lims(3)) ! fortran layered memory
-        
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        kbwin        = kbinterpol(KBWINSZ, 1.0)     ! no oversampling for now, this needs to be looked at
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-        mem_polwdim  = kbwin%get_wdim()
-        mem_polwlen  = mem_polwdim**2
-        allocate( mem_polcyc1_mat(    1:mem_polwdim, 1:mem_poldim(1), mem_poldim(2):mem_poldim(3)),&
-                  &mem_polcyc2_mat(   1:mem_polwdim, 1:mem_poldim(1), mem_poldim(2):mem_poldim(3)),&
-                  &mem_polweights_mat(1:mem_polwlen, 1:mem_poldim(1), mem_poldim(2):mem_poldim(3)),&
-                  &w(1:mem_polwdim,1:mem_polwdim))
-        ! cartesian to polar with Kaiser-Bessel
-        dang = twopi/real(2 * mem_poldim(1))
-        !$omp parallel do collapse(2) schedule(static) private(i,k,ang,x,y,cnt,l,w,win) default(shared) proc_bind(close)
-        do i=1,mem_poldim(1)
-            do k=mem_poldim(2),mem_poldim(3)
+        mem_poldim = pdim
+        ! IMPORTANT: lims from PADDED grid because self is padded
+        lims = transpose(self%loop_lims(3))
+        ! KB kernel for padded-grid interpolation
+        kbwin = kbinterpol(KBWINSZ, KBALPHA)
+        wdim   = kbwin%get_wdim()
+        iwinsz = ceiling(kbwin%get_winsz() - 0.5)
+        mem_polwdim = wdim
+        mem_polwlen = wdim*wdim
+        allocate( mem_polcyc1_mat(  1:wdim,        1:mem_poldim(1), mem_poldim(2):mem_poldim(3)), &
+                mem_polcyc2_mat(    1:wdim,        1:mem_poldim(1), mem_poldim(2):mem_poldim(3)), &
+                mem_polweights_mat( 1:mem_polwlen, 1:mem_poldim(1), mem_poldim(2):mem_poldim(3)), &
+                w(1:wdim,1:wdim) )
+        dang = twopi / real(2 * mem_poldim(1))
+        !$omp parallel do collapse(2) schedule(static) private(i,k,ang,xpd,ypd,win,w,l,m) default(shared) proc_bind(close)
+        do i = 1, mem_poldim(1)
+            do k = mem_poldim(2), mem_poldim(3)
                 ang = real(i-1) * dang
-                ! polar coordinates
-                x =  sin(ang)*real(k) ! x-coordinate
-                y = -cos(ang)*real(k) ! y-coordinate
-                call sqwin_2d(x, y, kbwin%get_winsz(), win)
-                w   = 1.
-                cnt = 0
-                do l=1,mem_polwdim
-                    cnt = cnt + 1
-                    ! interpolation weights
-                    w(l,:) = w(l,:) * kbwin%apod(real(win(1,1)+l-1)-x)
-                    w(:,l) = w(:,l) * kbwin%apod(real(win(2,1)+l-1)-y)
-                    ! cyclic addresses
-                    mem_polcyc1_mat(cnt, i, k) = cyci_1d(lims(:,1), win(1,1)+l-1)
-                    mem_polcyc2_mat(cnt, i, k) = cyci_1d(lims(:,2), win(2,1)+l-1)
+                ! Sample location in PADDED logical units
+                xpd =  sin(ang) * real(pf*k)
+                ypd = -cos(ang) * real(pf*k)
+                call sqwin_2d(xpd, ypd, kbwin%get_winsz(), win)
+                ! Store cyclic neighbor indices (PADDED logical)
+                do l = 1, wdim
+                    mem_polcyc1_mat(l,i,k) = cyci_1d(lims(:,1), win(1,1) + l - 1)
+                    mem_polcyc2_mat(l,i,k) = cyci_1d(lims(:,2), win(2,1) + l - 1)
                 end do
-                mem_polweights_mat(:,i,k) = reshape(w,(/mem_polwlen/))
+                ! Separable weights (PADDED geometry)
+                w = 1.0
+                do l = 1, wdim
+                    w(l,:) = w(l,:) * kbwin%apod(real(win(1,1)+l-1) - xpd)
+                    w(:,l) = w(:,l) * kbwin%apod(real(win(2,1)+l-1) - ypd)
+                end do
+                mem_polweights_mat(:,i,k) = reshape(w, (/mem_polwlen/))
                 mem_polweights_mat(:,i,k) = mem_polweights_mat(:,i,k) / sum(w)
-            enddo
-        enddo
+            end do
+        end do
         !$omp end parallel do
         deallocate(w)
     end subroutine memoize4polarize
@@ -103,41 +102,37 @@ contains
         endif
     end subroutine polarize
 
-    module subroutine polarize_strided( self, pft, mask )
-        class(image),      intent(in)    :: self           !< padded image instance to polarize
-        complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft (original image dims)
-        logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
+    module subroutine polarize_oversamp( self, pft, mask )
+        class(image),      intent(in)    :: self
+        complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3))
+        logical, optional, intent(in)    :: mask(:)
         complex(kind=c_float_complex) :: acc, fcomp
         real    :: padding_factor_scaling
         logical :: h_negative
-        integer :: original_box, i, k, l, m, ind, h_val, k_val, phys1, phys2, phys1p, phys2p, ithr
-        original_box = self%ldim(1) / STRIDE_GRID_PAD_FAC
-        ! To account for the FFTW division by box_pd^2 and recover values
-        ! at the same scale as the original image
+        integer :: padded_box
+        integer :: i, k, l, m, ind
+        integer :: h_val_pd, k_val_pd
+        integer :: h_abs, k_eff
+        integer :: phys1p, phys2p
+        padded_box = self%ldim(1)
         padding_factor_scaling = real(STRIDE_GRID_PAD_FAC**2)
-        ! interpolate (but fetch from padded FFT at strided (every STRIDE_GRID_PAD_FAC-th) samples)
-        !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,h_val,k_val,phys1,phys2,phys1p,phys2p,h_negative,fcomp)
+        !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,h_val_pd,k_val_pd,h_abs,k_eff,phys1p,phys2p,h_negative,fcomp)
         do k = mem_poldim(2), mem_poldim(3)
             do i = 1, mem_poldim(1)
                 acc = CMPLX_ZERO
                 ind = 0
                 do m = 1, mem_polwdim
-                    k_val = mem_polcyc2_mat(m,i,k)
+                    k_val_pd = mem_polcyc2_mat(m,i,k)
                     do l = 1, mem_polwdim
-                        ind   = ind + 1
-                        h_val = mem_polcyc1_mat(l,i,k)
-                        ! Branch-free indexing computation on the ORIGINAL (unpadded) Fourier lattice
-                        h_negative = (h_val < 0)
-                        phys1      = merge(-h_val, h_val, h_negative) + 1
-                        phys2      = merge(-k_val, k_val, h_negative) + 1 + &
-                                    merge(original_box, 0, merge(-k_val, k_val, h_negative) < 0)
-                        ! Map original Fourier lattice indices -> padded Fourier lattice indices (stride)
-                        ! Note: assumes self%cmat is the padded FFT with dimensions = STRIDE_GRID_PAD_FAC * original_dims.
-                        phys1p = 1 + (phys1 - 1) * STRIDE_GRID_PAD_FAC
-                        phys2p = 1 + (phys2 - 1) * STRIDE_GRID_PAD_FAC
-                        ! Fetch complex value from padded spectrum at strided location
-                        fcomp  = merge(conjg(self%cmat(phys1p,phys2p,1)), self%cmat(phys1p,phys2p,1), h_negative)
-                        ! accumulate dot product
+                        ind = ind + 1
+                        h_val_pd = mem_polcyc1_mat(l,i,k)
+                        h_negative = (h_val_pd < 0)
+                        h_abs = abs(h_val_pd)
+                        k_eff = merge(-k_val_pd, k_val_pd, h_negative)
+                        phys1p = h_abs + 1
+                        phys2p = k_eff + 1
+                        if (k_eff < 0) phys2p = phys2p + padded_box
+                        fcomp = merge(conjg(self%cmat(phys1p,phys2p,1)), self%cmat(phys1p,phys2p,1), h_negative)
                         acc = acc + mem_polweights_mat(ind,i,k) * fcomp
                     end do
                 end do
@@ -146,13 +141,12 @@ contains
         end do
         !$OMP END SIMD
         if( present(mask) )then
-            ! band masking
             !$OMP SIMD
             do k = mem_poldim(2), mem_poldim(3)
                 if( .not.mask(k) ) pft(:,k) = CMPLX_ZERO
-            enddo
+            end do
             !$OMP END SIMD
         endif
-    end subroutine polarize_strided
+    end subroutine polarize_oversamp
 
 end submodule simple_image_polar

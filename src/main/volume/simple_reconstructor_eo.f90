@@ -94,7 +94,7 @@ contains
         self%filtsz  = fdim(self%box) - 1
         self%msk     = real(self%box / 2) - COSMSKHALFWIDTH - 1.
         self%automsk = params_glob%l_filemsk .and. params_glob%l_envfsc
-        ! strided Fourier interpolation, so construct this at native size
+        ! oversampled Fourier interpolation, so construct this at native size
         self%mag_correction = real(params_glob%box) ! consistent with the current scheme
         self%ldim           = [self%box,self%box,self%box]
         ! create composites
@@ -383,9 +383,9 @@ contains
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%insert_plane_strided(se, o, fpl, pwght)
+                call self%even%insert_plane_oversamp(se, o, fpl, pwght)
             case(1)
-                call self%odd%insert_plane_strided(se, o, fpl, pwght)
+                call self%odd%insert_plane_oversamp(se, o, fpl, pwght)
             case DEFAULT
                 THROW_HARD('unsupported eo flag; grid_plane')
         end select

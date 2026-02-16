@@ -44,7 +44,7 @@ type, extends(image) :: reconstructor
     procedure          :: write_rho, write_rho_as_mrc, write_absfc_as_mrc
     procedure          :: read_rho, read_raw_rho
     ! CONVOLUTION INTERPOLATION
-    procedure          :: insert_plane_strided
+    procedure          :: insert_plane_oversamp
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     procedure          :: expand_exp
@@ -205,7 +205,7 @@ contains
 
     !> insert Fourier plane into NATIVE (unpadded) expanded Fourier volume,
     !> sampling the PADDED plane by STRIDING 
-    subroutine insert_plane_strided( self, se, o, fpl, pwght )
+    subroutine insert_plane_oversamp( self, se, o, fpl, pwght )
         use simple_math,    only: ceil_div, floor_div
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
         class(reconstructor), intent(inout) :: self
@@ -232,6 +232,8 @@ contains
             do isym = 2, nsym
                 call se%apply(o, isym, o_sym)
                 rotmats(isym,:,:) = o_sym%get_mat()
+                ! scale the matrix to map to the padded image
+                rotmats(isym,:,:) = KBALPHA * rotmats(isym,:,:)
             end do
         endif
         ! Plane limits/nyq are for the PADDED plane (input)
@@ -256,19 +258,19 @@ contains
                         kp = k * pf
                         sh = nint(sqrt(real(h*h + k*k)))
                         if (sh > self%nyq) cycle
-                        ! non-uniform sampling location on the ORIGINAL (native) lattice
-                        loc = matmul(real([h,k,0]), rotmats(isym,:,:))
-                        ! window on ORIGINAL (native) lattice
-                        win(1,:) = nint(loc)
+                        ! non-uniform sampling location on the PADDED lattice
+                        loc = matmul(real([h,k,0]), rotmats(isym,:,:)) 
+                        ! Window in NATIVE voxel indices (destination grid unchanged)
+                        win(1,:) = nint(loc / real(pf)) ! nearest native voxel
                         win(2,:) = win(1,:) + iwinsz
                         win(1,:) = win(1,:) - iwinsz
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         if( win(2,1) < self%lims(1,1) ) cycle
-                        ! Fourier component & CTF from PADDED plane at STRIDED indices
+                        ! Fourier component & CTF from PADDED plane
                         comp   = pwght * pf2 * fplane_get_cmplx(fpl, hp, kp)
                         ! CTF values are calculated analytically, no FFTW/padding scaling to account for
                         ctfval = pwght * fplane_get_ctfsq(fpl, hp, kp)
-                        ! KB weights evaluated in ORIGINAL coordinates / geometry
+                        ! Evaluate KB weights in PADDED logical units
                         call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
                         ! expanded matrices update (NATIVE volume)
                         self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) = &
@@ -282,7 +284,7 @@ contains
         end do
         !$omp end parallel
         call o_sym%kill
-    end subroutine insert_plane_strided
+    end subroutine insert_plane_oversamp
 
     subroutine sampl_dens_correct( self )
         class(reconstructor), intent(inout) :: self
