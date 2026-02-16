@@ -25,6 +25,7 @@ contains
         real,                            allocatable :: cls_res(:), cls_pop(:)
         logical,                         allocatable :: l_processed(:)
         integer,                           parameter :: NCLS_MAX = 100, NCLS_MIN=10, MIN_PTCLS_PER_CLASS=200
+        real,                              parameter :: CHUNK_MULTIPLIER = 1.5 ! accounts for more particles found using template pick vs initial pick
         type(json_value),                    pointer :: accepted_cls2D, rejected_cls2D, latest_accepted_cls2D, latest_rejected_cls2D
         type(rec_list)                               :: project_list, chunk_list, set_list
         type(parameters)                             :: params
@@ -481,13 +482,11 @@ contains
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
                 ! Updates global parameters once and init chunk 2D clustering
                 if(params%nptcls_per_cls == 0) then
-                    if( project_list%size() * STREAM_NMOVS_SET .gt. params%nmics) then
+                    if( n_imported .gt. params%nmics) then
                         ! nptcls_per_cls is calculated after params%nmics processed micrographs
-                        avgmicptcls    = nptcls_glob / (project_list%size() * STREAM_NMOVS_SET)
+                        avgmicptcls    = nptcls_glob / n_imported
                         avgmicptcls    = ceiling(avgmicptcls / 10) * 10.0
-                   !     nptcls_per_cls = ceiling(params%nmics * avgmicptcls / params%ncls)
-                        ! testing logic from opening2D
-                        chunk_size     = ceiling((avgmicptcls * params%nmics) / 1000.0 ) * 1000
+                        chunk_size     = ceiling((CHUNK_MULTIPLIER * avgmicptcls * params%nmics) / 1000.0 ) * 1000
                         ncls           = min(NCLS_MAX, max(NCLS_MIN, ceiling(chunk_size/MIN_PTCLS_PER_CLASS)))
                         nptcls_per_cls = ceiling(chunk_size /(ncls * 10.0)) * 10.0
                         write(logfhandle,'(A,I6)')   '>>> AVERAGE # PARTICLES PER MICROGRAPH : ', int(avgmicptcls)

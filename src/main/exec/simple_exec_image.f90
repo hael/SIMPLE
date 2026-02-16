@@ -23,8 +23,8 @@ contains
     subroutine exec_image_commander(which, cline, l_silent, l_did_execute)
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
+        logical,             intent(inout) :: l_did_execute
         logical,             intent(out)   :: l_silent
-        logical,             intent(out)   :: l_did_execute
         if( l_did_execute )return
         l_silent      = .false.
         l_did_execute = .true.

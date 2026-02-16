@@ -41,6 +41,9 @@ contains
         call construct_volume_programs(prgtab)
         call construct_other_programs(prgtab)
 
+        ! SIMPLE STREAM PROGRAMS
+        call construct_stream_programs(prgtab)
+
         ! SINGLE PROGRAMS
         call construct_single_atom_programs(prgtab)
         call construct_single_map_programs(prgtab)
