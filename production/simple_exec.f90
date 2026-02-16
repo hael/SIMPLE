@@ -29,7 +29,7 @@ call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, string(trim(prg)), string('simple_exec'))
 l_silent      = .false.
-l_did_execute = .true. ! will be set to false if no program was executed
+l_did_execute = .false. ! will be set to true if one program was executed
 call exec_project_commander(trim(prg),    cline, l_silent, l_did_execute)
 call exec_preproc_commander(trim(prg),    cline, l_silent, l_did_execute)
 call exec_cluster2D_commander(trim(prg),  cline, l_silent, l_did_execute)
@@ -57,7 +57,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('1323f308')
+    call simple_print_git_version('18db69b0')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
