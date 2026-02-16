@@ -4,6 +4,9 @@
 
 https://github.com/hael/SIMPLE/releases/tag/v3.0.0
 
+PUBLIC UNIT TESTS
+https://zenodo.org/records/18663655
+
 ABOUT
 
 Single-particle IMage Processing Linux Engine (SIMPLE) is an open-source software package for analysis of cryogenic transmission electron microscopy (cryo-EM) movies of single-particles (Single-Particle Analysis, SPA). SIMPLE includes a full SPA processing pipeline and a streaming SPA platform for informing data acquisition in real time, using only minimal CPU computing resources. Our stream SPA tool implements the steps of anisotropic motion correction, particle identification and 2D clustering with automatic class rejection. SIMPLE features an easy-to-use web-based graphical user interface that can be run on any device (workstation, laptop, tablet or iphone) and supports remote multi-user execution over the network. The project-based execution model automatically records the executed workflow, facilitates meta-data handling and greatly simplifies usage. Using SIMPLE, it is possible to automatically obtain a clean SP data set amenable to high-resolution 3D reconstruction directly upon completion of the data acquisition, without the need for extensive batch image processing.
