@@ -1011,7 +1011,7 @@ contains
         else
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
-        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
+        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
         call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
                                         

@@ -948,7 +948,6 @@ contains
             ! PREPARATION OF pftc AND REFERENCES
             nrefs = params_glob%nspace * params_glob%nstates
             call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
-            call build_glob%img_crop%memoize4polarize(pftc%get_pdim())
             ! Read polar references
             call pftc%polar_cavger_new(.true.)
             call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
@@ -1028,7 +1027,6 @@ contains
         ! pftc
         nrefs = params_glob%nspace * params_glob%nstates
         call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
-        call build_glob%img_crop%memoize4polarize(pftc%get_pdim())
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates
             if( str_has_substr(params_glob%refine, 'prob') )then
@@ -1105,7 +1103,9 @@ contains
         ! mask memoization for prepimg4align
         call tmp_imgs(1)%memoize_mask_coords
         ! memoize CTF stuff
-        call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())        
+        call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())   
+        ! memoize for polarize_oversamp
+        call tmp_imgs_pad(1)%memoize4polarize_oversamp(pftc%get_pdim())     
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,pft) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1

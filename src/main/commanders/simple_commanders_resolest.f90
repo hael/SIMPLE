@@ -115,7 +115,6 @@ contains
         call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, incr_sampled=.false.)
         ! PREPARATION OF PARTICLES
         call pftc%new(params%nspace, [1,nptcls], params%kfromto)
-        call build%img_crop%memoize4polarize(pftc%get_pdim())
         call prepimgbatch(nptcls)
         allocate(tmp_imgs(nthr_glob), tmp_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
@@ -126,7 +125,7 @@ contains
         !$omp end parallel do
         ! Build polar particle images
         call pftc%allocate_refs_memoization
-        call build_batch_particles(pftc, nptcls, pinds, tmp_imgs,tmp_imgs_pad)
+        call build_batch_particles(pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Dealing with polar cavgs
         call pftc%polar_cavger_new(.true.)
         call pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, is3D=.true.)
