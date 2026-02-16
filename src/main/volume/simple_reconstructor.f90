@@ -232,10 +232,10 @@ contains
             do isym = 2, nsym
                 call se%apply(o, isym, o_sym)
                 rotmats(isym,:,:) = o_sym%get_mat()
-                ! scale the matrix to map to the padded image
-                rotmats(isym,:,:) = KBALPHA * rotmats(isym,:,:)
             end do
         endif
+        ! scale the matrix to map to the padded image
+        rotmats = KBALPHA * rotmats
         ! Plane limits/nyq are for the PADDED plane (input)
         fpllims_pd = fpl%frlims
         ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
