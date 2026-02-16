@@ -41,6 +41,7 @@ contains
         class(cmdline),      intent(inout) :: cline
         logical,             intent(out)   :: l_silent
         logical,             intent(out)   :: l_did_execute
+        if( l_did_execute )return
         l_silent      = .false.
         l_did_execute = .true.
         select case(trim(adjustl(which)))
