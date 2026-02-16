@@ -354,6 +354,7 @@ contains
     procedure          :: iter_gridcorr
     ! POLARIZATION, file: simple_image_polar.f90
     procedure          :: memoize4polarize
+    procedure          :: memoize4polarize_oversamp
     procedure          :: polarize
     procedure          :: polarize_oversamp
     ! GEOMETRICAL, file: simple_image_geom.f90
@@ -2172,11 +2173,15 @@ interface
 
     ! ===== polarization procedure interfaces =====
 
-    module subroutine memoize4polarize( self, pdim, instrfun_img )
+    module subroutine memoize4polarize( self, pdim )
         class(image),           intent(in)    :: self         !< instance
         integer,                intent(in)    :: pdim(3)      !< pftsz,kfrom,kto
-        class(image), optional, intent(inout) :: instrfun_img !< instrument function
     end subroutine memoize4polarize
+
+     module subroutine memoize4polarize_oversamp( self, pdim )
+        class(image),           intent(in)    :: self         !< instance
+        integer,                intent(in)    :: pdim(3)      !< pftsz,kfrom,kto
+    end subroutine memoize4polarize_oversamp
 
     module subroutine polarize( self, pft, mask )
         class(image),      intent(in)    :: self     !< image instance to polarize

@@ -5,10 +5,58 @@ implicit none
 
 contains
 
-    module subroutine memoize4polarize( self, pdim, instrfun_img )
+    !> \brief  initialises the image polarizer
+    module subroutine memoize4polarize( self, pdim )
+        class(image),           intent(in)    :: self    !< instance
+        integer,                intent(in)    :: pdim(3) !< pftsz,kfrom,kto
+        type(kbinterpol)  :: kbwin                       !< KB kernel  object
+        real, allocatable :: w(:,:)
+        real              :: x, y, d1, d2, dang, ang
+        integer           :: win(2,2), lims(2,3), i, k, l, cnt, f1, f2
+        if( allocated(mem_polweights_mat) ) deallocate(mem_polweights_mat)
+        if( allocated(mem_polcyc1_mat)    ) deallocate(mem_polcyc1_mat)
+        if( allocated(mem_polcyc2_mat)    ) deallocate(mem_polcyc2_mat)
+        mem_poldim   = pdim
+        lims         = transpose(self%loop_lims(3)) ! fortran layered memory
+        kbwin        = kbinterpol(KBWINSZ, 1.0)     ! no oversampling, since self is not padded
+        mem_polwdim  = kbwin%get_wdim()
+        mem_polwlen  = mem_polwdim**2
+        allocate( mem_polcyc1_mat(    1:mem_polwdim, 1:mem_poldim(1), mem_poldim(2):mem_poldim(3)),&
+                  &mem_polcyc2_mat(   1:mem_polwdim, 1:mem_poldim(1), mem_poldim(2):mem_poldim(3)),&
+                  &mem_polweights_mat(1:mem_polwlen, 1:mem_poldim(1), mem_poldim(2):mem_poldim(3)),&
+                  &w(1:mem_polwdim,1:mem_polwdim))
+        ! cartesian to polar with Kaiser-Bessel
+        dang = twopi/real(2 * mem_poldim(1))
+        !$omp parallel do collapse(2) schedule(static) private(i,k,ang,x,y,cnt,l,w,win) default(shared) proc_bind(close)
+        do i=1,mem_poldim(1)
+            do k=mem_poldim(2),mem_poldim(3)
+                ang = real(i-1) * dang
+                ! polar coordinates
+                x =  sin(ang)*real(k) ! x-coordinate
+                y = -cos(ang)*real(k) ! y-coordinate
+                call sqwin_2d(x, y, kbwin%get_winsz(), win)
+                w   = 1.
+                cnt = 0
+                do l=1,mem_polwdim
+                    cnt = cnt + 1
+                    ! interpolation weights
+                    w(l,:) = w(l,:) * kbwin%apod(real(win(1,1)+l-1)-x)
+                    w(:,l) = w(:,l) * kbwin%apod(real(win(2,1)+l-1)-y)
+                    ! cyclic addresses
+                    mem_polcyc1_mat(cnt, i, k) = cyci_1d(lims(:,1), win(1,1)+l-1)
+                    mem_polcyc2_mat(cnt, i, k) = cyci_1d(lims(:,2), win(2,1)+l-1)
+                end do
+                mem_polweights_mat(:,i,k) = reshape(w,(/mem_polwlen/))
+                mem_polweights_mat(:,i,k) = mem_polweights_mat(:,i,k) / sum(w)
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate(w)
+    end subroutine memoize4polarize
+
+    module subroutine memoize4polarize_oversamp( self, pdim )
         class(image), intent(in) :: self
         integer,      intent(in) :: pdim(3)
-        class(image), optional, intent(inout) :: instrfun_img
         type(kbinterpol)  :: kbwin
         real, allocatable :: w(:,:)
         real :: xpd, ypd, dang, ang
@@ -56,7 +104,7 @@ contains
         end do
         !$omp end parallel do
         deallocate(w)
-    end subroutine memoize4polarize
+    end subroutine memoize4polarize_oversamp
 
     ! keep serial
     module subroutine polarize( self, pft, mask )
