@@ -4,9 +4,9 @@ use simple_ui_modules
 implicit none
 
 type(ui_program), target :: abinitio2D_stream
-type(ui_program), target :: assign_optics ! not executing
+type(ui_program), target :: assign_optics
 type(ui_program), target :: cluster2D_stream 
-type(ui_program), target :: gen_pickrefs  ! not executing
+type(ui_program), target :: gen_pickrefs
 type(ui_program), target :: pick_extract
 type(ui_program), target :: preproc
 type(ui_program), target :: sieve_cavgs
@@ -16,9 +16,9 @@ contains
     subroutine construct_stream_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D_stream(prgtab)
-        call new_assign_optics(prgtab) ! not in list
+        call new_assign_optics(prgtab)
         call new_cluster2D_stream(prgtab)
-        call new_gen_pickrefs(prgtab)  ! not in list
+        call new_gen_pickrefs(prgtab)
         call new_pick_extract(prgtab)
         call new_preproc(prgtab)
         call new_sieve_cavgs(prgtab)
