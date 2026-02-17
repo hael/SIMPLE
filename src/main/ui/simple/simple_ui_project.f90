@@ -128,7 +128,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        !
+        ! add to ui_hash
         call add_ui_program('export_starproject', export_starproject, prgtab)
     end subroutine new_export_starproject
 
@@ -160,6 +160,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
         call add_ui_program('extract_subproj', extract_subproj, prgtab)
     end subroutine new_extract_subproj
 

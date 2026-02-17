@@ -91,7 +91,6 @@ contains
         call add_ui_program('info_stktab', info_stktab, prgtab)
     end subroutine new_info_stktab
 
-
     subroutine new_print_dose_weights( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

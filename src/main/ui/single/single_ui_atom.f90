@@ -59,6 +59,7 @@ contains
         ! <empty>
         ! computer controls
         call atoms_register%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('atoms_register', atoms_register, prgtab) 
     end subroutine new_atoms_register
 
@@ -88,6 +89,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
         call add_ui_program('atoms_rmsd', atoms_rmsd, prgtab) 
     end subroutine new_atoms_rmsd
 
@@ -123,6 +125,7 @@ contains
         ! <empty>
         ! computer controls
         call atoms_stats%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('atoms_stats', atoms_stats, prgtab) 
     end subroutine new_atoms_stats
 
@@ -152,6 +155,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
         call add_ui_program('core_atoms_analysis', core_atoms_analysis, prgtab) 
     end subroutine new_core_atoms_analysis
 
@@ -181,6 +185,7 @@ contains
         ! <empty>
         ! computer controls
         call crys_score%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('crys_score', crys_score, prgtab) 
     end subroutine new_crys_score
 
@@ -211,6 +216,7 @@ contains
         ! <empty>
         ! computer controls
         call detect_atoms%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('detect_atoms', detect_atoms, prgtab) 
     end subroutine new_detect_atoms
 
@@ -241,6 +247,7 @@ contains
         ! <empty>
         ! computer controls
         call simulate_atoms%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('simulate_atoms', simulate_atoms, prgtab) 
     end subroutine new_simulate_atoms
 

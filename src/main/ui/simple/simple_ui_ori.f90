@@ -65,9 +65,9 @@ contains
         ! <empty>
         ! computer controls
         call make_oris%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('make_oris', make_oris, prgtab)
     end subroutine new_make_oris
-
 
     subroutine new_oriops( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -122,9 +122,9 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
         call add_ui_program('oriops', oriops, prgtab)
     end subroutine new_oriops
-
 
     subroutine new_oristats( prgtab )
         class(ui_hash), intent(inout) :: prgtab

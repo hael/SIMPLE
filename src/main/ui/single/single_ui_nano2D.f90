@@ -53,6 +53,7 @@ contains
         ! computer controls
         call analysis2D_nano%add_input(UI_COMP, nthr)
         call analysis2D_nano%add_input(UI_COMP, script)
+        ! add to ui_hash
         call add_ui_program('analysis2D_nano', analysis2D_nano, prgtab)
     end subroutine new_analysis2D_nano
 
@@ -83,6 +84,7 @@ contains
         ! computer controls
         call center2D_nano%add_input(UI_COMP, nthr)
         call center2D_nano%add_input(UI_COMP, script)
+        ! add to ui_hash
         call add_ui_program('center2D_nano', center2D_nano, prgtab)
     end subroutine new_center2D_nano
 
@@ -123,6 +125,7 @@ contains
         call cluster2D_nano%add_input(UI_COMP, nparts, required_override=.false.)
         call cluster2D_nano%add_input(UI_COMP, nthr)
         call cluster2D_nano%add_input(UI_COMP, script)
+        ! add to ui_hash
         call add_ui_program('cluster2D_nano', cluster2D_nano, prgtab)
     end subroutine new_cluster2D_nano
 
@@ -151,6 +154,7 @@ contains
         call estimate_diam%add_input(UI_MASK, mskdiam)
         ! computer controls
         call estimate_diam%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('estimate_diam', estimate_diam, prgtab)
     end subroutine new_estimate_diam
 

@@ -47,6 +47,7 @@ contains
         call conv_atom_denoise%add_input(UI_MASK, mskdiam)
         ! computer controls
         call conv_atom_denoise%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('conv_atom_denoise', conv_atom_denoise, prgtab)
     end subroutine new_conv_atom_denoise
 
@@ -75,6 +76,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
         call add_ui_program('tsegmaps_core_finder', tsegmaps_core_finder, prgtab)
     end subroutine new_tsegmaps_core_finder
 

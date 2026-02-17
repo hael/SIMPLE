@@ -4,9 +4,9 @@ use simple_ui_modules
 implicit none
 
 type(ui_program), target :: abinitio2D_stream
-type(ui_program), target :: assign_optics
-type(ui_program), target :: cluster2D_stream
-type(ui_program), target :: gen_pickrefs
+type(ui_program), target :: assign_optics ! not executing
+type(ui_program), target :: cluster2D_stream 
+type(ui_program), target :: gen_pickrefs  ! not executing
 type(ui_program), target :: pick_extract
 type(ui_program), target :: preproc
 type(ui_program), target :: sieve_cavgs
@@ -16,9 +16,9 @@ contains
     subroutine construct_stream_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D_stream(prgtab)
-        call new_assign_optics(prgtab)
+        call new_assign_optics(prgtab) ! not in list
         call new_cluster2D_stream(prgtab)
-        call new_gen_pickrefs(prgtab)
+        call new_gen_pickrefs(prgtab)  ! not in list
         call new_pick_extract(prgtab)
         call new_preproc(prgtab)
         call new_sieve_cavgs(prgtab)
@@ -75,13 +75,12 @@ contains
         call add_ui_program('abinitio2D_stream', abinitio2D_stream, prgtab)
     end subroutine new_abinitio2D_stream
 
-
     subroutine new_assign_optics( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call assign_optics%new(&
         &'assign_optics', &                                              ! name
-        &'Assign optics groups',&                                         ! descr_short
+        &'Assign optics groups',&                                        ! descr_short
         &'is a program to assign optics groups during streaming',&       ! descr long
         &'simple_stream',&                                               ! executable
         &.true.)                                                         ! requires sp_project
@@ -99,10 +98,10 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-
         call assign_optics%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('assign_optics', abinitio2D_stream, prgtab)
     end subroutine new_assign_optics
-
 
     subroutine new_cluster2D_stream( prgtab )
         class(ui_hash), intent(inout) :: prgtab 
@@ -146,7 +145,6 @@ contains
         call add_ui_program('cluster2D_stream', cluster2D_stream, prgtab)
     end subroutine new_cluster2D_stream
 
-
     subroutine new_gen_pickrefs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
@@ -175,8 +173,9 @@ contains
         ! <empty>
         ! computer controls
         call gen_pickrefs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('gen_pickrefs', cluster2D_stream, prgtab)
     end subroutine new_gen_pickrefs
-
 
     subroutine new_pick_extract( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -230,7 +229,7 @@ contains
         &'Preprocessing',&                                                                  ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
-        &'simple_exec',&                                                                    ! executable
+        &'simple_stream',&                                                                    ! executable
         &.true.)                                                                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS           
         ! image input/output

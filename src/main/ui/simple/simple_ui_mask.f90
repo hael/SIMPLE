@@ -54,7 +54,6 @@ contains
         call add_ui_program('auto_spher_mask', auto_spher_mask, prgtab) 
     end subroutine new_auto_spher_mask
 
-
     subroutine new_automask2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION

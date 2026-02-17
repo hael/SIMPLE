@@ -1,5 +1,5 @@
 !@descr: module defining the user interfaces for testing programs in the simple_exec suite
-module simple_ui_tests
+module simple_ui_test
 use simple_ui_modules
 implicit none
 
@@ -7,17 +7,17 @@ type(ui_program), target :: test_sim_workflow
 
 contains
 
-    subroutine construct_tests_programs(prgtab)
+    subroutine construct_test_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_test_sim_workflow(prgtab)
-    end subroutine construct_tests_programs
+    end subroutine construct_test_programs
 
-    subroutine print_tests_programs(logfhandle)
+    subroutine print_test_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('TESTS:', C_UNDERLINED)
         write(logfhandle,'(A)') test_sim_workflow%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_tests_programs
+    end subroutine print_test_programs
 
     subroutine new_test_sim_workflow( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -42,4 +42,4 @@ contains
         call add_ui_program('test_sim_workflow', test_sim_workflow, prgtab)
     end subroutine new_test_sim_workflow
 
-end module simple_ui_tests
+end module simple_ui_test

@@ -180,6 +180,7 @@ contains
         call match_stacks%add_input(UI_MASK, mskdiam)
         ! computer controls
         call match_stacks%add_input(UI_COMP, nthr)
+        ! add 2 ui  
         call add_ui_program('match_stacks', match_stacks, prgtab)
     end subroutine new_match_stacks
 

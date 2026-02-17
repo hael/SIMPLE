@@ -63,6 +63,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
         call add_ui_program('extract_substk', extract_substk, prgtab)
     end subroutine new_extract_substk
 
@@ -93,6 +94,7 @@ contains
         ! <empty>
         ! computer controls
         call graphene_subtr%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('graphene_subtr', graphene_subtr, prgtab)
     end subroutine new_graphene_subtr
 
@@ -121,6 +123,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
         call add_ui_program('import_trajectory', import_trajectory, prgtab)
     end subroutine new_import_trajectory
 
@@ -149,6 +152,7 @@ contains
         ! <empty>
         ! computer controls
         call trajectory_denoise%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('trajectory_denoise', trajectory_denoise, prgtab)
     end subroutine new_trajectory_denoise
 
@@ -178,6 +182,7 @@ contains
         call trajectory_make_projavgs%add_input(UI_MASK, mskdiam)
         ! computer controls
         call trajectory_make_projavgs%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('trajectory_make_projavgs', trajectory_make_projavgs, prgtab)
     end subroutine new_trajectory_make_projavgs
 
@@ -209,6 +214,7 @@ contains
         ! computer controls
         call trajectory_reconstruct3D%add_input(UI_COMP, nparts, required_override=.false.)
         call trajectory_reconstruct3D%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('trajectory_reconstruct3D', trajectory_reconstruct3D, prgtab)
     end subroutine new_trajectory_reconstruct3D
 
@@ -236,6 +242,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
         call add_ui_program('trajectory_swap_stack', trajectory_swap_stack, prgtab)
     end subroutine new_trajectory_swap_stack
 
