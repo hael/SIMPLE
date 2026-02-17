@@ -842,7 +842,7 @@ contains
         write(logfhandle,'(A,F5.1)')        '>>> POOL   HARD RESOLUTION LIMIT (Angs) : ',params_glob%lpstop
         ! upsample cavgs
         ldim = [pool_dims%box,pool_dims%box,1]
-        str_tmp_mrc = str_tmp_mrc
+        str_tmp_mrc = TMP_STK_FNAME
         call scale_imgfile(refs_glob, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
         call simple_rename(str_tmp_mrc,refs_glob)
         str  = add2fbody(refs_glob, params_glob%ext,'_even')
