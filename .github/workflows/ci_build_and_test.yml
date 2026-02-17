@@ -118,7 +118,7 @@ jobs:
              echo "-------------------- TEST UNITS -------------------------"
              simple_test_units
          
-      - - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
       - run: mkdir -p build && wget -P build https://www.dartmouth.edu/emlab/images/hibim4.jpg
       - run: echo "<html><body><h1>CI Report</h1><p>Test Passed</p> <img src="hibim4.jpg" alt="Embedded Base64 image" width="200" height="200"> </body></html>" > build/artifact.html
       - uses: actions/upload-artifact@v4
