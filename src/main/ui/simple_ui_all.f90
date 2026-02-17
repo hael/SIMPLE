@@ -39,4 +39,28 @@ use single_ui_nano3D
 use single_ui_trajectory
 use single_ui_tseries
 use single_ui_validate
+
+! SIMPLE STREAM
+!use simple_stream_ui_all
+!    abinitio2D_stream
+!    assign_optics
+!    cluster2D_stream
+!    gen_pickrefs
+!    pick_extract
+!    preproc
+!    sieve_cavgs
+
+! SIMPLE TEST
+use simple_test_ui_highlevel
+use simple_test_ui_io
+use simple_test_ui_network
+use simple_test_ui_parallel
+use simple_test_ui_fft
+use simple_test_ui_geometry
+use simple_test_ui_masks
+use simple_test_ui_optimize
+use simple_test_ui_numerics
+use simple_test_ui_utils
+use simple_test_ui_stats
+
 end module simple_ui_all
