@@ -24,7 +24,7 @@ use simple_ui_res
 use simple_ui_sim
 use simple_ui_stream
 use simple_ui_sym
-use simple_ui_tests
+use simple_ui_test
 use simple_ui_validate
 use simple_ui_volume
 use simple_ui_hash

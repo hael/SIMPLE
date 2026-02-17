@@ -65,6 +65,7 @@ contains
         ! <empty>
         ! computer controls
         call track_particles%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('track_particles', track_particles, prgtab)
     end subroutine new_track_particles
 
@@ -95,6 +96,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
+        ! add to ui_hash
         call add_ui_program('tseries_import', tseries_import, prgtab)
     end subroutine new_tseries_import
 
@@ -132,6 +134,7 @@ contains
         ! <empty>
         ! computer controls
         call tseries_make_pickavg%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('tseries_make_pickavg', tseries_make_pickavg, prgtab)
     end subroutine new_tseries_make_pickavg
 
@@ -170,6 +173,7 @@ contains
         ! computer controls
         call tseries_motion_correct%add_input(UI_COMP, nparts)
         call tseries_motion_correct%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab)
     end subroutine new_tseries_motion_correct
 

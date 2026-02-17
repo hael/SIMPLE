@@ -50,6 +50,7 @@ contains
         ! computer controls
         call cavgseoproc_nano%add_input(UI_COMP, nthr)
         call cavgseoproc_nano%add_input(UI_COMP, script)
+        ! add to ui_hash
         call add_ui_program('cavgseoproc_nano', cavgseoproc_nano, prgtab)
     end subroutine new_cavgseoproc_nano
 
@@ -78,6 +79,7 @@ contains
         ! computer controls
         call cavgsproc_nano%add_input(UI_COMP, nthr)
         call cavgsproc_nano%add_input(UI_COMP, script)
+        ! add to ui_hash
         call add_ui_program('cavgsproc_nano', cavgsproc_nano, prgtab)
     end subroutine new_cavgsproc_nano
 
@@ -105,6 +107,7 @@ contains
         ! computer controls
         call ptclsproc_nano%add_input(UI_COMP, nthr)
         call ptclsproc_nano%add_input(UI_COMP, script)
+        ! add to ui_hash
         call add_ui_program('ptclsproc_nano', ptclsproc_nano, prgtab)
     end subroutine new_ptclsproc_nano
 

@@ -108,7 +108,7 @@ contains
         ! filter controls
         ! mask controls
         ! computer controls
-        ! add 2 ui_ash
+        ! add 2 ui_hash
         call add_ui_program('cleanup2D', cleanup2D, prgtab)
     end subroutine new_cleanup2D
 

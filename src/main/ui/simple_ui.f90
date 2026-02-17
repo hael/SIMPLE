@@ -3,8 +3,9 @@ module simple_ui
 use simple_ui_all
 implicit none
 
-public :: make_ui, get_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui
-public :: print_ui_json, write_ui_json, list_single_prgs_in_ui, list_stream_prgs_in_ui
+public :: make_ui, get_prg_ptr
+public :: list_simple_prgs_in_ui, list_simple_test_prgs_in_ui, list_stream_prgs_in_ui, list_single_prgs_in_ui
+public :: print_ui_json, write_ui_json
 public :: print_stream_ui_json, validate_ui_json
 private
 #include "simple_local_flags.inc"
@@ -19,6 +20,7 @@ contains
     ! public class methods
 
     subroutine make_ui
+        integer :: i
         call set_ui_params
         ! SIMPLE PROGRAMS
         call construct_project_programs(prgtab)
@@ -40,10 +42,10 @@ contains
         call construct_dock_programs(prgtab)
         call construct_volume_programs(prgtab)
         call construct_other_programs(prgtab)
-
+        ! SIMPLE TEST PROGRAMS
+        call construct_test_programs(prgtab)
         ! SIMPLE STREAM PROGRAMS
         call construct_stream_programs(prgtab)
-
         ! SINGLE PROGRAMS
         call construct_single_atom_programs(prgtab)
         call construct_single_map_programs(prgtab)
@@ -53,7 +55,6 @@ contains
         call construct_single_tseries_programs(prgtab)
         call construct_single_validate_programs(prgtab)
         prgnames = prgtab%keys_sorted()
-        if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_ui; make_ui, DONE'
     end subroutine make_ui
 
     subroutine get_prg_ptr( which_program, ptr2prg )

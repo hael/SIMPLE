@@ -59,6 +59,7 @@ contains
         ! computer controls
         call autorefine3D_nano%add_input(UI_COMP, nthr)
         call autorefine3D_nano%add_input(UI_COMP, script)
+        ! add to ui_hash
         call add_ui_program('autorefine3D_nano', autorefine3D_nano, prgtab)
     end subroutine new_autorefine3D_nano
 
@@ -103,6 +104,7 @@ contains
         ! computer controls
         call refine3D_nano%add_input(UI_COMP, nparts, required_override=.false.)
         call refine3D_nano%add_input(UI_COMP, nthr)
+        ! add to ui_hash
         call add_ui_program('refine3D_nano', refine3D_nano, prgtab)
     end subroutine new_refine3D_nano
 
