@@ -24,12 +24,6 @@ contains
         smpd    = vol%get_smpd()
         boxpd   = 2 * round2even(KBALPHA * real(box / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
-        ! padding & fft
-        call vol_pad%new(ldim_pd, smpd)
-        call vol%pad(vol_pad)
-        ! corrects for interpolation function
-        call vol_pad%fft
-        call vol_pad%mul(real(boxpd)) ! correct for FFTW convention
         if( present(top) )then
             n = top
         else
@@ -43,6 +37,10 @@ contains
         do ithr=1,nthr_glob
             call imgs_pad(ithr)%new([boxpd,boxpd,1], smpd, wthreads=.false.)
         end do
+        ! padding & fft
+        call vol_pad%new(ldim_pd, smpd)
+        call vol%pad(vol_pad)
+        call vol_pad%fft
         ! prepare for projection
         call vol_pad%expand_cmat
         write(logfhandle,'(A)') '>>> GENERATING PROJECTIONS'
