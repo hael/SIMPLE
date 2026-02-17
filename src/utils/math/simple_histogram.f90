@@ -188,8 +188,7 @@ contains
         class(histogram),  intent(inout) :: self
         class(image),      intent(in)    :: img
         real,    optional, intent(in)    :: minmax(2), radius
-        real, pointer :: prmat(:,:,:)
-        real          :: minmax_here(2), diff, radsq, dsq
+        real          :: minmax_here(2), diff, radsq, dsq, v
         integer       :: dims(3), center(3), i,j,bin,djsq
         if( .not.self%exists ) THROW_HARD('Object has not been instanciated!')
         if( img%is_ft() ) THROW_HARD('Real space only!')
@@ -216,19 +215,18 @@ contains
         self%x(self%nbins+1) = minmax_here(2)
         center = dims/2 + 1
         self%counts = 0.
-        call img%get_rmat_ptr(prmat)
         do j = 1,dims(2)
             djsq = (j-center(2))**2
             do i = 1,dims(1)
                 dsq  = real(djsq + (i-center(1))**2)
                 if( dsq > radsq ) cycle
-                bin = self%get_bin(prmat(i,j,1))
+                v   = img%get([i,j,1])
+                bin = self%get_bin( v )
                 bin = min(self%nbins,max(1,bin))
                 self%counts(bin) = self%counts(bin)+1.
             enddo
         enddo
         self%ntot = sum(self%counts)
-        nullify(prmat)
     end subroutine quantize
 
     !> Getters

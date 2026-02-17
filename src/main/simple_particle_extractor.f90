@@ -2,7 +2,7 @@
 !@descr: core functionality for extracting particles from micrographs
 module simple_particle_extractor
 use simple_core_module_api
-use simple_image,                only: image, image_ptr
+use simple_image,                only: image
 use simple_eer_factory,          only: eer_decoder
 use simple_motion_correct_utils, only: correct_gain
 use simple_starfile_wrappers
@@ -473,8 +473,6 @@ contains
     subroutine cure_outliers( self )
         class(ptcl_extractor), intent(inout)  :: self
         integer, parameter   :: hwinsz = 5
-        type(image_ptr)      :: prmats(self%nframes)
-        real,        pointer :: prmat(:,:,:)
         real,    allocatable :: rsum(:,:), new_vals(:,:), vals(:)
         integer, allocatable :: pos_outliers(:,:), pos_outliers_here(:,:)
         real    :: ave, sdev, var, lthresh,uthresh, l,u,localave
@@ -484,12 +482,8 @@ contains
         write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS'
         ! sum
         do iframe = 1,self%nframes
-            call self%frames(iframe)%get_rmat_ptr(prmat)
-            !$omp parallel workshare
-            rsum(:,:) = rsum(:,:) + prmat(:self%ldim(1),:self%ldim(2),1)
-            !$omp end parallel workshare
+            call self%frames(iframe)%add_rmat2mat_workshare(rsum)
         enddo
-        nullify(prmat)
         ! outliers detection
         call moment( rsum, ave, sdev, var, err )
         if( sdev<TINY )return
@@ -523,11 +517,7 @@ contains
             enddo
             ! add eer gain defects for curation
             if( self%l_eer .and. self%l_gain )then
-                call self%gain%get_rmat_ptr(prmat)
-                where( is_zero(prmat(:self%ldim(1),:self%ldim(2),1)) )
-                    outliers = .true.
-                end where
-                nullify(prmat)
+                call self%gain%add_zero2mask(outliers)
                 noutliers = count(outliers)
                 if( noutliers > 0 )then
                     write(logfhandle,'(a,1x,i8)') '>>> # DEAD/HOT PIXELS + EER GAIN DEFFECTS:', noutliers
@@ -557,7 +547,6 @@ contains
             !$omp parallel do default(shared) private(iframe,k,i,j,n,ii,jj,vals,l,u,localave)&
             !$omp proc_bind(close) schedule(static)
             do iframe=1,self%nframes
-                call self%frames(iframe)%get_rmat_ptr(prmats(iframe)%rmat)
                 ! calulate new values
                 do k = 1,noutliers
                     i = pos_outliers_here(1,k)
@@ -568,8 +557,8 @@ contains
                         do ii = i-HWINSZ,i+HWINSZ
                             if( ii < 1 .or. ii > self%ldim(1) ) cycle
                             if( outliers(ii,jj) ) cycle
-                            n = n + 1
-                            vals(n) = prmats(iframe)%rmat(ii,jj,1)
+                            n       = n + 1
+                            vals(n) = self%frames(iframe)%get([ii,jj,1])
                         enddo
                     enddo
                     if( n > 1 )then
@@ -591,7 +580,7 @@ contains
                 do k = 1,noutliers
                     i = pos_outliers_here(1,k)
                     j = pos_outliers_here(2,k)
-                    prmats(iframe)%rmat(i,j,1) = new_vals(k,iframe)
+                    call self%frames(iframe)%set([i,j,1], new_vals(k,iframe))
                 enddo
             enddo
             !$omp end parallel do

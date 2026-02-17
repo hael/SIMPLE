@@ -725,7 +725,6 @@ contains
         type(image),       intent(inout) :: img_out
         type(image)       :: tiles(nthr_glob), tmp(nthr_glob)
         real, allocatable :: rmat_sum(:,:,:)
-        real, pointer     :: prmat(:,:,:)
         real    :: smpd
         integer :: ldim(3), i,j, n, hbox, ithr
         logical :: outside
@@ -739,7 +738,7 @@ contains
         call img_out%zero_and_unflag_ft
         rmat_sum = img_out%get_rmat()
         ! sum individual spectra
-        !$omp parallel do private(i,j,ithr,prmat) default(shared) schedule(static)&
+        !$omp parallel do private(i,j,ithr) default(shared) schedule(static)&
         !$omp proc_bind(close) reduction(+:n,rmat_sum)
         do j = 0,ldim(2)-box,hbox
             do i = 0,ldim(1)-box,hbox
@@ -756,8 +755,7 @@ contains
                 call tiles(ithr)%zero_edgeavg
                 call tiles(ithr)%fft()
                 call tiles(ithr)%ft2img(speckind, tmp(ithr))
-                call tmp(ithr)%get_rmat_ptr(prmat)
-                rmat_sum(:box,:box,1) = rmat_sum(:box,:box,1) + prmat(:box,:box,1)
+                call tmp(ithr)%add_rmat2mat_workshare(rmat_sum)
             enddo
         enddo
         !$omp end parallel do
@@ -773,7 +771,6 @@ contains
             call tiles(ithr)%kill
             call tmp(ithr)%kill
         enddo
-        nullify(prmat)
         if( L_BENCH ) print *,'rt_mic2spec:        ',toc(t_mic2spec)
     end subroutine motion_correct_mic2spec
 
@@ -804,11 +801,8 @@ contains
 
     ! identify and cure outliers
     subroutine cure_outliers( frames )
-        use simple_image, only: image_ptr
         class(image), intent(inout) :: frames(nframes)
         integer, parameter   :: hwinsz = 5
-        type(image_ptr)      :: prmats(nframes)
-        real,        pointer :: prmat(:,:,:)
         real,    allocatable :: rsum(:,:), new_vals(:,:), vals(:)
         integer, allocatable :: pos_outliers_here(:,:)
         real    :: ave, sdev, var, lthresh,uthresh, l,u,localave
@@ -818,12 +812,8 @@ contains
         if( l_BENCH ) t_cure = tic()
         ! sum
         do iframe = 1,nframes
-            call frames(iframe)%get_rmat_ptr(prmat)
-            !$omp parallel workshare
-            rsum(:,:) = rsum(:,:) + prmat(:ldim(1),:ldim(2),1)
-            !$omp end parallel workshare
+            call frames(iframe)%add_rmat2mat_workshare(rsum)
         enddo
-        nullify(prmat)
         ! outliers detection
         call moment( rsum, ave, sdev, var, err )
         if( sdev<TINY )return
@@ -856,11 +846,7 @@ contains
             enddo
             ! add eer gain defects for curation but not star output
             if( l_eer .and. gain_img%exists() )then
-                call gain_img%get_rmat_ptr(prmat)
-                where( is_zero(prmat(:ldim(1),:ldim(2),1)) )
-                    outliers = .true.
-                end where
-                nullify(prmat)
+                call gain_img%add_zero2mask(outliers)
                 noutliers = count(outliers)
                 if( noutliers > 0 )then
                     write(logfhandle,'(a,1x,i8)') '>>> # DEAD/HOT PIXELS + EER GAIN DEFFECTS:', noutliers
@@ -890,7 +876,6 @@ contains
             !$omp parallel do default(shared) private(iframe,k,i,j,n,ii,jj,vals,l,u,localave)&
             !$omp proc_bind(close) schedule(static)
             do iframe=1,nframes
-                call frames(iframe)%get_rmat_ptr(prmats(iframe)%rmat)
                 ! calulate new values
                 do k = 1,noutliers
                     i = pos_outliers_here(1,k)
@@ -902,7 +887,7 @@ contains
                             if( ii < 1 .or. ii > ldim(1) ) cycle
                             if( outliers(ii,jj) ) cycle
                             n = n + 1
-                            vals(n) = prmats(iframe)%rmat(ii,jj,1)
+                            vals(n) = frames(iframe)%get([ii,jj,1])
                         enddo
                     enddo
                     if( n > 1 )then
@@ -924,10 +909,8 @@ contains
                 do k = 1,noutliers
                     i = pos_outliers_here(1,k)
                     j = pos_outliers_here(2,k)
-                    prmats(iframe)%rmat(i,j,1) = new_vals(k,iframe)
+                    call frames(iframe)%set([i,j,1], new_vals(k,iframe))
                 enddo
-                ! cleanup
-                nullify(prmats(iframe)%rmat)
             enddo
             !$omp end parallel do
         else

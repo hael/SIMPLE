@@ -81,6 +81,7 @@ contains
     generic            :: add => add_1, add_2, add_3, add_4, add_5
     procedure, private :: add_mat2cmat_1, add_mat2cmat_2
     generic            :: add_mat2cmat => add_mat2cmat_1, add_mat2cmat_2
+    procedure          :: add_rmat2mat_workshare
     procedure          :: add_dble_cmat2mat
     procedure, private :: add_workshare_1, add_workshare_2
     generic            :: add_workshare => add_workshare_1, add_workshare_2
@@ -125,6 +126,7 @@ contains
     procedure, private :: open
     procedure          :: read
     procedure          :: read_raw_mrc
+    procedure          :: read_single_mrc_image
     procedure          :: write
     procedure          :: update_header_stats
     procedure          :: write_jpg
@@ -242,6 +244,7 @@ contains
     procedure          :: checkimg4nans
     procedure          :: cure
     procedure          :: dead_hot_positions
+    procedure          :: add_zero2mask
     ! Gradients / geometry
     procedure          :: calc_gradient
     procedure          :: gradients_magnitude
@@ -597,6 +600,11 @@ interface
         real,                       intent(in)    :: w
     end subroutine add_mat2cmat_2
 
+    module subroutine add_rmat2mat_workshare( self, M )
+        class(image), intent(in)    :: self
+        real,         intent(inout) :: M(1:self%ldim(1),1:self%ldim(2))
+    end subroutine add_rmat2mat_workshare
+
     module subroutine add_dble_cmat2mat( self, M )
         class(image), intent(in)    :: self
         complex(dp),  intent(inout) :: M(self%array_shape(1),self%array_shape(2),self%array_shape(3))
@@ -891,6 +899,12 @@ interface
         class(imgfile), intent(inout) :: ioimg
     end subroutine read_raw_mrc
 
+    module subroutine read_single_mrc_image( self, ioimg, index )
+        class(image),   intent(inout) :: self
+        class(imgfile), intent(inout) :: ioimg
+        integer,        intent(in)    :: index
+    end subroutine read_single_mrc_image
+
     module subroutine write( self, fname, i, del_if_exists)
         class(image),      intent(inout) :: self
         class(string),     intent(in)    :: fname
@@ -957,9 +971,9 @@ interface
 
     !--- Getters ---!
 
-    module function get( self, logi ) result( val )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: logi(3)
+    module pure function get( self, logi ) result( val )
+        class(image), intent(in) :: self
+        integer,      intent(in) :: logi(3)
         real :: val
     end function get
 
@@ -1569,6 +1583,11 @@ interface
         real,         intent(in) :: frac
         logical, allocatable     :: pos(:,:)
     end function dead_hot_positions
+
+    module subroutine add_zero2mask( self, mask )
+        class(image), intent(in)    :: self
+        logical,      intent(inout) :: mask(1:self%ldim(1),1:self%ldim(2))
+    end subroutine add_zero2mask
 
     !--- Gradients / geometry ---!
 

@@ -1,7 +1,7 @@
 !@descr: for single-threaded non-contiguous reading of image stacks
 module simple_discrete_stack_io
 use simple_core_module_api
-use simple_image,   only: image, image_ptr
+use simple_image,   only: image
 use simple_imgfile, only: imgfile
 implicit none
 
@@ -11,7 +11,6 @@ private
 
 type dstack_io
     private
-    type(image_ptr), allocatable :: img_ptrs(:)
     type(imgfile),   allocatable :: ioimgs(:)
     type(string),    allocatable :: stknames(:)
     integer,         allocatable :: nptcls(:)
@@ -36,7 +35,7 @@ contains
         integer,           intent(in)    :: box
         call self%kill
         self%n = 1
-        allocate(self%stknames(self%n),self%ioimgs(self%n),self%img_ptrs(self%n),&
+        allocate(self%stknames(self%n),self%ioimgs(self%n),&
             &self%l_open(self%n),self%fts(self%n),self%nptcls(self%n))
         self%smpd        = smpd
         self%nptcls      = 0
@@ -62,9 +61,7 @@ contains
             THROW_HARD('index i out of range: '//int2str(ind_in_stk)//' / '//int2str(self%nptcls(ithr)))
         endif
         call img%set_ft(self%fts(ithr))
-        call img%get_rmat_ptr(self%img_ptrs(ithr)%rmat)
-        call self%ioimgs(ithr)%rSlices(ind_in_stk,ind_in_stk,&
-            &self%img_ptrs(ithr)%rmat(1:self%box,1:self%box,1:1),is_mrc=.true.)
+        call img%read_single_mrc_image(self%ioimgs(ithr), ind_in_stk)
     end subroutine read
 
     ! single-threaded
@@ -122,9 +119,8 @@ contains
         if( self%exists )then
             do i = 1,self%n
                 call self%ioimgs(i)%close
-                nullify(self%img_ptrs(i)%rmat)
             enddo
-            deallocate(self%stknames,self%nptcls,self%fts,self%l_open,self%ioimgs,self%img_ptrs)
+            deallocate(self%stknames,self%nptcls,self%fts,self%l_open,self%ioimgs)
             self%n      = 0
             self%box    = 0
             self%smpd   = 0.

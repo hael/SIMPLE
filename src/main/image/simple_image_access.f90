@@ -61,9 +61,9 @@ contains
     ! Getters
     !===========================
 
-    module function get( self, logi ) result( val )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: logi(3)
+    module pure function get( self, logi ) result( val )
+        class(image), intent(in) :: self
+        integer,      intent(in) :: logi(3)
         real :: val
         val = self%rmat(logi(1),logi(2),logi(3))
     end function get
