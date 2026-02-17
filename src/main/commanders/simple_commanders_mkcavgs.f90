@@ -2,7 +2,6 @@
 module simple_commanders_mkcavgs
 use simple_commanders_api
 use simple_pftc_srch_api
-use simple_classaverager
 implicit none
 #include "simple_local_flags.inc"
 
@@ -163,22 +162,19 @@ contains
         else
             if( params%part .eq. 1 ) call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
-        ! create class averager
-        call cavger_new
-        ! transfer ori data to object
-        call cavger_transf_oridat(build%spproj)
-        call cavger_read_euclid_sigma2
-        ! standard cavg assembly
-        call cavger_assemble_sums( .false. )
+        ! choice of algorithm
         if( l_shmem )then
-            call cavger_merge_eos_and_norm
-            call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
-            ! classdoc gen needs to be after calc of FRCs
-            call cavger_gen2Dclassdoc(build%spproj)
-            ! write references
-            call cavger_write(params%refs,      'merged')
-            call cavger_write(params%refs_even, 'even'  )
-            call cavger_write(params%refs_odd,  'odd'   )
+            select case(trim(params%algorithm))
+            case('conv','splat')
+                call new_interp
+            case DEFAULT
+                call interp
+            end select
+        else
+            call interp
+        endif
+        ! book-keeping
+        if( l_shmem )then
             select case(trim(params%oritype))
                 case('ptcl2D')
                     call build%spproj%write_segment_inside('cls2D', params%projfile)
@@ -201,19 +197,61 @@ contains
                 case DEFAULT
                     THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
             end select
-        else
-            ! write partial sums
-            call cavger_readwrite_partial_sums('write')
-            call qsys_job_finished(string('simple_commanders_cluster2D :: exec_make_cavgs'))
         endif
-        call cavger_kill
         ! end gracefully
         call build%kill_strategy2D_tbox
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
+
+      contains
+
+        subroutine interp
+            use simple_classaverager
+            call cavger_new
+            call cavger_transf_oridat(build%spproj)
+            call cavger_read_euclid_sigma2
+            call cavger_assemble_sums( .false. )
+            if( l_shmem )then
+                call cavger_merge_eos_and_norm
+                call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
+                call cavger_gen2Dclassdoc(build%spproj)
+                call cavger_write(params%refs,      'merged')
+                call cavger_write(params%refs_even, 'even'  )
+                call cavger_write(params%refs_odd,  'odd'   )
+            else
+                ! distributed: write partial sums only
+                call cavger_readwrite_partial_sums('write')
+                call qsys_job_finished(string('simple_commanders_cluster2D :: exec_make_cavgs'))
+            endif
+            call cavger_kill
+        end subroutine interp
+
+        subroutine new_interp
+            use simple_new_classaverager
+            if( l_shmem )then
+                call cavger_new
+                call cavger_transf_oridat(build%spproj)
+                call cavger_read_euclid_sigma2
+                if( trim(params%algorithm).eq.'conv' )then
+                    ! convolution interpolation
+                    call cavger_assemble_sums_conv(.false.)
+                else
+                    ! default: splat
+                    call cavger_assemble_sums( .false. )
+                endif
+                call cavger_restore_cavgs(params%frcs)
+                call cavger_gen2Dclassdoc(build%spproj)
+                call cavger_write_all(params%refs, params%refs_even, params%refs_odd)
+                call cavger_kill
+            else
+                THROW_HARD('Not implemented yet')
+            endif
+        end subroutine new_interp
+
     end subroutine exec_make_cavgs
 
     subroutine exec_cavgassemble( self, cline )
+        use simple_classaverager
         class(commander_cavgassemble), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)   :: params

@@ -419,12 +419,6 @@ contains
         where( rsum > 1.d-10 ) sig2 = real(real(cnt,dp) / rsum)
         ! Signal power
         tau2 = ssnr * sig2
-
-        print *, is, frc
-        print *, is, ssnr
-        print *, is, sig2
-        print *, is, tau2
-
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
         reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
