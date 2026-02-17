@@ -248,6 +248,18 @@ contains
         endif
     end subroutine add_mat2cmat_2
 
+    module subroutine add_rmat2mat_workshare( self, M )
+        class(image), intent(in)    :: self
+        real,         intent(inout) :: M(1:self%ldim(1),1:self%ldim(2))
+        if( self%ft )then
+            THROW_HARD('Image must be in real space! add_rmat2mat')
+        else
+            !$omp parallel workshare proc_bind(close)
+            M = M + self%rmat(1:self%ldim(1),1:self%ldim(2),1)
+            !$omp end parallel workshare
+        endif
+    end subroutine add_rmat2mat_workshare
+
     module subroutine add_dble_cmat2mat( self, M )
         class(image), intent(in)    :: self
         complex(dp),  intent(inout) :: M(self%array_shape(1),self%array_shape(2),self%array_shape(3))

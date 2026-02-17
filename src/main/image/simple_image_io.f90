@@ -96,6 +96,14 @@ contains
         call ioimg%rSlices(1, self%ldim(1), self%rmat, is_mrc=.true.)
     end subroutine read_raw_mrc
 
+    ! For fast serial i/o of a square slice from a stack in mrc format
+    module subroutine read_single_mrc_image( self, ioimg, index )
+        class(image),   intent(inout) :: self
+        class(imgfile), intent(inout) :: ioimg  ! is assumed externally open
+        integer,        intent(in)    :: index
+        call ioimg%rSlices(index, index, self%rmat(1:self%ldim(1),1:self%ldim(2),1:1), is_mrc=.true.)
+    end subroutine read_single_mrc_image
+
     !===========================
     ! write
     !===========================

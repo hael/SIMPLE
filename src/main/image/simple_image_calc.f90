@@ -550,6 +550,15 @@ contains
         end do
     end function dead_hot_positions
 
+    ! Flags positions that are zero to an alreday set mask
+    module subroutine add_zero2mask( self, mask )
+        class(image), intent(in)    :: self
+        logical,      intent(inout) :: mask(1:self%ldim(1),1:self%ldim(2))
+        where( is_zero(self%rmat(1:self%ldim(1), 1:self%ldim(2), 1)) )
+            mask = .true.
+        end where
+    end subroutine add_zero2mask
+
     !===========================
     ! Gradients / geometry
     !===========================

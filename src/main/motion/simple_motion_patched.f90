@@ -874,18 +874,15 @@ contains
         type(image),       allocatable, intent(inout) :: stack(:)
         integer,                        intent(in)    :: pi, pj
         integer             :: iframe, k, l, ip, jp           ! ip, jp: i_patch, j_patch
-        real, pointer       :: prmat_patch(:,:,:), prmat_frame(:,:,:)
         do iframe=1,self%nframes
             ! init
             call self%frame_patches(pi,pj)%stack(iframe)%new(self%ldim_patch, self%smpd, wthreads=.false.)
-            call self%frame_patches(pi,pj)%stack(iframe)%get_rmat_ptr(prmat_patch)
-            call stack(iframe)%get_rmat_ptr(prmat_frame)
             ! copy
             do l = self%lims_patches(pi,pj,2,1), self%lims_patches(pi,pj,2,2)
                 jp = l - self%lims_patches(pi,pj,2,1) + 1
                 do k = self%lims_patches(pi,pj,1,1), self%lims_patches(pi,pj,1,2)
                     ip = k - self%lims_patches(pi,pj,1,1) + 1
-                    prmat_patch(ip,jp,1) = prmat_frame(k,l,1)
+                    call self%frame_patches(pi,pj)%stack(iframe)%set([ip,jp,1], stack(iframe)%get([k,l,1]))
                 end do
             end do
         end do
