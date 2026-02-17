@@ -3,66 +3,13 @@ program single_exec
 use single_exec_api
 implicit none
 #include "simple_local_flags.inc"
-
-! PROJECT MANAGEMENT PROGRAMS
-type(commander_new_project)                      :: xnew_project
-type(commander_update_project)                   :: xupdate_project
-type(commander_print_project_info)               :: xprint_project_info
-type(commander_print_project_field)              :: xprint_project_field
-type(commander_tseries_import)                   :: xtseries_import
-type(commander_import_particles)                 :: ximport_particles
-type(commander_import_trajectory)                :: ximport_trajectory
-type(commander_prune_project_distr)              :: xprune_project
-
-! TIME-SERIES PRE-PROCESSING PROGRAMS
-type(commander_tseries_make_pickavg)             :: xtseries_make_pickavg
-type(commander_tseries_motion_correct_distr)     :: xmcorr
-type(commander_track_particles_distr)            :: xtrack
-type(commander_graphene_subtr)                   :: xgraphene_subtr
-type(commander_trajectory_denoise)               :: xden_traj
-
-! PARTICLE 3D RECONSTRUCTION PROGRAMS
-type(commander_analysis2D_nano)                  :: xanalysis2D_nano
-type(commander_center2D_nano)                    :: xcenter2D
-type(commander_cluster2D_nano)                   :: xcluster2D
-type(commander_map_cavgs_selection)              :: xmap_cavgs_selection
-type(commander_ppca_denoise_classes)             :: xppca_denoise_classes
-type(commander_estimate_diam)                    :: xestimate_diam
-type(commander_simulate_atoms)                   :: xsimulate_atoms
-type(commander_refine3D_nano)                    :: xrefine3D_nano
-type(commander_extract_substk)                   :: xextract_substk
-type(commander_extract_subproj)                  :: xextract_subproj
-type(commander_autorefine3D_nano)                :: xautorefine3D_nano
-type(commander_trajectory_reconstruct3D_distr)   :: xtrajectory_reconstruct3D
-type(commander_tsegmaps_core_finder)           :: xtsegmaps_core_finder
-type(commander_trajectory_swap_stack)            :: xtrajectory_swap_stack
-
-! VALIDATION PROGRAMS
-type(commander_vizoris)                          :: xvizoris
-type(commander_cavgsproc_nano)                   :: xcavgsproc
-type(commander_cavgseoproc_nano)                 :: xcavgseoproc
-type(commander_ptclsproc_nano)                   :: xptclsproc
-type(commander_trajectory_make_projavgs)         :: xtrajectory_make_projavgs
-
-! MODEL BUILDING/ANALYSIS PROGRAMS
-type(commander_pdb2mrc)                          :: xpdb2mrc
-type(commander_detect_atoms)                     :: xdetect_atoms
-type(commander_conv_atom_denoise)                :: xconv_atom_denoise
-type(commander_atoms_stats)                      :: xatoms_stats
-type(commander_atoms_register)                   :: xatoms_register
-type(commander_crys_score)                       :: xcrys_score
-type(commander_atoms_rmsd)               :: xatoms_rmsd
-type(commander_core_atoms_analysis)      :: xcore_atoms_analysis
-
-! OTHER DECLARATIONS
 character(len=STDLEN)      :: args, prg
 character(len=XLONGSTRLEN) :: entire_line
 type(cmdline)              :: cline
 integer                    :: cmdstat, cmdlen, pos
 integer(timer_int_kind)    :: t0
 real(timer_int_kind)       :: rt_exec
-logical                    :: l_silent
-
+logical                    :: l_silent, l_did_execute
 ! start timer
 t0 = tic()
 ! parse command line
@@ -83,125 +30,25 @@ call cline%parse
 call script_exec(cline, string(trim(prg)), string('single_exec'))
 ! set global defaults
 if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-
-select case(prg)
-
-    ! PROJECT MANAGEMENT PROGRAMS
-    case( 'new_project' )
-        call xnew_project%execute(cline)
-    case( 'update_project' )
-        call xupdate_project%execute(cline)
-    case( 'print_project_info' )
-        call xprint_project_info%execute(cline)
-        l_silent = .true.
-    case( 'print_project_field' )
-        call xprint_project_field%execute(cline)
-        l_silent = .true.
-    case( 'tseries_import' )
-        call xtseries_import%execute(cline)
-    case( 'import_particles')
-        call ximport_particles%execute(cline)
-    case( 'import_trajectory' )
-        call ximport_trajectory%execute(cline)
-    case( 'prune_project' )
-        call xprune_project%execute( cline )
-
-    ! TIME-SERIES PRE-PROCESSING PROGRAMS
-    case( 'tseries_make_pickavg' )
-        call xtseries_make_pickavg%execute(cline)
-    case( 'tseries_motion_correct' )
-        call xmcorr%execute( cline )
-    case( 'track_particles' )
-        call xtrack%execute( cline )
-    case( 'graphene_subtr' )
-        call cline%set('mkdir', 'no')
-        call xgraphene_subtr%execute( cline )
-    case( 'trajectory_denoise' )
-        call cline%set('mkdir', 'no')
-        call xden_traj%execute( cline )
-
-    ! PARTICLE 3D RECONSTRUCTION PROGRAMS
-    case( 'analysis2D_nano' )
-        call xanalysis2D_nano%execute(cline)
-    case( 'center2D_nano' )
-        call xcenter2D%execute(cline)
-    case( 'cluster2D_nano' )
-        call xcluster2D%execute(cline)
-    case( 'map_cavgs_selection' )
-        call xmap_cavgs_selection%execute(cline)
-    case( 'ppca_denoise_classes' )
-        call xppca_denoise_classes%execute(cline)
-    case( 'estimate_diam' )
-        call cline%set('mkdir', 'no')
-        call xestimate_diam%execute(cline)
-    case( 'simulate_atoms' )
-        call cline%set('mkdir', 'no')
-        call xsimulate_atoms%execute(cline)
-    case( 'refine3D_nano' )
-        call xrefine3D_nano%execute(cline)
-    case( 'extract_substk' )
-        call xextract_substk%execute(cline)
-    case( 'extract_subproj' )
-        call xextract_subproj%execute(cline)
-    case( 'autorefine3D_nano' )
-        if( cline%defined('nrestarts') )then
-            call restarted_exec(cline, string('autorefine3D_nano'), string('single_exec'))
-        else
-            call xautorefine3D_nano%execute(cline)
-        endif
-    case( 'trajectory_reconstruct3D' )
-        call xtrajectory_reconstruct3D%execute(cline)
-    case( 'tsegmaps_core_finder' )
-        call xtsegmaps_core_finder%execute(cline)
-    case( 'trajectory_swap_stack' ) 
-        call xtrajectory_swap_stack%execute(cline)
-
-    ! VALIDATION PROGRAMS
-    case( 'vizoris' )
-        call xvizoris%execute(cline)
-    case( 'cavgsproc_nano' )
-        call xcavgsproc%execute(cline)
-    case( 'cavgseoproc_nano' )
-        call xcavgseoproc%execute(cline)
-    case( 'ptclsproc_nano' )
-        call xptclsproc%execute(cline)
-
-    ! MODEL BUILDING/ANALYSIS PROGRAMS
-    case( 'pdb2mrc' )
-        call cline%set('mkdir', 'no')
-        call xpdb2mrc%execute(cline)
-    case( 'conv_atom_denoise')
-        call xconv_atom_denoise%execute(cline)
-    case( 'detect_atoms' )
-        call cline%set('mkdir', 'no')
-        call xdetect_atoms%execute(cline)
-    case( 'atoms_stats' )
-        call cline%set('mkdir', 'yes')
-        call xatoms_stats%execute(cline)
-    case( 'atoms_register' )
-        call cline%set('mkdir', 'no')
-        call xatoms_register%execute(cline)
-    case( 'crys_score' )
-        call cline%set('mkdir', 'no')
-        call xcrys_score%execute(cline)
-    case( 'atoms_rmsd' )
-        call xatoms_rmsd%execute(cline)
-    case( 'core_atoms_analysis' )
-        call xcore_atoms_analysis%execute(cline)
-    case( 'trajectory_make_projavgs' )
-        call xtrajectory_make_projavgs%execute(cline)
-
-    ! UNSUPPORTED
-    case DEFAULT
-        THROW_HARD('prg='//trim(prg)//' is unsupported')
-end select
+l_silent      = .false.
+l_did_execute = .false. ! will be set to true if one program was executed
+call exec_tseries_commander(    trim(prg), cline, l_silent, l_did_execute)
+call exec_trajectory_commander( trim(prg), cline, l_silent, l_did_execute)
+call exec_nano2D_commander(     trim(prg), cline, l_silent, l_did_execute)
+call exec_nano3D_commander(     trim(prg), cline, l_silent, l_did_execute)
+call exec_map_commander(        trim(prg), cline, l_silent, l_did_execute)
+call exec_atom_commander(       trim(prg), cline, l_silent, l_did_execute)
+call exec_validate_commander(   trim(prg), cline, l_silent, l_did_execute)
+if( .not. l_did_execute )then
+    THROW_HARD('Program "'//trim(prg)//'" not recognized. Use prg=list to see available programs.')
+endif
 call update_job_descriptions_in_project( cline )
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('9b373877')
+    call simple_print_git_version('a6651bd1')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

@@ -20,7 +20,7 @@ contains
 
     subroutine print_single_nano2D_programs(logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('NANO 2D:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('2D ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') analysis2D_nano%name%to_char()
         write(logfhandle,'(A)') center2D_nano%name%to_char()
         write(logfhandle,'(A)') cluster2D_nano%name%to_char()

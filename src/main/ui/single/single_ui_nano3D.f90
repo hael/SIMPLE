@@ -16,7 +16,7 @@ contains
 
     subroutine print_single_nano3D_programs(logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('NANO 3D:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') autorefine3D_nano%name%to_char()
         write(logfhandle,'(A)') refine3D_nano%name%to_char()
         write(logfhandle,'(A)') ''
