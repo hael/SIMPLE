@@ -24,7 +24,6 @@ contains
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
         logical,             intent(out)   :: l_silent
-        
         if( l_did_execute )return
         l_silent      = .false.
         l_did_execute = .true.

@@ -16,7 +16,7 @@ contains
 
     subroutine print_single_map_programs(logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('MAP:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('MAP ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') conv_atom_denoise%name%to_char()
         write(logfhandle,'(A)') tsegmaps_core_finder%name%to_char()
         write(logfhandle,'(A)') ''

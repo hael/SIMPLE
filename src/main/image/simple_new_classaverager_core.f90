@@ -40,7 +40,7 @@ contains
         self%even%slices(is)%ft   = ft
         self%odd%slices(is)%ft    = ft
         self%merged%slices(is)%ft = ft
-    end subroutine
+    end subroutine copy_fast
 
     module subroutine kill_set( self )
         class(cavgs_set), intent(inout) :: self

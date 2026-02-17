@@ -26,7 +26,7 @@ contains
 
     subroutine print_single_atom_programs(logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('ATOM:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('ATOM ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') atoms_register%name%to_char()
         write(logfhandle,'(A)') atoms_rmsd%name%to_char()
         write(logfhandle,'(A)') atoms_stats%name%to_char()
@@ -67,8 +67,8 @@ contains
         ! PROGRAM SPECIFICATION
         call atoms_rmsd%new(&
         &'atoms_rmsd',&                                                               ! name
-        &'Analysis of results obtianed with trajectory_reconstruct3D and detect_atoms',& ! descr_short
-        &'is a program that analysis atomic time-series coordinates',&                ! descr long
+        &'Analysis of results obtained with trajectory_reconstruct3D and detect_atoms',& ! descr_short
+        &'is a program that analyzes atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
         &.false., gui_advanced=.false.)                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -97,7 +97,7 @@ contains
         call atoms_stats%new(&
         &'atoms_stats',&                                                                              ! name
         &'Statistical test for radial dependent symmetry',&                                           ! descr_short
-        &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
+        &'is a program that generates statistics at different radii and across the whole nano map.',& ! descr long
         &'single_exec',&                                                                              ! executable
         &.false., gui_advanced=.false.)                                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
