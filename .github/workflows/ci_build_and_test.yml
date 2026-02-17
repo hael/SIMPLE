@@ -118,4 +118,8 @@ jobs:
              echo "-------------------- TEST UNITS -------------------------"
              simple_test_units
          
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SIMPLE-artifact
+          path: 
 
