@@ -18,7 +18,7 @@ implicit none
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc
 public :: cavger_read_euclid_sigma2, cavger_kill
 ! Interpolation & restoration
-public :: cavger_assemble_sums, cavger_restore_cavgs
+public :: cavger_assemble_sums, cavger_restore_cavgs, cavger_assemble_sums_conv
 ! I/O & handling of distributed sums
 public :: cavger_write_eo, cavger_write_all, cavger_read_all
 public :: cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts
@@ -281,6 +281,10 @@ interface
     module subroutine cavger_assemble_sums( do_frac_update )
         logical, intent(in)      :: do_frac_update
     end subroutine cavger_assemble_sums
+
+    module subroutine cavger_assemble_sums_conv( do_frac_update )
+        logical, intent(in)      :: do_frac_update
+    end subroutine cavger_assemble_sums_conv
 
     module subroutine cavger_restore_cavgs( frcs_fname )
         use simple_gridding, only: prep2D_inv_instrfun4mul
