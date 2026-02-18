@@ -1,100 +1,298 @@
-!@ descr: module defining the user interfaces for FFTprograms in the simple_test_exec suite
+!@ descr: module defining the user interfaces for fft  programs in the simple_test_exec suite
 module simple_test_ui_fft
 use simple_ui_modules
 implicit none
 
-type(ui_program), target :: simple_test_phasecorr
-type(ui_program), target :: simple_test_order_corr
-type(ui_program), target :: simple_test_gencorrs_fft
-type(ui_program), target :: simple_test_ft_expanded
-type(ui_program), target :: simple_test_eval_polarftcc
-type(ui_program), target :: simple_test_polarops
-type(ui_program), target :: simple_test_corrs2weights
-type(ui_program), target :: simple_test_rank_weights
-type(ui_program), target :: simple_test_rotate_ref
+type(ui_program), target :: corrs2weights_test
+type(ui_program), target :: eval_polarftcc
+type(ui_program), target :: ft_expanded
+type(ui_program), target :: gencorrs_fft
+type(ui_program), target :: order_corr
+type(ui_program), target :: phasecorr
+type(ui_program), target :: polarops
+type(ui_program), target :: rank_weights
+type(ui_program), target :: rotate_ref
 
 contains
 
     subroutine construct_fft_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
-        call new_simple_test_phasecorr(prgtab)
-        call new_simple_test_order_corr(prgtab)
-        call new_simple_test_gencorrs_fft(prgtab)
-        call new_simple_test_ft_expanded(prgtab)
-        call new_simple_test_eval_polarftcc(prgtab)
-        call new_simple_test_polarops(prgtab)
-        call new_simple_test_corrs2weights(prgtab)
-        call new_simple_test_rank_weights(prgtab)
-        call new_simple_test_rotate_ref(prgtab)
+        call new_corrs2weights_test(prgtab)
+        call new_eval_polarftcc(prgtab)
+        call new_ft_expanded(prgtab)
+        call new_gencorrs_fft(prgtab)
+        call new_order_corr(prgtab)
+        call new_phasecorr(prgtab)
+        call new_polarops(prgtab)
+        call new_rank_weights(prgtab)
+        call new_rotate_ref(prgtab)
     end subroutine construct_fft_programs
 
     subroutine print_fft_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('FFT:', C_UNDERLINED)
-        write(logfhandle,'(A)') simple_test_phasecorr%name%to_char()
-        write(logfhandle,'(A)') simple_test_order_corr%name%to_char()
-        write(logfhandle,'(A)') simple_test_gencorrs_fft%name%to_char()
-        write(logfhandle,'(A)') simple_test_ft_expanded%name%to_char()
-        write(logfhandle,'(A)') simple_test_eval_polarftcc%name%to_char()
-        write(logfhandle,'(A)') simple_test_polarops%name%to_char()
-        write(logfhandle,'(A)') simple_test_corrs2weights%name%to_char()
-        write(logfhandle,'(A)') simple_test_rank_weights%name%to_char()
-        write(logfhandle,'(A)') simple_test_rotate_ref%name%to_char()
+        write(logfhandle,'(A)') corrs2weights_test%name%to_char()
+        write(logfhandle,'(A)') eval_polarftcc%name%to_char()
+        write(logfhandle,'(A)') ft_expanded%name%to_char()
+        write(logfhandle,'(A)') gencorrs_fft%name%to_char()
+        write(logfhandle,'(A)') order_corr%name%to_char()
+        write(logfhandle,'(A)') phasecorr%name%to_char()
+        write(logfhandle,'(A)') polarops%name%to_char()
+        write(logfhandle,'(A)') rank_weights%name%to_char()
+        write(logfhandle,'(A)') rotate_ref%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_fft_programs
 
-    subroutine new_simple_test_phasecorr( prgtab )
+    subroutine new_corrs2weights_test( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call corrs2weights_test%new(&
+        &'corrs2weights_test',&                         ! name
+        &'corrs2weights_test ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call corrs2weights_test%add_input(UI_IO, )
+        ! parameter input/output
+        !call corrs2weights_test%add_input(UI_IMG, )
+        ! alternative inputs
+        !call corrs2weights_test%add_input(UI_PARM, )
+        ! search controls
+        !call corrs2weights_test%add_input(UI_SRCH, )
+        ! filter controls
+        !call corrs2weights_test%add_input(UI_FILT, )
+        ! mask controls
+        !call corrs2weights_test%add_input(UI_MASK, )
+        ! computer controls
+        !call corrs2weights_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_phasecorr', simple_test_phasecorr, prgtab)
-    end subroutine new_simple_test_phasecorr
+        call add_ui_program('corrs2weights_test', corrs2weights_test, prgtab)
+    end subroutine new_corrs2weights_test
 
-    subroutine new_simple_test_order_corr( prgtab )
+    subroutine new_eval_polarftcc( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call eval_polarftcc%new(&
+        &'eval_polarftcc',&                         ! name
+        &'eval_polarftcc ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call eval_polarftcc%add_input(UI_IO, )
+        ! parameter input/output
+        !call eval_polarftcc%add_input(UI_IMG, )
+        ! alternative inputs
+        !call eval_polarftcc%add_input(UI_PARM, )
+        ! search controls
+        !call eval_polarftcc%add_input(UI_SRCH, )
+        ! filter controls
+        !call eval_polarftcc%add_input(UI_FILT, )
+        ! mask controls
+        !call eval_polarftcc%add_input(UI_MASK, )
+        ! computer controls
+        !call eval_polarftcc%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_order_corr', simple_test_order_corr, prgtab)
-    end subroutine new_simple_test_order_corr
+        call add_ui_program('eval_polarftcc', eval_polarftcc, prgtab)
+    end subroutine new_eval_polarftcc
 
-    subroutine new_simple_test_gencorrs_fft( prgtab )
+    subroutine new_ft_expanded( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call ft_expanded%new(&
+        &'ft_expanded',&                         ! name
+        &'ft_expanded ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call ft_expanded%add_input(UI_IO, )
+        ! parameter input/output
+        !call ft_expanded%add_input(UI_IMG, )
+        ! alternative inputs
+        !call ft_expanded%add_input(UI_PARM, )
+        ! search controls
+        !call ft_expanded%add_input(UI_SRCH, )
+        ! filter controls
+        !call ft_expanded%add_input(UI_FILT, )
+        ! mask controls
+        !call ft_expanded%add_input(UI_MASK, )
+        ! computer controls
+        !call ft_expanded%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_gencorrs_fft', simple_test_gencorrs_fft, prgtab)
-    end subroutine new_simple_test_gencorrs_fft
+        call add_ui_program('ft_expanded', ft_expanded, prgtab)
+    end subroutine new_ft_expanded
 
-    subroutine new_simple_test_ft_expanded( prgtab )
+    subroutine new_gencorrs_fft( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call gencorrs_fft%new(&
+        &'gencorrs_fft',&                         ! name
+        &'gencorrs_fft ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call gencorrs_fft%add_input(UI_IO, )
+        ! parameter input/output
+        !call gencorrs_fft%add_input(UI_IMG, )
+        ! alternative inputs
+        !call gencorrs_fft%add_input(UI_PARM, )
+        ! search controls
+        !call gencorrs_fft%add_input(UI_SRCH, )
+        ! filter controls
+        !call gencorrs_fft%add_input(UI_FILT, )
+        ! mask controls
+        !call gencorrs_fft%add_input(UI_MASK, )
+        ! computer controls
+        !call gencorrs_fft%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_ft_expanded', simple_test_ft_expanded, prgtab)
-    end subroutine new_simple_test_ft_expanded
+        call add_ui_program('gencorrs_fft', gencorrs_fft, prgtab)
+    end subroutine new_gencorrs_fft
 
-    subroutine new_simple_test_eval_polarftcc( prgtab )
+    subroutine new_order_corr( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call order_corr%new(&
+        &'order_corr',&                         ! name
+        &'order_corr ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call order_corr%add_input(UI_IO, )
+        ! parameter input/output
+        !call order_corr%add_input(UI_IMG, )
+        ! alternative inputs
+        !call order_corr%add_input(UI_PARM, )
+        ! search controls
+        !call order_corr%add_input(UI_SRCH, )
+        ! filter controls
+        !call order_corr%add_input(UI_FILT, )
+        ! mask controls
+        !call order_corr%add_input(UI_MASK, )
+        ! computer controls
+        !call order_corr%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_eval_polarftcc', simple_test_eval_polarftcc, prgtab)
-    end subroutine new_simple_test_eval_polarftcc
+        call add_ui_program('order_corr', order_corr, prgtab)
+    end subroutine new_order_corr
 
-    subroutine new_simple_test_polarops( prgtab )
+    subroutine new_phasecorr( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call phasecorr%new(&
+        &'phasecorr',&                         ! name
+        &'phasecorr ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call phasecorr%add_input(UI_IO, )
+        ! parameter input/output
+        !call phasecorr%add_input(UI_IMG, )
+        ! alternative inputs
+        !call phasecorr%add_input(UI_PARM, )
+        ! search controls
+        !call phasecorr%add_input(UI_SRCH, )
+        ! filter controls
+        !call phasecorr%add_input(UI_FILT, )
+        ! mask controls
+        !call phasecorr%add_input(UI_MASK, )
+        ! computer controls
+        !call phasecorr%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_polarops', simple_test_polarops, prgtab)
-    end subroutine new_simple_test_polarops
+        call add_ui_program('phasecorr', phasecorr, prgtab)
+    end subroutine new_phasecorr
 
-    subroutine new_simple_test_corrs2weights( prgtab )
+    subroutine new_polarops( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call polarops%new(&
+        &'polarops',&                         ! name
+        &'polarops ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call polarops%add_input(UI_IO, )
+        ! parameter input/output
+        !call polarops%add_input(UI_IMG, )
+        ! alternative inputs
+        !call polarops%add_input(UI_PARM, )
+        ! search controls
+        !call polarops%add_input(UI_SRCH, )
+        ! filter controls
+        !call polarops%add_input(UI_FILT, )
+        ! mask controls
+        !call polarops%add_input(UI_MASK, )
+        ! computer controls
+        !call polarops%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_corrs2weights', simple_test_corrs2weights, prgtab)
-    end subroutine new_simple_test_corrs2weights
+        call add_ui_program('polarops', polarops, prgtab)
+    end subroutine new_polarops
 
-    subroutine new_simple_test_rank_weights( prgtab )
+    subroutine new_rank_weights( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call rank_weights%new(&
+        &'rank_weights',&                         ! name
+        &'rank_weights ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call rank_weights%add_input(UI_IO, )
+        ! parameter input/output
+        !call rank_weights%add_input(UI_IMG, )
+        ! alternative inputs
+        !call rank_weights%add_input(UI_PARM, )
+        ! search controls
+        !call rank_weights%add_input(UI_SRCH, )
+        ! filter controls
+        !call rank_weights%add_input(UI_FILT, )
+        ! mask controls
+        !call rank_weights%add_input(UI_MASK, )
+        ! computer controls
+        !call rank_weights%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_rank_weights', simple_test_rank_weights, prgtab)
-    end subroutine new_simple_test_rank_weights
+        call add_ui_program('rank_weights', rank_weights, prgtab)
+    end subroutine new_rank_weights
 
-    subroutine new_simple_test_rotate_ref( prgtab )
+    subroutine new_rotate_ref( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call rotate_ref%new(&
+        &'rotate_ref',&                         ! name
+        &'rotate_ref ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call rotate_ref%add_input(UI_IO, )
+        ! parameter input/output
+        !call rotate_ref%add_input(UI_IMG, )
+        ! alternative inputs
+        !call rotate_ref%add_input(UI_PARM, )
+        ! search controls
+        !call rotate_ref%add_input(UI_SRCH, )
+        ! filter controls
+        !call rotate_ref%add_input(UI_FILT, )
+        ! mask controls
+        !call rotate_ref%add_input(UI_MASK, )
+        ! computer controls
+        !call rotate_ref%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_rotate_ref', simple_test_rotate_ref, prgtab)
-    end subroutine new_simple_test_rotate_ref
+        call add_ui_program('rotate_ref', rotate_ref, prgtab)
+    end subroutine new_rotate_ref
 
 end module simple_test_ui_fft

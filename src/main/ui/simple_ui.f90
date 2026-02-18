@@ -87,9 +87,17 @@ contains
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_simple_test_prgs_in_ui
-
-        ! 2 be implemented
-       
+        call print_fft_programs(logfhandle)
+        call print_geometry_programs(logfhandle)
+        call print_highlevel_programs(logfhandle)
+        call print_io_programs(logfhandle)
+        call print_masks_programs(logfhandle)
+        call print_network_programs(logfhandle)
+        call print_numerics_programs(logfhandle)
+        call print_optimize_programs(logfhandle)
+        call print_parallel_programs(logfhandle)
+        call print_stats_programs(logfhandle)
+        call print_utils_programs(logfhandle)
     end subroutine list_simple_test_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui

@@ -1,91 +1,267 @@
-!@ descr: module defining the user interfaces for masks programs in the simple_test_exec suite
+!@ descr: module defining the user interfaces for masks  programs in the simple_test_exec suite
 module simple_test_ui_masks
 use simple_ui_modules
 implicit none
 
-type(ui_program), target :: simple_test_mask
-type(ui_program), target :: simple_test_msk_routines
-type(ui_program), target :: simple_test_otsu
-type(ui_program), target :: simple_test_bounds_from_mask3D
-type(ui_program), target :: simple_test_graphene_mask
-type(ui_program), target :: simple_test_nano_mask
-type(ui_program), target :: simple_test_ptcl_center
-type(ui_program), target :: simple_test_image_bin
+type(ui_program), target :: bounds_from_mask3D_test
+type(ui_program), target :: graphene_mask
+type(ui_program), target :: image_bin
+type(ui_program), target :: mask
+type(ui_program), target :: msk_routines
+type(ui_program), target :: nano_mask
+type(ui_program), target :: otsu_test
+type(ui_program), target :: ptcl_center
 
 contains
 
     subroutine construct_masks_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
-        call new_simple_test_mask(prgtab)
-        call new_simple_test_msk_routines(prgtab)
-        call new_simple_test_otsu(prgtab)
-        call new_simple_test_bounds_from_mask3D(prgtab)
-        call new_simple_test_graphene_mask(prgtab)
-        call new_simple_test_nano_mask(prgtab)
-        call new_simple_test_ptcl_center(prgtab)
-        call new_simple_test_image_bin(prgtab)
+        call new_bounds_from_mask3D_test(prgtab)
+        call new_graphene_mask(prgtab)
+        call new_image_bin(prgtab)
+        call new_mask(prgtab)
+        call new_msk_routines(prgtab)
+        call new_nano_mask(prgtab)
+        call new_otsu_test(prgtab)
+        call new_ptcl_center(prgtab)
     end subroutine construct_masks_programs
 
     subroutine print_masks_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('MASKS:', C_UNDERLINED)
-        write(logfhandle,'(A)') simple_test_mask%name%to_char()
-        write(logfhandle,'(A)') simple_test_msk_routines%name%to_char()
-        write(logfhandle,'(A)') simple_test_otsu%name%to_char()
-        write(logfhandle,'(A)') simple_test_bounds_from_mask3D%name%to_char()
-        write(logfhandle,'(A)') simple_test_graphene_mask%name%to_char()
-        write(logfhandle,'(A)') simple_test_nano_mask%name%to_char()
-        write(logfhandle,'(A)') simple_test_ptcl_center%name%to_char()
-        write(logfhandle,'(A)') simple_test_image_bin%name%to_char()
+        write(logfhandle,'(A)') bounds_from_mask3D_test%name%to_char()
+        write(logfhandle,'(A)') graphene_mask%name%to_char()
+        write(logfhandle,'(A)') image_bin%name%to_char()
+        write(logfhandle,'(A)') mask%name%to_char()
+        write(logfhandle,'(A)') msk_routines%name%to_char()
+        write(logfhandle,'(A)') nano_mask%name%to_char()
+        write(logfhandle,'(A)') otsu_test%name%to_char()
+        write(logfhandle,'(A)') ptcl_center%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_masks_programs
 
-    subroutine new_simple_test_mask( prgtab )
+    subroutine new_bounds_from_mask3D_test( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call bounds_from_mask3D_test%new(&
+        &'bounds_from_mask3D_test',&                         ! name
+        &'bounds_from_mask3D_test ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call bounds_from_mask3D_test%add_input(UI_IO, )
+        ! parameter input/output
+        !call bounds_from_mask3D_test%add_input(UI_IMG, )
+        ! alternative inputs
+        !call bounds_from_mask3D_test%add_input(UI_PARM, )
+        ! search controls
+        !call bounds_from_mask3D_test%add_input(UI_SRCH, )
+        ! filter controls
+        !call bounds_from_mask3D_test%add_input(UI_FILT, )
+        ! mask controls
+        !call bounds_from_mask3D_test%add_input(UI_MASK, )
+        ! computer controls
+        !call bounds_from_mask3D_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_mask', simple_test_mask, prgtab)
-    end subroutine new_simple_test_mask
+        call add_ui_program('bounds_from_mask3D_test', bounds_from_mask3D_test, prgtab)
+    end subroutine new_bounds_from_mask3D_test
 
-    subroutine new_simple_test_msk_routines( prgtab )
+    subroutine new_graphene_mask( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call graphene_mask%new(&
+        &'graphene_mask',&                         ! name
+        &'graphene_mask ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call graphene_mask%add_input(UI_IO, )
+        ! parameter input/output
+        !call graphene_mask%add_input(UI_IMG, )
+        ! alternative inputs
+        !call graphene_mask%add_input(UI_PARM, )
+        ! search controls
+        !call graphene_mask%add_input(UI_SRCH, )
+        ! filter controls
+        !call graphene_mask%add_input(UI_FILT, )
+        ! mask controls
+        !call graphene_mask%add_input(UI_MASK, )
+        ! computer controls
+        !call graphene_mask%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_msk_routines', simple_test_msk_routines, prgtab)
-    end subroutine new_simple_test_msk_routines
+        call add_ui_program('graphene_mask', graphene_mask, prgtab)
+    end subroutine new_graphene_mask
 
-    subroutine new_simple_test_otsu( prgtab )
+    subroutine new_image_bin( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call image_bin%new(&
+        &'image_bin',&                         ! name
+        &'image_bin ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call image_bin%add_input(UI_IO, )
+        ! parameter input/output
+        !call image_bin%add_input(UI_IMG, )
+        ! alternative inputs
+        !call image_bin%add_input(UI_PARM, )
+        ! search controls
+        !call image_bin%add_input(UI_SRCH, )
+        ! filter controls
+        !call image_bin%add_input(UI_FILT, )
+        ! mask controls
+        !call image_bin%add_input(UI_MASK, )
+        ! computer controls
+        !call image_bin%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_otsu', simple_test_otsu, prgtab)
-    end subroutine new_simple_test_otsu
+        call add_ui_program('image_bin', image_bin, prgtab)
+    end subroutine new_image_bin
 
-    subroutine new_simple_test_bounds_from_mask3D( prgtab )
+    subroutine new_mask( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call mask%new(&
+        &'mask',&                         ! name
+        &'mask ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call mask%add_input(UI_IO, )
+        ! parameter input/output
+        !call mask%add_input(UI_IMG, )
+        ! alternative inputs
+        !call mask%add_input(UI_PARM, )
+        ! search controls
+        !call mask%add_input(UI_SRCH, )
+        ! filter controls
+        !call mask%add_input(UI_FILT, )
+        ! mask controls
+        !call mask%add_input(UI_MASK, )
+        ! computer controls
+        !call mask%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_bounds_from_mask3D', simple_test_bounds_from_mask3D, prgtab)
-    end subroutine new_simple_test_bounds_from_mask3D
+        call add_ui_program('mask', mask, prgtab)
+    end subroutine new_mask
 
-    subroutine new_simple_test_graphene_mask( prgtab )
+    subroutine new_msk_routines( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call msk_routines%new(&
+        &'msk_routines',&                         ! name
+        &'msk_routines ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call msk_routines%add_input(UI_IO, )
+        ! parameter input/output
+        !call msk_routines%add_input(UI_IMG, )
+        ! alternative inputs
+        !call msk_routines%add_input(UI_PARM, )
+        ! search controls
+        !call msk_routines%add_input(UI_SRCH, )
+        ! filter controls
+        !call msk_routines%add_input(UI_FILT, )
+        ! mask controls
+        !call msk_routines%add_input(UI_MASK, )
+        ! computer controls
+        !call msk_routines%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_graphene_mask', simple_test_graphene_mask, prgtab)
-    end subroutine new_simple_test_graphene_mask
+        call add_ui_program('msk_routines', msk_routines, prgtab)
+    end subroutine new_msk_routines
 
-    subroutine new_simple_test_nano_mask( prgtab )
+    subroutine new_nano_mask( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call nano_mask%new(&
+        &'nano_mask',&                         ! name
+        &'nano_mask ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call nano_mask%add_input(UI_IO, )
+        ! parameter input/output
+        !call nano_mask%add_input(UI_IMG, )
+        ! alternative inputs
+        !call nano_mask%add_input(UI_PARM, )
+        ! search controls
+        !call nano_mask%add_input(UI_SRCH, )
+        ! filter controls
+        !call nano_mask%add_input(UI_FILT, )
+        ! mask controls
+        !call nano_mask%add_input(UI_MASK, )
+        ! computer controls
+        !call nano_mask%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_nano_mask', simple_test_nano_mask, prgtab)
-    end subroutine new_simple_test_nano_mask
+        call add_ui_program('nano_mask', nano_mask, prgtab)
+    end subroutine new_nano_mask
 
-    subroutine new_simple_test_ptcl_center( prgtab )
+    subroutine new_otsu_test( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call otsu_test%new(&
+        &'otsu_test',&                         ! name
+        &'otsu_test ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call otsu_test%add_input(UI_IO, )
+        ! parameter input/output
+        !call otsu_test%add_input(UI_IMG, )
+        ! alternative inputs
+        !call otsu_test%add_input(UI_PARM, )
+        ! search controls
+        !call otsu_test%add_input(UI_SRCH, )
+        ! filter controls
+        !call otsu_test%add_input(UI_FILT, )
+        ! mask controls
+        !call otsu_test%add_input(UI_MASK, )
+        ! computer controls
+        !call otsu_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_ptcl_center', simple_test_ptcl_center, prgtab)
-    end subroutine new_simple_test_ptcl_center
+        call add_ui_program('otsu_test', otsu_test, prgtab)
+    end subroutine new_otsu_test
 
-    subroutine new_simple_test_image_bin( prgtab )
+    subroutine new_ptcl_center( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call ptcl_center%new(&
+        &'ptcl_center',&                         ! name
+        &'ptcl_center ',&                        ! descr_short
+        &'is a test program for ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call ptcl_center%add_input(UI_IO, )
+        ! parameter input/output
+        !call ptcl_center%add_input(UI_IMG, )
+        ! alternative inputs
+        !call ptcl_center%add_input(UI_PARM, )
+        ! search controls
+        !call ptcl_center%add_input(UI_SRCH, )
+        ! filter controls
+        !call ptcl_center%add_input(UI_FILT, )
+        ! mask controls
+        !call ptcl_center%add_input(UI_MASK, )
+        ! computer controls
+        !call ptcl_center%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simple_test_image_bin', simple_test_image_bin, prgtab)
-    end subroutine new_simple_test_image_bin
+        call add_ui_program('ptcl_center', ptcl_center, prgtab)
+    end subroutine new_ptcl_center
 
 end module simple_test_ui_masks
