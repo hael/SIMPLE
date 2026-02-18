@@ -484,7 +484,6 @@ contains
 
     subroutine clean_batch_particles2D
         use simple_imgarr_utils, only: dealloc_imgarr
-        integer :: ithr
         call killimgbatch
         call dealloc_imgarr(ptcl_match_imgs)
         call dealloc_imgarr(ptcl_match_imgs_pad)
@@ -627,11 +626,7 @@ contains
                 if( params_glob%l_lpset )then
                     ! merged class average in both even and odd positions
                     call match_imgs(icls)%copy_fast(cavgs_merged(icls))
-                    call prep2Dref(match_imgs(icls), icls, xyz)
-                    call match_imgs(icls)%ifft
-                    call ptcl_match_imgs_pad(ithr)%zero_and_unflag_ft
-                    call match_imgs(icls)%pad(ptcl_match_imgs_pad(ithr))
-                    call ptcl_match_imgs_pad(ithr)%fft
+                    call prep2Dref(match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                     call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
                     call pftc%set_ref_pft(icls, pft, iseven=.true.)
                     call pftc%cp_even2odd_ref(icls)
@@ -639,29 +634,17 @@ contains
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! even & odd
                         call match_imgs(icls)%copy_fast(cavgs_even(icls))
-                        call prep2Dref(match_imgs(icls), icls, xyz)
-                        call match_imgs(icls)%ifft
-                        call ptcl_match_imgs_pad(ithr)%zero_and_unflag_ft
-                        call match_imgs(icls)%pad(ptcl_match_imgs_pad(ithr))
-                        call ptcl_match_imgs_pad(ithr)%fft
+                        call prep2Dref(match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
                         call pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call match_imgs(icls)%copy_fast(cavgs_odd(icls))
-                        call prep2Dref(match_imgs(icls), icls, xyz)
-                        call match_imgs(icls)%ifft
-                        call ptcl_match_imgs_pad(ithr)%zero_and_unflag_ft
-                        call match_imgs(icls)%pad(ptcl_match_imgs_pad(ithr))
-                        call ptcl_match_imgs_pad(ithr)%fft
+                        call prep2Dref(match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
                         call pftc%set_ref_pft(icls, pft, iseven=.false.)
                     else
                         ! merged class average in both even and odd positions
                         call match_imgs(icls)%copy_fast(cavgs_merged(icls))
-                        call prep2Dref(match_imgs(icls), icls, xyz)
-                        call match_imgs(icls)%ifft
-                        call ptcl_match_imgs_pad(ithr)%zero_and_unflag_ft
-                        call match_imgs(icls)%pad(ptcl_match_imgs_pad(ithr))
-                        call ptcl_match_imgs_pad(ithr)%fft
+                        call prep2Dref(match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_glob%l_resmsk)
                         call pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call pftc%cp_even2odd_ref(icls)

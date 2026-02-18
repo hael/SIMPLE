@@ -421,8 +421,8 @@ contains
     end subroutine calc_2Dref_offset
 
     !>  \brief  Prepares one cluster centre image for alignment
-    subroutine prep2Dref( img, icls, xyz )
-        class(image), intent(inout) :: img
+    subroutine prep2Dref( img, icls, xyz, img_pd )
+        class(image), intent(inout) :: img, img_pd
         integer,      intent(in)    :: icls
         real,         intent(in)    :: xyz(3)
         integer :: filtsz
@@ -457,8 +457,8 @@ contains
         if( params_glob%l_lpset.and.params_glob%l_icm )then
             call img%ICM2D( params_glob%lambda, verbose=.false. )
         endif
-        ! mask, grid, fft
-        call img%mask_fft(params_glob%msk_crop)
+        ! mask, pad, FFT
+        call img%mask_pad_fft(params_glob%msk_crop, img_pd)
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction
