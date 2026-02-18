@@ -119,6 +119,7 @@ contains
     procedure          :: norm_noise_fft_clip_shift_ctf_flip
     procedure          :: norm_noise_mask_fft_powspec
     procedure          :: mask_fft
+    procedure          :: mask_pad_fft
     procedure          :: ifft_mask_fft
     procedure          :: ifft_mask_pad_fft
     procedure          :: expand_ft
@@ -859,6 +860,12 @@ interface
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
     end subroutine mask_fft
+
+    module subroutine mask_pad_fft( self, mskrad, self_out )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: mskrad
+        class(image), intent(inout) :: self_out
+    end subroutine mask_pad_fft
 
     module subroutine ifft_mask_fft( self, mskrad )
         class(image), intent(inout) :: self
