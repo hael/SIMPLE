@@ -135,8 +135,6 @@ contains
         real    :: nonzero_pt_x(3),  nonzero_pt_y(3)  ! points of non-zero entries
         real    :: nonzero_val_x(3), nonzero_val_y(3) ! values of non-zero entries
         integer :: i, j, x, y
-        real, pointer :: b(:,:,:)
-        call self%b_img%get_rmat_ptr(b)
         nonzero_x   (1) = 1
         nonzero_pt_x(1) = 0.
         nonzero_x   (2) = 2
@@ -155,12 +153,12 @@ contains
         do i = 1,size(nonzero_y)
             nonzero_val_y(i) = b3(nonzero_pt_y(i))
         end do
-        b = 0.
+        call self%b_img%zero_and_unflag_ft
         do j = 1,size(nonzero_y)
             y = nonzero_y(j)
             do i = 1,size(nonzero_x)
                 x = nonzero_x(i)
-                b(x,y,1) = nonzero_val_x(i) * nonzero_val_y(j)
+                call self%b_img%set([x,y,1], nonzero_val_x(i) * nonzero_val_y(j))
             end do
         end do
     end subroutine fill_b
@@ -171,8 +169,6 @@ contains
         real    :: nonzero_pt_x(3),  nonzero_pt_y(3),  nonzero_pt_z(3)  ! points of non-zero entries
         real    :: nonzero_val_x(3), nonzero_val_y(3), nonzero_val_z(3) ! values of non-zero entries
         integer :: i, j, k, x, y, z
-        real, pointer :: b(:,:,:)
-        call self%b_img%get_rmat_ptr(b)
         nonzero_x   (1) = 1
         nonzero_pt_x(1) = 0.
         nonzero_x   (2) = 2
@@ -200,14 +196,14 @@ contains
         do i = 1,size(nonzero_z)
             nonzero_val_z(i) = b3(nonzero_pt_z(i))
         end do
-        b = 0.
+        call self%b_img%zero_and_unflag_ft
         do k = 1,size(nonzero_z)
             z = nonzero_z(k)
             do j = 1,size(nonzero_y)
                 y = nonzero_y(j)
                 do i = 1,size(nonzero_x)
                     x = nonzero_x(i)
-                    b(x,y,z) = nonzero_val_x(i) * nonzero_val_y(j) * nonzero_val_z(k)
+                    call self%b_img%set([x,y,z], nonzero_val_x(i) * nonzero_val_y(j) * nonzero_val_z(k))
                 end do
             end do
         end do
@@ -247,8 +243,6 @@ contains
         real    :: nonzero_val_x_a0(5), nonzero_val_x_a2(5) ! values of non-zero entries
         real    :: nonzero_val_y_a0(5), nonzero_val_y_a2(5) ! values of non-zero entries
         integer :: i, j, x, y
-        real, pointer :: r(:,:,:)
-        call self%r_img%get_rmat_ptr(r)
         nonzero_x(1) = 1
         nonzero_x(2) = 2
         nonzero_x(3) = 3
@@ -269,12 +263,12 @@ contains
             nonzero_val_y_a0(i) = a0xy(y, self%img_dims(2))
             nonzero_val_y_a2(i) = a2xy(y, self%img_dims(2))
         end do
-        r = 0.
+        call self%r_img%zero_and_unflag_ft
         do j = 1, size(nonzero_x)
             y = nonzero_y(j)
             do i = 1, size(nonzero_x)
                 x = nonzero_x(i)
-                r(x,y,1) = nonzero_val_x_a0(i) * nonzero_val_y_a2(j) + nonzero_val_x_a2(i) * nonzero_val_y_a0(j)
+                call self%r_img%set([x,y,1], nonzero_val_x_a0(i) * nonzero_val_y_a2(j) + nonzero_val_x_a2(i) * nonzero_val_y_a0(j))
             end do
         end do
     end subroutine fill_r
@@ -337,9 +331,8 @@ contains
         real    :: nonzero_val_x_a0(5), nonzero_val_x_a2(5) ! values of non-zero entries
         real    :: nonzero_val_y_a0(5), nonzero_val_y_a2(5) ! values of non-zero entries
         real    :: nonzero_val_z_a0(5), nonzero_val_z_a2(5) ! values of non-zero entries
+        real    :: r
         integer :: i, j, k, x, y, z
-        real, pointer :: r(:,:,:)
-        call self%r_img%get_rmat_ptr(r)
         nonzero_x(1) = 1
         nonzero_x(2) = 2
         nonzero_x(3) = 3
@@ -370,15 +363,16 @@ contains
             nonzero_val_z_a0(i) = a0xy(z, self%img_dims_3d(3))
             nonzero_val_z_a2(i) = a2xy(z, self%img_dims_3d(3))
         end do
-        r = 0.
+        call self%r_img%zero_and_unflag_ft
         do k = 1, size(nonzero_z)
             z = nonzero_z(k)
             do j = 1, size(nonzero_y)
                 y = nonzero_y(j)
                 do i = 1, size(nonzero_x)
                     x = nonzero_x(i)
-                    r(x,y,z) = nonzero_val_x_a0(i) * nonzero_val_y_a2(j) * nonzero_val_z_a2(k) + &
+                    r = nonzero_val_x_a0(i) * nonzero_val_y_a2(j) * nonzero_val_z_a2(k) + &
                         nonzero_val_x_a2(i) * nonzero_val_y_a0(j) * nonzero_val_z_a0(k)
+                    call self%r_img%set([x,y,z], r)
                 end do
             end do
         end do
