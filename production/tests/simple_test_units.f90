@@ -13,6 +13,7 @@ use simple_vrefhash_tester
 use simple_hash_tester
 use simple_linked_list_tester
 use simple_binary_tree_tester
+use simple_multi_dendro_tester
 use simple_cmdline_tester
 use simple_ori_tester
 use simple_oris_tester
@@ -43,6 +44,7 @@ call run_all_hash_tests
 call run_all_vrefhash_tests
 call run_all_list_tests
 call run_all_tree_tests
+call run_all_multi_dendro_tests
 call run_all_cmdline_tests
 call run_all_ori_tests
 call run_all_oris_tests
