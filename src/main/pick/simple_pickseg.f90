@@ -6,7 +6,6 @@ use simple_image,        only: image
 use simple_tvfilter,     only: tvfilter
 use simple_segmentation, only: otsu_img, sauvola
 use simple_image_bin,    only: image_bin
-use simple_syslib
 implicit none
 
 public :: pickseg
