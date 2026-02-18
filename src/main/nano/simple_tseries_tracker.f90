@@ -339,9 +339,9 @@ contains
     function center_reference( iframe )result( shift )
         use simple_image_bin,    only: image_bin
         use simple_segmentation, only: otsu_robust_fast
-        integer, intent(in) :: iframe
-        type(image_bin)       :: img, tmp, tmpcc
-        real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
+        integer,  intent(in) :: iframe
+        type(image_bin)      :: img, tmp, tmpcc
+        real,    pointer     :: rmat_cc(:,:,:)
         integer, allocatable :: sz(:)
         real                 :: shift(3), thresh(3), cen_cc(2), dist_cc, threshold
         integer              :: loc, ldim
@@ -356,8 +356,7 @@ contains
         ! median filtering
         call img%real_space_filter(5,'median')
         ! thresholding
-        call img%get_rmat_ptr(rmat)
-        where(rmat(1:ldim,1:ldim,1) < TINY) rmat(1:ldim,1:ldim,1) = 0.
+        call img%zero_below(TINY)
         call tmp%copy_bimg(img)
         ! binarize
         call otsu_robust_fast(tmp,is2d=.true.,noneg=.true.,thresh=thresh)

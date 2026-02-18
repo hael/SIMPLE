@@ -10,14 +10,9 @@ use simple_neighs
 use gnufor2
 implicit none
 
-public :: image, image_ptr, test_image, image_stack, unmemoize_mask_coords
+public :: image, test_image, image_stack, unmemoize_mask_coords
 private
 #include "simple_local_flags.inc"
-
-type image_ptr
-    real(kind=c_float),            public, pointer :: rmat(:,:,:)
-    complex(kind=c_float_complex), public, pointer :: cmat(:,:,:)
-end type image_ptr
 
 ! mask memoization
 integer              :: mem_msk_box = 0
