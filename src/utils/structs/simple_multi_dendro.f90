@@ -1,3 +1,4 @@
+!@descr: simple multi-dendrogram structure to hold multiple hierarchical clusterings of different reference chunks (from coarse clustering step)
 module simple_multi_dendro
 use simple_core_module_api
 use simple_srch_sort_loc, only: mask2inds
@@ -12,7 +13,6 @@ private
 type :: multi_dendro
    private
    type(binary_tree), allocatable :: trees(:)
-   real,              allocatable :: dist_mat(:,:)
    integer,           allocatable :: cls_pops(:)
    logical,           allocatable :: cls_map(:,:)
    integer,           allocatable :: medoids(:)
@@ -20,29 +20,28 @@ type :: multi_dendro
    integer :: n_refs  = 0
    logical :: exists  = .false.
 contains
-   procedure          :: new
-   procedure          :: get_n_trees
-   procedure          :: get_n_refs
-   procedure          :: get_medoid
-   procedure          :: get_cls_pop
-   procedure          :: build_multi_dendro
-   procedure          :: get_left_right_idxs
-   procedure, private :: get_tree_indx
-   procedure          :: kill
+   procedure :: new
+   procedure :: get_n_trees
+   procedure :: get_n_refs
+   procedure :: get_medoid
+   procedure :: get_cls_pop
+   procedure :: get_tree_refs
+   procedure :: build_tree_from_subdist
+   procedure :: get_left_right_idxs
+   procedure :: get_tree_indx
+   procedure :: kill
 end type multi_dendro
 
 contains
 
-   subroutine new(self, dist_mat, labels)
+   subroutine new(self, labels)
       class(multi_dendro), intent(inout) :: self
-      real,                intent(in)    :: dist_mat(:,:)
       integer,             intent(in)    :: labels(:)
       integer :: i, j
       call self%kill()
       if (any(labels == 0)) THROW_HARD('0 labels not allowed')
       self%n_trees = maxval(labels)
       self%n_refs  = size(labels)
-      allocate(self%dist_mat(self%n_refs,self%n_refs), source=dist_mat)
       allocate(self%cls_pops(self%n_trees), self%medoids(self%n_trees), source=0)
       do i = 1, self%n_trees
          self%cls_pops(i) = count(labels == i)
@@ -85,43 +84,73 @@ contains
       pop = self%cls_pops(itree)
    end function get_cls_pop
 
-   subroutine build_multi_dendro(self, linkage)
+   !--- Return refs for a given tree (global ref IDs).
+   function get_tree_refs(self, itree) result(refs)
+        class(multi_dendro), intent(in) :: self
+        integer,             intent(in) :: itree
+        integer, allocatable :: refs(:)
+        integer :: n
+        if (itree < 1 .or. itree > self%n_trees) then
+            allocate(refs(0))
+            return
+        end if
+        n = count(self%cls_map(itree,:))
+        allocate(refs(n))
+        refs = mask2inds(self%cls_map(itree,:))
+   end function get_tree_refs
+
+   !--- Build a single tree from an externally provided sub-distance matrix.
+   !    refs must be the same list returned by get_tree_refs(itree, ...)
+   !    sub_distmat must be n x n, symmetric (upper triangle accepted).
+   subroutine build_tree_from_subdist(self, itree, refs, sub_distmat, linkage)
       class(multi_dendro), intent(inout) :: self
-      integer,             intent(in)    :: linkage
-      real,    allocatable :: sub_distmat(:,:), height(:)
-      integer, allocatable :: refs(:), merge_mat(:,:)
-      integer :: itree, i, j, nref_sub, root_idx
+      integer,            intent(in)    :: itree
+      integer,            intent(in)    :: refs(:)            ! global ref ids
+      real,               intent(in)    :: sub_distmat(:,:)   ! n x n symmetric
+      integer,            intent(in)    :: linkage
+      ! local vars
+      integer :: n, i, j
+      integer, allocatable :: merge_mat(:,:)
+      real,    allocatable :: height(:)
       type(hclust)  :: hc
       type(bt_node) :: node
-      do itree = 1, self%n_trees
-         nref_sub = count(self%cls_map(itree,:))
-         refs     = mask2inds(self%cls_map(itree,:))
-         if (nref_sub == 1) then
-            ! degenerate tree: single node
-            call self%trees(itree)%build_from_hclust(reshape([1,1],[2,1]), refs, self%dist_mat)
-            self%medoids(itree) = refs(1)
-            deallocate(refs)
-            cycle
-         end if
-         allocate(sub_distmat(nref_sub, nref_sub))
-         sub_distmat = 1.0
-         do i = 1, nref_sub
-            do j = i + 1, nref_sub
-               sub_distmat(i,j) = self%dist_mat(refs(i), refs(j))
-               sub_distmat(j,i) = sub_distmat(i,j)
-            end do
-         end do
-         allocate(merge_mat(2, nref_sub-1), height(nref_sub-1))
-         call hc%new(nref_sub, sub_distmat, linkage)
-         call hc%cluster(merge_mat, height)
-         call hc%kill()
-         call self%trees(itree)%build_from_hclust(merge_mat, refs, self%dist_mat)
-         root_idx = self%trees(itree)%get_root_idx()
-         node     = self%trees(itree)%get_node(root_idx)
-         self%medoids(itree) = node%ref_idx
-         deallocate(sub_distmat, refs, merge_mat, height)
-      end do
-   end subroutine build_multi_dendro
+      ! Basic validations
+      if (itree < 1 .or. itree > self%n_trees) then
+         THROW_HARD('build_tree_from_subdist: itree out of range')
+      end if
+      n = size(refs)
+      if (n == 0) then
+         THROW_HARD('build_tree_from_subdist: empty refs')
+      end if
+      if (size(sub_distmat,1) /= n .or. size(sub_distmat,2) /= n) then
+         THROW_HARD('build_tree_from_subdist: sub_distmat must be (n,n) with n=size(refs)')
+      end if
+      ! If the tree already exists, clear it first
+      if (allocated(self%trees)) then
+         call self%trees(itree)%kill()
+      end if
+      ! For n==1: create degenerate single-node tree
+      if (n == 1) then
+         ! Create a one-node tree (build_from_hclust supports this as before)
+         allocate(merge_mat(2,1))  ! dummy but not used by build logic for n=1
+         merge_mat = 1   ! value doesn't matter
+         call self%trees(itree)%build_from_hclust(merge_mat, refs, sub_distmat)
+         self%medoids(itree) = refs(1)
+         deallocate(merge_mat)
+         return
+      end if
+      ! Run hclust on the provided local submatrix
+      allocate(merge_mat(2, n-1), height(n-1))
+      call hc%new(n, sub_distmat, linkage)
+      call hc%cluster(merge_mat, height)
+      call hc%kill()
+      ! Build binary_tree from merge matrix using local submatrix (local builder uses sub_distmat)
+      call self%trees(itree)%build_from_hclust(merge_mat, refs, sub_distmat)
+      ! set medoid for this tree
+      node = self%trees(itree)%get_node(self%trees(itree)%get_root_idx())
+      self%medoids(itree) = node%ref_idx
+      deallocate(merge_mat, height)
+   end subroutine build_tree_from_subdist
 
    pure subroutine get_left_right_idxs(self, ref_idx, left_ref_idx, right_ref_idx)
       class(multi_dendro), intent(in)  :: self
@@ -163,7 +192,6 @@ contains
          end do
          deallocate(self%trees)
       end if
-      if (allocated(self%dist_mat))  deallocate(self%dist_mat)
       if (allocated(self%cls_pops))  deallocate(self%cls_pops)
       if (allocated(self%cls_map))   deallocate(self%cls_map)
       if (allocated(self%medoids))   deallocate(self%medoids)

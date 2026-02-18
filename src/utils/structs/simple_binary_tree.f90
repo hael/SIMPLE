@@ -1,3 +1,4 @@
+!@descr: simple binary tree structure for hierarchical clustering results
 module simple_binary_tree
 implicit none
 private
@@ -106,14 +107,15 @@ contains
     subroutine build_from_hclust(self, merge_mat, refs, dist_mat)
         class(binary_tree), intent(inout) :: self
         integer,            intent(in)    :: merge_mat(:,:)   ! (2, nref-1)
-        integer,            intent(in)    :: refs(:)          ! length nref
-        real,               intent(in)    :: dist_mat(:,:)    ! full distmat (global indexing)
-        integer :: nref, n_total, k, s, l, r, p, m, i, j, best
+        integer,            intent(in)    :: refs(:)          ! length nref (global ids)
+        real,               intent(in)    :: dist_mat(:,:)    ! (nref,nref) LOCAL to refs ordering
+        integer :: nref, n_total, k, s, l, r, p, m, i, j
+        integer :: best_local
         integer, allocatable :: tmp(:)
         real :: best_sum, sum
         call self%kill()
-        nref     = size(refs)
-        n_total  = 2*nref - 1
+        nref    = size(refs)
+        n_total = 2*nref - 1
         allocate(self%nodes(n_total))
         ! init all nodes
         do k = 1, n_total
@@ -127,9 +129,9 @@ contains
         end do
         ! leaves 1..nref
         do k = 1, nref
-            self%nodes(k)%ref_idx = refs(k)
+            self%nodes(k)%ref_idx = refs(k)     ! global ref id
             allocate(self%nodes(k)%subset(1))
-            self%nodes(k)%subset = [refs(k)]
+            self%nodes(k)%subset = [k]          ! LOCAL index (1..nref)
         end do
         ! internal nodes nref+1 .. n_total
         m = nref
@@ -137,29 +139,29 @@ contains
             l = merge_mat(1, s)
             r = merge_mat(2, s)
             p = m + s
-            self%nodes(p)%left_idx  = l
-            self%nodes(p)%right_idx = r
+            self%nodes(p)%left_idx   = l
+            self%nodes(p)%right_idx  = r
             self%nodes(l)%parent_idx = p
             self%nodes(r)%parent_idx = p
-            self%nodes(p)%level = s
-            ! union subset
+            self%nodes(p)%level      = s
+            ! union subset (still LOCAL indices)
             allocate(tmp(size(self%nodes(l)%subset) + size(self%nodes(r)%subset)))
             tmp = [self%nodes(l)%subset, self%nodes(r)%subset]
             call move_alloc(tmp, self%nodes(p)%subset)
-            ! compute medoid (same logic you had)
-            best     = -1
-            best_sum = huge(1.0)
+            ! compute medoid using LOCAL dist_mat (indexed by LOCAL indices)
+            best_local = -1
+            best_sum   = huge(1.0)
             do i = 1, size(self%nodes(p)%subset)
                 sum = 0.0
                 do j = 1, size(self%nodes(p)%subset)
-                sum = sum + dist_mat(self%nodes(p)%subset(i), self%nodes(p)%subset(j))
+                    sum = sum + dist_mat(self%nodes(p)%subset(i), self%nodes(p)%subset(j))
                 end do
                 if (sum < best_sum) then
-                best_sum = sum
-                best     = self%nodes(p)%subset(i)
+                    best_sum   = sum
+                    best_local = self%nodes(p)%subset(i)
                 end if
             end do
-            self%nodes(p)%ref_idx = best
+            self%nodes(p)%ref_idx = refs(best_local)   ! store GLOBAL id
         end do
         self%root_idx = n_total
         self%exists   = .true.
