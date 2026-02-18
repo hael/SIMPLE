@@ -24,7 +24,7 @@ class Project:
             self.load()
 
     def setIDFromRequest(self, request):
-        if "selected_project_id" in request.POST:
+        if "selected_project_id" in request.POST: 
             test_id_str = request.POST["selected_project_id"]
         else:
             test_id_str = request.COOKIES.get('selected_project_id', 'none')

@@ -100,7 +100,7 @@ contains
         ! computer controls
         call assign_optics%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         ! add to ui_hash
-        call add_ui_program('assign_optics', abinitio2D_stream, prgtab)
+        call add_ui_program('assign_optics', assign_optics, prgtab)
     end subroutine new_assign_optics
 
     subroutine new_cluster2D_stream( prgtab )
@@ -174,7 +174,7 @@ contains
         ! computer controls
         call gen_pickrefs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         ! add to ui_hash
-        call add_ui_program('gen_pickrefs', cluster2D_stream, prgtab)
+        call add_ui_program('gen_pickrefs', gen_pickrefs, prgtab)
     end subroutine new_gen_pickrefs
 
     subroutine new_pick_extract( prgtab )
