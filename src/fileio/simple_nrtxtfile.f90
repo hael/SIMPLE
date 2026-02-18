@@ -1,11 +1,11 @@
 !@descr: deals with text files of numbers
 module simple_nrtxtfile
-use simple_defs
-use simple_error
-use simple_fileio
-use simple_string
-use simple_string_utils
-use simple_syslib
+use simple_defs,         only: XLONGSTRLEN
+use simple_error,        only: simple_exception
+use simple_fileio,       only: fopen, fclose, fileiochk, is_open
+use simple_string,       only: string
+use simple_string_utils, only: str_is_comment, str_is_blank, cnt_recs_per_line
+use simple_syslib,       only: simple_mkdir, simple_chdir
 implicit none
 
 public :: nrtxtfile

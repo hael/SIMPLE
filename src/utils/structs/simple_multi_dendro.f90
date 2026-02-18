@@ -21,6 +21,10 @@ type :: multi_dendro
    logical :: exists  = .false.
 contains
    procedure          :: new
+   procedure          :: get_n_trees
+   procedure          :: get_n_refs
+   procedure          :: get_medoid
+   procedure          :: get_cls_pop
    procedure          :: build_multi_dendro
    procedure          :: get_left_right_idxs
    procedure, private :: get_tree_indx
@@ -53,6 +57,34 @@ contains
       self%exists = .true.
    end subroutine new
 
+   pure integer function get_n_trees(self) result(n)
+      class(multi_dendro), intent(in) :: self
+      n = self%n_trees
+   end function
+
+   pure integer function get_n_refs(self) result(n)
+      class(multi_dendro), intent(in) :: self
+      n = self%n_refs
+   end function
+
+   pure integer function get_medoid(self, itree) result(m)
+      class(multi_dendro), intent(in) :: self
+      integer, intent(in) :: itree
+      m = 0
+      if (itree < 1 .or. itree > self%n_trees) return
+      if (.not. allocated(self%medoids)) return
+      m = self%medoids(itree)
+   end function
+
+   pure integer function get_cls_pop(self, itree) result(pop)
+      class(multi_dendro), intent(in) :: self
+      integer, intent(in) :: itree
+      pop = 0
+      if (itree < 1 .or. itree > self%n_trees) return
+      if (.not. allocated(self%cls_pops)) return
+      pop = self%cls_pops(itree)
+   end function get_cls_pop
+
    subroutine build_multi_dendro(self, linkage)
       class(multi_dendro), intent(inout) :: self
       integer,             intent(in)    :: linkage
@@ -79,7 +111,7 @@ contains
                sub_distmat(j,i) = sub_distmat(i,j)
             end do
          end do
-         allocate(merge_mat(2, nref_sub-1))
+         allocate(merge_mat(2, nref_sub-1), height(nref_sub-1))
          call hc%new(nref_sub, sub_distmat, linkage)
          call hc%cluster(merge_mat, height)
          call hc%kill()
@@ -87,7 +119,7 @@ contains
          root_idx = self%trees(itree)%get_root_idx()
          node     = self%trees(itree)%get_node(root_idx)
          self%medoids(itree) = node%ref_idx
-         deallocate(sub_distmat, refs, merge_mat)
+         deallocate(sub_distmat, refs, merge_mat, height)
       end do
    end subroutine build_multi_dendro
 
@@ -96,7 +128,10 @@ contains
       integer,             intent(in)  :: ref_idx
       integer,             intent(out) :: left_ref_idx, right_ref_idx
       integer :: itree
+      left_ref_idx  = 0
+      right_ref_idx = 0
       itree = self%get_tree_indx(ref_idx)
+      if (itree == 0) return
       call self%trees(itree)%get_left_right_ref(ref_idx, left_ref_idx, right_ref_idx)
    end subroutine get_left_right_idxs
 
@@ -104,8 +139,12 @@ contains
       class(multi_dendro), intent(in) :: self
       integer,             intent(in) :: ref_idx
       integer :: itree
-      tree_idx = 1
-      if (self%n_trees == 1) return
+      tree_idx = 0
+      if (self%n_trees == 0) return ! should never happen, but just in case
+      if (self%n_trees == 1) then
+         if (self%trees(1)%find_node_by_ref(ref_idx) /= 0) tree_idx = 1
+         return
+      end if
       do itree = 1, self%n_trees
          if (self%trees(itree)%find_node_by_ref(ref_idx) /= 0) then
             tree_idx = itree
