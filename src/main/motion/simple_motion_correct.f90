@@ -15,7 +15,7 @@ implicit none
 public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_shift_frames
 public :: motion_correct_iso_kill
 ! Beam-induced motion correction
-public :: motion_correct_dev, motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
+public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
 public :: motion_correct_with_patched
 ! Common & convenience
 public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname, motion_correct_write_poly
@@ -564,14 +564,9 @@ contains
         call motion_patch%set_fixed_frame(fixed_frame)
         call motion_patch%set_interp_fixed_frame(fixed_frame)
         call motion_patch%set_bfactor(bfac)
-        if( trim(params_glob%algorithm).eq.'poly2' )then
-            call motion_patch%correct_poly(hp, rmsd_threshold, movie_frames_scaled, patched_shift_fname, patched_polyn,  global_shifts=shifts_toplot)
-            rmsd = motion_patch%get_polyfit_rmsd()
-        else
-            call motion_patch%correct(hp, movie_frames_scaled, patched_shift_fname, global_shifts=shifts_toplot)
-            rmsd = motion_patch%get_polyfit_rmsd()
-            call motion_patch%get_poly4star(patched_polyn, patched_shifts, patched_centers)
-        endif
+        call motion_patch%correct(hp, movie_frames_scaled, patched_shift_fname, global_shifts=shifts_toplot)
+        rmsd = motion_patch%get_polyfit_rmsd()
+        call motion_patch%get_poly4star(patched_polyn, patched_shifts, patched_centers)
         ! end if
         if( L_BENCH )then
             rt_patched = toc(t_patched)
@@ -628,90 +623,6 @@ contains
         call motion_patch%kill
         call ftexp_transfmat_kill
     end subroutine motion_correct_patched_kill
-
-    !> motion_correction of DDD movie
-    subroutine motion_correct_dev( movie_stack_fname, ctfvars, movie_sum, movie_sum_corrected,&
-            &movie_sum_ctf, aniso_success, poly_rmsd, gainref, boxdata )
-        use simple_motion_align_poly, only: motion_align_poly
-        class(string),           intent(in)    :: movie_stack_fname  !< input filename of stack
-        type(ctfparams),         intent(inout) :: ctfvars            !< CTF params
-        type(image),             intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        logical,                 intent(out)   :: aniso_success
-        real,                    intent(out)   :: poly_rmsd
-        class(string), optional, intent(in)    :: gainref            !< gain reference filename
-        real,          optional, intent(in)    :: boxdata(:,:)
-        type(motion_align_poly) :: align_obj
-        real, allocatable       :: iso_shifts(:,:)
-        real(dp)                :: star_polyn(36)
-        real                    :: ave, sdev, var
-        integer                 :: t
-        logical                 :: err, err_stat
-        ! initialise
-        if( l_BENCH ) t_correct_iso_init = tic()
-        call motion_correct_init(movie_stack_fname, ctfvars, err, movie_sum, gainref)
-        ! deals with reference frame convention
-        select case(trim(params_glob%mcconvention))
-            case('relion','first')
-                fixed_frame = 1
-            case DEFAULT
-                fixed_frame = nint(real(nframes)/2.)
-        end select
-        !$omp parallel do schedule(guided) default(shared) private(t) proc_bind(close)
-        do t=1,nframes
-            call movie_frames_scaled(t)%ifft
-        enddo
-        !$omp end parallel do
-        if( err ) return
-        call align_obj%new(movie_frames_scaled, fixed_frame)
-        call align_obj%gen_patches_dimensions
-        call align_obj%gen_tiles(boxdata)
-        if( l_BENCH ) rt_correct_iso_init = toc(t_correct_iso_init)
-        if( L_BENCH ) t_ = tic()
-        call align_obj%align(params_glob%algorithm, poly_rmsd, aniso_success, patched_polyn, star_polyn)
-        if( .not.aniso_success )then
-            THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
-            THROW_WARN('Only isotropic/stage-drift correction will be used')
-        endif
-        if( L_BENCH ) rt_aniso_align = toc(t_)
-        ! solution
-        call align_obj%plot_shifts(patched_shift_fname)
-        call align_obj%get_iso_shifts(iso_shifts)
-        call align_obj%get_weights(frameweights)
-        shifts_toplot = iso_shifts
-        call moment(frameweights, ave, sdev, var, err_stat)
-        write(logfhandle,'(A,F7.4)') '>>> AVERAGE PATCH & FRAMES CORRELATION: ', align_obj%get_corr()
-        write(logfhandle,'(A,4F7.4)')'>>> FRAME WEIGHTS AVE/SDEV/MIN/MAX    : ', ave, sdev, minval(frameweights), maxval(frameweights)
-        ! shift frames
-        !$omp parallel do schedule(guided) default(shared) private(t) proc_bind(close)
-        do t=1,nframes
-            call movie_frames_scaled(t)%fft
-            call movie_frames_scaled(t)%shift2Dserial(-iso_shifts(t,:))
-            if( aniso_success ) call movie_frames_scaled(t)%ifft
-        enddo
-        !$omp end parallel do
-        if( aniso_success )then
-            ! dummy init to access interpolation routine
-            call motion_patch%new([params_glob%nxpatch, params_glob%nypatch],0.)
-            call motion_patch%set_nframes(nframes)
-            call motion_patch%set_fixed_frame(fixed_frame)
-            call motion_patch%set_interp_fixed_frame(fixed_frame)
-            call motion_patch%set_poly_coeffs(patched_polyn)
-            ! generate micrograph & CTF micrograph
-            call motion_correct_patched_calc_sums(movie_sum_corrected, movie_sum_ctf)
-        else
-            ! generate micrograph & CTF micrograph
-            call motion_correct_iso_calc_sums(movie_sum_corrected, movie_sum_ctf)
-        endif
-        ! now patched_polyn is with reference to first frame for later star ouput
-        patched_polyn = star_polyn
-        ! report the sampling distance of the possibly scaled movies
-        ctfvars%smpd = smpd_scaled
-        call align_obj%kill
-        if( L_BENCH )then
-            print *,'rt_iso_init   : ',rt_correct_iso_init
-            print *,'rt_aniso_align: ',rt_aniso_align
-        endif
-    end subroutine motion_correct_dev
 
     ! PUBLIC COMMON
 

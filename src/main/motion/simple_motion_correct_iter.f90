@@ -93,108 +93,75 @@ contains
         motion_correct_with_patched = (params_glob%mcpatch.eq.'yes') .and. (params_glob%nxpatch*params_glob%nypatch > 1)
         bid = 0.0
         ! ALIGNEMENT
-        select case(params_glob%algorithm)
-        case('wpatch','poly')
-            write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', moviename%to_char()
-            if( cline%defined('boxfile') )then
-                if( file_exists(params_glob%boxfile) )then
-                    if( nlines(params_glob%boxfile) > 0 )then
-                        call boxfile%new(params_glob%boxfile, 1)
-                        allocate( boxdata(boxfile%get_ndatalines(),boxfile%get_nrecs_per_line()))
-                        do iptcl=1,boxfile%get_ndatalines()
-                            call boxfile%readNextDataLine(boxdata(iptcl,:))
-                        end do
-                        call boxfile%kill
-                    endif
+        if( trim(params_glob%algorithm) .eq. 'iso' ) motion_correct_with_patched = .false.
+        ! b-factors for alignment
+        bfac_here = -1.
+        if( cline%defined('bfac') ) bfac_here = params_glob%bfac
+        ! check, increment counter & print
+        write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', moviename%to_char()
+        ! execute the motion_correction
+        call motion_correct_iso(self%moviename, ctfvars, bfac_here, self%moviesum, gainref_fname=gainref_fname)
+        call motion_correct_mic2spec(self%moviesum, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
+        call self%moviesum%kill
+        ! shifts frames accordingly
+        call motion_correct_iso_shift_frames
+        ! optionally calculate optimal weights
+        call motion_correct_calc_opt_weights
+        ! destruct before anisotropic correction
+        call motion_correct_iso_kill
+        ! Patch based approach
+        if( motion_correct_with_patched ) then
+            select case(trim(params_glob%mcconvention))
+                case('first','relion')
+                    ! the threshold is slighly increased because goodness of fit is always higher
+                    ! when calculated with reference to the first frame
+                    effective_patch_fit_threshold = PATCH_FIT_THRESHOLD + 1.0
+                case DEFAULT
+                    effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
+            end select
+            nxpatch = params_glob%nxpatch
+            nypatch = params_glob%nypatch
+            call motion_correct_patched(bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
+            if( trim(params_glob%mcpatch_thres).eq.'no' )then
+                patch_success = .true. ! always accept patch solution
+                if( any(goodnessoffit >= effective_patch_fit_threshold) )then
+                    THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. The patch-based correction will however be used')
                 endif
-                call motion_correct_dev(self%moviename, ctfvars, self%moviesum, self%moviesum_corrected,&
-                    &self%moviesum_ctf, patch_success, goodnessoffit(1), gainref=gainref_fname, boxdata=boxdata)
             else
-                call motion_correct_dev(self%moviename, ctfvars, self%moviesum, self%moviesum_corrected,&
-                    &self%moviesum_ctf, patch_success, goodnessoffit(1), gainref=gainref_fname)
-            endif
-            ! STAR output
-            if( .not. l_tseries ) call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
-            call motion_correct_iso_kill
-            call motion_correct_kill_common
-            call motion_correct_patched_kill
-            if( .not.patch_success )then
-                THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
-                THROW_WARN('Only isotropic/stage-drift correction will be used')
-            endif
-            call orientation%set('gof',   goodnessoffit(1))
-            call motion_correct_mic2spec(self%moviesum, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
-        case DEFAULT
-            if( trim(params_glob%algorithm) .eq. 'iso' ) motion_correct_with_patched = .false.
-            ! b-factors for alignment
-            bfac_here = -1.
-            if( cline%defined('bfac') ) bfac_here = params_glob%bfac
-            ! check, increment counter & print
-            write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', moviename%to_char()
-            ! execute the motion_correction
-            call motion_correct_iso(self%moviename, ctfvars, bfac_here, self%moviesum, gainref_fname=gainref_fname)
-            call motion_correct_mic2spec(self%moviesum, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
-            call self%moviesum%kill
-            ! shifts frames accordingly
-            call motion_correct_iso_shift_frames
-            ! optionally calculate optimal weights
-            call motion_correct_calc_opt_weights
-            ! destruct before anisotropic correction
-            call motion_correct_iso_kill
-            ! Patch based approach
-            if( motion_correct_with_patched ) then
-                select case(trim(params_glob%mcconvention))
-                    case('first','relion')
-                        ! the threshold is slighly increased because goodness of fit is always higher
-                        ! when calculated with reference to the first frame
-                        effective_patch_fit_threshold = PATCH_FIT_THRESHOLD + 1.0
-                    case DEFAULT
-                        effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
-                end select
-                nxpatch = params_glob%nxpatch
-                nypatch = params_glob%nypatch
-                call motion_correct_patched(bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
-                if( trim(params_glob%mcpatch_thres).eq.'no' )then
-                    patch_success = .true. ! always accept patch solution
-                    if( any(goodnessoffit >= effective_patch_fit_threshold) )then
-                        THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. The patch-based correction will however be used')
-                    endif
-                else
-                    patch_success = all(goodnessoffit < effective_patch_fit_threshold)
-                    if( patch_success )then
-                        ! First pass of BIM correction was successful
-                    else
-                        THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. Retrying with less patches')
-                        nxpatch = max(1,nint(real(nxpatch)/2.))
-                        nypatch = max(1,nint(real(nypatch)/2.))
-                        if( nxpatch * nypatch >= 2 )then
-                            patched_shift_fname = dir_out%to_char()//fbody_here%to_char()//'_shifts.eps'
-                            call motion_correct_patched(bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
-                            patch_success = all(goodnessoffit < effective_patch_fit_threshold)
-                        endif
-                    endif
-                endif
-                ! generate sums
+                patch_success = all(goodnessoffit < effective_patch_fit_threshold)
                 if( patch_success )then
-                    call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
+                    ! First pass of BIM correction was successful
                 else
-                    call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
-                    THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. Stage-drift correction will be used')
+                    THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. Retrying with less patches')
+                    nxpatch = max(1,nint(real(nxpatch)/2.))
+                    nypatch = max(1,nint(real(nypatch)/2.))
+                    if( nxpatch * nypatch >= 2 )then
+                        patched_shift_fname = dir_out%to_char()//fbody_here%to_char()//'_shifts.eps'
+                        call motion_correct_patched(bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
+                        patch_success = all(goodnessoffit < effective_patch_fit_threshold)
+                    endif
                 endif
-                call orientation%set('gofx',goodnessoffit(1))
-                call orientation%set('gofy',goodnessoffit(2))
-                ! cleanup
-                call motion_correct_patched_kill
+            endif
+            ! generate sums
+            if( patch_success )then
+                call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
             else
                 call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
+                THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. Stage-drift correction will be used')
             endif
-            ! STAR output
-            if( .not. l_tseries )then
-                call motion_correct_write_poly(poly_fname)
-                call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
-                call motion_correct_calc_bid(patch_success, bid)
-            endif
-        end select
+            call orientation%set('gofx',goodnessoffit(1))
+            call orientation%set('gofy',goodnessoffit(2))
+            ! cleanup
+            call motion_correct_patched_kill
+        else
+            call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
+        endif
+        ! STAR output
+        if( .not. l_tseries )then
+            call motion_correct_write_poly(poly_fname)
+            call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
+            call motion_correct_calc_bid(patch_success, bid)
+        endif
         ! generate power-spectra
         call motion_correct_mic2spec(self%moviesum_ctf, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
         call self%pspec_sum%before_after(self%pspec_ctf, self%pspec_half_n_half)
