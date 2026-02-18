@@ -511,6 +511,7 @@ contains
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target=' // PREPROC_JOB_NAME)
         call json%add(process_inputs, '', 'outdir='     // OPTICS_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nthr='       // int2str(DEFAULT_NTHR_MASTER))
         !! opening 2D
         call json%create_object(process, 'process')
         call json%add(processes, process)
