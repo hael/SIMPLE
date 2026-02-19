@@ -1,4 +1,4 @@
-!@descr: module defining the user interfaces for optimize  programs in the simple_test_exec suite
+!@descr: module defining the user interfaces for optimize test programs in the simple_test_exec suite
 module simple_test_ui_optimize
 use simple_ui_modules
 implicit none
@@ -12,17 +12,17 @@ type(ui_program), target :: tree_srch
 
 contains
 
-    subroutine construct_optimize_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_lbfgsb(prgtab)
-        call new_lbfgsb_cosine(prgtab)
-        call new_lplims(prgtab)
-        call new_lpstages_test(prgtab)
-        call new_opt_lp(prgtab)
-        call new_tree_srch(prgtab)
-    end subroutine construct_optimize_programs
+    subroutine construct_test_optimize_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_lbfgsb(tsttab)
+        call new_lbfgsb_cosine(tsttab)
+        call new_lplims(tsttab)
+        call new_lpstages_test(tsttab)
+        call new_opt_lp(tsttab)
+        call new_tree_srch(tsttab)
+    end subroutine construct_test_optimize_programs
 
-    subroutine print_optimize_programs(logfhandle)
+    subroutine print_test_optimize_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('OPTIMIZE:', C_UNDERLINED)
         write(logfhandle,'(A)') lbfgsb%name%to_char()
@@ -32,10 +32,10 @@ contains
         write(logfhandle,'(A)') opt_lp%name%to_char()
         write(logfhandle,'(A)') tree_srch%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_optimize_programs
+    end subroutine print_test_optimize_programs
 
-    subroutine new_lbfgsb( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_lbfgsb( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call lbfgsb%new(&
         &'lbfgsb',&                         ! name
@@ -59,11 +59,11 @@ contains
         ! computer controls
         !call lbfgsb%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('lbfgsb', lbfgsb, prgtab)
+        call add_ui_program('lbfgsb', lbfgsb, tsttab)
     end subroutine new_lbfgsb
 
-    subroutine new_lbfgsb_cosine( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_lbfgsb_cosine( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call lbfgsb_cosine%new(&
         &'lbfgsb_cosine',&                     ! name
@@ -87,11 +87,11 @@ contains
         ! computer controls
         !call lbfgsb_cosine%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('lbfgsb_cosine', lbfgsb_cosine, prgtab)
+        call add_ui_program('lbfgsb_cosine', lbfgsb_cosine, tsttab)
     end subroutine new_lbfgsb_cosine
 
-    subroutine new_lplims( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_lplims( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call lplims%new(&
         &'lplims',&                            ! name
@@ -115,11 +115,11 @@ contains
         ! computer controls
         !call lplims%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('lplims', lplims, prgtab)
+        call add_ui_program('lplims', lplims, tsttab)
     end subroutine new_lplims
 
-    subroutine new_lpstages_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_lpstages_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call lpstages_test%new(&
         &'lpstages_test',&                     ! name
@@ -143,11 +143,11 @@ contains
         ! computer controls
         !call lpstages_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('lpstages_test', lpstages_test, prgtab)
+        call add_ui_program('lpstages_test', lpstages_test, tsttab)
     end subroutine new_lpstages_test
 
-    subroutine new_opt_lp( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_opt_lp( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call opt_lp%new(&
         &'opt_lp',&                            ! name
@@ -171,11 +171,11 @@ contains
         ! computer controls
         !call opt_lp%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('opt_lp', opt_lp, prgtab)
+        call add_ui_program('opt_lp', opt_lp, tsttab)
     end subroutine new_opt_lp
 
-    subroutine new_tree_srch( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_tree_srch( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call tree_srch%new(&
         &'tree_srch',&                         ! name
@@ -199,7 +199,7 @@ contains
         ! computer controls
         !call tree_srch%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('tree_srch', tree_srch, prgtab)
+        call add_ui_program('tree_srch', tree_srch, tsttab)
     end subroutine new_tree_srch
 
 end module simple_test_ui_optimize

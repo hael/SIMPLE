@@ -4,7 +4,7 @@ use simple_cmdline,                   only: cmdline
 use simple_commanders_test_highlevel, only: commander_test_mini_stream, commander_test_simulated_workflow
 implicit none
 
-public :: exec_highlevel_commander
+public :: exec_test_highlevel_commander
 private
 
 type(commander_test_mini_stream)        :: xmini_stream
@@ -12,7 +12,7 @@ type(commander_test_simulated_workflow) :: xsimulated_workflow
 
 contains
 
-    subroutine exec_highlevel_commander(which, cline, l_silent, l_did_execute)
+    subroutine exec_test_highlevel_commander( which, cline, l_silent, l_did_execute )
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
@@ -28,6 +28,6 @@ contains
             case default
                 l_did_execute = .false.
         end select
-    end subroutine exec_highlevel_commander
+    end subroutine exec_test_highlevel_commander
 
 end module simple_test_exec_highlevel

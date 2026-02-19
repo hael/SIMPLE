@@ -8,7 +8,7 @@ implicit none
 
 contains
 
-    subroutine add_ui_program( prg_name, ui_prg_instance, prgtab)
+    subroutine add_ui_program( prg_name, ui_prg_instance, prgtab )
         character(len=*),          intent(in)    :: prg_name
         class(ui_program), target, intent(inout) :: ui_prg_instance
         class(ui_hash),            intent(inout) :: prgtab

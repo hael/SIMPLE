@@ -1,4 +1,4 @@
-!@descr: module defining the user interfaces for fft  programs in the simple_test_exec suite
+!@descr: module defining the user interfaces for fft testprograms in the simple_test_exec suite
 module simple_test_ui_fft
 use simple_ui_modules
 implicit none
@@ -15,20 +15,20 @@ type(ui_program), target :: rotate_ref
 
 contains
 
-    subroutine construct_fft_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_corrs2weights_test(prgtab)
-        call new_eval_polarftcc(prgtab)
-        call new_ft_expanded(prgtab)
-        call new_gencorrs_fft(prgtab)
-        call new_order_corr(prgtab)
-        call new_phasecorr(prgtab)
-        call new_polarops(prgtab)
-        call new_rank_weights(prgtab)
-        call new_rotate_ref(prgtab)
-    end subroutine construct_fft_programs
+    subroutine construct_test_fft_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_corrs2weights_test(tsttab)
+        call new_eval_polarftcc(tsttab)
+        call new_ft_expanded(tsttab)
+        call new_gencorrs_fft(tsttab)
+        call new_order_corr(tsttab)
+        call new_phasecorr(tsttab)
+        call new_polarops(tsttab)
+        call new_rank_weights(tsttab)
+        call new_rotate_ref(tsttab)
+    end subroutine construct_test_fft_programs
 
-    subroutine print_fft_programs(logfhandle)
+    subroutine print_test_fft_programs( logfhandle )
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('FFT:', C_UNDERLINED)
         write(logfhandle,'(A)') corrs2weights_test%name%to_char()
@@ -41,10 +41,10 @@ contains
         write(logfhandle,'(A)') rank_weights%name%to_char()
         write(logfhandle,'(A)') rotate_ref%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_fft_programs
+    end subroutine print_test_fft_programs
 
-    subroutine new_corrs2weights_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_corrs2weights_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call corrs2weights_test%new(&
         &'corrs2weights_test',&                ! name
@@ -68,11 +68,11 @@ contains
         ! computer controls
         !call corrs2weights_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('corrs2weights_test', corrs2weights_test, prgtab)
+        call add_ui_program('corrs2weights_test', corrs2weights_test, tsttab)
     end subroutine new_corrs2weights_test
 
-    subroutine new_eval_polarftcc( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_eval_polarftcc( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call eval_polarftcc%new(&
         &'eval_polarftcc',&                    ! name
@@ -96,11 +96,11 @@ contains
         ! computer controls
         !call eval_polarftcc%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('eval_polarftcc', eval_polarftcc, prgtab)
+        call add_ui_program('eval_polarftcc', eval_polarftcc, tsttab)
     end subroutine new_eval_polarftcc
 
-    subroutine new_ft_expanded( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_ft_expanded( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call ft_expanded%new(&
         &'ft_expanded',&                       ! name
@@ -124,11 +124,11 @@ contains
         ! computer controls
         !call ft_expanded%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ft_expanded', ft_expanded, prgtab)
+        call add_ui_program('ft_expanded', ft_expanded, tsttab)
     end subroutine new_ft_expanded
 
-    subroutine new_gencorrs_fft( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_gencorrs_fft( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call gencorrs_fft%new(&
         &'gencorrs_fft',&                      ! name
@@ -152,11 +152,11 @@ contains
         ! computer controls
         !call gencorrs_fft%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('gencorrs_fft', gencorrs_fft, prgtab)
+        call add_ui_program('gencorrs_fft', gencorrs_fft, tsttab)
     end subroutine new_gencorrs_fft
 
-    subroutine new_order_corr( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_order_corr( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call order_corr%new(&
         &'order_corr',&                        ! name
@@ -180,11 +180,11 @@ contains
         ! computer controls
         !call order_corr%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('order_corr', order_corr, prgtab)
+        call add_ui_program('order_corr', order_corr, tsttab)
     end subroutine new_order_corr
 
-    subroutine new_phasecorr( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_phasecorr( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call phasecorr%new(&
         &'phasecorr',&                         ! name
@@ -208,11 +208,11 @@ contains
         ! computer controls
         !call phasecorr%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('phasecorr', phasecorr, prgtab)
+        call add_ui_program('phasecorr', phasecorr, tsttab)
     end subroutine new_phasecorr
 
-    subroutine new_polarops( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_polarops( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call polarops%new(&
         &'polarops',&                         ! name
@@ -236,11 +236,11 @@ contains
         ! computer controls
         !call polarops%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('polarops', polarops, prgtab)
+        call add_ui_program('polarops', polarops, tsttab)
     end subroutine new_polarops
 
-    subroutine new_rank_weights( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_rank_weights( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call rank_weights%new(&
         &'rank_weights',&                      ! name
@@ -264,11 +264,11 @@ contains
         ! computer controls
         !call rank_weights%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('rank_weights', rank_weights, prgtab)
+        call add_ui_program('rank_weights', rank_weights, tsttab)
     end subroutine new_rank_weights
 
-    subroutine new_rotate_ref( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_rotate_ref( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call rotate_ref%new(&
         &'rotate_ref',&                        ! name
@@ -292,7 +292,7 @@ contains
         ! computer controls
         !call rotate_ref%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('rotate_ref', rotate_ref, prgtab)
+        call add_ui_program('rotate_ref', rotate_ref, tsttab)
     end subroutine new_rotate_ref
 
 end module simple_test_ui_fft

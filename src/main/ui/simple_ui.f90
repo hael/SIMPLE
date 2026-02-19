@@ -3,7 +3,7 @@ module simple_ui
 use simple_ui_all
 implicit none
 
-public :: make_ui, get_prg_ptr
+public :: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr
 public :: list_simple_prgs_in_ui, list_simple_test_prgs_in_ui, list_stream_prgs_in_ui, list_single_prgs_in_ui
 public :: print_ui_json, write_ui_json
 public :: print_stream_ui_json, validate_ui_json
@@ -12,8 +12,9 @@ private
 
 character(len=26), parameter :: UI_FNAME = 'simple_ui.json'
 logical,           parameter :: DEBUG    = .false.
-type(ui_hash)                :: prgtab
+type(ui_hash)                :: prgtab, tsttab
 type(string), allocatable    :: prgnames(:)
+type(string), allocatable    :: tstnames(:)
 
 contains
     
@@ -42,8 +43,6 @@ contains
         call construct_dock_programs(prgtab)
         call construct_volume_programs(prgtab)
         call construct_other_programs(prgtab)
-        ! SIMPLE TEST PROGRAMS
-        call construct_test_programs(prgtab)
         ! SIMPLE STREAM PROGRAMS
         call construct_stream_programs(prgtab)
         ! SINGLE PROGRAMS
@@ -57,12 +56,37 @@ contains
         prgnames = prgtab%keys_sorted()
     end subroutine make_ui
 
+    subroutine make_test_ui
+        integer :: i
+        call set_ui_params
+        ! SIMPLE TEST PROGRAMS
+        call construct_test_fft_programs(tsttab)
+        call construct_test_geometry_programs(tsttab)
+        call construct_test_highlevel_programs(tsttab)
+        call construct_test_io_programs(tsttab)
+        call construct_test_masks_programs(tsttab)
+        call construct_test_network_programs(tsttab)
+        call construct_test_numerics_programs(tsttab)
+        call construct_test_optimize_programs(tsttab)
+        call construct_test_parallel_programs(tsttab)
+        call construct_test_stats_programs(tsttab)
+        call construct_test_utils_programs(tsttab)
+        tstnames = tsttab%keys_sorted()
+    end subroutine make_test_ui
+
     subroutine get_prg_ptr( which_program, ptr2prg )
         class(string),             intent(in)    :: which_program
         type(ui_program), pointer, intent(inout) :: ptr2prg
         ptr2prg => null()
         call prgtab%get_ui_program(which_program, ptr2prg)
     end subroutine get_prg_ptr
+
+    subroutine get_test_prg_ptr( which_program, ptr2prg )
+        class(string),             intent(in)    :: which_program
+        type(ui_program), pointer, intent(inout) :: ptr2prg
+        ptr2prg => null()
+        call tsttab%get_ui_program(which_program, ptr2prg)
+    end subroutine get_test_prg_ptr
 
     subroutine list_simple_prgs_in_ui
         call print_project_programs(logfhandle)
@@ -87,17 +111,17 @@ contains
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_simple_test_prgs_in_ui
-        call print_fft_programs(logfhandle)
-        call print_geometry_programs(logfhandle)
-        call print_highlevel_programs(logfhandle)
-        call print_io_programs(logfhandle)
-        call print_masks_programs(logfhandle)
-        call print_network_programs(logfhandle)
-        call print_numerics_programs(logfhandle)
-        call print_optimize_programs(logfhandle)
-        call print_parallel_programs(logfhandle)
-        call print_stats_programs(logfhandle)
-        call print_utils_programs(logfhandle)
+        call print_test_fft_programs(logfhandle)
+        call print_test_geometry_programs(logfhandle)
+        call print_test_highlevel_programs(logfhandle)
+        call print_test_io_programs(logfhandle)
+        call print_test_masks_programs(logfhandle)
+        call print_test_network_programs(logfhandle)
+        call print_test_numerics_programs(logfhandle)
+        call print_test_optimize_programs(logfhandle)
+        call print_test_parallel_programs(logfhandle)
+        call print_test_stats_programs(logfhandle)
+        call print_test_utils_programs(logfhandle)
     end subroutine list_simple_test_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui

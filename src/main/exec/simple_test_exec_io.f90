@@ -1,4 +1,4 @@
-!@descr: execution of test io processing commanders
+!@descr: execution of test input/output processing commanders
 module simple_test_exec_io
 use simple_cmdline,            only: cmdline
 use simple_commanders_test_io, only: commander_test_imgfile, commander_test_inside_write, &
@@ -8,7 +8,7 @@ use simple_commanders_test_io, only: commander_test_imgfile, commander_test_insi
                                      commander_test_starfile_test
 implicit none
 
-public :: exec_io_commander
+public :: exec_test_io_commander
 private
 
 type(commander_test_imgfile)        :: ximgfile
@@ -23,7 +23,7 @@ type(commander_test_starfile_test)  :: xstarfile_test
 
 contains
 
-    subroutine exec_io_commander(which, cline, l_silent, l_did_execute)
+    subroutine exec_test_io_commander( which, cline, l_silent, l_did_execute )
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
@@ -53,6 +53,6 @@ contains
             case default
                 l_did_execute = .false.
         end select
-    end subroutine exec_io_commander
+    end subroutine exec_test_io_commander
 
 end module simple_test_exec_io

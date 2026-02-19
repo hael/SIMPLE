@@ -20,7 +20,7 @@ contains
 
     subroutine print_single_tseries_programs(logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('TIME-SERIES PRE-PROCESSING PROGRAMS:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('TIME-SERIES PRE-PROCESSING:', C_UNDERLINED)
         write(logfhandle,'(A)') track_particles%name%to_char()
         write(logfhandle,'(A)') tseries_import%name%to_char()
         write(logfhandle,'(A)') tseries_make_pickavg%name%to_char()

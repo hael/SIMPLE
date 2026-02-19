@@ -1,4 +1,4 @@
-!@descr: module defining the user interfaces for network  programs in the simple_test_exec suite
+!@descr: module defining the user interfaces for network test programs in the simple_test_exec suite
 module simple_test_ui_network
 use simple_ui_modules
 implicit none
@@ -10,15 +10,15 @@ type(ui_program), target :: socket_server
 
 contains
 
-    subroutine construct_network_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_socket_client(prgtab)
-        call new_socket_comm_distr(prgtab)
-        call new_socket_io(prgtab)
-        call new_socket_server(prgtab)
-    end subroutine construct_network_programs
+    subroutine construct_test_network_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_socket_client(tsttab)
+        call new_socket_comm_distr(tsttab)
+        call new_socket_io(tsttab)
+        call new_socket_server(tsttab)
+    end subroutine construct_test_network_programs
 
-    subroutine print_network_programs(logfhandle)
+    subroutine print_test_network_programs( logfhandle )
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('NETWORK:', C_UNDERLINED)
         write(logfhandle,'(A)') socket_client%name%to_char()
@@ -26,10 +26,10 @@ contains
         write(logfhandle,'(A)') socket_io%name%to_char()
         write(logfhandle,'(A)') socket_server%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_network_programs
+    end subroutine print_test_network_programs
 
-    subroutine new_socket_client( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_socket_client( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call socket_client%new(&
         &'socket_client',&                     ! name
@@ -53,11 +53,11 @@ contains
         ! computer controls
         !call socket_client%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('socket_client', socket_client, prgtab)
+        call add_ui_program('socket_client', socket_client, tsttab)
     end subroutine new_socket_client
 
-    subroutine new_socket_comm_distr( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_socket_comm_distr( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call socket_comm_distr%new(&
         &'socket_comm_distr',&                 ! name
@@ -81,11 +81,11 @@ contains
         ! computer controls
         !call socket_comm_distr%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('socket_comm_distr', socket_comm_distr, prgtab)
+        call add_ui_program('socket_comm_distr', socket_comm_distr, tsttab)
     end subroutine new_socket_comm_distr
 
-    subroutine new_socket_io( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_socket_io( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call socket_io%new(&
         &'socket_io',&                         ! name
@@ -109,11 +109,11 @@ contains
         ! computer controls
         !call socket_io%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('socket_io', socket_io, prgtab)
+        call add_ui_program('socket_io', socket_io, tsttab)
     end subroutine new_socket_io
 
-    subroutine new_socket_server( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_socket_server( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call socket_server%new(&
         &'socket_server',&                     ! name
@@ -137,7 +137,7 @@ contains
         ! computer controls
         !call socket_server%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('socket_server', socket_server, prgtab)
+        call add_ui_program('socket_server', socket_server, tsttab)
     end subroutine new_socket_server
 
 end module simple_test_ui_network

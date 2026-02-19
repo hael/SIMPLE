@@ -6,7 +6,7 @@ use simple_commanders_test_geometry, only: commander_test_angres, commander_test
                                            commander_test_uniform_euler, commander_test_uniform_rot
 implicit none
 
-public :: exec_geometry_commander
+public :: exec_test_geometry_commander
 private
 
 type(commander_test_angres)        :: xangres
@@ -18,7 +18,7 @@ type(commander_test_uniform_rot)   :: xuniform_rot
 
 contains
 
-    subroutine exec_geometry_commander(which, cline, l_silent, l_did_execute)
+    subroutine exec_test_geometry_commander( which, cline, l_silent, l_did_execute )
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
@@ -42,6 +42,6 @@ contains
             case default
                 l_did_execute = .false.
         end select
-    end subroutine exec_geometry_commander
+    end subroutine exec_test_geometry_commander
 
 end module simple_test_exec_geometry

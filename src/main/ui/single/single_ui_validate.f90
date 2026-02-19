@@ -18,7 +18,7 @@ contains
 
     subroutine print_single_validate_programs(logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('VALIDATION:', C_UNDERLINED)
         write(logfhandle,'(A)') cavgseoproc_nano%name%to_char()
         write(logfhandle,'(A)') cavgsproc_nano%name%to_char()
         write(logfhandle,'(A)') ptclsproc_nano%name%to_char()

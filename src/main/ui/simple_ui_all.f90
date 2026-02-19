@@ -40,16 +40,6 @@ use single_ui_trajectory
 use single_ui_tseries
 use single_ui_validate
 
-! SIMPLE STREAM
-!use simple_stream_ui_all
-!    abinitio2D_stream
-!    assign_optics
-!    cluster2D_stream
-!    gen_pickrefs
-!    pick_extract
-!    preproc
-!    sieve_cavgs
-
 ! SIMPLE TEST
 use simple_test_ui_highlevel
 use simple_test_ui_io

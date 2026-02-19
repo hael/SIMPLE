@@ -1,4 +1,4 @@
-!@descr: module defining the user interfaces for stats  programs in the simple_test_exec suite
+!@descr: module defining the user interfaces for statistics test programs in the simple_test_exec suite
 module simple_test_ui_stats
 use simple_ui_modules
 implicit none
@@ -15,22 +15,22 @@ type(ui_program), target :: sp_project
 
 contains
 
-    subroutine construct_stats_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_class_sample_test(prgtab)
-        call new_clustering(prgtab)
-        call new_ctf_test(prgtab)
-        call new_eo_diff(prgtab)
-        call new_extr_frac(prgtab)
-        call new_multinomal_test(prgtab)
-        call new_pca_all(prgtab)
-        call new_pca_imgvar(prgtab)
-        call new_sp_project(prgtab)
-    end subroutine construct_stats_programs
+    subroutine construct_test_stats_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_class_sample_test(tsttab)
+        call new_clustering(tsttab)
+        call new_ctf_test(tsttab)
+        call new_eo_diff(tsttab)
+        call new_extr_frac(tsttab)
+        call new_multinomal_test(tsttab)
+        call new_pca_all(tsttab)
+        call new_pca_imgvar(tsttab)
+        call new_sp_project(tsttab)
+    end subroutine construct_test_stats_programs
 
-    subroutine print_stats_programs(logfhandle)
+    subroutine print_test_stats_programs( logfhandle )
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('STADISTICS:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('STATISTICS:', C_UNDERLINED)
         write(logfhandle,'(A)') class_sample_test%name%to_char()
         write(logfhandle,'(A)') clustering%name%to_char()
         write(logfhandle,'(A)') ctf_test%name%to_char()
@@ -41,10 +41,10 @@ contains
         write(logfhandle,'(A)') pca_imgvar%name%to_char()
         write(logfhandle,'(A)') sp_project%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_stats_programs
+    end subroutine print_test_stats_programs
 
-    subroutine new_class_sample_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_class_sample_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call class_sample_test%new(&
         &'class_sample_test',&                 ! name
@@ -68,11 +68,11 @@ contains
         ! computer controls
         !call class_sample_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('class_sample_test', class_sample_test, prgtab)
+        call add_ui_program('class_sample_test', class_sample_test, tsttab)
     end subroutine new_class_sample_test
 
-    subroutine new_clustering( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_clustering( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call clustering%new(&
         &'clustering',&                        ! name
@@ -96,11 +96,11 @@ contains
         ! computer controls
         !call clustering%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('clustering', clustering, prgtab)
+        call add_ui_program('clustering', clustering, tsttab)
     end subroutine new_clustering
 
-    subroutine new_ctf_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_ctf_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call ctf_test%new(&
         &'ctf_test',&                          ! name
@@ -124,11 +124,11 @@ contains
         ! computer controls
         !call ctf_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ctf_test', ctf_test, prgtab)
+        call add_ui_program('ctf_test', ctf_test, tsttab)
     end subroutine new_ctf_test
 
-    subroutine new_eo_diff( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_eo_diff( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call eo_diff%new(&
         &'eo_diff',&                           ! name
@@ -152,11 +152,11 @@ contains
         ! computer controls
         !call eo_diff%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('eo_diff', eo_diff, prgtab)
+        call add_ui_program('eo_diff', eo_diff, tsttab)
     end subroutine new_eo_diff
 
-    subroutine new_extr_frac( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_extr_frac( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call extr_frac%new(&
         &'extr_frac',&                         ! name
@@ -180,11 +180,11 @@ contains
         ! computer controls
         !call extr_frac%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('extr_frac', extr_frac, prgtab)
+        call add_ui_program('extr_frac', extr_frac, tsttab)
     end subroutine new_extr_frac
 
-    subroutine new_multinomal_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_multinomal_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call multinomal_test%new(&
         &'multinomal_test',&                   ! name
@@ -208,11 +208,11 @@ contains
         ! computer controls
         !call multinomal_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('multinomal_test', multinomal_test, prgtab)
+        call add_ui_program('multinomal_test', multinomal_test, tsttab)
     end subroutine new_multinomal_test
 
-    subroutine new_pca_all( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_pca_all( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call pca_all%new(&
         &'pca_all',&                           ! name
@@ -236,11 +236,11 @@ contains
         ! computer controls
         !call pca_all%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('pca_all', pca_all, prgtab)
+        call add_ui_program('pca_all', pca_all, tsttab)
     end subroutine new_pca_all
 
-    subroutine new_pca_imgvar( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_pca_imgvar( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call pca_imgvar%new(&
         &'pca_imgvar',&                        ! name
@@ -264,11 +264,11 @@ contains
         ! computer controls
         !call pca_imgvar%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('pca_imgvar', pca_imgvar, prgtab)
+        call add_ui_program('pca_imgvar', pca_imgvar, tsttab)
     end subroutine new_pca_imgvar
 
-    subroutine new_sp_project( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_sp_project( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call sp_project%new(&
         &'sp_project',&                        ! name
@@ -292,7 +292,7 @@ contains
         ! computer controls
         !call sp_project%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('sp_project', sp_project, prgtab)
+        call add_ui_program('sp_project', sp_project, tsttab)
     end subroutine new_sp_project
 
 end module simple_test_ui_stats

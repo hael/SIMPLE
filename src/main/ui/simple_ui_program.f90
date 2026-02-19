@@ -72,7 +72,7 @@ contains
         if(present(gui_submenu_list)) self%gui_submenu_list = gui_submenu_list
     end subroutine new
 
-    subroutine add_input_num(self, which, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value, &
+    subroutine add_input_num( self, which, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value, &
                             gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
@@ -97,7 +97,7 @@ contains
         end select
     end subroutine add_input_num
 
-    subroutine add_input_str(self, which, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value, &
+    subroutine add_input_str( self, which, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value, &
                             gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
@@ -122,7 +122,7 @@ contains
         end select
     end subroutine add_input_str
 
-    subroutine add_input_param(self, which, param, descr_short_override, descr_long_override, descr_placeholder_override,&
+    subroutine add_input_param( self, which, param, descr_short_override, descr_long_override, descr_placeholder_override,&
     &required_override, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
@@ -200,10 +200,20 @@ contains
         endif
     end subroutine print_ui
 
-    subroutine print_cmdline(self)
+    subroutine print_cmdline( self )
         class(ui_program), intent(in) :: self
+        ! type(string), intent(in) :: exec_cmd
         write(logfhandle,'(a)') format_str('USAGE', C_UNDERLINED)
-        write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg=' // self%name%to_char() // ' key1=val1 key2=val2 ...', C_ITALIC)
+        ! select case(exec_cmd%to_char())
+        !     case('simple_exec')
+        !         write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg=' // self%name%to_char() // ' key1=val1 key2=val2 ...', C_ITALIC)
+        !     case('simple_test_exec')
+        !         write(logfhandle,'(a)') format_str('bash-3.2$ simple_test_exec prg=' // self%name%to_char() // ' key1=val1 key2=val2 ...', C_ITALIC)
+        !     case('single_exec')
+        !         write(logfhandle,'(a)') format_str('bash-3.2$ single_exec prg=' // self%name%to_char() // ' key1=val1 key2=val2 ...', C_ITALIC)
+        !     case DEFAULT
+        !         write(logfhandle,'(a)') format_str('bash-3.2$ ' // exec_cmd%to_char() // ' prg=' // self%name%to_char() // ' key1=val1 key2=val2 ...', C_ITALIC)
+        ! end select
         write(logfhandle,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
         if (.not. self%img_ios%is_empty()) then
             write(logfhandle,'(a)') format_str('IMAGE INPUT/OUTPUT', C_UNDERLINED)
@@ -283,7 +293,7 @@ contains
         name = self%executable
     end function get_executable
 
-    integer function get_nrequired_keys(self)
+    integer function get_nrequired_keys( self )
         class(ui_program), intent(in) :: self
         get_nrequired_keys = count_required_in_list(self%img_ios)   + &
                             count_required_in_list(self%parm_ios)   + &
@@ -298,7 +308,7 @@ contains
         end if
     end function get_nrequired_keys
 
-    function get_required_keys(self) result(keys)
+    function get_required_keys( self ) result( keys )
         class(ui_program), intent(in) :: self
         type(string), allocatable     :: keys(:)
         integer                       :: nreq, ireq
@@ -361,12 +371,12 @@ contains
 
     ! private helpers
 
-    subroutine print_param_list(lst)
+    subroutine print_param_list( lst )
         class(linked_list), intent(in) :: lst
-        type(list_iterator)        :: it
-        class(*), allocatable      :: tmp
-        type(chash)                :: ch
-        integer                    :: i
+        type(list_iterator)   :: it
+        class(*), allocatable :: tmp
+        type(chash)           :: ch
+        integer               :: i
         if (lst%is_empty()) return
         i  = 0
         it = lst%begin()

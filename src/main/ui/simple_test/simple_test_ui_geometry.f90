@@ -1,4 +1,4 @@
-!@descr: module defining the user interfaces for geometry  programs in the simple_test_exec suite
+!@descr: module defining the user interfaces for geometry test programs in the simple_test_exec suite
 module simple_test_ui_geometry
 use simple_ui_modules
 implicit none
@@ -12,17 +12,17 @@ type(ui_program), target :: uniform_rot
 
 contains
 
-    subroutine construct_geometry_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_angres(prgtab)
-        call new_ori_test(prgtab)
-        call new_oris_test(prgtab)
-        call new_sym_test(prgtab)
-        call new_uniform_euler(prgtab)
-        call new_uniform_rot(prgtab)
-    end subroutine construct_geometry_programs
+    subroutine construct_test_geometry_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_angres(tsttab)
+        call new_ori_test(tsttab)
+        call new_oris_test(tsttab)
+        call new_sym_test(tsttab)
+        call new_uniform_euler(tsttab)
+        call new_uniform_rot(tsttab)
+    end subroutine construct_test_geometry_programs
 
-    subroutine print_geometry_programs(logfhandle)
+    subroutine print_test_geometry_programs( logfhandle )
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('GEOMETRY:', C_UNDERLINED)
         write(logfhandle,'(A)') angres%name%to_char()
@@ -32,10 +32,10 @@ contains
         write(logfhandle,'(A)') uniform_euler%name%to_char()
         write(logfhandle,'(A)') uniform_rot%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_geometry_programs
+    end subroutine print_test_geometry_programs
 
-    subroutine new_angres( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_angres( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call angres%new(&
         &'angres',&                            ! name
@@ -59,11 +59,11 @@ contains
         ! computer controls
         !call angres%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('angres', angres, prgtab)
+        call add_ui_program('angres', angres, tsttab)
     end subroutine new_angres
 
-    subroutine new_ori_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_ori_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call ori_test%new(&
         &'ori_test',&                          ! name
@@ -87,11 +87,11 @@ contains
         ! computer controls
         !call ori_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ori_test', ori_test, prgtab)
+        call add_ui_program('ori_test', ori_test, tsttab)
     end subroutine new_ori_test
 
-    subroutine new_oris_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_oris_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call oris_test%new(&
         &'oris_test',&                         ! name
@@ -115,11 +115,11 @@ contains
         ! computer controls
         !call oris_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('oris_test', oris_test, prgtab)
+        call add_ui_program('oris_test', oris_test, tsttab)
     end subroutine new_oris_test
 
-    subroutine new_sym_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_sym_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call sym_test%new(&
         &'sym_test',&                          ! name
@@ -143,11 +143,11 @@ contains
         ! computer controls
         !call sym_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('sym_test', sym_test, prgtab)
+        call add_ui_program('sym_test', sym_test, tsttab)
     end subroutine new_sym_test
 
-    subroutine new_uniform_euler( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_uniform_euler( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call uniform_euler%new(&
         &'uniform_euler',&                     ! name
@@ -171,11 +171,11 @@ contains
         ! computer controls
         !call uniform_euler%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('uniform_euler', uniform_euler, prgtab)
+        call add_ui_program('uniform_euler', uniform_euler, tsttab)
     end subroutine new_uniform_euler
 
-    subroutine new_uniform_rot( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_uniform_rot( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call uniform_rot%new(&
         &'uniform_rot',&                       ! name
@@ -199,7 +199,7 @@ contains
         ! computer controls
         !call uniform_rot%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('uniform_rot', uniform_rot, prgtab)
+        call add_ui_program('uniform_rot', uniform_rot, tsttab)
     end subroutine new_uniform_rot
 
 end module simple_test_ui_geometry

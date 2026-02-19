@@ -47,14 +47,14 @@ end type commander_test_ptcl_center
 contains
 
 subroutine exec_test_bounds_from_mask3D_test( self, cline )
-    class(commander_test_bounds_from_mask3D_test),    intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
+    class(commander_test_bounds_from_mask3D_test), intent(inout) :: self
+    class(cmdline),                                intent(inout) :: cline
     call simple_end('**** SIMPLE_TEST_BOUNDS_FROM_MASK3D_TEST_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_bounds_from_mask3D_test
 
 subroutine exec_test_graphene_mask( self, cline )
-    class(commander_test_graphene_mask),    intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
+    class(commander_test_graphene_mask), intent(inout) :: self
+    class(cmdline),                      intent(inout) :: cline
     call simple_end('**** SIMPLE_TEST_GRAPHENE_MASK_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_graphene_mask
 
