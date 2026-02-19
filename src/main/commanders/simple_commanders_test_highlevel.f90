@@ -202,10 +202,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     integer                             :: rc
     type(string)                        :: cmd, projfile
     logical                             :: mrc_exists
-    if( command_argument_count() .ne. 0 )then
-       write(logfhandle,'(a)') 'ERROR! Usage: simple_test_sim_workflow'
-       call exit(-1)
-    endif
+
     ! Download pdb & generate volume and reprojections
     inquire(file="1JYX.mrc", exist=mrc_exists)
     if( .not. mrc_exists )then
