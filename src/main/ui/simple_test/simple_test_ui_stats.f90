@@ -47,8 +47,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call class_sample_test%new(&
-        &'class_sample_test',&                         ! name
-        &'class_sample_test ',&                        ! descr_short
+        &'class_sample_test',&                 ! name
+        &'class_sample_test ',&                ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -75,8 +75,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call clustering%new(&
-        &'clustering',&                         ! name
-        &'clustering ',&                        ! descr_short
+        &'clustering',&                        ! name
+        &'clustering ',&                       ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -103,8 +103,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ctf_test%new(&
-        &'ctf_test',&                         ! name
-        &'ctf_test ',&                        ! descr_short
+        &'ctf_test',&                          ! name
+        &'ctf_test ',&                         ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -131,8 +131,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call eo_diff%new(&
-        &'eo_diff',&                         ! name
-        &'eo_diff ',&                        ! descr_short
+        &'eo_diff',&                           ! name
+        &'eo_diff ',&                          ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -187,8 +187,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call multinomal_test%new(&
-        &'multinomal_test',&                         ! name
-        &'multinomal_test ',&                        ! descr_short
+        &'multinomal_test',&                   ! name
+        &'multinomal_test ',&                  ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -215,8 +215,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call pca_all%new(&
-        &'pca_all',&                         ! name
-        &'pca_all ',&                        ! descr_short
+        &'pca_all',&                           ! name
+        &'pca_all ',&                          ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -243,8 +243,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call pca_imgvar%new(&
-        &'pca_imgvar',&                         ! name
-        &'pca_imgvar ',&                        ! descr_short
+        &'pca_imgvar',&                        ! name
+        &'pca_imgvar ',&                       ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -271,8 +271,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call sp_project%new(&
-        &'sp_project',&                         ! name
-        &'sp_project ',&                        ! descr_short
+        &'sp_project',&                        ! name
+        &'sp_project ',&                       ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project

@@ -47,8 +47,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call corrs2weights_test%new(&
-        &'corrs2weights_test',&                         ! name
-        &'corrs2weights_test ',&                        ! descr_short
+        &'corrs2weights_test',&                ! name
+        &'corrs2weights_test ',&               ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -75,8 +75,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call eval_polarftcc%new(&
-        &'eval_polarftcc',&                         ! name
-        &'eval_polarftcc ',&                        ! descr_short
+        &'eval_polarftcc',&                    ! name
+        &'eval_polarftcc ',&                   ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -103,8 +103,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ft_expanded%new(&
-        &'ft_expanded',&                         ! name
-        &'ft_expanded ',&                        ! descr_short
+        &'ft_expanded',&                       ! name
+        &'ft_expanded ',&                      ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -131,8 +131,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call gencorrs_fft%new(&
-        &'gencorrs_fft',&                         ! name
-        &'gencorrs_fft ',&                        ! descr_short
+        &'gencorrs_fft',&                      ! name
+        &'gencorrs_fft ',&                     ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -159,8 +159,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call order_corr%new(&
-        &'order_corr',&                         ! name
-        &'order_corr ',&                        ! descr_short
+        &'order_corr',&                        ! name
+        &'order_corr ',&                       ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -218,8 +218,8 @@ contains
         &'polarops',&                         ! name
         &'polarops ',&                        ! descr_short
         &'is a test program for ',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
+        &'simple_test_exec',&                 ! executable
+        &.false.)                             ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         !call polarops%add_input(UI_IO, )
@@ -243,8 +243,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call rank_weights%new(&
-        &'rank_weights',&                         ! name
-        &'rank_weights ',&                        ! descr_short
+        &'rank_weights',&                      ! name
+        &'rank_weights ',&                     ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -271,8 +271,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call rotate_ref%new(&
-        &'rotate_ref',&                         ! name
-        &'rotate_ref ',&                        ! descr_short
+        &'rotate_ref',&                        ! name
+        &'rotate_ref ',&                       ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project

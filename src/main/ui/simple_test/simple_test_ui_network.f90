@@ -32,8 +32,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call socket_client%new(&
-        &'socket_client',&                         ! name
-        &'socket_client ',&                        ! descr_short
+        &'socket_client',&                     ! name
+        &'socket_client ',&                    ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -60,8 +60,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call socket_comm_distr%new(&
-        &'socket_comm_distr',&                         ! name
-        &'socket_comm_distr ',&                        ! descr_short
+        &'socket_comm_distr',&                 ! name
+        &'socket_comm_distr ',&                ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -116,8 +116,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call socket_server%new(&
-        &'socket_server',&                         ! name
-        &'socket_server ',&                        ! descr_short
+        &'socket_server',&                     ! name
+        &'socket_server ',&                    ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project

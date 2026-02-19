@@ -47,8 +47,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call imgfile%new(&
-        &'imgfile',&                         ! name
-        &'imgfile ',&                        ! descr_short
+        &'imgfile',&                           ! name
+        &'imgfile ',&                          ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -75,8 +75,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call inside_write%new(&
-        &'inside_write',&                         ! name
-        &'inside_write ',&                        ! descr_short
+        &'inside_write',&                      ! name
+        &'inside_write ',&                     ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -103,8 +103,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call io%new(&
-        &'io',&                         ! name
-        &'io ',&                        ! descr_short
+        &'io',&                                ! name
+        &'io ',&                               ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -131,8 +131,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call io_parallel%new(&
-        &'io_parallel',&                         ! name
-        &'io_parallel ',&                        ! descr_short
+        &'io_parallel',&                       ! name
+        &'io_parallel ',&                      ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -159,8 +159,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call mrc2jpeg%new(&
-        &'mrc2jpeg',&                         ! name
-        &'mrc2jpeg ',&                        ! descr_short
+        &'mrc2jpeg',&                          ! name
+        &'mrc2jpeg ',&                         ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -187,8 +187,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call mrc_validation%new(&
-        &'mrc_validation',&                         ! name
-        &'mrc_validation ',&                        ! descr_short
+        &'mrc_validation',&                    ! name
+        &'mrc_validation ',&                   ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -215,8 +215,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call stack_io%new(&
-        &'stack_io',&                         ! name
-        &'stack_io ',&                        ! descr_short
+        &'stack_io',&                          ! name
+        &'stack_io ',&                         ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -243,8 +243,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call star_export%new(&
-        &'star_export',&                         ! name
-        &'star_export ',&                        ! descr_short
+        &'star_export',&                       ! name
+        &'star_export ',&                      ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -271,8 +271,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call starfile_test%new(&
-        &'starfile_test',&                         ! name
-        &'starfile_test ',&                        ! descr_short
+        &'starfile_test',&                     ! name
+        &'starfile_test ',&                    ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project

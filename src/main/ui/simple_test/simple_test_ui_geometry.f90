@@ -38,8 +38,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call angres%new(&
-        &'angres',&                         ! name
-        &'angres ',&                        ! descr_short
+        &'angres',&                            ! name
+        &'angres ',&                           ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -66,8 +66,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ori_test%new(&
-        &'ori_test',&                         ! name
-        &'ori_test ',&                        ! descr_short
+        &'ori_test',&                          ! name
+        &'ori_test ',&                         ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -122,8 +122,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call sym_test%new(&
-        &'sym_test',&                         ! name
-        &'sym_test ',&                        ! descr_short
+        &'sym_test',&                          ! name
+        &'sym_test ',&                         ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -150,8 +150,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call uniform_euler%new(&
-        &'uniform_euler',&                         ! name
-        &'uniform_euler ',&                        ! descr_short
+        &'uniform_euler',&                     ! name
+        &'uniform_euler ',&                    ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -178,8 +178,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call uniform_rot%new(&
-        &'uniform_rot',&                         ! name
-        &'uniform_rot ',&                        ! descr_short
+        &'uniform_rot',&                       ! name
+        &'uniform_rot ',&                      ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project

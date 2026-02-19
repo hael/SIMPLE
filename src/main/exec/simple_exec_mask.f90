@@ -9,7 +9,7 @@ private
 
 type(commander_auto_spher_mask) :: xauto_spher_mask
 type(commander_automask2D)      :: xautomask2D
-type(commander_mask)           :: xmask
+type(commander_mask)            :: xmask
 
 contains
 

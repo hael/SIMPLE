@@ -44,8 +44,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call bounds_from_mask3D_test%new(&
-        &'bounds_from_mask3D_test',&                         ! name
-        &'bounds_from_mask3D_test ',&                        ! descr_short
+        &'bounds_from_mask3D_test',&           ! name
+        &'bounds_from_mask3D_test ',&          ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -72,8 +72,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call graphene_mask%new(&
-        &'graphene_mask',&                         ! name
-        &'graphene_mask ',&                        ! descr_short
+        &'graphene_mask',&                     ! name
+        &'graphene_mask ',&                    ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -128,8 +128,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call mask%new(&
-        &'mask',&                         ! name
-        &'mask ',&                        ! descr_short
+        &'mask',&                              ! name
+        &'mask ',&                             ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -156,8 +156,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call msk_routines%new(&
-        &'msk_routines',&                         ! name
-        &'msk_routines ',&                        ! descr_short
+        &'msk_routines',&                      ! name
+        &'msk_routines ',&                     ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -240,8 +240,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ptcl_center%new(&
-        &'ptcl_center',&                         ! name
-        &'ptcl_center ',&                        ! descr_short
+        &'ptcl_center',&                       ! name
+        &'ptcl_center ',&                      ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
