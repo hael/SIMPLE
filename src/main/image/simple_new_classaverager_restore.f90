@@ -7,12 +7,12 @@ implicit none
 contains
 
     !>  \brief  Constructor
-    module subroutine cavger_new( pinds, alloccavgs )
+    module subroutine cavger_new_new( pinds, alloccavgs )
         integer, optional, intent(in) :: pinds(:)
         logical, optional, intent(in) :: alloccavgs
         l_alloc_read_cavgs = .true.
         if( present(alloccavgs) ) l_alloc_read_cavgs = alloccavgs
-        call cavger_kill(dealloccavgs=l_alloc_read_cavgs)
+        call cavger_new_kill(dealloccavgs=l_alloc_read_cavgs)
         allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=.true.)
         if( present(pinds) )then
             pptcl_mask           = .false.
@@ -41,12 +41,12 @@ contains
         ! build arrays
         allocate(precs(partsz))
         if( l_alloc_read_cavgs ) call cavgs%new_set(ldim_crop(1:2), ncls)
-    end subroutine cavger_new
+    end subroutine cavger_new_new
 
     ! setters/getters
 
     !>  \brief  transfers metadata to the instance
-    module subroutine cavger_transf_oridat( spproj )
+    module subroutine cavger_new_transf_oridat( spproj )
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
         class(oris), pointer :: spproj_field
@@ -83,10 +83,10 @@ contains
             call spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, stkind, precs(cnt)%ind_in_stk)
         end do
         !$omp end parallel do
-    end subroutine cavger_transf_oridat
+    end subroutine cavger_new_transf_oridat
 
     !>  \brief  for loading sigma2
-    module subroutine cavger_read_euclid_sigma2
+    module subroutine cavger_new_read_euclid_sigma2
         type(string) :: fname
         if( params_glob%l_ml_reg )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
@@ -94,11 +94,11 @@ contains
             call eucl_sigma%read_part(  build_glob%spproj_field)
             call eucl_sigma%read_groups(build_glob%spproj_field)
         end if
-    end subroutine cavger_read_euclid_sigma2
+    end subroutine cavger_new_read_euclid_sigma2
 
     !>  \brief prepares a 2D class document with class index, resolution,
     !!         population, average correlation and weight
-    module subroutine cavger_gen2Dclassdoc( spproj )
+    module subroutine cavger_new_gen2Dclassdoc( spproj )
         use simple_sp_project, only: sp_project
         class(sp_project), target, intent(inout) :: spproj
         class(oris), pointer :: ptcl_field, cls_field
@@ -156,7 +156,7 @@ contains
                 call cls_field%set(icls, 'state', 0.0) ! exclusion
             endif
         end do
-    end subroutine cavger_gen2Dclassdoc
+    end subroutine cavger_new_gen2Dclassdoc
 
     !>  \brief  is for calculating class population
     integer function class_pop( class )
@@ -184,7 +184,7 @@ contains
 
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !           using convolution interpolation in Fourier space
-    module subroutine cavger_assemble_sums_conv( do_frac_update )
+    module subroutine cavger_new_assemble_sums_conv( do_frac_update )
         use simple_strategy2D3D_common, only: prepimgbatch
         use simple_math_ft,             only: upsample_sigma2
         logical, intent(in)      :: do_frac_update
@@ -211,7 +211,7 @@ contains
         if( l_alloc_read_cavgs )then
             call cavgs%zero_set(.true.)
             if( do_frac_update )then
-                call cavger_readwrite_partial_sums('read')
+                call cavger_new_readwrite_partial_sums('read')
                 call apply_weights2cavgs(1.0-params_glob%update_frac)
             endif
         else
@@ -405,11 +405,11 @@ contains
         call forget_ft_maps
         call dealloc_imgarr(tmp_pad_imgs)
         deallocate(cmats,interp_cmats,tvals,kbw,interp_rhos)
-    end subroutine cavger_assemble_sums_conv
+    end subroutine cavger_new_assemble_sums_conv
 
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !           using interpolation in Fourier space
-    module subroutine cavger_assemble_sums( do_frac_update )
+    module subroutine cavger_new_assemble_sums( do_frac_update )
         use simple_strategy2D3D_common, only: prepimgbatch
         use simple_math_ft,             only: upsample_sigma2
         logical, intent(in)      :: do_frac_update
@@ -437,7 +437,7 @@ contains
         if( l_alloc_read_cavgs )then
             call cavgs%zero_set(.true.)
             if( do_frac_update )then
-                call cavger_readwrite_partial_sums('read')
+                call cavger_new_readwrite_partial_sums('read')
                 call apply_weights2cavgs(1.0-params_glob%update_frac)
             endif
         else
@@ -631,11 +631,11 @@ contains
         call forget_ft_maps
         call dealloc_imgarr(tmp_pad_imgs)
         deallocate(cmats,interp_cmats,tvals,kbw,interp_rhos)
-    end subroutine cavger_assemble_sums
+    end subroutine cavger_new_assemble_sums
 
     !>  \brief  merges the even/odd pairs and normalises the sums, merge low resolution
     !    frequencies, calculates & writes FRCs and optionally applies regularization
-    module subroutine cavger_restore_cavgs( frcs_fname )
+    module subroutine cavger_new_restore_cavgs( frcs_fname )
         use simple_gridding, only: prep2D_inv_instrfun4mul
         class(string), intent(in) :: frcs_fname
         real, allocatable :: frc(:)
@@ -652,6 +652,12 @@ contains
         if( params_glob%l_ml_reg ) call cavgs_bak%new_set(ldim_crop, ncls)
         call memoize_ft_maps(ldim_crop(1:2), smpd_crop)
         gridcorr_img = prep2D_inv_instrfun4mul(ldim_crop, ldim_croppd, smpd_crop)
+        ! Making sure that the public images are allocated with make_cavgs & shared memory
+        if( (.not.l_distr_exec_glob).and.(.not.allocated(cavgs_merged_new)) )then
+            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_even_new)
+            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_odd_new)
+            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_merged_new)
+        endif
         ! Main loop
         !$omp parallel do default(shared) private(icls,ithr,eo_pop,pop,frc)&
         !$omp schedule(static) proc_bind(close)
@@ -725,6 +731,13 @@ contains
             endif
             ! store FRC
             call build_glob%clsfrcs%set_frc(icls, frc, 1)
+            ! Transfer cavg from stack object to image object used in alignment
+            ! only in shared memory execution
+            if( .not.l_distr_exec_glob )then
+                call cavgs_even_new(icls)%set_rmat(  cavgs%even%rmat(:,:,icls:icls), .false.)
+                call cavgs_odd_new(icls)%set_rmat(   cavgs%odd%rmat(:,:,icls:icls), .false.)
+                call cavgs_merged_new(icls)%set_rmat(cavgs%merged%rmat(:,:,icls:icls), .false.)
+            endif
         end do
         !$omp end parallel do
         ! write FRCs
@@ -736,23 +749,28 @@ contains
         call odd_tmp%kill_stack
         call cavgs_bak%kill_set
         deallocate(frc)
-    end subroutine cavger_restore_cavgs
+    end subroutine cavger_new_restore_cavgs
 
     ! I/O
 
-    module subroutine cavger_write_eo( fname_e, fname_o )
+    module subroutine cavger_new_write_eo( fname_e, fname_o )
         class(string), intent(in) :: fname_e, fname_o
         call cavgs%even%write(fname_e, .false.)
         call cavgs%odd%write(fname_o, .false.)
-    end subroutine cavger_write_eo
+    end subroutine cavger_new_write_eo
 
-    module subroutine cavger_write_all( fname, fname_e, fname_o )
+    module subroutine cavger_new_write_all( fname, fname_e, fname_o )
         class(string), intent(in) :: fname, fname_e, fname_o
-        call cavgs%merged%write(fname, .false.)
-        call cavger_write_eo( fname_e, fname_o )
-    end subroutine cavger_write_all
+        call cavger_new_write_merged( fname)
+        call cavger_new_write_eo( fname_e, fname_o )
+    end subroutine cavger_new_write_all
 
-    module subroutine cavger_read_all()
+    module subroutine cavger_new_write_merged( fname)
+        class(string), intent(in) :: fname
+        call cavgs%merged%write(fname, .false.)
+    end subroutine cavger_new_write_merged
+
+    module subroutine cavger_new_read_all()
         if( .not. file_exists(params_glob%refs) ) THROW_HARD('references (REFS) does not exist in cwd')
         call read_cavgs(params_glob%refs, 'merged')
         if( file_exists(params_glob%refs_even) )then
@@ -765,7 +783,7 @@ contains
         else
             call read_cavgs(params_glob%refs, 'odd')
         endif
-    end subroutine cavger_read_all
+    end subroutine cavger_new_read_all
 
     !>  \brief  submodule utility for reading class averages (image type)
     subroutine read_cavgs( fname, which )
@@ -774,18 +792,17 @@ contains
         character(len=*), intent(in) :: which
         class(image), pointer :: cavgs(:)
         integer               :: ldim_read(3), icls
-        ! to use a local subroutine instead of pointers
         ! read
         select case(trim(which))
             case('even')
-                cavgs_even = read_stk_into_imgarr(fname)
-                cavgs => cavgs_even
+                cavgs_even_new = read_stk_into_imgarr(fname)
+                cavgs => cavgs_even_new
             case('odd')
-                cavgs_odd = read_stk_into_imgarr(fname)
-                cavgs => cavgs_odd
+                cavgs_odd_new = read_stk_into_imgarr(fname)
+                cavgs => cavgs_odd_new
             case('merged')
-                cavgs_merged = read_stk_into_imgarr(fname)
-                cavgs => cavgs_merged
+                cavgs_merged_new = read_stk_into_imgarr(fname)
+                cavgs => cavgs_merged_new
             case DEFAULT
                 THROW_HARD('unsupported which flag')
         end select
@@ -794,7 +811,7 @@ contains
         if( any(ldim_read /= ldim_crop) )then
             if( ldim_read(1) > ldim_crop(1) )then
                 ! Cropping is not covered
-                THROW_HARD('Incompatible cavgs dimensions! ; cavger_read')
+                THROW_HARD('Incompatible cavgs dimensions! ; cavger_new_read')
             else if( ldim_read(1) < ldim_crop(1) )then
                 ! Fourier padding
                 !$omp parallel do proc_bind(close) schedule(static) default(shared) private(icls)
@@ -810,7 +827,7 @@ contains
     end subroutine read_cavgs
 
     !>  \brief  writes partial class averages to disk (distributed execution)
-    module subroutine cavger_readwrite_partial_sums( which )
+    module subroutine cavger_new_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
         type(string)   :: cae, cao, cte, cto
         cae   = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
@@ -829,13 +846,13 @@ contains
                 call cavgs%even%write_ctfsq(cte)
                 call cavgs%odd%write_ctfsq(cto)
             case DEFAULT
-                THROW_HARD('unknown which flag; only read & write supported; cavger_readwrite_partial_sums')
+                THROW_HARD('unknown which flag; only read & write supported; cavger_new_readwrite_partial_sums')
         end select
         call cae%kill
         call cao%kill
         call cte%kill
         call cto%kill
-    end subroutine cavger_readwrite_partial_sums
+    end subroutine cavger_new_readwrite_partial_sums
 
     module subroutine apply_weights2cavgs( w )
         real, intent(in) :: w
@@ -848,7 +865,7 @@ contains
     end subroutine apply_weights2cavgs
 
     !>  \brief  generates the cavgs parts after distributed execution
-    module subroutine cavger_assemble_sums_from_parts
+    module subroutine cavger_new_assemble_sums_from_parts
         integer(timer_int_kind) ::  t_init,  t_io,  t_sum, t_merge_eos_and_norm,  t_tot
         real(timer_int_kind)    :: rt_init, rt_io, rt_sum, rt_merge_eos_and_norm, rt_tot
         type(string) :: cae, cao, cte, cto, benchfname
@@ -899,7 +916,7 @@ contains
         call cavgs4reado%kill_stack
         ! Restoration of e/o/merged classes
         if( L_BENCH_GLOB ) t_merge_eos_and_norm = tic()
-        call cavger_restore_cavgs(params_glob%frcs)
+        call cavger_new_restore_cavgs(params_glob%frcs)
         ! Benchmarck
         if( L_BENCH_GLOB )then
             rt_merge_eos_and_norm = toc(t_merge_eos_and_norm)
@@ -922,12 +939,12 @@ contains
             &((rt_init+rt_io+rt_sum+rt_merge_eos_and_norm)/rt_tot) * 100.
             call fclose(fnr)
         endif
-    end subroutine cavger_assemble_sums_from_parts
+    end subroutine cavger_new_assemble_sums_from_parts
 
     ! DESTRUCTOR
 
     !>  \brief  is a destructor
-    module subroutine cavger_kill( dealloccavgs )
+    module subroutine cavger_new_kill( dealloccavgs )
         logical, optional, intent(in) :: dealloccavgs
         if( present(dealloccavgs) )then
             if( dealloccavgs ) call dealloc_cavgs
@@ -936,13 +953,13 @@ contains
         endif
         if( allocated(pptcl_mask) ) deallocate(pptcl_mask)
         if( allocated(precs)      ) deallocate(precs)
-    end subroutine cavger_kill
+    end subroutine cavger_new_kill
 
     !>  \brief submodule private destructor utility
     subroutine dealloc_cavgs
-        call dealloc_imgarr(cavgs_even)
-        call dealloc_imgarr(cavgs_odd)
-        call dealloc_imgarr(cavgs_merged)
+        call dealloc_imgarr(cavgs_even_new)
+        call dealloc_imgarr(cavgs_odd_new)
+        call dealloc_imgarr(cavgs_merged_new)
         call cavgs%kill_set
         istart  = 0; iend = 0
         partsz  = 0
@@ -953,7 +970,7 @@ contains
         l_alloc_read_cavgs = .true.
     end subroutine dealloc_cavgs
 
-    ! PUBLIC UTILITIES
+    ! PUBLIC UTILITIES (private for now)
 
     module subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project

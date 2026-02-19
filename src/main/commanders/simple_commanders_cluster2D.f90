@@ -3,6 +3,7 @@ module simple_commanders_cluster2D
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_classaverager
+use simple_new_classaverager
 use simple_commanders_cavgs,   only: commander_rank_cavgs
 use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr, commander_cavgassemble
 use simple_commanders_euclid,  only: commander_calc_pspec_distr, commander_calc_group_sigmas
@@ -225,9 +226,14 @@ contains
                 ! Write e/o at the very end
                 params%refs_even = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//'_even'//params%ext%to_char()
                 params%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//'_odd'//params%ext%to_char()
-                call cavger_write(params%refs_even,'even')
-                call cavger_write(params%refs_odd, 'odd')
-                call cavger_kill
+                if( L_NEW_CAVGER )then
+                    call cavger_new_write_eo(params%refs_even, params%refs_odd)
+                    call cavger_new_kill
+                else
+                    call cavger_write(params%refs_even,'even')
+                    call cavger_write(params%refs_odd, 'odd')
+                    call cavger_kill
+                endif
             endif
         endif
         ! adding cavgs & FRCs to project
@@ -871,17 +877,32 @@ contains
                             finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%startit,3)//params%ext%to_char()
                             call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
                             if( trim(params%chunk).eq.'yes' )then
-                                call cavger_write(params%refs_even,'even')
-                                call cavger_write(params%refs_odd, 'odd')
-                                call cavger_readwrite_partial_sums('write')
-                                call cavger_kill
-                            else
-                                if( trim(params%tseries).eq.'yes' )then
+                                if( L_NEW_CAVGER )then
+                                    call cavger_new_write_eo(params%refs_even, params%refs_odd)
+                                    call cavger_new_readwrite_partial_sums('write')
+                                    call cavger_new_kill
+                                else
                                     call cavger_write(params%refs_even,'even')
                                     call cavger_write(params%refs_odd, 'odd')
+                                    call cavger_readwrite_partial_sums('write')
                                     call cavger_kill
+                                endif
+                            else
+                                if( L_NEW_CAVGER )then
+                                    if( trim(params%tseries).eq.'yes' )then
+                                        call cavger_new_write_eo(params%refs_even, params%refs_odd)
+                                        call cavger_new_kill
+                                    else
+                                        call cavger_new_kill(dealloccavgs=.false.)
+                                    endif
                                 else
-                                    call cavger_kill(dealloccavgs=.false.)
+                                    if( trim(params%tseries).eq.'yes' )then
+                                        call cavger_write(params%refs_even,'even')
+                                        call cavger_write(params%refs_odd, 'odd')
+                                        call cavger_kill
+                                    else
+                                        call cavger_kill(dealloccavgs=.false.)
+                                    endif
                                 endif
                             endif
                         endif
@@ -1087,10 +1108,19 @@ contains
             if( .not. cline%defined('refs') )then
                 THROW_HARD('need refs to be part of command line for cluster2D execution')
             endif
-            call cavger_new(pinds, alloccavgs=.true.)
-            call cavger_read_all
+            if( L_NEW_CAVGER )then
+                call cavger_new(pinds, alloccavgs=.true.)
+                call cavger_new_read_all
+            else
+                call cavger_new(pinds, alloccavgs=.true.)
+                call cavger_read_all
+            endif
         else
-            call cavger_new(pinds, alloccavgs=.false.)
+            if( L_NEW_CAVGER )then
+                call cavger_new_new(pinds, alloccavgs=.false.)
+            else
+                call cavger_new(pinds, alloccavgs=.false.)
+            endif
         endif
         ! init scorer & prep references
         call preppftc4align2D(pftc, nptcls, params%which_iter, l_stream)
@@ -1099,7 +1129,7 @@ contains
         ! prep particles
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=params%fromp).ne.'no'
         call prep_batch_particles2D(nptcls)
-        call build_batch_particles2D(pftc, nptcls, pinds, l_ctf)
+        call build_batch_particles2D(pftc, nptcls, pinds)
         ! init prob table
         call eulprob%new(pinds)
         fname = DIST_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
