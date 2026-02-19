@@ -1,4 +1,4 @@
-! @descr: distance calculators and related functions for oris
+!@descr: distance calculators and related functions for oris
 submodule (simple_oris) simple_oris_dists
 implicit none
 #include "simple_local_flags.inc"

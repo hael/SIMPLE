@@ -1,4 +1,4 @@
-!@ descr: module defining the user interfaces for class average processing programs in the simple_exec suite
+!@descr: module defining the user interfaces for class average processing programs in the simple_exec suite
 module simple_ui_cavgproc
 use simple_ui_modules
 implicit none

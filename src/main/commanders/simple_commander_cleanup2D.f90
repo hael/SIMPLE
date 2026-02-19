@@ -1,4 +1,4 @@
-!@ descr cleanup for molecule with large heterogeneity 
+!@descr: cleanup for molecule with large heterogeneity 
 module simple_commanders_cleanup2D
 use simple_commanders_api
 use simple_commanders_project_core, only: commander_extract_subproj
