@@ -1109,17 +1109,17 @@ contains
                 THROW_HARD('need refs to be part of command line for cluster2D execution')
             endif
             if( L_NEW_CAVGER )then
-                call cavger_new(pinds, alloccavgs=.true.)
+                call cavger_new(build_glob, pinds, alloccavgs=.true.)
                 call cavger_new_read_all
             else
-                call cavger_new(pinds, alloccavgs=.true.)
+                call cavger_new(build_glob, pinds, alloccavgs=.true.)
                 call cavger_read_all
             endif
         else
             if( L_NEW_CAVGER )then
-                call cavger_new_new(pinds, alloccavgs=.false.)
+                call cavger_new_new(build_glob, pinds, alloccavgs=.false.)
             else
-                call cavger_new(pinds, alloccavgs=.false.)
+                call cavger_new(build_glob, pinds, alloccavgs=.false.)
             endif
         endif
         ! init scorer & prep references
@@ -1268,12 +1268,12 @@ contains
         do i = 1, ncls
             call progress_gfortran(i,ncls)
             if( trim(params%pca_img_ori) .eq. 'yes' )then
-                call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
+                call transform_ptcls(build_glob, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
                 do j = 1, size(imgs)
                     call imgs(j)%copy_fast(imgs_ori(j))
                 enddo
             else
-                call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
+                call transform_ptcls(build_glob, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
             endif
             nptcls = size(imgs)
             if( trim(params%neigs_per).eq.'yes' )then
@@ -1343,7 +1343,7 @@ contains
                     call imgs_ori(j)%write(fname_denoised, cnt2)
                     if( trim(params%pca_ori_stk) .eq. 'yes' ) ori_map(pinds(j)) = cnt2
                 end do
-                call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
+                call transform_ptcls(build_glob, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
             else
                 fname_class_ptcls_den = 'class'//int2str_pad(i,4)//'ptcls.mrcs'
                 do j = 1, nptcls

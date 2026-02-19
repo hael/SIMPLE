@@ -148,7 +148,7 @@ contains
                 l_alloc_read_cavgs = which_iter==1
             endif
             if( L_NEW_CAVGER )then
-                call cavger_new_new(pinds, alloccavgs=l_alloc_read_cavgs)
+                call cavger_new_new(build_glob, pinds, alloccavgs=l_alloc_read_cavgs)
                 if( l_alloc_read_cavgs )then
                     if( .not. cline%defined('refs') )then
                         THROW_HARD('need refs to be part of command line for cluster2D execution')
@@ -156,7 +156,7 @@ contains
                     call cavger_new_read_all
                 endif
             else
-                call cavger_new(pinds, alloccavgs=l_alloc_read_cavgs)
+                call cavger_new(build_glob, pinds, alloccavgs=l_alloc_read_cavgs)
                 if( l_alloc_read_cavgs )then
                     if( .not. cline%defined('refs') )then
                         THROW_HARD('need refs to be part of command line for cluster2D execution')

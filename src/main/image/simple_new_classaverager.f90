@@ -1,7 +1,7 @@
 !@descr: Types and interfaces for production of Cartesian class averages
 module simple_new_classaverager
 use simple_core_module_api
-use simple_builder,           only: build_glob
+use simple_builder,           only: builder
 use simple_ctf,               only: ctf
 use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2,     only: euclid_sigma2, eucl_sigma2_glob
@@ -108,6 +108,7 @@ type(image), target, allocatable :: cavgs_odd_new(:)          !< Odd class avera
 type(image), target, allocatable :: cavgs_merged_new(:)       !< Merged class averages for reading
 type(cavgs_set)                  :: cavgs                     !< Class averages
 type(euclid_sigma2)              :: eucl_sigma                !< Noise power estimates
+type(builder),        pointer    :: build_ptr => null()       !< active builder instance
 logical,             allocatable :: pptcl_mask(:)             !< selected particles
 integer                          :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
 integer                          :: istart      = 0, iend = 0 !< particle index range in partition
@@ -256,9 +257,10 @@ interface
     ! Module public routines
     !
 
-    module subroutine cavger_new_new( pinds, alloccavgs )
-        integer, optional, intent(in) :: pinds(:)
-        logical, optional, intent(in) :: alloccavgs 
+    module subroutine cavger_new_new( build, pinds, alloccavgs )
+        class(builder), target, intent(inout) :: build
+        integer, optional,      intent(in) :: pinds(:)
+        logical, optional,      intent(in) :: alloccavgs 
     end subroutine cavger_new_new
 
     ! Book-keeping & metadata
@@ -323,10 +325,11 @@ interface
 
     ! Public utility
 
-    module subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
+    module subroutine transform_ptcls( build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
+        class(builder),             target, intent(inout) :: build
         class(sp_project),                  intent(inout) :: spproj
         character(len=*),                   intent(in)    :: oritype
         integer,                            intent(in)    :: icls
