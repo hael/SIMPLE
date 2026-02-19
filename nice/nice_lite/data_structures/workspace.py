@@ -2,13 +2,13 @@
 import os
 import re
 import copy
-from django.utils import timezone
+from django.utils           import timezone
 from django.template.loader import render_to_string
 
 # local imports
-from ..models import ProjectModel, WorkspaceModel, JobClassicModel, DatasetModel
+from ..models    import ProjectModel, WorkspaceModel, JobClassicModel, DatasetModel
 from .jobclassic import JobClassic
-from .simple import SIMPLEProject
+from .simple     import SIMPLEProject
 
 class Workspace:
 
@@ -27,6 +27,7 @@ class Workspace:
     trashfolder = ""
 
     def __init__(self, workspace_id=None, request=None):
+        # unit tests: test_workspace_init, test_workspace_init_by_request, test_workspace_init_by_id
         if workspace_id is not None:
             self.id = workspace_id
         elif request is not None:
@@ -36,6 +37,7 @@ class Workspace:
             self.load()
 
     def setIDFromRequest(self, request):
+        # unit tests: test_workspace_init_by_request
         if "selected_workspace_id" in request.POST:
             test_id_str = request.POST["selected_workspace_id"]
         else:
@@ -44,6 +46,7 @@ class Workspace:
             self.id = int(test_id_str)
 
     def load(self):
+        # unit tests: test_workspace_init_by_request, test_workspace_init_by_id
         workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
         if workspacemodel is not None:
             self.name     = workspacemodel.name
@@ -59,6 +62,7 @@ class Workspace:
             self.addNodesHTML()
 
     def new(self, project, user):
+        # unit tests: test_workspace_new
         projectmodel = ProjectModel.objects.filter(id=project.id).first()
         if projectmodel is None:
             return False
@@ -116,7 +120,7 @@ class Workspace:
         return True
     
     def addNodesHTML(self):
-
+        # unit tests: 
         def addNodeHTML(obj):
             if "children" in obj:
                 for child in obj["children"]:
@@ -143,7 +147,7 @@ class Workspace:
             addNodeHTML(self.nstrhtml)
         
     def addChild(self, parentid, jobid):
-
+        # unit tests: 
         def findParent(obj):
             if "jobid" in obj:
                 if parentid == obj["jobid"]:
@@ -181,7 +185,7 @@ class Workspace:
             self.nstr = updated
 
     def removeChild(self, jobid):
-
+        # unit tests: 
         def findChild(obj):
             if "jobid" in obj:
                 if jobid == obj["jobid"]:
@@ -223,6 +227,7 @@ class Workspace:
             self.nstr = updated
 
     def delete(self, project):
+        # unit tests: test_workspace_delete
         workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
         if project.ensureTrashfolder() and workspacemodel is not None:
             workspace_path = os.path.join(project.dirc, self.dirc)
@@ -263,6 +268,7 @@ class Workspace:
             project.delete()
 
     def rename(self, request, project):
+        # unit tests: test_workspace_rename
         if "new_workspace_name" in request.POST:
             new_workspace_name = request.POST["new_workspace_name"]
             workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
@@ -294,6 +300,7 @@ class Workspace:
         return False
 
     def updateDescription(self, request):
+        # unit tests: test_workspace_update_description
         if "new_workspace_description" in request.POST:
             new_workspace_description = request.POST["new_workspace_description"]
             workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
@@ -303,6 +310,7 @@ class Workspace:
         return False
         
     def ensureTrashfolder(self, project):
+        # unit tests: test_workspace_trash
         if not os.path.exists(os.path.join(project.dirc, self.dirc)):
             return False
         if not os.path.isdir(os.path.join(project.dirc, self.dirc)):

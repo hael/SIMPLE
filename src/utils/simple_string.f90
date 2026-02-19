@@ -34,6 +34,7 @@ type :: string
     procedure          :: to_int
     procedure          :: to_real
     procedure          :: to_dble
+    procedure          :: to_fnv1a_hash64
     procedure, private :: has_substr_1, has_substr_2
     generic            :: has_substr => has_substr_1, has_substr_2
     procedure          :: substr_remove
@@ -51,6 +52,7 @@ type :: string
     generic            :: operator(.ne.) => is_not_equal_1, is_not_equal_2
     generic            :: operator(/=) => is_not_equal_1, is_not_equal_2
     procedure          :: readline
+    procedure          :: readfile
     procedure          :: writeline
     procedure          :: print
     procedure, private :: set_real, set_dble, set_int
@@ -229,6 +231,26 @@ contains
         endif
         if( present(io_stat) ) io_stat = ios
     end function to_dble
+
+    function to_fnv1a_hash64(self) result( hash )
+        class(string),    intent(in) :: self
+        integer(kind=8),  parameter  :: FNV_OFFSET = int(z'CBF29CE484222325', 8)
+        integer(kind=8),  parameter  :: FNV_PRIME  = int(z'00000100000001B3', 8)
+        type(string)                 :: hash
+        character(len=16)            :: hash_hex
+        integer(kind=8)              :: hash_val
+        integer                      :: i
+        hash_val = FNV_OFFSET
+        do i = 1, self%strlen_trim()
+            ! 1. XOR current hash with the current byte
+            hash_val = ieor(hash_val, int(iachar(self%buffer(i:i)), int64))
+            ! 2. Multiply by the FNV prime
+            hash_val = hash_val * FNV_PRIME
+        end do
+        ! Format result as a 16-character zero-padded hex string
+        write(hash_hex, '(Z16.16)') hash_val
+        hash = hash_hex
+    end function to_fnv1a_hash64
 
     elemental logical function has_substr_1( self, substr )
         class(string), intent(in) :: self, substr
@@ -478,6 +500,23 @@ contains
         read(fhandle, '(A)', iostat=ios) buffer_static
         if( ios == 0 ) self%buffer = trim(adjustl(buffer_static))
     end subroutine readline
+
+    subroutine readfile( self, fhandle )
+        class(string),    intent(inout) :: self
+        integer,          intent(in)    :: fhandle
+        character(len=:), allocatable   :: tmp
+        character(len=XLONGSTRLEN)      :: buffer_static 
+        integer                         :: ios
+        call self%kill
+        do
+            read(fhandle, '(A)', iostat=ios) buffer_static
+            if( ios /= 0 ) exit
+            if( len(trim(buffer_static)) > 0 ) then
+                tmp = self%buffer // trim(adjustl(buffer_static)) // new_line('a')
+                call move_alloc(tmp, self%buffer)
+            endif
+        end do  
+    end subroutine readfile
 
     subroutine writeline( self, fhandle, ios )
         class(string), intent(inout) :: self
