@@ -114,7 +114,7 @@ contains
         call assert_int(0, md%get_n_trees(), 'initial get_n_trees=0')
         call assert_int(0, md%get_n_refs(),  'initial get_n_refs=0')
         call assert_int(0, md%get_medoid(1), 'initial get_medoid(1)=0')
-        call assert_int(0, md%get_cls_pop(1),'initial get_cls_pop(1)=0')
+        call assert_int(0, md%get_tree_pop(1),'initial get_tree_pop(1)=0')
     end subroutine test_initial_state
 
     subroutine test_new_counts_and_getters()
@@ -125,11 +125,11 @@ contains
         call md%new(labels)
         call assert_int(3, md%get_n_trees(), 'n_trees from labels')
         call assert_int(5, md%get_n_refs(),  'n_refs from labels')
-        call assert_int(2, md%get_cls_pop(1), 'cls_pop(1)=2')
-        call assert_int(2, md%get_cls_pop(2), 'cls_pop(2)=2')
-        call assert_int(1, md%get_cls_pop(3), 'cls_pop(3)=1')
-        call assert_int(0, md%get_cls_pop(0), 'cls_pop(0)=0')
-        call assert_int(0, md%get_cls_pop(4), 'cls_pop(4)=0')
+        call assert_int(2, md%get_tree_pop(1), 'cls_pop(1)=2')
+        call assert_int(2, md%get_tree_pop(2), 'cls_pop(2)=2')
+        call assert_int(1, md%get_tree_pop(3), 'cls_pop(3)=1')
+        call assert_int(0, md%get_tree_pop(0), 'cls_pop(0)=0')
+        call assert_int(0, md%get_tree_pop(4), 'cls_pop(4)=0')
         call assert_int(0, md%get_medoid(0),  'medoid(0)=0')
         call assert_int(0, md%get_medoid(4),  'medoid(4)=0')
         call md%kill()
@@ -180,8 +180,8 @@ contains
             call assert_int(1, size(refs), 'singleton refs size=1')
             allocate(submat(1,1))
             submat = 0.0
-            call md%build_tree_from_subdist(itree, refs, submat, linkage=1)
-            call assert_int(1, md%get_cls_pop(itree), 'singleton cls_pop=1')
+            call md%build_tree_from_subdistmat(itree, refs, submat, linkage=1)
+            call assert_int(1, md%get_tree_pop(itree), 'singleton cls_pop=1')
             call assert_int(refs(1), md%get_medoid(itree), 'singleton medoid equals only ref')
             call md%get_left_right_idxs(refs(1), l, r)
             call assert_pair(0,0, l, r, 'singleton left/right are 0,0')
@@ -208,7 +208,7 @@ contains
         submat(1,1)=0.0; submat(2,2)=0.0
         submat(1,2)=dist(refs(1), refs(2))
         submat(2,1)=submat(1,2)
-        call md%build_tree_from_subdist(1, refs, submat, linkage=1)
+        call md%build_tree_from_subdistmat(1, refs, submat, linkage=1)
         ! tie -> first
         call assert_int(refs(1), md%get_medoid(1), 'pair tree1 medoid is first (tie)')
         deallocate(submat); deallocate(refs)
@@ -219,13 +219,13 @@ contains
         submat(1,1)=0.0; submat(2,2)=0.0
         submat(1,2)=dist(refs(1), refs(2))
         submat(2,1)=submat(1,2)
-        call md%build_tree_from_subdist(2, refs, submat, linkage=1)
+        call md%build_tree_from_subdistmat(2, refs, submat, linkage=1)
         call assert_int(refs(1), md%get_medoid(2), 'pair tree2 medoid is first (tie)')
         deallocate(submat); deallocate(refs)
         call assert_int(2, md%get_n_trees(), 'pairs: n_trees=2')
         call assert_int(4, md%get_n_refs(),  'pairs: n_refs=4')
-        call assert_int(2, md%get_cls_pop(1),'pairs: cls_pop(1)=2')
-        call assert_int(2, md%get_cls_pop(2),'pairs: cls_pop(2)=2')
+        call assert_int(2, md%get_tree_pop(1),'pairs: cls_pop(1)=2')
+        call assert_int(2, md%get_tree_pop(2),'pairs: cls_pop(2)=2')
         call md%kill()
     end subroutine test_build_tree_pairs_medoids
 
@@ -252,7 +252,7 @@ contains
                 submat(j,i) = submat(i,j)
             end do
         end do
-        call md%build_tree_from_subdist(1, refs, submat, linkage=1)
+        call md%build_tree_from_subdistmat(1, refs, submat, linkage=1)
         call assert_int(2, md%get_medoid(1), 'cluster1 medoid=2')
         deallocate(submat); deallocate(refs)
         ! Build tree 2 with external submatrix
@@ -266,13 +266,13 @@ contains
                 submat(j,i) = submat(i,j)
             end do
         end do
-        call md%build_tree_from_subdist(2, refs, submat, linkage=1)
+        call md%build_tree_from_subdistmat(2, refs, submat, linkage=1)
         call assert_int(5, md%get_medoid(2), 'cluster2 medoid=5')
         deallocate(submat); deallocate(refs)
         call assert_int(2, md%get_n_trees(), 'n_trees=2')
         call assert_int(6, md%get_n_refs(),  'n_refs=6')
-        call assert_int(3, md%get_cls_pop(1),'cls_pop(1)=3')
-        call assert_int(3, md%get_cls_pop(2),'cls_pop(2)=3')
+        call assert_int(3, md%get_tree_pop(1),'cls_pop(1)=3')
+        call assert_int(3, md%get_tree_pop(2),'cls_pop(2)=3')
         ! leaf-hit behavior (binary_tree finds leaves first)
         call md%get_left_right_idxs(1, l, r)
         call assert_pair(0,0, l, r, 'leaf ref=1 left/right 0,0')
@@ -310,7 +310,7 @@ contains
                     end do
                 end do
             end if
-            call md%build_tree_from_subdist(itree, refs, submat, linkage=1)
+            call md%build_tree_from_subdistmat(itree, refs, submat, linkage=1)
             deallocate(submat)
             deallocate(refs)
         end do
@@ -342,7 +342,7 @@ contains
                     submat(j,i) = submat(i,j)
                 end do
             end do
-            call md%build_tree_from_subdist(itree, refs, submat, linkage=1)
+            call md%build_tree_from_subdistmat(itree, refs, submat, linkage=1)
             deallocate(submat)
             deallocate(refs)
         end do
@@ -350,7 +350,7 @@ contains
         call assert_int(0, md%get_n_trees(), 'after kill n_trees=0')
         call assert_int(0, md%get_n_refs(),  'after kill n_refs=0')
         call assert_int(0, md%get_medoid(1), 'after kill get_medoid(1)=0')
-        call assert_int(0, md%get_cls_pop(1),'after kill get_cls_pop(1)=0')
+        call assert_int(0, md%get_tree_pop(1),'after kill get_tree_pop(1)=0')
         ! Reuse: singleton + larger cluster (still use dist from make_distmat_two_triples)
         labels = [1,2,2,2,2,2]
         call md%new(labels)
@@ -365,14 +365,14 @@ contains
                     submat(j,i) = submat(i,j)
                 end do
             end do
-            call md%build_tree_from_subdist(itree, refs, submat, linkage=1)
+            call md%build_tree_from_subdistmat(itree, refs, submat, linkage=1)
             deallocate(submat)
             deallocate(refs)
         end do
         call assert_int(2, md%get_n_trees(), 'reuse n_trees=2')
         call assert_int(6, md%get_n_refs(),  'reuse n_refs=6')
-        call assert_int(1, md%get_cls_pop(1),'reuse cls_pop(1)=1')
-        call assert_int(5, md%get_cls_pop(2),'reuse cls_pop(2)=5')
+        call assert_int(1, md%get_tree_pop(1),'reuse cls_pop(1)=1')
+        call assert_int(5, md%get_tree_pop(2),'reuse cls_pop(2)=5')
         call assert_int(1, md%get_medoid(1), 'reuse singleton medoid=1')
         call md%kill()
     end subroutine test_kill_and_reuse

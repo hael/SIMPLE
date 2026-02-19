@@ -30,6 +30,7 @@ contains
     procedure :: kill
     procedure :: n_nodes
     procedure :: get_root_idx
+    procedure :: get_medoid
     procedure :: get_node
     procedure :: get_left_right_ref
     ! build from hierarchical clustering merge matrix + original reference ids
@@ -78,6 +79,11 @@ contains
         class(binary_tree), intent(in) :: self
         get_root_idx = self%root_idx
     end function get_root_idx
+
+    pure integer function get_medoid(self) result(ref)
+        class(binary_tree), intent(in) :: self
+        ref = self%nodes(self%root_idx)%ref_idx
+    end function get_medoid
 
     pure function get_node( self, inode ) result( node )
         class(binary_tree), intent(in) :: self
