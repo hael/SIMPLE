@@ -409,13 +409,13 @@ contains
                     ! polar restoration
                     if( l_clin )then
                         clinw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
-                        call pftc%polar_cavger_merge_eos_and_norm(build_glob%eulspace, clinw)
+                        call pftc%polar_cavger_merge_eos_and_norm(build_glob%eulspace, build_glob%pgrpsyms, clinw)
                     else
                         call pftc%polar_cavger_merge_eos_and_norm2D
                     endif
-                    call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
+                    call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build_glob%clsfrcs, build_glob%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
                     call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                    call pftc%polar_cavger_gen2Dclassdoc(build_glob%spproj)
+                    call pftc%polar_cavger_gen2Dclassdoc(build_glob%spproj, build_glob%clsfrcs)
                     call pftc%polar_cavger_kill
                 else
                     ! cartesian restoration
@@ -775,7 +775,7 @@ contains
                 xyz      = 0.
                 if( l_center ) call calc_2Dref_offset(tmp_imgs(icls), icls, centype, xyz)
                 ! Prep for alignment
-                call pftc%polar_prep2Dref(icls, l_gaufilt)
+                call pftc%polar_prep2Dref(build_glob%clsfrcs, icls, l_gaufilt)
                 ! transfer to pftc
                 if( params_glob%l_lpset )then
                     ! merged class average in both even and odd positions
