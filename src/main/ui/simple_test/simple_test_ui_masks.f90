@@ -1,4 +1,4 @@
-!@ descr: module defining the user interfaces for masks  programs in the simple_test_exec suite
+!@descr: module defining the user interfaces for masks  programs in the simple_test_exec suite
 module simple_test_ui_masks
 use simple_ui_modules
 implicit none

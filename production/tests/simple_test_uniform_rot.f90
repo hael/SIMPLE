@@ -1,4 +1,4 @@
-! from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361
+!@descr: from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361
 program simple_test_uniform_rot
 use simple_core_module_api
 implicit none

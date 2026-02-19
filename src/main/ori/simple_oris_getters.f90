@@ -1,4 +1,4 @@
-! @descr: getters/queries for oris object
+!@descr: getters/queries for oris object
 submodule (simple_oris) simple_oris_getters
 use simple_ori_api
 use simple_ori, only: ori
