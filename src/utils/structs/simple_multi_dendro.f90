@@ -13,8 +13,8 @@ private
 type :: multi_dendro
    private
    type(binary_tree), allocatable :: trees(:)
-   integer,           allocatable :: cls_pops(:)
-   logical,           allocatable :: cls_map(:,:)
+   integer,           allocatable :: tree_pops(:)
+   logical,           allocatable :: tree_map(:,:)
    integer,           allocatable :: medoids(:)
    integer :: n_trees = 0
    integer :: n_refs  = 0
@@ -24,9 +24,9 @@ contains
    procedure :: get_n_trees
    procedure :: get_n_refs
    procedure :: get_medoid
-   procedure :: get_cls_pop
+   procedure :: get_tree_pop
    procedure :: get_tree_refs
-   procedure :: build_tree_from_subdist
+   procedure :: build_tree_from_subdistmat
    procedure :: get_left_right_idxs
    procedure :: get_tree_indx
    procedure :: kill
@@ -42,14 +42,14 @@ contains
       if (any(labels == 0)) THROW_HARD('0 labels not allowed')
       self%n_trees = maxval(labels)
       self%n_refs  = size(labels)
-      allocate(self%cls_pops(self%n_trees), self%medoids(self%n_trees), source=0)
+      allocate(self%tree_pops(self%n_trees), self%medoids(self%n_trees), source=0)
       do i = 1, self%n_trees
-         self%cls_pops(i) = count(labels == i)
+         self%tree_pops(i) = count(labels == i)
       end do
-      allocate(self%cls_map(self%n_trees,self%n_refs))
+      allocate(self%tree_map(self%n_trees,self%n_refs))
       do i = 1, self%n_trees
          do j = 1, self%n_refs
-            self%cls_map(i,j) = (labels(j) == i)
+            self%tree_map(i,j) = (labels(j) == i)
          end do
       end do
       allocate(self%trees(self%n_trees))
@@ -59,12 +59,12 @@ contains
    pure integer function get_n_trees(self) result(n)
       class(multi_dendro), intent(in) :: self
       n = self%n_trees
-   end function
+   end function get_n_trees
 
    pure integer function get_n_refs(self) result(n)
       class(multi_dendro), intent(in) :: self
       n = self%n_refs
-   end function
+   end function get_n_refs
 
    pure integer function get_medoid(self, itree) result(m)
       class(multi_dendro), intent(in) :: self
@@ -73,16 +73,16 @@ contains
       if (itree < 1 .or. itree > self%n_trees) return
       if (.not. allocated(self%medoids)) return
       m = self%medoids(itree)
-   end function
+   end function get_medoid
 
-   pure integer function get_cls_pop(self, itree) result(pop)
+   pure integer function get_tree_pop(self, itree) result(pop)
       class(multi_dendro), intent(in) :: self
       integer, intent(in) :: itree
       pop = 0
       if (itree < 1 .or. itree > self%n_trees) return
-      if (.not. allocated(self%cls_pops)) return
-      pop = self%cls_pops(itree)
-   end function get_cls_pop
+      if (.not. allocated(self%tree_pops)) return
+      pop = self%tree_pops(itree)
+   end function get_tree_pop
 
    !--- Return refs for a given tree (global ref IDs).
    function get_tree_refs(self, itree) result(refs)
@@ -94,15 +94,15 @@ contains
             allocate(refs(0))
             return
         end if
-        n = count(self%cls_map(itree,:))
+        n = count(self%tree_map(itree,:))
         allocate(refs(n))
-        refs = mask2inds(self%cls_map(itree,:))
+        refs = mask2inds(self%tree_map(itree,:))
    end function get_tree_refs
 
    !--- Build a single tree from an externally provided sub-distance matrix.
    !    refs must be the same list returned by get_tree_refs(itree, ...)
    !    sub_distmat must be n x n, symmetric (upper triangle accepted).
-   subroutine build_tree_from_subdist(self, itree, refs, sub_distmat, linkage)
+   subroutine build_tree_from_subdistmat(self, itree, refs, sub_distmat, linkage)
       class(multi_dendro), intent(inout) :: self
       integer,            intent(in)    :: itree
       integer,            intent(in)    :: refs(:)            ! global ref ids
@@ -116,14 +116,14 @@ contains
       type(bt_node) :: node
       ! Basic validations
       if (itree < 1 .or. itree > self%n_trees) then
-         THROW_HARD('build_tree_from_subdist: itree out of range')
+         THROW_HARD('build_tree_from_subdistmat: itree out of range')
       end if
       n = size(refs)
       if (n == 0) then
-         THROW_HARD('build_tree_from_subdist: empty refs')
+         THROW_HARD('build_tree_from_subdistmat: empty refs')
       end if
       if (size(sub_distmat,1) /= n .or. size(sub_distmat,2) /= n) then
-         THROW_HARD('build_tree_from_subdist: sub_distmat must be (n,n) with n=size(refs)')
+         THROW_HARD('build_tree_from_subdistmat: sub_distmat must be (n,n) with n=size(refs)')
       end if
       ! If the tree already exists, clear it first
       if (allocated(self%trees)) then
@@ -135,7 +135,7 @@ contains
          allocate(merge_mat(2,1))  ! dummy but not used by build logic for n=1
          merge_mat = 1   ! value doesn't matter
          call self%trees(itree)%build_from_hclust(merge_mat, refs, sub_distmat)
-         self%medoids(itree) = refs(1)
+         self%medoids(itree) = self%trees(itree)%get_medoid()
          deallocate(merge_mat)
          return
       end if
@@ -150,7 +150,7 @@ contains
       node = self%trees(itree)%get_node(self%trees(itree)%get_root_idx())
       self%medoids(itree) = node%ref_idx
       deallocate(merge_mat, height)
-   end subroutine build_tree_from_subdist
+   end subroutine build_tree_from_subdistmat
 
    pure subroutine get_left_right_idxs(self, ref_idx, left_ref_idx, right_ref_idx)
       class(multi_dendro), intent(in)  :: self
@@ -192,8 +192,8 @@ contains
          end do
          deallocate(self%trees)
       end if
-      if (allocated(self%cls_pops))  deallocate(self%cls_pops)
-      if (allocated(self%cls_map))   deallocate(self%cls_map)
+      if (allocated(self%tree_pops))  deallocate(self%tree_pops)
+      if (allocated(self%tree_map))   deallocate(self%tree_map)
       if (allocated(self%medoids))   deallocate(self%medoids)
       self%n_trees = 0
       self%n_refs  = 0

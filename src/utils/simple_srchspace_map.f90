@@ -16,6 +16,8 @@ type :: srchspace_map
 contains
     procedure :: new
     procedure :: get_inds_in_full
+    procedure :: get_sub2full_map
+    procedure :: get_full2sub_map
     procedure :: full2sub
     procedure :: sub2full
     procedure :: get_nspace
@@ -52,6 +54,26 @@ contains
         mask = (self%full2sub_map == sub_idx)
         inds = mask2inds(mask)
     end function get_inds_in_full
+
+    pure function get_sub2full_map(self) result(arr)
+        class(srchspace_map), intent(in) :: self
+        integer, allocatable :: arr(:)
+        if (.not. allocated(self%sub2full_map)) then
+            allocate(arr(0))
+        else
+            allocate(arr(size(self%sub2full_map)), source=self%sub2full_map)
+        end if
+    end function get_sub2full_map
+
+    pure function get_full2sub_map(self) result(arr)
+        class(srchspace_map), intent(in) :: self
+        integer, allocatable :: arr(:)
+        if (.not. allocated(self%full2sub_map)) then
+            allocate(arr(0))
+        else
+            allocate(arr(size(self%full2sub_map)), source=self%full2sub_map)
+        end if
+    end function get_full2sub_map
 
     pure integer function full2sub(self, full_idx)
         class(srchspace_map), intent(in) :: self
