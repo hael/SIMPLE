@@ -60,8 +60,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call kbinterpol_fast%new(&
-        &'kbinterpol_fast',&                         ! name
-        &'kbinterpol_fast ',&                        ! descr_short
+        &'kbinterpol_fast',&                   ! name
+        &'kbinterpol_fast ',&                  ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -88,8 +88,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call maxnloc_test%new(&
-        &'maxnloc_test',&                         ! name
-        &'maxnloc_test ',&                        ! descr_short
+        &'maxnloc_test',&                      ! name
+        &'maxnloc_test ',&                     ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -116,8 +116,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call neigh%new(&
-        &'neigh',&                         ! name
-        &'neigh ',&                        ! descr_short
+        &'neigh',&                             ! name
+        &'neigh ',&                            ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project

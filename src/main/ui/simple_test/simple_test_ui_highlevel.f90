@@ -26,9 +26,9 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call mini_stream%new(&
-        &'mini_stream',&                         ! name
-        &'mini_stream ',&                        ! descr_short
-        &'is a test program for ',&
+        &'mini_stream',&                       ! name
+        &'mini_stream ',&                      ! descr_short
+        &'is a test program for mini_stream',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -54,9 +54,9 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call simulated_workflow%new(&
-        &'simulated_workflow',&                         ! name
-        &'simulated_workflow ',&                        ! descr_short
-        &'is a test program for ',&
+        &'simulated_workflow',&                ! name
+        &'simulated_workflow ',&               ! descr_short
+        &'is a test program for simulated_workflow',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

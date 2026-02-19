@@ -41,8 +41,8 @@ contains
         &'lbfgsb',&                         ! name
         &'lbfgsb ',&                        ! descr_short
         &'is a test program for ',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
+        &'simple_test_exec',&               ! executable
+        &.false.)                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         !call lbfgsb%add_input(UI_IO, )
@@ -66,8 +66,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call lbfgsb_cosine%new(&
-        &'lbfgsb_cosine',&                         ! name
-        &'lbfgsb_cosine ',&                        ! descr_short
+        &'lbfgsb_cosine',&                     ! name
+        &'lbfgsb_cosine ',&                    ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -94,8 +94,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call lplims%new(&
-        &'lplims',&                         ! name
-        &'lplims ',&                        ! descr_short
+        &'lplims',&                            ! name
+        &'lplims ',&                           ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -122,8 +122,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call lpstages_test%new(&
-        &'lpstages_test',&                         ! name
-        &'lpstages_test ',&                        ! descr_short
+        &'lpstages_test',&                     ! name
+        &'lpstages_test ',&                    ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -150,8 +150,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call opt_lp%new(&
-        &'opt_lp',&                         ! name
-        &'opt_lp ',&                        ! descr_short
+        &'opt_lp',&                            ! name
+        &'opt_lp ',&                           ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project

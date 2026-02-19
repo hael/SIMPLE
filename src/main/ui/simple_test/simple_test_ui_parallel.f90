@@ -32,8 +32,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call coarrays%new(&
-        &'coarrays',&                         ! name
-        &'coarrays ',&                        ! descr_short
+        &'coarrays',&                          ! name
+        &'coarrays ',&                         ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -60,8 +60,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call openacc%new(&
-        &'openacc',&                         ! name
-        &'openacc ',&                        ! descr_short
+        &'openacc',&                           ! name
+        &'openacc ',&                          ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -88,8 +88,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call openmp%new(&
-        &'openmp',&                         ! name
-        &'openmp ',&                        ! descr_short
+        &'openmp',&                            ! name
+        &'openmp ',&                           ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -116,8 +116,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call simd%new(&
-        &'simd',&                         ! name
-        &'simd ',&                        ! descr_short
+        &'simd',&                              ! name
+        &'simd ',&                             ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project

@@ -47,8 +47,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call ansi_colors%new(&
-        &'ansi_colors',&                         ! name
-        &'ansi_colors ',&                        ! descr_short
+        &'ansi_colors',&                       ! name
+        &'ansi_colors ',&                      ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -75,8 +75,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call binoris_test%new(&
-        &'binoris_test',&                         ! name
-        &'binoris_test ',&                        ! descr_short
+        &'binoris_test',&                      ! name
+        &'binoris_test ',&                     ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -103,8 +103,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call binoris_io_test%new(&
-        &'binoris_io_test',&                         ! name
-        &'binoris_io_test ',&                        ! descr_short
+        &'binoris_io_test',&                   ! name
+        &'binoris_io_test ',&                  ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -134,8 +134,8 @@ contains
         &'cmdline',&                         ! name
         &'cmdline ',&                        ! descr_short
         &'is a test program for ',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
+        &'simple_test_exec',&                ! executable
+        &.false.)                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         !call cmdline%add_input(UI_IO, )
@@ -162,8 +162,8 @@ contains
         &'install',&                         ! name
         &'install ',&                        ! descr_short
         &'is a test program for ',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
+        &'simple_test_exec',&                ! executable
+        &.false.)                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         !call install%add_input(UI_IO, )
@@ -190,8 +190,8 @@ contains
         &'nice',&                         ! name
         &'nice ',&                        ! descr_short
         &'is a test program for ',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
+        &'simple_test_exec',&             ! executable
+        &.false.)                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         !call nice%add_input(UI_IO, )
@@ -243,8 +243,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call stringmatch%new(&
-        &'stringmatch',&                         ! name
-        &'stringmatch ',&                        ! descr_short
+        &'stringmatch',&                       ! name
+        &'stringmatch ',&                      ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -271,8 +271,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call units%new(&
-        &'units',&                         ! name
-        &'units ',&                        ! descr_short
+        &'units',&                             ! name
+        &'units ',&                            ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project

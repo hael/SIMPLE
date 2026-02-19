@@ -16,7 +16,7 @@ contains
 
     subroutine print_res_programs(logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('res ESTIMATION:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('RESOLUTION ESTIMATION:', C_UNDERLINED)
         write(logfhandle,'(A)') fsc%name%to_char()
         write(logfhandle,'(A)') clin_fsc%name%to_char()
         write(logfhandle,'(A)') ''
