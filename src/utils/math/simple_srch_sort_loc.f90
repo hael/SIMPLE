@@ -698,7 +698,7 @@ contains
         call hpsort(tmp, order)
     end function dists2order
 
-    function mask2inds( mask ) result( inds )
+    pure function mask2inds( mask ) result( inds )
         logical, intent(in)  :: mask(:)
         integer, allocatable :: inds(:)
         integer :: i, n
