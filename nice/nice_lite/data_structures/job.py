@@ -63,7 +63,7 @@ class Job:
         datasetmodel = DatasetModel.objects.filter(id=dataset.id).first()
         #jobmodels = JobModel.objects.filter(dset=datasetmodel)
       #  self.disp = jobmodels.count() + 1
-        # handle no downsampling
+        # handle no downsampling - think this can be taken out now
         if "smpd" in self.args and "smpd_downscale" in self.args:
             if float(self.args["smpd"]) > float(self.args["smpd_downscale"]):
                 self.args["smpd_downscale"] = self.args["smpd"]

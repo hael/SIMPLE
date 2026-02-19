@@ -21,6 +21,7 @@ class Dataset:
     trashfolder = ""
 
     def __init__(self, dataset_id=None, request=None):
+        # unit tests: test_dataset_init, test_dataset_init_by_request, test_dataset_init_by_id 
         if dataset_id is not None:
             self.id = dataset_id
         elif request is not None:
@@ -29,6 +30,7 @@ class Dataset:
             self.load()
 
     def setIDFromRequest(self, request):
+        # unit tests: test_dataset_init_by_id 
         if "selected_dataset_id" in request.POST:
             test_id_str = request.POST["selected_dataset_id"]
         else:
@@ -37,6 +39,7 @@ class Dataset:
             self.id = int(test_id_str)
 
     def load(self):
+        # unit tests: test_dataset_init_by_request, test_dataset_init_by_id 
         datasetmodel = DatasetModel.objects.filter(id=self.id).first()
         if datasetmodel is not None:
             self.name = datasetmodel.name
@@ -50,6 +53,7 @@ class Dataset:
             self.user = datasetmodel.user
 
     def new(self, project, user):
+        # unit tests: test_dataset_new
         projectmodel = ProjectModel.objects.filter(id=project.id).first()
         if projectmodel is None:
             return False
@@ -96,6 +100,7 @@ class Dataset:
         return True#
 
     def delete(self, project):
+        # unit tests: test_dataset_delete
         datasetmodel = DatasetModel.objects.filter(id=self.id).first()
         if project.ensureTrashfolder() and datasetmodel is not None:
             dataset_path = os.path.join(project.dirc, self.dirc)
@@ -137,6 +142,7 @@ class Dataset:
             projectmodel.delete()
 
     def rename(self, request, project):
+        # unit tests: test_dataset_rename
         if "new_dataset_name" in request.POST:
             new_dataset_name = request.POST["new_dataset_name"]
             datasetmodel = DatasetModel.objects.filter(id=self.id).first()
@@ -148,13 +154,12 @@ class Dataset:
             new_dataset_link     = os.path.join(project.dirc, new_dataset_name)
             try :
                 os.rename(current_dataset_link, new_dataset_link)
-                print("Source path renamed to destination path successfully.")
+             #   print("Source path renamed to destination path successfully.")
             except IsADirectoryError:
                 print("Source is a file but destination is a directory.")
                 return False
             except NotADirectoryError:
                 print("Source is a directory but destination is a file.")
-
             except PermissionError:
                 print("Operation not permitted")
                 return False
@@ -168,6 +173,7 @@ class Dataset:
         return False
 
     def updateDescription(self, request):
+        # unit tests: test_dataset_update_description
         if "new_dataset_description" in request.POST:
             new_dataset_description = request.POST["new_dataset_description"]
             datasetmodel = DatasetModel.objects.filter(id=self.id).first()
@@ -176,7 +182,8 @@ class Dataset:
             return True
         return False
     
-    def ensureTrashfolder(self, project):
+    def test_dataset_trash(self, project):
+        # unit tests: test_dataset_trash
         if not os.path.exists(os.path.join(project.dirc, self.dirc)):
             return False
         if not os.path.isdir(os.path.join(project.dirc, self.dirc)):

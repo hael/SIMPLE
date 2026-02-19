@@ -16,6 +16,7 @@ contains
         call test_append_operator()
         call test_strlen()
         call test_to_char()
+        call test_to_fnv1a_hash64()
         call test_numeric_conversion()
         call test_has_substr()
         call test_substr_remove()
@@ -30,6 +31,7 @@ contains
         call test_readline_long_line()
         call test_readline_eof_behavior()
         call test_writeline_unallocated()
+        call test_readfile()
         ! call report_summary()
     end subroutine run_all_string_tests
 
@@ -126,6 +128,17 @@ contains
         sub = s%to_char([1,2])
         call assert_char('  ', sub,             'to_char([1,2]) returns leading spaces')
     end subroutine test_to_char
+
+    !---------------- fnv1a_hash64 generation ----------------
+
+    subroutine test_to_fnv1a_hash64()
+        type(string) :: s, s_hash
+        character(:), allocatable :: sub
+        write(*,'(A)') 'test_to_fnv1a_hash64'
+        s      = string('abcdef')
+        s_hash = s%to_fnv1a_hash64()
+        call assert_char('D80BDA3FBE244A0A', s_hash%to_char(), 'to_fnv1a_hash64() returns incorrect hash')
+    end subroutine test_to_fnv1a_hash64
 
     !---------------- numeric conversions ----------------
 
@@ -448,5 +461,22 @@ contains
         call assert_int(-1, ios, 'writeline on unallocated sets ios=-1')
         close(unit)
     end subroutine test_writeline_unallocated
+
+    subroutine test_readfile()
+        type(string) :: s_in, s_out
+        integer      :: unit, ios
+        write(*,'(A)') 'test_readfile'
+        ! s_in is multiline string
+        s_in = "line1" // new_line('a') // "line2" // new_line('a')
+        call assert_true(s_in%is_allocated(), 'multiline string not allocated')
+        open(newunit=unit, status='scratch', action='readwrite', iostat=ios)
+        call assert_int(0, ios, 'open scratch file (readfile)')
+        call s_in%writeline(unit, ios)
+        call assert_int(0, ios, 'writeline on multiline string')
+        rewind(unit)
+        call s_out%readfile(unit)
+        call assert_char(s_in%to_char(), s_out%to_char(), 'multiline content preserved')
+        close(unit)
+    end subroutine test_readfile
 
 end module simple_string_tester

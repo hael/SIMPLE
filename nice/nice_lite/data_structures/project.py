@@ -16,6 +16,7 @@ class Project:
     trashfolder = ""
 
     def __init__(self, project_id=None, request=None):
+        # unit tests: test_project_init, test_project_init_by_request, test_project_init_by_id
         if project_id is not None:
             self.id = project_id
         elif request is not None:
@@ -23,7 +24,8 @@ class Project:
         if self.id > 0:
             self.load()
 
-    def setIDFromRequest(self, request):
+    def setIDFromRequest(self, request): 
+        # unit tests: test_project_init_by_request
         if "selected_project_id" in request.POST: 
             test_id_str = request.POST["selected_project_id"]
         else:
@@ -31,7 +33,8 @@ class Project:
         if test_id_str.isnumeric():
             self.id = int(test_id_str)
 
-    def load(self):
+    def load(self): 
+        # unit tests: test_project_init_by_request, test_project_init_by_id
         projectmodel = ProjectModel.objects.filter(id=self.id).first()
         if projectmodel is not None:
             self.name = projectmodel.name
@@ -48,7 +51,8 @@ class Project:
         else:
             self.id = 0
 
-    def new(self, request):
+    def new(self, request): 
+        # unit tests: test_project_new
 
         if "new_project_name" in request.POST:
             new_project_name = request.POST["new_project_name"]
@@ -82,19 +86,22 @@ class Project:
         self.load()
         return True
 
-    def containsDataset(self, dataset_id):
+    def containsDataset(self, dataset_id): 
+        # unit tests: test_project_contains_dataset, test_project_doesnt_contain_dataset
         for dataset in self.datasets_list:
             if dataset["id"] == dataset_id:
                 return True
         return False
     
-    def containsWorkspace(self, workspace_id):
+    def containsWorkspace(self, workspace_id): 
+        # unit tests: test_project_contains_workspace, test_project_doesnt_contain_workspace
         for workspace in self.workspaces_list:
             if workspace["id"] == workspace_id:
                 return True
         return False
     
-    def ensureTrashfolder(self):
+    def ensureTrashfolder(self): 
+        # unit tests: test_project_trash
         if not os.path.exists(self.dirc):
             return False
         if not os.path.isdir(self.dirc):
