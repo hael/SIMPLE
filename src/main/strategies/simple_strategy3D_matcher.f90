@@ -344,7 +344,7 @@ contains
         ! REPORT CONVERGENCE
         call qsys_job_finished(string('simple_strategy3D_matcher :: refine3D_exec'))
         if( .not. params_glob%l_distr_exec .and. trim(params_glob%refine).ne.'sigma' )then
-            converged = conv%check_conv3D(cline, params_glob%msk)
+            converged = conv%check_conv3D(cline, build_glob%spproj_field, params_glob%msk)
         endif
         if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)
@@ -383,8 +383,8 @@ contains
 
         subroutine polar_restoration()
             params_glob%refs = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//params_glob%ext%to_char()
-            call pftc%polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace)
-            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
+            call pftc%polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace, symop=build_glob%pgrpsyms)
+            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build_glob%clsfrcs, build_glob%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
             call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call pftc%polar_cavger_kill
         end subroutine polar_restoration

@@ -1,7 +1,6 @@
 !@descr: submodule for class average restoration in the polar Fourier domain
 submodule (simple_polarft_calc) simple_polarft_ops_restore
 use simple_class_frcs, only: class_frcs
-use simple_builder,    only: build_glob
 use simple_cmdline,    only: cmdline
 implicit none
 #include "simple_local_flags.inc"
@@ -50,9 +49,10 @@ contains
     end subroutine polar_cavger_merge_eos_and_norm2D
 
     !>  \brief  Restores 3D slices
-    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, cl_weight )
+    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop, cl_weight )
         class(polarft_calc),  intent(inout) :: self
         type(oris),           intent(in)    :: reforis
+        type(sym),        intent(in)    :: symop
         real,       optional, intent(in)    :: cl_weight
         type(class_frcs)   :: cavg2clin_frcs
         real,  allocatable :: cavg_clin_frcs(:,:,:)
@@ -69,16 +69,16 @@ contains
                 if( present(cl_weight) ) clw = min(max(0.d0,real(cl_weight,dp)),1.d0)
                 if( clw > 1.d-6 )then
                     ! Mirroring slices
-                    call mirror_slices(reforis, build_glob%pgrpsyms)
+                    call mirror_slices(reforis, symop)
                     ! Common-lines conribution
-                    call self%calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
+                    call self%calc_comlin_contrib(reforis, symop,&
                     &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
                 endif
             case('comlin_noself', 'comlin')
                 ! Mirroring slices
-                call mirror_slices(reforis, build_glob%pgrpsyms)
+                call mirror_slices(reforis, symop)
                 ! Common-lines conribution
-                call self%calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
+                call self%calc_comlin_contrib(reforis, symop,&
                 &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
             case DEFAULT
                 THROW_HARD('Invalid REF_TYPE='//trim(params_glob%ref_type)//' in polar_cavger_merge_eos_and_norm')
@@ -261,9 +261,9 @@ contains
             pfte_backup(:,:,:)  = self%pfts_even(:,:,:); pfto_backup(:,:,:)  = self%pfts_odd(:,:,:)
             ctf2e_backup(:,:,:) = self%ctf2_even(:,:,:); ctf2o_backup(:,:,:) = self%ctf2_odd(:,:,:)
             ! mirror classes belonging to the same slice
-            call mirror_slices(reforis, build_glob%pgrpsyms)
+            call mirror_slices(reforis, symop)
             ! calculate the per slice CLs
-            call self%calc_comlin_contrib(reforis, build_glob%pgrpsyms,&
+            call self%calc_comlin_contrib(reforis, symop,&
             &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
             ! CLs vs. CLS FRCs
             call calc_cavg_comlin_frcs(frcs)
@@ -433,8 +433,10 @@ contains
     end subroutine polar_cavger_merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations
-    module subroutine polar_cavger_calc_and_write_frcs_and_eoavg( self, fname, cline )
+    module subroutine polar_cavger_calc_and_write_frcs_and_eoavg( self, clsfrcs, update_frac, fname, cline )
         class(polarft_calc), intent(inout) :: self
+        class(class_frcs),   intent(inout) :: clsfrcs
+        real,                intent(in)    :: update_frac
         class(string),       intent(in)    :: fname
         type(cmdline),       intent(in)    :: cline
         complex(dp), allocatable :: prev_prefs(:,:,:)
@@ -444,17 +446,17 @@ contains
         filtsz = fdim(params_glob%box_crop) - 1
         allocate(frc(filtsz),source=0.)
         ! In case nspace/self%ncls has changed OR volume/frcs were downsampled
-        if( (build_glob%clsfrcs%get_ncls() /= self%ncls) .or. (build_glob%clsfrcs%get_filtsz() /= filtsz) )then
-            call build_glob%clsfrcs%new(self%ncls, params_glob%box_crop, params_glob%smpd_crop, params_glob%nstates)
+        if( (clsfrcs%get_ncls() /= self%ncls) .or. (clsfrcs%get_filtsz() /= filtsz) )then
+            call clsfrcs%new(self%ncls, params_glob%box_crop, params_glob%smpd_crop, params_glob%nstates)
         endif
         !$omp parallel do default(shared) private(icls,frc,find,pop) schedule(static) proc_bind(close)
         do icls = 1,self%ncls
             if( self%l_comlin )then
                 ! calculate FRC (pseudo-cavgs are never empty)
                 call self%polar_cavger_calc_frc(self%pfts_even(:,:,icls), self%pfts_odd(:,:,icls), filtsz, frc)
-                call build_glob%clsfrcs%set_frc(icls, frc, 1)
+                call clsfrcs%set_frc(icls, frc, 1)
                 ! average low-resolution info between eo pairs to keep things in register
-                find = min(self%kfromto(2), build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1))
+                find = min(self%kfromto(2), clsfrcs%estimate_find_for_eoavg(icls, 1))
                 if( find >= self%kfromto(1) )then
                     self%pfts_even(:,self%kfromto(1):find,icls) = self%pfts_merg(:,self%kfromto(1):find,icls)
                     self%pfts_odd(:,self%kfromto(1):find,icls)  = self%pfts_merg(:,self%kfromto(1):find,icls)
@@ -463,13 +465,13 @@ contains
                 pop = sum(self%prev_eo_pops(:,icls) + self%eo_pops(:,icls))
                 if( pop == 0 )then
                     frc = 0.
-                    call build_glob%clsfrcs%set_frc(icls, frc, 1)
+                    call clsfrcs%set_frc(icls, frc, 1)
                 else
                     ! calculate FRC
                     call self%polar_cavger_calc_frc(self%pfts_even(:,:,icls), self%pfts_odd(:,:,icls), filtsz, frc)
-                    call build_glob%clsfrcs%set_frc(icls, frc, 1)
+                    call clsfrcs%set_frc(icls, frc, 1)
                     ! average low-resolution info between eo pairs to keep things in register
-                    find = min(self%kfromto(2), build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1))
+                    find = min(self%kfromto(2), clsfrcs%estimate_find_for_eoavg(icls, 1))
                     if( find >= self%kfromto(1) )then
                         self%pfts_even(:,self%kfromto(1):find,icls) = self%pfts_merg(:,self%kfromto(1):find,icls)
                         self%pfts_odd(:,self%kfromto(1):find,icls)  = self%pfts_merg(:,self%kfromto(1):find,icls)
@@ -479,13 +481,13 @@ contains
         end do
         !$omp end parallel do
         ! write FRCs
-        call build_glob%clsfrcs%write(fname)
+        call clsfrcs%write(fname)
         ! e/o Trailing reconstruction
         if( params_glob%l_trail_rec )then
             if( cline%defined('ufrac_trec') )then
                 ufrac_trec = real(params_glob%ufrac_trec,dp)
             else
-                ufrac_trec = real(build_glob%spproj_field%get_update_frac(),dp)
+                ufrac_trec = real(update_frac,dp)
             endif
             call self%read_pft_array(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_prefs)
             !$omp parallel workshare proc_bind(close)
@@ -501,19 +503,20 @@ contains
     end subroutine polar_cavger_calc_and_write_frcs_and_eoavg
 
     !>  \brief  Filters one polar cluster centre for alignment
-    module subroutine polar_prep2Dref( self, icls, gaufilt )
+    module subroutine polar_prep2Dref( self, clsfrcs, icls, gaufilt )
         class(polarft_calc), intent(inout) :: self
+        class(class_frcs),   intent(inout) :: clsfrcs
         integer,             intent(in) :: icls
         logical,             intent(in) :: gaufilt
-        real    :: frc(build_glob%clsfrcs%get_filtsz())
-        real    :: filter(build_glob%clsfrcs%get_filtsz())
-        real    :: gaufilter(build_glob%clsfrcs%get_filtsz())
-        integer :: k
+        real, allocatable :: frc(:), filter(:), gaufilter(:)
+        integer :: k, filtsz
+        filtsz = clsfrcs%get_filtsz()
+        allocate(frc(filtsz), filter(filtsz), gaufilter(filtsz))
         if( params_glob%l_ml_reg )then
             ! no filtering, not supported yet in 2D
         else
             ! FRC-based optimal filter
-            call build_glob%clsfrcs%frc_getter(icls, frc)
+            call clsfrcs%frc_getter(icls, frc)
             if( any(frc > 0.143) )then
                 call fsc2optlp_sub(size(frc), frc, filter, merged=params_glob%l_lpset)
             else
@@ -527,13 +530,15 @@ contains
             endif
             call self%polar_filterrefs(icls, filter)
         endif
+        deallocate(frc, filter, gaufilter)
     end subroutine polar_prep2Dref
 
     !>  \brief prepares a 2D class document with class index, resolution,
     !!         population, average correlation and weight
-    module subroutine polar_cavger_gen2Dclassdoc( self, spproj )
+    module subroutine polar_cavger_gen2Dclassdoc( self, spproj, clsfrcs )
         class(polarft_calc),       intent(in) :: self
         class(sp_project), target, intent(inout) :: spproj
+        class(class_frcs),         intent(inout) :: clsfrcs
         class(oris), pointer :: ptcl_field, cls_field
         integer  :: pops(self%ncls)
         real(dp) :: corrs(self%ncls), ws(self%ncls)
@@ -584,7 +589,7 @@ contains
         call cls_field%new(self%ncls, is_ptcl=.false.)
         do icls=1,self%ncls
             pop = pops(icls)
-            call build_glob%clsfrcs%estimate_res(icls, frc05, frc0143)
+            call clsfrcs%estimate_res(icls, frc05, frc0143)
             if( l_3D )then
                 call cls_field%set(icls, 'proj',  icls)
             else

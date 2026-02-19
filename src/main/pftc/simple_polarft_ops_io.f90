@@ -336,9 +336,10 @@ contains
 
     !>  \brief  Reads in and reduces partial matrices prior to restoration
     !! performance critical code
-    module subroutine polar_cavger_assemble_sums_from_parts( self, reforis, clin_anneal )
+    module subroutine polar_cavger_assemble_sums_from_parts( self, reforis, symop, clin_anneal )
         class(polarft_calc),  intent(inout) :: self
         type(oris), optional, intent(in)    :: reforis
+        type(sym),  optional, intent(in)    :: symop
         real,       optional, intent(in)    :: clin_anneal
         complex(dp), allocatable :: pfte(:,:,:),      pfto(:,:,:)
         complex(sp), allocatable :: pfte_buf(:,:,:),  pfto_buf(:,:,:)
@@ -389,7 +390,7 @@ contains
             case('polar_cavg')
                 call self%polar_cavger_merge_eos_and_norm2D
             case DEFAULT
-                call self%polar_cavger_merge_eos_and_norm(reforis=reforis, cl_weight=clin_anneal)
+                call self%polar_cavger_merge_eos_and_norm(reforis=reforis, symop=symop, cl_weight=clin_anneal)
         end select
     end subroutine polar_cavger_assemble_sums_from_parts
 

@@ -2,7 +2,6 @@
 module simple_convergence
 use simple_core_module_api
 use simple_parameters, only: params_glob
-use simple_builder,    only: build_glob
 use simple_cmdline,    only: cmdline
 use simple_progress
 implicit none
@@ -197,9 +196,10 @@ contains
         call ostats%kill
     end function check_conv2D
 
-    function check_conv3D( self, cline, msk ) result( converged )
+    function check_conv3D( self, cline, os, msk ) result( converged )
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
+        class(oris),        intent(inout) :: os
         real,               intent(in)    :: msk
         type(oris)           :: ostats
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
@@ -212,10 +212,10 @@ contains
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         607 format(A,1X,F4.2)
         609 format(A)
-        states         = build_glob%spproj_field%get_all('state')
-        scores         = build_glob%spproj_field%get_all('corr')
-        updatecnts     = build_glob%spproj_field%get_all('updatecnt')
-        sampled        = build_glob%spproj_field%get_all('sampled')
+        states         = os%get_all('state')
+        scores         = os%get_all('corr')
+        updatecnts     = os%get_all('updatecnt')
+        sampled        = os%get_all('sampled')
         n              = size(states)
         nptcls         = count(states > 0.5)
         sampled_lb     = maxval(sampled) - 0.5
@@ -227,18 +227,18 @@ contains
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
         endif
-        call build_glob%spproj_field%stats('corr',       self%score,      mask=mask)
-        call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
-        call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
-        call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
-        call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
-        call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
-        call build_glob%spproj_field%stats('lp',         self%lp,         mask=mask)
-        call build_glob%spproj_field%stats('lp_est',     self%lp_est,     mask=mask)
-        call build_glob%spproj_field%stats('res',        self%res,        mask=mask)
-        self%mi_proj     = build_glob%spproj_field%get_avg('mi_proj',     mask=mask)
-        self%mi_state    = build_glob%spproj_field%get_avg('mi_state',    mask=mask)
-        self%frac_greedy = build_glob%spproj_field%get_avg('frac_greedy', mask=mask)
+        call os%stats('corr',       self%score,      mask=mask)
+        call os%stats('dist',       self%dist,       mask=mask)
+        call os%stats('dist_inpl',  self%dist_inpl,  mask=mask)
+        call os%stats('frac',       self%frac_srch,  mask=mask)
+        call os%stats('shincarg',   self%shincarg,   mask=mask)
+        call os%stats('w',          self%pw,         mask=mask)
+        call os%stats('lp',         self%lp,         mask=mask)
+        call os%stats('lp_est',     self%lp_est,     mask=mask)
+        call os%stats('res',        self%res,        mask=mask)
+        self%mi_proj     = os%get_avg('mi_proj',     mask=mask)
+        self%mi_state    = os%get_avg('mi_state',    mask=mask)
+        self%frac_greedy = os%get_avg('frac_greedy', mask=mask)
         ! overlaps and particle updates
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
         if( params_glob%nstates > 1 )then
@@ -325,11 +325,11 @@ contains
             allocate( state_mi_joint(params_glob%nstates), statepops(params_glob%nstates) )
             state_mi_joint = 0.
             statepops      = 0.
-            do iptcl=1,build_glob%spproj_field%get_noris()
-                ucnt   = build_glob%spproj_field%get_updatecnt(iptcl)
-                istate = build_glob%spproj_field%get_state(iptcl)
+            do iptcl=1,os%get_noris()
+                ucnt   = os%get_updatecnt(iptcl)
+                istate = os%get_state(iptcl)
                 if( istate==0 .or. ucnt==0 ) cycle
-                state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_proj')
+                state_mi_joint(istate) = state_mi_joint(istate) + os%get(iptcl,'mi_proj')
                 statepops(istate)      = statepops(istate) + 1.
             end do
             ! normalise the overlap
@@ -383,7 +383,7 @@ contains
         endif
         call ostats%write(string(STATS_FILE))
         call self%append_stats(ostats)
-        call self%plot_projdirs(mask)
+        call self%plot_projdirs(os, mask)
         ! destruct
         if( allocated(state_mi_joint) ) deallocate(state_mi_joint)
         if( allocated(statepops)      ) deallocate(statepops)
@@ -435,9 +435,10 @@ contains
         call fname%kill
     end subroutine append_stats
 
-    subroutine plot_projdirs( self, ptcl_mask )
+    subroutine plot_projdirs( self, os_in, ptcl_mask )
         use CPlot2D_wrapper_module
         class(convergence),   intent(in) :: self
+        class(oris),          intent(inout) :: os_in
         logical, allocatable, intent(in) :: ptcl_mask(:)
         type(string)                  :: title
         type(CPlot2D_type)            :: figure
@@ -451,7 +452,7 @@ contains
         integer  :: iptcl, nptcls, nprojs, proj, l, iostat, ind
         if( trim(params_glob%iterstats).ne.'yes' ) return
         nptcls = size(ptcl_mask)
-        projs  = nint(build_glob%spproj_field%get_all('proj'))
+        projs  = nint(os_in%get_all('proj'))
         nprojs = max(params_glob%nspace,maxval(projs,mask=ptcl_mask))
         ! gather populations & euler angles
         allocate(phi(nprojs),psi(nprojs),pops(nprojs), logpops(nprojs))
@@ -463,8 +464,8 @@ contains
                 proj = projs(iptcl)
                 pops(proj) = pops(proj) + 1
                 if( phi(proj) < -1. )then
-                    phi(proj) = build_glob%spproj_field%e1get(iptcl)
-                    psi(proj) = build_glob%spproj_field%e2get(iptcl)
+                    phi(proj) = os_in%e1get(iptcl)
+                    psi(proj) = os_in%e2get(iptcl)
                 endif
             endif
         enddo

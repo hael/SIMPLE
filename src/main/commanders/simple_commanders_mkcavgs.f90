@@ -283,16 +283,16 @@ contains
                 call build%eulspace%new(params%ncls, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(build%eulspace)
                 clw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
-                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, clin_anneal=clw)
+                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms, clin_anneal=clw)
             else
                 call pftc%polar_cavger_new(.false., nrefs=params%ncls)
                 call pftc%polar_cavger_calc_pops(build%spproj)
                 call pftc%polar_cavger_assemble_sums_from_parts
             endif
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
-            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(params%frcs, cline)
+            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), params%frcs, cline)
             call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call pftc%polar_cavger_gen2Dclassdoc(build_glob%spproj)
+            call pftc%polar_cavger_gen2Dclassdoc(build_glob%spproj, build%clsfrcs)
             call pftc%kill
             call pftc%polar_cavger_kill
         else

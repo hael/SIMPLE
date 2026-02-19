@@ -358,16 +358,23 @@ contains
         real(dp), allocatable :: group_weights(:,:), group_pspecs(:,:,:)
         real(dp)              :: w
         integer               :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
-        if( associated(build_glob) )then
-            if( .not.associated(params_glob) )then
-                THROW_HARD('Builder & parameters must be associated for shared memory execution!')
-            endif
-        else
-            call cline%set('mkdir',  'no')
-            call cline%set('stream', 'no')
-            if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-            call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        logical               :: l_put_back_build_glob
+        class(builder), pointer :: build_glob_ptr => null()
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'no')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        l_put_back_build_glob = .false.
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        if( associated(build_glob) ) then
+            build_glob_ptr => build_glob
+            build_glob    => null()
+            l_put_back_build_glob = .true.
         endif
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        if( l_put_back_build_glob ) then
+            build_glob => build_glob_ptr
+            build_glob_ptr => null()
+        endif
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ! read sigmas from binfiles
         do ipart = 1,params_glob%nparts
             sigma2_array%fname = SIGMA2_FBODY//int2str_pad(ipart,params_glob%numlen)//'.dat'
@@ -392,9 +399,9 @@ contains
             !$omp parallel do default(shared) private(iptcl,eo,w)&
             !$omp schedule(static) proc_bind(close) reduction(+:group_pspecs,group_weights)
             do iptcl = 1,params_glob%nptcls
-                if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
-                eo = build_glob%spproj_field%get_eo(iptcl) ! 0/1
-                w  = real(build_glob%spproj_field%get(iptcl,'w'),dp)
+                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                eo = build%spproj_field%get_eo(iptcl) ! 0/1
+                w  = real(build%spproj_field%get(iptcl,'w'),dp)
                 if( w < TINY )cycle
                 group_pspecs(eo+1,1,:) = group_pspecs (eo+1,1,:) + w * real(pspecs(:,iptcl),dp)
                 group_weights(eo+1,1)  = group_weights(eo+1,1)   + w
@@ -405,17 +412,17 @@ contains
             !$omp parallel do default(shared) private(iptcl,igroup)&
             !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
             do iptcl = 1,params_glob%nptcls
-                if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
-                igroup  = nint(build_glob%spproj_field%get(iptcl,'stkind'))
+                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
                 ngroups = max(igroup,ngroups)
             enddo
             !$omp end parallel do
             allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
             do iptcl = 1,params_glob%nptcls
-                if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
-                eo     = build_glob%spproj_field%get_eo(iptcl) ! 0/1
-                igroup = nint(build_glob%spproj_field%get(iptcl,'stkind'))
-                w      = real(build_glob%spproj_field%get(iptcl,'w'),dp)
+                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                eo     = build%spproj_field%get_eo(iptcl) ! 0/1
+                igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+                w      = real(build%spproj_field%get(iptcl,'w'),dp)
                 if( w < TINY )cycle
                 group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + w * real(pspecs(:,iptcl),dp)
                 group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + w

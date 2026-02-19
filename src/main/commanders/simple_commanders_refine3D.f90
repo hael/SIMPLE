@@ -646,9 +646,9 @@ contains
                 params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
                 call pftc%polar_cavger_new(.true., nrefs=params%nspace)
                 call pftc%polar_cavger_calc_pops(build%spproj)
-                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace)
+                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace, symop=build_glob%pgrpsyms)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
-                call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(string(FRCS_FILE), cline)
+                call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
                 call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
                 call pftc%polar_cavger_kill
                 call job_descr%delete('vol1')
@@ -968,7 +968,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! check convergence
-        converged = conv%check_conv3D(cline, params%msk)
+        converged = conv%check_conv3D(cline, build%spproj_field, params%msk)
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
         if( params_glob%l_doshift )then

@@ -129,7 +129,7 @@ contains
         ! Dealing with polar cavgs
         call pftc%polar_cavger_new(.true.)
         call pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, is3D=.true.)
-        call pftc%polar_cavger_merge_eos_and_norm(reforis=build%eulspace)
+        call pftc%polar_cavger_merge_eos_and_norm(reforis=build%eulspace, symop=build%pgrpsyms)
         ! write
         allocate(cavgs(params%nspace))
         call pftc%polar_cavger_write(string('cavgs_even.bin'), 'even')

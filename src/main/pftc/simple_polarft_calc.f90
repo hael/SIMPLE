@@ -734,28 +734,36 @@ interface
         class(polarft_calc), intent(inout) :: self
     end subroutine polar_cavger_merge_eos_and_norm2D
 
-    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, cl_weight )
+    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop, cl_weight )
         class(polarft_calc),  intent(inout) :: self
         type(oris),           intent(in)    :: reforis
+        type(sym),            intent(in)    :: symop
         real,       optional, intent(in)    :: cl_weight
     end subroutine polar_cavger_merge_eos_and_norm
 
-    module subroutine polar_cavger_calc_and_write_frcs_and_eoavg( self, fname, cline )
+    module subroutine polar_cavger_calc_and_write_frcs_and_eoavg( self, clsfrcs, update_frac, fname, cline )
         use simple_cmdline, only: cmdline
+        use simple_class_frcs, only: class_frcs
         class(polarft_calc), intent(inout) :: self
+        class(class_frcs),   intent(inout) :: clsfrcs
+        real,                intent(in)    :: update_frac
         class(string),       intent(in)    :: fname
         type(cmdline),       intent(in)    :: cline
     end subroutine polar_cavger_calc_and_write_frcs_and_eoavg
 
-    module subroutine polar_prep2Dref( self, icls, gaufilt )
+    module subroutine polar_prep2Dref( self, clsfrcs, icls, gaufilt )
+        use simple_class_frcs, only: class_frcs
         class(polarft_calc), intent(inout) :: self
+        class(class_frcs),   intent(inout) :: clsfrcs
         integer,             intent(in)    :: icls
         logical,             intent(in)    :: gaufilt
     end subroutine polar_prep2Dref
 
-    module subroutine polar_cavger_gen2Dclassdoc( self, spproj )
+    module subroutine polar_cavger_gen2Dclassdoc( self, spproj, clsfrcs )
+        use simple_class_frcs, only: class_frcs
         class(polarft_calc),       intent(in)    :: self
         class(sp_project), target, intent(inout) :: spproj
+        class(class_frcs),         intent(inout) :: clsfrcs
     end subroutine polar_cavger_gen2Dclassdoc
 
     module subroutine polar_filterrefs( self, icls, filter )
@@ -855,9 +863,10 @@ interface
         character(len=*),    intent(in)    :: which
     end subroutine polar_cavger_readwrite_partial_sums
 
-    module subroutine polar_cavger_assemble_sums_from_parts( self, reforis, clin_anneal )
+    module subroutine polar_cavger_assemble_sums_from_parts( self, reforis, symop, clin_anneal )
         class(polarft_calc),  intent(inout) :: self
         type(oris), optional, intent(in)    :: reforis
+        type(sym),  optional, intent(in)    :: symop
         real,       optional, intent(in)    :: clin_anneal
     end subroutine polar_cavger_assemble_sums_from_parts
 
