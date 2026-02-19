@@ -1,4 +1,4 @@
-!@descr: module defining the user interfaces for parallel  programs in the simple_test_exec suite
+!@descr: module defining the user interfaces for parallel test programs in the simple_test_exec suite
 module simple_test_ui_parallel
 use simple_ui_modules
 implicit none
@@ -10,15 +10,15 @@ type(ui_program), target :: simd
 
 contains
 
-    subroutine construct_parallel_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_coarrays(prgtab)
-        call new_openacc(prgtab)
-        call new_openmp(prgtab)
-        call new_simd(prgtab)
-    end subroutine construct_parallel_programs
+    subroutine construct_test_parallel_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_coarrays(tsttab)
+        call new_openacc(tsttab)
+        call new_openmp(tsttab)
+        call new_simd(tsttab)
+    end subroutine construct_test_parallel_programs
 
-    subroutine print_parallel_programs(logfhandle)
+    subroutine print_test_parallel_programs( logfhandle )
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('PARALLEL:', C_UNDERLINED)
         write(logfhandle,'(A)') coarrays%name%to_char()
@@ -26,10 +26,10 @@ contains
         write(logfhandle,'(A)') openmp%name%to_char()
         write(logfhandle,'(A)') simd%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_parallel_programs
+    end subroutine print_test_parallel_programs
 
-    subroutine new_coarrays( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_coarrays( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call coarrays%new(&
         &'coarrays',&                          ! name
@@ -53,11 +53,11 @@ contains
         ! computer controls
         !call coarrays%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('coarrays', coarrays, prgtab)
+        call add_ui_program('coarrays', coarrays, tsttab)
     end subroutine new_coarrays
 
-    subroutine new_openacc( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_openacc( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call openacc%new(&
         &'openacc',&                           ! name
@@ -81,11 +81,11 @@ contains
         ! computer controls
         !call openacc%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('openacc', openacc, prgtab)
+        call add_ui_program('openacc', openacc, tsttab)
     end subroutine new_openacc
 
-    subroutine new_openmp( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_openmp( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call openmp%new(&
         &'openmp',&                            ! name
@@ -109,11 +109,11 @@ contains
         ! computer controls
         !call openmp%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('openmp', openmp, prgtab)
+        call add_ui_program('openmp', openmp, tsttab)
     end subroutine new_openmp
 
-    subroutine new_simd( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_simd( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call simd%new(&
         &'simd',&                              ! name
@@ -137,7 +137,7 @@ contains
         ! computer controls
         !call simd%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simd', simd, prgtab)
+        call add_ui_program('simd', simd, tsttab)
     end subroutine new_simd
 
 end module simple_test_ui_parallel

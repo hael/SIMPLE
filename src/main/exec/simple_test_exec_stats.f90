@@ -8,7 +8,7 @@ use simple_commanders_test_stats, only: commander_test_class_sample_test, comman
                                         commander_test_sp_project
 implicit none
 
-public :: exec_stats_commander
+public :: exec_test_stats_commander
 private
 
 type(commander_test_class_sample_test) :: xclass_sample_test
@@ -23,7 +23,7 @@ type(commander_test_sp_project)        :: xsp_project
 
 contains
 
-    subroutine exec_stats_commander(which, cline, l_silent, l_did_execute)
+    subroutine exec_test_stats_commander( which, cline, l_silent, l_did_execute )
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
@@ -53,6 +53,6 @@ contains
             case default
                 l_did_execute = .false.
         end select
-    end subroutine exec_stats_commander
+    end subroutine exec_test_stats_commander
 
-end module simple_test_exec_stats
+end module simple_test_exec_stats   

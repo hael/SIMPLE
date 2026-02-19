@@ -10,15 +10,15 @@ type(ui_program), target :: neigh
 
 contains
 
-    subroutine construct_numerics_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_eigh_test(prgtab)
-        call new_kbinterpol_fast(prgtab)
-        call new_maxnloc_test(prgtab)
-        call new_neigh(prgtab)
-    end subroutine construct_numerics_programs
+    subroutine construct_test_numerics_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_eigh_test(tsttab)
+        call new_kbinterpol_fast(tsttab)
+        call new_maxnloc_test(tsttab)
+        call new_neigh(tsttab)
+    end subroutine construct_test_numerics_programs
 
-    subroutine print_numerics_programs(logfhandle)
+    subroutine print_test_numerics_programs( logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('NUMERICS:', C_UNDERLINED)
         write(logfhandle,'(A)') eigh_test%name%to_char()
@@ -26,10 +26,10 @@ contains
         write(logfhandle,'(A)') maxnloc_test%name%to_char()
         write(logfhandle,'(A)') neigh%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_numerics_programs
+    end subroutine print_test_numerics_programs
 
-    subroutine new_eigh_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_eigh_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call eigh_test%new(&
         &'eigh_test',&                         ! name
@@ -53,11 +53,11 @@ contains
         ! computer controls
         !call eigh_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('eigh_test', eigh_test, prgtab)
+        call add_ui_program('eigh_test', eigh_test, tsttab)
     end subroutine new_eigh_test
 
-    subroutine new_kbinterpol_fast( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_kbinterpol_fast( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call kbinterpol_fast%new(&
         &'kbinterpol_fast',&                   ! name
@@ -81,11 +81,11 @@ contains
         ! computer controls
         !call kbinterpol_fast%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('kbinterpol_fast', kbinterpol_fast, prgtab)
+        call add_ui_program('kbinterpol_fast', kbinterpol_fast, tsttab)
     end subroutine new_kbinterpol_fast
 
-    subroutine new_maxnloc_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_maxnloc_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call maxnloc_test%new(&
         &'maxnloc_test',&                      ! name
@@ -109,11 +109,11 @@ contains
         ! computer controls
         !call maxnloc_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('maxnloc_test', maxnloc_test, prgtab)
+        call add_ui_program('maxnloc_test', maxnloc_test, tsttab)
     end subroutine new_maxnloc_test
 
-    subroutine new_neigh( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_neigh( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call neigh%new(&
         &'neigh',&                             ! name
@@ -137,7 +137,7 @@ contains
         ! computer controls
         !call neigh%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('neigh', neigh, prgtab)
+        call add_ui_program('neigh', neigh, tsttab)
     end subroutine new_neigh
 
 end module simple_test_ui_numerics

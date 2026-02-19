@@ -1,4 +1,4 @@
-!@descr: module defining the user interfaces for io  programs in the simple_test_exec suite
+!@descr: module defining the user interfaces for input/output test programs in the simple_test_exec suite
 module simple_test_ui_io
 use simple_ui_modules
 implicit none
@@ -15,20 +15,20 @@ type(ui_program), target :: starfile_test
 
 contains
 
-    subroutine construct_io_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_imgfile(prgtab)
-        call new_inside_write(prgtab)
-        call new_io(prgtab)
-        call new_io_parallel(prgtab)
-        call new_mrc2jpeg(prgtab)
-        call new_mrc_validation(prgtab)
-        call new_stack_io(prgtab)
-        call new_star_export(prgtab)
-        call new_starfile_test(prgtab)
-    end subroutine construct_io_programs
+    subroutine construct_test_io_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_imgfile(tsttab)
+        call new_inside_write(tsttab)
+        call new_io(tsttab)
+        call new_io_parallel(tsttab)
+        call new_mrc2jpeg(tsttab)
+        call new_mrc_validation(tsttab)
+        call new_stack_io(tsttab)
+        call new_star_export(tsttab)
+        call new_starfile_test(tsttab)
+    end subroutine construct_test_io_programs
 
-    subroutine print_io_programs(logfhandle)
+    subroutine print_test_io_programs( logfhandle )
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('INPUT/OUTPUT:', C_UNDERLINED)
         write(logfhandle,'(A)') imgfile%name%to_char()
@@ -41,10 +41,10 @@ contains
         write(logfhandle,'(A)') star_export%name%to_char()
         write(logfhandle,'(A)') starfile_test%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_io_programs
+    end subroutine print_test_io_programs
 
-    subroutine new_imgfile( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_imgfile( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call imgfile%new(&
         &'imgfile',&                           ! name
@@ -68,11 +68,11 @@ contains
         ! computer controls
         !call imgfile%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('imgfile', imgfile, prgtab)
+        call add_ui_program('imgfile', imgfile, tsttab)
     end subroutine new_imgfile
 
-    subroutine new_inside_write( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_inside_write( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call inside_write%new(&
         &'inside_write',&                      ! name
@@ -96,11 +96,11 @@ contains
         ! computer controls
         !call inside_write%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('inside_write', inside_write, prgtab)
+        call add_ui_program('inside_write', inside_write, tsttab)
     end subroutine new_inside_write
 
-    subroutine new_io( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_io( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call io%new(&
         &'io',&                                ! name
@@ -124,11 +124,11 @@ contains
         ! computer controls
         !call io%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('io', io, prgtab)
+        call add_ui_program('io', io, tsttab)
     end subroutine new_io
 
-    subroutine new_io_parallel( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_io_parallel( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call io_parallel%new(&
         &'io_parallel',&                       ! name
@@ -152,11 +152,11 @@ contains
         ! computer controls
         !call io_parallel%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('io_parallel', io_parallel, prgtab)
+        call add_ui_program('io_parallel', io_parallel, tsttab)
     end subroutine new_io_parallel
 
-    subroutine new_mrc2jpeg( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_mrc2jpeg( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call mrc2jpeg%new(&
         &'mrc2jpeg',&                          ! name
@@ -180,11 +180,11 @@ contains
         ! computer controls
         !call mrc2jpeg%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('mrc2jpeg', mrc2jpeg, prgtab)
+        call add_ui_program('mrc2jpeg', mrc2jpeg, tsttab)
     end subroutine new_mrc2jpeg
 
-    subroutine new_mrc_validation( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_mrc_validation( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call mrc_validation%new(&
         &'mrc_validation',&                    ! name
@@ -208,11 +208,11 @@ contains
         ! computer controls
         !call mrc_validation%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('mrc_validation', mrc_validation, prgtab)
+        call add_ui_program('mrc_validation', mrc_validation, tsttab)
     end subroutine new_mrc_validation
 
-    subroutine new_stack_io( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_stack_io( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call stack_io%new(&
         &'stack_io',&                          ! name
@@ -236,11 +236,11 @@ contains
         ! computer controls
         !call stack_io%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('stack_io', stack_io, prgtab)
+        call add_ui_program('stack_io', stack_io, tsttab)
     end subroutine new_stack_io
 
-    subroutine new_star_export( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_star_export( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call star_export%new(&
         &'star_export',&                       ! name
@@ -264,11 +264,11 @@ contains
         ! computer controls
         !call star_export%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('star_export', star_export, prgtab)
+        call add_ui_program('star_export', star_export, tsttab)
     end subroutine new_star_export
 
-    subroutine new_starfile_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_starfile_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call starfile_test%new(&
         &'starfile_test',&                     ! name
@@ -292,7 +292,7 @@ contains
         ! computer controls
         !call starfile_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('starfile_test', starfile_test, prgtab)
+        call add_ui_program('starfile_test', starfile_test, tsttab)
     end subroutine new_starfile_test
 
 end module simple_test_ui_io

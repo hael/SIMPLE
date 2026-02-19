@@ -37,31 +37,31 @@ end type commander_test_uniform_rot
 contains
 
 subroutine exec_test_angres( self, cline )
-    class(commander_test_angres),    intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
+    class(commander_test_angres), intent(inout) :: self
+    class(cmdline),               intent(inout) :: cline
     call simple_end('**** SIMPLE_TEST_ANGRES_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_angres
 
 subroutine exec_test_ori_test( self, cline )
-    class(commander_test_ori_test),    intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
+    class(commander_test_ori_test), intent(inout) :: self
+    class(cmdline),                 intent(inout) :: cline
     call simple_end('**** SIMPLE_TEST_ORI_TEST_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_ori_test
 
 subroutine exec_test_oris_test( self, cline )
-    class(commander_test_oris_test),    intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
+    class(commander_test_oris_test), intent(inout) :: self
+    class(cmdline),                   intent(inout) :: cline
     call simple_end('**** SIMPLE_TEST_ORIS_TEST_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_oris_test
 
 subroutine exec_test_sym_test( self, cline )
-    class(commander_test_sym_test),    intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
+    class(commander_test_sym_test), intent(inout) :: self
+    class(cmdline),                 intent(inout) :: cline
     call simple_end('**** SIMPLE_TEST_SYM_TEST_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_sym_test
 
 subroutine exec_test_uniform_euler( self, cline )
-    class(commander_test_uniform_euler),    intent(inout) :: self
+    class(commander_test_uniform_euler), intent(inout) :: self
     class(cmdline),                     intent(inout) :: cline
     call simple_end('**** SIMPLE_TEST_UNIFORM_EULER_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_uniform_euler

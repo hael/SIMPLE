@@ -1,7 +1,7 @@
 !@descr: the class implementing command line parsing
 module simple_cmdline
 use simple_core_module_api
-use simple_ui,             only: get_prg_ptr, list_simple_prgs_in_ui, list_stream_prgs_in_ui, list_single_prgs_in_ui
+use simple_ui,             only: get_prg_ptr, get_test_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
 use simple_ui_program,     only: ui_program
 use simple_args,           only: args
 use simple_private_prgs 
@@ -29,7 +29,6 @@ type cmdline
   contains
     procedure          :: parse
     procedure          :: parse_private
-    procedure          :: parse_test
     procedure          :: parse_oldschool
     procedure, private :: parse_command_line_value
     procedure, private :: copy
@@ -58,20 +57,27 @@ contains
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self )
-        class(cmdline), intent(inout) :: self
-        type(string), allocatable     :: keys_required(:)
-        type(args)                    :: allowed_args
-        type(ui_program), pointer :: ptr2prg => null()
-        type(string)                  :: prgname, exec_cmd_ui, exec_cmd
+        class(cmdline), intent(inout)  :: self
+        type(string), allocatable      :: keys_required(:)
+        type(args)                     :: allowed_args
+        type(ui_program), pointer      :: ptr2prg => null()
+        type(string)                   :: prgname, exec_cmd_ui, exec_cmd
         character(len=XLONGSTRLEN)     :: arg, buffer
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
-        if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg=flag must be set on command line')
         call get_command_argument(0,buffer)
         exec_cmd = trim(adjustl(buffer))
+        select case(exec_cmd%to_char())
+            case('simple_exec', 'single_exec', 'simple_stream', 'simple_private_exec')
+                if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg=flag must be set on command line')
+            case('simple_test_exec')
+                if( .not. str_has_substr(self%entire_line,'test=') ) THROW_HARD('test=flag must be set on command line')
+            case DEFAULT
+                THROW_HARD('Executable '//exec_cmd%to_char()//' not supported')
+        end select
         if( DEBUG_HERE ) print *, 'exec_cmd from get_command_argument in cmdline class: ', exec_cmd%to_char()
         ! parse program name
         call get_command_argument(1, arg, cmdlen, cmdstat)
@@ -81,7 +87,14 @@ contains
         if( DEBUG_HERE ) print *, 'prgname from command-line in cmdline class: ', prgname%to_char()
         if( prgname%has_substr('report_selection') ) prgname = 'selection' ! FIX4NOW
         ! obtain pointer to the program in the simple_ui specification
-        call get_prg_ptr(prgname, ptr2prg)
+        select case(exec_cmd%to_char())
+            case('simple_exec', 'single_exec', 'simple_stream', 'simple_private_exec')
+                call get_prg_ptr(prgname, ptr2prg)
+            case('simple_test_exec')
+                call get_test_prg_ptr(prgname, ptr2prg)
+            case DEFAULT
+                THROW_HARD('Executable '//exec_cmd%to_char()//' not supported')
+        end select
         if( .not. associated(ptr2prg) ) THROW_HARD(prgname%to_char()//' is not part of any executable in the code base')
         if( DEBUG_HERE ) print *, 'prgname from UI in cmdline class: ', prgname%to_char()
         exec_cmd_ui = ptr2prg%get_executable()
@@ -91,22 +104,32 @@ contains
                 THROW_HARD(prgname%to_char()//' is not executed by '//exec_cmd%to_char()//' but by '//exec_cmd_ui%to_char())
             endif
         endif
-        ! list programs if so instructed
-        if( str_has_substr(self%entire_line, 'prg=list') )then
-            select case(exec_cmd%to_char())
-                case('simple_exec')
-                    call list_simple_prgs_in_ui
+        ! re-parse command line arguments in case of a different executable
+        select case(exec_cmd%to_char())
+            case('simple_exec','single_exec','simple_stream', 'simple_private_exec')
+                if( str_has_substr(self%entire_line, 'prg=list') )then
+                    select case(exec_cmd%to_char())
+                        case('simple_exec')
+                            call list_simple_prgs_in_ui
+                            stop
+                        case('single_exec')
+                            call list_single_prgs_in_ui
+                            stop
+                        case('simple_stream')
+                            call list_stream_prgs_in_ui
+                            stop
+                        case DEFAULT
+                            THROW_HARD('Program '//prgname%to_char()//' not supported; parse')
+                    end select
+                endif
+            case('simple_test_exec')
+                if( str_has_substr(self%entire_line, 'test=list') )then
+                    call list_simple_test_prgs_in_ui
                     stop
-                case('single_exec')
-                    call list_single_prgs_in_ui
-                    stop
-                case('simple_stream')
-                    call list_stream_prgs_in_ui
-                    stop
-                case DEFAULT
-                    THROW_HARD('Program '//prgname%to_char()//' not supported; parse')
-            end select
-        endif
+                endif
+            case DEFAULT
+                THROW_HARD('Program '//exec_cmd%to_char()//' not supported')
+        end select
         ! describe program if so instructed
         if( str_has_substr(self%entire_line, 'describe=yes') )then
             call ptr2prg%print_prg_descr_long()
@@ -230,88 +253,6 @@ contains
         end do
         if( sz_keys_req > 0 ) call self%check
     end subroutine parse_private
-
-    !> \brief for parsing the command line arguments passed as key=val
-    subroutine parse_test( self )
-        class(cmdline), intent(inout) :: self
-        type(string), allocatable     :: keys_required(:)
-        type(args)                    :: allowed_args
-        character(len=XLONGSTRLEN)    :: arg
-        type(ui_program), pointer :: ptr2prg => null()
-        integer :: i, ikey, pos, cmdstat, cmdlen, sz_keys_req, nargs_required
-        ! parse command line
-        self%argcnt = command_argument_count()
-        call get_command(self%entire_line)
-        cmdline_glob = trim(self%entire_line)
-        if( .not. str_has_substr(self%entire_line,'test=') ) THROW_HARD('test= flag must be set on command line')
-        ! parse program name
-        call get_command_argument(1, arg, cmdlen, cmdstat)
-        pos = index(arg, '=') ! position of '='
-        call cmdline_err(cmdstat, cmdlen, arg, pos)
-        ! obtain pointer to the program in the simple_ui specification
-        call get_prg_ptr(string(arg(pos+1:)), ptr2prg)
-        ! decide wether to print the command line instructions or not
-        select case(trim(arg(pos+1:)))
-            case('write_ui_json','print_ui_json','print_sym_subgroups','print_ui_stream')
-                ! no command line arguments
-                return
-            case DEFAULT
-                if( associated(ptr2prg) )then
-                    ! get required keys
-                    sz_keys_req = ptr2prg%get_nrequired_keys()
-                    if( sz_keys_req > 0 )then
-                        keys_required  = ptr2prg%get_required_keys()
-                        nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
-                    else
-                        nargs_required = 1
-                    endif
-                    if( self%argcnt < nargs_required )then
-                        call ptr2prg%print_cmdline()
-                        stop
-                    else
-                        ! indicate which variables are required
-                        if( sz_keys_req > 0 )then
-                            do ikey=1,sz_keys_req
-                                if( keys_required(ikey)%is_allocated() ) call self%checkvar(keys_required(ikey)%to_char(), ikey)
-                            end do
-                        endif
-                    endif
-                else
-                    ! get required keys
-                    sz_keys_req = get_n_private_keys_required(trim(arg(pos+1:)))
-                    if( sz_keys_req > 0 )then
-                        keys_required  = get_private_keys_required(trim(arg(pos+1:)))
-                        nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
-                    else
-                        nargs_required = 1
-                    endif
-                    if( self%argcnt < nargs_required .or. (sz_keys_req == 0 .and. self%argcnt == 1) )then
-                        call print_private_cmdline(arg(pos+1:))
-                        stop
-                    else
-                        ! indicate which variables are required
-                        if( sz_keys_req > 0 )then
-                            do ikey=1,sz_keys_req
-                                if( keys_required(ikey)%is_allocated() ) call self%checkvar(keys_required(ikey)%to_char(), ikey)
-                            end do
-                        endif
-                    endif
-                endif
-        end select
-        allowed_args = args()
-        do i=1,self%argcnt
-            call get_command_argument(i, arg, cmdlen, cmdstat)
-            if( cmdstat == -1 )then
-                write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_test'
-                write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(logfhandle,*) 'which likely exceeds the length limit XLONGSTRLEN'
-                write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-                stop
-            endif
-            call self%parse_command_line_value(i, arg, allowed_args)
-        end do
-        if( sz_keys_req > 0 ) call self%check
-    end subroutine parse_test
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse_oldschool( self, keys_required, keys_optional )

@@ -5,7 +5,7 @@ use simple_commanders_test_parallel, only: commander_test_coarrays, commander_te
                                            commander_test_openmp, commander_test_simd
 implicit none
 
-public :: exec_parallel_commander
+public :: exec_test_parallel_commander
 private
 
 type(commander_test_coarrays) :: xcoarrays
@@ -15,7 +15,7 @@ type(commander_test_simd)     :: xsimd
 
 contains
 
-    subroutine exec_parallel_commander(which, cline, l_silent, l_did_execute)
+    subroutine exec_test_parallel_commander( which, cline, l_silent, l_did_execute )
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
@@ -35,6 +35,6 @@ contains
             case default
                 l_did_execute = .false.
         end select
-    end subroutine exec_parallel_commander
+    end subroutine exec_test_parallel_commander
 
 end module simple_test_exec_parallel

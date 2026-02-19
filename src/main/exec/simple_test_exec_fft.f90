@@ -8,7 +8,7 @@ use simple_commanders_test_fft, only: commander_test_corrs2weights_test, &
                                       commander_test_rank_weights, commander_test_rotate_ref
 implicit none
 
-public :: exec_fft_commander
+public :: exec_test_fft_commander
 private
 
 type(commander_test_corrs2weights_test) :: xcorrs2weights_test
@@ -23,7 +23,7 @@ type(commander_test_rotate_ref)         :: xrotate_ref
 
 contains
 
-    subroutine exec_fft_commander(which, cline, l_silent, l_did_execute)
+    subroutine exec_test_fft_commander( which, cline, l_silent, l_did_execute )
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
@@ -53,6 +53,6 @@ contains
             case default
                 l_did_execute = .false.
         end select
-    end subroutine exec_fft_commander
+    end subroutine exec_test_fft_commander
 
 end module simple_test_exec_fft

@@ -26,7 +26,7 @@ contains
 
     subroutine print_single_trajectory_programs(logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('TRAJECTORY ANALYSIS PROGRAMS:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('TRAJECTORY ANALYSIS:', C_UNDERLINED)
         write(logfhandle,'(A)') extract_substk%name%to_char()
         write(logfhandle,'(A)') graphene_subtr%name%to_char()
         write(logfhandle,'(A)') import_trajectory%name%to_char()

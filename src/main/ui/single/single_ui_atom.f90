@@ -26,7 +26,7 @@ contains
 
     subroutine print_single_atom_programs(logfhandle)
         integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('ATOM ANALYSIS PROGRAMS:', C_UNDERLINED)
+        write(logfhandle,'(A)') format_str('ATOM ANALYSIS:', C_UNDERLINED)
         write(logfhandle,'(A)') atoms_register%name%to_char()
         write(logfhandle,'(A)') atoms_rmsd%name%to_char()
         write(logfhandle,'(A)') atoms_stats%name%to_char()

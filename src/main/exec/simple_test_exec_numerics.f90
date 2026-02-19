@@ -5,7 +5,7 @@ use simple_commanders_test_numerics, only: commander_test_eigh_test, commander_t
                                            commander_test_maxnloc_test, commander_test_neigh
 implicit none
 
-public :: exec_numerics_commander
+public :: exec_test_numerics_commander
 private
 
 type(commander_test_eigh_test)       :: xeigh_test
@@ -15,7 +15,7 @@ type(commander_test_neigh)           :: xneigh
 
 contains
 
-    subroutine exec_numerics_commander(which, cline, l_silent, l_did_execute)
+    subroutine exec_test_numerics_commander( which, cline, l_silent, l_did_execute )
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
@@ -35,6 +35,6 @@ contains
             case default
                 l_did_execute = .false.
         end select
-    end subroutine exec_numerics_commander
+    end subroutine exec_test_numerics_commander
 
 end module simple_test_exec_numerics

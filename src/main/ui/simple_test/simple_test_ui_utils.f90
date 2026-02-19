@@ -15,20 +15,20 @@ type(ui_program), target :: units
 
 contains
 
-    subroutine construct_utils_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_ansi_colors(prgtab)
-        call new_binoris_test(prgtab)
-        call new_binoris_io_test(prgtab)
-        call new_cmdline(prgtab)
-        call new_install(prgtab)
-        call new_nice(prgtab)
-        call new_serialize(prgtab)
-        call new_stringmatch(prgtab)
-        call new_units(prgtab)
-    end subroutine construct_utils_programs
+    subroutine construct_test_utils_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_ansi_colors(tsttab)
+        call new_binoris_test(tsttab)
+        call new_binoris_io_test(tsttab)
+        call new_cmdline(tsttab)
+        call new_install(tsttab)
+        call new_nice(tsttab)
+        call new_serialize(tsttab)
+        call new_stringmatch(tsttab)
+        call new_units(tsttab)
+    end subroutine construct_test_utils_programs
 
-    subroutine print_utils_programs(logfhandle)
+    subroutine print_test_utils_programs( logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('UTILS:', C_UNDERLINED)
         write(logfhandle,'(A)') ansi_colors%name%to_char()
@@ -41,10 +41,10 @@ contains
         write(logfhandle,'(A)') stringmatch%name%to_char()
         write(logfhandle,'(A)') units%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_utils_programs
+    end subroutine print_test_utils_programs
 
-    subroutine new_ansi_colors( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_ansi_colors( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call ansi_colors%new(&
         &'ansi_colors',&                       ! name
@@ -68,11 +68,11 @@ contains
         ! computer controls
         !call ansi_colors%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ansi_colors', ansi_colors, prgtab)
+        call add_ui_program('ansi_colors', ansi_colors, tsttab)
     end subroutine new_ansi_colors
 
-    subroutine new_binoris_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_binoris_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call binoris_test%new(&
         &'binoris_test',&                      ! name
@@ -96,11 +96,11 @@ contains
         ! computer controls
         !call binoris_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('binoris_test', binoris_test, prgtab)
+        call add_ui_program('binoris_test', binoris_test, tsttab)
     end subroutine new_binoris_test
 
-    subroutine new_binoris_io_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_binoris_io_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call binoris_io_test%new(&
         &'binoris_io_test',&                   ! name
@@ -124,11 +124,11 @@ contains
         ! computer controls
         !call binoris_io_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('binoris_io_test', binoris_io_test, prgtab)
+        call add_ui_program('binoris_io_test', binoris_io_test, tsttab)
     end subroutine new_binoris_io_test
 
-    subroutine new_cmdline( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_cmdline( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call cmdline%new(&
         &'cmdline',&                         ! name
@@ -152,11 +152,11 @@ contains
         ! computer controls
         !call cmdline%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('cmdline', cmdline, prgtab)
+        call add_ui_program('cmdline', cmdline, tsttab)
     end subroutine new_cmdline
 
-    subroutine new_install( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_install( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call install%new(&
         &'install',&                         ! name
@@ -180,11 +180,11 @@ contains
         ! computer controls
         !call install%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('install', install, prgtab)
+        call add_ui_program('install', install, tsttab)
     end subroutine new_install
 
-    subroutine new_nice( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_nice( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call nice%new(&
         &'nice',&                         ! name
@@ -208,11 +208,11 @@ contains
         ! computer controls
         !call nice%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('nice', nice, prgtab)
+        call add_ui_program('nice', nice, tsttab)
     end subroutine new_nice
 
-    subroutine new_serialize( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_serialize( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call serialize%new(&
         &'serialize',&                         ! name
@@ -236,11 +236,11 @@ contains
         ! computer controls
         !call serialize%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('serialize', serialize, prgtab)
+        call add_ui_program('serialize', serialize, tsttab)
     end subroutine new_serialize
 
-    subroutine new_stringmatch( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_stringmatch( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call stringmatch%new(&
         &'stringmatch',&                       ! name
@@ -264,11 +264,11 @@ contains
         ! computer controls
         !call stringmatch%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('stringmatch', stringmatch, prgtab)
+        call add_ui_program('stringmatch', stringmatch, tsttab)
     end subroutine new_stringmatch
 
-    subroutine new_units( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_units( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call units%new(&
         &'units',&                             ! name
@@ -292,7 +292,7 @@ contains
         ! computer controls
         !call units%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('units', units, prgtab)
+        call add_ui_program('units', units, tsttab)
     end subroutine new_units
 
 end module simple_test_ui_utils

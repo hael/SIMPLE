@@ -1,4 +1,4 @@
-!@descr: module defining the user interfaces for masks  programs in the simple_test_exec suite
+!@descr: module defining the user interfaces for masks test programs in the simple_test_exec suite
 module simple_test_ui_masks
 use simple_ui_modules
 implicit none
@@ -14,19 +14,19 @@ type(ui_program), target :: ptcl_center
 
 contains
 
-    subroutine construct_masks_programs(prgtab)
-        class(ui_hash), intent(inout) :: prgtab
-        call new_bounds_from_mask3D_test(prgtab)
-        call new_graphene_mask(prgtab)
-        call new_image_bin(prgtab)
-        call new_mask(prgtab)
-        call new_msk_routines(prgtab)
-        call new_nano_mask(prgtab)
-        call new_otsu_test(prgtab)
-        call new_ptcl_center(prgtab)
-    end subroutine construct_masks_programs
+    subroutine construct_test_masks_programs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call new_bounds_from_mask3D_test(tsttab)
+        call new_graphene_mask(tsttab)
+        call new_image_bin(tsttab)
+        call new_mask(tsttab)
+        call new_msk_routines(tsttab)
+        call new_nano_mask(tsttab)
+        call new_otsu_test(tsttab)
+        call new_ptcl_center(tsttab)
+    end subroutine construct_test_masks_programs
 
-    subroutine print_masks_programs(logfhandle)
+    subroutine print_test_masks_programs( logfhandle )
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('MASKS:', C_UNDERLINED)
         write(logfhandle,'(A)') bounds_from_mask3D_test%name%to_char()
@@ -38,10 +38,10 @@ contains
         write(logfhandle,'(A)') otsu_test%name%to_char()
         write(logfhandle,'(A)') ptcl_center%name%to_char()
         write(logfhandle,'(A)') ''
-    end subroutine print_masks_programs
+    end subroutine print_test_masks_programs
 
-    subroutine new_bounds_from_mask3D_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_bounds_from_mask3D_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call bounds_from_mask3D_test%new(&
         &'bounds_from_mask3D_test',&           ! name
@@ -65,11 +65,11 @@ contains
         ! computer controls
         !call bounds_from_mask3D_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('bounds_from_mask3D_test', bounds_from_mask3D_test, prgtab)
+        call add_ui_program('bounds_from_mask3D_test', bounds_from_mask3D_test, tsttab)
     end subroutine new_bounds_from_mask3D_test
 
-    subroutine new_graphene_mask( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_graphene_mask( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call graphene_mask%new(&
         &'graphene_mask',&                     ! name
@@ -93,11 +93,11 @@ contains
         ! computer controls
         !call graphene_mask%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('graphene_mask', graphene_mask, prgtab)
+        call add_ui_program('graphene_mask', graphene_mask, tsttab)
     end subroutine new_graphene_mask
 
-    subroutine new_image_bin( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_image_bin( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call image_bin%new(&
         &'image_bin',&                         ! name
@@ -121,15 +121,15 @@ contains
         ! computer controls
         !call image_bin%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('image_bin', image_bin, prgtab)
+        call add_ui_program('image_bin', image_bin, tsttab)
     end subroutine new_image_bin
 
-    subroutine new_mask( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_mask( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call mask%new(&
-        &'mask',&                              ! name
-        &'mask ',&                             ! descr_short
+        &'mask',&                         ! name
+        &'mask ',&                        ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -149,11 +149,11 @@ contains
         ! computer controls
         !call mask%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('mask', mask, prgtab)
+        call add_ui_program('mask', mask, tsttab)
     end subroutine new_mask
 
-    subroutine new_msk_routines( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_msk_routines( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call msk_routines%new(&
         &'msk_routines',&                      ! name
@@ -177,11 +177,11 @@ contains
         ! computer controls
         !call msk_routines%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('msk_routines', msk_routines, prgtab)
+        call add_ui_program('msk_routines', msk_routines, tsttab)
     end subroutine new_msk_routines
 
-    subroutine new_nano_mask( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_nano_mask( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call nano_mask%new(&
         &'nano_mask',&                         ! name
@@ -205,11 +205,11 @@ contains
         ! computer controls
         !call nano_mask%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('nano_mask', nano_mask, prgtab)
+        call add_ui_program('nano_mask', nano_mask, tsttab)
     end subroutine new_nano_mask
 
-    subroutine new_otsu_test( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_otsu_test( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call otsu_test%new(&
         &'otsu_test',&                         ! name
@@ -233,11 +233,11 @@ contains
         ! computer controls
         !call otsu_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('otsu_test', otsu_test, prgtab)
+        call add_ui_program('otsu_test', otsu_test, tsttab)
     end subroutine new_otsu_test
 
-    subroutine new_ptcl_center( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
+    subroutine new_ptcl_center( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call ptcl_center%new(&
         &'ptcl_center',&                       ! name
@@ -261,7 +261,7 @@ contains
         ! computer controls
         !call ptcl_center%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ptcl_center', ptcl_center, prgtab)
+        call add_ui_program('ptcl_center', ptcl_center, tsttab)
     end subroutine new_ptcl_center
 
 end module simple_test_ui_masks

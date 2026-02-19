@@ -8,7 +8,7 @@ use simple_commanders_test_utils, only: commander_test_ansi_colors, commander_te
                                         commander_test_units
 implicit none
 
-public :: exec_utils_commander
+public :: exec_test_utils_commander
 private
 
 type(commander_test_ansi_colors)     :: xansi_colors
@@ -23,7 +23,7 @@ type(commander_test_units)           :: xunits
 
 contains
 
-    subroutine exec_utils_commander(which, cline, l_silent, l_did_execute)
+    subroutine exec_test_utils_commander( which, cline, l_silent, l_did_execute )
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
@@ -53,6 +53,6 @@ contains
             case default
                 l_did_execute = .false.
         end select
-    end subroutine exec_utils_commander
+    end subroutine exec_test_utils_commander
 
 end module simple_test_exec_utils
