@@ -40,7 +40,8 @@ type(stage_params), allocatable :: stage_parms(:)
 contains
 
     subroutine exec_abinitio2D( self, cline )
-        use simple_classaverager, only: cavger_kill, cavger_write, cavger_readwrite_partial_sums
+        use simple_classaverager
+        use simple_new_classaverager
         class(commander_abinitio2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
@@ -169,12 +170,17 @@ contains
                 params%refs      = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//params%ext%to_char()
                 params%refs_even = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//'_even'//params%ext%to_char()
                 params%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//'_odd'//params%ext%to_char()
-                call cavger_write(params%refs,     'merged')
-                call cavger_write(params%refs_even,'even')
-                call cavger_write(params%refs_odd, 'odd')
-                ! required for remapping
-                if( trim(params%chunk).eq.'yes') call cavger_readwrite_partial_sums('write')
-                call cavger_kill
+                if( L_NEW_CAVGER )then
+                    call cavger_new_write_all(params%refs, params%refs_even, params%refs_odd)
+                    if( trim(params%chunk).eq.'yes') call cavger_new_readwrite_partial_sums('write')
+                    call cavger_new_kill
+                else
+                    call cavger_write(params%refs,     'merged')
+                    call cavger_write(params%refs_even,'even')
+                    call cavger_write(params%refs_odd, 'odd')
+                    if( trim(params%chunk).eq.'yes') call cavger_readwrite_partial_sums('write')
+                    call cavger_kill
+                endif
             endif
         endif
         ! cleanup

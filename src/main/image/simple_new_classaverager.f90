@@ -13,19 +13,19 @@ use simple_ftiter
 use simple_imgfile
 implicit none
 
-! Module public data & routines are prefixed with cavger_
+! Module public data & routines are prefixed with cavger_new_
 ! Init & book-keeping
-public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc
-public :: cavger_read_euclid_sigma2, cavger_kill
+public :: cavger_new_new, cavger_new_transf_oridat, cavger_new_gen2Dclassdoc
+public :: cavger_new_read_euclid_sigma2, cavger_new_kill
 ! Interpolation & restoration
-public :: cavger_assemble_sums, cavger_restore_cavgs, cavger_assemble_sums_conv
+public :: cavger_new_assemble_sums, cavger_new_restore_cavgs
 ! I/O & handling of distributed sums
-public :: cavger_write_eo, cavger_write_all, cavger_read_all
-public :: cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts
+public :: cavger_new_write_eo, cavger_new_write_all, cavger_new_write_merged, cavger_new_read_all
+public :: cavger_new_readwrite_partial_sums, cavger_new_assemble_sums_from_parts
 ! Stacks used for alignment
-public :: cavgs_even, cavgs_odd, cavgs_merged
+public :: cavgs_even_new, cavgs_odd_new, cavgs_merged_new
 ! Separate public utility to rotate particles
-public :: transform_ptcls
+! public :: transform_ptcls
 private
 #include "simple_local_flags.inc"
 
@@ -103,9 +103,9 @@ end type ptcl_record
 
 ! Main module variables
 type(ptcl_record),   allocatable :: precs(:)                  !< Particle records
-type(image), target, allocatable :: cavgs_even(:)             !< Even class averages for reading
-type(image), target, allocatable :: cavgs_odd(:)              !< Odd class averages for reading
-type(image), target, allocatable :: cavgs_merged(:)           !< Merged class averages for reading
+type(image), target, allocatable :: cavgs_even_new(:)         !< Even class averages for reading
+type(image), target, allocatable :: cavgs_odd_new(:)          !< Odd class averages for reading
+type(image), target, allocatable :: cavgs_merged_new(:)       !< Merged class averages for reading
 type(cavgs_set)                  :: cavgs                     !< Class averages
 type(euclid_sigma2)              :: eucl_sigma                !< Noise power estimates
 logical,             allocatable :: pptcl_mask(:)             !< selected particles
@@ -256,66 +256,70 @@ interface
     ! Module public routines
     !
 
-    module subroutine cavger_new( pinds, alloccavgs )
+    module subroutine cavger_new_new( pinds, alloccavgs )
         integer, optional, intent(in) :: pinds(:)
         logical, optional, intent(in) :: alloccavgs 
-    end subroutine cavger_new
+    end subroutine cavger_new_new
 
     ! Book-keeping & metadata
 
-    module subroutine cavger_transf_oridat( spproj )
+    module subroutine cavger_new_transf_oridat( spproj )
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
-    end subroutine cavger_transf_oridat
+    end subroutine cavger_new_transf_oridat
 
-    module subroutine cavger_read_euclid_sigma2
-    end subroutine cavger_read_euclid_sigma2
+    module subroutine cavger_new_read_euclid_sigma2
+    end subroutine cavger_new_read_euclid_sigma2
 
-    module subroutine cavger_gen2Dclassdoc( spproj )
+    module subroutine cavger_new_gen2Dclassdoc( spproj )
         use simple_sp_project, only: sp_project
         class(sp_project), target, intent(inout) :: spproj
-    end subroutine cavger_gen2Dclassdoc
+    end subroutine cavger_new_gen2Dclassdoc
 
     ! Restoration
 
-    module subroutine cavger_assemble_sums( do_frac_update )
+    module subroutine cavger_new_assemble_sums( do_frac_update )
         logical, intent(in)      :: do_frac_update
-    end subroutine cavger_assemble_sums
+    end subroutine cavger_new_assemble_sums
 
-    module subroutine cavger_assemble_sums_conv( do_frac_update )
+    module subroutine cavger_new_assemble_sums_conv( do_frac_update )
         logical, intent(in)      :: do_frac_update
-    end subroutine cavger_assemble_sums_conv
+    end subroutine cavger_new_assemble_sums_conv
 
-    module subroutine cavger_restore_cavgs( frcs_fname )
+    module subroutine cavger_new_restore_cavgs( frcs_fname )
         use simple_gridding, only: prep2D_inv_instrfun4mul
         class(string), intent(in) :: frcs_fname
-    end subroutine cavger_restore_cavgs
+    end subroutine cavger_new_restore_cavgs
 
     ! I/O & assembly
 
-    module subroutine cavger_write_eo( fname_e, fname_o )
+    module subroutine cavger_new_write_eo( fname_e, fname_o )
         class(string), intent(in) :: fname_e, fname_o
-    end subroutine cavger_write_eo
+    end subroutine cavger_new_write_eo
 
-    module subroutine cavger_write_all( fname, fname_e, fname_o )
+    module subroutine cavger_new_write_all( fname, fname_e, fname_o )
         class(string), intent(in) :: fname, fname_e, fname_o
-    end subroutine cavger_write_all
+    end subroutine cavger_new_write_all
 
-    module subroutine cavger_read_all()
-    end subroutine cavger_read_all
+    module subroutine cavger_new_write_merged( fname )
+        class(string), intent(in) :: fname
+    end subroutine cavger_new_write_merged
 
-    module subroutine cavger_readwrite_partial_sums( which )
+    module subroutine cavger_new_read_all()
+    end subroutine cavger_new_read_all
+
+    module subroutine cavger_new_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
-    end subroutine cavger_readwrite_partial_sums
+    end subroutine cavger_new_readwrite_partial_sums
 
-    module subroutine cavger_assemble_sums_from_parts
-    end subroutine cavger_assemble_sums_from_parts
+    module subroutine cavger_new_assemble_sums_from_parts
+    end subroutine cavger_new_assemble_sums_from_parts
 
     ! Destructors
 
-    module subroutine cavger_kill( dealloccavgs )
+    module subroutine cavger_new_kill( dealloccavgs )
         logical, optional, intent(in) :: dealloccavgs
-    end subroutine cavger_kill
+    end subroutine cavger_new_kill
 
     ! Public utility
 
