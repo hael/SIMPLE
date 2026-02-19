@@ -1,7 +1,7 @@
 !@descr: for production of Cartesian class averages
 module simple_classaverager
 use simple_core_module_api
-use simple_builder,           only: build_glob
+use simple_builder,           only: builder
 use simple_ctf,               only: ctf
 use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2,     only: euclid_sigma2, eucl_sigma2_glob
@@ -53,6 +53,7 @@ type(image),         allocatable :: cavgs_odd_part(:)         !< -"-
 type(image),         allocatable :: ctfsqsums_even_bak(:)     !< CTF**2 sums for Wiener normalisation
 type(image),         allocatable :: ctfsqsums_odd_bak(:)      !< -"-
 type(euclid_sigma2)              :: eucl_sigma
+type(builder),        pointer    :: build_ptr => null()
 logical,             allocatable :: pptcl_mask(:)
 logical                          :: l_ml_reg           = .false.  !< Maximum-Likelihood regularization
 logical                          :: l_alloc_read_cavgs = .true.   !< whether to allocate sums and read partial sums
@@ -63,9 +64,11 @@ type(string)            :: benchfname
 
 contains
 
-    subroutine cavger_new( pinds, alloccavgs )
-        integer, optional, intent(in) :: pinds(:)
-        logical, optional, intent(in) :: alloccavgs
+    subroutine cavger_new( build, pinds, alloccavgs )
+        class(builder), target, intent(inout) :: build
+        integer, optional,      intent(in) :: pinds(:)
+        logical, optional,      intent(in) :: alloccavgs
+        build_ptr => build
         l_alloc_read_cavgs = .true.
         if( present(alloccavgs) ) l_alloc_read_cavgs = alloccavgs
         call cavger_kill(dealloccavgs=l_alloc_read_cavgs)
@@ -85,7 +88,7 @@ contains
         endif
         partsz        = size(pptcl_mask)
         ! CTF logics
-        ctfflag       = build_glob%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
+        ctfflag       = build_ptr%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
         ! smpd
         smpd          = params_glob%smpd
         smpd_crop     = params_glob%smpd_crop
@@ -148,8 +151,8 @@ contains
         if( l_ml_reg )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_glob%spproj_field)
-            call eucl_sigma%read_groups(build_glob%spproj_field)
+            call eucl_sigma%read_part(  build_ptr%spproj_field)
+            call eucl_sigma%read_groups(build_ptr%spproj_field)
         end if
     end subroutine cavger_read_euclid_sigma2
 
@@ -201,7 +204,7 @@ contains
         call cls_field%new(params_glob%ncls, is_ptcl=.false.)
         do icls=1,params_glob%ncls
             pop = pops(icls)
-            call build_glob%clsfrcs%estimate_res(icls, frc05, frc0143)
+            call build_ptr%clsfrcs%estimate_res(icls, frc05, frc0143)
             call cls_field%set(icls, 'class',     icls)
             call cls_field%set(icls, 'pop',       pop)
             call cls_field%set(icls, 'res',       frc0143)
@@ -321,7 +324,7 @@ contains
         allocate(kbw(wdim,wdim),source=0.)
         ! Number stacks
         first_pind = params_glob%fromp
-        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
+        call build_ptr%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
         last_pind = 0
         do i = partsz,1,-1
             if( precs(i)%pind > 0 )then
@@ -329,7 +332,7 @@ contains
                 exit
             endif
         enddo
-        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
+        call build_ptr%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks     = last_stkind - first_stkind + 1
         ! scaling/croping
         reg_scale = 1.0
@@ -362,10 +365,10 @@ contains
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
             ! Particles range in stack
-            fromp = build_glob%spproj%os_stk%get_fromp(istk)
-            top   = build_glob%spproj%os_stk%get_top(istk)
+            fromp = build_ptr%spproj%os_stk%get_fromp(istk)
+            top   = build_ptr%spproj%os_stk%get_top(istk)
             nptcls_in_stk = top - fromp + 1 ! # of particles in stack
-            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
+            call build_ptr%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
             ! batch loop
             nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ)) ! will be 1 most of the tme
             do ibatch = 1,nbatches
@@ -401,7 +404,7 @@ contains
                     rhos(:,:,i)  = 0.0
                     tvals(:,:,i) = 0.0
                     ! prep image
-                    call read_imgs(i)%norm_noise_taper_edge_pad_fft_shift_2mat(build_glob%lmsk, cgrid_imgs(i), -precs(iprec)%shift*crop_scale,&
+                    call read_imgs(i)%norm_noise_taper_edge_pad_fft_shift_2mat(build_ptr%lmsk, cgrid_imgs(i), -precs(iprec)%shift*crop_scale,&
                                                                     &ldim_croppd, logi_lims_crop, cmats(:,:,i))
                     ! apply CTF to image, stores CTF values
                     call precs(iprec)%tfun%eval_and_apply(ctfflag, precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast,&
@@ -585,8 +588,8 @@ contains
                     call even_imgs(icls)%fft()
                     call odd_imgs(icls)%fft()
                     call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-                    call build_glob%clsfrcs%set_frc(icls, frc, 1)
-                    find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
+                    call build_ptr%clsfrcs%set_frc(icls, frc, 1)
+                    find = build_ptr%clsfrcs%estimate_find_for_eoavg(icls, 1)
                     ! add noise term to denominator
                     call add_invtausq2rho(ctfsqsums_even(icls), frc)
                     call add_invtausq2rho(ctfsqsums_odd(icls), frc)
@@ -635,9 +638,9 @@ contains
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
                 call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-                call build_glob%clsfrcs%set_frc(icls, frc, 1)
+                call build_ptr%clsfrcs%set_frc(icls, frc, 1)
                 ! average low-resolution info between eo pairs to keep things in register
-                find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
+                find = build_ptr%clsfrcs%estimate_find_for_eoavg(icls, 1)
                 call cavgs_merged(icls)%fft()
                 call cavgs_even(icls)%fft()
                 call cavgs_odd(icls)%fft()
@@ -650,7 +653,7 @@ contains
             !$omp end parallel do
         endif
         ! write FRCs
-        call build_glob%clsfrcs%write(fname)
+        call build_ptr%clsfrcs%write(fname)
         ! destruct
         do icls=1,ncls
             call even_imgs(icls)%kill
@@ -1186,10 +1189,11 @@ contains
 
     ! PUBLIC UTILITIES
 
-    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
+    subroutine transform_ptcls( build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
+        class(builder),             target, intent(inout) :: build
         class(sp_project),                  intent(inout) :: spproj
         character(len=*),                   intent(in)    :: oritype
         integer,                            intent(in)    :: icls
@@ -1210,6 +1214,7 @@ contains
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
         integer :: i,iptcl, l,m, pop, h,k, hh,kk, ithr, iwinsz, wdim, physh,physk
         logical :: l_phflip, l_imgs, l_conjg
+        build_ptr => build
         l_imgs = .false.
         if( allocated(timgs) )then
             do i = 1,size(timgs)
@@ -1292,7 +1297,7 @@ contains
             call img(ithr)%zero_and_flag_ft
             call timg(ithr)%zero_and_flag_ft
             ! normalisation
-            call build_glob%imgbatch(i)%norm_noise_taper_edge_pad_fft(build_glob%lmsk,img(ithr))
+            call build_ptr%imgbatch(i)%norm_noise_taper_edge_pad_fft(build_ptr%lmsk,img(ithr))
             if( l_imgs )then
                 call img(ithr)%ifft
                 call img(ithr)%clip(imgs_ori(i))

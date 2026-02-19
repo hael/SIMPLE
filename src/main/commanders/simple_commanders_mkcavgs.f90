@@ -167,7 +167,7 @@ contains
         ! choice of algorithm
         if( l_shmem )then
             if( L_NEW_CAVGER )then
-                call cavger_new_new
+                call cavger_new_new(build)
                 call cavger_new_transf_oridat( build%spproj )
                 call cavger_new_read_euclid_sigma2
                 call cavger_new_assemble_sums( .false. )
@@ -176,7 +176,7 @@ contains
                 call cavger_new_write_all(params%refs, params%refs_even, params%refs_odd)
                 call cavger_new_kill
             else
-                call cavger_new
+                call cavger_new(build)
                 call cavger_transf_oridat(build%spproj)
                 call cavger_read_euclid_sigma2
                 call cavger_assemble_sums( .false. )
@@ -191,14 +191,14 @@ contains
         else
             ! distributed: write partial sums only
             if( L_NEW_CAVGER )then
-                call cavger_new_new
+                call cavger_new_new(build)
                 call cavger_new_transf_oridat(build%spproj)
                 call cavger_new_read_euclid_sigma2
                 call cavger_new_assemble_sums( .false. )
                 call cavger_new_readwrite_partial_sums('write')
                 call cavger_new_kill
             else
-                call cavger_new
+                call cavger_new(build)
                 call cavger_transf_oridat(build%spproj)
                 call cavger_read_euclid_sigma2
                 call cavger_assemble_sums( .false. )
@@ -297,7 +297,7 @@ contains
             call pftc%polar_cavger_kill
         else
             if( L_NEW_CAVGER )then
-                call cavger_new_new
+                call cavger_new_new(build)
                 call cavger_new_transf_oridat( build%spproj )
                 call cavger_new_assemble_sums_from_parts()
                 ! classdoc gen needs to be after calc of FRCs
@@ -307,7 +307,7 @@ contains
                 call cavger_new_write_all(params%refs, params%refs_even, params%refs_odd)
                 call cavger_new_kill
             else
-                call cavger_new
+                call cavger_new(build)
                 call cavger_transf_oridat( build%spproj )
                 call cavger_assemble_sums_from_parts()
                 call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
