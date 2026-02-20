@@ -197,7 +197,7 @@ contains
         endif
 
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftc initialization
-        call prep_strategy2D_glob( neigh_frac )
+        call prep_strategy2D_glob( build_glob%spproj, neigh_frac )
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 
         ! SETUP WEIGHTS
@@ -231,7 +231,7 @@ contains
             if( L_BENCH_GLOB ) rt_prep_pftc = rt_prep_pftc + toc(t_prep_pftc)
             ! batch strategy2D objects
             if( L_BENCH_GLOB ) t_init = tic()
-            call prep_strategy2D_batch( pftc, which_iter, batchsz, pinds(batch_start:batch_end))
+            call prep_strategy2D_batch( build_glob%spproj, pftc, which_iter, batchsz, pinds(batch_start:batch_end))
             if( L_BENCH_GLOB ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
             if( L_BENCH_GLOB ) t_align = tic()

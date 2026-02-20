@@ -680,31 +680,23 @@ contains
         type(chash)                :: job_descr
         integer :: nptcls
         logical :: l_maxpop, l_stream
-        ! After this condition block, only build_glob & params_glob must be used!
-        if( associated(build_glob) )then
-            if( .not.associated(params_glob) )then
-                THROW_HARD('Builder & parameters must be associated for shared memory execution!')
-            endif
-            l_stream = .false.
-            if(cline%defined('stream')) l_stream = cline%get_carg('stream').eq.'yes'
-        else
-            l_stream = .false.
-            if(cline%defined('stream')) l_stream = cline%get_carg('stream').eq.'yes'
-            call cline%set('mkdir',   'no')
-            call cline%set('stream',  'no')
-            call cline%set('oritype', 'ptcl2D')
-            call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-            if( l_stream ) call cline%set('stream', 'yes')
-        endif
-        if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
+        ! Initialize builder and parameters for shared memory execution
+        l_stream = .false.
+        if(cline%defined('stream')) l_stream = cline%get_carg('stream').eq.'yes'
+        call cline%set('mkdir',   'no')
+        call cline%set('stream',  'no')
+        call cline%set('oritype', 'ptcl2D')
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        if( l_stream ) call cline%set('stream', 'yes')
+        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! Whether to weight based-on the top maxpop particles
-        l_maxpop = cline%defined('maxpop') .and. (params_glob%maxpop > 0)
+        l_maxpop = cline%defined('maxpop') .and. (params%maxpop > 0)
         ! sample particles
-        call sample_ptcls4update2D([1,params_glob%nptcls], params_glob%l_update_frac, nptcls, pinds)
+        call sample_ptcls4update2D([1,params%nptcls], params%l_update_frac, nptcls, pinds)
         ! communicate to project file
-        call build_glob%spproj%write_segment_inside(params_glob%oritype, params_glob%projfile)
+        call build%spproj%write_segment_inside(params%oritype, params%projfile)
         ! more prep
-        call eulprob%new(build_glob, pinds)
+        call eulprob%new(build, pinds)
         ! generating all scores
         cline_prob_tab2D = cline
         call cline_prob_tab2D%set('prg', 'prob_tab2D' )
@@ -714,7 +706,7 @@ contains
             call xprob_tab2D%execute_safe(cline_prob_tab2D)
         else
             ! setup the environment for distributed execution
-            call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
+            call qenv%new(params%nparts, nptcls=params%nptcls)
             call cline_prob_tab2D%gen_job_descr(job_descr)
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
@@ -723,27 +715,27 @@ contains
         call eulprob%read_table_parts_to_glob
         ! perform assignment
         if( l_stream )then
-            select case(trim(params_glob%refine))
+            select case(trim(params%refine))
                 case('prob_smpl')
-                    call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                    call eulprob%assign_smpl(build%spproj_field, l_maxpop)
                 case DEFAULT
                     THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
             end select
         else
-            if( params_glob%which_iter == 1 )then
+            if( params%which_iter == 1 )then
                 ! Always greedy assignement with first iteration
                 call eulprob%assign_greedy(l_maxpop)
             else
-                select case(trim(params_glob%refine))
+                select case(trim(params%refine))
                 case('prob')
-                    if( params_glob%extr_iter <= params_glob%extr_lim )then
+                    if( params%extr_iter <= params%extr_lim )then
                         call eulprob%normalize_table
-                        call eulprob%assign_prob(build_glob%spproj_field, l_maxpop)
+                        call eulprob%assign_prob(build%spproj_field, l_maxpop)
                     else
-                        call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                        call eulprob%assign_smpl(build%spproj_field, l_maxpop)
                     endif
                 case('prob_smpl')
-                    call eulprob%assign_smpl(build_glob%spproj_field, l_maxpop)
+                    call eulprob%assign_smpl(build%spproj_field, l_maxpop)
                 case('prob_greedy')
                     call eulprob%assign_greedy(l_maxpop)
                 case DEFAULT
@@ -804,17 +796,17 @@ contains
                 THROW_HARD('need refs to be part of command line for cluster2D execution')
             endif
             if( L_NEW_CAVGER )then
-                call cavger_new(build_glob, pinds, alloccavgs=.true.)
+                call cavger_new(build, pinds, alloccavgs=.true.)
                 call cavger_new_read_all
             else
-                call cavger_new(build_glob, pinds, alloccavgs=.true.)
+                call cavger_new(build, pinds, alloccavgs=.true.)
                 call cavger_read_all
             endif
         else
             if( L_NEW_CAVGER )then
-                call cavger_new_new(build_glob, pinds, alloccavgs=.false.)
+                call cavger_new_new(build, pinds, alloccavgs=.false.)
             else
-                call cavger_new(build_glob, pinds, alloccavgs=.false.)
+                call cavger_new(build, pinds, alloccavgs=.false.)
             endif
         endif
         ! init scorer & prep references
@@ -963,12 +955,12 @@ contains
         do i = 1, ncls
             call progress_gfortran(i,ncls)
             if( trim(params%pca_img_ori) .eq. 'yes' )then
-                call transform_ptcls(build_glob, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
+                call transform_ptcls(build, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
                 do j = 1, size(imgs)
                     call imgs(j)%copy_fast(imgs_ori(j))
                 enddo
             else
-                call transform_ptcls(build_glob, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
+                call transform_ptcls(build, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
             endif
             nptcls = size(imgs)
             if( trim(params%neigs_per).eq.'yes' )then
@@ -1038,7 +1030,7 @@ contains
                     call imgs_ori(j)%write(fname_denoised, cnt2)
                     if( trim(params%pca_ori_stk) .eq. 'yes' ) ori_map(pinds(j)) = cnt2
                 end do
-                call transform_ptcls(build_glob, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
+                call transform_ptcls(build, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
             else
                 fname_class_ptcls_den = 'class'//int2str_pad(i,4)//'ptcls.mrcs'
                 do j = 1, nptcls

@@ -292,7 +292,7 @@ contains
             call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
             call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), params%frcs, cline)
             call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call pftc%polar_cavger_gen2Dclassdoc(build_glob%spproj, build%clsfrcs)
+            call pftc%polar_cavger_gen2Dclassdoc(build%spproj, build%clsfrcs)
             call pftc%kill
             call pftc%polar_cavger_kill
         else
