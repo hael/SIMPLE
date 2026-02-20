@@ -40,16 +40,16 @@ use single_ui_tseries
 use single_ui_validate
 
 ! SIMPLE TEST
-use simple_test_ui_highlevel
-use simple_test_ui_io
-use simple_test_ui_network
-use simple_test_ui_parallel
+use simple_test_ui_class
 use simple_test_ui_fft
 use simple_test_ui_geometry
+use simple_test_ui_highlevel
+use simple_test_ui_io
 use simple_test_ui_masks
-use simple_test_ui_optimize
+use simple_test_ui_network
 use simple_test_ui_numerics
+use simple_test_ui_optimize
+use simple_test_ui_parallel
 use simple_test_ui_utils
 use simple_test_ui_stats
-
 end module simple_ui_all

@@ -55,7 +55,7 @@ end type ui_program
 
 contains
 
-    subroutine new( self, name, descr_short, descr_long, executable, sp_required, gui_advanced, gui_submenu_list)
+    subroutine new( self, name, descr_short, descr_long, executable, sp_required, gui_advanced, gui_submenu_list )
         class(ui_program),          intent(inout) :: self
         character(len=*),           intent(in)    :: name, descr_short, descr_long, executable
         logical,                    intent(in)    :: sp_required
@@ -73,7 +73,7 @@ contains
     end subroutine new
 
     subroutine add_input_num( self, which, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value, &
-                            gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
+                            gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online )
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         character(len=*),           intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
@@ -98,7 +98,7 @@ contains
     end subroutine add_input_num
 
     subroutine add_input_str( self, which, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value, &
-                            gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
+                            gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online )
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         character(len=*),           intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
@@ -123,7 +123,7 @@ contains
     end subroutine add_input_str
 
     subroutine add_input_param( self, which, param, descr_short_override, descr_long_override, descr_placeholder_override,&
-    &required_override, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
+    &required_override, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online )
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         type(ui_param),             intent(in)    :: param
@@ -349,7 +349,7 @@ contains
         requires_sp_project = self%sp_required
     end function requires_sp_project
 
-    subroutine kill(self)
+    subroutine kill( self )
         class(ui_program), intent(inout) :: self
         if (.not. self%exists) return
         call self%name%kill()
@@ -404,7 +404,7 @@ contains
         end do
     end subroutine print_param_list
 
-    subroutine print_param_hash(lst)
+    subroutine print_param_hash( lst )
         class(linked_list),    intent(in)  :: lst
         character(len=KEYLEN), allocatable :: keys(:), sorted_keys(:), rearranged_keys(:)
         logical,               allocatable :: req(:), sorted_req(:)
@@ -476,7 +476,7 @@ contains
         if (allocated(inds))            deallocate(inds)
     end subroutine print_param_hash
 
-    subroutine create_section_from_list(json, program_entry, name, lst)
+    subroutine create_section_from_list( json, program_entry, name, lst )
         use json_module
         class(json_core),          intent(inout) :: json
         type(json_value), pointer, intent(inout) :: program_entry
@@ -554,7 +554,7 @@ contains
         call json%add(program_entry, section)
     end subroutine create_section_from_list
 
-    integer function count_required_in_list(lst) result(nreq)
+    integer function count_required_in_list( lst ) result( nreq )
         class(linked_list), intent(in) :: lst
         type(list_iterator)            :: it
         class(*), allocatable          :: tmp
@@ -574,7 +574,7 @@ contains
         end do
     end function count_required_in_list
 
-    subroutine append_required_keys_from_list(lst, keys, ireq)
+    subroutine append_required_keys_from_list( lst, keys, ireq )
         class(linked_list), intent(in)    :: lst
         type(string),       intent(inout) :: keys(:)
         integer,            intent(inout) :: ireq

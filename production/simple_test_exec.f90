@@ -30,6 +30,7 @@ call cline%parse
 call script_exec(cline, string(trim(prg)), string('simple_exec'))
 l_silent      = .false.
 l_did_execute = .false. ! will be set to true if one program was executed
+call exec_test_class_commander(    trim(prg), cline, l_silent, l_did_execute)
 call exec_test_fft_commander(      trim(prg), cline, l_silent, l_did_execute)
 call exec_test_geometry_commander( trim(prg), cline, l_silent, l_did_execute)
 call exec_test_highlevel_commander(trim(prg), cline, l_silent, l_did_execute)
