@@ -20,10 +20,6 @@ character(len=*), parameter :: SIEVING_REFS_FNAME         = 'sieving_references'
 character(len=*), parameter :: STREAM_DEFAULT_CS          = '2.7'
 character(len=*), parameter :: STREAM_DEFAULT_FRACA       = '0.1'
 integer(kind=8),  parameter :: FLUSH_TIMELIMIT            = 900                       ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
-integer,          parameter :: CHUNK_CC_ITERS             = 8                         ! maximum number of correlatiion-based iterations for chunks
-integer,          parameter :: CHUNK_EXTR_ITER            = 3                         ! starting extremal iteration for chunks
-integer,          parameter :: CHUNK_MINITS               = 13                        ! minimum number of iterations for chunks
-integer,          parameter :: CHUNK_MAXITS               = CHUNK_MINITS + 2          ! maximum number of iterations for chunks
 integer,          parameter :: CHUNK_MINBOXSZ             = 128                       ! minimum boxsize for scaling
 integer,          parameter :: CLASS2D_NCLS               = 200
 integer,          parameter :: CLASS2D_NPARTS             = 10

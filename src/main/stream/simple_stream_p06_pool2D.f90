@@ -52,7 +52,6 @@ contains
         ! if( .not. cline%defined('walltime')  ) call cline%set('walltime',  29*60) ! 29 minutes
         if( .not. cline%defined('dynreslim') ) call cline%set('dynreslim', 'yes')
         if( .not.cline%defined('center')     ) call cline%set('center',    'yes')
-        if( .not.cline%defined('algorithm')  ) call cline%set('algorithm', 'abinitio2D')
         if( .not.cline%defined('ncls')       ) call cline%set('ncls',       200)
         ! restart
         call cleanup4restart

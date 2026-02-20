@@ -30,7 +30,6 @@ type(stream_chunk), allocatable :: converged_chunks(:)
 !===========================
 ! 3. Global control flags
 !===========================
-logical :: l_abinitio2D      = .false.
 logical :: l_no_chunks       = .false.
 logical :: l_scaling         = .false.
 logical :: l_update_sigmas   = .false.

@@ -160,8 +160,6 @@ contains
         orig_projfile      = params_glob%projfile
         projfile4gui       = projfilegui
         l_update_sigmas    = params_glob%l_needs_sigma
-        l_abinitio2D       = cline%defined('algorithm')
-        if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
         params_glob%nparts_pool = params_glob%nparts ! backwards compatibility
         ! bookkeeping & directory structure
         numlen             = len(int2str(params_glob%nparts))
@@ -217,7 +215,6 @@ contains
         call cline_cluster2D_pool%set('stream',    'yes')
         call cline_cluster2D_pool%set('nparts',    params_glob%nparts)
         call cline_cluster2D_pool%delete('autoscale')
-        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0)
         ! when the 2D analysis is started from raw particles
         if( l_no_chunks ) l_update_sigmas = .false.
         ! set # of ptcls beyond which fractional updates will be used
@@ -262,9 +259,6 @@ contains
         ! refinement
         select case(trim(params_glob%refine))
             case('snhc','snhc_smpl','prob','prob_smpl')
-                if( (.not.l_abinitio2D) .and. str_has_substr(params_glob%refine,'prob') )then
-                    THROW_HARD('REFINE=PROBXX only compatible with algorithm=abinitio2D')
-                endif
                 call cline_cluster2D_pool%set( 'refine', params_glob%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')

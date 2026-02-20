@@ -62,7 +62,6 @@ contains
         if( .not.cline%defined('nchunksperset')) call cline%set('nchunksperset', 2)
         if( .not.cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         if( .not.cline%defined('center')       ) call cline%set('center',       'yes')
-        if( .not.cline%defined('algorithm')    ) call cline%set('algorithm',    'abinitio2D')
         if( .not.cline%defined('nmics')        ) call cline%set('nmics',        100)
         ! restart
         call cleanup4restart

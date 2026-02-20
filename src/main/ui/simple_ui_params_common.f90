@@ -14,7 +14,6 @@ type(ui_param) :: backgr_subtr
 type(ui_param) :: bfac
 type(ui_param) :: box
 type(ui_param) :: box_extract
-type(ui_param) :: cc_iters
 type(ui_param) :: center_pdb
 type(ui_param) :: clip
 type(ui_param) :: cls_init
@@ -208,10 +207,6 @@ subroutine set_ui_params
     call box_extract%set_param(    'box_extract',     'num',    'Extracted particle image size', &
                                    'Extracted particle image size(in pixels)', &
                                    'Extracted particle image size', .false., 0.)
-
-    call cc_iters%set_param(       'cc_iters',        'num',    'Number of correlation iterations before switching to ML', &
-                                   'Number of correlation iterations before switching to ML{10}', &
-                                   '# of iterations{10}', .false., 10.)
 
     call center_pdb%set_param(     'center_pdb',      'binary', 'Whether to move the PDB atomic center to the center of the box', &
                                    'Whether to move the PDB atomic center to the center of the box (yes|no){no}', &

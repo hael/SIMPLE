@@ -46,8 +46,6 @@ contains
         l_update_sigmas  = params_glob%l_needs_sigma
         numlen           = len(int2str(params_glob%nparts))
         l_no_chunks      = .false. ! will be using chunk indeed
-        l_abinitio2D     = cline%defined('algorithm')
-        if( l_abinitio2D ) l_abinitio2D = str_has_substr(params_glob%algorithm,'abinitio')
         params_glob%nparts_chunk = params_glob%nparts ! required by chunk object, to remove
         ! bookkeeping & directory structure
         if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
@@ -60,38 +58,17 @@ contains
         call pool_proj%projinfo%delete_entry('projfile')
         if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params_glob%walltime)
         ! chunk master command line
-        if( l_abinitio2D )then
-            call cline_cluster2D_chunk%set('prg', 'abinitio2D')
-            if( params_glob%nparts > 1 )then
-                call cline_cluster2D_chunk%set('nparts',       params_glob%nparts)
-            endif
-            if( cline%defined('cls_init') )then
-                call cline_cluster2D_chunk%set('cls_init',     params_glob%cls_init)
-            else
-                call cline_cluster2D_chunk%set('cls_init',     'rand')
-            endif
-            if( cline%defined('gaufreq') )then
-                call cline_cluster2D_chunk%set('gaufreq',      params_glob%gaufreq)
-            endif
+        call cline_cluster2D_chunk%set('prg', 'abinitio2D')
+        if( params_glob%nparts > 1 )then
+            call cline_cluster2D_chunk%set('nparts',       params_glob%nparts)
+        endif
+        if( cline%defined('cls_init') )then
+            call cline_cluster2D_chunk%set('cls_init',     params_glob%cls_init)
         else
-            if( params_glob%nparts > 1 )then
-                call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
-                call cline_cluster2D_chunk%set('nparts', params_glob%nparts)
-            else
-                ! shared memory execution
-                call cline_cluster2D_chunk%set('prg',    'cluster2D')
-            endif
-            call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
-            call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
-            call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER)
-            call cline_cluster2D_chunk%set('extr_lim',  MAX_EXTRLIM2D)
-            call cline_cluster2D_chunk%set('startit',   1)
-            if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_CC_ITERS)
-            if( cline%defined('cls_init') )then
-                call cline_cluster2D_chunk%set('cls_init', params_glob%cls_init)
-            else
-                call cline_cluster2D_chunk%set('cls_init','ptcl')
-            endif
+            call cline_cluster2D_chunk%set('cls_init',     'rand')
+        endif
+        if( cline%defined('gaufreq') )then
+            call cline_cluster2D_chunk%set('gaufreq',      params_glob%gaufreq)
         endif
         call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
         call cline_cluster2D_chunk%set('center',    'no')
@@ -110,9 +87,6 @@ contains
         ! refinement
         select case(trim(params_glob%refine))
             case('snhc','snhc_smpl','prob','prob_smpl')
-                if( (.not.l_abinitio2D) .and. str_has_substr(params_glob%refine,'prob') )then
-                    THROW_HARD('REFINE=PROBXX only compatible with algorithm=abinitio2D')
-                endif
                 call cline_cluster2D_chunk%set('refine', params_glob%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
@@ -231,7 +205,7 @@ contains
                 ! flag inclusion in original list
                 call project_list%set_included_flags([first2import,last2import])
                 ! execution
-                call chunks(ichunk)%analyze2D(l_update_sigmas, makecavgs)
+                call chunks(ichunk)%analyze2D(makecavgs=makecavgs)
                 first2import = last2import + 1 ! to avoid cycling through all projects
                 call project_list_slice%kill
             endif
