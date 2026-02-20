@@ -191,13 +191,7 @@ contains
         ! postprocess
         call cline%set('prg', 'postprocess')
         call cline%set('mkdir', 'yes')
-        call xpostprocess%execute_safe(cline)
-
-        !**************TESTS2DO
-        ! check so that we have a starting 3D alignment
-        ! check so that all states are 0 or 1 and fall over otherwise
-        ! should test 40k projection directions and see how that performs (params class needs modification)
-        
+        call xpostprocess%execute_safe(cline)        
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_distr( self, cline )
@@ -646,7 +640,7 @@ contains
                 params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
                 call pftc%polar_cavger_new(.true., nrefs=params%nspace)
                 call pftc%polar_cavger_calc_pops(build%spproj)
-                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build_glob%eulspace, symop=build_glob%pgrpsyms)
+                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
                 call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
                 call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
@@ -734,7 +728,7 @@ contains
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
-            call refine3D_exec(cline, startit, converged)
+            call refine3D_exec(build, cline, startit, converged)
         else
             if( trim(params%continue) == 'yes' ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             ! Input reference
@@ -823,7 +817,7 @@ contains
                     call xprob_align%execute( cline_prob_align )
                 endif
                 ! in strategy3D_matcher:
-                call refine3D_exec(cline, params%which_iter, converged)
+                call refine3D_exec(build, cline, params%which_iter, converged)
                 ! making sure the input volume is only used once
                 if( params%l_polar ) call cline%delete('vol1')
                 ! convergence
@@ -934,7 +928,7 @@ contains
         ! init
         if( l_shmem )then
             call build%init_params_and_build_strategy3D_tbox(cline_first_sigmas, params )
-            call refine3D_exec(cline_first_sigmas, params%which_iter, converged)
+            call refine3D_exec(build, cline_first_sigmas, params%which_iter, converged)
             call build%kill_strategy3D_tbox
         else
             call build%init_params_and_build_spproj(cline_first_sigmas, params)
@@ -1040,26 +1034,26 @@ contains
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_strategy2D3D_common, only: sample_ptcls4fillin, sample_ptcls4update
+        use simple_builder,             only: build_glob
         class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,            allocatable :: pinds(:)
         type(string)                    :: fname
-        type(builder)                   :: build
-        type(parameters)                :: params
+        type(builder),          target  :: build_local
+        type(parameters)                :: params_local
         type(commander_prob_tab)        :: xprob_tab
         type(eul_prob_tab)              :: eulprob_obj_glob
         type(cmdline)                   :: cline_prob_tab
         type(qsys_env)                  :: qenv
         type(chash)                     :: job_descr
         integer :: nptcls, ipart
-        if( associated(build_glob) )then
-            if( .not.associated(params_glob) )then
-                THROW_HARD('Builder & parameters must be associated for shared memory execution!')
-            endif
-        else
+        ! Check if we're in shared memory execution (build_glob already set)
+        if( .not. associated(build_glob) )then
+            ! Stand-alone distributed execution - initialize build
             call cline%set('mkdir',  'no')
             call cline%set('stream', 'no')
-            call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+            call build_local%init_params_and_build_general_tbox(cline, params_local, do3d=.true.)
+            ! Note: build_glob and params_glob are now set by init method
         endif
         if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
@@ -1083,10 +1077,10 @@ contains
             call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
             call cline_prob_tab%gen_job_descr(job_descr)
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params_local)
         endif
         ! reading corrs from all parts
-        if( str_has_substr(params%refine, 'prob_state') )then
+        if( str_has_substr(params_glob%refine, 'prob_state') )then
             do ipart = 1, params_glob%nparts
                 fname = string(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
                 call eulprob_obj_glob%read_state_tab(fname)
