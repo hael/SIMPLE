@@ -8,9 +8,9 @@ type :: bt_node
     integer :: left_idx   = 0
     integer :: right_idx  = 0
     integer :: parent_idx = 0
-    integer, allocatable :: subset(:)   ! refs contained in this node
-    integer :: level    = 0             ! optional: merge step / depth marker
-    integer :: ref_idx  = 0             ! your “medoid” (or leaf ref for leaves)
+    integer, allocatable :: subset(:)   ! LOCAL indices (1..nref)
+    integer :: level    = 0
+    integer :: ref_idx  = 0             ! GLOBAL ref id (medoid for internal nodes)
     integer :: node_idx = 0             ! 1..n_nodes
 end type bt_node
 
@@ -24,24 +24,32 @@ end interface
 type :: binary_tree
     private
     type(bt_node), allocatable :: nodes(:)
+    integer,      allocatable :: refs(:)     ! LOCAL->GLOBAL mapping (length nref)
     integer :: root_idx = 0
-    logical :: exists = .false.
+    integer :: nref     = 0
+    logical :: exists   = .false.
 contains
-    procedure :: kill
-    procedure :: n_nodes
-    procedure :: get_root_idx
-    procedure :: get_medoid
-    procedure :: get_node
-    procedure :: get_left_right_ref
+    procedure          :: kill
+    procedure          :: n_nodes
+    procedure          :: get_root_idx
+    procedure          :: get_node
+    procedure          :: is_leaf
+    procedure          :: get_subset_size
+    procedure          :: get_node_ref
+    procedure          :: get_children_idx
+    procedure          :: get_children_ref
+    procedure          :: get_nref
+    procedure          :: local_to_global_ref
+    procedure          :: get_medoid
+    procedure          :: get_height
+    procedure, private :: height_recursive
     ! build from hierarchical clustering merge matrix + original reference ids
-    procedure :: build_from_hclust
-    ! standard traversals (visitor callback)
-    procedure :: traverse_preorder
-    procedure :: traverse_inorder
-    procedure :: traverse_postorder
-    procedure :: traverse_levelorder
-    ! utility
-    procedure :: find_node_by_ref   ! O(n) default (can be optimized)
+    procedure          :: build_from_hclust
+    ! traversals
+    procedure          :: traverse_preorder
+    procedure          :: traverse_inorder
+    procedure          :: traverse_postorder
+    procedure          :: traverse_levelorder
 end type binary_tree
 
 contains
@@ -62,7 +70,9 @@ contains
             end do
             deallocate(self%nodes)
         end if
+        if (allocated(self%refs)) deallocate(self%refs)
         self%root_idx = 0
+        self%nref     = 0
         self%exists   = .false.
     end subroutine kill
 
@@ -80,32 +90,110 @@ contains
         get_root_idx = self%root_idx
     end function get_root_idx
 
-    pure integer function get_medoid(self) result(ref)
+    pure integer function get_nref(self)
         class(binary_tree), intent(in) :: self
-        ref = self%nodes(self%root_idx)%ref_idx
-    end function get_medoid
+        get_nref = self%nref
+    end function get_nref
 
-    pure function get_node( self, inode ) result( node )
+    pure function get_node(self, inode) result(node)
         class(binary_tree), intent(in) :: self
         integer,            intent(in) :: inode
         type(bt_node) :: node
         node = self%nodes(inode)
     end function get_node
 
-    pure subroutine get_left_right_ref(self, ref_idx, left_ref, right_ref)
+    pure logical function is_leaf(self, inode)
+        class(binary_tree), intent(in) :: self
+        integer,            intent(in) :: inode
+        is_leaf = .false.
+        if (.not. allocated(self%nodes)) return
+        if (inode < 1 .or. inode > size(self%nodes)) return
+        is_leaf = (self%nodes(inode)%left_idx == 0 .and. self%nodes(inode)%right_idx == 0)
+    end function is_leaf
+
+    pure integer function get_subset_size(self, inode)
+        class(binary_tree), intent(in) :: self
+        integer,            intent(in) :: inode
+        get_subset_size = 0
+        if (.not. allocated(self%nodes)) return
+        if (inode < 1 .or. inode > size(self%nodes)) return
+        if (.not. allocated(self%nodes(inode)%subset)) return
+        get_subset_size = size(self%nodes(inode)%subset)
+    end function get_subset_size
+
+    pure integer function get_node_ref(self, inode) result(ref)
+        class(binary_tree), intent(in) :: self
+        integer,            intent(in) :: inode
+        ref = 0
+        if (.not. allocated(self%nodes)) return
+        if (inode < 1 .or. inode > size(self%nodes)) return
+        ref = self%nodes(inode)%ref_idx
+    end function get_node_ref
+
+    pure subroutine get_children_idx(self, inode, left_idx, right_idx)
         class(binary_tree), intent(in)  :: self
-        integer,            intent(in)  :: ref_idx
+        integer,            intent(in)  :: inode
+        integer,            intent(out) :: left_idx, right_idx
+        left_idx  = 0
+        right_idx = 0
+        if (.not. allocated(self%nodes)) return
+        if (inode < 1 .or. inode > size(self%nodes)) return
+        left_idx  = self%nodes(inode)%left_idx
+        right_idx = self%nodes(inode)%right_idx
+    end subroutine get_children_idx
+
+    pure subroutine get_children_ref(self, inode, left_ref, right_ref)
+        class(binary_tree), intent(in)  :: self
+        integer,            intent(in)  :: inode
         integer,            intent(out) :: left_ref, right_ref
-        integer :: cur, lidx, ridx
+        integer :: lidx, ridx
         left_ref  = 0
         right_ref = 0
-        cur = self%find_node_by_ref(ref_idx)
-        if (cur == 0) return
-        lidx = self%nodes(cur)%left_idx
-        ridx = self%nodes(cur)%right_idx
+        call self%get_children_idx(inode, lidx, ridx)
         if (lidx /= 0) left_ref  = self%nodes(lidx)%ref_idx
         if (ridx /= 0) right_ref = self%nodes(ridx)%ref_idx
-    end subroutine get_left_right_ref
+    end subroutine get_children_ref
+
+    pure integer function local_to_global_ref(self, local_k) result(global_ref)
+        class(binary_tree), intent(in) :: self
+        integer,            intent(in) :: local_k
+        global_ref = 0
+        if (.not. allocated(self%refs)) return
+        if (local_k < 1 .or. local_k > size(self%refs)) return
+        global_ref = self%refs(local_k)
+    end function local_to_global_ref
+
+    pure integer function get_medoid(self) result(ref)
+        class(binary_tree), intent(in) :: self
+        ref = 0
+        if (.not. self%exists) return
+        if (self%root_idx == 0) return
+        ref = self%nodes(self%root_idx)%ref_idx
+    end function get_medoid
+
+    pure integer function get_height(self) result(h)
+        class(binary_tree), intent(in) :: self
+        h = 0
+        if (.not. self%exists) return
+        if (.not. allocated(self%nodes)) return
+        if (self%root_idx == 0) return
+        h = height_recursive(self, self%root_idx)
+    end function get_height
+
+    pure recursive integer function height_recursive(self, idx) result(h)
+        class(binary_tree), intent(in) :: self
+        integer,            intent(in) :: idx
+        integer :: hl, hr, l, r
+        if (idx == 0) then
+            h = 0
+            return
+        end if
+        l = self%nodes(idx)%left_idx
+        r = self%nodes(idx)%right_idx
+        hl = height_recursive(self, l)
+        hr = height_recursive(self, r)
+        h = 1 + max(hl, hr)   ! "levels" counted as nodes along path
+    end function height_recursive
 
     ! --------------------------
     ! Build from merge matrix
@@ -113,7 +201,7 @@ contains
     subroutine build_from_hclust(self, merge_mat, refs, dist_mat)
         class(binary_tree), intent(inout) :: self
         integer,            intent(in)    :: merge_mat(:,:)   ! (2, nref-1)
-        integer,            intent(in)    :: refs(:)          ! length nref (global ids)
+        integer,            intent(in)    :: refs(:)          ! length nref (GLOBAL ids)
         real,               intent(in)    :: dist_mat(:,:)    ! (nref,nref) LOCAL to refs ordering
         integer :: nref, n_total, k, s, l, r, p, m, i, j
         integer :: best_local
@@ -121,7 +209,10 @@ contains
         real :: best_sum, sum
         call self%kill()
         nref    = size(refs)
+        self%nref = nref
         n_total = 2*nref - 1
+        allocate(self%refs(nref))
+        self%refs = refs
         allocate(self%nodes(n_total))
         ! init all nodes
         do k = 1, n_total
@@ -135,7 +226,7 @@ contains
         end do
         ! leaves 1..nref
         do k = 1, nref
-            self%nodes(k)%ref_idx = refs(k)     ! global ref id
+            self%nodes(k)%ref_idx = refs(k)     ! GLOBAL ref id
             allocate(self%nodes(k)%subset(1))
             self%nodes(k)%subset = [k]          ! LOCAL index (1..nref)
         end do
@@ -173,7 +264,7 @@ contains
         self%exists   = .true.
     end subroutine build_from_hclust
 
-   ! --------------------------
+    ! --------------------------
    ! Traversals (visitor-based)
    ! --------------------------
     subroutine traverse_preorder(self, visit)
