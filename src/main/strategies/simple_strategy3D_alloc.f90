@@ -95,8 +95,8 @@ contains
         if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
         allocate(s3D%smpl_refs_athres(params_glob%nstates), s3D%smpl_inpl_athres(params_glob%nstates))
         do istate = 1, params_glob%nstates
-            s3D%smpl_refs_athres(istate) = calc_athres('dist',      state=istate)
-            s3D%smpl_inpl_athres(istate) = calc_athres('dist_inpl', state=istate)
+            s3D%smpl_refs_athres(istate) = calc_athres('dist',      state=istate, os=build_glob%spproj_field)
+            s3D%smpl_inpl_athres(istate) = calc_athres('dist_inpl', state=istate, os=build_glob%spproj_field)
         enddo
     end subroutine prep_strategy3D
 

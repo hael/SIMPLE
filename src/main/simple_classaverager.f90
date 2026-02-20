@@ -53,7 +53,7 @@ type(image),         allocatable :: cavgs_odd_part(:)         !< -"-
 type(image),         allocatable :: ctfsqsums_even_bak(:)     !< CTF**2 sums for Wiener normalisation
 type(image),         allocatable :: ctfsqsums_odd_bak(:)      !< -"-
 type(euclid_sigma2)              :: eucl_sigma
-type(builder),        pointer    :: build_ptr => null()
+class(builder),      pointer     :: build_ptr => null()
 logical,             allocatable :: pptcl_mask(:)
 logical                          :: l_ml_reg           = .false.  !< Maximum-Likelihood regularization
 logical                          :: l_alloc_read_cavgs = .true.   !< whether to allocate sums and read partial sums

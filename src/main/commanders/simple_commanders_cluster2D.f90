@@ -1009,7 +1009,7 @@ contains
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype, params_glob%projfile)
         ! more prep
-        call eulprob%new(pinds)
+        call eulprob%new(build_glob, pinds)
         ! generating all scores
         cline_prob_tab2D = cline
         call cline_prob_tab2D%set('prg', 'prob_tab2D' )
@@ -1131,7 +1131,7 @@ contains
         call prep_batch_particles2D(nptcls)
         call build_batch_particles2D(pftc, nptcls, pinds)
         ! init prob table
-        call eulprob%new(pinds)
+        call eulprob%new(build, pinds)
         fname = DIST_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
         ! Fill probability table
         if( l_stream )then

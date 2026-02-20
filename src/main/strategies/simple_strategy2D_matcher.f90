@@ -209,7 +209,7 @@ contains
 
         ! READ THE ASSIGNMENT FOR PROB MODE
         if( l_prob )then
-            call probtab%new(pinds)
+            call probtab%new(build_glob, pinds)
             call probtab%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
             s2D%probtab => probtab ! table accessible to strategies
         endif
