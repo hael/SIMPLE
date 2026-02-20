@@ -254,9 +254,9 @@ contains
             do iptcl = 1, nptcls
                 cnt = cnt + 1
                 ! compute cross-correlation between particle image and the class average image
-                call prepimgbatch(nptcls)
-                call read_imgbatch([1, nptcls])
-                call discrete_read_imgbatch(nptcls, pinds(:), [1,nptcls] )
+                call prepimgbatch(build, nptcls)
+                call read_imgbatch(build, [1, nptcls])
+                call discrete_read_imgbatch(build, nptcls, pinds(:), [1,nptcls] )
                 corr = build%imgbatch(iptcl)%real_corr(cavg_img)
                 write(25,'(2i6, 2F18.6)') icavgs, pinds(cnt), real(cnt)/real(nptcls), corr
             enddo
@@ -408,7 +408,7 @@ contains
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
-        call prepimgbatch(batchsz_max)
+        call prepimgbatch(build, batchsz_max)
         allocate(ref_weights(batchsz_max,params%nspace),rot_imgs(batchsz_max))
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do i = 1,batchsz_max
@@ -442,7 +442,7 @@ contains
                 enddo
             enddo
             ! Images prep
-            call discrete_read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz])
+            call discrete_read_imgbatch(build, batchsz, pinds(batch_start:batch_end), [1,batchsz])
             !$omp parallel do default(shared) private(i,iptcl,x,y,sdev_noise) proc_bind(close) schedule(static)
             do i = 1, batchsz
                 iptcl = pinds(batch_start+i-1)

@@ -173,7 +173,7 @@ contains
             call build%spproj_field%write(params%outfile, [1,params%nptcls])
         endif
         call vol_pad%kill_expanded
-        call killimgbatch
+        call killimgbatch(build)
         call orientation%kill
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_PARTICLES NORMAL STOP ****')

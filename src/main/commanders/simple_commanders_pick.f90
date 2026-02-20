@@ -1170,7 +1170,7 @@ contains
                         call spproj_in%os_ptcl3D%set(iptcl, 'indstk', cnt)
                     enddo
                     ptcl_inds = ptcl_inds -fromp+1 ! because indexing range lost when passed to extractor
-                    call prepimgbatch(nptcls2extract)
+                    call prepimgbatch(build, nptcls2extract)
                     if( l_movie_frames )then
                         ! extraction from movie
                         call extractor%init_mov(o_mic, params%box, (params%pcontrast .eq. 'black'))
@@ -1238,7 +1238,7 @@ contains
         call micrograph%kill
         call micrograph_sc%kill
         call extractor%kill
-        call killimgbatch
+        call killimgbatch(build)
         ! OUTPUT
         call spproj%read_non_data_segments(params%projfile)
         call spproj%projinfo%set(1,'projname', get_fbody(params%outfile,METADATA_EXT,separator=.false.))

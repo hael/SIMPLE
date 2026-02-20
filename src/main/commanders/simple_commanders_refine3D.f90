@@ -996,7 +996,7 @@ contains
         integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range( cline )
+        call set_bp_range( build, cline )
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
@@ -1006,11 +1006,11 @@ contains
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls( build, pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
                                         
         ! Build polar particle images
-        call build_batch_particles(pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build_batch_particles(build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
         call eulprob_obj_part%new(build, pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
@@ -1022,7 +1022,7 @@ contains
             call eulprob_obj_part%write_tab(fname)
         endif
         call eulprob_obj_part%kill
-        call killimgbatch
+        call killimgbatch(build)
         call pftc%kill
         call build%kill_general_tbox
         call dealloc_imgarr(tmp_imgs)
@@ -1058,9 +1058,9 @@ contains
         if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
         if( params_glob%l_fillin .and. mod(params_glob%startit,5) == 0 )then
-            call sample_ptcls4fillin([1,params_glob%nptcls], .true., nptcls, pinds)
+            call sample_ptcls4fillin(build_glob, [1,params_glob%nptcls], .true., nptcls, pinds)
         else
-            call sample_ptcls4update([1,params_glob%nptcls], .true., nptcls, pinds)
+            call sample_ptcls4update(build_glob, [1,params_glob%nptcls], .true., nptcls, pinds)
         endif
         ! communicate to project file
         call build_glob%spproj%write_segment_inside(params_glob%oritype)

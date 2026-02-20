@@ -793,7 +793,7 @@ contains
         ! Resolution range
         frac_srch_space = build%spproj_field%get_avg('frac')
         if( file_exists(params_glob%frcs) ) call build%clsfrcs%read(params_glob%frcs)
-        call set_bp_range2D( cline, params%which_iter, frac_srch_space )
+        call set_bp_range2D( build, cline, params%which_iter, frac_srch_space )
         ! Read references
         l_alloc_read_cavgs = .true.
         if( .not.l_distr_exec_glob )then

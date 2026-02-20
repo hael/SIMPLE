@@ -156,7 +156,7 @@ contains
             call eucl_sigma%new(fname, params%box)
             call eucl_sigma%read_groups(build%spproj_field)
         end if
-        call calc_3Drec( cline, nptcls2update, pinds )
+        call calc_3Drec( build, cline, nptcls2update, pinds )
         ! cleanup
         call eucl_sigma%kill
         call qsys_job_finished(string('simple_commanders_rec :: exec_reconstruct3D'))

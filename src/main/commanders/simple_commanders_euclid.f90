@@ -133,7 +133,7 @@ contains
         nyq = build%img%get_nyq()
         allocate(sigma2(nyq,params%fromp:params%top),pspec(nyq),source=0.)
         batchsz_max = min(nptcls_part_sel,50 * nthr_glob)
-        call prepimgbatch(batchsz_max)
+        call prepimgbatch(build, batchsz_max)
         call sum_img%new([params%box,params%box,1],params%smpd)
         call sum_img%zero_and_flag_ft
         cmat_sum = sum_img%allocate_cmat()
@@ -143,7 +143,7 @@ contains
         do i = 1,nptcls_part_sel,batchsz_max
             batchlims = [i, min(i+batchsz_max-1,nptcls_part_sel)]
             nbatch    = batchlims(2) - batchlims(1) + 1
-            call discrete_read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
+            call discrete_read_imgbatch(build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
             cmat_thr_sum = dcmplx(0.d0,0.d0)
             !$omp parallel do default(shared) private(iptcl,imatch,pspec)&
             !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum)
@@ -173,7 +173,7 @@ contains
         ! destruct
         call build%kill_general_tbox
         call binfile%kill
-        call killimgbatch
+        call killimgbatch(build)
         call sum_img%kill
         ! end gracefully
         call qsys_job_finished(string('simple_commanders_euclid :: exec_calc_pspec'))

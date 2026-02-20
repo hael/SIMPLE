@@ -4,6 +4,7 @@ use simple_pftc_srch_api
 use simple_strategy3D_alloc
 use simple_strategy2D3D_common
 use simple_binoris_io
+use simple_builder,                 only: builder
 use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
@@ -32,6 +33,7 @@ type(string)               :: fname
 integer                    :: nptcls2update
 type(euclid_sigma2)        :: eucl_sigma
 type(polarft_calc)         :: pftc
+class(builder), pointer    :: build_ptr => null()
 ! benchmarking
 integer(timer_int_kind)    :: t_init, t_build_batch_particles, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
 integer(timer_int_kind)    :: t_prepare_refs_sigmas_ptcls, t_prepare_polar_references
@@ -42,11 +44,10 @@ type(string)               :: benchfname
 contains
 
     subroutine refine3D_exec( build, cline, which_iter, converged )
-        use simple_builder, only: builder, build_glob
-        class(builder), target,  intent(inout) :: build
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: which_iter
-        logical,        intent(inout) :: converged
+        class(builder), target, intent(inout) :: build
+        class(cmdline),         intent(inout) :: cline
+        integer,                intent(in)    :: which_iter
+        logical,                intent(inout) :: converged
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
         type :: strategy3D_per_ptcl
             class(strategy3D), pointer :: ptr  => null()
@@ -66,8 +67,8 @@ contains
         integer :: ibatch
         logical :: doprint, l_polar, l_restore
         
-        ! Assign build_glob pointer for compatibility with common module
-        build_glob => build
+        ! assign builder pointer
+        build_ptr => build
         
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -82,30 +83,30 @@ contains
         end select
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
-        if( build%spproj_field%get_nevenodd() == 0 )then
+        if( build_ptr%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; refine3D_exec')
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params_glob%oritype)
+            call build_ptr%spproj_field%partition_eo
+            call build_ptr%spproj%write_segment_inside(params_glob%oritype)
         endif
 
         ! CHECK WHETHER WE HAVE PREVIOUS 3D ORIENTATIONS
-        has_been_searched = .not.build%spproj%is_virgin_field(params_glob%oritype)
+        has_been_searched = .not.build_ptr%spproj%is_virgin_field(params_glob%oritype)
 
         ! SET FOURIER INDEX RANGE
-        call set_bp_range(cline)
+        call set_bp_range(build_ptr, cline)
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) ) deallocate(pinds)
         if( str_has_substr(params_glob%refine, 'prob') )then
             ! generation of random sample and incr of updatecnts delegated to prob_align
-            call build%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+            call build_ptr%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
             &nptcls2update, pinds )
         else
             ! sampled incremented
             if( params_glob%l_fillin .and. mod(which_iter,5) == 0 )then
-                call sample_ptcls4fillin([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)
+                call sample_ptcls4fillin(build_ptr, [params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)
             else
-                call sample_ptcls4update([params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)
+                call sample_ptcls4update(build_ptr, [params_glob%fromp,params_glob%top], .true., nptcls2update, pinds)
             endif
         endif
 
@@ -120,7 +121,7 @@ contains
             rt_init = toc(t_init)
             t_prepare_refs_sigmas_ptcls = tic()
         endif
-        call prepare_refs_sigmas_ptcls( pftc, cline, eucl_sigma, ptcl_match_imgs, ptcl_match_imgs_pad,&
+        call prepare_refs_sigmas_ptcls( build_ptr, pftc, cline, eucl_sigma, ptcl_match_imgs, ptcl_match_imgs_pad,&
                                         &batchsz_max, which_iter, do_polar=(l_polar .and. .not.cline%defined('vol1')) )
         if( L_BENCH_GLOB )then
             rt_prepare_refs_sigmas_ptcls = toc(t_prepare_refs_sigmas_ptcls)
@@ -137,9 +138,9 @@ contains
             endif
             call pftc%polar_cavger_zero_pft_refs
             if( file_exists(params_glob%frcs) )then
-                call build%clsfrcs%read(params_glob%frcs)
+                call build_ptr%clsfrcs%read(params_glob%frcs)
             else
-                call build%clsfrcs%new(params_glob%nspace, params_glob%box_crop,&
+                call build_ptr%clsfrcs%new(params_glob%nspace, params_glob%box_crop,&
                     &params_glob%smpd_crop, params_glob%nstates)
             endif
         endif
@@ -154,7 +155,7 @@ contains
 
         ! READING THE ASSIGNMENT FOR PROB MODE
         if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            call eulprob_obj_part%new(build, pinds)
+            call eulprob_obj_part%new(build_ptr, pinds)
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
         endif
 
@@ -175,7 +176,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftc
             if( L_BENCH_GLOB ) t_build_batch_particles = tic()
-            call build_batch_particles(pftc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs, ptcl_match_imgs_pad)
+            call build_batch_particles(build_ptr, pftc, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs, ptcl_match_imgs_pad)
             if( L_BENCH_GLOB ) rt_build_batch_particles = rt_build_batch_particles + toc(t_build_batch_particles)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -201,14 +202,14 @@ contains
                             endif
                         endif
                     case('shc_smpl')
-                        if( build%spproj_field%is_first_update(which_iter, iptcl) )then
+                        if( build_ptr%spproj_field%is_first_update(which_iter, iptcl) )then
                             allocate(strategy3D_greedy_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
                             cnt_greedy(ithr) = cnt_greedy(ithr) + 1
                         else
                             allocate(strategy3D_shc_smpl         :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
                     case('snhc_smpl')
-                        if( build%spproj_field%is_first_update(which_iter, iptcl) )then
+                        if( build_ptr%spproj_field%is_first_update(which_iter, iptcl) )then
                             allocate(strategy3D_greedy_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
                             cnt_greedy(ithr) = cnt_greedy(ithr) + 1
                         else
@@ -224,8 +225,8 @@ contains
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)
-                        call build%spproj_field%get_ori(iptcl, orientation)
-                        call build%spproj_field%set(iptcl, 'proj', build%eulspace%find_closest_proj(orientation))
+                        call build_ptr%spproj_field%get_ori(iptcl, orientation)
+                        call build_ptr%spproj_field%set(iptcl, 'proj', build_ptr%eulspace%find_closest_proj(orientation))
                     case DEFAULT
                         THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
                 end select
@@ -238,13 +239,13 @@ contains
                     call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
                     call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
                     ! keep track of incremental shift
-                    incr_shifts(:,iptcl_batch) = build%spproj_field%get_2Dshift(iptcl) - strategy3Dsrch(iptcl_batch)%ptr%s%prev_shvec
+                    incr_shifts(:,iptcl_batch) = build_ptr%spproj_field%get_2Dshift(iptcl) - strategy3Dsrch(iptcl_batch)%ptr%s%prev_shvec
                     ! cleanup
                     call strategy3Dsrch(iptcl_batch)%ptr%kill
                 endif
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
-                    call build%spproj_field%get_ori(iptcl, orientation)
+                    call build_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
                     call eucl_sigma%calc_sigma2(pftc, iptcl, orientation, 'proj')
                 end if
@@ -255,7 +256,7 @@ contains
             if( l_polar .and. l_restore )then
                 if( L_BENCH_GLOB ) t_rec = tic()
                 call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &build%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
+                    &build_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
                 if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
             endif
         enddo
@@ -264,7 +265,7 @@ contains
         if( any(cnt_greedy > 0) .and. any(cnt_all > 0) )then
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
-        call build%spproj_field%set_all2single('frac_greedy', frac_greedy)
+        call build_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
         ! cleanup
         do iptcl_batch = 1,batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
@@ -282,16 +283,16 @@ contains
         else
             if( trim(params_glob%cavgw).eq.'yes' )then
                 ! class averages
-                call build%spproj_field%calc_cavg_soft_weights(params_glob%frac)
+                call build_ptr%spproj_field%calc_cavg_soft_weights(params_glob%frac)
             else
                 ! particles
-                call build%spproj_field%calc_hard_weights(params_glob%frac)
+                call build_ptr%spproj_field%calc_hard_weights(params_glob%frac)
             endif
         endif
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
-        call build%vol%kill
+        call build_ptr%vol%kill
         call orientation%kill
         call dealloc_imgarr(ptcl_match_imgs)
         call dealloc_imgarr(ptcl_match_imgs_pad)
@@ -304,11 +305,11 @@ contains
                 if( L_BENCH_GLOB ) t_projio = tic()
                 select case(trim(params_glob%oritype))
                     case('ptcl3D')
-                        call binwrite_oritab(params_glob%outfile, build%spproj, &
-                            &build%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
+                        call binwrite_oritab(params_glob%outfile, build_ptr%spproj, &
+                            &build_ptr%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
                     case('cls3D')
-                        call binwrite_oritab(params_glob%outfile, build%spproj, &
-                            &build%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
+                        call binwrite_oritab(params_glob%outfile, build_ptr%spproj, &
+                            &build_ptr%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
                     case DEFAULT
                         THROW_HARD('unsupported oritype: '//trim(params_glob%oritype)//'; refine3D_exec')
                 end select
@@ -321,7 +322,7 @@ contains
             if( L_BENCH_GLOB ) t_rec = tic()
             if( l_polar )then
                 ! Polar representation
-                call killimgbatch
+                call killimgbatch(build_ptr)
                 call eucl_sigma%kill
                 if( l_distr_exec_glob )then
                     call pftc%polar_cavger_readwrite_partial_sums('write')
@@ -333,15 +334,15 @@ contains
                 ! Cartesian volume
                 call pftc%kill
                 if( trim(params_glob%volrec).eq.'yes' )then
-                     call calc_3Drec( cline, nptcls2update, pinds )
+                     call calc_3Drec( build_ptr, cline, nptcls2update, pinds )
                 endif
                 call eucl_sigma%kill
-                call killimgbatch
+                call killimgbatch(build_ptr)
             endif
             if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
         else
             ! cleanup
-            call killimgbatch
+            call killimgbatch(build_ptr)
             call eucl_sigma%kill
             call pftc%kill
         endif
@@ -349,7 +350,7 @@ contains
         ! REPORT CONVERGENCE
         call qsys_job_finished(string('simple_strategy3D_matcher :: refine3D_exec'))
         if( .not. params_glob%l_distr_exec .and. trim(params_glob%refine).ne.'sigma' )then
-            converged = conv%check_conv3D(cline, build%spproj_field, params_glob%msk)
+            converged = conv%check_conv3D(cline, build_ptr%spproj_field, params_glob%msk)
         endif
         if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)
@@ -388,8 +389,8 @@ contains
 
         subroutine polar_restoration()
             params_glob%refs = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//params_glob%ext%to_char()
-            call pftc%polar_cavger_merge_eos_and_norm(reforis=build%eulspace, symop=build%pgrpsyms)
-            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
+            call pftc%polar_cavger_merge_eos_and_norm(reforis=build_ptr%eulspace, symop=build_ptr%pgrpsyms)
+            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build_ptr%clsfrcs, build_ptr%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
             call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call pftc%polar_cavger_kill
         end subroutine polar_restoration
