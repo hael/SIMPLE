@@ -1,7 +1,7 @@
 !@descr: the core probability table routines used for probabilistic 2D search
 module simple_eul_prob_tab2D
 use simple_pftc_srch_api
-use simple_builder,          only: build_glob
+use simple_builder,          only: builder
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_eul_prob_tab,     only: eulprob_dist_switch, eulprob_corr_switch
 use simple_decay_funs,       only: extremal_decay2D
@@ -10,6 +10,8 @@ implicit none
 public :: eul_prob_tab2D, squared_sampling, power_sampling, neighfrac2nsmpl
 private
 #include "simple_local_flags.inc"
+
+class(builder), pointer :: build_ptr => null()
 
 type :: eul_prob_tab2D
     type(ptcl_rec), allocatable :: loc_tab(:,:)   !< 2D search table (ncls x nptcls)
@@ -72,12 +74,14 @@ contains
         self%incl   = .true.
     end subroutine set
 
-    subroutine new( self, pinds )
-        class(eul_prob_tab2D), intent(inout) :: self
-        integer,               intent(in)    :: pinds(:)
+    subroutine new( self, build, pinds )
+        class(eul_prob_tab2D),  intent(inout) :: self
+        class(builder), target, intent(in)    :: build
+        integer,                intent(in)    :: pinds(:)
         integer, parameter   :: MIN_POP = 2   ! ignoring classes with one particle
         integer, allocatable :: pops(:)
         integer :: i, iptcl, icls
+        build_ptr => build
         call self%kill
         call seed_rnd
         self%nptcls = size(pinds)
@@ -93,19 +97,19 @@ contains
         end do
         !$omp end parallel do
         ! Classes (similar to strategy2D_alloc)
-        if( build_glob%spproj%os_cls2D%get_noris() == 0 )then
-            if( build_glob%spproj_field%isthere('class') )then
-                call build_glob%spproj%os_ptcl2D%get_pops(pops, 'class', maxn=self%ncls)
+        if( build_ptr%spproj%os_cls2D%get_noris() == 0 )then
+            if( build_ptr%spproj_field%isthere('class') )then
+                call build_ptr%spproj%os_ptcl2D%get_pops(pops, 'class', maxn=self%ncls)
             else
                 allocate(pops(self%ncls), source=MINCLSPOPLIM+1)
             endif
         else
-            if( build_glob%spproj_field%isthere('class') )then
-                if( build_glob%spproj%os_cls2D%get_noris() /= self%ncls )then
+            if( build_ptr%spproj_field%isthere('class') )then
+                if( build_ptr%spproj%os_cls2D%get_noris() /= self%ncls )then
                     ! to be able to restart after having run cleanup with fewer classes
                     allocate(pops(self%ncls), source=MINCLSPOPLIM+1)
                 else
-                    pops = nint(build_glob%spproj%os_cls2D%get_all('pop'))
+                    pops = nint(build_ptr%spproj%os_cls2D%get_all('pop'))
                     where( pops < MIN_POP ) pops = 0 ! ignoring classes with one particle
                 endif
             else

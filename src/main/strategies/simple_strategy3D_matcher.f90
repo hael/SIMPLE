@@ -149,7 +149,7 @@ contains
 
         ! READING THE ASSIGNMENT FOR PROB MODE
         if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            call eulprob_obj_part%new(pinds)
+            call eulprob_obj_part%new(build_glob, pinds)
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
         endif
 
