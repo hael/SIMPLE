@@ -4,7 +4,6 @@ use simple_pftc_srch_api
 use simple_strategy3D_alloc
 use simple_strategy2D3D_common
 use simple_binoris_io
-use simple_builder,                 only: build_glob
 use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
@@ -42,7 +41,9 @@ type(string)               :: benchfname
 
 contains
 
-    subroutine refine3D_exec( cline, which_iter, converged )
+    subroutine refine3D_exec( build, cline, which_iter, converged )
+        use simple_builder, only: builder, build_glob
+        class(builder), target,  intent(inout) :: build
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
@@ -64,6 +65,10 @@ contains
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch
         logical :: doprint, l_polar, l_restore
+        
+        ! Assign build_glob pointer for compatibility with common module
+        build_glob => build
+        
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -77,14 +82,14 @@ contains
         end select
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
-        if( build_glob%spproj_field%get_nevenodd() == 0 )then
+        if( build%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; refine3D_exec')
-            call build_glob%spproj_field%partition_eo
-            call build_glob%spproj%write_segment_inside(params_glob%oritype)
+            call build%spproj_field%partition_eo
+            call build%spproj%write_segment_inside(params_glob%oritype)
         endif
 
         ! CHECK WHETHER WE HAVE PREVIOUS 3D ORIENTATIONS
-        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
+        has_been_searched = .not.build%spproj%is_virgin_field(params_glob%oritype)
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range(cline)
@@ -93,7 +98,7 @@ contains
         if( allocated(pinds) ) deallocate(pinds)
         if( str_has_substr(params_glob%refine, 'prob') )then
             ! generation of random sample and incr of updatecnts delegated to prob_align
-            call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+            call build%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
             &nptcls2update, pinds )
         else
             ! sampled incremented
@@ -132,9 +137,9 @@ contains
             endif
             call pftc%polar_cavger_zero_pft_refs
             if( file_exists(params_glob%frcs) )then
-                call build_glob%clsfrcs%read(params_glob%frcs)
+                call build%clsfrcs%read(params_glob%frcs)
             else
-                call build_glob%clsfrcs%new(params_glob%nspace, params_glob%box_crop,&
+                call build%clsfrcs%new(params_glob%nspace, params_glob%box_crop,&
                     &params_glob%smpd_crop, params_glob%nstates)
             endif
         endif
@@ -149,7 +154,7 @@ contains
 
         ! READING THE ASSIGNMENT FOR PROB MODE
         if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            call eulprob_obj_part%new(build_glob, pinds)
+            call eulprob_obj_part%new(build, pinds)
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
         endif
 
@@ -196,14 +201,14 @@ contains
                             endif
                         endif
                     case('shc_smpl')
-                        if( build_glob%spproj_field%is_first_update(which_iter, iptcl) )then
+                        if( build%spproj_field%is_first_update(which_iter, iptcl) )then
                             allocate(strategy3D_greedy_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
                             cnt_greedy(ithr) = cnt_greedy(ithr) + 1
                         else
                             allocate(strategy3D_shc_smpl         :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
                     case('snhc_smpl')
-                        if( build_glob%spproj_field%is_first_update(which_iter, iptcl) )then
+                        if( build%spproj_field%is_first_update(which_iter, iptcl) )then
                             allocate(strategy3D_greedy_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
                             cnt_greedy(ithr) = cnt_greedy(ithr) + 1
                         else
@@ -219,8 +224,8 @@ contains
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)
-                        call build_glob%spproj_field%get_ori(iptcl, orientation)
-                        call build_glob%spproj_field%set(iptcl, 'proj', build_glob%eulspace%find_closest_proj(orientation))
+                        call build%spproj_field%get_ori(iptcl, orientation)
+                        call build%spproj_field%set(iptcl, 'proj', build%eulspace%find_closest_proj(orientation))
                     case DEFAULT
                         THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
                 end select
@@ -233,13 +238,13 @@ contains
                     call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
                     call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
                     ! keep track of incremental shift
-                    incr_shifts(:,iptcl_batch) = build_glob%spproj_field%get_2Dshift(iptcl) - strategy3Dsrch(iptcl_batch)%ptr%s%prev_shvec
+                    incr_shifts(:,iptcl_batch) = build%spproj_field%get_2Dshift(iptcl) - strategy3Dsrch(iptcl_batch)%ptr%s%prev_shvec
                     ! cleanup
                     call strategy3Dsrch(iptcl_batch)%ptr%kill
                 endif
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
-                    call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    call build%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
                     call eucl_sigma%calc_sigma2(pftc, iptcl, orientation, 'proj')
                 end if
@@ -250,7 +255,7 @@ contains
             if( l_polar .and. l_restore )then
                 if( L_BENCH_GLOB ) t_rec = tic()
                 call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &build_glob%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
+                    &build%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
                 if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
             endif
         enddo
@@ -259,7 +264,7 @@ contains
         if( any(cnt_greedy > 0) .and. any(cnt_all > 0) )then
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
-        call build_glob%spproj_field%set_all2single('frac_greedy', frac_greedy)
+        call build%spproj_field%set_all2single('frac_greedy', frac_greedy)
         ! cleanup
         do iptcl_batch = 1,batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
@@ -277,16 +282,16 @@ contains
         else
             if( trim(params_glob%cavgw).eq.'yes' )then
                 ! class averages
-                call build_glob%spproj_field%calc_cavg_soft_weights(params_glob%frac)
+                call build%spproj_field%calc_cavg_soft_weights(params_glob%frac)
             else
                 ! particles
-                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+                call build%spproj_field%calc_hard_weights(params_glob%frac)
             endif
         endif
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
-        call build_glob%vol%kill
+        call build%vol%kill
         call orientation%kill
         call dealloc_imgarr(ptcl_match_imgs)
         call dealloc_imgarr(ptcl_match_imgs_pad)
@@ -299,11 +304,11 @@ contains
                 if( L_BENCH_GLOB ) t_projio = tic()
                 select case(trim(params_glob%oritype))
                     case('ptcl3D')
-                        call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
-                            &build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
+                        call binwrite_oritab(params_glob%outfile, build%spproj, &
+                            &build%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
                     case('cls3D')
-                        call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
-                            &build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
+                        call binwrite_oritab(params_glob%outfile, build%spproj, &
+                            &build%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
                     case DEFAULT
                         THROW_HARD('unsupported oritype: '//trim(params_glob%oritype)//'; refine3D_exec')
                 end select
@@ -344,7 +349,7 @@ contains
         ! REPORT CONVERGENCE
         call qsys_job_finished(string('simple_strategy3D_matcher :: refine3D_exec'))
         if( .not. params_glob%l_distr_exec .and. trim(params_glob%refine).ne.'sigma' )then
-            converged = conv%check_conv3D(cline, build_glob%spproj_field, params_glob%msk)
+            converged = conv%check_conv3D(cline, build%spproj_field, params_glob%msk)
         endif
         if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)
@@ -383,8 +388,8 @@ contains
 
         subroutine polar_restoration()
             params_glob%refs = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//params_glob%ext%to_char()
-            call pftc%polar_cavger_merge_eos_and_norm(reforis=build_glob%eulspace, symop=build_glob%pgrpsyms)
-            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build_glob%clsfrcs, build_glob%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
+            call pftc%polar_cavger_merge_eos_and_norm(reforis=build%eulspace, symop=build%pgrpsyms)
+            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
             call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call pftc%polar_cavger_kill
         end subroutine polar_restoration
