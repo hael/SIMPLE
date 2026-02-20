@@ -5,7 +5,7 @@ use simple_default_clines
 use simple_nice
 use simple_qsys_funs
 use simple_binoris_io,       only: binread_nlines, binread_oritab, binwrite_oritab, binread_ctfparams_state_eo
-use simple_builder,          only: builder, build_glob
+use simple_builder,          only: builder
 use simple_cmdline,          only: cmdline
 use simple_commander_base,   only: commander_base
 use simple_euclid_sigma2,    only: write_groups_starfile, euclid_sigma2, sigma2_star_from_iter, eucl_sigma2_glob

@@ -30,18 +30,14 @@ contains
     subroutine execute_safe( self, cline )
         use simple_cmdline,    only: cmdline
         use simple_parameters, only: parameters, params_glob
-        use simple_builder,    only: builder, build_glob
         class(commander_base), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         class(parameters), pointer :: params_ptr
-        class(builder),    pointer :: build_ptr
         params_ptr => params_glob
-        build_ptr  => build_glob
-        nullify(build_glob,params_glob)
+        nullify(params_glob)
         call self%execute(cline)
         params_glob => params_ptr
-        build_glob  => build_ptr
-        nullify(build_ptr,params_ptr)
+        nullify(params_ptr)
     end subroutine execute_safe
 
 end module simple_commander_base
