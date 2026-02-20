@@ -1276,7 +1276,7 @@ contains
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim),source=0.)
         ! temporary objects
-        call prepimgbatch(pop)
+        call prepimgbatch(build, pop)
         do ithr = 1, nthr_glob
             call  img(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
             call timg(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
@@ -1286,7 +1286,7 @@ contains
         cyc_lims       = img(1)%loop_lims(3)
         cyc_limsR(:,1) = cyc_lims(1,:)
         cyc_limsR(:,2) = cyc_lims(2,:)
-        call discrete_read_imgbatch(pop, pinds(:), [1,pop])
+        call discrete_read_imgbatch(build, pop, pinds(:), [1,pop])
         !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,h,k,hh,kk,loc,win,l,m,physh,physk,kbw,fcomp,fcompl,l_conjg) &
         !$omp default(shared) schedule(static) proc_bind(close)
         do i = 1,pop

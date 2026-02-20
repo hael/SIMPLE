@@ -69,7 +69,7 @@ contains
         endif
 
         ! SET FRACTION OF SEARCH SPACE
-        frac_srch_space = build%spproj_field%get_avg('frac')
+        frac_srch_space = build_ptr%spproj_field%get_avg('frac')
 
         ! SWITCHES
         refine_flag    = trim(params_glob%refine)
@@ -119,7 +119,7 @@ contains
         if( allocated(pinds) ) deallocate(pinds)
         if( l_prob )then
             ! generation of random sample and incr of updatecnts delegated to prob_tab2D_distr
-            call build%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+            call build_ptr%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
             &nptcls2update, pinds )
         else
             call sample_ptcls4update2D([params_glob%fromp,params_glob%top], l_update_frac, nptcls2update, pinds)
@@ -137,13 +137,13 @@ contains
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        if( file_exists(params_glob%frcs) ) call build%clsfrcs%read(params_glob%frcs)
+        if( file_exists(params_glob%frcs) ) call build_ptr%clsfrcs%read(params_glob%frcs)
 
         ! PREP REFERENCES
-        if( build%spproj_field%get_nevenodd() == 0 )then
+        if( build_ptr%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params_glob%oritype)
+            call build_ptr%spproj_field%partition_eo
+            call build_ptr%spproj%write_segment_inside(params_glob%oritype)
         endif
         if( l_polar .and. which_iter>1 )then
             ! references are read in prep_polar_pftc4align2D below
@@ -154,7 +154,7 @@ contains
                 l_alloc_read_cavgs = which_iter==1
             endif
             if( L_NEW_CAVGER )then
-                call cavger_new_new(build, pinds, alloccavgs=l_alloc_read_cavgs)
+                call cavger_new_new(build_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
                 if( l_alloc_read_cavgs )then
                     if( .not. cline%defined('refs') )then
                         THROW_HARD('need refs to be part of command line for cluster2D execution')
@@ -162,7 +162,7 @@ contains
                     call cavger_new_read_all
                 endif
             else
-                call cavger_new(build, pinds, alloccavgs=l_alloc_read_cavgs)
+                call cavger_new(build_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
                 if( l_alloc_read_cavgs )then
                     if( .not. cline%defined('refs') )then
                         THROW_HARD('need refs to be part of command line for cluster2D execution')
@@ -173,7 +173,7 @@ contains
         endif
 
         ! SET FOURIER INDEX RANGE
-        call set_bp_range2D(cline, which_iter, frac_srch_space)
+        call set_bp_range2D(build_ptr, cline, which_iter, frac_srch_space)
 
         ! PREP BATCH ALIGNEMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
@@ -203,11 +203,11 @@ contains
         endif
 
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftc initialization
-        call prep_strategy2D_glob( build%spproj, neigh_frac )
+        call prep_strategy2D_glob( build_ptr%spproj, neigh_frac )
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 
         ! SETUP WEIGHTS
-        call build%spproj_field%set_all2single('w', 1.0)
+        call build_ptr%spproj_field%set_all2single('w', 1.0)
 
         ! GENERATE PARTICLES SEARCH OBJECTS
         allocate(strategy2Dsrch(batchsz_max))
@@ -215,14 +215,14 @@ contains
 
         ! READ THE ASSIGNMENT FOR PROB MODE
         if( l_prob )then
-            call probtab%new(build, pinds)
+            call probtab%new(build_ptr, pinds)
             call probtab%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
             s2D%probtab => probtab ! table accessible to strategies
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         rt_align         = 0.
-        l_ctf            = build%spproj%get_ctfflag('ptcl2D',iptcl=params_glob%fromp).ne.'no'
+        l_ctf            = build_ptr%spproj%get_ctfflag('ptcl2D',iptcl=params_glob%fromp).ne.'no'
         l_np_cls_defined = cline%defined('nptcls_per_cls')
         write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
 
@@ -237,7 +237,7 @@ contains
             if( L_BENCH_GLOB ) rt_prep_pftc = rt_prep_pftc + toc(t_prep_pftc)
             ! batch strategy2D objects
             if( L_BENCH_GLOB ) t_init = tic()
-            call prep_strategy2D_batch( build%spproj, pftc, which_iter, batchsz, pinds(batch_start:batch_end) )
+            call prep_strategy2D_batch( build_ptr%spproj, pftc, which_iter, batchsz, pinds(batch_start:batch_end) )
             if( L_BENCH_GLOB ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -247,10 +247,10 @@ contains
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
                 iptcl      = pinds(iptcl_map)              ! global index
                 ! Search strategy (polymorphic strategy2D construction)
-                updatecnt = build%spproj_field%get_updatecnt(iptcl)
+                updatecnt = build_ptr%spproj_field%get_updatecnt(iptcl)
                 if( l_stream )then
                     ! online mode, based on history
-                    if( updatecnt==1 .or. (.not.build%spproj_field%has_been_searched(iptcl)) )then
+                    if( updatecnt==1 .or. (.not.build_ptr%spproj_field%has_been_searched(iptcl)) )then
                         ! brand new particles
                         allocate(strategy2D_greedy                :: strategy2Dsrch(iptcl_batch)%ptr)
                     else
@@ -276,7 +276,7 @@ contains
                             else if( refine_flag.eq.'inpl_smpl' )then
                                 allocate(strategy2D_inpl_smpl       :: strategy2Dsrch(iptcl_batch)%ptr)
                             endif
-                        else if( l_greedy .or. (updatecnt==1 .or. (.not.build%spproj_field%has_been_searched(iptcl))) )then
+                        else if( l_greedy .or. (updatecnt==1 .or. (.not.build_ptr%spproj_field%has_been_searched(iptcl))) )then
                             ! first iteration | refine=*greedy*
                             if( trim(params_glob%tseries).eq.'yes' )then
                                 if( l_np_cls_defined )then
@@ -314,7 +314,7 @@ contains
                 incr_shifts(:,iptcl_batch) = strategy2Dsrch(iptcl_batch)%ptr%s%best_shvec
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
-                    call build%spproj_field%get_ori(iptcl, orientation)
+                    call build_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch)) ! incremental shift
                     call eucl_sigma%calc_sigma2(pftc, iptcl, orientation, 'class')
                 end if
@@ -326,7 +326,7 @@ contains
             ! restore polar cavgs
             if( l_polar )then
                 call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &build%spproj, incr_shifts(:,1:batchsz))
+                    &build_ptr%spproj, incr_shifts(:,1:batchsz))
             endif
         enddo ! Batch loop
 
@@ -336,12 +336,12 @@ contains
         else
             if( l_stream )then
                 if( params_glob%l_update_frac .and. params_glob%maxpop>0 )then
-                    call build%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
+                    call build_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
                         &params_glob%maxpop, params_glob%nparts)
                 endif
             else
                 if( params_glob%maxpop>0 )then
-                    call build%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
+                    call build_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
                         &params_glob%maxpop, params_glob%nparts)
                 endif
             endif
@@ -362,7 +362,7 @@ contains
 
         ! OUTPUT ORIENTATIONS
         if( L_BENCH_GLOB ) t_projio = tic()
-        call binwrite_oritab(params_glob%outfile, build%spproj, build%spproj_field, &
+        call binwrite_oritab(params_glob%outfile, build_ptr%spproj, build_ptr%spproj_field, &
             &[params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
         params_glob%oritab = params_glob%outfile
         if( L_BENCH_GLOB ) rt_projio = toc(t_projio)
@@ -375,11 +375,11 @@ contains
                     call pftc%polar_cavger_readwrite_partial_sums('write')
                 else
                     if( L_NEW_CAVGER )then
-                        call cavger_new_transf_oridat( build%spproj )
+                        call cavger_new_transf_oridat( build_ptr%spproj )
                         call cavger_new_assemble_sums( l_partial_sums )
                         call cavger_new_readwrite_partial_sums('write')
                     else
-                        call cavger_transf_oridat( build%spproj )
+                        call cavger_transf_oridat( build_ptr%spproj )
                         call cavger_assemble_sums( l_partial_sums )
                         call cavger_readwrite_partial_sums('write')
                     endif
@@ -393,7 +393,7 @@ contains
             call pftc%polar_cavger_kill
         else
             ! check convergence
-            converged = conv%check_conv2D(cline, build%spproj_field, build%spproj_field%get_n('class'), params_glob%msk)
+            converged = conv%check_conv2D(cline, build_ptr%spproj_field, build_ptr%spproj_field%get_n('class'), params_glob%msk)
             converged = converged .and. (params_glob%which_iter >= params_glob%minits)
             converged = converged .or.  (params_glob%which_iter >= params_glob%maxits)
             ! Update progress file if not stream
@@ -415,22 +415,22 @@ contains
                     ! polar restoration
                     if( l_clin )then
                         clinw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
-                        call pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, clinw)
+                        call pftc%polar_cavger_merge_eos_and_norm(build_ptr%eulspace, build_ptr%pgrpsyms, clinw)
                     else
                         call pftc%polar_cavger_merge_eos_and_norm2D
                     endif
-                    call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
+                    call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build_ptr%clsfrcs, build_ptr%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
                     call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                    call pftc%polar_cavger_gen2Dclassdoc(build%spproj, build%clsfrcs)
+                    call pftc%polar_cavger_gen2Dclassdoc(build_ptr%spproj, build_ptr%clsfrcs)
                     call pftc%polar_cavger_kill
                 else
                     ! cartesian restoration
                     if( L_NEW_CAVGER )then
-                        call cavger_new_transf_oridat( build%spproj )
+                        call cavger_new_transf_oridat( build_ptr%spproj )
                         call cavger_new_assemble_sums( l_partial_sums )
                         call cavger_new_restore_cavgs( params_glob%frcs )
                         ! classdoc gen needs to be after calc of FRCs
-                        call cavger_new_gen2Dclassdoc( build%spproj )
+                        call cavger_new_gen2Dclassdoc( build_ptr%spproj )
                         ! write references
                         call cavger_new_write_merged( params_glob%refs )
                         if( l_stream )then
@@ -439,12 +439,12 @@ contains
                         endif
                         call cavger_new_kill(dealloccavgs=.false.)
                     else
-                        call cavger_transf_oridat( build%spproj )
+                        call cavger_transf_oridat( build_ptr%spproj )
                         call cavger_assemble_sums( l_partial_sums )
                         call cavger_merge_eos_and_norm
                         call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs, params_glob%which_iter)
                         ! classdoc gen needs to be after calc of FRCs
-                        call cavger_gen2Dclassdoc(build%spproj)
+                        call cavger_gen2Dclassdoc(build_ptr%spproj)
                         ! write references
                         call cavger_write(params_glob%refs,'merged')
                         if( l_stream )then
@@ -458,11 +458,11 @@ contains
                 ! update command line
                 call cline%set('refs', params_glob%refs)
                 ! write project: cls2D and state congruent cls3D
-                call build%spproj%os_cls3D%new(params_glob%ncls, is_ptcl=.false.)
-                states = build%spproj%os_cls2D%get_all('state')
-                call build%spproj%os_cls3D%set_all('state',states)
-                call build%spproj%write_segment_inside('cls2D', params_glob%projfile)
-                call build%spproj%write_segment_inside('cls3D', params_glob%projfile)
+                call build_ptr%spproj%os_cls3D%new(params_glob%ncls, is_ptcl=.false.)
+                states = build_ptr%spproj%os_cls2D%get_all('state')
+                call build_ptr%spproj%os_cls3D%set_all('state',states)
+                call build_ptr%spproj%write_segment_inside('cls2D', params_glob%projfile)
+                call build_ptr%spproj%write_segment_inside('cls3D', params_glob%projfile)
                 deallocate(states)
             endif
         endif
@@ -516,7 +516,7 @@ contains
     subroutine prep_batch_particles2D( batchsz_max )
         integer, intent(in) :: batchsz_max
         integer :: ithr
-        call prepimgbatch(batchsz_max)
+        call prepimgbatch(build_ptr, batchsz_max)
         allocate(ptcl_match_imgs(params_glob%nthr), ptcl_match_imgs_pad(params_glob%nthr))
         !$omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
         do ithr = 1,params_glob%nthr
@@ -530,7 +530,7 @@ contains
 
     subroutine clean_batch_particles2D
         use simple_imgarr_utils, only: dealloc_imgarr
-        call killimgbatch
+        call killimgbatch(build_ptr)
         call dealloc_imgarr(ptcl_match_imgs)
         call dealloc_imgarr(ptcl_match_imgs_pad)
     end subroutine clean_batch_particles2D
@@ -545,7 +545,7 @@ contains
         ! real(timer_int_kind)    :: rt_prep1, rt_prep2, rt_prep, rt_polarize, rt_sum, rt_loop
         ! integer(timer_int_kind) :: t_polarize, t_loop
         integer     :: iptcl_batch, iptcl, ithr
-        call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here])
+        call discrete_read_imgbatch(build_ptr, nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
         call pftc%reallocate_ptcls(nptcls_here, pinds)
         ! memoization for polarize_oversamp
@@ -565,7 +565,7 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            call prepimg4align(iptcl, build_ptr%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
+            call prepimg4align(build_ptr, iptcl, build_ptr%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             ! t_polarize = tic()
             ! call prepimg4align_bench(iptcl, build_ptr%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr),&
             ! &rt_prep1, rt_prep2, rt_prep)
@@ -671,7 +671,7 @@ contains
                 do_center = input_center .and. do_center
                 if( do_center )then
                     call match_imgs(icls)%copy_fast(cavgs_m(icls))
-                    call calc_2Dref_offset(match_imgs(icls), icls, centype, xyz)
+                    call calc_2Dref_offset(build_ptr, match_imgs(icls), icls, centype, xyz)
                 else
                     xyz = 0.0
                 endif
@@ -681,7 +681,7 @@ contains
                 if( params_glob%l_lpset )then
                     ! merged class average in both even and odd positions
                     call match_imgs(icls)%copy_fast(cavgs_m(icls))
-                    call prep2Dref(match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
+                    call prep2Dref(build_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                     call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_ptr%l_resmsk)
                     call pftc%set_ref_pft(icls, pft, iseven=.true.)
                     call pftc%cp_even2odd_ref(icls)
@@ -689,17 +689,17 @@ contains
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! even & odd
                         call match_imgs(icls)%copy_fast(cavgs_e(icls))
-                        call prep2Dref(match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
+                        call prep2Dref(build_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_ptr%l_resmsk)
                         call pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call match_imgs(icls)%copy_fast(cavgs_o(icls))
-                        call prep2Dref(match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
+                        call prep2Dref(build_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_ptr%l_resmsk)
                         call pftc%set_ref_pft(icls, pft, iseven=.false.)
                     else
                         ! merged class average in both even and odd positions
                         call match_imgs(icls)%copy_fast(cavgs_m(icls))
-                        call prep2Dref(match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
+                        call prep2Dref(build_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build_ptr%l_resmsk)
                         call pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call pftc%cp_even2odd_ref(icls)
@@ -779,7 +779,7 @@ contains
                 ! centering
                 l_center = do_center .and. (pop > MINCLSPOPLIM)
                 xyz      = 0.
-                if( l_center ) call calc_2Dref_offset(tmp_imgs(icls), icls, centype, xyz)
+                if( l_center ) call calc_2Dref_offset(build_ptr, tmp_imgs(icls), icls, centype, xyz)
                 ! Prep for alignment
                 call pftc%polar_prep2Dref(build_ptr%clsfrcs, icls, l_gaufilt)
                 ! transfer to pftc

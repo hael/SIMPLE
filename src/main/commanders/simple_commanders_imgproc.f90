@@ -107,7 +107,7 @@ contains
             call memoize_ft_maps(build%img%get_ldim(), build%img%get_smpd())
             call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
             do iptcl = 1, nptcls
-                call read_imgbatch(iptcl, build%img)
+                call read_imgbatch(build, iptcl, build%img)
                 call build%img%fft
                 ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
                 tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
