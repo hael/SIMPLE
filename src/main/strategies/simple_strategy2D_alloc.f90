@@ -1,7 +1,6 @@
 !@descr: array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
 module simple_strategy2D_alloc
 use simple_pftc_srch_api
-use simple_builder,        only: build_glob
 use simple_eul_prob_tab2D, only: eul_prob_tab2D, neighfrac2nsmpl
 implicit none
 
@@ -39,20 +38,21 @@ contains
     end subroutine clean_strategy2D
 
     !>  prep class & global parameters
-    subroutine prep_strategy2D_glob( neigh_frac )
+    subroutine prep_strategy2D_glob( spproj, neigh_frac )
         use simple_eul_prob_tab, only: calc_athres
-        real,           intent(in) :: neigh_frac
+        type(sp_project), intent(inout) :: spproj
+        real,             intent(in)    :: neigh_frac
         real    :: overlap, avg_dist_inpl
         logical :: zero_oris, ncls_diff
         ! gather class populations
-        zero_oris = build_glob%spproj%os_cls2D%get_noris() == 0
-        ncls_diff = build_glob%spproj%os_cls2D%get_noris() /= params_glob%ncls
-        if( build_glob%spproj_field%isthere('class') )then
+        zero_oris = spproj%os_cls2D%get_noris() == 0
+        ncls_diff = spproj%os_cls2D%get_noris() /= params_glob%ncls
+        if( spproj%os_ptcl2D%isthere('class') )then
             if( zero_oris .or. ncls_diff  )then
                 ! the ==0    is to overcome bug in shared-memory version
                 ! the ==ncls is to be able to restart after having run cleanup with fewer classes
                 if( zero_oris )then
-                    call build_glob%spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', maxn=params_glob%ncls)
+                    call spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', maxn=params_glob%ncls)
                     return
                 endif
                 if( ncls_diff )then
@@ -60,7 +60,7 @@ contains
                     return
                 endif
             endif
-            s2D%cls_pops = nint(build_glob%spproj%os_cls2D%get_all('pop'))
+            s2D%cls_pops = nint(spproj%os_cls2D%get_all('pop'))
             where(s2D%cls_pops < 2 )
                 ! ignoring classes with one particle
                 s2D%cls_pops = 0
@@ -78,8 +78,8 @@ contains
         s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, pftc_glob%get_nrots())
         select case(trim(params_glob%refine))
         case('greedy_smpl','inpl_smpl')
-            overlap        = build_glob%spproj_field%get_avg('mi_class', state=1)
-            avg_dist_inpl  = calc_athres(os=build_glob%spproj_field, field_str='dist_inpl', state=1)
+            overlap        = spproj%os_ptcl2D%get_avg('mi_class', state=1)
+            avg_dist_inpl  = calc_athres(os=spproj%os_ptcl2D, field_str='dist_inpl', state=1)
             avg_dist_inpl  = avg_dist_inpl * (1.-overlap)
             s2D%smpl_ninpl = max(2,nint(avg_dist_inpl*real(pftc_glob%get_nrots())/180.))
             s2D%smpl_ncls  = nint(real(params_glob%ncls) * (1.-overlap)**2)
@@ -96,7 +96,8 @@ contains
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)
-    subroutine prep_strategy2D_batch( pftc, which_iter, nptcls, pinds )
+    subroutine prep_strategy2D_batch( spproj, pftc, which_iter, nptcls, pinds )
+        type(sp_project),   intent(in) :: spproj
         type(polarft_calc), intent(in) :: pftc
         integer,            intent(in) :: which_iter
         integer,            intent(in) :: nptcls        ! # of particles in batch
@@ -118,7 +119,7 @@ contains
         do i = 1,nptcls
             iptcl = pinds(i)
             call rt%ne_ran_iarr(s2D%srch_order(i,:))
-            prev_class = nint(build_glob%spproj_field%get(iptcl,'class'))
+            prev_class = nint(spproj%os_ptcl2D%get(iptcl,'class'))
             call put_last(prev_class, s2D%srch_order(i,:))
         enddo
         call rt%kill
