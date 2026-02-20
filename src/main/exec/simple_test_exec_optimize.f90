@@ -3,7 +3,7 @@ module simple_test_exec_optimize
 use simple_cmdline,                  only: cmdline
 use simple_commanders_test_optimize, only: commander_test_lbfgsb, commander_test_lbfgsb_cosine, &
                                            commander_test_lplims, commander_test_lpstages_test, &
-                                           commander_test_opt_lp, commander_test_tree_srch
+                                           commander_test_opt_lp
 implicit none
 
 public :: exec_test_optimize_commander
@@ -14,7 +14,6 @@ type(commander_test_lbfgsb_cosine) :: xlbfgsb_cosine
 type(commander_test_lplims)        :: xlplims
 type(commander_test_lpstages_test) :: xlpstages_test
 type(commander_test_opt_lp)        :: xopt_lp
-type(commander_test_tree_srch)     :: xtree_srch
 
 contains
 
@@ -37,8 +36,6 @@ contains
                 call xlpstages_test%execute(cline)
             case( 'opt_lp' )
                 call xopt_lp%execute(cline)
-            case( 'tree_srch' )
-                call xtree_srch%execute(cline)
             case default
                 l_did_execute = .false.
         end select

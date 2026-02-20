@@ -4,8 +4,8 @@ use simple_cmdline,               only: cmdline
 use simple_commanders_test_utils, only: commander_test_ansi_colors, commander_test_binoris_test, &
                                         commander_test_binoris_io_test, commander_test_cmdline, &
                                         commander_test_install, commander_test_nice, &
-                                        commander_test_serialize, commander_test_stringmatch, &
-                                        commander_test_units
+                                        commander_test_serialize, commander_test_stringmatch
+
 implicit none
 
 public :: exec_test_utils_commander
@@ -19,7 +19,6 @@ type(commander_test_install)         :: xinstall
 type(commander_test_nice)            :: xnice
 type(commander_test_serialize)       :: xserialize
 type(commander_test_stringmatch)     :: xstringmatch
-type(commander_test_units)           :: xunits
 
 contains
 
@@ -48,8 +47,6 @@ contains
                 call xserialize%execute(cline)
             case( 'stringmatch' )
                 call xstringmatch%execute(cline)
-            case( 'units' )
-                call xunits%execute(cline)
             case default
                 l_did_execute = .false.
         end select
