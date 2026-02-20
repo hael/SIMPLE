@@ -16,7 +16,7 @@ type(commander_test_socket_server)     :: xsocket_server
 
 contains
 
-    subroutine exec_test_network_commander( which, cline, l_silent, l_did_execute )
+    subroutine exec_test_network_commander(which, cline, l_silent, l_did_execute)
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute

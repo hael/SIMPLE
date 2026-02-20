@@ -8,7 +8,6 @@ type(ui_program), target :: lbfgsb_cosine
 type(ui_program), target :: lplims
 type(ui_program), target :: lpstages_test
 type(ui_program), target :: opt_lp
-type(ui_program), target :: tree_srch
 
 contains
 
@@ -19,7 +18,6 @@ contains
         call new_lplims(tsttab)
         call new_lpstages_test(tsttab)
         call new_opt_lp(tsttab)
-        call new_tree_srch(tsttab)
     end subroutine construct_test_optimize_programs
 
     subroutine print_test_optimize_programs(logfhandle)
@@ -30,7 +28,6 @@ contains
         write(logfhandle,'(A)') lplims%name%to_char()
         write(logfhandle,'(A)') lpstages_test%name%to_char()
         write(logfhandle,'(A)') opt_lp%name%to_char()
-        write(logfhandle,'(A)') tree_srch%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_optimize_programs
 
@@ -174,32 +171,5 @@ contains
         call add_ui_program('opt_lp', opt_lp, tsttab)
     end subroutine new_opt_lp
 
-    subroutine new_tree_srch( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call tree_srch%new(&
-        &'tree_srch',&                         ! name
-        &'tree_srch ',&                        ! descr_short
-        &'is a test program for ',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        !call tree_srch%add_input(UI_IO, )
-        ! parameter input/output
-        !call tree_srch%add_input(UI_IMG, )
-        ! alternative inputs
-        !call tree_srch%add_input(UI_PARM, )
-        ! search controls
-        !call tree_srch%add_input(UI_SRCH, )
-        ! filter controls
-        !call tree_srch%add_input(UI_FILT, )
-        ! mask controls
-        !call tree_srch%add_input(UI_MASK, )
-        ! computer controls
-        !call tree_srch%add_input(UI_COMP, )
-        ! add to ui_hash
-        call add_ui_program('tree_srch', tree_srch, tsttab)
-    end subroutine new_tree_srch
 
 end module simple_test_ui_optimize

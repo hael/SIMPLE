@@ -40,7 +40,7 @@ call exec_map_commander(        trim(prg), cline, l_silent, l_did_execute)
 call exec_atom_commander(       trim(prg), cline, l_silent, l_did_execute)
 call exec_validate_commander(   trim(prg), cline, l_silent, l_did_execute)
 if( .not. l_did_execute )then
-    THROW_HARD('Program "'//trim(prg)//'" not recognized. Use prg=list to see available programs.')
+    THROW_HARD('Program "'//trim(prg)//'"  not recognized. Use prg=list to see available programs.')
 endif
 call update_job_descriptions_in_project( cline )
 ! close log file
@@ -48,7 +48,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('f6d75e10')
+    call simple_print_git_version('ab7a682d')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

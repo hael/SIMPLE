@@ -11,7 +11,6 @@ type(ui_program), target :: install
 type(ui_program), target :: nice
 type(ui_program), target :: serialize
 type(ui_program), target :: stringmatch
-type(ui_program), target :: units
 
 contains
 
@@ -25,7 +24,6 @@ contains
         call new_nice(tsttab)
         call new_serialize(tsttab)
         call new_stringmatch(tsttab)
-        call new_units(tsttab)
     end subroutine construct_test_utils_programs
 
     subroutine print_test_utils_programs( logfhandle)
@@ -39,7 +37,6 @@ contains
         write(logfhandle,'(A)') nice%name%to_char()
         write(logfhandle,'(A)') serialize%name%to_char()
         write(logfhandle,'(A)') stringmatch%name%to_char()
-        write(logfhandle,'(A)') units%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_utils_programs
 
@@ -266,33 +263,5 @@ contains
         ! add to ui_hash
         call add_ui_program('stringmatch', stringmatch, tsttab)
     end subroutine new_stringmatch
-
-    subroutine new_units( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call units%new(&
-        &'units',&                             ! name
-        &'units ',&                            ! descr_short
-        &'is a test program for ',&
-        &'simple_test_exec',&                  ! executable
-        &.false.)                              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        !call units%add_input(UI_IO, )
-        ! parameter input/output
-        !call units%add_input(UI_IMG, )
-        ! alternative inputs
-        !call units%add_input(UI_PARM, )
-        ! search controls
-        !call units%add_input(UI_SRCH, )
-        ! filter controls
-        !call units%add_input(UI_FILT, )
-        ! mask controls
-        !call units%add_input(UI_MASK, )
-        ! computer controls
-        !call units%add_input(UI_COMP, )
-        ! add to ui_hash
-        call add_ui_program('units', units, tsttab)
-    end subroutine new_units
 
 end module simple_test_ui_utils
