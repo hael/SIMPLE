@@ -309,7 +309,7 @@ contains
                 strategy2Dspec%iptcl_map   = iptcl_map
                 strategy2Dspec%stoch_bound = neigh_frac
                 call strategy2Dsrch(iptcl_batch)%ptr%new(strategy2Dspec)
-                call strategy2Dsrch(iptcl_batch)%ptr%srch()
+                call strategy2Dsrch(iptcl_batch)%ptr%srch(build_ptr%spproj_field)
                 ! keep track of incremental shift
                 incr_shifts(:,iptcl_batch) = strategy2Dsrch(iptcl_batch)%ptr%s%best_shvec
                 ! calculate sigma2 for ML-based refinement

@@ -3,11 +3,11 @@ module simple_strategy3D_snhc_smpl
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_builder,          only: build_glob
 use simple_decay_funs,       only: extremal_decay
 use simple_eul_prob_tab2D,   only: neighfrac2nsmpl, power_sampling
 use simple_parameters,       only: params_glob
 use simple_polarft_calc,     only: pftc_glob
+use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
 implicit none
@@ -26,22 +26,25 @@ end type strategy3D_snhc_smpl
 
 contains
 
-    subroutine new_snhc_smpl( self, spec )
+    subroutine new_snhc_smpl( self, spec, build )
+        use simple_builder, only: builder
         class(strategy3D_snhc_smpl), intent(inout) :: self
         class(strategy3D_spec),      intent(inout) :: spec
-        call self%s%new(spec)
+        class(builder), target,      intent(inout) :: build
+        call self%s%new(spec, build)
         self%spec = spec
     end subroutine new_snhc_smpl
 
-    subroutine srch_snhc_smpl( self, ithr )
+    subroutine srch_snhc_smpl( self, os, ithr )
         use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy3D_snhc_smpl), intent(inout) :: self
+        class(oris),                  intent(inout) :: os
         integer,                     intent(in)    :: ithr
         real    :: sorted_corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
         real    :: cxy(3), inpl_corr, neigh_frac, power
         integer :: vec_nrots(self%s%nrots), sorted_inds(self%s%nrefs)
         integer :: iref, isample, nrefs_bound, inpl_ind, order_ind, smpl_nrefs, smpl_ninpl
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+        if( os%get_state(self%s%iptcl) > 0 )then
             ! thread index
             self%s%ithr = ithr
             ! prep
@@ -102,7 +105,7 @@ contains
             ! prepare weights and orientations
             call self%oris_assign
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
     end subroutine srch_snhc_smpl
 

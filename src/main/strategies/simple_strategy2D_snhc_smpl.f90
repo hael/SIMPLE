@@ -2,7 +2,6 @@
 module simple_strategy2D_snhc_smpl
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
-use simple_builder,          only: build_glob
 use simple_eul_prob_tab2D,   only: power_sampling
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
@@ -29,15 +28,16 @@ contains
         self%spec = spec
     end subroutine new_snhc_smpl
 
-    subroutine srch_snhc_smpl( self )
+    subroutine srch_snhc_smpl( self, os )   
         class(strategy2D_snhc_smpl), intent(inout) :: self
+        class(oris),                 intent(inout) :: os
         real    :: inpl_corrs(self%s%nrots), sorted_cls_corrs(self%s%nrefs), cls_corrs(self%s%nrefs)
         real    :: cxy(3), inpl_corr
         integer :: cls_inpl_inds(self%s%nrefs), vec_nrots(self%s%nrots), sorted_cls_inds(self%s%nrefs)
         integer :: iref, isample, inpl_ind, order_ind
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+        if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
-            call self%s%prep4srch
+            call self%s%prep4srch(os)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! Class search
@@ -98,9 +98,9 @@ contains
             ! In-plane search
             call self%s%inpl_srch
             ! Updates solution
-            call self%s%store_solution
+            call self%s%store_solution(os)
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
     end subroutine srch_snhc_smpl
 

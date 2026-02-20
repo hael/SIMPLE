@@ -2,7 +2,6 @@
 module simple_strategy2D_eval
 use simple_core_module_api
 use simple_strategy2D_alloc
-use simple_builder,          only: build_glob
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 implicit none
@@ -26,14 +25,15 @@ contains
         self%spec = spec
     end subroutine new_eval
 
-    subroutine srch_eval( self )
+    subroutine srch_eval( self, os )
         class(strategy2D_eval), intent(inout) :: self
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
-            call self%s%prep4srch
+        class(oris),            intent(inout) :: os
+        if( os%get_state(self%s%iptcl) > 0 )then
+            call self%s%prep4srch(os)
             self%s%nrefs_eval = self%s%nrefs
-            call self%s%store_solution
+            call self%s%store_solution(os)
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
     end subroutine srch_eval
 

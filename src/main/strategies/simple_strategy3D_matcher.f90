@@ -150,7 +150,7 @@ contains
         endif
 
         ! PREPARE STRATEGY3D
-        call prep_strategy3D ! allocate s3D singleton
+        call prep_strategy3D(build_ptr) ! allocate s3D singleton
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
 
         ! READING THE ASSIGNMENT FOR PROB MODE
@@ -236,8 +236,8 @@ contains
                 ! search
                 if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
                     ! instance & search
-                    call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
-                    call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
+                    call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch), build_ptr)
+                    call strategy3Dsrch(iptcl_batch)%ptr%srch(build_ptr%spproj_field, ithr)
                     ! keep track of incremental shift
                     incr_shifts(:,iptcl_batch) = build_ptr%spproj_field%get_2Dshift(iptcl) - strategy3Dsrch(iptcl_batch)%ptr%s%prev_shvec
                     ! cleanup

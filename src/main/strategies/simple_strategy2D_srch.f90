@@ -2,7 +2,6 @@
 module simple_strategy2D_srch
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
-use simple_builder,          only: build_glob
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 implicit none
@@ -86,15 +85,16 @@ contains
         call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh, opt_angle=.false.)
     end subroutine new
 
-    subroutine prep4srch( self )
+    subroutine prep4srch( self, os )
         class(strategy2D_srch), intent(inout) :: self
+        class(oris),            intent(inout) :: os
         real    :: corrs(pftc_glob%get_nrots())
         self%nrefs_eval = 0
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
-        self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
-        self%prev_rot   = pftc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
-        self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                      ! shift vector
+        self%prev_class = nint(os%get(self%iptcl,'class'))                ! class index
+        self%prev_rot   = pftc_glob%get_roind(360.-os%e3get(self%iptcl)) ! in-plane angle index
+        self%prev_shvec = os%get_2Dshift(self%iptcl)                      ! shift vector
         self%best_shvec = 0.
         if( self%prev_class > 0 )then
             if( s2D%cls_pops(self%prev_class) > 0 )then
@@ -184,10 +184,11 @@ contains
         endif
     end subroutine inpl_srch
 
-    subroutine store_solution( self, nrefs, w_in )
-        class(strategy2D_srch), intent(in) :: self
-        integer,      optional, intent(in) :: nrefs
-        real,         optional, intent(in) :: w_in
+    subroutine store_solution( self, os, nrefs, w_in )
+        class(strategy2D_srch), intent(in)    :: self
+        class(oris),            intent(inout) :: os
+        integer,      optional, intent(in)    :: nrefs
+        real,         optional, intent(in)    :: w_in
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
         real :: e3, mi_class, frac, w
         ! get in-plane angle
@@ -197,7 +198,7 @@ contains
         u(2) = 1.
         call rotmat2d(e3, mat)
         x1   = matmul(u,mat)
-        call rotmat2d(build_glob%spproj_field%e3get(self%iptcl), mat)
+        call rotmat2d(os%e3get(self%iptcl), mat)
         x2   = matmul(u,mat)
         dist = myacos(dot_product(x1,x2))
         ! calculate overlap between distributions
@@ -213,16 +214,16 @@ contains
         w = 1.0
         if( present(w_in) ) w = w_in
         ! update parameters
-        call build_glob%spproj_field%e3set(self%iptcl,e3)
-        call build_glob%spproj_field%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
-        call build_glob%spproj_field%set(self%iptcl, 'shincarg',   arg(self%best_shvec))
-        call build_glob%spproj_field%set(self%iptcl, 'inpl',       real(self%best_rot))
-        call build_glob%spproj_field%set(self%iptcl, 'class',      real(self%best_class))
-        call build_glob%spproj_field%set(self%iptcl, 'corr',       self%best_corr)
-        call build_glob%spproj_field%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
-        call build_glob%spproj_field%set(self%iptcl, 'mi_class',   mi_class)
-        call build_glob%spproj_field%set(self%iptcl, 'frac',       frac)
-        call build_glob%spproj_field%set(self%iptcl, 'w',          w)
+        call os%e3set(self%iptcl,e3)
+        call os%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
+        call os%set(self%iptcl, 'shincarg',   arg(self%best_shvec))
+        call os%set(self%iptcl, 'inpl',       real(self%best_rot))
+        call os%set(self%iptcl, 'class',      real(self%best_class))
+        call os%set(self%iptcl, 'corr',       self%best_corr)
+        call os%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
+        call os%set(self%iptcl, 'mi_class',   mi_class)
+        call os%set(self%iptcl, 'frac',       frac)
+        call os%set(self%iptcl, 'w',          w)
     end subroutine store_solution
 
     subroutine kill( self )

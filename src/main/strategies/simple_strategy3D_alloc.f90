@@ -1,7 +1,7 @@
 !@descr: array allocation for concrete strategy3D extensions to improve caching and reduce alloc overheads
 module simple_strategy3D_alloc
 use simple_pftc_srch_api
-use simple_builder, only: build_glob
+use simple_builder, only: builder
 implicit none
 
 public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
@@ -35,8 +35,9 @@ logical                :: srch_order_allocated = .false.
 
 contains
 
-    subroutine prep_strategy3D( )
+    subroutine prep_strategy3D( build )
         use simple_eul_prob_tab, only: calc_athres
+        class(builder), intent(inout) :: build
         integer :: istate, iproj, ithr, cnt, nrefs, nrefs_sub
         real    :: areal
         ! clean all class arrays & types
@@ -51,11 +52,11 @@ contains
             &s3D%proj_space_inplinds(nrefs,nthr_glob),&
             &s3D%proj_space_proj(nrefs),s3D%proj_space_w(nrefs,nthr_glob))
         ! states existence
-        if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
+        if( .not.build%spproj%is_virgin_field(params_glob%oritype) )then
             if( str_has_substr(params_glob%refine,'greedy') )then
                 allocate(s3D%state_exists(params_glob%nstates), source=.true.)
             else
-                s3D%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
+                s3D%state_exists = build%spproj_field%states_exist(params_glob%nstates)
             endif
         else
             allocate(s3D%state_exists(params_glob%nstates), source=.true.)
@@ -67,7 +68,7 @@ contains
                 cnt = cnt + 1
                 s3D%proj_space_state(cnt)     = istate
                 s3D%proj_space_proj(cnt)      = iproj
-                master_proj_space_euls(:,cnt) = build_glob%eulspace%get_euler(iproj)
+                master_proj_space_euls(:,cnt) = build%eulspace%get_euler(iproj)
             enddo
         enddo
         s3D%proj_space_shift = 0.
@@ -95,8 +96,8 @@ contains
         if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
         allocate(s3D%smpl_refs_athres(params_glob%nstates), s3D%smpl_inpl_athres(params_glob%nstates))
         do istate = 1, params_glob%nstates
-            s3D%smpl_refs_athres(istate) = calc_athres(os=build_glob%spproj_field, field_str='dist',      state=istate)
-            s3D%smpl_inpl_athres(istate) = calc_athres(os=build_glob%spproj_field, field_str='dist_inpl', state=istate)
+            s3D%smpl_refs_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist',      state=istate)
+            s3D%smpl_inpl_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist_inpl', state=istate)
         enddo
     end subroutine prep_strategy3D
 
