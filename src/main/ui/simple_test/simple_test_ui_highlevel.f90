@@ -73,7 +73,7 @@ contains
         ! mask controls
         !call simulated_workflow%add_input(UI_MASK, )
         ! computer controls
-        call simulated_workflow%add_input(UI_COMP, nthr)
+        !call simulated_workflow%add_input(UI_COMP, nthr)
         ! add to ui_hash
         call add_ui_program('simulated_workflow', simulated_workflow, tsttab)
     end subroutine new_simulated_workflow

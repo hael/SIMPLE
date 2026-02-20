@@ -60,6 +60,7 @@ contains
         integer :: i
         call set_ui_params
         ! SIMPLE TEST PROGRAMS
+        call construct_test_class_programs(tsttab)
         call construct_test_fft_programs(tsttab)
         call construct_test_geometry_programs(tsttab)
         call construct_test_highlevel_programs(tsttab)
@@ -111,6 +112,7 @@ contains
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_simple_test_prgs_in_ui
+        call print_test_class_programs(logfhandle)
         call print_test_fft_programs(logfhandle)
         call print_test_geometry_programs(logfhandle)
         call print_test_highlevel_programs(logfhandle)

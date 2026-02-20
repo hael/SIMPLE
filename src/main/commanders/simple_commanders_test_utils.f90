@@ -52,8 +52,18 @@ end type commander_test_units
 contains
 
 subroutine exec_test_ansi_colors( self, cline )
-    class(commander_test_ansi_colors),    intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
+    use simple_ansi_ctrls
+    use simple_defs_fname, only: NEWLINE
+    class(commander_test_ansi_colors), intent(inout) :: self
+    class(cmdline),                    intent(inout) :: cline
+    print '(a)', &
+        format_str('Red',     C_RED)     // NEWLINE // &
+        format_str('Green',   C_GREEN)   // NEWLINE // &
+        format_str('Yellow',  C_YELLOW)  // NEWLINE // &
+        format_str('Blue',    C_BLUE)    // NEWLINE // &
+        format_str('Magenta', C_MAGENTA) // NEWLINE // &
+        format_str('Cyan',    C_CYAN)    // NEWLINE // &
+        format_str('White',   C_WHITE)
     call simple_end('**** SIMPLE_TEST_ANSI_COLORS_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_ansi_colors
 

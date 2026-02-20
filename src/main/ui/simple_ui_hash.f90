@@ -28,7 +28,7 @@ end type ui_hash
 
 contains
 
-    subroutine set_ref_ui_param_char(self, key, obj)
+    subroutine set_ref_ui_param_char( self, key, obj )
         class(ui_hash),         intent(inout) :: self
         character(len=*),       intent(in)    :: key
         type(ui_param), target, intent(inout) :: obj
@@ -40,7 +40,7 @@ contains
         call self%set_ref(k, p)
     end subroutine set_ref_ui_param_char
 
-    subroutine set_ref_ui_param_str(self, key, obj)
+    subroutine set_ref_ui_param_str( self, key, obj)
         class(ui_hash),         intent(inout) :: self
         type(string),           intent(in)    :: key
         type(ui_param), target, intent(inout) :: obj
@@ -51,7 +51,7 @@ contains
         call self%set_ref(k, p)
     end subroutine set_ref_ui_param_str
 
-    subroutine get_ref_ui_param_char(self, key, pobj, found)
+    subroutine get_ref_ui_param_char( self, key, pobj, found)
         class(ui_hash),          intent(in)  :: self
         character(len=*),        intent(in)  :: key
         type(ui_param), pointer, intent(out) :: pobj
@@ -74,7 +74,7 @@ contains
         end select
     end subroutine get_ref_ui_param_char
 
-    subroutine get_ref_ui_param_str(self, key, pobj, found)
+    subroutine get_ref_ui_param_str( self, key, pobj, found )
         class(ui_hash),          intent(in)  :: self
         type(string),            intent(in)  :: key
         type(ui_param), pointer, intent(out) :: pobj
@@ -97,7 +97,7 @@ contains
         end select
     end subroutine get_ref_ui_param_str
 
-    subroutine set_ref_ui_program_char(self, key, obj)
+    subroutine set_ref_ui_program_char( self, key, obj )
         class(ui_hash),           intent(inout) :: self
         character(len=*),         intent(in)    :: key
         type(ui_program), target, intent(inout) :: obj
@@ -108,7 +108,7 @@ contains
         call self%set_ref(k, p)
     end subroutine set_ref_ui_program_char
 
-    subroutine set_ref_ui_program_str(self, key, obj)
+    subroutine set_ref_ui_program_str( self, key, obj )
         class(ui_hash),           intent(inout) :: self
         type(string),             intent(in)    :: key
         type(ui_program), target, intent(inout) :: obj
@@ -119,7 +119,7 @@ contains
         call self%set_ref(k, p)
     end subroutine set_ref_ui_program_str
 
-    subroutine get_ref_ui_program_char(self, key, pobj, found)
+    subroutine get_ref_ui_program_char( self, key, pobj, found )
         class(ui_hash),            intent(in)  :: self
         character(len=*),          intent(in)  :: key
         type(ui_program), pointer, intent(out) :: pobj
@@ -141,7 +141,7 @@ contains
         end select
     end subroutine get_ref_ui_program_char
 
-    subroutine get_ref_ui_program_str(self, key, pobj, found)
+    subroutine get_ref_ui_program_str( self, key, pobj, found )
         class(ui_hash),            intent(in)  :: self
         type(string),              intent(in)  :: key
         type(ui_program), pointer, intent(out) :: pobj

@@ -6,6 +6,7 @@ use simple_jiffys,              only: simple_print_git_version, simple_print_tim
 use simple_ui,                  only: make_test_ui, list_simple_test_prgs_in_ui
 use iso_fortran_env,            only: output_unit
 use simple_cmdline,             only: cmdline, cmdline_err
+use simple_test_exec_class,     only: exec_test_class_commander
 use simple_test_exec_fft,       only: exec_test_fft_commander
 use simple_test_exec_geometry,  only: exec_test_geometry_commander
 use simple_test_exec_highlevel, only: exec_test_highlevel_commander

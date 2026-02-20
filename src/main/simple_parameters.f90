@@ -179,6 +179,7 @@ type :: parameters
     type(string)              :: pickrefs             !< picking references
     type(string)              :: plaintexttab         !< plain text file of input parameters
     type(string)              :: prg                  !< SIMPLE program being executed
+    type(string)              :: test                 !< SIMPLE TEST program being executed
     type(string)              :: projfile             !< SIMPLE *.simple project file
     type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
     type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
