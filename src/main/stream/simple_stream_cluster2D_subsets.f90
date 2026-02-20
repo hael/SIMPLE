@@ -55,7 +55,6 @@ contains
         call cline%set('numlen',       5)
         call cline%set('sigma_est',    'global')
         call cline%set('refine',       'snhc_smpl')
-        call cline%set('algorithm',    'abinitio2D')
         call cline%set('nchunks',      1)
         call cline%set('nthr2D',       cline%get_iarg('nthr'))
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',         'yes')
@@ -101,7 +100,7 @@ contains
         call cline_cluster2D_chunk%delete('maxits')
         call cline_cluster2D_chunk%delete('extr_iter')
         call cline_cluster2D_chunk%delete('extr_lim')
-        call cline_cluster2D_chunk%delete('cc_iters')
+        ! call cline_cluster2D_chunk%delete('cc_iters')
         call cline_cluster2D_chunk%set('rank_cavgs', params%rank_cavgs)
         ! re-init with updated command-lines
         do ichunk = 1,params_glob%nchunks

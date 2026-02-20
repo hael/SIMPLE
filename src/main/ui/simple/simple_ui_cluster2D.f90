@@ -18,7 +18,6 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D(prgtab)
         call new_cleanup2D(prgtab)
-        call new_cluster2D(prgtab)
         call new_cluster2D_subsets(prgtab)
         call new_make_cavgs(prgtab)
         call new_map_cavgs_selection(prgtab)
@@ -111,67 +110,6 @@ contains
         ! add 2 ui_hash
         call add_ui_program('cleanup2D', cleanup2D, prgtab)
     end subroutine new_cleanup2D
-
-    subroutine new_cluster2D( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call cluster2D%new(&
-        &'cluster2D',&                                                          ! name
-        &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
-        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
-        &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
-        &'simple_exec',&                                                        ! executable
-        &.true.,&                                                               ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "search,mask,filter,compute") ! GUI                   
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call cluster2D%add_input(UI_IMG, 'refs', 'file', 'Initial references',&
-        &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false., 'refs.mrc', gui_submenu="search")
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call cluster2D%add_input(UI_SRCH, ncls, gui_submenu="search", gui_advanced=.false.)
-        call cluster2D%add_input(UI_SRCH, startit, gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, trs, gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
-        &'(yes|no){yes}', .false., 'yes', gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, maxits, gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, update_frac, gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, objfun, gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy||greedy_smpl){snhc}',&
-        &'(snhc|greedy|snhc_smpl|greedy_smpl){snhc}', .false., 'snhc', gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, sigma_est, gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
-        call cluster2D%add_input(UI_SRCH, cc_iters, gui_submenu="search")
-        ! filter controls
-        call cluster2D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call cluster2D%add_input(UI_FILT, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
-        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 20., gui_submenu="filter")
-        call cluster2D%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &few iterations of search, before the automatic scheme kicks in. Also controls the degree of downsampling in the first &
-        &phase', 'initial low-pass limit in Angstroms', .false., 15., gui_submenu="filter")
-        call cluster2D%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
-        &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.,&
-        &gui_submenu="filter")
-        call cluster2D%add_input(UI_FILT, graphene_filt, gui_submenu="filter")
-        call cluster2D%add_input(UI_FILT, ml_reg,        gui_submenu="filter")
-        call cluster2D%add_input(UI_FILT, hp,            gui_submenu="filter")
-        call cluster2D%add_input(UI_FILT, icm,           gui_submenu="filter")
-        ! mask controls
-        call cluster2D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
-        ! computer controls
-        call cluster2D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        ! add to ui_hash
-        call add_ui_program('cluster2D', cluster2D, prgtab)
-    end subroutine new_cluster2D
 
     subroutine new_cluster2D_subsets( prgtab )
         class(ui_hash), intent(inout) :: prgtab

@@ -277,7 +277,7 @@ contains
             call cline_cluster2D_pool%set( 'cenlp', params_glob%cenlp)
         endif
         ! Will use resolution update scheme from abinitio2D
-        if( l_abinitio2D .and. (.not.l_no_chunks))then
+        if( .not.l_no_chunks )then
             if( master_cline%defined('lpstop') )then
                 ! already set above
             else

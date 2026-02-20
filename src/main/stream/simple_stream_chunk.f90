@@ -75,7 +75,7 @@ contains
         class(cmdline),      intent(in)    :: cline
         integer,             intent(in)    :: id
         class(sp_project),   intent(in)    :: master_spproj
-        type(string)          :: exec, str_prg
+        type(string)          :: exec
         character(len=STDLEN) :: chunk_part_env
         integer               :: envlen
         call debug_print('in chunk%init '//int2str(id))
@@ -93,12 +93,7 @@ contains
         self%projfile_out    = ''
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
-        str_prg              = self%cline%get_carg('prg')
-        if( str_prg%has_substr('abinitio') )then
-            exec = 'simple_exec'
-        else
-            exec = 'simple_private_exec'
-        endif
+        exec = 'simple_exec'
         if( params_glob%nparts_chunk == 1 )then
             ! shared memory
             call self%qenv%new(params_glob%nparts_chunk, exec_bin=exec, qsys_nthr=params_glob%nthr2D)
@@ -118,7 +113,6 @@ contains
         self%toanalyze2D = .true.
         self%converged  = .false.
         self%available  = .true.
-        call str_prg%kill
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init_chunk
 
@@ -190,14 +184,13 @@ contains
     end function get_projfile_fname
 
     ! Initiates 2D analysis
-    subroutine analyze2D( self, calc_pspec, makecavgs )
+    subroutine analyze2D( self, makecavgs )
         class(stream_chunk), intent(inout) :: self
-        logical,             intent(in)    :: calc_pspec
         logical,   optional, intent(in)    :: makecavgs
         type(string),  allocatable :: bins(:)
         type(cmdline), allocatable :: clines(:)
         type(cmdline) :: cline_pspec
-        type(string)  :: cwd, str_prg
+        type(string)  :: cwd
         integer       :: nptcls_sel, nclines
         logical       :: l_makecavgs
         call debug_print('in chunk%analyze2D '//int2str(self%id))
@@ -213,25 +206,7 @@ contains
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
         nclines = 1
-        str_prg = self%cline%get_carg('prg')
-        if( str_prg%has_substr('abinitio') )then
-            allocate(clines(nclines))
-        else
-            if( calc_pspec ) nclines = nclines + 1
-            allocate(clines(nclines))
-            ! noise estimates
-            if( calc_pspec )then
-                call cline_pspec%set('prg',      'calc_pspec_distr')
-                call cline_pspec%set('oritype',  'ptcl2D')
-                call cline_pspec%set('projfile', self%projfile_out)
-                call cline_pspec%set('nthr',     self%cline%get_iarg('nthr'))
-                call cline_pspec%set('mkdir',    'yes')
-                call cline_pspec%set('nparts',   1)
-                if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
-                if( self%cline%defined('sigma_est') ) call cline_pspec%set('sigma_est', self%cline%get_carg('sigma_est'))
-                clines(1) = cline_pspec
-            endif
-        endif
+        allocate(clines(nclines))
         call self%cline%set('projfile', self%projfile_out)
         call self%cline%set('projname', CHUNK_PROJNAME)
         call self%spproj%update_projinfo(self%cline)
@@ -260,7 +235,6 @@ contains
         call clines(:)%kill
         deallocate(clines)
         call self%qenv%kill
-        call str_prg%kill
         ! chunk is now busy
         self%available = .false.
         self%converged = .false.
@@ -495,11 +469,7 @@ contains
         if( .not.self%converged )then
             if( self%toanalyze2D )then
                 str_prg = self%cline%get_carg('prg')
-                if( str_prg%has_substr('abinitio') )then
-                    self%converged = file_exists(self%path//ABINITIO2D_FINISHED)
-                else
-                    self%converged = file_exists(self%path//CLUSTER2D_FINISHED)
-                endif
+                self%converged = file_exists(self%path//ABINITIO2D_FINISHED)
                 call str_prg%kill
             else
                 self%converged = file_exists(self%path//CALCPSPEC_FINISHED)

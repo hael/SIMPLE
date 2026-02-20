@@ -398,7 +398,7 @@ contains
         subroutine set_cline_cluster2D( istage )
             integer, intent(in) :: istage
             type(string) :: sh_first, refine, center, objfun, refs, icm, gauref
-            integer      :: iphase, iter, imaxits, cc_iters, minits, extr_iter
+            integer      :: iphase, iter, imaxits, minits, extr_iter
             real         :: trs, lambda, gaufreq
             logical      :: l_gauref, l_gaufreq_input
             refine = trim(params%refine)
@@ -414,10 +414,8 @@ contains
             ! objective function
             if( params%cc_objfun == OBJFUN_CC )then
                 objfun   = 'cc'
-                cc_iters = 999
             else
                 objfun   = 'euclid'
-                cc_iters = 0
             endif
             ! iteration number book-keeping
             iter = 0
@@ -433,7 +431,7 @@ contains
                 trs       = stage_parms(1)%trslim
                 sh_first  = trim(params%sh_first)
                 center    = trim(params%center)
-                cc_iters  = 0
+                ! cc_iters  = 0
                 objfun    = 'euclid'
                 ! Filters deactivated
                 icm       = 'no'
@@ -595,7 +593,6 @@ contains
             call cline_cluster2D%set('startit',   iter)
             call cline_cluster2D%set('refine',    refine)
             call cline_cluster2D%set('objfun',    objfun)
-            call cline_cluster2D%set('cc_iters',  cc_iters)
             call cline_cluster2D%set('trs',       trs)
             call cline_cluster2D%set('sh_first',  sh_first)
             call cline_cluster2D%set('center',    center)
@@ -695,7 +692,9 @@ contains
             call spproj%read_segment('out', params%projfile)
             call spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
             call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg')
-            if( params%sigma_est == 'global') call spproj%add_sigma22os_out(sigma2_star_from_iter(iter))
+            if( (params%cc_objfun == OBJFUN_EUCLID) .and. params%sigma_est == 'global')then
+                call spproj%add_sigma22os_out(sigma2_star_from_iter(iter))
+            endif
             call spproj%write_segment_inside('out', params%projfile)
             ! rank based on gold-standard resolution estimates
             finalcavgs_ranked = CAVGS_ITER_FBODY//int2str_pad(iter,3)//'_ranked'//params%ext%to_char()

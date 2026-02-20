@@ -14,11 +14,6 @@ use simple_commanders_imgops,  only: commander_scale
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_cluster2D_autoscale
-  contains
-    procedure :: execute      => exec_cluster2D_autoscale
-end type commander_cluster2D_autoscale
-
 type, extends(commander_base) :: commander_cluster2D_distr
   contains
     procedure :: execute      => exec_cluster2D_distr
@@ -46,219 +41,6 @@ end type commander_ppca_denoise_classes
 
 contains
 
-    subroutine exec_cluster2D_autoscale( self, cline )
-        class(commander_cluster2D_autoscale), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        ! constants
-        integer, parameter :: MAXITS_STAGE1      = 10
-        integer, parameter :: MAXITS_STAGE1_EXTR = 15
-        integer, parameter :: MINBOX             = 88
-        ! commanders
-        type(commander_make_cavgs_distr) :: xmake_cavgs_distr
-        type(commander_make_cavgs)       :: xmake_cavgs
-        type(commander_cluster2D_distr)  :: xcluster2D_distr
-        type(commander_cluster2D)        :: xcluster2D
-        type(commander_rank_cavgs)       :: xrank_cavgs
-        type(commander_calc_pspec_distr) :: xcalc_pspec_distr
-        type(commander_scale)            :: xscale
-        ! command lines
-        type(cmdline) :: cline_cluster2D_stage1, cline_cluster2D_stage2
-        type(cmdline) :: cline_scalerefs, cline_calc_pspec_distr
-        type(cmdline) :: cline_make_cavgs, cline_rank_cavgs
-        ! other variables
-        class(parameters), pointer :: params_ptr => null()
-        type(parameters)           :: params
-        type(sp_project)           :: spproj
-        type(string)               :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
-        real     :: scale, trs_stage2, smpd_target
-        integer  :: last_iter_stage1, last_iter_stage2
-        logical  :: l_scaling, l_shmem, l_euclid, l_cc_iters
-        call set_cluster2D_defaults( cline )
-        if( .not.cline%defined('objfun') ) call cline%set('objfun', 'cc')
-        call cline%delete('clip')
-        l_cc_iters = cline%defined('cc_iters')
-        if( cline%defined('update_frac') ) THROW_HARD('UPDATE_FRAC is deprecated')
-        ! shared memory flag
-        l_shmem = set_shmem_flag( cline )
-        ! master parameters
-        call params%new(cline)
-        ! report limits used
-        write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', params%lpstart
-        write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', params%lpstop
-        write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params%cenlp
-        smpd_target = max(2.*params%smpd_crop,min(params%smpd_targets2D(2),params%lpstop))
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
-        ! read project file
-        call spproj%read(params%projfile)
-        ! sanity checks
-        if( spproj%get_nptcls() == 0 )then
-            THROW_HARD('No particles found in project file: '//params%projfile%to_char()//'; exec_cluster2D_autoscale')
-        endif
-        ! delete any previous solution
-        if( .not. spproj%is_virgin_field(params%oritype) .and. trim(params%refine).ne.'inpl' )then
-            ! removes previous cluster2D solution (states are preserved)
-            call spproj%os_ptcl2D%delete_2Dclustering
-            call spproj%write_segment_inside(params%oritype)
-        endif
-        ! splitting
-        if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
-        ! deal with eo partitioning
-        if( spproj%os_ptcl2D%get_nevenodd() == 0 )then
-            call spproj%os_ptcl2D%partition_eo
-            call spproj%write_segment_inside(params%oritype,params%projfile)
-        endif
-        ! Cropped dimensions
-        l_scaling = .false.
-        scale     = 1.0
-        params%smpd_crop = params%smpd
-        params%box_crop  = params%box
-        params%msk_crop  = params%msk
-        if( params%l_autoscale .and. (params%box > MINBOX) )then
-            call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale, minbox=MINBOX)
-            l_scaling = params%box_crop < params%box
-            if( l_scaling )then
-                params%msk_crop = round2even(params%msk * scale)
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
-            endif
-        endif
-        ! noise power estimates for objfun = euclid at original sampling
-        l_euclid = .false.
-        if( cline%defined('objfun') )then
-            l_euclid = cline%get_carg('objfun').eq.'euclid'
-            if( l_euclid )then
-                cline_calc_pspec_distr  = cline
-                call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
-                call spproj%os_ptcl2D%set_all2single('w', 1.0)
-                call spproj%write_segment_inside(params%oritype)
-                call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
-            endif
-        endif
-        ! Clustering command lines
-        cline_cluster2D_stage1 = cline
-        cline_cluster2D_stage2 = cline
-        call cline_cluster2D_stage1%set('smpd_crop', params%smpd_crop)
-        call cline_cluster2D_stage1%set('box_crop',  params%box_crop)
-        call cline_cluster2D_stage2%set('smpd_crop', params%smpd_crop)
-        call cline_cluster2D_stage2%set('box_crop',  params%box_crop)
-        if( l_scaling )then
-            ! scale references
-            if( cline%defined('refs') )then
-                refs_sc = 'refs'//SCALE_SUFFIX//params%ext%to_char()
-                call cline_scalerefs%set('stk',    params%refs)
-                call cline_scalerefs%set('outstk', refs_sc)
-                call cline_scalerefs%set('smpd',   params%smpd)
-                call cline_scalerefs%set('newbox', params%box_crop)
-                call xscale%execute_safe(cline_scalerefs)
-                call cline_cluster2D_stage1%set('refs', refs_sc)
-            endif
-        endif
-        ! this workflow executes two stages of CLUSTER2D
-        ! Stage 1: down-scaling for fast execution, hybrid extremal/SHC optimisation for
-        !          improved population distribution of clusters, no incremental learning
-        if( l_euclid )then
-            call cline_cluster2D_stage1%set('objfun', cline%get_carg('objfun'))
-        else
-            call cline_cluster2D_stage1%set('objfun', 'cc') ! cc-based search in first phase
-        endif
-        call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
-        call cline_cluster2D_stage1%set('ml_reg',     'no')
-        call cline_cluster2D_stage1%set('maxits', min(params%maxits,MAXITS_STAGE1))
-        if( l_euclid )then
-            if( l_cc_iters )then
-                params%cc_iters = min(params%cc_iters,MAXITS_STAGE1)
-                call cline_cluster2D_stage1%set('cc_iters', params%cc_iters)
-            else
-                call cline_cluster2D_stage1%set('cc_iters', MAXITS_STAGE1)
-            endif
-        endif
-        ! execution
-        if( l_shmem )then
-            call xcluster2D%execute_safe(cline_cluster2D_stage1)
-        else
-            call xcluster2D_distr%execute(cline_cluster2D_stage1)
-        endif
-        last_iter_stage1 = cline_cluster2D_stage1%get_iarg('endit')
-        cavgs            = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage1,3)//params%ext%to_char()
-        ! Stage 2: refinement stage, little extremal updates, optional incremental
-        !          learning for acceleration
-        call cline_cluster2D_stage2%delete('cc_iters')
-        call cline_cluster2D_stage2%set('refs',    cavgs)
-        call cline_cluster2D_stage2%set('startit', last_iter_stage1+1)
-        if( l_euclid )then
-            call cline_cluster2D_stage2%set('objfun',   cline%get_carg('objfun'))
-            call cline_cluster2D_stage2%set('cc_iters', 0.)
-        endif
-        trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2))
-        trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
-        call cline_cluster2D_stage2%set('trs', trs_stage2)
-        ! for testing
-        if( cline%defined('extr_iter') )then
-            call cline_cluster2D_stage2%set('extr_iter', cline_cluster2D_stage1%get_iarg('extr_iter'))
-        endif
-        ! execution
-        if( l_shmem )then
-            call xcluster2D%execute_safe(cline_cluster2D_stage2)
-        else
-            call xcluster2D_distr%execute(cline_cluster2D_stage2)
-        endif
-        last_iter_stage2 = cline_cluster2D_stage2%get_iarg('endit')
-        finalcavgs       = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//params%ext%to_char()
-        ! Updates project and references
-        if( l_scaling )then
-            ! original scale references
-            cline_make_cavgs = cline ! ncls is transferred here
-            call cline_make_cavgs%delete('autoscale')
-            call cline_make_cavgs%delete('balance')
-            call cline_make_cavgs%delete('polar')
-            call cline_make_cavgs%set('prg',      'make_cavgs')
-            call cline_make_cavgs%set('nparts',   params%nparts)
-            call cline_make_cavgs%set('refs',     finalcavgs)
-            call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is done for the final cavgs
-            call cline_make_cavgs%set('which_iter', last_iter_stage2) ! to ensure masks are generated and used
-            if( l_shmem )then
-                call xmake_cavgs%execute_safe(cline_make_cavgs)
-            else
-                call xmake_cavgs_distr%execute(cline_make_cavgs)
-            endif
-        else
-            if( l_shmem )then
-                ! Write e/o at the very end
-                params%refs_even = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//'_even'//params%ext%to_char()
-                params%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//'_odd'//params%ext%to_char()
-                if( L_NEW_CAVGER )then
-                    call cavger_new_write_eo(params%refs_even, params%refs_odd)
-                    call cavger_new_kill
-                else
-                    call cavger_write(params%refs_even,'even')
-                    call cavger_write(params%refs_odd, 'odd')
-                    call cavger_kill
-                endif
-            endif
-        endif
-        ! adding cavgs & FRCs to project
-        call spproj%read( params%projfile )
-        call spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
-        call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg')
-        call spproj%write_segment_inside('out', params%projfile)
-        call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
-        call spproj%write_segment_inside('ptcl3D', params%projfile)
-        ! clean
-        call spproj%kill()
-        ! rank based on gold-standard resolution estimates
-        finalcavgs_ranked = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext%to_char()
-        call cline_rank_cavgs%set('projfile', params%projfile)
-        call cline_rank_cavgs%set('stk',      finalcavgs)
-        call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
-        call xrank_cavgs%execute_safe( cline_rank_cavgs )
-        ! cleanup
-        call del_file('start2Drefs'//params%ext%to_char())
-        call del_file('start2Drefs_even'//params%ext%to_char())
-        call del_file('start2Drefs_odd'//params%ext%to_char())
-        ! end gracefully
-        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
-    end subroutine exec_cluster2D_autoscale
-
     subroutine exec_cluster2D_distr( self, cline )
         class(commander_cluster2D_distr), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
@@ -278,7 +60,7 @@ contains
         type(cmdline) :: cline_prob_tab2D_distr
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
-        type(string)              :: benchfname, orig_objfun
+        type(string)              :: benchfname
         ! other variables
         type(parameters)          :: params
         type(builder)             :: build
@@ -286,8 +68,8 @@ contains
         type(chash)               :: job_descr
         type(string)              :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
         real                      :: frac_srch_space
-        integer                   :: nthr_here, iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
-        logical                   :: l_stream, l_switch2euclid, l_converged, l_ml_reg, l_scale_inirefs
+        integer                   :: nthr_here, iter, cnt, iptcl, ptclind, fnr
+        logical                   :: l_stream, l_converged, l_scale_inirefs
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
         ! streaming
@@ -296,14 +78,6 @@ contains
             l_stream = cline%get_carg('stream')=='yes'
         endif
         call cline%set('stream','no') ! for parameters determination
-        ! objective functions part 1
-        l_switch2euclid = .false.
-        if( cline%defined('objfun') )then
-            if( cline%get_carg('objfun').eq.'euclid' )then
-                orig_objfun     = cline%get_carg('objfun')
-                l_switch2euclid = .true.
-            endif
-        endif
         ! deal with # threads for the master process
         call set_master_num_threads(nthr_here, string('CLUSTER2D'))
         ! nice communicator init
@@ -315,36 +89,18 @@ contains
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
         if( l_stream ) call cline%set('stream','yes')
-        ! objective functions part 2: scheduling
-        l_ml_reg = params%l_ml_reg
-        iter_switch2euclid = -1
-        if( l_switch2euclid )then
-            if( params%cc_iters < 1 )then
-                ! already performing euclidian-based optimization, no switch
-                iter_switch2euclid = params%startit
-                l_switch2euclid    = .false.
-            else
-                ! switching objective function from cc_iters+1
-                call cline%set('objfun','cc')
-                call cline%set('ml_reg','no')
-                params%cc_objfun   = OBJFUN_CC
-                params%objfun      = 'cc'
-                iter_switch2euclid = params%startit
-                if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
-                params%l_needs_sigma = .false.
-                params%needs_sigma   = 'no'
-                params%ml_reg        = 'no'
-                params%l_ml_reg      = .false.
-            endif
-        else
-            ! Correlation only, but sigma2 calculated from iter_switch2euclid
+        ! objective functions
+        select case( params%cc_objfun )
+        case( OBJFUN_CC )
+            ! making sure euclid options are turned off
             params%l_needs_sigma = .false.
             params%needs_sigma   = 'no'
+            call cline%set('ml_reg','no')
             params%ml_reg        = 'no'
             params%l_ml_reg      = .false.
-            call cline%set('ml_reg','no')
-            if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
-        endif
+        case( OBJFUN_EUCLID )
+            ! all set
+        end select
         ! sanity check
         if( build%spproj%get_nptcls() == 0 )then
             THROW_HARD('no particles found! exec_cluster2D_distr')
@@ -493,13 +249,6 @@ contains
             params%extr_iter = params%extr_iter + 1
             call job_descr%set('extr_iter', int2str(params%extr_iter))
             call cline%set('extr_iter', params%extr_iter)
-            ! objfun function part 3: activate sigma2 calculation
-            if( iter==iter_switch2euclid )then
-                call cline%set('needs_sigma','yes')
-                call job_descr%set('needs_sigma','yes')
-                params%needs_sigma   = 'yes'
-                params%l_needs_sigma = .true.
-            endif
             ! build probability table
             if( str_has_substr(params%refine, 'prob') )then
                 cline_prob_tab2D_distr = cline
@@ -570,23 +319,6 @@ contains
             else
                 call cline_check_2Dconv%delete('converged')
             endif
-            ! objfun=euclid, part 5:  actual switch
-            if( l_switch2euclid .and. (iter==iter_switch2euclid) )then
-                write(logfhandle,'(A)')'>>>'
-                write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
-                call cline%set('objfun', orig_objfun)
-                call job_descr%set('objfun', orig_objfun)
-                call cline_cavgassemble%set('objfun', orig_objfun)
-                params%objfun = orig_objfun%to_char()
-                if( params%objfun == 'euclid' ) params%cc_objfun = OBJFUN_EUCLID
-                l_switch2euclid = .false.
-                if( l_ml_reg )then
-                    call cline%set('ml_reg',     'yes')
-                    call job_descr%set('ml_reg', 'yes')
-                    params%ml_reg   = 'yes'
-                    params%l_ml_reg = .true.
-                endif
-            endif
             if( L_BENCH_GLOB )then
                 rt_tot  = toc(t_init)
                 benchfname = 'CLUSTER2D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
@@ -646,7 +378,7 @@ contains
         type(parameters)          :: params
         type(builder),     target :: build
         type(starproject)         :: starproj
-        type(string)              :: finalcavgs, orig_objfun, refs_sc, fname, fname_sigma
+        type(string)              :: finalcavgs, refs_sc, fname, fname_sigma
         real,         allocatable :: corrs(:), corrs_all(:)
         integer,      allocatable :: order(:), class_cnt(:), class_all(:)
         integer :: startit, i, cnt, iptcl, ptclind
@@ -778,41 +510,19 @@ contains
                 params%extr_iter = params%startit
             endif
             ! objective functions
-            l_switch2euclid = params%cc_objfun==OBJFUN_EUCLID
-            orig_objfun     = cline%get_carg('objfun')
-            l_ml_reg        = params%l_ml_reg
-            iter_switch2euclid = -1
-            if( l_switch2euclid )then
-                if( params%cc_iters < 1 )then
-                    ! already performing euclidian-based optimization, no switch
-                    fname_sigma = sigma2_star_from_iter(params%startit)
-                    if( .not.file_exists(fname_sigma) )then
-                        THROW_HARD('Sigma2 file does not exists: '//fname_sigma%to_char())
-                    endif
-                    iter_switch2euclid = params%startit
-                    l_switch2euclid    = .false.
-                else
-                    ! switching objective function from cc_iters+1
-                    call cline%set('objfun','cc')
-                    call cline%set('ml_reg','no')
-                    params%cc_objfun   = OBJFUN_CC
-                    params%objfun      = 'cc'
-                    iter_switch2euclid = params%startit
-                    if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
-                    params%l_needs_sigma = .false.
-                    params%needs_sigma   = 'no'
-                    params%ml_reg        = 'no'
-                    params%l_ml_reg      = .false.
-                endif
-            else
-                ! Correlation only, but sigma2 calculated from iter_switch2euclid
+            select case( params%cc_objfun )
+            case( OBJFUN_CC )
                 params%l_needs_sigma = .false.
                 params%needs_sigma   = 'no'
-                if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
                 call cline%set('ml_reg','no')
                 params%ml_reg        = 'no'
                 params%l_ml_reg      = .false.
-            endif
+            case( OBJFUN_EUCLID )
+                fname_sigma = sigma2_star_from_iter(params%startit)
+                if( .not.file_exists(fname_sigma) )then
+                    THROW_HARD('Sigma2 file does not exists: '//fname_sigma%to_char())
+                endif
+            end select
             ! initialise progress monitor
             if(.not. l_stream) call progressfile_init()
             ! Main loop
@@ -824,11 +534,6 @@ contains
                 nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
                 call nice_communicator%cycle()
                 call cline%set('which_iter', params%which_iter)
-                if( params%which_iter == iter_switch2euclid )then
-                    call cline%set('needs_sigma','yes')
-                    params%needs_sigma   = 'yes'
-                    params%l_needs_sigma = .true.
-                endif
                 ! refine=prob
                 if( str_has_substr(params%refine, 'prob') )then
                     cline_prob_tab2D = cline
@@ -847,16 +552,6 @@ contains
                     params%which_iter = params%which_iter + 1
                     call xcalc_group_sigmas%execute(cline)
                     params%which_iter = params%which_iter - 1
-                endif
-                if( l_switch2euclid .and. params%which_iter==iter_switch2euclid )then
-                    params%objfun = orig_objfun%to_char()
-                    if( params%objfun == 'euclid' ) params%cc_objfun = OBJFUN_EUCLID
-                    l_switch2euclid = .false.
-                    if( l_ml_reg )then
-                        call cline%set('ml_reg','yes')
-                        params%ml_reg        = 'yes'
-                        params%l_ml_reg      = .true.
-                    endif
                 endif
                 ! cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
