@@ -11,7 +11,7 @@ use simple_class_frcs,       only: class_frcs
 use simple_parameters,       only: parameters
 implicit none
 
-public :: builder, build_glob
+public :: builder
 private
 #include "simple_local_flags.inc"
 
@@ -66,8 +66,6 @@ type :: builder
     procedure                           :: kill_strategy2D_tbox
 end type builder
 
-class(builder), pointer :: build_glob  => null()
-
 contains
 
     ! HIGH-LEVEL BUILDERS
@@ -112,7 +110,6 @@ contains
         endif
         call self%build_general_tbox(params, cline, do3d=.false.)
         call self%build_strategy2D_tbox(params)
-        build_glob => self
     end subroutine init_params_spproj_tbox2D
 
     subroutine init_params_and_build_spproj( self, cline, params )
@@ -121,7 +118,6 @@ contains
         class(parameters), intent(inout)          :: params
         call params%new(cline)
         call self%build_spproj(params, cline)
-        build_glob => self
     end subroutine init_params_and_build_spproj
 
     subroutine init_params_and_build_general_tbox( self, cline, params, do3d )
@@ -132,7 +128,6 @@ contains
         call params%new(cline)
         call self%build_spproj(params, cline)
         call self%build_general_tbox(params, cline, do3d=do3d)
-        build_glob => self
     end subroutine init_params_and_build_general_tbox
 
     subroutine init_params_and_build_strategy2D_tbox( self, cline, params, wthreads )
@@ -144,7 +139,6 @@ contains
         call self%build_spproj(params, cline, wthreads=wthreads)
         call self%build_general_tbox(params, cline, do3d=.false.)
         call self%build_strategy2D_tbox(params)
-        build_glob => self
     end subroutine init_params_and_build_strategy2D_tbox
 
     subroutine init_params_and_build_strategy3D_tbox( self, cline, params )
@@ -155,7 +149,6 @@ contains
         call self%build_spproj(params, cline)
         call self%build_general_tbox(params, cline, do3d=.true.)
         call self%build_strategy3D_tbox(params)
-        build_glob => self
     end subroutine init_params_and_build_strategy3D_tbox
 
     ! LOW-LEVEL BUILDERS
@@ -203,7 +196,6 @@ contains
             if( params%deftab /= '' ) call binread_ctfparams_state_eo(params%deftab,  self%spproj, self%spproj_field, [1,params%nptcls])
             if( params%oritab /= '' ) call binread_oritab(params%oritab,              self%spproj, self%spproj_field, [1,params%nptcls])
         endif
-        if( .not. associated(build_glob) ) build_glob => self
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING SP PROJECT'
 
     contains
@@ -305,7 +297,6 @@ contains
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
         ! associate global build pointer
-        if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
     end subroutine build_general_tbox
@@ -347,7 +338,6 @@ contains
         call self%kill_rec_eo_tbox
         call self%eorecvol%new(self%spproj)
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        if( .not. associated(build_glob) ) build_glob => self
         self%eo_rec_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
     end subroutine build_rec_eo_tbox
@@ -365,7 +355,6 @@ contains
         class(parameters),      intent(inout) :: params
         call self%kill_strategy2D_tbox
         call self%clsfrcs%new(params%ncls, params%box_crop, params%smpd_crop, params%nstates)
-        if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
     end subroutine build_strategy2D_tbox
@@ -399,7 +388,6 @@ contains
             self%inpl_rots(params%nrots) = rot
             rot = rot + params%athres
         end do
-        if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
     end subroutine build_strategy3D_tbox

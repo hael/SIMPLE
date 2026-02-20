@@ -358,23 +358,9 @@ contains
         real(dp), allocatable :: group_weights(:,:), group_pspecs(:,:,:)
         real(dp)              :: w
         integer               :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
-        logical               :: l_put_back_build_glob
-        class(builder), pointer :: build_glob_ptr => null()
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        l_put_back_build_glob = .false.
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        if( associated(build_glob) ) then
-            build_glob_ptr => build_glob
-            build_glob    => null()
-            l_put_back_build_glob = .true.
-        endif
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        if( l_put_back_build_glob ) then
-            build_glob => build_glob_ptr
-            build_glob_ptr => null()
-        endif
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ! read sigmas from binfiles
         do ipart = 1,params_glob%nparts
             sigma2_array%fname = SIGMA2_FBODY//int2str_pad(ipart,params_glob%numlen)//'.dat'

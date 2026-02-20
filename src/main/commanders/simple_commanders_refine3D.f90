@@ -490,6 +490,7 @@ contains
                 cline_prob_align_distr = cline
                 call cline_prob_align_distr%set('which_iter', params%which_iter)
                 call cline_prob_align_distr%set('startit',    iter)
+                call build%spproj%write_segment_inside(params%oritype)
                 call xprob_align_distr%execute_safe( cline_prob_align_distr )
             endif
             call job_descr%set( 'which_iter', int2str(params%which_iter))
@@ -814,6 +815,7 @@ contains
                             call cline%set('vol'//int2str(state), params%vols(state))
                         enddo
                     endif
+                    call build%spproj%write_segment_inside(params%oritype)
                     call xprob_align%execute( cline_prob_align )
                 endif
                 ! in strategy3D_matcher:
@@ -1034,38 +1036,33 @@ contains
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_strategy2D3D_common, only: sample_ptcls4fillin, sample_ptcls4update
-        use simple_builder,             only: build_glob
+        use simple_builder,             only: builder
         class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,            allocatable :: pinds(:)
         type(string)                    :: fname
-        type(builder),          target  :: build_local
-        type(parameters)                :: params_local
+        type(builder)                   :: build
+        type(parameters)                :: params
         type(commander_prob_tab)        :: xprob_tab
         type(eul_prob_tab)              :: eulprob_obj_glob
         type(cmdline)                   :: cline_prob_tab
         type(qsys_env)                  :: qenv
         type(chash)                     :: job_descr
         integer :: nptcls, ipart
-        ! Check if we're in shared memory execution (build_glob already set)
-        if( .not. associated(build_glob) )then
-            ! Stand-alone distributed execution - initialize build
-            call cline%set('mkdir',  'no')
-            call cline%set('stream', 'no')
-            call build_local%init_params_and_build_general_tbox(cline, params_local, do3d=.true.)
-            ! Note: build_glob and params_glob are now set by init method
-        endif
-        if( params_glob%startit == 1 ) call build_glob%spproj_field%clean_entry('updatecnt', 'sampled')
+        call cline%set('mkdir',  'no')
+        call cline%set('stream', 'no')
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
-        if( params_glob%l_fillin .and. mod(params_glob%startit,5) == 0 )then
-            call sample_ptcls4fillin(build_glob, [1,params_glob%nptcls], .true., nptcls, pinds)
+        if( params%l_fillin .and. mod(params%startit,5) == 0 )then
+            call sample_ptcls4fillin(build, [1,params%nptcls], .true., nptcls, pinds)
         else
-            call sample_ptcls4update(build_glob, [1,params_glob%nptcls], .true., nptcls, pinds)
+            call sample_ptcls4update(build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         ! communicate to project file
-        call build_glob%spproj%write_segment_inside(params_glob%oritype)
+        call build%spproj%write_segment_inside(params%oritype)
         ! more prep
-        call eulprob_obj_glob%new(build_glob, pinds)
+        call eulprob_obj_glob%new(build, pinds)
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
@@ -1074,21 +1071,21 @@ contains
             call xprob_tab%execute_safe(cline_prob_tab)
         else
             ! setup the environment for distributed execution
-            call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
+            call qenv%new(params%nparts, nptcls=params%nptcls)
             call cline_prob_tab%gen_job_descr(job_descr)
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params_local)
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
         ! reading corrs from all parts
-        if( str_has_substr(params_glob%refine, 'prob_state') )then
-            do ipart = 1, params_glob%nparts
-                fname = string(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+        if( str_has_substr(params%refine, 'prob_state') )then
+            do ipart = 1, params%nparts
+                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
                 call eulprob_obj_glob%read_state_tab(fname)
             enddo
             call eulprob_obj_glob%state_assign
         else
-            do ipart = 1, params_glob%nparts
-                fname = string(DIST_FBODY)//int2str_pad(ipart,params_glob%numlen)//'.dat'
+            do ipart = 1, params%nparts
+                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
                 call eulprob_obj_glob%read_tab_to_glob(fname)
             enddo
             call eulprob_obj_glob%ref_assign
@@ -1101,6 +1098,7 @@ contains
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill
+        call build%kill_general_tbox
         call qsys_job_finished(string('simple_commanders_refine3D :: exec_prob_align'))
         call qsys_cleanup
         call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
