@@ -1,6 +1,7 @@
 !@descr: abstract base class defining the common strategy2D interface
 module simple_strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
+use simple_oris,             only: oris
 implicit none
 
 public :: strategy2D, strategy2D_per_ptcl
@@ -25,9 +26,11 @@ abstract interface
         class(strategy2D_spec), intent(inout) :: spec
     end subroutine generic_new
 
-    subroutine generic_srch( self )
+    subroutine generic_srch( self, os )
         import :: strategy2D
+        import :: oris
         class(strategy2D), intent(inout) :: self
+        class(oris),       intent(inout) :: os
     end subroutine generic_srch
 
     subroutine generic_kill( self )

@@ -3,9 +3,9 @@ module simple_strategy3D_shc_smpl
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
 use simple_polarft_calc,     only: pftc_glob
+use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
 implicit none
@@ -24,20 +24,23 @@ end type strategy3D_shc_smpl
 
 contains
 
-    subroutine new_shc_smpl( self, spec )
+    subroutine new_shc_smpl( self, spec, build )
+        use simple_builder, only: builder
         class(strategy3D_shc_smpl), intent(inout) :: self
         class(strategy3D_spec),     intent(inout) :: spec
-        call self%s%new(spec)
+        class(builder), target,     intent(inout) :: build
+        call self%s%new(spec, build)
         self%spec = spec
     end subroutine new_shc_smpl
 
-    subroutine srch_shc_smpl( self, ithr )
+    subroutine srch_shc_smpl( self, os, ithr )
         use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy3D_shc_smpl), intent(inout) :: self
+        class(oris),                 intent(inout) :: os
         integer,                    intent(in)    :: ithr
         integer :: iref, isample, loc(1), inds(self%s%nrots)
         real    :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots)
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+        if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
@@ -71,7 +74,7 @@ contains
             ! prepare weights and orientations
             call self%oris_assign
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
     end subroutine srch_shc_smpl
 

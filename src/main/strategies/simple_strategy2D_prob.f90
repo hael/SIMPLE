@@ -2,7 +2,6 @@
 module simple_strategy2D_prob
 use simple_core_module_api
 use simple_strategy2D_alloc
-use simple_builder,          only: build_glob
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 implicit none
@@ -28,13 +27,14 @@ contains
         self%spec = spec
     end subroutine new_prob
 
-    subroutine srch_prob( self )
+    subroutine srch_prob( self, os )
         use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy2D_prob), intent(inout) :: self
+        class(oris),            intent(inout) :: os
         real :: w
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+        if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
-            call self%s%prep4srch
+            call self%s%prep4srch(os)
             ! Assignment
             self%s%best_class = s2D%probtab%assgn_map(self%s%iptcl_map)%cls
             self%s%best_corr  = eulprob_corr_switch(s2D%probtab%assgn_map(self%s%iptcl_map)%dist)
@@ -49,9 +49,9 @@ contains
             w = 0.
             if( s2D%probtab%assgn_map(self%s%iptcl_map)%incl) w = 1.
             self%s%nrefs_eval = self%s%nrefs
-            call self%s%store_solution(w_in=w)
+            call self%s%store_solution(os, w_in=w)
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
     end subroutine srch_prob
 

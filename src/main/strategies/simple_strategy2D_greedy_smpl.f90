@@ -2,7 +2,6 @@
 module simple_strategy2D_greedy_smpl
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
-use simple_builder,         only: build_glob
 use simple_eul_prob_tab2D,  only: squared_sampling
 use simple_strategy2D,      only: strategy2D
 use simple_strategy2D_srch, only: strategy2D_spec
@@ -29,16 +28,17 @@ contains
         self%spec = spec
     end subroutine new_greedy_smpl
 
-    subroutine srch_greedy_smpl( self )
+    subroutine srch_greedy_smpl( self, os )
         use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy2D_greedy_smpl), intent(inout) :: self
+        class(oris),                   intent(inout) :: os
         integer :: refs_inds(self%s%nrefs), refs_inplinds(self%s%nrefs), inds(self%s%nrots)
         integer :: iref, inpl_ind, isample, order_ind
         real    :: refs_corrs(self%s%nrefs), inpl_corrs(self%s%nrots), cxy(3)
         real    :: inpl_corr
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+        if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
-            call self%s%prep4srch
+            call self%s%prep4srch(os)
             ! Shift search on previous best reference
             call self%s%inpl_srch_first
             ! Class search
@@ -113,9 +113,9 @@ contains
             endif
             call self%s%inpl_srch
             self%s%nrefs_eval = self%s%nrefs
-            call self%s%store_solution
+            call self%s%store_solution(os)
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
     end subroutine srch_greedy_smpl
 

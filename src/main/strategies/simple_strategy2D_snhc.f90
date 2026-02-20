@@ -2,7 +2,6 @@
 module simple_strategy2D_snhc
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
-use simple_builder,          only: build_glob
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 implicit none
@@ -28,14 +27,15 @@ contains
         self%spec = spec
     end subroutine new_snhc
 
-    subroutine srch_snhc( self )
+    subroutine srch_snhc( self, os )
         class(strategy2D_snhc), intent(inout) :: self
+        class(oris),            intent(inout) :: os
         integer :: iref, isample, inpl_ind, class_glob, inpl_glob
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
         logical :: found_better
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+        if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
-            call self%s%prep4srch
+            call self%s%prep4srch(os)
             ! Shift search on previous best reference
             call self%s%inpl_srch_first
             ! Class search
@@ -87,9 +87,9 @@ contains
                 self%s%best_rot   = inpl_glob
             endif
             call self%s%inpl_srch
-            call self%s%store_solution(nrefs=min(self%s%nrefs, s2D%snhc_nrefs_bound+1))
+            call self%s%store_solution(os, nrefs=min(self%s%nrefs, s2D%snhc_nrefs_bound+1))
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
         if( DEBUG ) write(logfhandle,*) '>>> strategy2D_srch::FINISHED STOCHASTIC NEIGH SEARCH'
     end subroutine srch_snhc

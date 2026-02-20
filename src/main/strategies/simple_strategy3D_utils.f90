@@ -2,7 +2,6 @@
 module simple_strategy3D_utils
 use simple_core_module_api
 use simple_strategy3D_alloc
-use simple_builder,         only: build_glob
 use simple_parameters,      only: params_glob
 use simple_polarft_calc,    only: pftc_glob
 use simple_strategy3D_srch, only: strategy3D_srch
@@ -26,14 +25,14 @@ contains
         logical   :: l_multistates
         s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftc_glob%get_rot(inpl)
         ! stash previous ori
-        call build_glob%spproj_field%get_ori(s%iptcl, o_prev)
+        call s%build_ptr%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)
         if( ref < 1 .or. ref > s%nrefs ) THROW_HARD('ref index: '//int2str(ref)//' out of bound; assign_ori')
-        call build_glob%spproj_field%set(s%iptcl, 'proj', real(s3D%proj_space_proj(ref)))
+        call s%build_ptr%spproj_field%set(s%iptcl, 'proj', real(s3D%proj_space_proj(ref)))
         ! in-plane (inpl)
-        call build_glob%spproj_field%set(s%iptcl, 'inpl', real(inpl))
+        call s%build_ptr%spproj_field%set(s%iptcl, 'inpl', real(inpl))
         ! Euler angle
-        call build_glob%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(:,ref,s%ithr))
+        call s%build_ptr%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(:,ref,s%ithr))
         ! shift
         shvec      = s%prev_shvec
         shvec_incr = 0.
@@ -42,8 +41,8 @@ contains
             shvec      = shvec + shvec_incr
         end if
         where( abs(shvec) < 1e-6 ) shvec = 0.
-        call build_glob%spproj_field%set_shift(s%iptcl, shvec)
-        call build_glob%spproj_field%set(s%iptcl, 'shincarg', arg(shvec_incr))
+        call s%build_ptr%spproj_field%set_shift(s%iptcl, shvec)
+        call s%build_ptr%spproj_field%set(s%iptcl, 'shincarg', arg(shvec_incr))
         ! state
         state = 1
         l_multistates = s%nstates > 1
@@ -54,28 +53,28 @@ contains
         mi_state = 0.
         if( s%prev_state == state ) mi_state = 1.
         if( l_multistates )then
-            call build_glob%spproj_field%set(s%iptcl, 'state',  real(state))
-            call build_glob%spproj_field%set(s%iptcl, 'mi_state', mi_state)
+            call s%build_ptr%spproj_field%set(s%iptcl, 'state',  real(state))
+            call s%build_ptr%spproj_field%set(s%iptcl, 'mi_state', mi_state)
         else
-            call build_glob%spproj_field%set(s%iptcl, 'state',    1.)
-            call build_glob%spproj_field%set(s%iptcl, 'mi_state', 1.)
+            call s%build_ptr%spproj_field%set(s%iptcl, 'state',    1.)
+            call s%build_ptr%spproj_field%set(s%iptcl, 'mi_state', 1.)
         endif
         ! correlation
-        call build_glob%spproj_field%set(s%iptcl, 'corr', corr)
+        call s%build_ptr%spproj_field%set(s%iptcl, 'corr', corr)
         ! angular distances
-        call build_glob%spproj_field%get_ori(s%iptcl, o_new)
-        call build_glob%pgrpsyms%sym_dists(o_prev, o_new, osym, euldist, dist_inpl)
-        if( build_glob%spproj_field%isthere(s%iptcl,'dist') )then
-            call build_glob%spproj_field%set(s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%spproj_field%get(s%iptcl,'dist'))
+        call s%build_ptr%spproj_field%get_ori(s%iptcl, o_new)
+        call s%build_ptr%pgrpsyms%sym_dists(o_prev, o_new, osym, euldist, dist_inpl)
+        if( s%build_ptr%spproj_field%isthere(s%iptcl,'dist') )then
+            call s%build_ptr%spproj_field%set(s%iptcl, 'dist', 0.5*euldist + 0.5*s%build_ptr%spproj_field%get(s%iptcl,'dist'))
         else
-            call build_glob%spproj_field%set(s%iptcl, 'dist', euldist)
+            call s%build_ptr%spproj_field%set(s%iptcl, 'dist', euldist)
         endif
-        call build_glob%spproj_field%set(s%iptcl, 'dist_inpl', dist_inpl)
+        call s%build_ptr%spproj_field%set(s%iptcl, 'dist_inpl', dist_inpl)
         ! CONVERGENCE STATS
         ! projection direction overlap
         mi_proj  = 0.
         if( euldist <= params_glob%angthres_mi_proj ) mi_proj  = 1.
-        call build_glob%spproj_field%set(s%iptcl, 'mi_proj', mi_proj)
+        call s%build_ptr%spproj_field%set(s%iptcl, 'mi_proj', mi_proj)
         ! fraction of search space scanned
         neff_states = 1
         if( l_multistates ) neff_states = count(s3D%state_exists)
@@ -100,11 +99,11 @@ contains
             nrefs_tot  = s%nprojs * neff_states
         endif
         frac = 100.0 * real(nrefs_eval) / real(nrefs_tot)
-        call build_glob%spproj_field%set(s%iptcl, 'frac', frac)
+        call s%build_ptr%spproj_field%set(s%iptcl, 'frac', frac)
         ! weight
         pw = s3D%proj_space_w(ref, s%ithr)
         if( (trim(params_glob%ptclw) .eq. 'yes') .and. present(w) ) pw = w
-        call build_glob%spproj_field%set(s%iptcl, 'w', pw)
+        call s%build_ptr%spproj_field%set(s%iptcl, 'w', pw)
         ! destruct
         call osym%kill
         call o_prev%kill

@@ -3,10 +3,10 @@ module simple_strategy3D_prob
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
+use simple_oris,             only: oris
 implicit none
 
 public :: strategy3D_prob
@@ -24,20 +24,23 @@ end type strategy3D_prob
 
 contains
 
-    subroutine new_prob( self, spec )
+    subroutine new_prob( self, spec, build )
+        use simple_builder, only: builder
         class(strategy3D_prob), intent(inout) :: self
         class(strategy3D_spec), intent(inout) :: spec
-        call self%s%new(spec)
+        class(builder), target, intent(inout) :: build
+        call self%s%new(spec, build)
         self%spec = spec
     end subroutine new_prob
 
-    subroutine srch_prob( self, ithr )
+    subroutine srch_prob( self, os, ithr )
         use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy3D_prob), intent(inout) :: self
+        class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
         integer :: iproj, iptcl_map, irot, istate, iref, rot
         real    :: corr
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+        if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
@@ -72,7 +75,7 @@ contains
                 call assign_ori(self%s, iref, irot, corr, [0.,0.], corr)
             endif
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
     end subroutine srch_prob
 

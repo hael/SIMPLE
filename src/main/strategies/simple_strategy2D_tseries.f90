@@ -2,7 +2,6 @@
 module simple_strategy2D_tseries
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
-use simple_builder,          only: build_glob
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 implicit none
@@ -30,12 +29,13 @@ contains
         self%spec = spec
     end subroutine new_tseries
 
-    subroutine srch_tseries( self )
+    subroutine srch_tseries( self, os )
         class(strategy2D_tseries), intent(inout) :: self
+        class(oris),               intent(inout) :: os
         integer :: iref,inpl_ind,itrs,i,j
         real    :: corrs(self%s%nrots), rotmat(2,2), inpl_corr, corr
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
-            call self%s%prep4srch
+        if( os%get_state(self%s%iptcl) > 0 )then
+            call self%s%prep4srch(os)
             corr = -huge(corr)
             itrs = max(TRSSTEP,floor(self%s%trs))
             ! previous best
@@ -64,9 +64,9 @@ contains
                 call rotmat2d(pftc_glob%get_rot(self%s%best_rot), rotmat)
                 self%s%best_shvec = matmul(self%s%best_shvec, rotmat)
             endif
-            call self%s%store_solution
+            call self%s%store_solution(os)
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
         contains
 

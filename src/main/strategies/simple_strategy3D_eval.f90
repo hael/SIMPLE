@@ -3,9 +3,9 @@ module simple_strategy3D_eval
 use simple_core_module_api
 use simple_strategy3D_utils
 use simple_strategy3D_alloc
-use simple_builder,         only: build_glob
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_spec
+use simple_oris,            only: oris
 implicit none
 
 public :: strategy3D_eval
@@ -21,23 +21,26 @@ end type strategy3D_eval
 
 contains
 
-    subroutine new_eval( self, spec )
+    subroutine new_eval( self, spec, build )
+        use simple_builder, only: builder
         class(strategy3D_eval), intent(inout) :: self
         class(strategy3D_spec), intent(inout) :: spec
-        call self%s%new( spec )
+        class(builder), target, intent(inout) :: build
+        call self%s%new( spec, build )
         self%spec = spec
     end subroutine new_eval
 
-    subroutine srch_eval( self, ithr )
+    subroutine srch_eval( self, os, ithr )
         class(strategy3D_eval), intent(inout) :: self
+        class(oris),             intent(inout) :: os
         integer,                intent(in)    :: ithr
-        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+        if( os%get_state(self%s%iptcl) > 0 )then
             self%s%ithr = ithr
             call self%s%prep4srch
             self%s%nrefs_eval = self%s%nrefs
             call self%s%store_solution(self%s%prev_ref, self%s%prev_roind, self%s%prev_corr, sh=self%s%prev_shvec)
         else
-            call build_glob%spproj_field%reject(self%s%iptcl)
+            call os%reject(self%s%iptcl)
         endif
     end subroutine srch_eval
 

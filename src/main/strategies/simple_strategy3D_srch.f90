@@ -2,7 +2,7 @@
 module simple_strategy3D_srch
 use simple_core_module_api
 use simple_strategy3D_alloc
-use simple_builder,          only: build_glob
+use simple_builder,          only: builder
 use simple_eul_prob_tab,     only: eul_prob_tab
 use simple_parameters,       only: params_glob
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
@@ -20,11 +20,12 @@ end type strategy3D_spec
 
 type strategy3D_srch
     character(len=:), allocatable :: refine                !< 3D refinement flag
-    type(pftc_shsrch_grad) :: grad_shsrch_obj             !< origin shift search object, L-BFGS with gradient
-    type(pftc_shsrch_grad) :: grad_shsrch_obj2            !<
-    type(pftc_shsrch_grad) :: grad_shsrch_first_obj       !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
+    type(pftc_shsrch_grad) :: grad_shsrch_obj              !< origin shift search object, L-BFGS with gradient
+    type(pftc_shsrch_grad) :: grad_shsrch_obj2             !<
+    type(pftc_shsrch_grad) :: grad_shsrch_first_obj        !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
     type(ori)               :: o_prev                      !< previous orientation
     type(oris)              :: opeaks                      !< peak orientations to consider for refinement
+    class(builder), pointer :: build_ptr       => null()    !< build handle for access to spproj/eulspace/symmetry
     integer                 :: iptcl           = 0         !< global particle index
     integer                 :: iptcl_map       = 0         !< map particle index
     integer                 :: ithr            = 0         !< thread index
@@ -66,9 +67,10 @@ end type strategy3D_srch
 
 contains
 
-    subroutine new( self, spec )
+    subroutine new( self, spec, build )
         class(strategy3D_srch), intent(inout) :: self
         class(strategy3D_spec), intent(in)    :: spec
+        class(builder), target, intent(inout) :: build
         real :: lims(2,2), lims_init(2,2)
         ! set constants
         self%iptcl         = spec%iptcl
@@ -84,7 +86,8 @@ contains
         self%nbetter       = 0
         self%nrefs_eval    = 0
         self%ntrs_eval     = 0
-        self%nsym          = build_glob%pgrpsyms%get_nsym()
+        self%build_ptr     => build
+        self%nsym          = self%build_ptr%pgrpsyms%get_nsym()
         self%doshift       = params_glob%l_doshift
         self%l_neigh       = params_glob%l_neigh
         self%refine        = trim(params_glob%refine)
@@ -111,13 +114,13 @@ contains
         real      :: corrs(self%nrots), corr
         integer   :: ipeak, tmp_inds(self%nrefs_sub), iref_sub, prev_proj_sub
         ! previous parameters
-        call build_glob%spproj_field%get_ori(self%iptcl, self%o_prev)        ! previous ori
+        call self%build_ptr%spproj_field%get_ori(self%iptcl, self%o_prev)        ! previous ori
         self%prev_state = self%o_prev%get_state()                            ! state index
         self%prev_roind = pftc_glob%get_roind(360.-self%o_prev%e3get())     ! in-plane angle index
         self%prev_shvec = self%o_prev%get_2Dshift()                          ! shift vector
-        self%prev_proj  = build_glob%eulspace%find_closest_proj(self%o_prev) ! previous projection direction
+        self%prev_proj  = self%build_ptr%eulspace%find_closest_proj(self%o_prev) ! previous projection direction
         self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj   ! previous reference
-        call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
+        call self%build_ptr%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
         ! copy self%o_prev to opeaks to transfer paticle-dependent parameters
         do ipeak = 1, self%npeaks
             call self%opeaks%set_ori(ipeak, self%o_prev)
@@ -134,8 +137,8 @@ contains
             call s3D%rts_sub(self%ithr)%ne_ran_iarr(tmp_inds)
             ! --> do the mapping
             do iref_sub = 1, self%nrefs_sub
-                ! index for build_glob%subspace_inds needs to be a projection direction
-                prev_proj_sub = build_glob%subspace_inds(&
+                ! index for build_ptr%subspace_inds needs to be a projection direction
+                prev_proj_sub = self%build_ptr%subspace_inds(&
                 &tmp_inds(iref_sub) - (self%prev_state - 1) * params_glob%nspace_sub)
                 ! but then we need to turn it back into a reference index in the full search space
                 s3D%srch_order_sub(iref_sub,self%ithr) = (self%prev_state - 1) * self%nprojs + prev_proj_sub
@@ -244,6 +247,7 @@ contains
         call self%opeaks%kill
         call self%o_prev%kill
         if( allocated(self%refine) ) deallocate(self%refine)
+        nullify(self%build_ptr)
     end subroutine kill
 
 end module simple_strategy3D_srch
