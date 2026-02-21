@@ -107,12 +107,12 @@ contains
         do j = 1,self%ldim(2)
             do i = 1,self%ldim(1)
                 r = sqrt((i-center(1))**2 + (j-center(2))**2)
-                if( r < (params_glob%msk_crop-COSMSKHALFWIDTH) )then
+                if( r < (p_ptr%msk_crop-COSMSKHALFWIDTH) )then
                     cycle
-                else if( r > (params_glob%msk_crop+COSMSKHALFWIDTH) )then
+                else if( r > (p_ptr%msk_crop+COSMSKHALFWIDTH) )then
                     e = 0.
                 else
-                    r = (r-(params_glob%msk_crop-COSMSKHALFWIDTH)) / (2.*COSMSKHALFWIDTH)
+                    r = (r-(p_ptr%msk_crop-COSMSKHALFWIDTH)) / (2.*COSMSKHALFWIDTH)
                     r = min(1.0, max(0.0, r))
                     e = min(1.0, max(0.0, cos(r * pio2)))
                 endif
@@ -397,7 +397,7 @@ contains
         integer  :: cnt(0:frcsz)
         real     :: cc, invtau2, fudge, ctfsq
         integer  :: phys(2), h, k, sh, reslim_ind
-        fudge = params_glob%tau
+        fudge = p_ptr%tau
         rsum  = 0.d0
         cnt   = 0
         ssnr  = 0.0; tau2 = 0.0; sig2 = 0.0
@@ -421,7 +421,7 @@ contains
         tau2 = ssnr * sig2
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
-        reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
+        reslim_ind = max(6, calc_fourier_index(p_ptr%hp, p_ptr%box, p_ptr%smpd))
         do h = self%flims(1,1),self%flims(1,2)
             do k = self%flims(2,1),self%flims(2,2)
                 sh = nint(hyp(h,k))

@@ -167,7 +167,7 @@ contains
         ! choice of algorithm
         if( l_shmem )then
             if( L_NEW_CAVGER )then
-                call cavger_new_new(build)
+                call cavger_new_new(params, build)
                 call cavger_new_transf_oridat( build%spproj )
                 call cavger_new_read_euclid_sigma2
                 call cavger_new_assemble_sums( .false. )
@@ -191,7 +191,7 @@ contains
         else
             ! distributed: write partial sums only
             if( L_NEW_CAVGER )then
-                call cavger_new_new(build)
+                call cavger_new_new(params, build)
                 call cavger_new_transf_oridat(build%spproj)
                 call cavger_new_read_euclid_sigma2
                 call cavger_new_assemble_sums( .false. )
@@ -297,7 +297,7 @@ contains
             call pftc%polar_cavger_kill
         else
             if( L_NEW_CAVGER )then
-                call cavger_new_new(build)
+                call cavger_new_new(params, build)
                 call cavger_new_transf_oridat( build%spproj )
                 call cavger_new_assemble_sums_from_parts()
                 ! classdoc gen needs to be after calc of FRCs

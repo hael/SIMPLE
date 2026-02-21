@@ -2,6 +2,7 @@
 module simple_strategy2D_prob
 use simple_core_module_api
 use simple_strategy2D_alloc
+use simple_parameters,       only: params_glob
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 implicit none
@@ -37,7 +38,7 @@ contains
             call self%s%prep4srch(os)
             ! Assignment
             self%s%best_class = s2D%probtab%assgn_map(self%s%iptcl_map)%cls
-            self%s%best_corr  = eulprob_corr_switch(s2D%probtab%assgn_map(self%s%iptcl_map)%dist)
+            self%s%best_corr  = eulprob_corr_switch(s2D%probtab%assgn_map(self%s%iptcl_map)%dist, params_glob%cc_objfun)
             self%s%best_rot   = s2D%probtab%assgn_map(self%s%iptcl_map)%inpl
             self%s%best_shvec = 0.
             if( s2D%do_inplsrch(self%s%iptcl_batch) )then

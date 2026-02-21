@@ -79,7 +79,7 @@ contains
         select case(trim(params_glob%refine))
         case('greedy_smpl','inpl_smpl')
             overlap        = spproj%os_ptcl2D%get_avg('mi_class', state=1)
-            avg_dist_inpl  = calc_athres(os=spproj%os_ptcl2D, field_str='dist_inpl', state=1)
+            avg_dist_inpl  = calc_athres(os=spproj%os_ptcl2D, field_str='dist_inpl', prob_athres=params_glob%prob_athres, state=1)
             avg_dist_inpl  = avg_dist_inpl * (1.-overlap)
             s2D%smpl_ninpl = max(2,nint(avg_dist_inpl*real(pftc_glob%get_nrots())/180.))
             s2D%smpl_ncls  = nint(real(params_glob%ncls) * (1.-overlap)**2)

@@ -154,7 +154,7 @@ contains
                 l_alloc_read_cavgs = which_iter==1
             endif
             if( L_NEW_CAVGER )then
-                call cavger_new_new(b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
+                call cavger_new_new(params_glob, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
                 if( l_alloc_read_cavgs )then
                     if( .not. cline%defined('refs') )then
                         THROW_HARD('need refs to be part of command line for cluster2D execution')
@@ -215,7 +215,7 @@ contains
 
         ! READ THE ASSIGNMENT FOR PROB MODE
         if( l_prob )then
-            call probtab%new(b_ptr, pinds)
+            call probtab%new(params_glob, b_ptr, pinds)
             call probtab%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
             s2D%probtab => probtab ! table accessible to strategies
         endif

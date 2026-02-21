@@ -49,7 +49,7 @@ contains
             iptcl_map = self%s%iptcl_map
             istate    =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%istate
             iproj     =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%iproj
-            corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist)
+            corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, params_glob%cc_objfun)
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
             iref      = (istate-1)*params_glob%nspace + iproj
             if( self%s%doshift )then
