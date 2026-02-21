@@ -7,39 +7,41 @@ implicit none
 contains
 
     !>  \brief  Constructor
-    module subroutine cavger_new_new( build, pinds, alloccavgs )
-        class(builder), target, intent(inout) :: build
-        integer, optional,      intent(in) :: pinds(:)
-        logical, optional,      intent(in) :: alloccavgs
+    module subroutine cavger_new_new( params, build, pinds, alloccavgs )
+        class(parameters), target, intent(inout) :: params
+        class(builder),    target, intent(inout) :: build
+        integer, optional,         intent(in)    :: pinds(:)
+        logical, optional,         intent(in)    :: alloccavgs
+        p_ptr => params
         b_ptr => build
         l_alloc_read_cavgs = .true.
         if( present(alloccavgs) ) l_alloc_read_cavgs = alloccavgs
         call cavger_new_kill(dealloccavgs=l_alloc_read_cavgs)
-        allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=.true.)
+        allocate(pptcl_mask(p_ptr%fromp:p_ptr%top), source=.true.)
         if( present(pinds) )then
             pptcl_mask           = .false.
             pptcl_mask(pinds(:)) = .true.
         endif
-        ncls          = params_glob%ncls
+        ncls          = p_ptr%ncls
         ! work out range and partsz
-        if( params_glob%l_distr_exec )then
-            istart    = params_glob%fromp
-            iend      = params_glob%top
+        if( p_ptr%l_distr_exec )then
+            istart    = p_ptr%fromp
+            iend      = p_ptr%top
         else
             istart    = 1
-            iend      = params_glob%nptcls
+            iend      = p_ptr%nptcls
         endif
         partsz        = size(pptcl_mask)
         ! CTF logics
-        ctfflag       = b_ptr%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
+        ctfflag       = b_ptr%spproj%get_ctfflag_type('ptcl2D',iptcl=p_ptr%fromp)
         ! smpd
-        smpd          = params_glob%smpd
-        smpd_crop     = params_glob%smpd_crop
+        smpd          = p_ptr%smpd
+        smpd_crop     = p_ptr%smpd_crop
         ! set ldims
-        ldim          = [params_glob%box,  params_glob%box,  1]
-        ldim_crop     = [params_glob%box_crop,  params_glob%box_crop,  1]
-        ldim_croppd   = [params_glob%box_croppd,params_glob%box_croppd,1]
-        ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
+        ldim          = [p_ptr%box,       p_ptr%box,       1]
+        ldim_crop     = [p_ptr%box_crop,  p_ptr%box_crop,  1]
+        ldim_croppd   = [p_ptr%box_croppd,p_ptr%box_croppd,1]
+        ldim_pd       = [p_ptr%boxpd,     p_ptr%boxpd,     1]
         ! build arrays
         allocate(precs(partsz))
         if( l_alloc_read_cavgs ) call cavgs%new_set(ldim_crop(1:2), ncls)
@@ -54,7 +56,7 @@ contains
         class(oris), pointer :: spproj_field
         type(ctfparams)      :: ctfvars(nthr_glob)
         integer              :: cnt, iptcl, ithr, stkind
-        call spproj%ptr2oritype(params_glob%oritype, spproj_field)
+        call spproj%ptr2oritype(p_ptr%oritype, spproj_field)
         ! build index map
         cnt = 0
         do iptcl=istart,iend
@@ -74,15 +76,15 @@ contains
             ithr               = omp_get_thread_num() + 1
             precs(cnt)%eo      = spproj_field%get_eo(iptcl)
             precs(cnt)%pw      = spproj_field%get(iptcl,'w')
-            ctfvars(ithr)      = spproj%get_ctfparams(params_glob%oritype,iptcl)
-            precs(cnt)%tfun    = ctf(params_glob%smpd_crop, ctfvars(ithr)%kv, ctfvars(ithr)%cs, ctfvars(ithr)%fraca)
+            ctfvars(ithr)      = spproj%get_ctfparams(p_ptr%oritype,iptcl)
+            precs(cnt)%tfun    = ctf(p_ptr%smpd_crop, ctfvars(ithr)%kv, ctfvars(ithr)%cs, ctfvars(ithr)%fraca)
             precs(cnt)%dfx     = ctfvars(ithr)%dfx
             precs(cnt)%dfy     = ctfvars(ithr)%dfy
             precs(cnt)%angast  = ctfvars(ithr)%angast
             precs(cnt)%class   = spproj_field%get_class(iptcl)
             precs(cnt)%e3      = spproj_field%e3get(iptcl)
             precs(cnt)%shift   = spproj_field%get_2Dshift(iptcl)
-            call spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, stkind, precs(cnt)%ind_in_stk)
+            call spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, iptcl, stkind, precs(cnt)%ind_in_stk)
         end do
         !$omp end parallel do
     end subroutine cavger_new_transf_oridat
@@ -90,9 +92,9 @@ contains
     !>  \brief  for loading sigma2
     module subroutine cavger_new_read_euclid_sigma2
         type(string) :: fname
-        if( params_glob%l_ml_reg )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(params_glob, fname, params_glob%box)
+        if( p_ptr%l_ml_reg )then
+            fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
+            call eucl_sigma%new(p_ptr, fname, p_ptr%box)
             call eucl_sigma%read_part(  b_ptr%spproj_field)
             call eucl_sigma%read_groups(b_ptr%spproj_field)
         end if
@@ -104,11 +106,11 @@ contains
         use simple_sp_project, only: sp_project
         class(sp_project), target, intent(inout) :: spproj
         class(oris), pointer :: ptcl_field, cls_field
-        integer  :: pops(params_glob%ncls)
-        real(dp) :: corrs(params_glob%ncls), ws(params_glob%ncls)
+        integer  :: pops(p_ptr%ncls)
+        real(dp) :: corrs(p_ptr%ncls), ws(p_ptr%ncls)
         real     :: frc05, frc0143, rstate, w
         integer  :: iptcl, icls, pop, nptcls
-        select case(trim(params_glob%oritype))
+        select case(trim(p_ptr%oritype))
             case('ptcl2D')
                 ptcl_field => spproj%os_ptcl2D
                 cls_field  => spproj%os_cls2D
@@ -116,7 +118,7 @@ contains
                 ptcl_field => spproj%os_ptcl3D
                 cls_field  => spproj%os_cls3D
             case DEFAULT
-                THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
+                THROW_HARD('Unsupported ORITYPE: '//trim(p_ptr%oritype))
         end select
         nptcls = ptcl_field%get_noris()
         pops   = 0
@@ -130,7 +132,7 @@ contains
             w = ptcl_field%get(iptcl,'w')
             if( w < SMALL ) cycle
             icls = ptcl_field%get_class(iptcl)
-            if( icls<1 .or. icls>params_glob%ncls )cycle
+            if( icls<1 .or. icls>p_ptr%ncls )cycle
             pops(icls)  = pops(icls)  + 1
             corrs(icls) = corrs(icls) + real(ptcl_field%get(iptcl,'corr'),dp)
             ws(icls)    = ws(icls)    + real(w,dp)
@@ -143,8 +145,8 @@ contains
             corrs = -1.
             ws    = 0.
         end where
-        call cls_field%new(params_glob%ncls, is_ptcl=.false.)
-        do icls=1,params_glob%ncls
+        call cls_field%new(p_ptr%ncls, is_ptcl=.false.)
+        do icls=1,p_ptr%ncls
             pop = pops(icls)
             call b_ptr%clsfrcs%estimate_res(icls, frc05, frc0143)
             call cls_field%set(icls, 'class',     icls)
@@ -208,16 +210,16 @@ contains
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
         logical :: l_conjg
-        if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        if( .not. p_ptr%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! Init cavgs
         if( l_alloc_read_cavgs )then
             call cavgs%zero_set(.true.)
             if( do_frac_update )then
                 call cavger_new_readwrite_partial_sums('read')
-                call apply_weights2cavgs(1.0-params_glob%update_frac)
+                call apply_weights2cavgs(1.0-p_ptr%update_frac)
             endif
         else
-            if( do_frac_update ) call apply_weights2cavgs(1.0-params_glob%update_frac)
+            if( do_frac_update ) call apply_weights2cavgs(1.0-p_ptr%update_frac)
             call cavgs%zero_set(.true.)
         endif
         ! Interpolation variables
@@ -226,8 +228,8 @@ contains
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim,nthr_glob),source=0.)
         ! Indexing the number stacks
-        first_pind = params_glob%fromp
-        call b_ptr%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
+        first_pind = p_ptr%fromp
+        call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, first_pind, first_stkind, ind_in_stk)
         last_pind = 0
         do i = partsz,1,-1
             if( precs(i)%pind > 0 )then
@@ -235,10 +237,10 @@ contains
                 exit
             endif
         enddo
-        call b_ptr%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
+        call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks     = last_stkind - first_stkind + 1
         ! Memoization, dimensions & limits
-        call memoize_ft_maps(ldim_croppd(1:2), params_glob%smpd_crop)
+        call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
         croppd_scale          = real(ldim_croppd(1)) / real(ldim_pd(1))
         cyc_lims_croppd       = ft_map_lims_nr            ! croppd limits
         cyc_lims_croppdR(:,1) = cyc_lims_croppd(1,:)      ! croppd transposed limits
@@ -252,7 +254,7 @@ contains
         call prepimgbatch(b_ptr, READBUFFSZ)
         call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
         ! sigma2 prep for regularization
-        if( params_glob%l_ml_reg )then
+        if( p_ptr%l_ml_reg )then
             allocate(sigma2(1:nyq_crop,nthr_glob),sigma2pd(0:nyq_croppd,nthr_glob),&
                     &sqrt_sigma2pd(0:nyq_croppd,nthr_glob),source=0.0)
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
@@ -272,7 +274,7 @@ contains
             fromp = b_ptr%spproj%os_stk%get_fromp(istk)
             top   = b_ptr%spproj%os_stk%get_top(istk)
             nptcls_in_stk = top - fromp + 1 ! # of particles in stack
-            call b_ptr%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
+            call b_ptr%spproj%get_stkname_and_ind(p_ptr%oritype, max(p_ptr%fromp,fromp), stk_fname, ind_in_stk)
             ! batch loop
             nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ))
             do ibatch = 1,nbatches
@@ -286,8 +288,8 @@ contains
                 do i = istart,iend
                     iptcl    = fromp + i - 1                         ! global particle index
                     batchind = batchind + 1                          ! index in batch
-                    if( iptcl < params_glob%fromp ) cycle            ! taking care of limits
-                    if( iptcl > params_glob%top )   cycle
+                    if( iptcl < p_ptr%fromp ) cycle            ! taking care of limits
+                    if( iptcl > p_ptr%top )   cycle
                     iprec_glob = iprec_glob + 1                      ! global particle record
                     batch_iprecs(batchind) = iprec_glob              ! particle record in batch
                     if( precs(iprec_glob)%pind == 0 ) cycle
@@ -315,7 +317,7 @@ contains
                     call precs(iprec)%tfun%eval_and_apply(ctfflag, precs(iprec)%dfx, precs(iprec)%dfy,&
                         &precs(iprec)%angast, fdims_croppd(1:2), tvals(:,:,ithr), cmats(:,:,ithr))
                     ! upsample sigma2 & multipliy CTF.image & CTF2
-                    if( params_glob%l_ml_reg )then
+                    if( p_ptr%l_ml_reg )then
                         sigma2(sigma2_kfromto(1):nyq_crop,ithr) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):nyq_crop,iptcl)
                         call upsample_sigma2(sigma2_kfromto(1), nyq_crop, sigma2(:,ithr), nyq_croppd, sigma2pd(:,ithr))
                         sqrt_sigma2pd(:,ithr) = sqrt(sigma2pd(:,ithr))
@@ -434,16 +436,16 @@ contains
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
         logical :: l_conjg
-        if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        if( .not. p_ptr%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! Init cavgs
         if( l_alloc_read_cavgs )then
             call cavgs%zero_set(.true.)
             if( do_frac_update )then
                 call cavger_new_readwrite_partial_sums('read')
-                call apply_weights2cavgs(1.0-params_glob%update_frac)
+                call apply_weights2cavgs(1.0-p_ptr%update_frac)
             endif
         else
-            if( do_frac_update ) call apply_weights2cavgs(1.0-params_glob%update_frac)
+            if( do_frac_update ) call apply_weights2cavgs(1.0-p_ptr%update_frac)
             call cavgs%zero_set(.true.)
         endif
         ! Interpolation variables
@@ -452,8 +454,8 @@ contains
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim,nthr_glob),source=0.)
         ! Indexing the number stacks
-        first_pind = params_glob%fromp
-        call b_ptr%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
+        first_pind = p_ptr%fromp
+        call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, first_pind, first_stkind, ind_in_stk)
         last_pind = 0
         do i = partsz,1,-1
             if( precs(i)%pind > 0 )then
@@ -461,13 +463,13 @@ contains
                 exit
             endif
         enddo
-        call b_ptr%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
+        call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks     = last_stkind - first_stkind + 1
         ! Work images
         call prepimgbatch(b_ptr, READBUFFSZ)
         call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
         ! Memoization for padded image
-        call memoize_ft_maps(ldim_croppd(1:2), params_glob%smpd_crop)
+        call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
         ! Dimensions & limits
         croppd_scale          = real(ldim_croppd(1)) / real(ldim_pd(1))
         cyc_lims_croppd       = ft_map_lims_nr            ! croppd limits
@@ -481,7 +483,7 @@ contains
         cyc_lims_crop  = cavgs%even%fit%loop_lims(3)
         cyc_lims_cropR = transpose(cyc_lims_crop(1:2,:))
         ! sigma2 prep for regularization
-        if( params_glob%l_ml_reg )then
+        if( p_ptr%l_ml_reg )then
             allocate(sigma2(1:nyq_crop,nthr_glob),sigma2pd(0:nyq_croppd,nthr_glob),&
                     &sqrt_sigma2pd(0:nyq_croppd,nthr_glob),source=0.0)
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
@@ -501,7 +503,7 @@ contains
             fromp = b_ptr%spproj%os_stk%get_fromp(istk)
             top   = b_ptr%spproj%os_stk%get_top(istk)
             nptcls_in_stk = top - fromp + 1 ! # of particles in stack
-            call b_ptr%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
+            call b_ptr%spproj%get_stkname_and_ind(p_ptr%oritype, max(p_ptr%fromp,fromp), stk_fname, ind_in_stk)
             ! batch loop
             nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ))
             do ibatch = 1,nbatches
@@ -515,8 +517,8 @@ contains
                 do i = istart,iend
                     iptcl    = fromp + i - 1                         ! global particle index
                     batchind = batchind + 1                          ! index in batch
-                    if( iptcl < params_glob%fromp ) cycle            ! taking care of limits
-                    if( iptcl > params_glob%top )   cycle
+                    if( iptcl < p_ptr%fromp ) cycle            ! taking care of limits
+                    if( iptcl > p_ptr%top )   cycle
                     iprec_glob = iprec_glob + 1                      ! global particle record
                     batch_iprecs(batchind) = iprec_glob              ! particle record in batch
                     if( precs(iprec_glob)%pind == 0 ) cycle
@@ -544,7 +546,7 @@ contains
                     call precs(iprec)%tfun%eval_and_apply(ctfflag, precs(iprec)%dfx, precs(iprec)%dfy,&
                         &precs(iprec)%angast, fdims_croppd(1:2), tvals(:,:,ithr), cmats(:,:,ithr))
                     ! upsample sigma2 & multipliy CTF.image & CTF2
-                    if( params_glob%l_ml_reg )then
+                    if( p_ptr%l_ml_reg )then
                         sigma2(sigma2_kfromto(1):nyq_crop,ithr) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):nyq_crop,iptcl)
                         call upsample_sigma2(sigma2_kfromto(1), nyq_crop, sigma2(:,ithr), nyq_croppd, sigma2pd(:,ithr))
                         sqrt_sigma2pd(:,ithr) = sqrt(sigma2pd(:,ithr))
@@ -651,7 +653,7 @@ contains
         call cavgs_bak%new_set(ldim_crop, ncls)
         call even_tmp%new_stack(ldim_crop, nthr_glob, alloc_ctfsq=.false.)
         call odd_tmp%new_stack( ldim_crop, nthr_glob, alloc_ctfsq=.false.)
-        if( params_glob%l_ml_reg ) call cavgs_bak%new_set(ldim_crop, ncls)
+        if( p_ptr%l_ml_reg ) call cavgs_bak%new_set(ldim_crop, ncls)
         call memoize_ft_maps(ldim_crop(1:2), smpd_crop)
         gridcorr_img = prep2D_inv_instrfun4mul(ldim_crop, ldim_croppd, smpd_crop)
         ! Making sure that the public images are allocated with make_cavgs & shared memory
@@ -679,7 +681,7 @@ contains
                 cavgs%merged%cmat(:,:,icls)  = cavgs%even%cmat(:,:,icls)  + cavgs%odd%cmat(:,:,icls)
                 cavgs%merged%ctfsq(:,:,icls) = cavgs%even%ctfsq(:,:,icls) + cavgs%odd%ctfsq(:,:,icls)
                 ! backup current classes
-                if( params_glob%l_ml_reg ) call cavgs_bak%copy_fast(cavgs, icls, .true.)
+                if( p_ptr%l_ml_reg ) call cavgs_bak%copy_fast(cavgs, icls, .true.)
                 ! CTF2 density correction
                 if( eo_pop(1) > 1 ) call cavgs%even%ctf_dens_correct(icls)
                 if( eo_pop(2) > 1 ) call cavgs%odd%ctf_dens_correct(icls)
@@ -699,7 +701,7 @@ contains
                 call odd_tmp%fft(ithr)
                 call even_tmp%frc(odd_tmp, ithr, frc)
                 ! ML-regularization: add inverse of noise power to ctfsq & normalize again
-                if( params_glob%l_ml_reg )then
+                if( p_ptr%l_ml_reg )then
                     ! add noise power term to denominator
                     call cavgs_bak%even%add_invnoisepower2rho(icls, filtsz_crop, frc)
                     call cavgs_bak%odd%add_invnoisepower2rho(icls, filtsz_crop, frc)
@@ -773,17 +775,17 @@ contains
     end subroutine cavger_new_write_merged
 
     module subroutine cavger_new_read_all()
-        if( .not. file_exists(params_glob%refs) ) THROW_HARD('references (REFS) does not exist in cwd')
-        call read_cavgs(params_glob%refs, 'merged')
-        if( file_exists(params_glob%refs_even) )then
-            call read_cavgs(params_glob%refs_even, 'even')
+        if( .not. file_exists(p_ptr%refs) ) THROW_HARD('references (REFS) does not exist in cwd')
+        call read_cavgs(p_ptr%refs, 'merged')
+        if( file_exists(p_ptr%refs_even) )then
+            call read_cavgs(p_ptr%refs_even, 'even')
         else
-            call read_cavgs(params_glob%refs, 'even')
+            call read_cavgs(p_ptr%refs, 'even')
         endif
-        if( file_exists(params_glob%refs_odd) )then
-            call read_cavgs(params_glob%refs_odd, 'odd')
+        if( file_exists(p_ptr%refs_odd) )then
+            call read_cavgs(p_ptr%refs_odd, 'odd')
         else
-            call read_cavgs(params_glob%refs, 'odd')
+            call read_cavgs(p_ptr%refs, 'odd')
         endif
     end subroutine cavger_new_read_all
 
@@ -832,10 +834,10 @@ contains
     module subroutine cavger_new_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
         type(string)   :: cae, cao, cte, cto
-        cae   = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
-        cao   = 'cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
-        cte   = 'ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
-        cto   = 'ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
+        cae   = 'cavgs_even_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
+        cao   = 'cavgs_odd_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
+        cte   = 'ctfsqsums_even_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
+        cto   = 'ctfsqsums_odd_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
         select case(trim(which))
             case('read')
                 call cavgs%even%read_cmat(cae)
@@ -885,13 +887,13 @@ contains
             rt_io   = 0.
             rt_sum  = 0.
         endif
-        do ipart=1,params_glob%nparts
+        do ipart=1,p_ptr%nparts
             if( L_BENCH_GLOB ) t_io = tic()
             ! filenames
-            cae = 'cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
-            cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
-            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//MRC_EXT
-            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
+            cae = 'cavgs_even_part'    //int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
+            cao = 'cavgs_odd_part'     //int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
+            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
+            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
             ! read arrays
             call cavgs4reade%read_cmat(cae)
             call cavgs4reade%read_ctfsq(cte)
@@ -918,7 +920,7 @@ contains
         call cavgs4reado%kill_stack
         ! Restoration of e/o/merged classes
         if( L_BENCH_GLOB ) t_merge_eos_and_norm = tic()
-        call cavger_new_restore_cavgs(params_glob%frcs)
+        call cavger_new_restore_cavgs(p_ptr%frcs)
         ! Benchmarck
         if( L_BENCH_GLOB )then
             rt_merge_eos_and_norm = toc(t_merge_eos_and_norm)
@@ -1047,12 +1049,12 @@ contains
         endif
         allocate(timgs(pop))
         do i = 1,size(timgs)
-            call timgs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
+            call timgs(i)%new([p_ptr%box,p_ptr%box,1],p_ptr%smpd, wthreads=.false.)
         enddo
         if( l_imgs )then
             allocate(imgs_ori(pop))
             do i = 1,size(imgs_ori)
-                call imgs_ori(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
+                call imgs_ori(i)%new([p_ptr%box,p_ptr%box,1],p_ptr%smpd, wthreads=.false.)
             enddo
         endif
         ! interpolation variables
@@ -1063,8 +1065,8 @@ contains
         ! temporary objects
         call prepimgbatch(b_ptr, pop)
         do ithr = 1, nthr_glob
-            call  img(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
-            call timg(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
+            call  img(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
+            call timg(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
         end do
         call memoize_ft_maps(img(1)%get_ldim(), img(1)%get_smpd())
         logi_lims      = img(1)%loop_lims(2)

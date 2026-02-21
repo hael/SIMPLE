@@ -57,7 +57,7 @@ contains
                     else
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                     endif
-                    loc = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
+                    loc = angle_sampling(eulprob_dist_switch(inpl_corrs, params_glob%cc_objfun), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), params_glob%prob_athres)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                 end if
             end do

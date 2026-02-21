@@ -16,7 +16,8 @@ interface angle_sampling
 end interface
 
 type :: eul_prob_tab
-    class(builder), pointer     :: b_ptr => null()
+    class(builder),    pointer  :: b_ptr => null()
+    class(parameters), pointer  :: p_ptr => null()
     type(ptcl_ref), allocatable :: loc_tab(:,:)    !< 2D search table (nspace*nstates, nptcls)
     type(ptcl_ref), allocatable :: state_tab(:,:)  !< 2D search table (nstates,        nptcls)
     type(ptcl_ref), allocatable :: assgn_map(:)    !< assignment map                  (nptcls)
@@ -56,36 +57,38 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new_1( self, build, pinds, empty_okay )
-        class(eul_prob_tab),    intent(inout) :: self
-        class(builder), target, intent(in)    :: build
-        integer,                intent(in)    :: pinds(:)
-        logical, optional,      intent(in)    :: empty_okay
+    subroutine new_1( self, params, build, pinds, empty_okay )
+        class(eul_prob_tab),       intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        logical, optional,         intent(in)    :: empty_okay
         integer, parameter :: MIN_POP = 5   ! ignoring cavgs with less than 5 particles
         integer :: i, iproj, iptcl, istate, si, ri
         real    :: x
         logical :: l_empty
-        l_empty = (trim(params_glob%empty3Dcavgs) .eq. 'yes')
-        if( present(empty_okay) ) l_empty = empty_okay
-        self%b_ptr => build
         call self%kill
+        l_empty = (trim(params%empty3Dcavgs) .eq. 'yes')
+        if( present(empty_okay) ) l_empty = empty_okay
+        self%p_ptr => params
+        self%b_ptr  => build
         self%nptcls       = size(pinds)
-        self%state_exists = self%b_ptr%spproj_field%states_exist(params_glob%nstates, thres=MIN_POP)
+        self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
         self%nstates      = count(self%state_exists .eqv. .true.)
         if( l_empty )then
-            allocate(self%proj_exists(params_glob%nspace,params_glob%nstates), source=.true.)
+            allocate(self%proj_exists(self%p_ptr%nspace,self%p_ptr%nstates), source=.true.)
         else
-            self%proj_exists = self%b_ptr%spproj_field%projs_exist(params_glob%nstates,params_glob%nspace, thres=MIN_POP)
+            self%proj_exists = self%b_ptr%spproj_field%projs_exist(self%p_ptr%nstates,self%p_ptr%nspace, thres=MIN_POP)
         endif
         self%nrefs = count(self%proj_exists .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%jinds(self%nrefs),self%sinds(self%nrefs))
         si = 0
         ri = 0
-        do istate = 1, params_glob%nstates
+        do istate = 1, self%p_ptr%nstates
             if( .not. self%state_exists(istate) )cycle
             si              = si + 1
             self%ssinds(si) = istate
-            do iproj = 1,params_glob%nspace
+            do iproj = 1,self%p_ptr%nspace
                 if( .not. self%proj_exists(iproj,istate) )cycle
                 ri             = ri + 1
                 self%jinds(ri) = iproj
@@ -129,17 +132,19 @@ contains
         !$omp end parallel do
     end subroutine new_1
 
-    subroutine new_2( self, build, os )
-        class(eul_prob_tab),    intent(inout) :: self
-        class(builder), target, intent(in)    :: build
-        class(oris),            intent(in)    :: os
+    subroutine new_2( self, params, build, os )
+        class(eul_prob_tab),       intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        class(oris),               intent(in)    :: os
         integer, allocatable :: states(:)
         integer :: i, iproj, iptcl, istate, n, iref
         real    :: x
-        self%b_ptr => build
         call self%kill
+        self%p_ptr => params
+        self%b_ptr => build
         self%nptcls  = os%get_noris(consider_state=.true.)
-        self%nstates = params_glob%nstates
+        self%nstates = self%p_ptr%nstates
         n = os%get_noris()
         allocate(states(n), source=nint(os%get_all('state')))
         self%pinds = pack((/(i,i=1,n)/), mask=states > 0)
@@ -165,8 +170,8 @@ contains
                 self%state_tab(istate,i)%x      = 0.
                 self%state_tab(istate,i)%y      = 0.
                 self%state_tab(istate,i)%has_sh = .false.
-                do iproj = 1,params_glob%nspace
-                    iref = (istate-1)*params_glob%nspace + iproj
+                do iproj = 1,self%p_ptr%nspace
+                    iref = (istate-1)*self%p_ptr%nspace + iproj
                     self%loc_tab(iref,i)%pind   = iptcl
                     self%loc_tab(iref,i)%istate = istate
                     self%loc_tab(iref,i)%iproj  = iproj
@@ -194,27 +199,27 @@ contains
         integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(pftc%get_nrots(),nthr_glob),&
                   &istate, iref_start
         logical :: l_doshift
-        real    :: rotmat(2,2), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres(params_glob%nstates)
+        real    :: rotmat(2,2), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres(self%p_ptr%nstates)
         real    :: dists_inpl(pftc%get_nrots(),nthr_glob), dists_inpl_sorted(pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         call seed_rnd
         projs_ns = 0
         do si = 1, self%nstates
             istate = self%ssinds(si)
-            call calc_num2sample(self%b_ptr%spproj_field, params_glob%nspace, 'dist', n, state=istate)
+            call calc_num2sample(self%b_ptr%spproj_field, self%p_ptr%nspace, 'dist', n, self%p_ptr%prob_athres, state=istate)
             projs_ns            = max(projs_ns, n)
-            inpl_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', state=istate)
+            inpl_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
         enddo
         if( allocated(locn) ) deallocate(locn)
         allocate(locn(projs_ns,nthr_glob), source=0)
-        if( params_glob%l_sh_first .and. params_glob%l_doshift )then
+        if( self%p_ptr%l_sh_first .and. self%p_ptr%l_doshift )then
             ! make shift search objects
-            lims(:,1)      = -params_glob%trs
-            lims(:,2)      =  params_glob%trs
+            lims(:,1)      = -self%p_ptr%trs
+            lims(:,2)      =  self%p_ptr%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                    &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+                    &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             ! fill the table
             !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob,rot_xy,rotmat)&
@@ -228,7 +233,7 @@ contains
                 irot       = pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                 iproj      = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 if( self%state_exists(istate) .and. self%proj_exists(iproj,istate) )then
-                    iref_start = (istate-1)*params_glob%nspace
+                    iref_start = (istate-1)*self%p_ptr%nspace
                     ! BFGS over shifts
                     call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
@@ -240,9 +245,9 @@ contains
                 do ri = 1, self%nrefs
                     istate = self%sinds(ri)
                     iproj  = self%jinds(ri)
-                    call pftc%gen_objfun_vals((istate-1)*params_glob%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
-                    dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                    irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
+                    call pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
+                    dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
+                    irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
                     ! rotate the shift vector to the frame of reference
                     call rotmat2d(pftc%get_rot(irot), rotmat)
                     rot_xy                    = matmul(cxy(2:3), rotmat)
@@ -255,19 +260,19 @@ contains
                 enddo
                 ! (3) see if we can refine the shifts by re-searching them for individual references in the 
                 !     identified probabilistic neighborhood
-                if( params_glob%l_prob_sh )then
+                if( self%p_ptr%l_prob_sh )then
                     locn(:,ithr) = minnloc(dists_refs(:,ithr), projs_ns)
                     do j = 1,projs_ns
                         ri     = locn(j,ithr)
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
                         ! BFGS over shifts
-                        call grad_shsrch_obj(ithr)%set_indices((istate-1)*params_glob%nspace + iproj, iptcl)
+                        call grad_shsrch_obj(ithr)%set_indices((istate-1)*self%p_ptr%nspace + iproj, iptcl)
                         irot     = self%loc_tab(ri,i)%inpl
                         cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
                         if( irot > 0 )then
                             self%loc_tab(ri,i)%inpl   = irot
-                            self%loc_tab(ri,i)%dist   = eulprob_dist_switch(cxy_prob(1))
+                            self%loc_tab(ri,i)%dist   = eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun)
                             self%loc_tab(ri,i)%x      = cxy_prob(2)
                             self%loc_tab(ri,i)%y      = cxy_prob(3)
                             self%loc_tab(ri,i)%has_sh = .true.
@@ -277,16 +282,16 @@ contains
             enddo
             !$omp end parallel do
         else
-            l_doshift = params_glob%l_prob_sh .and. params_glob%l_doshift
+            l_doshift = self%p_ptr%l_prob_sh .and. self%p_ptr%l_doshift
             if( l_doshift )then
                 ! make shift search objects
-                lims(:,1)      = -params_glob%trs
-                lims(:,2)      =  params_glob%trs
+                lims(:,1)      = -self%p_ptr%trs
+                lims(:,2)      =  self%p_ptr%trs
                 lims_init(:,1) = -SHC_INPL_TRSHWDTH
                 lims_init(:,2) =  SHC_INPL_TRSHWDTH
                 do ithr = 1,nthr_glob
-                    call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                        &maxits=params_glob%maxits_sh, opt_angle=.true.)
+                    call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+                        &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
                 end do
                 ! fill the table
                 !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot,j,cxy) proc_bind(close) schedule(static)
@@ -296,9 +301,9 @@ contains
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
-                        call pftc%gen_objfun_vals((istate-1)*params_glob%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
-                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
+                        call pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
+                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
+                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
                         self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
                         self%loc_tab(ri,i)%inpl = irot
                         dists_refs(  ri,ithr)   = dists_inpl(irot,ithr)
@@ -309,12 +314,12 @@ contains
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
                         ! BFGS over shifts
-                        call grad_shsrch_obj(ithr)%set_indices((istate-1)*params_glob%nspace + iproj, iptcl)
+                        call grad_shsrch_obj(ithr)%set_indices((istate-1)*self%p_ptr%nspace + iproj, iptcl)
                         irot = self%loc_tab(ri,i)%inpl
                         cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
                         if( irot > 0 )then
                             self%loc_tab(ri,i)%inpl = irot
-                            self%loc_tab(ri,i)%dist = eulprob_dist_switch(cxy(1))
+                            self%loc_tab(ri,i)%dist = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
                             self%loc_tab(ri,i)%x    = cxy(2)
                             self%loc_tab(ri,i)%y    = cxy(3)
                         endif
@@ -331,9 +336,9 @@ contains
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
-                        call pftc%gen_objfun_vals((istate-1)*params_glob%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
-                        dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr))
-                        irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate))
+                        call pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
+                        dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
+                        irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
                         self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
                         self%loc_tab(ri,i)%inpl = irot
                     enddo
@@ -355,15 +360,15 @@ contains
         integer :: i, iproj, iptcl, ithr, irot, istate, iref_start, is
         real    :: lims(2,2), lims_init(2,2), cxy(3)
         call seed_rnd
-        if( params_glob%l_doshift )then
+        if( self%p_ptr%l_doshift )then
             ! make shift search objects
-            lims(:,1)      = -params_glob%trs
-            lims(:,2)      =  params_glob%trs
+            lims(:,1)      = -self%p_ptr%trs
+            lims(:,2)      =  self%p_ptr%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                    &maxits=params_glob%maxits_sh, opt_angle=.true.)
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+                    &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
             end do
             ! fill the table
             !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,is,istate,irot,iref_start,cxy)&
@@ -377,7 +382,7 @@ contains
                 do is = 1, self%nstates
                     istate     = self%ssinds(is)
                     irot       = pftc%get_roind(360.-o_prev%e3get()) ! in-plane angle index
-                    iref_start = (istate-1)*params_glob%nspace
+                    iref_start = (istate-1)*self%p_ptr%nspace
                     ! BFGS over shifts
                     call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
@@ -386,7 +391,7 @@ contains
                         cxy(1)   = real(pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot))
                         cxy(2:3) = 0.
                     endif
-                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(cxy(1))
+                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
                     self%state_tab(istate,i)%iproj  = iproj
                     self%state_tab(istate,i)%inpl   = irot
                     self%state_tab(istate,i)%x      = cxy(2)
@@ -407,8 +412,8 @@ contains
                 iproj = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 do is = 1, self%nstates
                     istate      = self%ssinds(is)
-                    iref_start  = (istate-1)*params_glob%nspace
-                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot)))
+                    iref_start  = (istate-1)*self%p_ptr%nspace
+                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot)), self%p_ptr%cc_objfun)
                     self%state_tab(istate,i)%iproj  = iproj
                     self%state_tab(istate,i)%inpl   = irot
                     self%state_tab(istate,i)%x      = 0.
@@ -481,7 +486,7 @@ contains
         !$omp end parallel do
         projs_athres = 0.
         do istate = 1, self%nstates
-            projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', state=istate))
+            projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', self%p_ptr%prob_athres, state=istate))
         enddo
         ! first row is the current best reference distribution
         iref_dist_inds = 1
@@ -489,7 +494,7 @@ contains
         ptcl_avail     = .true.
         do while( any(ptcl_avail) )
             ! sampling the ref distribution to choose next iref to assign
-            assigned_iref = angle_sampling(iref_dist, dists_sorted, inds_sorted, projs_athres)
+            assigned_iref = angle_sampling(iref_dist, dists_sorted, inds_sorted, projs_athres, self%p_ptr%prob_athres)
             assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
@@ -730,39 +735,44 @@ contains
         if( allocated(self%jinds)        ) deallocate(self%jinds)
         if( allocated(self%state_exists) ) deallocate(self%state_exists)
         if( allocated(self%proj_exists)  ) deallocate(self%proj_exists)
+        self%b_ptr => null()
+        self%p_ptr => null()
     end subroutine kill
 
     ! PUBLIC UTILITITES
 
-    subroutine calc_num2sample( os, num_all, field_str, num_smpl, state)
+    subroutine calc_num2sample( os, num_all, field_str, num_smpl, prob_athres, state)
         class(oris),       intent(in)  :: os
         integer,           intent(in)  :: num_all
         character(len=*),  intent(in)  :: field_str
         integer,           intent(out) :: num_smpl
+        real,              intent(in)  :: prob_athres
         integer, optional, intent(in)  :: state
         real :: athres
-        athres   = calc_athres(os, field_str, state=state)
+        athres   = calc_athres(os, field_str, prob_athres, state=state)
         num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
 
-    function calc_athres( os, field_str, state ) result( athres )
+    function calc_athres( os, field_str, prob_athres, state ) result( athres )
         class(oris),       intent(in) :: os
         character(len=*),  intent(in) :: field_str
+        real,              intent(in) :: prob_athres
         integer, optional, intent(in) :: state
         real, allocatable :: vals(:)
         real :: athres, dist_thres
         vals = os%get_all_sampled(trim(field_str), state=state)
         dist_thres = sum(vals) / real(size(vals))
-        athres     = params_glob%prob_athres
+        athres     = prob_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
     end function calc_athres
 
     ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
-    elemental function eulprob_dist_switch( corr ) result(dist)
-        real, intent(in) :: corr
+    elemental function eulprob_dist_switch( corr, cc_objfun ) result(dist)
+        real,    intent(in) :: corr
+        integer, intent(in) :: cc_objfun
         real :: dist
         dist = corr
-        select case(params_glob%cc_objfun)
+        select case(cc_objfun)
             case(OBJFUN_CC)
                 if( corr < 0. )then
                     dist = 0.
@@ -780,11 +790,12 @@ contains
     end function eulprob_dist_switch
 
     ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
-    elemental function eulprob_corr_switch( dist, cc_objfun  ) result(corr)
-        real, intent(in) :: dist
+    elemental function eulprob_corr_switch( dist, cc_objfun ) result(corr)
+        real,    intent(in) :: dist
+        integer, intent(in) :: cc_objfun
         real :: corr
         corr = dist
-        select case(params_glob%cc_objfun)
+        select case(cc_objfun)
             case(OBJFUN_CC)
                 corr = 1 - dist
             case(OBJFUN_EUCLID)
@@ -792,26 +803,28 @@ contains
         end select
     end function eulprob_corr_switch
 
-    function angle_sampling_1( pvec, athres_ub_in ) result( which )
+    function angle_sampling_1( pvec, athres_ub_in, prob_athres ) result( which )
         real,    intent(in)  :: pvec(:)        !< probabilities
         real,    intent(in)  :: athres_ub_in
+        real,    intent(in)  :: prob_athres
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: sorted_inds(:)
         integer :: which, n
         n = size(pvec)
         allocate(pvec_sorted(n),sorted_inds(n))
-        which = angle_sampling_2(pvec, pvec_sorted, sorted_inds, athres_ub_in)
+        which = angle_sampling_2(pvec, pvec_sorted, sorted_inds, athres_ub_in, prob_athres)
     end function angle_sampling_1
 
-    function angle_sampling_2( pvec, pvec_sorted, sorted_inds, athres_ub_in ) result( which )
+    function angle_sampling_2( pvec, pvec_sorted, sorted_inds, athres_ub_in, prob_athres ) result( which )
         real,    intent(in)    :: pvec(:)        !< probabilities
         real,    intent(inout) :: pvec_sorted(:) !< sorted probabilities
         integer, intent(inout) :: sorted_inds(:)
         real,    intent(in)    :: athres_ub_in
+        real,    intent(in)    :: prob_athres
         integer :: which, num_lb, num_ub, n
         real    :: athres_ub, athres_lb
         n         = size(pvec)
-        athres_ub = min(params_glob%prob_athres, athres_ub_in)
+        athres_ub = min(prob_athres, athres_ub_in)
         athres_lb = min(athres_ub / 10., 1.) ! athres lower bound is 1/10 of athres upper bound, max at 1 degree
         num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
         num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)

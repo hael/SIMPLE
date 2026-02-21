@@ -12,7 +12,8 @@ private
 #include "simple_local_flags.inc"
 
 type :: eul_prob_tab2D
-    class(builder), pointer     :: b_ptr => null()
+    class(builder),    pointer  :: b_ptr => null()
+    class(parameters), pointer  :: params => null()
     type(ptcl_rec), allocatable :: loc_tab(:,:)   !< 2D search table (ncls x nptcls)
     type(ptcl_rec), allocatable :: assgn_map(:)   !< assignment map  (nptcls)
     integer,        allocatable :: pinds(:)       !< particle indices
@@ -73,18 +74,20 @@ contains
         self%incl   = .true.
     end subroutine set
 
-    subroutine new( self, build, pinds )
-        class(eul_prob_tab2D),  intent(inout) :: self
-        class(builder), target, intent(in)    :: build
-        integer,                intent(in)    :: pinds(:)
+    subroutine new( self, params, build, pinds )
+        class(eul_prob_tab2D),     intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
         integer, parameter   :: MIN_POP = 2   ! ignoring classes with one particle
         integer, allocatable :: pops(:)
         integer :: i, iptcl, icls
-        self%b_ptr => build
         call self%kill
+        self%params => params
+        self%b_ptr  => build
         call seed_rnd
         self%nptcls = size(pinds)
-        self%ncls   = params_glob%ncls
+        self%ncls   = self%params%ncls
         allocate(self%loc_tab(self%ncls,self%nptcls), self%assgn_map(self%nptcls),self%pinds(self%nptcls))
         ! Particles
         !$omp parallel do default(shared) private(i,iptcl,icls) proc_bind(close) schedule(static)
@@ -139,15 +142,15 @@ contains
         real    :: scores(pftc_glob%get_nrots())
         real    :: lims(2,2), lims_init(2,2), cxy(3), best_score
         integer :: i, j, iptcl, ithr, irot, icls, best_rot
-        if( params_glob%l_doshift )then
+        if( self%params%l_doshift )then
             ! search objects
-            lims(:,1)      = -params_glob%trs
-            lims(:,2)      =  params_glob%trs
+            lims(:,1)      = -self%params%trs
+            lims(:,2)      =  self%params%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-                    &maxits=params_glob%maxits_sh, opt_angle=.true.)
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=self%params%shbarrier,&
+                    &maxits=self%params%maxits_sh, opt_angle=.true.)
             end do
             ! search
             !$omp parallel do default(shared) private(i,iptcl,ithr,icls,irot,best_rot,best_score,scores,cxy)&
@@ -169,7 +172,7 @@ contains
                         best_rot   = irot
                         best_score = cxy(1)
                     endif
-                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(best_score)
+                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(best_score, self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl   = best_rot
                     self%loc_tab(icls,i)%x      = cxy(2)
                     self%loc_tab(icls,i)%y      = cxy(3)
@@ -186,7 +189,7 @@ contains
                     icls  = self%clsinds(j)
                     call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     irot = maxloc(scores, dim=1)
-                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(scores(irot))
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(scores(irot), self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl = irot
                 enddo
             enddo
@@ -207,20 +210,20 @@ contains
         nrots = pftc_glob%get_nrots()
         ! power of sampling distribution
         P = EXTR_POWER
-        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
+        if( self%params%extr_iter > self%params%extr_lim ) P = POST_EXTR_POWER
         ! size of stochastic neighborhood (# of in-plane angles to draw from)
-        neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
+        neigh_frac = extremal_decay2D(self%params%extr_iter, self%params%extr_lim)
         ninpl_smpl = neighfrac2nsmpl(neigh_frac, nrots)
         ncls_smpl  = neighfrac2nsmpl(neigh_frac, self%neffcls)
         ! Fork
-        if( params_glob%l_doshift )then
-            lims(:,1)      = -params_glob%trs
-            lims(:,2)      =  params_glob%trs
+        if( self%params%l_doshift )then
+            lims(:,1)      = -self%params%trs
+            lims(:,2)      =  self%params%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
                 call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
-                    &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh,&
+                    &shbarrier=self%params%shbarrier, maxits=self%params%maxits_sh,&
                     &opt_angle=.true., coarse_init=.false.)
             end do
             allocate(sorted_scores(self%neffcls),sorted_inds(self%neffcls))
@@ -234,7 +237,7 @@ contains
                     icls  = self%clsinds(j)
                     call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
-                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score, self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl   = irot
                     self%loc_tab(icls,i)%x      = 0.
                     self%loc_tab(icls,i)%y      = 0.
@@ -255,7 +258,7 @@ contains
                         irot = jrot
                         cxy  = [real(pftc_glob%gen_corr_for_rot_8(icls, iptcl, irot)), 0.,0.]
                     endif
-                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(cxy(1))
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(cxy(1), self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl = irot
                     self%loc_tab(icls,i)%x    = cxy(2)
                     self%loc_tab(icls,i)%y    = cxy(3)
@@ -272,7 +275,7 @@ contains
                     icls  = self%clsinds(j)
                     call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
-                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(score, self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl = irot
                 enddo
             enddo
@@ -300,14 +303,14 @@ contains
         ninpl_smpl = neighfrac2nsmpl(0., nrots)
         ncls_smpl  = neighfrac2nsmpl(0., self%neffcls)
         ! Fork
-        if( params_glob%l_doshift )then
-            lims(:,1)      = -params_glob%trs
-            lims(:,2)      =  params_glob%trs
+        if( self%params%l_doshift )then
+            lims(:,1)      = -self%params%trs
+            lims(:,2)      =  self%params%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
                 call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
-                    &shbarrier=params_glob%shbarrier, maxits=params_glob%maxits_sh,&
+                    &shbarrier=self%params%shbarrier, maxits=self%params%maxits_sh,&
                     &opt_angle=.true., coarse_init=.false.)
             end do
             allocate(sorted_scores(self%neffcls),sorted_inds(self%neffcls))
@@ -329,7 +332,7 @@ contains
                         ! stochastic in-plane
                         call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
                     endif
-                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score, self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl   = irot
                     self%loc_tab(icls,i)%x      = 0.
                     self%loc_tab(icls,i)%y      = 0.
@@ -350,7 +353,7 @@ contains
                         irot = jrot
                         cxy  = [real(pftc_glob%gen_corr_for_rot_8(icls, iptcl, irot)), 0.,0.]
                     endif
-                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(cxy(1))
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(cxy(1), self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl = irot
                     self%loc_tab(icls,i)%x    = cxy(2)
                     self%loc_tab(icls,i)%y    = cxy(3)
@@ -374,7 +377,7 @@ contains
                     else
                         call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
                     endif
-                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(score)
+                    self%loc_tab(icls,i)%dist = eulprob_dist_switch(score, self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl = irot
                 enddo
             enddo
@@ -442,11 +445,11 @@ contains
         !$omp private(i,j,icls,inds,dists,t)
         do i = 1,self%neffcls
             icls = self%clsinds(i)
-            if( counts(icls) > params_glob%maxpop )then
+            if( counts(icls) > self%params%maxpop )then
                 inds  = pack((/(j,j=1,self%nptcls)/), mask=self%assgn_map(:)%cls==icls)
                 dists = self%assgn_map(inds(:))%dist
                 call hpsort(dists)
-                t = dists(params_glob%maxpop)               ! threshold within the class
+                t = dists(self%params%maxpop)               ! threshold within the class
                 where( self%assgn_map(inds(:))%dist > t )
                     self%assgn_map(inds(:))%incl = .false.  ! this will set the restoration weight to ZERO
                 else where
@@ -464,7 +467,7 @@ contains
         class(oris),           intent(in)    :: os
         real    :: a
         integer :: i,icls,iptcl
-        if( params_glob%extr_iter <= params_glob%extr_lim )then
+        if( self%params%extr_iter <= self%params%extr_lim )then
             a = huge(a)
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,icls)
             do i = 1,self%nptcls
@@ -503,16 +506,16 @@ contains
         integer :: pops(self%ncls), vec(self%neffcls), i, icls, ind, rank, ncls_smpl
         call self%prevcls_withdrawal(os)
         ! size of stochastic neighborhood (# of classes to draw from)
-        neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
+        neigh_frac = extremal_decay2D(self%params%extr_iter, self%params%extr_lim)
         ncls_smpl  = neighfrac2nsmpl(neigh_frac, self%neffcls)
         P = EXTR_POWER
-        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
+        if( self%params%extr_iter > self%params%extr_lim ) P = POST_EXTR_POWER
         ! select class stochastically
         pops = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(i,pdists,vec,ind,rank,score,icls) reduction(+:pops)
         do i = 1,self%nptcls
-            pdists = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist)  ! distances to score
+            pdists = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist, self%params%cc_objfun)  ! distances to score
             call power_sampling(P, self%neffcls, pdists, vec, ncls_smpl, ind, rank, score) ! stochastic sampling
             icls = self%clsinds(ind)                                            ! class ID
             self%assgn_map(i) = self%loc_tab(icls,i)                            ! updates assignement
@@ -547,7 +550,7 @@ contains
                 pdists = self%loc_tab(self%clsinds(:),i)%dist
                 ind    = minloc(pdists,dim=1)                                   ! greedy sampling
             else
-                pdists = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist)             ! distances to score
+                pdists = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist, self%params%cc_objfun)             ! distances to score
                 call power_sampling(P, self%neffcls, pdists, vec, ncls_smpl, ind, rank, score) ! stochastic sampling
             endif
             icls              = self%clsinds(ind)                               ! class ID
@@ -574,7 +577,7 @@ contains
             if( prev_cls <= 0 )then
                 icls = minloc(self%loc_tab(self%clsinds(:),i)%dist,dim=1)
             else
-                scores = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist)
+                scores = eulprob_corr_switch(self%loc_tab(self%clsinds(:),i)%dist, self%params%cc_objfun)
                 icls   = shcloc(self%neffcls, scores, scores(prev_cls))
                 if( icls == 0 ) icls = maxloc(scores,dim=1)
             endif
@@ -609,17 +612,17 @@ contains
             call hpsort(sorted_tab(:,icls), stab_inds(:,icls))
         enddo
         !$omp end parallel do
-        neigh_frac = extremal_decay2D(params_glob%extr_iter, params_glob%extr_lim)
+        neigh_frac = extremal_decay2D(self%params%extr_iter, self%params%extr_lim)
         ncls_smpl = neighfrac2nsmpl(neigh_frac, self%neffcls)
         P = EXTR_POWER
-        if( params_glob%extr_iter > params_glob%extr_lim ) P = POST_EXTR_POWER
+        if( self%params%extr_iter > self%params%extr_lim ) P = POST_EXTR_POWER
         ! first row is the current best reference distribution
         cls_dist_inds = 1
         cls_dist      = sorted_tab(1,:)
         ptcl_avail    = .true.
         ! assignment
         do j = 1,self%nptcls
-            tmp = eulprob_corr_switch(cls_dist)
+            tmp = eulprob_corr_switch(cls_dist, self%params%cc_objfun)
             call power_sampling(P, self%ncls, tmp, inds_sorted, ncls_smpl, cls, r, s)
             ptcl                 = stab_inds(cls_dist_inds(cls), cls)
             ptcl_avail(ptcl)     = .false.
@@ -662,8 +665,8 @@ contains
         type(string) :: fname
         integer :: funit, addr, io_stat, file_header(2), nptcls, ncls, ipart, istart, iend
         istart = 1
-        do ipart = 1,params_glob%nparts
-            fname = DIST_FBODY//int2str_pad(ipart,params_glob%numlen)//'.dat'
+        do ipart = 1,self%params%nparts
+            fname = DIST_FBODY//int2str_pad(ipart,self%params%numlen)//'.dat'
             if( file_exists(fname) )then
                 call fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
                 call fileiochk('simple_eul_prob_tab2D; read_table_parts_to_glob; file: '//fname%to_char(), io_stat)
@@ -674,7 +677,7 @@ contains
             read(unit=funit,pos=1) file_header
             ncls   = file_header(1)
             nptcls = file_header(2)
-            if( ncls .ne. params_glob%ncls ) THROW_HARD( 'NCLS should be the same in this partition file!' )
+            if( ncls .ne. self%params%ncls ) THROW_HARD( 'NCLS should be the same in this partition file!' )
             ! read partition information
             iend = istart + nptcls - 1
             if( iend > self%nptcls ) THROW_HARD('More particle records than required!')

@@ -187,7 +187,7 @@ contains
             call o_odd%set('stkind', work_proj%os_ptcl3D%get(odd_ind,'stkind'))
             call work_proj%os_ptcl3D%set_ori(odd_ind, o_odd)
         enddo
-        params_glob%nptcls = work_proj%get_nptcls()
+        params%nptcls = work_proj%get_nptcls()
         call work_proj%write()
         ! Frequency marching
         call set_cline_refine3D(params, 1, l_cavgs=.true.)
@@ -216,7 +216,7 @@ contains
         call work_proj%read_segment('out',    work_projfile)
         call work_proj%os_ptcl3D%delete_entry('stkind')
         call work_proj%os_ptcl3D%delete_entry('eo')
-        params_glob%nptcls = ncavgs
+        params%nptcls = ncavgs
         call spproj%os_cls3D%new(ncavgs, is_ptcl=.false.)
         do icls=1,ncavgs
             if( work_proj%os_ptcl3D%get_state(icls) == 0 )then
@@ -777,7 +777,7 @@ contains
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! At the splitting stage of docked mode: reset the nstates in params
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
-                params_glob%nstates = nstates_glob
+                params%nstates = nstates_glob
                 update_frac         = min(update_frac * nstates_glob, UPDATE_FRAC_MAX)
             endif
             ! Preparation of command line for refinement
@@ -840,15 +840,15 @@ contains
             if( .not. cline_ini3D%defined('lpstart_ini3D') ) call cline_ini3D%set('lpstart_ini3D', LPSTART_INI3D)
             if( .not. cline_ini3D%defined('lpstop_ini3D')  ) call cline_ini3D%set('lpstop_ini3D',  LPSTOP_INI3D)
             if( cline%defined('lpstart_ini3D') )then
-                call cline_ini3D%set('lpstart', params_glob%lpstart_ini3D)
+                call cline_ini3D%set('lpstart', params%lpstart_ini3D)
                 call cline_ini3D%delete('lpstart_ini3D')
             endif
             if( cline%defined('lpstop_ini3D') )then
-                call cline_ini3D%set('lpstop', params_glob%lpstop_ini3D)
+                call cline_ini3D%set('lpstop', params%lpstop_ini3D)
                 call cline_ini3D%delete('lpstop_ini3D')
             endif
             if( cline%defined('nthr_ini3D') )then
-                call cline_ini3D%set('nthr', params_glob%nthr_ini3D)
+                call cline_ini3D%set('nthr', params%nthr_ini3D)
                 call cline_ini3D%delete('nthr_ini3D')
             endif
             call cline_ini3D%delete('nstates') ! cavg_ini under the assumption of one state
@@ -858,12 +858,12 @@ contains
             call cline_ini3D%delete('prob_athres')
             call xini3D%execute_safe(cline_ini3D)
             ! update point-group symmetry
-            call cline%set('pgrp_start', params_glob%pgrp)
-            params_glob%pgrp_start = params_glob%pgrp
+            call cline%set('pgrp_start', params%pgrp)
+            params%pgrp_start = params%pgrp
             ! stash away files
             ! identfy files that stay
             allocate(files_that_stay(7))
-            files_that_stay(1) = basename(params_glob%projfile)
+            files_that_stay(1) = basename(params%projfile)
             files_that_stay(2) = 'cavgs'
             files_that_stay(3) = 'nice'
             files_that_stay(4) = 'frcs'

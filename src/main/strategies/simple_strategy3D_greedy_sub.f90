@@ -87,7 +87,7 @@ contains
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                     endif
                     if( params_glob%l_prob_inpl )then
-                        loc = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
+                        loc = angle_sampling(eulprob_dist_switch(inpl_corrs, params_glob%cc_objfun), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), params_glob%prob_athres)
                     else
                         loc = maxloc(inpl_corrs)
                     endif

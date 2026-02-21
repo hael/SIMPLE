@@ -6,7 +6,7 @@ use simple_ctf,               only: ctf
 use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2,     only: euclid_sigma2, eucl_sigma2_glob
 use simple_image,             only: image
-use simple_parameters,        only: params_glob
+use simple_parameters,        only: parameters
 use simple_memoize_ft_maps
 use simple_fftw3
 use simple_ftiter
@@ -108,7 +108,8 @@ type(image), target, allocatable :: cavgs_odd_new(:)          !< Odd class avera
 type(image), target, allocatable :: cavgs_merged_new(:)       !< Merged class averages for reading
 type(cavgs_set)                  :: cavgs                     !< Class averages
 type(euclid_sigma2)              :: eucl_sigma                !< Noise power estimates
-type(builder),        pointer    :: b_ptr => null()       !< active builder instance
+type(builder),        pointer    :: b_ptr  => null()          !< active builder instance
+class(parameters),    pointer    :: p_ptr => null()          !< active parameters instance
 logical,             allocatable :: pptcl_mask(:)             !< selected particles
 integer                          :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
 integer                          :: istart      = 0, iend = 0 !< particle index range in partition
@@ -257,10 +258,11 @@ interface
     ! Module public routines
     !
 
-    module subroutine cavger_new_new( build, pinds, alloccavgs )
-        class(builder), target, intent(inout) :: build
-        integer, optional,      intent(in) :: pinds(:)
-        logical, optional,      intent(in) :: alloccavgs 
+    module subroutine cavger_new_new( params, build, pinds, alloccavgs )
+        class(parameters), target, intent(inout) :: params
+        class(builder),    target, intent(inout) :: build
+        integer, optional,         intent(in)    :: pinds(:)
+        logical, optional,         intent(in)    :: alloccavgs 
     end subroutine cavger_new_new
 
     ! Book-keeping & metadata

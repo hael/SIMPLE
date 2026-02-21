@@ -1014,7 +1014,7 @@ contains
         ! Build polar particle images
         call build_batch_particles(build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
-        call eulprob_obj_part%new(build, pinds)
+        call eulprob_obj_part%new(params, build, pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( str_has_substr(params%refine, 'prob_state') )then
             call eulprob_obj_part%fill_tab_state_only(pftc)
@@ -1062,7 +1062,7 @@ contains
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
         ! more prep
-        call eulprob_obj_glob%new(build, pinds)
+        call eulprob_obj_glob%new(params, build, pinds)
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call

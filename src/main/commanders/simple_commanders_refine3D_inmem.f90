@@ -37,7 +37,7 @@ contains
             call sample_ptcls4update(build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         call build%spproj%write_segment_inside(params%oritype)
-        call eulprob_obj_glob%new(build, pinds)
+        call eulprob_obj_glob%new(params, build, pinds)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' )
         if( .not.cline_prob_tab%defined('nparts') )then
@@ -93,7 +93,7 @@ contains
         call prepare_refs_sigmas_ptcls(build, pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
         call build_batch_particles(build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
-        call eulprob_obj_part%new(build, pinds)
+        call eulprob_obj_part%new(params, build, pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( str_has_substr(params%refine, 'prob_state') )then
             call eulprob_obj_part%fill_tab_state_only(pftc)
