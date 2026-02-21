@@ -550,8 +550,10 @@ contains
                 ! objective functions
                 if( params%l_needs_sigma )then
                     params%which_iter = params%which_iter + 1
+                    call cline%set('which_iter', params%which_iter)
                     call xcalc_group_sigmas%execute(cline)
                     params%which_iter = params%which_iter - 1
+                    call cline%set('which_iter', params%which_iter)
                 endif
                 ! cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
