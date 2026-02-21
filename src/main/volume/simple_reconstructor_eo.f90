@@ -89,7 +89,7 @@ contains
         self%smpd    = params_glob%smpd_crop
         self%fny     = 2.*self%smpd
         self%nstates = params_glob%nstates
-        self%ext     = params_glob%ext
+        self%ext     = MRC_EXT
         self%numlen  = params_glob%numlen
         self%filtsz  = fdim(self%box) - 1
         self%msk     = real(self%box / 2) - COSMSKHALFWIDTH - 1.
@@ -453,7 +453,7 @@ contains
             call even%ifft()
             call even%clip_inplace([self%box,self%box,self%box])
             call even%div(self%mag_correction)
-            call even%write(add2fbody(fname_even,params_glob%ext,'_unfil'))
+            call even%write(add2fbody(fname_even,MRC_EXT,'_unfil'))
             ! odd
             cmat = self%odd%get_cmat()
             call self%odd%sampl_dens_correct
@@ -463,7 +463,7 @@ contains
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
             call odd%div(self%mag_correction)
-            call odd%write(add2fbody(fname_odd,params_glob%ext,'_unfil'))
+            call odd%write(add2fbody(fname_odd,MRC_EXT,'_unfil'))
             if( .not. l_have_fsc )then
                 ! masking
                 if( self%automsk )then

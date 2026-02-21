@@ -578,9 +578,9 @@ contains
         vol_odd  = params_glob%vols_odd(loc)
         if( params_glob%l_ml_reg )then
             ! estimate low-pass limit from unfiltered volumes
-            tmp = add2fbody(vol_even, params_glob%ext,'_unfil')
+            tmp = add2fbody(vol_even, MRC_EXT,'_unfil')
             if( file_exists(tmp) ) vol_even = tmp
-            tmp = add2fbody(vol_odd, params_glob%ext,'_unfil')
+            tmp = add2fbody(vol_odd, MRC_EXT,'_unfil')
             if( file_exists(tmp) ) vol_even = tmp
         endif
         call build%vol%read_and_crop(    vol_even, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
@@ -864,12 +864,12 @@ contains
             else
                 ! global volume name update
                 recname = VOL_FBODY//int2str_pad(s,2)
-                volname = recname//params_glob%ext
+                volname = recname//MRC_EXT
                 if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                     call build%eorecvols(s)%set_automsk(.true.)
                 endif
-                eonames(1) = recname//'_even'//params_glob%ext%to_char()
-                eonames(2) = recname//'_odd'//params_glob%ext%to_char()
+                eonames(1) = recname//'_even'//MRC_EXT
+                eonames(2) = recname//'_odd'//MRC_EXT
                 if( params_glob%l_ml_reg )then
                     ! the sum is done after regularization
                 else
@@ -878,8 +878,8 @@ contains
                 if( params_glob%l_trail_rec )then
                     if( .not. cline%defined('vol'//int2str(s)) ) THROW_HARD('vol'//int2str(s)//'required in norm_struct_facts cline when trail_rec==yes')
                     volname_prev      = cline%get_carg('vol'//int2str(s))
-                    volname_prev_even = add2fbody(volname_prev, params_glob%ext, '_even')
-                    volname_prev_odd  = add2fbody(volname_prev, params_glob%ext, '_odd')
+                    volname_prev_even = add2fbody(volname_prev, MRC_EXT, '_even')
+                    volname_prev_odd  = add2fbody(volname_prev, MRC_EXT, '_odd')
                     if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//volname_prev_even%to_char()//' does not exist!')
                     if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//volname_prev_odd%to_char()//' does not exist!')
                     call vol_prev_even%read_and_crop(volname_prev_even, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)

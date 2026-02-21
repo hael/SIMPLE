@@ -16,6 +16,7 @@ character(len=*), parameter :: BOX_EXT              = '.box'
 character(len=*), parameter :: METADATA_EXT         = '.simple'
 character(len=*), parameter :: JPG_EXT              = '.jpg'
 character(len=*), parameter :: STK_EXT              = '.mrcs'
+character(len=*), parameter :: MRC_EXT              = '.mrc'
 character(len=*), parameter :: STAR_EXT             = '.star'
 ! SUFFIXES
 character(len=*), parameter :: SCALE_SUFFIX         = '_sc'

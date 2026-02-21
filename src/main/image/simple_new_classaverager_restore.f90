@@ -832,10 +832,10 @@ contains
     module subroutine cavger_new_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
         type(string)   :: cae, cao, cte, cto
-        cae   = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
-        cao   = 'cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
-        cte   = 'ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
-        cto   = 'ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
+        cae   = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
+        cao   = 'cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
+        cte   = 'ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
+        cto   = 'ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
         select case(trim(which))
             case('read')
                 call cavgs%even%read_cmat(cae)
@@ -888,10 +888,10 @@ contains
         do ipart=1,params_glob%nparts
             if( L_BENCH_GLOB ) t_io = tic()
             ! filenames
-            cae = 'cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
-            cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
-            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
-            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
+            cae = 'cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
+            cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
+            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//MRC_EXT
+            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
             ! read arrays
             call cavgs4reade%read_cmat(cae)
             call cavgs4reade%read_ctfsq(cte)

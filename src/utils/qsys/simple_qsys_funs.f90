@@ -41,10 +41,10 @@ contains
         call del_files('distr_simple_script_', np)
         ! optionally deletes 2D analysis temporary files
         if( .not.l_keep2D )then
-            call del_files('cavgs_even_part',     np, ext=params_glob%ext%to_char())
-            call del_files('cavgs_odd_part',      np, ext=params_glob%ext%to_char())
-            call del_files('ctfsqsums_even_part', np, ext=params_glob%ext%to_char())
-            call del_files('ctfsqsums_odd_part',  np, ext=params_glob%ext%to_char())
+            call del_files('cavgs_even_part',     np, ext=MRC_EXT)
+            call del_files('cavgs_odd_part',      np, ext=MRC_EXT)
+            call del_files('ctfsqsums_even_part', np, ext=MRC_EXT)
+            call del_files('ctfsqsums_odd_part',  np, ext=MRC_EXT)
         endif
         ! flush the log filehandle to avoid delayed printing
         call flush(logfhandle)

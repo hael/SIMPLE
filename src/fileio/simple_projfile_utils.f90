@@ -2,7 +2,6 @@
 module simple_projfile_utils
 use simple_core_module_api
 use simple_image,         only: image
-use simple_parameters,    only: params_glob
 use simple_sp_project,    only: sp_project
 use simple_euclid_sigma2, only: average_sigma2_groups
 use simple_class_frcs
@@ -60,13 +59,13 @@ contains
         if( present(cavgs_out) )then
             cavgs = dir//cavgs_out
         else
-            cavgs = dir%to_char()//'cavgs'//params_glob%ext%to_char()
+            cavgs = dir%to_char()//'cavgs'//MRC_EXT
         endif
         if( l_cavgs_replace ) then
             cavgs_tmp    = cavgs
-            evenname_tmp = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//params_glob%ext
-            oddname_tmp  = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//params_glob%ext
-            cavgs        = dir%to_char()//'cavgs_tmp'//params_glob%ext%to_char()
+            evenname_tmp = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//MRC_EXT
+            oddname_tmp  = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//MRC_EXT
+            cavgs        = dir%to_char()//'cavgs_tmp'//MRC_EXT
         endif
         if( file_exists(cavgs) )THROW_WARN('ouput stack already exists: '//cavgs%to_char())
         nallptcls = 0
@@ -86,16 +85,16 @@ contains
             ldim(3) = 1
             ncls    = chunks(ic)%os_cls2D%get_noris()
             call img%new(ldim, smpd)
-            evenname = add2fbody(stkname, params_glob%ext, '_even')
-            oddname  = add2fbody(stkname, params_glob%ext, '_odd')
+            evenname = add2fbody(stkname, MRC_EXT, '_even')
+            oddname  = add2fbody(stkname, MRC_EXT, '_odd')
             do i = 1,ncls
                 icls = icls+1
                 call img%read(stkname,i)
                 call img%write(cavgs,icls)
                 call img%read(evenname,i)
-                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//params_glob%ext,icls)
+                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//MRC_EXT,icls)
                 call img%read(oddname,i)
-                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//params_glob%ext,icls)
+                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//MRC_EXT,icls)
             enddo
         enddo
         call img%kill
@@ -182,8 +181,8 @@ contains
         call frcs%write(dir//trim(FRCS_FILE))
         call merged_proj%add_frcs2os_out(dir//trim(FRCS_FILE), 'frc2D')
         if( l_cavgs_replace ) then
-            evenname = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//params_glob%ext
-            oddname  = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//params_glob%ext
+            evenname = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//MRC_EXT
+            oddname  = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//MRC_EXT
             call simple_rename( cavgs,    cavgs_tmp,    overwrite=.true. )
             call simple_rename( evenname, evenname_tmp, overwrite=.true. )
             call simple_rename( oddname,  oddname_tmp,  overwrite=.true. )

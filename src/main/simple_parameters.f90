@@ -568,7 +568,7 @@ contains
         self%dir_target=''        !< put output here
         self%exec_dir='./'        !< auto-named execution directory
         self%executable=''        !< name of executable
-        self%ext='.mrc'           !< file extension{.mrc}
+        self%ext=MRC_EXT          !< file extension{.mrc}
         self%fbody=''             !< file body
         self%filetab=''           !< list of files(.txt)
         self%fname=''             !< file name
@@ -2089,13 +2089,13 @@ contains
         character(len=*),  intent(in)    :: ext
         select case(trim(ext))
             case('M','D','B')
-                self%ext = '.mrc'
+                self%ext = MRC_EXT
             case('S')
                 self%ext = '.spi'
 #ifdef USING_TIFF
             case('J','K','L')
                 ! for tiff/eer/gain we set .mrc as preferred output format
-                self%ext = '.mrc'
+                self%ext = MRC_EXT
 #endif
             case DEFAULT
                 write(logfhandle,*)'format: ', trim(ext)

@@ -428,7 +428,7 @@ contains
         endif
         call params%new(cline)
         if( cline%defined('oritab') )then
-            params%nptcls = binread_nlines(params%oritab)
+            params%nptcls = binread_nlines(params%oritab, params%spproj_iseg)
             call build%build_spproj(params, cline)
             call build%build_general_tbox(params, cline)
             params%nspace = build%spproj_field%get_noris()

@@ -78,12 +78,12 @@ contains
         star_fname            = dir_out%to_char()//fbody_here%to_char()//STAR_EXT
         poly_fname            = dir_out%to_char()//fbody_here%to_char()//'.poly'
         ! isotropic ones
-        self%moviename_intg   = dir_out%to_char()//fbody_here%to_char()//INTGMOV_SUFFIX//params_glob%ext%to_char()
-        self%moviename_forctf = dir_out%to_char()//fbody_here%to_char()//FORCTF_SUFFIX//params_glob%ext%to_char()
+        self%moviename_intg   = dir_out%to_char()//fbody_here%to_char()//INTGMOV_SUFFIX//MRC_EXT
+        self%moviename_forctf = dir_out%to_char()//fbody_here%to_char()//FORCTF_SUFFIX//MRC_EXT
         self%moviename_thumb  = dir_out%to_char()//fbody_here%to_char()//THUMBNAIL_SUFFIX//JPG_EXT
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
         if( params_glob%nframesgrp > 0 )then
-            self%moviename = 'tmpnframesgrpmovie'//params_glob%ext%to_char()
+            self%moviename = 'tmpnframesgrpmovie'//MRC_EXT
             call frameavg_stack(moviename, self%moviename, params_glob%nframesgrp, ctfvars%smpd)
         else
             self%moviename = moviename

@@ -39,7 +39,7 @@ contains
         endif
         ldim(3) = 1
         ! deal with output
-        tmpl_fname = get_fbody(basename(moviename_forctf), params_glob%ext, separator=.false.)
+        tmpl_fname = get_fbody(basename(moviename_forctf), MRC_EXT, separator=.false.)
         if( moviename_forctf%has_substr(FORCTF_SUFFIX) )then
             tmpl_fname = tmpl_fname%to_char([1,tmpl_fname%strlen_trim()-7])
         endif

@@ -37,7 +37,7 @@ contains
         fbody_here = basename(moviename_intg)
         ext        = fname2ext(fbody_here)
         fbody_here = get_fbody(fbody_here, ext)
-        self%moviename_pspec = dir_out%to_char()//fbody_here%to_char()//POWSPEC_SUFFIX//params_glob%ext%to_char()
+        self%moviename_pspec = dir_out%to_char()//fbody_here%to_char()//POWSPEC_SUFFIX//MRC_EXT
         self%moviename_thumb = dir_out%to_char()//fbody_here%to_char()//THUMBNAIL_SUFFIX//JPG_EXT
         write(logfhandle,'(a,1x,a)') '>>> PROCESSING INTEGRATED MOVIE:', moviename_intg%to_char()
         call find_ldim_nptcls(moviename_intg, ldim, nframes)
