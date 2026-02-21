@@ -940,10 +940,10 @@ contains
         type(string)   :: cae, cao, cte, cto
         type(stack_io) :: stkio(4)
         logical        :: is_ft
-        cae   = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
-        cao   = 'cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
-        cte   = 'ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
-        cto   = 'ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext%to_char()
+        cae   = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
+        cao   = 'cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
+        cte   = 'ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
+        cto   = 'ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
         select case(trim(which))
             case('read')
                 call stkio(1)%open(cae, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
@@ -1039,10 +1039,10 @@ contains
         do ipart=1,params_glob%nparts
             if( L_BENCH_GLOB ) t_io = tic()
             ! look for files
-            cae = 'cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
-            cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
-            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
-            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext%to_char()
+            cae = 'cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
+            cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
+            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//MRC_EXT
+            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
             call ioimg(1)%open(cae, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
             call ioimg(2)%open(cao, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
             call ioimg(3)%open(cte, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')

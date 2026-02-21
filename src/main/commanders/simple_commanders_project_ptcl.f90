@@ -93,13 +93,13 @@ contains
         if( cline%defined('stk') ) is_ptcl = .true.
         ! oris input
         if( inputted_oritab )then
-            ndatlines = binread_nlines(params%oritab)
+            ndatlines = binread_nlines(params%oritab, params%spproj_iseg)
             call os%new(ndatlines, is_ptcl=is_ptcl )
             call binread_oritab(params%oritab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
         if( inputted_deftab )then
-            ndatlines = binread_nlines(params%deftab)
+            ndatlines = binread_nlines(params%deftab, params%spproj_iseg)
             call os%new(ndatlines, is_ptcl=is_ptcl )
             call binread_ctfparams_state_eo(params%deftab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety

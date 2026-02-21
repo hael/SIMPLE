@@ -28,7 +28,7 @@ print *, '>>> BINREAD ORITAB'
 call binread_oritab(fname, spproj, o, fromto)
 print *, '>>> CTFPARAMS STATE EO'
 call binread_ctfparams_state_eo(fname, spproj, o, fromto)
-print *, '>>> READ NLINES ',binread_nlines(fname)
+print *, '>>> READ NLINES ',binread_nlines(fname, params%spproj_iseg)
 print *, '>>> WRITE ORITAB'
 call binwrite_oritab(fname, spproj, o, fromto)
 if( test_passed )then

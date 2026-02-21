@@ -200,10 +200,10 @@ contains
         select case(trim(which))
             case('even','odd')
                 call self%polar_cavger_refs2cartesian(imgs, trim(which) )
-                call write_imgarr(imgs, tmpl_fname//'_'//trim(which)//params_glob%ext%to_char())
+                call write_imgarr(imgs, tmpl_fname//'_'//trim(which)//MRC_EXT)
             case('merged')
                 call self%polar_cavger_refs2cartesian(imgs, 'merged' )
-                call write_imgarr(imgs, tmpl_fname//params_glob%ext)
+                call write_imgarr(imgs, tmpl_fname//MRC_EXT)
         end select
         call dealloc_imgarr(imgs)
     end subroutine polar_cavger_write_cartrefs
@@ -219,8 +219,8 @@ contains
         integer :: dims_e(4), dims_o(4), dims_m(4)
         integer :: i
         ext = string('.')//fname2ext(fname)
-        if( ext == params_glob%ext )then
-            refs = get_fbody(fname, params_glob%ext, separator=.false.)//BIN_EXT
+        if( ext == MRC_EXT )then
+            refs = get_fbody(fname, MRC_EXT, separator=.false.)//BIN_EXT
         elseif( ext == BIN_EXT )then
             refs = fname
         else

@@ -400,9 +400,9 @@ contains
             if(.not. l_stream) call progressfile_update(conv%get('progress'))
             if( trim(params_glob%restore_cavgs).eq.'yes' )then
                 if( cline%defined('which_iter') )then
-                    params_glob%refs      = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//params_glob%ext%to_char()
-                    params_glob%refs_even = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext%to_char()
-                    params_glob%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//'_odd'//params_glob%ext%to_char()
+                    params_glob%refs      = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//MRC_EXT
+                    params_glob%refs_even = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//'_even'//MRC_EXT
+                    params_glob%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//'_odd'//MRC_EXT
                 else
                     THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                 endif

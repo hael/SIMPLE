@@ -46,9 +46,9 @@ contains
         end select
     end subroutine binread_ctfparams_state_eo
 
-    function binread_nlines( fname ) result( nl )
-        use simple_parameters, only: params_glob
+    function binread_nlines( fname, spproj_iseg ) result( nl )
         class(string), intent(in) :: fname
+        integer,       intent(in) :: spproj_iseg
         integer       :: nl
         type(binoris) :: bos
         nl = -1
@@ -58,7 +58,7 @@ contains
         select case(fname2format(fname))
         case('O')
             call bos%open(fname)
-            nl = bos%get_n_records(params_glob%spproj_iseg)
+            nl = bos%get_n_records(spproj_iseg)
             call bos%close
         case('T')
             nl = nlines(fname)

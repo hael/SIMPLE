@@ -174,11 +174,11 @@ contains
         end select
         call qsys_cleanup
         if( aarray )then
-            call self%qscripts%generate_array_script(job_descr, params_glob%ext, self%qdescr,&
+            call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr,&
             &outfile_body=algnfbody, part_params=part_params)
             call self%qscripts%schedule_array_jobs
         else
-            call self%qscripts%generate_scripts(job_descr, params_glob%ext, self%qdescr,&
+            call self%qscripts%generate_scripts(job_descr, string(MRC_EXT), self%qdescr,&
             &outfile_body=algnfbody, part_params=part_params, extra_params=extra_params)
             call self%qscripts%schedule_jobs
         endif

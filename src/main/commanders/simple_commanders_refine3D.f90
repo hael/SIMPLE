@@ -159,7 +159,7 @@ contains
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
         ! 3D refinement, phase1
         str_state = int2str_pad(1,2)
-        call cline%set('vol1', string(VOL_FBODY)//str_state//params_glob%ext)
+        call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
         params%mskfile = MSKVOL_FILE
         call cline%set('mskfile',           MSKVOL_FILE)
         call cline%set('prg',                'refine3D')
@@ -178,7 +178,7 @@ contains
         call cline_reconstruct3D_distr%set('mskfile', MSKVOL_FILE)
         call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
         ! 3D refinement, phase2
-        call cline%set('vol1', string(VOL_FBODY)//str_state//params_glob%ext)
+        call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
         params%mskfile = MSKVOL_FILE
         call cline%set('mskfile',    MSKVOL_FILE)
         call cline%set('maxits',   maxits_phase1)

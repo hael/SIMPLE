@@ -330,16 +330,16 @@ contains
                     do icls = 1,params_glob%ncls_start
                         call avg%zero_and_flag_ft
                         do ipart = 1,params_glob%nparts_chunk
-                            fname = tmpl//int2str_pad(ipart,numlen_chunk)//params_glob%ext%to_char()
+                            fname = tmpl//int2str_pad(ipart,numlen_chunk)//MRC_EXT
                             call img%read(fname,icls)
                             call avg%add(img)
                         enddo
                         call avg%div(real(params_glob%nparts_chunk))
-                        call avg%write(tmpl//params_glob%ext%to_char(),icls)
+                        call avg%write(tmpl//MRC_EXT,icls)
                     enddo
                 else
-                    fname = tmpl//'1'//params_glob%ext%to_char()
-                    call simple_rename(fname,tmpl//params_glob%ext)
+                    fname = tmpl//'1'//MRC_EXT
+                    call simple_rename(fname,tmpl//MRC_EXT)
                 endif
             end subroutine average_into
 

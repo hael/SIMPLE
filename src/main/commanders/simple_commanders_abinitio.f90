@@ -104,9 +104,9 @@ contains
             nstages_ini3D = min(NSTAGES_INI3D_MAX,params%nstages)   
         endif
         ! prepare class command lines
-        call prep_class_command_lines(cline, work_projfile)
+        call prep_class_command_lines(params, cline, work_projfile)
         ! set symmetry class variables
-        call set_symmetry_class_vars
+        call set_symmetry_class_vars(params)
         ! read project
         call spproj%read(params%projfile)
         ! set low-pass limits and downscaling info from FRCs
@@ -122,13 +122,13 @@ contains
             call cline%delete('lpstop_ini3D')
         else
             if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart, lpstop=params%lpstop)
+                call set_lplims_from_frcs(params, spproj, l_cavgs=.true., lpstart=params%lpstart, lpstop=params%lpstop)
             else if( cline%defined('lpstart') )then
-                call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstart=params%lpstart)
+                call set_lplims_from_frcs(params, spproj, l_cavgs=.true., lpstart=params%lpstart)
             else if( cline%defined('lpstop') )then
-                call set_lplims_from_frcs(spproj, l_cavgs=.true., lpstop=params%lpstop)
+                call set_lplims_from_frcs(params, spproj, l_cavgs=.true., lpstop=params%lpstop)
             else
-                call set_lplims_from_frcs(spproj, l_cavgs=.true.)
+                call set_lplims_from_frcs(params, spproj, l_cavgs=.true.)
             endif
         endif
         ! whether to use classes generated from 2D or 3D
@@ -190,25 +190,25 @@ contains
         params_glob%nptcls = work_proj%get_nptcls()
         call work_proj%write()
         ! Frequency marching
-        call set_cline_refine3D(1, l_cavgs=.true.)
+        call set_cline_refine3D(params, 1, l_cavgs=.true.)
         call rndstart(cline_refine3D)
         do istage = 1, nstages_ini3D
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! Preparation of command line for probabilistic search
-            call set_cline_refine3D(istage, l_cavgs=.true.)
+            call set_cline_refine3D(params, istage, l_cavgs=.true.)
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
             ! Reconstruction for polar representation
             if( l_polar )then
-                call calc_rec4polar( xreconstruct3D, istage, work_projfile )
+                call calc_rec4polar(params, xreconstruct3D, istage, work_projfile)
             endif
             ! Probabilistic search
-            call exec_refine3D(istage, xrefine3D) 
+            call exec_refine3D(params, istage, xrefine3D)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
-                call symmetrize(istage, work_proj, work_projfile, xreconstruct3D)
+                call symmetrize(params, istage, work_proj, work_projfile, xreconstruct3D)
             endif
         end do
         ! update original cls3D segment
@@ -245,9 +245,9 @@ contains
             if( params%nstates > 1 ) call conv_eo_states(work_proj%os_ptcl3D)
             call conv_eo(work_proj%os_ptcl3D)
             ! calculate 3D reconstruction at original sampling
-            call calc_final_rec(work_proj, work_projfile, xreconstruct3D)
+            call calc_final_rec(params, work_proj, work_projfile, xreconstruct3D)
             ! postprocess final 3D reconstruction
-            call postprocess_final_rec(work_proj)
+            call postprocess_final_rec(params, work_proj)
             ! add rec_final to os_out
             do s = 1,params%nstates
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
@@ -263,7 +263,7 @@ contains
             write(logfhandle,'(A)') '>>>'
             do s = 1,params%nstates
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
-                call cline_reproject%set('vol'//int2str(s), REC_FBODY//int2str_pad(s,2)//PPROC_SUFFIX//params_glob%ext%to_char())
+                call cline_reproject%set('vol'//int2str(s), REC_FBODY//int2str_pad(s,2)//PPROC_SUFFIX//MRC_EXT)
             enddo
             call xreproject%execute_safe(cline_reproject)
             ! write alternated stack
@@ -612,9 +612,9 @@ contains
             endif
         endif
         ! prepare class command lines
-        call prep_class_command_lines(cline, params%projfile)
+        call prep_class_command_lines(params, cline, params%projfile)
         ! set symmetry class variables
-        call set_symmetry_class_vars
+        call set_symmetry_class_vars(params)
         ! fall over if there are no particles
         if( spproj%os_ptcl3D%get_noris() < 1 ) THROW_HARD('Particles could not be found in the project')
         ! take care of class-biased particle sampling
@@ -678,13 +678,13 @@ contains
         endif
         ! set low-pass limits and downscaling info from FRCs
          if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-            call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
+            call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
         else if( cline%defined('lpstart') )then
-            call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstart=params%lpstart)
+            call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart)
         else if( cline%defined('lpstop') )then
-            call set_lplims_from_frcs(spproj, l_cavgs=.false., lpstop=params%lpstop)
+            call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstop=params%lpstop)
         else
-            call set_lplims_from_frcs(spproj, l_cavgs=.false.)
+            call set_lplims_from_frcs(params, spproj, l_cavgs=.false.)
         endif
         ! starting volume logics
         if( str_has_substr(params%multivol_mode,'input_oris') )then
@@ -712,7 +712,7 @@ contains
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! calc recs
-            call calc_start_rec(params%projfile, xreconstruct3D_distr, start_stage)
+            call calc_start_rec(params, params%projfile, xreconstruct3D_distr, start_stage)
         else if( .not. l_ini3D )then
             ! the ptcl3D field should be clean of updates at this stage
             call spproj%os_ptcl3D%clean_entry('updatecnt')
@@ -730,7 +730,7 @@ contains
             endif
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! create noise starting volume(s)
-            call generate_random_volumes( lpinfo(1)%box_crop, lpinfo(1)%smpd_crop, cline_refine3D )
+            call generate_random_volumes(params, lpinfo(1)%box_crop, lpinfo(1)%smpd_crop, cline_refine3D)
         else
             ! check that ptcl3D field is not virgin
             if( spproj%is_virgin_field('ptcl3D') )then
@@ -749,7 +749,7 @@ contains
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! create starting volume(s)
-            call calc_start_rec(params%projfile, xreconstruct3D_distr, start_stage)
+            call calc_start_rec(params, params%projfile, xreconstruct3D_distr, start_stage)
         endif
         ! Frequency marching
         maxits_dyn = 0
@@ -781,12 +781,12 @@ contains
                 update_frac         = min(update_frac * nstates_glob, UPDATE_FRAC_MAX)
             endif
             ! Preparation of command line for refinement
-            call set_cline_refine3D(istage, l_cavgs=.false.)
+            call set_cline_refine3D(params, istage, l_cavgs=.false.)
             ! Need to be here since rec cline depends on refine3D cline
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
-                call randomize_states(spproj, params%projfile, xreconstruct3D_distr, istage=split_stage)
+                call randomize_states(params, spproj, params%projfile, xreconstruct3D_distr, istage=split_stage)
             else if( istage >= RECALC_STARTREC_STAGE )then
-                if( .not.l_polar ) call calc_start_rec(params%projfile, xreconstruct3D_distr, istage)
+                if( .not.l_polar ) call calc_start_rec(params, params%projfile, xreconstruct3D_distr, istage)
             endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
@@ -796,25 +796,25 @@ contains
                 if( l_ini3D .and. (istage==start_stage) )then
                     ! reconstruction has been performed above
                 else
-                    call calc_rec4polar( xreconstruct3D_distr, istage )
+                    call calc_rec4polar(params, xreconstruct3D_distr, istage)
                 endif
             endif
             ! Executing the refinement with the above settings
-            call exec_refine3D(istage, xrefine3D)
+            call exec_refine3D(params, istage, xrefine3D)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
-                call symmetrize(istage, spproj, params%projfile, xreconstruct3D_distr)
+                call symmetrize(params, istage, spproj, params%projfile, xreconstruct3D_distr)
             endif
             ! nice
             call nice_communicator%update_ini3D(last_stage_completed=.true.) 
             call nice_communicator%cycle()
         enddo
         ! calculate 3D reconstruction at original sampling
-        call calc_final_rec(spproj, params%projfile, xreconstruct3D_distr)
+        call calc_final_rec(params, spproj, params%projfile, xreconstruct3D_distr)
         ! for visualization
-        call gen_ortho_reprojs4viz(spproj)
+        call gen_ortho_reprojs4viz(params, spproj)
         ! postprocess final 3D reconstruction
-        call postprocess_final_rec(spproj)
+        call postprocess_final_rec(params, spproj)
         ! termination
         nice_communicator%stat_root%stage = "terminating"
         call nice_communicator%cycle()

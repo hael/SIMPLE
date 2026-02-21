@@ -182,7 +182,7 @@ contains
         type(commander_rank_cavgs) :: xrank_cavgs
         type(cmdline)              :: cline_rank_cavgs
         type(string)               :: refs_ranked, stk
-        refs_ranked = add2fbody(refs_glob, params_glob%ext ,'_ranked')
+        refs_ranked = add2fbody(refs_glob, MRC_EXT ,'_ranked')
         call cline_rank_cavgs%set('projfile', orig_projfile)
         stk = string(POOL_DIR)//refs_glob
         call cline_rank_cavgs%set('stk',            stk)
@@ -335,7 +335,7 @@ contains
                     ! no 2D yet
                     call write_raw_project
                 else
-                    refs_glob = CAVGS_ITER_FBODY//int2str_pad(pool_iter,3)//params_glob%ext%to_char()
+                    refs_glob = CAVGS_ITER_FBODY//int2str_pad(pool_iter,3)//MRC_EXT
                     ! tricking the asynchronous master process to come to a hard stop
                     call simple_touch(POOL_DIR//TERM_STREAM)
                     do ipart = 1,params_glob%nparts_pool
@@ -414,9 +414,9 @@ contains
         if( pool_iter > 5 )then
             prefix = POOL_DIR//CAVGS_ITER_FBODY//int2str_pad(pool_iter-5,3)
             call del_file(prefix//JPG_EXT)
-            call del_file(prefix//'_even'//params_glob%ext%to_char())
-            call del_file(prefix//'_odd'//params_glob%ext%to_char())
-            call del_file(prefix//params_glob%ext%to_char())
+            call del_file(prefix//'_even'//MRC_EXT)
+            call del_file(prefix//'_odd'//MRC_EXT)
+            call del_file(prefix//MRC_EXT)
             call del_file(POOL_DIR//CLS2D_STARFBODY//'_iter'//int2str_pad(pool_iter-5,3)//STAR_EXT)
             call del_file(prefix // '.jpg')
             if( l_update_sigmas ) call del_file(string(POOL_DIR)//sigma2_star_from_iter(pool_iter-5))
@@ -439,11 +439,11 @@ contains
         ! merged class
         call read_pad_write(refs_in_here, indin, refs_out_here, indout)
         ! e/o
-        stkin  = add2fbody(refs_in_here, params_glob%ext,'_even')
-        stkout = add2fbody(refs_out_here,params_glob%ext,'_even')
+        stkin  = add2fbody(refs_in_here, MRC_EXT,'_even')
+        stkout = add2fbody(refs_out_here,MRC_EXT,'_even')
         call read_pad_write(stkin, indin, stkout, indout)
-        stkin  = add2fbody(refs_in_here,params_glob%ext,'_odd')
-        stkout = add2fbody(refs_out_here,params_glob%ext,'_odd')
+        stkin  = add2fbody(refs_in_here,MRC_EXT,'_odd')
+        stkout = add2fbody(refs_out_here,MRC_EXT,'_odd')
         call read_pad_write(stkin, indin, stkout, indout)
         ! temporary matrices, logics from chunk%read
         call img%new([chunk_dims%boxpd,chunk_dims%boxpd,1], chunk_dims%smpd)
@@ -476,17 +476,17 @@ contains
 
             subroutine write_inside_ftstack(tmplin, tmplout)
                 character(len=*), intent(in) :: tmplin, tmplout
-                stkin = dir//trim(tmplin)//params_glob%ext%to_char()
+                stkin = dir//trim(tmplin)//MRC_EXT
                 call img%read(stkin, indin)
                 if( pool_dims%box > chunk_dims%box )then
                     call img%pad(img2, antialiasing=.false.)
                     do ipart = 1,params_glob%nparts_pool
-                        stkout = POOL_DIR//trim(tmplout)//int2str_pad(ipart,numlen)//params_glob%ext%to_char()
+                        stkout = POOL_DIR//trim(tmplout)//int2str_pad(ipart,numlen)//MRC_EXT
                         call img2%write(stkout,indout)
                     enddo
                 else
                     do ipart = 1,params_glob%nparts_pool
-                        stkout = POOL_DIR//trim(tmplout)//int2str_pad(ipart,numlen)//params_glob%ext%to_char()
+                        stkout = POOL_DIR//trim(tmplout)//int2str_pad(ipart,numlen)//MRC_EXT
                         call img%write(stkout,indout)
                     enddo
                 endif
@@ -669,12 +669,12 @@ contains
         if(present(clspath))    l_clspath    = clspath
         ! file naming
         projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
-        cavgsfname = get_fbody(refs_glob, params_glob%ext, separator=.false.)
+        cavgsfname = get_fbody(refs_glob, MRC_EXT, separator=.false.)
         frcsfname  = get_fbody(FRCS_FILE, BIN_EXT, separator=.false.)
         call pool_proj%projinfo%set(1,'projname', projfname)
         projfile   = projfname//METADATA_EXT
         call pool_proj%projinfo%set(1,'projfile', projfile)
-        cavgsfname = cavgsfname//params_glob%ext
+        cavgsfname = cavgsfname//MRC_EXT
         frcsfname  = frcsfname//BIN_EXT
         pool_refs  = string(POOL_DIR)//refs_glob
         if(present(snapshot_projfile)) l_snapshot = snapshot_iteration > 0
@@ -708,8 +708,8 @@ contains
                 call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd)
                 call snapshot_proj%get_frcs(l_frcsname, 'frc2D')
                 call simple_copy_file(l_stkname, cavgsfname)
-                call simple_copy_file(add2fbody(l_stkname, params_glob%ext,'_even'), stemname(snapshot_projfile)//"/cavgs_even"//STK_EXT)
-                call simple_copy_file(add2fbody(l_stkname, params_glob%ext,'_odd'),  stemname(snapshot_projfile)//"/cavgs_odd" //STK_EXT)
+                call simple_copy_file(add2fbody(l_stkname, MRC_EXT,'_even'), stemname(snapshot_projfile)//"/cavgs_even"//STK_EXT)
+                call simple_copy_file(add2fbody(l_stkname, MRC_EXT,'_odd'),  stemname(snapshot_projfile)//"/cavgs_odd" //STK_EXT)
                 call simple_copy_file(l_frcsname, frcsfname)
                 call snapshot_proj%os_out%kill
                 call snapshot_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg')
@@ -822,11 +822,11 @@ contains
             class(string), intent(in) :: cavgs_fname
             type(string) :: source, destination
             call rescale_cavgs(pool_refs, cavgs_fname)
-            source  = add2fbody(pool_refs, params_glob%ext, '_even')
-            destination = add2fbody(cavgs_fname, params_glob%ext, '_even')
+            source  = add2fbody(pool_refs, MRC_EXT, '_even')
+            destination = add2fbody(cavgs_fname, MRC_EXT, '_even')
             call rescale_cavgs(source, destination)
-            source  = add2fbody(pool_refs, params_glob%ext,'_odd')
-            destination = add2fbody(cavgs_fname, params_glob%ext,'_odd')
+            source  = add2fbody(pool_refs, MRC_EXT,'_odd')
+            destination = add2fbody(cavgs_fname, MRC_EXT,'_odd')
             call rescale_cavgs(source, destination)
         end subroutine rescale_refs
 
@@ -841,7 +841,7 @@ contains
         if( .not. l_stream2D_active ) return
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
         if(repick_iteration .lt. 1) return
-        refsin = CAVGS_ITER_FBODY//int2str_pad(repick_iteration,3)//params_glob%ext%to_char()
+        refsin = CAVGS_ITER_FBODY//int2str_pad(repick_iteration,3)//MRC_EXT
         if(.not. file_exists(string(POOL_DIR)//refsin)) return
         if(file_exists(refsout) ) call del_file(refsout)
         call img%new([pool_dims%box,pool_dims%box,1], pool_dims%smpd)

@@ -388,7 +388,7 @@ contains
       contains
 
         subroutine polar_restoration()
-            params_glob%refs = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//params_glob%ext%to_char()
+            params_glob%refs = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//MRC_EXT
             call pftc%polar_cavger_merge_eos_and_norm(reforis=build_ptr%eulspace, symop=build_ptr%pgrpsyms)
             call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build_ptr%clsfrcs, build_ptr%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
             call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))

@@ -680,7 +680,7 @@ contains
         if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
         if(.not. self%starfile%initialised) call self%initialise()
         if(present(iter)) then 
-            stkname = basename(string(CWD_GLOB))//"/"//CAVGS_ITER_FBODY//int2str_pad(iter,3)//params_glob%ext%to_char()
+            stkname = basename(string(CWD_GLOB))//"/"//CAVGS_ITER_FBODY//int2str_pad(iter,3)//MRC_EXT
             do i=1, spproj%os_cls2D%get_noris()
                 call spproj%os_cls2D%set(i, "stk", stkname)
             end do

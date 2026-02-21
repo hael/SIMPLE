@@ -839,25 +839,25 @@ contains
         str_tmp_mrc = TMP_STK_FNAME
         call scale_imgfile(refs_glob, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
         call simple_rename(str_tmp_mrc,refs_glob)
-        str  = add2fbody(refs_glob, params_glob%ext,'_even')
+        str  = add2fbody(refs_glob, MRC_EXT,'_even')
         call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
         call simple_rename(str_tmp_mrc,str)
-        str  = add2fbody(refs_glob, params_glob%ext,'_odd')
+        str  = add2fbody(refs_glob, MRC_EXT,'_odd')
         call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
         call simple_rename(str_tmp_mrc,str)
         ! upsample cavgs matrices
         ldim = [pool_dims%boxpd,pool_dims%boxpd,1]
         do p = 1,params_glob%nparts_pool
-            str = POOL_DIR//'cavgs_even_part'//int2str_pad(p,numlen)//params_glob%ext%to_char()
+            str = POOL_DIR//'cavgs_even_part'//int2str_pad(p,numlen)//MRC_EXT
             call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
-            str = POOL_DIR//'cavgs_odd_part'//int2str_pad(p,numlen)//params_glob%ext%to_char()
+            str = POOL_DIR//'cavgs_odd_part'//int2str_pad(p,numlen)//MRC_EXT
             call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
-            str = POOL_DIR//'ctfsqsums_even_part'//int2str_pad(p,numlen)//params_glob%ext%to_char()
+            str = POOL_DIR//'ctfsqsums_even_part'//int2str_pad(p,numlen)//MRC_EXT
             call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
-            str = POOL_DIR//'ctfsqsums_odd_part'//int2str_pad(p,numlen)//params_glob%ext%to_char()
+            str = POOL_DIR//'ctfsqsums_odd_part'//int2str_pad(p,numlen)//MRC_EXT
             call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
         enddo
@@ -898,7 +898,7 @@ contains
         if( .not. l_pool_available )then
             l_pool_available = file_exists(POOL_DIR//CLUSTER2D_FINISHED)
             if( l_pool_available .and. (pool_iter >= 1) )then
-                refs_glob = CAVGS_ITER_FBODY//int2str_pad(pool_iter,3)//params_glob%ext%to_char()
+                refs_glob = CAVGS_ITER_FBODY//int2str_pad(pool_iter,3)//MRC_EXT
             endif
         endif
     end subroutine update_pool_status

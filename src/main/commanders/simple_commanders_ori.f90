@@ -183,7 +183,7 @@ contains
         if( cline%defined('oritab2') )then
             ! Comparison
             if( .not. cline%defined('oritab') ) THROW_HARD('need oritab for comparison')
-            if( binread_nlines( params%oritab) .ne. binread_nlines( params%oritab2) )then
+            if( binread_nlines( params%oritab, params%spproj_iseg) .ne. binread_nlines(params%oritab2, params%spproj_iseg) )then
                 THROW_HARD('inconsistent number of lines in the two oritabs!')
             endif
             call spproj%new_seg_with_ptr(params%nptcls, params%oritype, o)
