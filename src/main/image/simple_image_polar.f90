@@ -61,7 +61,7 @@ contains
         real, allocatable :: w(:,:)
         real :: xpd, ypd, dang, ang
         integer :: win(2,2), lims(2,3), i, k, l, m, pf, iwinsz, wdim
-        pf = STRIDE_GRID_PAD_FAC
+        pf = OSMPL_PAD_FAC
         if( allocated(mem_polweights_mat) ) deallocate(mem_polweights_mat)
         if( allocated(mem_polcyc1_mat)    ) deallocate(mem_polcyc1_mat)
         if( allocated(mem_polcyc2_mat)    ) deallocate(mem_polcyc2_mat)
@@ -163,7 +163,7 @@ contains
         integer :: h_abs, k_eff
         integer :: phys1p, phys2p
         padded_box = self%ldim(1)
-        padding_factor_scaling = real(STRIDE_GRID_PAD_FAC**2)
+        padding_factor_scaling = real(OSMPL_PAD_FAC**2)
         !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,h_val_pd,k_val_pd,h_abs,k_eff,phys1p,phys2p,h_negative,fcomp)
         do k = mem_poldim(2), mem_poldim(3)
             do i = 1, mem_poldim(1)

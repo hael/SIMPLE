@@ -2,7 +2,7 @@
 submodule (simple_image) simple_image_ctf
 use simple_memoize_ft_maps
 use simple_math_ctf,      only: ft_map_ctf_kernel
-use simple_parameters,    only: params_glob
+use simple_parameters,    only: parameters
 use simple_euclid_sigma2, only: eucl_sigma2_glob
 implicit none
 #include "simple_local_flags.inc"
@@ -128,11 +128,13 @@ contains
         end do
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, ctfparms, shift, iptcl, fplane )
+    module subroutine gen_fplane4rec( self, smpd_crop, ctfparms, shift, l_ml_reg, iptcl, fplane )
         use simple_math_ft, only: upsample_sigma2
         class(image),      intent(inout) :: self
+        real,              intent(in)    :: smpd_crop
         class(ctfparams),  intent(in)    :: ctfparms
         real,              intent(in)    :: shift(2)
+        logical,           intent(in)    :: l_ml_reg
         integer,           intent(in)    :: iptcl
         type(fplane_type), intent(out)   :: fplane
         type(ctf)                :: tfun
@@ -144,6 +146,7 @@ contains
         ! CTF kernel scalars (precomputed)
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
         integer :: physh, physk, sigma2_kfromto(2), h, k, shell, hmin, hmax, kmin, kmax,  frlims_crop(3,2), sigma_nyq
+        integer :: box_croppd, box_crop
         logical :: l_ctf, l_flip
         ! Shell LUT: shell = nint(sqrt(r2)) via lookup table
         integer, allocatable :: shell_lut(:)
@@ -153,12 +156,14 @@ contains
         ! -----------------------
         ! setup the Fourier plane (PADDED/CROPPED)
         ! -----------------------
+        box_croppd = self%ldim(1)
+        box_crop   = box_croppd / OSMPL_PAD_FAC
         ! cropped Fourier limits & dimensions need to be congruent with how the reconstroctor_eo objects are set up
-        call fiterator%new([params_glob%box_croppd, params_glob%box_croppd, 1], params_glob%smpd_crop)
+        call fiterator%new([box_croppd, box_croppd, 1], smpd_crop)
         ! use redundant logical limits (mode 3) so negative h exists for Friedel access (-h,-k)
         fplane%frlims = fiterator%loop_lims(3)
         fplane%nyq    = fiterator%get_lfny(1)
-        call fiterator%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop)
+        call fiterator%new([box_crop, box_crop, 1], smpd_crop)
         sigma_nyq     = fiterator%get_lfny(1)
         ! matrices
         if( allocated(fplane%cmplx_plane) ) deallocate(fplane%cmplx_plane)
@@ -191,7 +196,7 @@ contains
         ! -----------------------
         ! ML regularization noise spectrum
         ! -----------------------
-        if (params_glob%l_ml_reg) then
+        if (l_ml_reg) then
             allocate(sigma2_noise_tmp(1:sigma_nyq), sigma2_noise(0:fplane%nyq), source=0.0)
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
@@ -257,7 +262,7 @@ contains
                         tvalsq = 1.0
                     end if
                     ! sigma2 weighting (unchanged semantics)
-                    if (params_glob%l_ml_reg) then
+                    if (l_ml_reg) then
                         c      = c      / sigma2_noise(shell)
                         tvalsq = tvalsq / sigma2_noise(shell)
                     end if

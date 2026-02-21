@@ -1,7 +1,7 @@
 !@descr: does one iteration of CTF estimation
 module simple_ctf_estimate_iter
 use simple_core_module_api
-use simple_parameters,       only: params_glob
+use simple_parameters,       only: parameters
 use simple_image,            only: image
 use simple_ctf_estimate_fit, only: ctf_estimate_fit
 implicit none
@@ -20,8 +20,9 @@ end type ctf_estimate_iter
 
 contains
 
-    subroutine iterate( self, ctfvars, moviename_forctf, orientation, dir_out, l_gen_thumb )
+    subroutine iterate( self, params, ctfvars, moviename_forctf, orientation, dir_out, l_gen_thumb )
         class(ctf_estimate_iter), intent(inout) :: self
+        class(parameters),        intent(in)    :: params
         class(ctfparams),         intent(inout) :: ctfvars
         class(string),            intent(in)    :: moviename_forctf
         class(ori),               intent(inout) :: orientation
@@ -49,19 +50,19 @@ contains
         ! filter out frequencies lower than the box can express to avoid aliasing
         call self%micrograph%new(ldim, ctfvars%smpd)
         call self%micrograph%read(moviename_forctf, 1)
-        call self%micrograph%bp(real(params_glob%pspecsz) * ctfvars%smpd, 0.)
+        call self%micrograph%bp(real(params%pspecsz) * ctfvars%smpd, 0.)
         call self%micrograph%ifft
         ! global fitting
-        call ctffit%new(self%micrograph, params_glob%pspecsz, ctfvars, [params_glob%dfmin,params_glob%dfmax],&
-            &[params_glob%hp,params_glob%lp], params_glob%astigtol)
-        call ctffit%fit( ctfvars )
+        call ctffit%new(self%micrograph, params%pspecsz, ctfvars, [params%dfmin,params%dfmax],&
+            &[params%hp,params%lp], params%astigtol)
+        call ctffit%fit(ctfvars, params%ctfresthreshold)
         if( l_gen_thumb )then
-            call self%gen_thumbnail( ctffit )
+            call self%gen_thumbnail( ctffit, params%pspecsz )
             call self%img_jpg%write_jpg(moviename_thumb, norm=.true., quality=92)
             call orientation%set('thumb', simple_abspath(moviename_thumb))
         endif
         ! patch based fitting
-        if( trim(params_glob%ctfpatch).eq.'yes' )then
+        if( trim(params%ctfpatch).eq.'yes' )then
             call ctffit%fit_patches
             call ctffit%write_doc(moviename_forctf, docname)
             call orientation%set('ctfdoc', simple_abspath(docname))
@@ -84,9 +85,10 @@ contains
     end subroutine iterate
 
     ! generate thumbnail
-    subroutine gen_thumbnail( self, ctffit )
+    subroutine gen_thumbnail( self, ctffit, pspecsz )
         class(ctf_estimate_iter), intent(inout) :: self
         class(ctf_estimate_fit),  intent(inout) :: ctffit
+        integer,                  intent(in)    :: pspecsz
         type(image) :: tmp
         real        :: scale, smpd
         integer     :: ldim(3), ldim_thumb(3)
@@ -103,10 +105,10 @@ contains
         ! spectrum
         call ctffit%get_pspec(self%pspec4viz)
         call self%pspec4viz%scale_pspec4viz
-        if( params_glob%pspecsz > GUI_PSPECSZ )then
+        if( pspecsz > GUI_PSPECSZ )then
             call self%pspec4viz%fft
             call self%pspec4viz%clip_inplace([GUI_PSPECSZ,GUI_PSPECSZ,1])
-        else if( params_glob%pspecsz < GUI_PSPECSZ )then
+        else if( pspecsz < GUI_PSPECSZ )then
             tmp = self%pspec4viz
             call self%pspec4viz%zero_and_unflag_ft
             call tmp%fft

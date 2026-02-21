@@ -568,11 +568,11 @@ contains
                     interp_rhos(:,:,i)  = 0.0
                     ! loop over cropped original image limits
                     do h = flims_crop(1,1), flims_crop(1,2)
-                        hp = h * STRIDE_GRID_PAD_FAC        ! padded coordinate
+                        hp = h * OSMPL_PAD_FAC        ! padded coordinate
                         do k = flims_crop(2,1), flims_crop(2,2)
                             sh = nint(hyp(real(h),real(k)))
                             if( sh > nyq_crop )cycle
-                            kp = k * STRIDE_GRID_PAD_FAC    ! padded coordinate
+                            kp = k * OSMPL_PAD_FAC    ! padded coordinate
                             ! rotation on original lattice
                             loc = matmul(real([h,k]),mat)
                             ! interpolation window limits on original lattice

@@ -216,9 +216,9 @@ contains
                     cycle
             end select
             ! ctf_estimate
-            params_glob%hp = params%hp_ctf_estimate
-            params_glob%lp = max(params%fny, params%lp_ctf_estimate)
-            call ctfiter%iterate(ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate, .false.)
+            params%hp = params%hp_ctf_estimate
+            params%lp = max(params%fny, params%lp_ctf_estimate)
+            call ctfiter%iterate(params, ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate, .false.)
             ! delete file after estimation
             if( l_del_forctf )then
                 call o_mov%delete_entry('forctf')
@@ -464,7 +464,7 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', moviename_intg)
-                call ptiter%iterate(o, moviename_intg, output_dir)
+                call ptiter%iterate(params, o, moviename_intg, output_dir)
                 call spproj%os_mic%set_ori(iintg, o)
                 write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the integrated movies processed'
             endif
@@ -578,7 +578,7 @@ contains
                 endif
                 l_gen_thumb = .not. o%isthere('thumb')
                 ctfvars     = o%get_ctfvars()
-                call ctfiter%iterate( ctfvars, intg_forctf, o, output_dir, l_gen_thumb)
+                call ctfiter%iterate(params,  ctfvars, intg_forctf, o, output_dir, l_gen_thumb)
                 ! delete file after estimation
                 if( l_del_forctf )then
                     call o%delete_entry('forctf')

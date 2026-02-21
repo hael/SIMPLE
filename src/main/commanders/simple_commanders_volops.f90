@@ -95,7 +95,7 @@ contains
             do i = 1,nimgs
                 call build%img%zero_and_unflag_ft
                 call build%img%read(params%stk,i)
-                select case(trim(params_glob%center_type))
+                select case(trim(params%center_type))
                 case('params')
                     xyz = 0.
                     call build%spproj_field%calc_avg_offset2D(i, xyz(1:2))
@@ -133,7 +133,7 @@ contains
             allocate(shvec(params%nstates,3))
             do istate=1,params%nstates
                 call build%vol%read(params%vols(istate))
-                select case(trim(params_glob%center_type))
+                select case(trim(params%center_type))
                 case('mass')
                     shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk)
                     if( cline%defined('oritab') .or. cline%defined('projfile') )then

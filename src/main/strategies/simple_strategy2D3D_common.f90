@@ -781,7 +781,7 @@ contains
                 call build%imgbatch(ibatch)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
                 ctfparms(ibatch) = build%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 shift = build%spproj_field%get_2Dshift(iptcl)
-                call build%img_pad_heap(ithr)%gen_fplane4rec(ctfparms(ibatch), shift, iptcl, fpls(ibatch))
+                call build%img_pad_heap(ithr)%gen_fplane4rec(params_glob%smpd_crop, ctfparms(ibatch), shift, params_glob%l_ml_reg, iptcl, fpls(ibatch))
             end do
             !$omp end parallel do
             if( DEBUG )then

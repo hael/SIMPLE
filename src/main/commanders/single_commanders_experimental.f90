@@ -404,7 +404,7 @@ contains
             endif
         enddo
         ! batch prep
-        batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
+        batchsz_max = min(nptcls2update,params%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)

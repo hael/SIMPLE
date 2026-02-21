@@ -346,7 +346,7 @@ contains
         call simple_rename('RESOLUTION_FILE_FIRST', 'RESOLUTION_STATE01')
         ! Calculate correlation matrices
         nlps   = size(LP_LIST)
-        hp_ind = calc_fourier_index(HP_LIM, params%box, params_glob%smpd)
+        hp_ind = calc_fourier_index(HP_LIM, params%box, params%smpd)
         allocate(fsc(fdim(params%box)-1),ccs(nlps,nparts,nparts))
         call vol1%new([params%box,params%box,params%box],params%smpd)
         call vol2%new([params%box,params%box,params%box],params%smpd)
@@ -361,7 +361,7 @@ contains
                 call vol2%fft
                 call vol1%fsc(vol2,fsc)
                 do ilp = 1, nlps
-                    ind = calc_fourier_index(LP_LIST(ilp), params%box, params_glob%smpd)
+                    ind = calc_fourier_index(LP_LIST(ilp), params%box, params%smpd)
                     ccs(ilp,state,istate) = sum(fsc(hp_ind:ind)) / real(ind - hp_ind + 1)
                     ccs(ilp,istate,state) = ccs(ilp,state,istate)
                 enddo

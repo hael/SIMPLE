@@ -217,8 +217,8 @@ contains
         endif
         ! Prep for correction of the shape of the interpolator
         ldim         = build%vol%get_ldim()
-        ldim_pd      = STRIDE_GRID_PAD_FAC * ldim
-        gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params_glob%smpd_crop)
+        ldim_pd      = OSMPL_PAD_FAC * ldim
+        gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params%smpd_crop)
         ! assemble volumes
         do state=1,params%nstates
             call build%eorecvol%reset_all

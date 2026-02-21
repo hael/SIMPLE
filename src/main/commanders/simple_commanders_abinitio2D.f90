@@ -367,11 +367,11 @@ contains
             stage_parms(:)%nptcls      = nptcls_eff
             if( trim(params%autosample).eq.'yes' )then
                 do i = 1,NSTAGES
-                    call autosample2D(cline, nptcls_eff, params%ncls,&
+                    call autosample2D(params, cline, nptcls_eff, params%ncls,&
                     &stage_parms(i)%max_cls_pop, stage_parms(i)%nptcls)
                     if( (params%stage > 0) .and. (params%stage < NSTAGES))then
                         if( i<=params%stage )then
-                            call autosample2D(cline, nptcls_eff, params%ncls,&
+                            call autosample2D(params, cline, nptcls_eff, params%ncls,&
                             &stage_parms(i)%max_cls_pop, stage_parms(i)%nptcls, popfac=0.5)
                         endif
                     endif
@@ -717,21 +717,22 @@ contains
 
     ! pruvate helper
 
-    subroutine autosample2D( cline, nptcls, ncls, max_pop, max_nptcls, popfac )
-        class(cmdline), intent(in)  :: cline
-        integer,        intent(in)  :: nptcls, ncls
-        integer,        intent(out) :: max_pop, max_nptcls
-        real, optional, intent(in)  :: popfac ! testing purpose
+    subroutine autosample2D( params, cline, nptcls, ncls, max_pop, max_nptcls, popfac )
+        class(parameters), intent(in)  :: params
+        class(cmdline),    intent(in)  :: cline
+        integer,           intent(in)  :: nptcls, ncls
+        integer,           intent(out) :: max_pop, max_nptcls
+        real, optional,    intent(in)  :: popfac ! testing purpose
         max_pop    = 0
         max_nptcls = nptcls
-        if( trim(params_glob%autosample).ne.'yes' ) return
+        if( trim(params%autosample).ne.'yes' ) return
         ! Class population limit
         max_pop = MAXPOP_CLS
-        if( cline%defined('nsample') ) max_pop = params_glob%nsample
+        if( cline%defined('nsample') ) max_pop = params%nsample
         ! Total population limit
         max_nptcls = min(nptcls, 2*max_pop*ncls)
         if( cline%defined('nsample_max') )then
-            max_nptcls = min(params_glob%nsample_max, max_nptcls)
+            max_nptcls = min(params%nsample_max, max_nptcls)
         else
             if( present(popfac) )then
                 max_nptcls = min(nint(popfac*real(MAXPOP_PTCLS)), nptcls)
