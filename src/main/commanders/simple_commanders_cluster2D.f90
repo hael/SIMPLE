@@ -108,7 +108,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! splitting
@@ -708,7 +708,7 @@ contains
             call xprob_tab2D%execute_safe(cline_prob_tab2D)
         else
             ! setup the environment for distributed execution
-            call qenv%new(params_glob%nparts, nptcls=params_glob%nptcls)
+            call qenv%new(params_glob, params_glob%nparts, nptcls=params_glob%nptcls)
             call cline_prob_tab2D%gen_job_descr(job_descr)
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
@@ -1147,7 +1147,7 @@ contains
             l_stream = cline%get_carg('stream') == 'yes'
         endif
         ! convergence check
-        converged = conv%check_conv2D(cline, os, os%get_n('class'), params%msk)
+        converged = conv%check_conv2D(params, cline, os, os%get_n('class'), params%msk)
         ! Update progress file
         if(.not. l_stream) call progressfile_update(conv%get('progress'))
         call cline%set('frac_srch', conv%get('frac_srch'))

@@ -105,7 +105,7 @@ contains
             endif
         end do
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! schedule & clean
         call cline%gen_job_descr(job_descr)
         call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR)

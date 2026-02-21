@@ -279,7 +279,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! splitting
         if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         ! prepare command lines from prototype master
@@ -935,7 +935,7 @@ contains
         else
             call build%init_params_and_build_spproj(cline_first_sigmas, params)
             ! setup the environment for distributed execution
-            call qenv%new(params%nparts)
+            call qenv%new(params, params%nparts)
             ! prepare job description
             call cline_first_sigmas%gen_job_descr(job_descr)
             ! schedule
@@ -964,7 +964,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! check convergence
-        converged = conv%check_conv3D(cline, build%spproj_field, params%msk)
+        converged = conv%check_conv3D(params, cline, build%spproj_field, params%msk)
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
         if( params_glob%l_doshift )then
@@ -1071,7 +1071,7 @@ contains
             call xprob_tab%execute_safe(cline_prob_tab)
         else
             ! setup the environment for distributed execution
-            call qenv%new(params%nparts, nptcls=params%nptcls)
+            call qenv%new(params, params%nparts, nptcls=params%nptcls)
             call cline_prob_tab%gen_job_descr(job_descr)
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)

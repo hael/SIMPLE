@@ -84,7 +84,7 @@ contains
         ! to update eo flags and weights
         call build%spproj%write_segment_inside(params%oritype)
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         call cline%gen_job_descr(job_descr)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR)

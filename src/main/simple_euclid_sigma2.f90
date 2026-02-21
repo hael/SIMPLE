@@ -56,7 +56,7 @@ contains
         ! read group sigmas from starfile, to be used for alignment and volume reconstruction
         ! set up fields for fast access to sigmas
         class(euclid_sigma2), target, intent(inout) :: self
-        class(parameters),   target, intent(in)    :: params
+        class(parameters),    target, intent(in)    :: params
         class(string),                intent(in)    :: binfname
         integer,                      intent(in)    :: box
         call self%kill

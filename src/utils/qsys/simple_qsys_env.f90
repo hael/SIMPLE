@@ -11,7 +11,7 @@ use simple_qsys_lsf,     only: qsys_lsf
 use simple_qsys_pbs,     only: qsys_pbs
 use simple_qsys_sge,     only: qsys_sge
 use simple_qsys_ctrl,    only: qsys_ctrl
-use simple_parameters,   only: parameters, params_glob
+use simple_parameters,   only: parameters
 implicit none
 
 public :: qsys_env
@@ -43,9 +43,10 @@ end type qsys_env
 
 contains
 
-    subroutine new( self, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition )
+    subroutine new( self, params, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition )
         use simple_sp_project, only: sp_project
         class(qsys_env),         intent(inout) :: self
+        class(parameters),       intent(inout) :: params
         integer,                 intent(in)    :: nparts
         logical,       optional, intent(in)    :: stream
         integer,       optional, intent(in)    :: numlen, nptcls, qsys_nthr
@@ -64,9 +65,9 @@ contains
         sstream = .false.
         if( present(stream) ) sstream = stream
         self%nparts = nparts
-        nptcls_here = params_glob%nptcls
+        nptcls_here = params%nptcls
         if( present(nptcls) ) nptcls_here = nptcls
-        select case(trim(params_glob%split_mode))
+        select case(trim(params%split_mode))
             case('even')
                 self%parts = split_nobjs_even(nptcls_here, self%nparts)
                 partsz     = self%parts(1,2) - self%parts(1,1) + 1
@@ -75,16 +76,16 @@ contains
                 self%parts(:,:) = 1
                 partsz          = 1
             case('stream')
-                self%nparts = params_glob%ncunits
+                self%nparts = params%ncunits
                 allocate(self%parts(nptcls_here,2)) ! unused
                 self%parts(:,:) = 1                 ! unused
                 partsz          = 1                 ! unused
             case DEFAULT
-                THROW_HARD('split_mode: '//trim(params_glob%split_mode)//' is unsupported; new')
+                THROW_HARD('split_mode: '//trim(params%split_mode)//' is unsupported; new')
         end select
         ! retrieve environment variables from file
         call self%qdescr%new(MAXENVKEYS)
-        call spproj%read_segment('compenv', params_glob%projfile)
+        call spproj%read_segment('compenv', params%projfile)
         call spproj%compenv%get_ori(1, compenv_o)
         self%qdescr = compenv_o%ori2chash()
         ! deal with time
@@ -102,7 +103,7 @@ contains
             else
                 tot_time_sec = min(tot_time_sec, real(WALLTIME_DEFAULT))
             endif
-            tot_time_sec = min(tot_time_sec, real(params_glob%walltime)) ! command line override
+            tot_time_sec = min(tot_time_sec, real(params%walltime)) ! command line override
             hrs          = int(tot_time_sec/3600.)
             hrs_str      = int2str(hrs)
             mins         = int((tot_time_sec - 3600.*real(hrs))/60.)
@@ -121,14 +122,14 @@ contains
             self%simple_exec_bin = filepath(self%qdescr%get('simple_path'),string('bin'),string('simple_private_exec'))
         endif
         call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
-            &[1, self%nparts], params_glob%ncunits, sstream, numlen)
+            &[1, self%nparts], params%ncunits, sstream, numlen)
         if(present(qsys_nthr)) then
-            call self%qdescr%set('job_cpus_per_task', int2str(qsys_nthr))                  ! overrides env file and params_glob
+            call self%qdescr%set('job_cpus_per_task', int2str(qsys_nthr))                  ! overrides env file and params
         else
-            call self%qdescr%set('job_cpus_per_task', int2str(params_glob%nthr))           ! overrides env file
+            call self%qdescr%set('job_cpus_per_task', int2str(params%nthr))                ! overrides env file
         endif
-        if(present(qsys_partition)) call self%qdescr%set('qsys_partition', qsys_partition) ! overrides env file and params_glob
-        call self%qdescr%set('job_nparts', int2str(params_glob%nparts))                    ! overrides env file
+        if(present(qsys_partition)) call self%qdescr%set('qsys_partition', qsys_partition) ! overrides env file and params
+        call self%qdescr%set('job_nparts', int2str(params%nparts))                         ! overrides env file
         call qsnam%kill
         call compenv_o%kill
         call spproj%kill

@@ -393,7 +393,7 @@ contains
             call pftc%polar_cavger_kill
         else
             ! check convergence
-            converged = conv%check_conv2D(cline, b_ptr%spproj_field, b_ptr%spproj_field%get_n('class'), params_glob%msk)
+            converged = conv%check_conv2D(params_glob, cline, b_ptr%spproj_field, b_ptr%spproj_field%get_n('class'), params_glob%msk)
             converged = converged .and. (params_glob%which_iter >= params_glob%minits)
             converged = converged .or.  (params_glob%which_iter >= params_glob%maxits)
             ! Update progress file if not stream

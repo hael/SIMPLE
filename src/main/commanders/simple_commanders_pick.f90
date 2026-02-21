@@ -128,7 +128,7 @@ contains
                 THROW_HARD('Unsupported PICKER: '//trim(params%picker))
         end select
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepares picking references
         if( templates_provided )then
             cline_make_pickrefs = cline
@@ -310,7 +310,7 @@ contains
         ! call progressfile_init_parts(params%nparts) 
         ! DISTRIBUTED EXTRACTION
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -856,7 +856,7 @@ contains
             call part_params(ipart)%set('fromp',int2str(parts(ipart,1)))
             call part_params(ipart)%set('top',  int2str(parts(ipart,2)))
         end do
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean

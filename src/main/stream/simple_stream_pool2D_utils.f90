@@ -231,10 +231,10 @@ contains
             end if
             call get_environment_variable(SIMPLE_STREAM_REFGEN_PARTITION, refgen_part_env, envlen)
             if(envlen > 0) then
-                call pool_qenv%new(params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
+                call pool_qenv%new(params_glob, params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
                 &qsys_partition=string(trim(refgen_part_env)))
             else
-                call pool_qenv%new(params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'))
+                call pool_qenv%new(params_glob, params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'))
             end if
         else
             call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
@@ -246,10 +246,10 @@ contains
             end if
             call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
             if(envlen > 0) then
-                call pool_qenv%new(params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
+                call pool_qenv%new(params_glob, params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
                 &qsys_partition=string(trim(pool_part_env)))
             else
-                call pool_qenv%new(params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'))
+                call pool_qenv%new(params_glob, params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'))
             end if
         end if
         ! objective function

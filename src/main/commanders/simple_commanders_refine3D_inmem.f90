@@ -43,7 +43,7 @@ contains
         if( .not.cline_prob_tab%defined('nparts') )then
             call exec_prob_tab_inmem(build, params, cline_prob_tab)
         else
-            call qenv%new(params%nparts, nptcls=params%nptcls)
+            call qenv%new(params, params%nparts, nptcls=params%nptcls)
             call cline_prob_tab%gen_job_descr(job_descr)
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif

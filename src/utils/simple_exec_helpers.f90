@@ -93,7 +93,7 @@ contains
                 call cline%delete('mkdir')
                 call cline%delete('projfile')
                 call cline%set('projfile', projfile)
-                call qenv%new(1, exec_bin=executable)
+                call qenv%new(params, 1, exec_bin=executable)
                 if( cline%defined('tag') )then
                     call qenv%gen_script(cline, prg//'_script'//'_'//trim(params%tag), string(uppercase(prg%to_char())//'_OUTPUT'//'_'//trim(params%tag)))
                 else

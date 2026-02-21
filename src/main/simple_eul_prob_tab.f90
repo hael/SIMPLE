@@ -780,7 +780,7 @@ contains
     end function eulprob_dist_switch
 
     ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
-    elemental function eulprob_corr_switch( dist ) result(corr)
+    elemental function eulprob_corr_switch( dist, cc_objfun  ) result(corr)
         real, intent(in) :: dist
         real :: corr
         corr = dist

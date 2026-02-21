@@ -350,7 +350,7 @@ contains
         ! REPORT CONVERGENCE
         call qsys_job_finished(string('simple_strategy3D_matcher :: refine3D_exec'))
         if( .not. params_glob%l_distr_exec .and. trim(params_glob%refine).ne.'sigma' )then
-            converged = conv%check_conv3D(cline, b_ptr%spproj_field, params_glob%msk)
+            converged = conv%check_conv3D(params_glob, cline, b_ptr%spproj_field, params_glob%msk)
         endif
         if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)

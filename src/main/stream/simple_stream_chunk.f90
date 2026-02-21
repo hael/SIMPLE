@@ -96,11 +96,11 @@ contains
         exec = 'simple_exec'
         if( params_glob%nparts_chunk == 1 )then
             ! shared memory
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin=exec, qsys_nthr=params_glob%nthr2D)
+            call self%qenv%new(params_glob, params_glob%nparts_chunk, exec_bin=exec, qsys_nthr=params_glob%nthr2D)
             call self%spproj%compenv%set(1,'qsys_name','local')
         else
             ! we need to override the qsys_name for non local distributed execution
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin=exec, qsys_name=string('local'))
+            call self%qenv%new(params_glob, params_glob%nparts_chunk, exec_bin=exec, qsys_name=string('local'))
             call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
             if(envlen > 0) call self%spproj%compenv%set(1,'qsys_partition', trim(chunk_part_env))
         endif

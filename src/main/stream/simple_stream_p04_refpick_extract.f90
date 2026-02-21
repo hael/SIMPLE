@@ -202,11 +202,11 @@ contains
         ! setup the environment for distributed execution
         call get_environment_variable(SIMPLE_STREAM_PICK_PARTITION, pick_part_env, envlen)
         if(envlen > 0) then
-            call qenv_main%new(1,stream=.true.,qsys_partition=string(trim(pick_part_env)))
-            call qenv_interactive%new(1,stream=.true.,qsys_partition=string(trim(pick_part_env)))
+            call qenv_main%new(params, 1,stream=.true.,qsys_partition=string(trim(pick_part_env)))
+            call qenv_interactive%new(params, 1,stream=.true.,qsys_partition=string(trim(pick_part_env)))
         else
-            call qenv_main%new(1,stream=.true.)
-            call qenv_interactive%new(1,stream=.true.)
+            call qenv_main%new(params, 1,stream=.true.)
+            call qenv_interactive%new(params, 1,stream=.true.)
         end if
         if(l_interactive) then
             qenv => qenv_interactive
