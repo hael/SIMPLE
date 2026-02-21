@@ -11,10 +11,15 @@ type, extends(pca) :: kpca_svd
     private
     real, allocatable :: E_zn(:,:)  !< expectations (feature vecs)
     real, allocatable :: data(:,:)  !< projected data on feature vecs
+    integer           :: nthr                          !< number of threads
+    character(len=16) :: kpca_ker = ''                !< kernel type ('rbf' or 'cosine')
+    character(len=16) :: kpca_target = ''             !< target type ('ptcl' or other)
     logical           :: existence=.false.
     contains
     ! CONSTRUCTOR
     procedure :: new      => new_kpca
+    ! SETTERS
+    procedure :: set_params => set_params_kpca
     ! GETTERS
     procedure :: get_feat => get_feat_kpca
     procedure :: generate => generate_kpca
@@ -43,10 +48,27 @@ contains
         self%N = N
         self%D = D
         self%Q = Q
+        ! Initialize with defaults (use set_params() to override)
+        self%nthr = 1
+        self%kpca_ker = 'cosine'
+        self%kpca_target = 'ptcl'
         ! allocate principal subspace and feature vectors
         allocate( self%E_zn(self%Q,self%N), self%data(self%D,self%N), source=0.)
         self%existence = .true.
     end subroutine new_kpca
+
+    ! SETTERS
+
+    !>  \brief  setter for runtime parameters
+    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target )
+        class(kpca_svd),            intent(inout) :: self
+        integer,          optional, intent(in)    :: nthr
+        character(len=*), optional, intent(in)    :: kpca_ker
+        character(len=*), optional, intent(in)    :: kpca_target
+        if( present(nthr) )        self%nthr        = nthr
+        if( present(kpca_ker) )    self%kpca_ker    = trim(kpca_ker)
+        if( present(kpca_target) ) self%kpca_target = trim(kpca_target)
+    end subroutine set_params_kpca
 
     ! GETTERS
 
@@ -85,7 +107,6 @@ contains
     ! CALCULATORS
 
     subroutine master_kpca( self, pcavecs, maxpcaits )
-        use simple_parameters, only: params_glob
         class(kpca_svd),   intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
@@ -96,10 +117,10 @@ contains
         real(real64)       :: rate
         real(dp) :: denom
         real     :: ker(self%N,self%N), eig_vecs(self%N,self%Q), norm_pcavecs(self%D,self%N),norm_pcavecs_t(self%N,self%D),&
-                   &proj_data(self%N,params_glob%nthr), norm_prev(self%D,params_glob%nthr), norm_data(self%D,params_glob%nthr)
+                   &proj_data(self%N,self%nthr), norm_prev(self%D,self%nthr), norm_data(self%D,self%nthr)
         integer  :: i, ind, iter, its, ithr
         ! compute the kernel
-        select case(trim(params_glob%kpca_ker))
+        select case(trim(self%kpca_ker))
             case('rbf')
                 call self%rbf_kernel(   pcavecs, ker)
             case('cosine')
@@ -120,7 +141,7 @@ contains
         if( present(maxpcaits) ) its = maxpcaits
         if( DEBUG ) call system_clock(start_time, rate)
         ker = matmul(matmul(ker, eig_vecs), transpose(eig_vecs))
-        select case(trim(params_glob%kpca_ker))
+        select case(trim(self%kpca_ker))
             case('rbf')
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,iter,ithr,i,denom)
                 do ind = 1, self%N
@@ -153,7 +174,7 @@ contains
                 enddo
                 !$omp end parallel do
                 norm_pcavecs_t = transpose(norm_pcavecs)
-                if( trim(params_glob%kpca_target) .eq. 'ptcl' )then
+                if( trim(self%kpca_target) .eq. 'ptcl' )then
                     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1

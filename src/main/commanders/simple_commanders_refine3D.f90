@@ -253,7 +253,7 @@ contains
         call build%init_params_and_build_spproj(cline, params)
         if( params%l_polar )then
             call build%build_general_tbox(params, cline, do3d=.true.)
-            call pftc%new(1, [1,1], params%kfromto)
+            call pftc%new(params, 1, [1,1], params%kfromto)
         endif
         ! sanity check
         fall_over = .false.

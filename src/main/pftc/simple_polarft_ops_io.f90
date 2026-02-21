@@ -19,7 +19,7 @@ contains
         integer :: k,c,irot,physh,physk,box,icls,case_sel
         logical :: pfts_in_present
         pfts_in_present = present(pfts_in)
-        box = params_glob%box_crop
+        box = self%p_ptr%box_crop
         c   = box/2+1
         select case(trim(which))
             case('even')
@@ -93,7 +93,7 @@ contains
             ! arbitrary magnitude
             cmat(1,c) = CMPLX_ZERO
             ! set image
-            call cavgs(icls)%new([box,box,1], params_glob%smpd_crop, wthreads=.false.)
+            call cavgs(icls)%new([box,box,1], self%p_ptr%smpd_crop, wthreads=.false.)
             call cavgs(icls)%set_cmat(cmat)
             call cavgs(icls)%shift_phorig()
             call cavgs(icls)%ifft
@@ -196,7 +196,7 @@ contains
         class(string),       intent(in) :: tmpl_fname
         character(len=*),    intent(in) :: which
         type(image), allocatable :: imgs(:)
-        call alloc_imgarr(self%ncls, [params_glob%box_crop, params_glob%box_crop,1], params_glob%smpd_crop, imgs)
+        call alloc_imgarr(self%ncls, [self%p_ptr%box_crop, self%p_ptr%box_crop,1], self%p_ptr%smpd_crop, imgs)
         select case(trim(which))
             case('even','odd')
                 call self%polar_cavger_refs2cartesian(imgs, trim(which) )
@@ -273,10 +273,10 @@ contains
         integer :: dims_cae(4), dims_cao(4), dims_cte(4), dims_cto(4)
         integer :: funit_cae, funit_cao, funit_cte, funit_cto
         integer :: i
-        cae = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//BIN_EXT
-        cao = 'cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//BIN_EXT
-        cte = 'ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//BIN_EXT
-        cto = 'ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//BIN_EXT
+        cae = 'cavgs_even_part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//BIN_EXT
+        cao = 'cavgs_odd_part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//BIN_EXT
+        cte = 'ctfsqsums_even_part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//BIN_EXT
+        cto = 'ctfsqsums_odd_part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//BIN_EXT
         select case(trim(which))
             case('read')
                 call self%open_pft_array_for_read(cae,  self%pfts_even, funit_cae, dims_cae, pfte_buf)
@@ -352,11 +352,11 @@ contains
         allocate(pfte(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls),  pfto(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls),&
                &ctf2e(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls), ctf2o(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls))
         call self%polar_cavger_zero_pft_refs
-        do ipart = 1,params_glob%nparts
-            cae = 'cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//BIN_EXT
-            cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//BIN_EXT
-            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//BIN_EXT
-            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//BIN_EXT
+        do ipart = 1,self%p_ptr%nparts
+            cae = 'cavgs_even_part'    //int2str_pad(ipart,self%p_ptr%numlen)//BIN_EXT
+            cao = 'cavgs_odd_part'     //int2str_pad(ipart,self%p_ptr%numlen)//BIN_EXT
+            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,self%p_ptr%numlen)//BIN_EXT
+            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,self%p_ptr%numlen)//BIN_EXT
             call self%open_pft_array_for_read(cae, pfte,  funit_cae, dims_cae, pfte_buf)
             call self%open_pft_array_for_read(cao, pfto,  funit_cao, dims_cao, pfto_buf)
             call self%open_ctf2_array_for_read(cte, ctf2e, funit_cte, dims_cte, ctf2e_buf)
@@ -386,7 +386,7 @@ contains
         enddo
         deallocate(pfte_buf, pfto_buf, ctf2e_buf, ctf2o_buf) ! needs to be explicit, the others are in local scope
         ! merge eo-pairs and normalize
-        select case(trim(params_glob%ref_type))
+        select case(trim(self%p_ptr%ref_type))
             case('polar_cavg')
                 call self%polar_cavger_merge_eos_and_norm2D
             case DEFAULT
@@ -584,7 +584,7 @@ contains
     !                 call img%set([i,k,1], real(abs(self%pfts_merg(i,k,icls))))
     !             enddo
     !         enddo
-    !         call img%write(string('pfts_it'//int2str(params_glob%which_iter)//'.mrc'),icls)
+    !         call img%write(string('pfts_it'//int2str(self%p_ptr%which_iter)//'.mrc'),icls)
     !     enddo
     !     call img%kill
     ! end subroutine pft2img

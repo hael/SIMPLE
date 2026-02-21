@@ -45,7 +45,7 @@ call cline%set('mskdiam', real(N)/2-10.)
 call cline%set('ref_type', 'polar_cavg')
 ! Calculators
 call b%init_params_and_build_strategy2D_tbox(cline, p)
-call pftc%new(NCLS, [1,NIMGS], p%kfromto)
+call pftc%new(p, NCLS, [1,NIMGS], p%kfromto)
 pinds = (/(i,i=1,NIMGS)/)
 call b%img_crop%memoize4polarize(pftc%get_pdim())
 pft = pftc%allocate_pft()

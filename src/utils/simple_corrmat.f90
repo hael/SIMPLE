@@ -129,9 +129,10 @@ contains
         endif
     end subroutine calc_cartesian_corrmat_2
 
-    function calc_inpl_invariant_cc_nomirr( hp, lp, trs, imgs ) result( ccmat )
-        real,         intent(in)    :: hp, lp, trs
-        class(image), intent(inout) :: imgs(:)
+    function calc_inpl_invariant_cc_nomirr( params, hp, lp, trs, imgs ) result( ccmat )
+        class(parameters), intent(in)    :: params
+        real,              intent(in)    :: hp, lp, trs
+        class(image),      intent(inout) :: imgs(:)
         integer,      parameter     :: MAXITS_SH = 60
         real,         allocatable   :: inpl_corrs(:)
         type(pftc_shsrch_grad)      :: grad_shsrch_obj(nthr_glob)
@@ -147,7 +148,7 @@ contains
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
         ! initialize
-        call pftc%new(nimgs, [1,nimgs], kfromto)
+        call pftc%new(params, nimgs, [1,nimgs], kfromto)
         call imgs(1)%memoize4polarize(pftc%get_pdim())
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs

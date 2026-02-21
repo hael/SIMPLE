@@ -25,7 +25,7 @@ call p%new(cline)
 p%kfromto(1) = 2
 p%kfromto(2) = 100
 call b%build_general_tbox(p, cline)
-call pftc%new(p%nptcls, [1, p%nptcls], p%kfromto)
+call pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
 call b%img_crop%memoize4polarize(pftc%get_pdim())
 pft = pftc%allocate_pft()
 do iptcl=1,p%nptcls

@@ -31,7 +31,7 @@ contains
         pft_ref = pft_ref * shmat
         call self%rotate_pft(pft_ref, irot, pft_rot_ref)
         pft_rot_ref = pft_rot_ref * self%ctfmats(:,:,i)
-        select case(params_glob%cc_objfun)
+        select case(self%p_ptr%cc_objfun)
         case(OBJFUN_CC)
             sqsumref  = 0.d0
             sqsumptcl = 0.d0
@@ -101,7 +101,7 @@ contains
         integer,             intent(in)    :: iref, iptcl
         real(sp),            intent(in)    :: shift(2)
         real(sp),            intent(out)   :: vals(self%nrots)
-         select case(params_glob%cc_objfun)
+         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 call self%gen_corrs(iref, iptcl, shift, vals)
             case(OBJFUN_EUCLID)
@@ -293,7 +293,7 @@ contains
         ! ctf
         pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
         gen_corr_for_rot_8_1 = 0.d0
-        select case(params_glob%cc_objfun)
+        select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 gen_corr_for_rot_8_1 = self%gen_corr_cc_for_rot_8(pft_ref_tmp_8, i)
             case(OBJFUN_EUCLID)
@@ -326,7 +326,7 @@ contains
         ! ctf
         pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
         gen_corr_for_rot_8_2 = 0.d0
-        select case(params_glob%cc_objfun)
+        select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 gen_corr_for_rot_8_2 = self%gen_corr_cc_for_rot_8(pft_ref_tmp_8, i)
             case(OBJFUN_EUCLID)
@@ -390,7 +390,7 @@ contains
         endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
-        select case(params_glob%cc_objfun)
+        select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
             case(OBJFUN_EUCLID)
@@ -502,7 +502,7 @@ contains
         endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8
-        select case(params_glob%cc_objfun)
+        select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 call self%gen_corr_cc_grad_only_for_rot_8(pft_ref_8, pft_ref_tmp_8, i, irot, grad)
             case(OBJFUN_EUCLID)

@@ -7,8 +7,10 @@ contains
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-    module subroutine new(self, nrefs, pfromto, kfromto, eoarr)
+    module subroutine new(self, params, nrefs, pfromto, kfromto, eoarr)
+        use simple_parameters, only: parameters
         class(polarft_calc), target, intent(inout) :: self
+        class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
         integer, optional,           intent(in)    :: eoarr(pfromto(1):pfromto(2))
@@ -17,6 +19,8 @@ contains
         integer               :: irot, k, ithr, i
         logical               :: even_dims, test(2)
         call self%kill
+        ! set params pointer
+        self%p_ptr => params
         ! set particle index range
         self%pfromto = pfromto
         ! set band-pass Fourier index limits
@@ -31,7 +35,7 @@ contains
             write(logfhandle,*) 'nrefs: ', nrefs
             THROW_HARD ('nrefs (# of reference sections) must be > 0; new')
         endif
-        self%ldim = [params_glob%box,params_glob%box,1] !< logical dimensions of original cartesian image
+        self%ldim = [self%p_ptr%box,self%p_ptr%box,1] !< logical dimensions of original cartesian image
         test      = .false.
         test(1)   = is_even(self%ldim(1))
         test(2)   = is_even(self%ldim(2))
@@ -43,7 +47,7 @@ contains
         ! set constants
         self%nptcls = self%pfromto(2) - self%pfromto(1) + 1   !< the total number of particles in partition
         self%nrefs  = nrefs                                   !< the number of references (logically indexded [1,nrefs])
-        self%pftsz  = magic_pftsz(nint(params_glob%msk_crop)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
+        self%pftsz  = magic_pftsz(nint(self%p_ptr%msk_crop)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
         self%nrots  = 2 * self%pftsz                          !< number of in-plane rotations for one pft  (pftsz*2)
         ! generate polar coordinates
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
@@ -96,13 +100,13 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
-                &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
+                &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,self%p_ptr%nthr),&
+                &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,self%p_ptr%nthr),&
                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                 &self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                 &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
-                &self%heap_vars(params_glob%nthr))
-        do ithr=1,params_glob%nthr
+                &self%heap_vars(self%p_ptr%nthr))
+        do ithr=1,self%p_ptr%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%argvec(self%pftsz),&
@@ -127,7 +131,7 @@ contains
         ! CTF
         self%ctfmats = 1.0
         self%with_ctf = .false.
-        if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
+        if( self%p_ptr%ctf .ne. 'no' ) self%with_ctf = .true.
         ! setup npix_per_shell
         call self%setup_npix_per_shell
         ! allocation for memoization
@@ -142,7 +146,7 @@ contains
         class(polarft_calc), intent(inout) :: self
         integer :: ithr
         if( self%existence )then
-            do ithr=1,params_glob%nthr
+            do ithr=1,self%p_ptr%nthr
                 deallocate(self%heap_vars(ithr)%pft_ref,self%heap_vars(ithr)%pft_ref_tmp,&
                     &self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
@@ -159,6 +163,7 @@ contains
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
             nullify(self%sigma2_noise, pftc_glob)
+            self%p_ptr => null()
             self%existence = .false.
         endif
     end subroutine kill

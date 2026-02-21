@@ -114,7 +114,7 @@ contains
         call set_bp_range( build, cline )
         call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, incr_sampled=.false.)
         ! PREPARATION OF PARTICLES
-        call pftc%new(params%nspace, [1,nptcls], params%kfromto)
+        call pftc%new(params, params%nspace, [1,nptcls], params%kfromto)
         call prepimgbatch(build, nptcls)
         allocate(tmp_imgs(nthr_glob), tmp_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)

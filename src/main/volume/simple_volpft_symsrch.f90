@@ -30,9 +30,11 @@ integer                       :: kfromto(2)         !< Fourier index range
 
 contains
 
-    subroutine volpft_symsrch_init( vol, pgrp, hp, lp, nrestarts_in )
+    subroutine volpft_symsrch_init( params, vol, pgrp, hp, lp, nrestarts_in )
+        use simple_parameters,  only: parameters
         use simple_projector,   only: projector
         use simple_opt_factory, only: opt_factory
+        class(parameters), intent(in) :: params
         class(projector),  intent(in) :: vol
         character(len=*),  intent(in) :: pgrp
         real,              intent(in) :: hp, lp

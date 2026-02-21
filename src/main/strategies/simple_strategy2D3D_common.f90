@@ -970,7 +970,7 @@ contains
         if( l_polar )then
             ! PREPARATION OF pftc AND REFERENCES
             nrefs = params_glob%nspace * params_glob%nstates
-            call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
+            call pftc%new(params_glob, nrefs, [1,batchsz], params_glob%kfromto)
             ! Read polar references
             call pftc%polar_cavger_new(.true.)
             call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
@@ -1050,7 +1050,7 @@ contains
         endif
         ! pftc
         nrefs = params_glob%nspace * params_glob%nstates
-        call pftc%new(nrefs, [1,batchsz], params_glob%kfromto)
+        call pftc%new(params_glob, nrefs, [1,batchsz], params_glob%kfromto)
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates
             if( str_has_substr(params_glob%refine, 'prob') )then

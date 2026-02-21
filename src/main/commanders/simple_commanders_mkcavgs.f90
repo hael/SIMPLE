@@ -273,7 +273,7 @@ contains
             fname = 'cavgs_even_part'//int2str_pad(1,params%numlen)//BIN_EXT
             call polaft_dims_from_file_header(fname, pftsz, kfromto, ncls)
             call fname%kill
-            call pftc%new(1, [1,1], kfromto)
+            call pftc%new(params, 1, [1,1], kfromto)
             if( trim(params%ref_type)=='comlin_hybrid' )then
                 call pftc%polar_cavger_new(.true., nrefs=params%ncls)
                 call pftc%polar_cavger_calc_pops(build%spproj)

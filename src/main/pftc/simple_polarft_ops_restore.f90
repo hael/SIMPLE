@@ -12,7 +12,7 @@ contains
         complex(dp) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer     :: icls, eo_pop(2), pop
-        select case(trim(params_glob%ref_type))
+        select case(trim(self%p_ptr%ref_type))
         case('polar_cavg')
             ! all good
         case DEFAULT
@@ -62,7 +62,7 @@ contains
         real(dp)    :: ctf2_clin_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         real(dp)    :: fsc(self%kfromto(1):self%kfromto(2)), clw
         clw = 1.d0
-        select case(trim(params_glob%ref_type))
+        select case(trim(self%p_ptr%ref_type))
             case('comlin_hybrid')
                 ! 2.5D: cavgs + variable CLs contribution
                 ! Common-line contribution weight
@@ -81,13 +81,13 @@ contains
                 call self%calc_comlin_contrib(reforis, symop,&
                 &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
             case DEFAULT
-                THROW_HARD('Invalid REF_TYPE='//trim(params_glob%ref_type)//' in polar_cavger_merge_eos_and_norm')
+                THROW_HARD('Invalid REF_TYPE='//trim(self%p_ptr%ref_type)//' in polar_cavger_merge_eos_and_norm')
         end select
         ! ML-regularization
-        if( params_glob%l_ml_reg ) call add_invtausq2rho
+        if( self%p_ptr%l_ml_reg ) call add_invtausq2rho
         ! Restoration of references
         self%pfts_merg = DCMPLX_ZERO
-        select case(trim(params_glob%ref_type))
+        select case(trim(self%p_ptr%ref_type))
             case('comlin_hybrid')
                 if( clw > 1.d-6 )then
                     call calc_cavg_comlin_frcs(cavg2clin_frcs)
@@ -123,7 +123,7 @@ contains
             fsc  = 0.d0
             vare = 0.d0; varo = 0.d0
             sig2e = 0.d0; sig2o = 0.d0
-            select case(trim(params_glob%ref_type))
+            select case(trim(self%p_ptr%ref_type))
             case('comlin_hybrid')
                 THROW_HARD('Not supported yet')
             case('comlin_noself')
@@ -178,14 +178,14 @@ contains
                 fsc = 0.d0
             end where
             ! SSNR
-            fudge = real(params_glob%tau,dp)
+            fudge = real(self%p_ptr%tau,dp)
             do k = self%kfromto(1),self%kfromto(2)
                 cc = max(0.001d0,min(0.999d0,fsc(k)))
                 ssnr(k) = fudge * cc / (1.d0 - cc)
             enddo
             ! Add Tau2 inverse to denominators
             ! because signal assumed infinite at very low resolution there is no addition
-            kstart = max(6, calc_fourier_index(params_glob%hp, params_glob%box_crop, params_glob%smpd_crop))
+            kstart = max(6, calc_fourier_index(self%p_ptr%hp, self%p_ptr%box_crop, self%p_ptr%smpd_crop))
             ! Even
             where( sig2e > DTINY )
                 sig2e = real(self%ncls*self%pftsz,dp) / sig2e
@@ -281,7 +281,7 @@ contains
             complex(dp)       :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
             real(dp)          :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
             integer           :: icls, pop, nk
-            call frcs%new(self%ncls, params_glob%box, params_glob%smpd, 1)
+            call frcs%new(self%ncls, self%p_ptr%box, self%p_ptr%smpd, 1)
             nk = frcs%get_filtsz()
             allocate(frc(1:nk),source=0.)
             !$omp parallel do default(shared) schedule(static) proc_bind(close)&
@@ -443,11 +443,11 @@ contains
         real,        allocatable :: frc(:)
         real(dp) :: ufrac_trec
         integer  :: icls, find, pop, filtsz
-        filtsz = fdim(params_glob%box_crop) - 1
+        filtsz = fdim(self%p_ptr%box_crop) - 1
         allocate(frc(filtsz),source=0.)
         ! In case nspace/self%ncls has changed OR volume/frcs were downsampled
         if( (clsfrcs%get_ncls() /= self%ncls) .or. (clsfrcs%get_filtsz() /= filtsz) )then
-            call clsfrcs%new(self%ncls, params_glob%box_crop, params_glob%smpd_crop, params_glob%nstates)
+            call clsfrcs%new(self%ncls, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         endif
         !$omp parallel do default(shared) private(icls,frc,find,pop) schedule(static) proc_bind(close)
         do icls = 1,self%ncls
@@ -483,9 +483,9 @@ contains
         ! write FRCs
         call clsfrcs%write(fname)
         ! e/o Trailing reconstruction
-        if( params_glob%l_trail_rec )then
+        if( self%p_ptr%l_trail_rec )then
             if( cline%defined('ufrac_trec') )then
-                ufrac_trec = real(params_glob%ufrac_trec,dp)
+                ufrac_trec = real(self%p_ptr%ufrac_trec,dp)
             else
                 ufrac_trec = real(update_frac,dp)
             endif
@@ -512,19 +512,19 @@ contains
         integer :: k, filtsz
         filtsz = clsfrcs%get_filtsz()
         allocate(frc(filtsz), filter(filtsz), gaufilter(filtsz))
-        if( params_glob%l_ml_reg )then
+        if( self%p_ptr%l_ml_reg )then
             ! no filtering, not supported yet in 2D
         else
             ! FRC-based optimal filter
             call clsfrcs%frc_getter(icls, frc)
             if( any(frc > 0.143) )then
-                call fsc2optlp_sub(size(frc), frc, filter, merged=params_glob%l_lpset)
+                call fsc2optlp_sub(size(frc), frc, filter, merged=self%p_ptr%l_lpset)
             else
                 filter = 1.0
             endif
             ! gaussian filter
             if( gaufilt )then
-                call gaussian_filter(params_glob%gaufreq, params_glob%smpd, params_glob%box, gaufilter)
+                call gaussian_filter(self%p_ptr%gaufreq, self%p_ptr%smpd, self%p_ptr%box, gaufilter)
                 ! minimum of FRC-based & gaussian filters
                 forall(k = 1:size(filter)) filter(k) = min(filter(k), gaufilter(k))
             endif
@@ -546,7 +546,7 @@ contains
         integer  :: iptcl, icls, pop, nptcls
         logical  :: l_3D
         l_3D = .false.
-        select case(trim(params_glob%oritype))
+        select case(trim(self%p_ptr%oritype))
         case('ptcl2D')
             ptcl_field => spproj%os_ptcl2D
             cls_field  => spproj%os_cls2D
@@ -555,7 +555,7 @@ contains
             cls_field  => spproj%os_cls3D
             l_3D       = .true.
         case DEFAULT
-            THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
+            THROW_HARD('Unsupported ORITYPE: '//trim(self%p_ptr%oritype))
         end select
         nptcls = ptcl_field%get_noris()
         pops   = 0

@@ -114,7 +114,7 @@ subroutine exec_test_eval_polarftcc( self, cline )
     call o%print_ori
     print *,'Shift= 0.0 0.0'
     print *,'---------------------'
-    call pftc%new(p%nptcls, [1, p%nptcls], p%kfromto)
+    call pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
     call b%vol%read(p%vols(1))
     call b%vol%mask3D_soft(p%msk)
     call b%vol%fft()
@@ -193,7 +193,7 @@ subroutine exec_test_gencorrs_fft( self, cline )
     p%kfromto(1) = 2
     p%kfromto(2) = 100
     call b%build_general_tbox(p, cline)
-    call pftc%new(p%nptcls, [1, p%nptcls], p%kfromto)
+    call pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
     call b%img_crop%memoize4polarize(pftc%get_pdim())
     pft = pftc%allocate_pft()
     do iptcl=1,p%nptcls
@@ -308,7 +308,7 @@ subroutine exec_test_polarops( self, cline )
     call cline%set('ref_type', 'polar_cavg')
     ! Calculators
     call b%init_params_and_build_strategy2D_tbox(cline, p)
-    call pftc%new(NCLS, [1,NIMGS], p%kfromto)
+    call pftc%new(p, NCLS, [1,NIMGS], p%kfromto)
     pinds = (/(i,i=1,NIMGS)/)
     call b%img_crop%memoize4polarize(pftc%get_pdim())
     pft = pftc%allocate_pft()

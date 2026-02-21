@@ -664,7 +664,7 @@ contains
         ! mask volume
         call build%vol%mask3D_soft(params%msk_crop)
         ! init search object
-        call volpft_symsrch_init(build%vol, params%pgrp, params%hp, params%lp)
+        call volpft_symsrch_init(params, build%vol, params%pgrp, params%hp, params%lp)
         ! search
         call volpft_srch4symaxis(symaxis)
         call symaxis4write%new(1, is_ptcl=.false.)
@@ -757,7 +757,7 @@ contains
         ! mask volume
         call build%vol%mask3D_soft(params%msk)
         ! symmetrize
-        call symmetrize_map(build%vol, params, build%vol2, symaxis)
+        call symmetrize_map(params, build%vol, build%vol2, symaxis)
         if( cline%defined('projfile') )then
             if( trim(params%mkdir).eq.'yes' )then
                 ! updates paths manually as project is not required in this application
@@ -833,10 +833,10 @@ contains
         call build%vol%mask3D_soft(params%msk)
         ! run test
         if(cline%defined('fname')) then
-          call symmetry_tester(build%vol, params%msk, params%hp,&
+          call symmetry_tester(params, build%vol, params%msk, params%hp,&
           &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp, params%fname)
         else
-          call symmetry_tester(build%vol, params%msk, params%hp,&
+          call symmetry_tester(params, build%vol, params%msk, params%hp,&
             &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
           endif
         ! end gracefully

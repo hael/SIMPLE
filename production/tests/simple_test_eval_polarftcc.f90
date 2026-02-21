@@ -38,7 +38,7 @@ call o%print_ori
 print *,'Shift= 0.0 0.0'
 print *,'---------------------'
 
-call pftc%new(p%nptcls, [1, p%nptcls], p%kfromto)
+call pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
 call b%vol%read(p%vols(1))
 call b%vol%mask3D_soft(p%msk)
 call b%vol%fft()

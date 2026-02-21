@@ -28,10 +28,10 @@ end type sym_stats
 
 contains
 
-    subroutine symmetrize_map( vol_in, params, vol_out, symaxis )
+    subroutine symmetrize_map( params, vol_in, vol_out, symaxis )
         use simple_parameters, only: parameters
-        class(projector),  intent(inout) :: vol_in
         class(parameters), intent(inout) :: params
+        class(projector),  intent(inout) :: vol_in
         class(image),      intent(inout) :: vol_out
         class(ori),        intent(inout) :: symaxis
         type(ori)         :: o
@@ -51,7 +51,7 @@ contains
             sym_rmats(isym,:,:) = o%get_mat()
         end do
         ! init search object
-        call volpft_symsrch_init(vol_in, params%pgrp, params%hp, params%lp)
+        call volpft_symsrch_init(params, vol_in, params%pgrp, params%hp, params%lp)
         ! identify the symmetry axis
         call volpft_srch4symaxis(symaxis)
         ! get the rotation matrix for the symaxis
@@ -136,7 +136,9 @@ contains
         call symobj%kill
     end subroutine print_subgroups
 
-    subroutine symmetry_tester( vol_in, msk, hp, lp, cn_stop, platonic, pgrp_out, fname_out )
+    subroutine symmetry_tester( params, vol_in, msk, hp, lp, cn_stop, platonic, pgrp_out, fname_out )
+        use simple_parameters, only: parameters
+        class(parameters),       intent(in)    :: params
         class(projector),        intent(inout) :: vol_in
         real,                    intent(in)    :: msk, hp, lp
         integer,                 intent(in)    :: cn_stop
@@ -197,7 +199,7 @@ contains
         ! by definition for c1
         pgrps(1)%cc = 1.0
         ccs(1)      = 1.0
-        call eval_point_groups(vol_in, msk, hp, lp, pgrps)
+        call eval_point_groups(params, vol_in, msk, hp, lp, pgrps)
         ! fetch data
         ccs(:) = pgrps(:)%cc
         ! calculate Z-scores
@@ -259,7 +261,9 @@ contains
         call fclose(fnr)
     end subroutine symmetry_tester
 
-    subroutine eval_point_groups( vol_in, msk, hp, lp, pgrps )
+    subroutine eval_point_groups( params, vol_in, msk, hp, lp, pgrps )
+        use simple_parameters, only: parameters
+        class(parameters), intent(in)    :: params
         class(projector), intent(inout) :: vol_in
         real,             intent(in)    :: msk, hp, lp
         type(sym_stats),  intent(inout) :: pgrps(:)
@@ -331,7 +335,7 @@ contains
 
         subroutine find_symaxis( pgrp )
             character(len=*), intent(in) :: pgrp
-            call volpft_symsrch_init(vol_in, pgrp, hp, lp)
+            call volpft_symsrch_init(params, vol_in, pgrp, hp, lp)
             call volpft_srch4symaxis(symaxis)
             call vol_in%ifft ! return in real-space
             ! get the rotation matrix for the symaxis
