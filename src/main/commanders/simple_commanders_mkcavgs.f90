@@ -77,7 +77,7 @@ contains
         call cline%set('mkdir', 'no')
         if( l_shmem  )then
             call xmk_cavgs_shmem%execute_safe(cline)
-            if(trim(params_glob%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
+            if(trim(params%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
             return
         endif
         ! setup the environment for distributed execution
@@ -98,7 +98,7 @@ contains
         ! end
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
-        if(trim(params_glob%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
+        if(trim(params%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
     end subroutine exec_make_cavgs_distr
 
     subroutine exec_make_cavgs( self, cline )
@@ -259,7 +259,7 @@ contains
             call cline%set('stream','no')
         endif
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        if( l_stream ) params_glob%stream = 'yes'
+        if( l_stream ) params%stream = 'yes'
         if( cline%defined('which_iter') )then
             params%refs      = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//params%ext%to_char()
             params%refs_even = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//'_even'//params%ext%to_char()
@@ -282,7 +282,7 @@ contains
                 params%eullims = build%pgrpsyms%get_eullims()
                 call build%eulspace%new(params%ncls, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(build%eulspace)
-                clw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
+                clw = min(1.0, max(0.0, 1.0-max(0.0, real(params%extr_iter-4)/real(params%extr_lim-3))))
                 call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms, clin_anneal=clw)
             else
                 call pftc%polar_cavger_new(.false., nrefs=params%ncls)

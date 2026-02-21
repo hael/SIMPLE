@@ -260,7 +260,7 @@ contains
         integer :: iw, jw, kw
         integer :: hp, kp, mp
         real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
-        pad_fac = STRIDE_GRID_PAD_FAC
+        pad_fac = OSMPL_PAD_FAC
         padding_factor_scaling = real(pad_fac**3)
         ! Work in PADDED logical coordinates
         locpd = loc * real(pad_fac)

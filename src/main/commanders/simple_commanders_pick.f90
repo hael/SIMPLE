@@ -200,7 +200,7 @@ contains
                 call o%getter('intg', intg_name)
                 call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, thumb_den, nptcls_out)
                 call spproj%set_boxfile(imic, boxfile, nptcls=nptcls_out)
-                if( params_glob%nmoldiams == 1 ) call spproj%os_mic%set(imic, 'thumb_den', thumb_den)
+                if( params%nmoldiams == 1 ) call spproj%os_mic%set(imic, 'thumb_den', thumb_den)
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
@@ -1365,7 +1365,7 @@ contains
             call o_mic%getter('intg', micname)
             if( .not.file_exists(micname)) cycle
             ! picker
-            params_glob%lp = max(params%fny, params%lp_pick)
+            params%lp = max(params%fny, params%lp_pick)
             call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, thumb_den, nptcls)
             call o_mic%set('nptcls', nptcls)
             if( nptcls > 0 )then

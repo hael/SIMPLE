@@ -2,12 +2,12 @@
 module simple_image
 use simple_core_module_api
 use simple_fftw3
-use simple_ftiter,  only: ftiter
-use simple_imgfile, only: imgfile
-use simple_winfuns, only: winfuns
-use simple_ctf,     only: ctf
 use simple_neighs
 use gnufor2
+use simple_ctf,        only: ctf
+use simple_ftiter,     only: ftiter
+use simple_imgfile,    only: imgfile
+use simple_winfuns,    only: winfuns
 implicit none
 
 public :: image, test_image, image_stack, unmemoize_mask_coords
@@ -2015,10 +2015,12 @@ interface
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, ctfparms, shift, iptcl, fplane )
+    module subroutine gen_fplane4rec( self, smpd_crop, ctfparms, shift, l_ml_reg, iptcl, fplane )
         class(image),      intent(inout) :: self
+        real,              intent(in)    :: smpd_crop
         class(ctfparams),  intent(in)    :: ctfparms
         real,              intent(in)    :: shift(2)
+        logical,           intent(in)    :: l_ml_reg
         integer,           intent(in)    :: iptcl
         type(fplane_type), intent(out)   :: fplane
     end subroutine gen_fplane4rec

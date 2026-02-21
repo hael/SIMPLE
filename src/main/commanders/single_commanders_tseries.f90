@@ -19,11 +19,6 @@ type, extends(commander_base) :: commander_tseries_motion_correct
     procedure :: execute      => exec_tseries_motion_correct
 end type commander_tseries_motion_correct
 
-type, extends(commander_base) :: commander_tseries_ctf_estimate
-  contains
-    procedure :: execute      => exec_tseries_ctf_estimate
-end type commander_tseries_ctf_estimate
-
 type, extends(commander_base) :: commander_tseries_make_pickavg
   contains
     procedure :: execute      => exec_tseries_make_pickavg
@@ -199,58 +194,6 @@ contains
         call qsys_job_finished(string('single_commanders_tseries :: exec_tseries_motion_correct'))
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_tseries_motion_correct
-
-    subroutine exec_tseries_ctf_estimate( self, cline )
-        use simple_ctf_estimate_fit, only: ctf_estimate_fit
-        class(commander_tseries_ctf_estimate), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
-        character(len=*), parameter :: pspec_fname = 'tseries_ctf_estimate_pspec.mrc'
-        character(len=*), parameter :: diag_fname  = 'tseries_ctf_estimate_diag'//JPG_EXT
-        integer,          parameter :: nmics4ctf    = 10
-        type(parameters)       :: params
-        type(builder)          :: build
-        type(ctf_estimate_fit) :: ctffit
-        type(ctfparams)        :: ctfvars
-        type(string)           :: fname_diag, tmpl_fname, docname
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('hp')      ) call cline%set('hp', 5.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp', 1.)
-        if( .not. cline%defined('dfmin')   ) call cline%set('dfmin', -0.05)
-        if( .not. cline%defined('dfmax')   ) call cline%set('dfmax',  0.05)
-        if( .not. cline%defined('astigtol')) call cline%set('astigtol', 0.001)
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        ! prep
-        tmpl_fname = get_fbody(basename(params%stk), params%ext, separator=.false.)
-        fname_diag = filepath('./',tmpl_fname//'_ctf_estimate_diag'//JPG_EXT)
-        docname    = filepath('./',tmpl_fname//'_ctf'//TXT_EXT)
-        if( build%spproj%os_mic%get_noris() /= 0 )then
-            ctfvars = build%spproj%os_mic%get_ctfvars(1)
-        else if( build%spproj%os_stk%get_noris() /= 0 )then
-            ctfvars = build%spproj%os_stk%get_ctfvars(1)
-        else
-            THROW_HARD('Insufficient information found in the project')
-        endif
-        ! command-line override
-        if( cline%defined('cs').or.cline%defined('kv').or.cline%defined('fraca') )then
-            if( .not.(cline%defined('cs').and.cline%defined('kv').and.cline%defined('fraca')) )then
-                THROW_HARD('Insufficient number of CTF parameters')
-            endif
-            ctfvars%cs    = params%cs
-            ctfvars%kv    = params%kv
-            ctfvars%fraca = params%fraca
-        endif
-        ctfvars%ctfflag = CTFFLAG_YES
-        ! fitting
-        call ctffit%fit_nano(params%stk, params%box, ctfvars, [params%dfmin,params%dfmax], [params%hp,params%lp], params%astigtol)
-        ! output
-        call ctffit%write_doc(params%stk, docname)
-        call ctffit%write_diagnostic(fname_diag, nano=.true.)
-        ! cleanup
-        call ctffit%kill
-        call build%spproj%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_TSERIES_CTF_ESTIMATE NORMAL STOP ****')
-    end subroutine exec_tseries_ctf_estimate
 
     subroutine exec_tseries_make_pickavg( self, cline )
         use simple_commanders_stkops,   only: commander_stack

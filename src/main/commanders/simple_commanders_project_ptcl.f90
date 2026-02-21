@@ -741,11 +741,11 @@ contains
         call cline_scale%set('box',  box)
         ! setup the environment for distributed execution
         params%nparts       = nparts
-        params_glob%nparts  = nparts
+        params%nparts  = nparts
         params%ncunits      = min(MAX_NCUNITS, nparts)
-        params_glob%ncunits = min(MAX_NCUNITS, nparts)
+        params%ncunits = min(MAX_NCUNITS, nparts)
         params%nthr         = 1
-        params_glob%nthr    = 1
+        params%nthr    = 1
         call qenv%new(params, nparts)
         ! prepares stack-based parts
         parts = split_nobjs_even(nstks, nparts)
@@ -769,9 +769,9 @@ contains
         ! clean
         call qsys_cleanup
         ! end gracefully
-        params_glob%nparts  = nparts_orig
-        params_glob%ncunits = ncunits_orig
-        params_glob%nthr    = nthr_orig
+        params%nparts  = nparts_orig
+        params%ncunits = ncunits_orig
+        params%nthr    = nthr_orig
         call build%spproj%kill
         call simple_end('**** SIMPLE_SCALE_PROJECT_DISTR NORMAL STOP ****')
     end subroutine exec_scale_project_distr

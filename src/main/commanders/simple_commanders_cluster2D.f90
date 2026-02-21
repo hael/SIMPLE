@@ -611,7 +611,7 @@ contains
             nice_communicator%stat_root%stage = "terminating"
             call nice_communicator%cycle()
             ! print CSV file of correlation vs particle number
-            if( trim(params_glob%print_corrs).eq.'yes' )then
+            if( trim(params%print_corrs).eq.'yes' )then
                 class_all = build%spproj%os_ptcl2D%get_all_asint('class')
                 class_max = maxval(class_all)
                 ! counting the number of particles in each class
@@ -686,19 +686,19 @@ contains
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( l_stream ) call cline%set('stream', 'yes')
-        if( params_glob%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! Whether to weight based-on the top maxpop particles
-        l_maxpop = cline%defined('maxpop') .and. (params_glob%maxpop > 0)
+        l_maxpop = cline%defined('maxpop') .and. (params%maxpop > 0)
         ! sample particles
-        if( params_glob%l_update_frac )then
-            call build%spproj_field%sample4update_rnd([1,params_glob%nptcls], params_glob%update_frac, nptcls, pinds, .true.)
+        if( params%l_update_frac )then
+            call build%spproj_field%sample4update_rnd([1,params%nptcls], params%update_frac, nptcls, pinds, .true.)
         else
-            call build%spproj_field%sample4update_all([1,params_glob%nptcls], nptcls, pinds, .true.)
+            call build%spproj_field%sample4update_all([1,params%nptcls], nptcls, pinds, .true.)
         endif
         ! communicate to project file
-        call build%spproj%write_segment_inside(params_glob%oritype, params_glob%projfile)
+        call build%spproj%write_segment_inside(params%oritype, params%projfile)
         ! more prep
-        call eulprob%new(params_glob, build, pinds)
+        call eulprob%new(params, build, pinds)
         ! generating all scores
         cline_prob_tab2D = cline
         call cline_prob_tab2D%set('prg', 'prob_tab2D' )
@@ -708,7 +708,7 @@ contains
             call xprob_tab2D%execute_safe(cline_prob_tab2D)
         else
             ! setup the environment for distributed execution
-            call qenv%new(params_glob, params_glob%nparts, nptcls=params_glob%nptcls)
+            call qenv%new(params, params%nparts, nptcls=params%nptcls)
             call cline_prob_tab2D%gen_job_descr(job_descr)
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
@@ -717,20 +717,20 @@ contains
         call eulprob%read_table_parts_to_glob
         ! perform assignment
         if( l_stream )then
-            select case(trim(params_glob%refine))
+            select case(trim(params%refine))
                 case('prob_smpl')
                     call eulprob%assign_smpl(build%spproj_field, l_maxpop)
                 case DEFAULT
                     THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
             end select
         else
-            if( params_glob%which_iter == 1 )then
+            if( params%which_iter == 1 )then
                 ! Always greedy assignement with first iteration
                 call eulprob%assign_greedy(l_maxpop)
             else
-                select case(trim(params_glob%refine))
+                select case(trim(params%refine))
                 case('prob')
-                    if( params_glob%extr_iter <= params_glob%extr_lim )then
+                    if( params%extr_iter <= params%extr_lim )then
                         call eulprob%normalize_table
                         call eulprob%assign_prob(build%spproj_field, l_maxpop)
                     else
@@ -786,7 +786,7 @@ contains
         endif
         ! Resolution range
         frac_srch_space = build%spproj_field%get_avg('frac')
-        if( file_exists(params_glob%frcs) ) call build%clsfrcs%read(params_glob%frcs)
+        if( file_exists(params%frcs) ) call build%clsfrcs%read(params%frcs)
         call set_bp_range2D( build, cline, params%which_iter, frac_srch_space )
         ! Read references
         l_alloc_read_cavgs = .true.
@@ -946,7 +946,7 @@ contains
         cnt1 = 0
         cnt2 = 0
         ! pca allocation
-        select case(trim(params_glob%pca_mode))
+        select case(trim(params%pca_mode))
             case('ppca')
                 allocate(ppca_inmem :: pca_ptr)
             case('pca_svd')
@@ -1050,8 +1050,8 @@ contains
             call cavg%write(fname_cavgs_denoised, i)
         end do
         if( trim(params%pca_ori_stk) .eq. 'yes' )then
-            call  img%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
-            call timg%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
+            call  img%new([params%boxpd,params%boxpd,1],params%smpd, wthreads=.false.)
+            call timg%new([params%boxpd,params%boxpd,1],params%smpd, wthreads=.false.)
             logi_lims      = img%loop_lims(2)
             cyc_lims       = img%loop_lims(3)
             cyc_limsR(:,1) = cyc_lims(1,:)
@@ -1152,7 +1152,7 @@ contains
         if(.not. l_stream) call progressfile_update(conv%get('progress'))
         call cline%set('frac_srch', conv%get('frac_srch'))
         ! activates shift search
-        if( params_glob%l_doshift ) call cline%set('trs', params_glob%trs)
+        if( params%l_doshift ) call cline%set('trs', params%trs)
         if( converged )then
             call cline%set('converged', 'yes')
         else

@@ -70,7 +70,7 @@ contains
         endif
         if( spproj_field%get_nevenodd() == 0 )then
             call spproj_field%partition_eo
-            call spproj%write_segment_inside(params_glob%oritype, params%projfile)
+            call spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -124,7 +124,7 @@ contains
         ! l_update_frac, we sample uniformly AND do not write the corresponding field
         l_scale_update_frac = .false.
         if( params%l_update_frac )then
-            call build%spproj_field%sample4update_rnd([params%fromp,params%top], params_glob%update_frac, nptcls_part_sel, pinds, .false. )
+            call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, nptcls_part_sel, pinds, .false. )
             l_scale_update_frac = .true.
         else
             call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, .false.)
@@ -152,7 +152,7 @@ contains
                 call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, pspec)
                 if( l_scale_update_frac )then
                     ! To account for spectra not included in sampling and yield the correct average
-                    sigma2(:,iptcl) = pspec / (2.0 * params_glob%update_frac)
+                    sigma2(:,iptcl) = pspec / (2.0 * params%update_frac)
                 else
                     sigma2(:,iptcl) = pspec / 2.0
                 endif
@@ -232,7 +232,7 @@ contains
             pspecs(:,pspec_l:pspec_u) = sigma2_arrays(ipart)%sigma2(:,:)
         end do
         ! generate group averages & write
-        if( params_glob%l_sigma_glob )then
+        if( params%l_sigma_glob )then
             ngroups = 1
         else
             ngroups = 0
@@ -250,7 +250,7 @@ contains
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
             eo = build%spproj_field%get_eo(iptcl) ! 0/1
-            if( params_glob%l_sigma_glob )then
+            if( params%l_sigma_glob )then
                 igroup = 1
             else
                 igroup = build%spproj_field%get_int(iptcl, 'stkind')
@@ -277,7 +277,7 @@ contains
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
             eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
-            if( params_glob%l_sigma_glob )then
+            if( params%l_sigma_glob )then
                 igroup = 1
             else
                 igroup = nint(build%spproj_field%get(iptcl,'stkind'))
@@ -362,29 +362,29 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! read sigmas from binfiles
-        do ipart = 1,params_glob%nparts
-            sigma2_array%fname = SIGMA2_FBODY//int2str_pad(ipart,params_glob%numlen)//'.dat'
+        do ipart = 1,params%nparts
+            sigma2_array%fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
             call binfile%new_from_file(sigma2_array%fname)
             call binfile%read(sigma2_array%sigma2)
             fromp = lbound(sigma2_array%sigma2,2)
             top   = ubound(sigma2_array%sigma2,2)
-            if( (fromp<1).or.(top>params_glob%nptcls) )then
+            if( (fromp<1).or.(top>params%nptcls) )then
                 THROW_HARD('commander_euclid; exec_calc_group_sigmas; file ' // sigma2_array%fname%to_char() // ' has ptcl range ' // int2str(fromp) // '-' // int2str(top))
             end if
             if( ipart == 1 )then
                 call binfile%get_resrange(kfromto)
-                allocate(pspecs(kfromto(1):kfromto(2),params_glob%nptcls))
+                allocate(pspecs(kfromto(1):kfromto(2),params%nptcls))
             endif
             pspecs(:,fromp:top) = sigma2_array%sigma2(:,:)
             deallocate(sigma2_array%sigma2)
         end do
         call binfile%kill
-        if( params_glob%l_sigma_glob )then
+        if( params%l_sigma_glob )then
             ngroups = 1
             allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
             !$omp parallel do default(shared) private(iptcl,eo,w)&
             !$omp schedule(static) proc_bind(close) reduction(+:group_pspecs,group_weights)
-            do iptcl = 1,params_glob%nptcls
+            do iptcl = 1,params%nptcls
                 if( build%spproj_field%get_state(iptcl) == 0 ) cycle
                 eo = build%spproj_field%get_eo(iptcl) ! 0/1
                 w  = real(build%spproj_field%get(iptcl,'w'),dp)
@@ -397,14 +397,14 @@ contains
             ngroups = 0
             !$omp parallel do default(shared) private(iptcl,igroup)&
             !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
-            do iptcl = 1,params_glob%nptcls
+            do iptcl = 1,params%nptcls
                 if( build%spproj_field%get_state(iptcl) == 0 ) cycle
                 igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
                 ngroups = max(igroup,ngroups)
             enddo
             !$omp end parallel do
             allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
-            do iptcl = 1,params_glob%nptcls
+            do iptcl = 1,params%nptcls
                 if( build%spproj_field%get_state(iptcl) == 0 ) cycle
                 eo     = build%spproj_field%get_eo(iptcl) ! 0/1
                 igroup = nint(build%spproj_field%get(iptcl,'stkind'))
@@ -422,7 +422,7 @@ contains
             end do
         end do
         ! write group sigmas to starfile
-        starfile_fname = SIGMA2_GROUP_FBODY//int2str(params_glob%which_iter)//STAR_EXT
+        starfile_fname = SIGMA2_GROUP_FBODY//int2str(params%which_iter)//STAR_EXT
         call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
         ! cleanup
         call build%kill_general_tbox

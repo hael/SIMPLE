@@ -3,7 +3,7 @@ module simple_pspec_thumb_iter
 use simple_core_module_api
 use simple_image,      only: image
 use simple_cmdline,    only: cmdline
-use simple_parameters, only: params_glob
+use simple_parameters, only: parameters
 implicit none
 
 public :: pspec_thumb_iter
@@ -21,8 +21,9 @@ end type pspec_thumb_iter
 
 contains
 
-    subroutine iterate( self, orientation, moviename_intg, dir_out )
+    subroutine iterate( self, params, orientation, moviename_intg, dir_out )
         class(pspec_thumb_iter), intent(inout) :: self
+        class(parameters),       intent(in)    :: params
         class(ori),              intent(inout) :: orientation
         class(string),           intent(in)    :: moviename_intg, dir_out
         type(string) :: fbody_here, ext
@@ -47,10 +48,10 @@ contains
         call self%moviesum%new(ldim, smpd)
         call self%moviesum%read(moviename_intg)
         ! generate power-spectra
-        call self%moviesum%mic2spec(params_glob%pspecsz, self%speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec)
+        call self%moviesum%mic2spec(params%pspecsz, self%speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec)
         call self%pspec%write(self%moviename_pspec)
         ! generate thumbnail
-        scale         = real(params_glob%pspecsz)/real(ldim(1))
+        scale         = real(params%pspecsz)/real(ldim(1))
         ldim_thumb(1) = round2even(real(ldim(1))*scale)
         ldim_thumb(2) = round2even(real(ldim(2))*scale)
         ldim_thumb(3) = 1

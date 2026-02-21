@@ -4,7 +4,6 @@ use simple_core_module_api
 use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_ctf_estimate_cost, only: ctf_estimate_cost1D,ctf_estimate_cost2D,ctf_estimate_cost4Dcont
-use simple_parameters,        only: params_glob
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
 use simple_timer
@@ -67,7 +66,6 @@ contains
     ! constructor
     procedure          :: new
     procedure          :: read_doc
-    procedure          :: fit_nano
     ! getters
     procedure          :: get_ccfit
     procedure          :: get_pspec
@@ -202,85 +200,6 @@ contains
         if( BENCH ) self%rt_tot = toc(self%t_tot)
     end subroutine new
 
-    ! constructs & fit
-    subroutine fit_nano( self, forctf, box, parms, dfrange, resrange, astigtol_in)
-        class(ctf_estimate_fit), intent(inout) :: self
-        class(string),           intent(inout) :: forctf      ! background average spectrum
-        integer,                 intent(in)    :: box
-        class(ctfparams),        intent(inout) :: parms
-        real,                    intent(in)    :: dfrange(2)  !< defocus range, [30.0,5.0] default
-        real,                    intent(in)    :: resrange(2) !< resolution range, [30.0,5.0] default
-        real,                    intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
-        type(image)          :: spec
-        logical, allocatable :: graphene_msk(:)
-        integer :: foo(3),nimgs,sh
-        call self%kill
-        ! set constants
-        self%parms%smpd         = parms%smpd
-        self%parms%cs           = parms%Cs
-        self%parms%kv           = parms%kV
-        self%parms%fraca        = parms%fraca
-        self%parms%l_phaseplate = parms%l_phaseplate
-        if(.not.file_exists(forctf)) THROW_HARD('Could not find file:'//forctf%to_char()//'; new_nano')
-        self%box      = box
-        self%ldim_box = [self%box,self%box,1]
-        self%ldim_mic = self%ldim_box
-        self%smpd     = self%parms%smpd
-        call find_ldim_nptcls(forctf,foo,nimgs)
-        if( foo(1) /= box .or. foo(2) /= box )then
-            THROW_WARN('Image    dimensions: '//int2str(foo(1))//' x '//int2str(foo(1)))
-            THROW_WARN('Provided dimension:  '//int2str(box))
-            THROW_HARD('Inconsistent dimensions in '//forctf%to_char()//'; new_nano')
-        endif
-        if( nimgs > 1 )then
-            THROW_HARD('More than one image in '//forctf%to_char()//'; new_nano')
-        endif
-        if( resrange(1) > resrange(2) )then
-            self%hp = resrange(1)
-            self%lp = max(2.*self%smpd,resrange(2))
-        else
-            THROW_HARD('invalid resolution range; fit_nano')
-        endif
-        ! spectrum objects
-        call self%pspec%new(self%ldim_box, self%smpd)
-        call self%pspec_ctf%new(self%ldim_box, self%smpd)
-        self%flims      = self%pspec%loop_lims(3) ! redundant
-        self%flims1d    = [0,maxval(abs(self%flims(1:2,:)))]
-        self%freslims1d = [self%pspec%get_find(self%hp),self%pspec%get_find(self%lp)]
-        allocate(self%roavg_spec1d(self%flims1d(1):self%flims1d(2)),source=0.)
-        allocate(self%resmsk1D(self%flims1d(1):self%flims1d(2)), source=.false.)
-        ! graphene
-        graphene_msk = calc_graphene_mask(self%box,self%smpd)
-        do sh = self%freslims1d(1),self%freslims1d(2)
-            self%resmsk1D(sh) = graphene_msk(sh)
-        enddo
-        ! read spectrum
-        call spec%new(self%ldim_box, self%smpd)
-        call spec%read(forctf)
-        call self%pspec%copy(spec)
-        ! search related
-        if( dfrange(1) < dfrange(2) )then
-            self%df_lims = dfrange
-            self%df_step = (self%df_lims(2)-self%df_lims(1)) / real(NSTEPS)
-        else
-            THROW_HARD('invalid defocus range; fit_nano')
-        endif
-        self%astigtol = astigtol_in
-        ! other things
-        self%ntiles    = 0
-        self%npatches  = 0
-        self%ntotpatch = 0
-        ! construct CTF object
-        self%tfun = ctf(self%parms%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
-        ! generate correlation mask
-        call self%gen_resmsk
-        ! Actual fitting
-        call self%fit(parms, spec, nano=.true.)
-        ! cleanup
-        call spec%kill
-        self%exists = .true.
-    end subroutine fit_nano
-
     ! constructor for reading and evaluating the polynomials only
     ! with routine pix2polyvals
     subroutine read_doc( self, fname )
@@ -404,9 +323,10 @@ contains
     ! DOERS
 
     !>  Performs initial grid search & 2D refinement, calculate stats
-    subroutine fit( self, parms, spec, nano)
+    subroutine fit( self, parms, ctfresthreshold,spec, nano)
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctfparams),         intent(inout) :: parms
+        real,                    intent(in)    :: ctfresthreshold
         class(image),  optional, intent(inout) :: spec
         logical,       optional, intent(in)    :: nano
         integer :: freslims1d(2)
@@ -440,7 +360,7 @@ contains
         if( BENCH ) self%rt_2D = toc(self%t)
         ! calculate CTF stats
         if( BENCH ) self%t = tic()
-        call self%calc_ctfres
+        call self%calc_ctfres(ctfresthreshold)
         if( BENCH ) self%rt_stats = toc(self%t)
         ! calculate ice stats
         if( BENCH ) self%t = tic()
@@ -947,8 +867,9 @@ contains
     end subroutine ft2img
 
     ! as per CTFFIND4.1.x
-    subroutine calc_ctfres( self )
+    subroutine calc_ctfres( self, ctfresthreshold )
         class(ctf_estimate_fit), intent(inout) :: self
+        real,                    intent(in)    :: ctfresthreshold
         real,    parameter   :: target_smpd     = 1.40       ! Angs
         real,    parameter   :: min_angdist     = 10.        ! degrees
         integer, parameter   :: cross_halfwidth = 10         ! pixels
@@ -1059,7 +980,7 @@ contains
         call calc_frc
         sh = max(1, ctfres_shell())
         self%ctfres = max(2.0*smpd_sc,min(smpd_sc*real(self%box)/real(sh), self%hp))
-        if( self%ctfres > self%hp-0.001 ) self%ctfres = params_glob%ctfresthreshold
+        if( self%ctfres > self%hp-0.001 ) self%ctfres = ctfresthreshold
         if( DEBUG_HERE )then
             print *,'self%ctfres ',glob_count, self%ctfres, sh
             call self%plot_ctf(string(int2str(glob_count)//'_ctf.eps'), nshells, abs(ctf1d), spec1d_rank, frc, smpd_sc)

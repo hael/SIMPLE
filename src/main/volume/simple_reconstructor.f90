@@ -240,7 +240,7 @@ contains
         fpllims_pd = fpl%frlims
         ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
         fpllims_pd = fpl%frlims
-        pf         = STRIDE_GRID_PAD_FAC
+        pf         = OSMPL_PAD_FAC
         pf2        = real(pf*pf)
         fpllims    = fpllims_pd
         fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
