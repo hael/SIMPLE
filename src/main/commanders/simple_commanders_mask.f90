@@ -103,7 +103,7 @@ contains
             call imgs(i)%read(params%stk, i)
             call masks(i)%copy(imgs(i))
         end do
-        call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
+        call automask2D(params, masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
         do i = 1,n
             call imgs(i)%mul(masks(i))
             call imgs(i)%write(string('automasked.mrc'), i)
@@ -134,15 +134,15 @@ contains
         if( cline%defined('thres') )then
             if( params%thres < TINY )then
                 write(logfhandle,'(A)') '>>> GENERATING FILTERED VOLUME FOR THRESHOLD DETERMINATION'
-                call mskvol%automask3D_filter(build%vol, build%vol_odd,  build%vol2)
+                call mskvol%automask3D_filter(params, build%vol, build%vol_odd,  build%vol2)
                 fname_out = 'automask3D_filtered.mrc'
             else
-                call mskvol%automask3D(build%vol, build%vol_odd, build%vol2, l_tight, params%thres)
+                call mskvol%automask3D(params, build%vol, build%vol_odd, build%vol2, l_tight, params%thres)
                 call mskvol%write(string(MSKVOL_FILE))
                 fname_out = 'automask3D_masked_vol.mrc'
             endif
         else
-            call mskvol%automask3D(build%vol, build%vol_odd, build%vol2, l_tight)
+            call mskvol%automask3D(params, build%vol, build%vol_odd, build%vol2, l_tight)
             call mskvol%write(string(MSKVOL_FILE))
             fname_out = 'automask3D_masked_vol.mrc'
         endif
@@ -164,7 +164,7 @@ contains
         call build%build_spproj(params, cline)
         call build%build_general_tbox(params, cline)
         call build%vol%read(params%vols(1))
-        call mskvol%estimate_spher_mask_diam(build%vol, params%amsklp, msk_in_pix)
+        call mskvol%estimate_spher_mask_diam(params, build%vol, params%amsklp, msk_in_pix)
         write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * params%smpd
         call build%vol%mask3D_soft(msk_in_pix)
         if( cline%defined('outfile') )then

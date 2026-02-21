@@ -609,9 +609,9 @@ contains
                                     call vol_o%new([box,box,box], smpd)
                                     call vol_o%read(fname_odd)
                                     if( cline%defined('thres') )then
-                                        call mskvol%automask3D(vol_e, vol_o, trim(params%automsk).eq.'tight', params%thres)
+                                        call mskvol%automask3D(params, vol_e, vol_o, trim(params%automsk).eq.'tight', params%thres)
                                     else
-                                        call mskvol%automask3D(vol_e, vol_o, trim(params%automsk).eq.'tight')
+                                        call mskvol%automask3D(params, vol_e, vol_o, trim(params%automsk).eq.'tight')
                                     endif
                                     call mskvol%write(string(MSKVOL_FILE))
                                     params%mskfile   = MSKVOL_FILE

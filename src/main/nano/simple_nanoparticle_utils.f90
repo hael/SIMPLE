@@ -27,7 +27,6 @@ contains
     ! - reference atoms: atoms2
     ! - reg_atom = out_scale * (out_mat * atoms1 + out_trans)
     subroutine atoms_register( atoms1, atoms2, reg_atom, maxits, out_mat, out_trans, out_scale)
-        use simple_parameters, only: params_glob
         real,              intent(in)    :: atoms1(:,:)
         real,              intent(in)    :: atoms2(:,:)
         real,              intent(inout) :: reg_atom(:,:)
@@ -55,7 +54,7 @@ contains
             allocate(small_pos(3,N1), source=atoms1)
             allocate(large_pos(3,N2), source=atoms2)
         endif
-        allocate(costs(N2**3),perm(3,N2**3),taken(N2,params_glob%nthr))
+        allocate(costs(N2**3),perm(3,N2**3),taken(N2,nthr_glob))
         glob_cost = huge(glob_cost)
         call seed_rnd
         stoch_iters = 1

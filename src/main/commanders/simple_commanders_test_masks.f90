@@ -286,6 +286,7 @@ end subroutine exec_test_msk_routines
 subroutine exec_test_nano_mask( self, cline )
     use simple_image,     only: image
     use simple_image_msk, only: automask2D
+    use simple_parameters, only: parameters
     class(commander_test_nano_mask),    intent(inout) :: self
     class(cmdline),                     intent(inout) :: cline
     ! constants
@@ -293,9 +294,17 @@ subroutine exec_test_nano_mask( self, cline )
     real,             parameter :: SMPD=0.358
     integer,          parameter :: NGROW=3, WINSZ=1, EDGE=12
     ! variables
+    type(parameters)            :: params
     type(image),    allocatable :: imgs(:)
     real,           allocatable :: diams(:), shifts(:,:)
     integer                     ::  n, i, ldim(3)
+    ! setup parameters
+    call cline%set('smpd',    SMPD)
+    call cline%set('amsklp',  20.)
+    call cline%set('msk',     100.)
+    call cline%set('automsk', 'no')
+    call cline%set('part',    1.)
+    call params%new(cline)
     ! read images
     call find_ldim_nptcls(string(STK), ldim, n)
     allocate(imgs(n))
@@ -304,7 +313,7 @@ subroutine exec_test_nano_mask( self, cline )
         call imgs(i)%read(string(STK), i)
     end do
     ! mask
-    call automask2D(imgs, NGROW, WINSZ, EDGE, diams, shifts)
+    call automask2D(params, imgs, NGROW, WINSZ, EDGE, diams, shifts)
     call simple_end('**** SIMPLE_TEST_NANO_MASK_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_nano_mask
 
@@ -406,7 +415,7 @@ subroutine exec_test_ptcl_center( self, cline )
     call ptcl_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
     call vol%pad(vol_pad)
     call vol_pad%fft
-    call vol_pad%expand_cmat
+    call vol_pad%expand_cmat(p%box)
     call spiral%get_ori(ORI_IND, o1)
     call vol_pad%fproject(o1,ptcl_pad)
     call ptcl_pad%ifft

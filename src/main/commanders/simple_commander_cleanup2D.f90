@@ -86,7 +86,7 @@ contains
 
             allocate(stk(n_cavgs_subproj))
             stk = read_cavgs_into_imgarr(spproj, labels == jcls)
-            call automask2D(stk, params%ngrow, nint(params%winsz), params%edge, diams_arr, shifts)
+            call automask2D(params, stk, params%ngrow, nint(params%winsz), params%edge, diams_arr, shifts)
             deallocate(stk)
             call calc_stats(diams_arr, diam_stats)
             mskdiam = diam_stats%med

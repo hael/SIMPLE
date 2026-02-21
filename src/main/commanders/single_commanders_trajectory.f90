@@ -162,9 +162,9 @@ contains
         call simple_mkdir(dir)
         if( allocated(frame_names) )then
             if( allocated(intg_names) )then
-                call init_tracker( nint(boxdata(1,1:2)), intg_names, frame_names, dir, params%fbody)
+                call init_tracker(params, nint(boxdata(1,1:2)), intg_names, frame_names, dir, params%fbody)
             else
-                call init_tracker( nint(boxdata(1,1:2)), frame_names, frame_names, dir, params%fbody)
+                call init_tracker(params, nint(boxdata(1,1:2)), frame_names, frame_names, dir, params%fbody)
             endif
         endif
         if( cline%defined('fromf') )then

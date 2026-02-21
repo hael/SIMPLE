@@ -408,7 +408,7 @@ contains
         do icls = 1, nsel
             call stkio_r%get_image(selection(icls), cavgs(icls))
         end do
-        call automask2D(cavgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)       
+        call automask2D(params, cavgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)       
         box_for_pick    = min(round2even(maxval(diams) / smpd + 2. * COSMSKHALFWIDTH), ldim(1))
         moldiam         = smpd * box_for_pick
         mskdiam         = moldiam * MSK_EXP_FAC

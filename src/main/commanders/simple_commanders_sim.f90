@@ -108,7 +108,7 @@ contains
         call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
         call build%vol%pad(vol_pad)
         call vol_pad%fft
-        call vol_pad%expand_cmat
+        call vol_pad%expand_cmat(params%box)
         write(logfhandle,'(A)') '>>> GENERATING IMAGES'
         cnt  = 0
         ntot = params%top-params%fromp+1

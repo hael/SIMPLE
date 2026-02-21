@@ -3,7 +3,7 @@ module simple_motion_correct_iter
 use simple_core_module_api
 use simple_image,      only: image
 use simple_cmdline,    only: cmdline
-use simple_parameters, only: params_glob
+use simple_parameters, only: parameters
 use simple_stackops,   only: frameavg_stack
 use simple_motion_correct
 implicit none
@@ -33,8 +33,9 @@ end type motion_correct_iter
 
 contains
 
-    subroutine iterate( self, cline, ctfvars, orientation, fbody, frame_counter, moviename, dir_out, gainref_fname, tseries )
+    subroutine iterate( self, params, cline, ctfvars, orientation, fbody, frame_counter, moviename, dir_out, gainref_fname, tseries )
         class(motion_correct_iter), intent(inout) :: self
+        class(parameters),          intent(inout) :: params
         class(cmdline),             intent(inout) :: cline
         type(ctfparams),            intent(inout) :: ctfvars
         class(ori),                 intent(inout) :: orientation
@@ -58,7 +59,7 @@ contains
         ! sanity check
         if( fname2format(moviename) .eq. 'K' )then
             ! eer movie
-            if( (.not.params_glob%l_dose_weight) .and. (.not.cline%defined('eer_fraction')) )then
+            if( (.not.params%l_dose_weight) .and. (.not.cline%defined('eer_fraction')) )then
                 THROW_HARD('EER_FRACTION must be defined when TOTAL_DOSE is absent!')
             endif
         endif
@@ -82,25 +83,25 @@ contains
         self%moviename_forctf = dir_out%to_char()//fbody_here%to_char()//FORCTF_SUFFIX//MRC_EXT
         self%moviename_thumb  = dir_out%to_char()//fbody_here%to_char()//THUMBNAIL_SUFFIX//JPG_EXT
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
-        if( params_glob%nframesgrp > 0 )then
+        if( params%nframesgrp > 0 )then
             self%moviename = 'tmpnframesgrpmovie'//MRC_EXT
-            call frameavg_stack(moviename, self%moviename, params_glob%nframesgrp, ctfvars%smpd)
+            call frameavg_stack(moviename, self%moviename, params%nframesgrp, ctfvars%smpd)
         else
             self%moviename = moviename
         endif
         ! determines whether to perform patch-based step & patch size
-        call calc_npatches(self%moviename, ctfvars%smpd, cline, orientation)
-        motion_correct_with_patched = (params_glob%mcpatch.eq.'yes') .and. (params_glob%nxpatch*params_glob%nypatch > 1)
+        call calc_npatches(params, self%moviename, ctfvars%smpd, cline, orientation)
+        motion_correct_with_patched = (params%mcpatch.eq.'yes') .and. (params%nxpatch*params%nypatch > 1)
         bid = 0.0
         ! ALIGNEMENT
-        if( trim(params_glob%algorithm) .eq. 'iso' ) motion_correct_with_patched = .false.
+        if( trim(params%algorithm) .eq. 'iso' ) motion_correct_with_patched = .false.
         ! b-factors for alignment
         bfac_here = -1.
-        if( cline%defined('bfac') ) bfac_here = params_glob%bfac
+        if( cline%defined('bfac') ) bfac_here = params%bfac
         ! check, increment counter & print
         write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', moviename%to_char()
         ! execute the motion_correction
-        call motion_correct_iso(self%moviename, ctfvars, bfac_here, self%moviesum, gainref_fname=gainref_fname)
+        call motion_correct_iso(params, self%moviename, ctfvars, bfac_here, self%moviesum, gainref_fname=gainref_fname)
         call motion_correct_mic2spec(self%moviesum, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
         call self%moviesum%kill
         ! shifts frames accordingly
@@ -111,7 +112,7 @@ contains
         call motion_correct_iso_kill
         ! Patch based approach
         if( motion_correct_with_patched ) then
-            select case(trim(params_glob%mcconvention))
+            select case(trim(params%mcconvention))
                 case('first','relion')
                     ! the threshold is slighly increased because goodness of fit is always higher
                     ! when calculated with reference to the first frame
@@ -119,10 +120,10 @@ contains
                 case DEFAULT
                     effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
             end select
-            nxpatch = params_glob%nxpatch
-            nypatch = params_glob%nypatch
-            call motion_correct_patched(bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
-            if( trim(params_glob%mcpatch_thres).eq.'no' )then
+            nxpatch = params%nxpatch
+            nypatch = params%nypatch
+            call motion_correct_patched(params, bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
+            if( trim(params%mcpatch_thres).eq.'no' )then
                 patch_success = .true. ! always accept patch solution
                 if( any(goodnessoffit >= effective_patch_fit_threshold) )then
                     THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. The patch-based correction will however be used')
@@ -137,7 +138,7 @@ contains
                     nypatch = max(1,nint(real(nypatch)/2.))
                     if( nxpatch * nypatch >= 2 )then
                         patched_shift_fname = dir_out%to_char()//fbody_here%to_char()//'_shifts.eps'
-                        call motion_correct_patched(bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
+                        call motion_correct_patched(params, bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
                         patch_success = all(goodnessoffit < effective_patch_fit_threshold)
                     endif
                 endif
@@ -209,21 +210,22 @@ contains
         call motion_correct_kill_common
     end subroutine iterate
 
-    subroutine calc_npatches( moviename, smpd, cline, o )
-        class(string),  intent(in)    :: moviename
-        real,           intent(in)    :: smpd
-        class(cmdline), intent(inout) :: cline
-        class(ori),     intent(inout) :: o
+    subroutine calc_npatches( params, moviename, smpd, cline, o )
+        class(parameters), intent(inout) :: params
+        class(string),     intent(in)    :: moviename
+        real,              intent(in)    :: smpd
+        class(cmdline),    intent(inout) :: cline
+        class(ori),        intent(inout) :: o
         integer :: patchsz(2),pixsz(2),nx,ny
         real    :: physz(2)
-        if( trim(params_glob%mcpatch).eq.'yes' )then
+        if( trim(params%mcpatch).eq.'yes' )then
             pixsz = nint([o%get('xdim'),o%get('ydim')])     ! micrograph pixel dimensions
             physz = real(pixsz) * smpd                      ! stage size in Angs
             nx    = max(1, floor(physz(1) / MC_PATCHSZ))    ! # of patches along x
             ny    = max(1, floor(physz(2) / MC_PATCHSZ))    ! # of patches along y
             ! Micrograph scaled pixel dimensions
-            pixsz = nint(real(pixsz) * params_glob%scale_movies)
-            if( fname2format(moviename) .eq. 'K' ) pixsz = pixsz * params_glob%eer_upsampling
+            pixsz = nint(real(pixsz) * params%scale_movies)
+            if( fname2format(moviename) .eq. 'K' ) pixsz = pixsz * params%eer_upsampling
             ! Patch size in pixel
             patchsz(1) = nint(real(pixsz(1)) / real(nx))
             patchsz(2) = nint(real(pixsz(2)) / real(ny))
@@ -233,14 +235,14 @@ contains
             ! Effective number of patches
             nx = max(1, floor(real(pixsz(1)) / real(patchsz(1))))
             ny = max(1, floor(real(pixsz(2)) / real(patchsz(2))))
-            if( .not.cline%defined('nxpatch') ) params_glob%nxpatch = nx
-            if( .not.cline%defined('nypatch') ) params_glob%nypatch = ny
+            if( .not.cline%defined('nxpatch') ) params%nxpatch = nx
+            if( .not.cline%defined('nypatch') ) params%nypatch = ny
         else
-            params_glob%nxpatch = 1
-            params_glob%nypatch = 1
+            params%nxpatch = 1
+            params%nypatch = 1
         endif
-        call o%set('nxpatch', real(params_glob%nxpatch))
-        call o%set('nypatch', real(params_glob%nypatch))
+        call o%set('nxpatch', real(params%nxpatch))
+        call o%set('nypatch', real(params%nypatch))
     end subroutine calc_npatches
 
     function get_moviename( self, which ) result( moviename )

@@ -1075,7 +1075,7 @@ contains
             ! FT volume
             call build%vol%pad_fft(build%vol_pad)
             ! expand for fast interpolation & correct for norm when clipped
-            call build%vol_pad%expand_cmat
+            call build%vol_pad%expand_cmat(params_glob%box)
             !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj
@@ -1099,7 +1099,7 @@ contains
             ! FT volume
             call build%vol_odd%pad_fft(build%vol_odd_pad)
             ! expand for fast interpolation & correct for norm when clipped
-            call build%vol_odd_pad%expand_cmat
+            call build%vol_odd_pad%expand_cmat(params_glob%box)
             !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
             do iproj=1,params_glob%nspace
                 iref = (s - 1) * params_glob%nspace + iproj

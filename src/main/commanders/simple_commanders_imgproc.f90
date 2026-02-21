@@ -150,7 +150,7 @@ contains
             call imgs(i)%new([params%box,params%box,1],params%smpd)
             call imgs(i)%read(params%stk, i)
         end do
-        call automask2D(imgs, 0, 0, params%edge, diams, shifts)
+        call automask2D(params, imgs, 0, 0, params%edge, diams, shifts)
         diams_nonzero = pack(diams, mask=diams > TINY)
         call calc_stats(diams_nonzero, diamstats)
         ! output

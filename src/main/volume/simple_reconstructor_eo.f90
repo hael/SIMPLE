@@ -470,7 +470,7 @@ contains
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
                 else if( trim(params_glob%automsk).eq.'yes' )then
-                    call self%envmask%automask3D(even, odd, trim(params_glob%automsk).eq.'tight')
+                    call self%envmask%automask3D(params_glob, even, odd, trim(params_glob%automsk).eq.'tight')
                     call even%zero_env_background(self%envmask)
                     call odd%zero_env_background(self%envmask)
                     call even%mul(self%envmask)
@@ -535,7 +535,7 @@ contains
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
                 else if( trim(params_glob%automsk).eq.'yes' )then
-                    call self%envmask%automask3D(even, odd, trim(params_glob%automsk).eq.'tight')
+                    call self%envmask%automask3D(params_glob, even, odd, trim(params_glob%automsk).eq.'tight')
                     call even%zero_env_background(self%envmask)
                     call odd%zero_env_background(self%envmask)
                     call even%mul(self%envmask)
