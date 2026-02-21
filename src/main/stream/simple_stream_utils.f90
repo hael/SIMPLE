@@ -371,14 +371,14 @@ contains
         type(cmdline)                  :: cline
         type(stack_io)                 :: stkio_r, stkio_w
         type(image),       allocatable :: cavgs(:)
-        class(parameters), pointer     :: params_ptr
+        class(parameters), pointer     :: p_ptr
         real,              allocatable :: diams(:), shifts(:,:)
         logical,           parameter   :: DEBUG = .false.
         real    :: maxdiam, mskrad_in_pix, moldiam
         integer :: ldim(3), icls, ncls, nsel
         nsel = size(selection)
         if( nsel == 0 ) return
-        params_ptr => params_glob ! for safe call to automask2D
+        p_ptr => params_glob ! for safe call to automask2D
         nullify(params_glob)
         write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', nsel,' clusters'
         write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
@@ -441,8 +441,8 @@ contains
         ! write jpeg
         call mrc2jpeg_tiled(string(STREAM_SELECTED_REFS)//STK_EXT, string(STREAM_SELECTED_REFS)//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
         ! put back pointer to params_glob
-        params_glob => params_ptr
-        nullify(params_ptr)
+        params_glob => p_ptr
+        nullify(p_ptr)
     end subroutine process_selected_refs
     
     function get_latest_optics_map_id(optics_dir) result (lastmap)

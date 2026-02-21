@@ -6,7 +6,7 @@ use simple_ctf,               only: ctf
 use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2,     only: euclid_sigma2, eucl_sigma2_glob
 use simple_image,             only: image
-use simple_parameters,        only: params_glob
+use simple_parameters,        only: parameters
 use simple_stack_io,          only: stack_io
 implicit none
 
@@ -53,7 +53,8 @@ type(image),         allocatable :: cavgs_odd_part(:)         !< -"-
 type(image),         allocatable :: ctfsqsums_even_bak(:)     !< CTF**2 sums for Wiener normalisation
 type(image),         allocatable :: ctfsqsums_odd_bak(:)      !< -"-
 type(euclid_sigma2)              :: eucl_sigma
-class(builder),      pointer     :: build_ptr => null()
+class(builder),      pointer     :: b_ptr => null()
+class(parameters),   pointer     :: p_ptr => null()
 logical,             allocatable :: pptcl_mask(:)
 logical                          :: l_ml_reg           = .false.  !< Maximum-Likelihood regularization
 logical                          :: l_alloc_read_cavgs = .true.   !< whether to allocate sums and read partial sums
@@ -64,41 +65,43 @@ type(string)            :: benchfname
 
 contains
 
-    subroutine cavger_new( build, pinds, alloccavgs )
-        class(builder), target, intent(inout) :: build
-        integer, optional,      intent(in) :: pinds(:)
-        logical, optional,      intent(in) :: alloccavgs
-        build_ptr => build
+    subroutine cavger_new( params, build, pinds, alloccavgs )
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(inout) :: build
+        integer, optional,         intent(in)    :: pinds(:)
+        logical, optional,         intent(in)    :: alloccavgs
+        p_ptr => params
+        b_ptr => build
         l_alloc_read_cavgs = .true.
         if( present(alloccavgs) ) l_alloc_read_cavgs = alloccavgs
         call cavger_kill(dealloccavgs=l_alloc_read_cavgs)
-        allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=.true.)
+        allocate(pptcl_mask(p_ptr%fromp:p_ptr%top), source=.true.)
         if( present(pinds) )then
             pptcl_mask           = .false.
             pptcl_mask(pinds(:)) = .true.
         endif
-        ncls          = params_glob%ncls
+        ncls          = p_ptr%ncls
         ! work out range and partsz
-        if( params_glob%l_distr_exec )then
-            istart    = params_glob%fromp
-            iend      = params_glob%top
+        if( p_ptr%l_distr_exec )then
+            istart    = p_ptr%fromp
+            iend      = p_ptr%top
         else
             istart    = 1
-            iend      = params_glob%nptcls
+            iend      = p_ptr%nptcls
         endif
         partsz        = size(pptcl_mask)
         ! CTF logics
-        ctfflag       = build_ptr%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
+        ctfflag       = b_ptr%spproj%get_ctfflag_type('ptcl2D',iptcl=p_ptr%fromp)
         ! smpd
-        smpd          = params_glob%smpd
-        smpd_crop     = params_glob%smpd_crop
+        smpd          = p_ptr%smpd
+        smpd_crop     = p_ptr%smpd_crop
         ! set ldims
-        ldim          = [params_glob%box,  params_glob%box,  1]
-        ldim_crop     = [params_glob%box_crop,  params_glob%box_crop,  1]
-        ldim_croppd   = [params_glob%box_croppd,params_glob%box_croppd,1]
-        ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
+        ldim          = [p_ptr%box,  p_ptr%box,  1]
+        ldim_crop     = [p_ptr%box_crop,  p_ptr%box_crop,  1]
+        ldim_croppd   = [p_ptr%box_croppd,p_ptr%box_croppd,1]
+        ldim_pd       = [p_ptr%boxpd,p_ptr%boxpd,1]
         ! ML-regularization
-        l_ml_reg      = params_glob%l_ml_reg
+        l_ml_reg      = p_ptr%l_ml_reg
         ! build arrays
         allocate(precs(partsz))
         call alloc_cavgs_sums
@@ -113,7 +116,7 @@ contains
         class(oris), pointer :: spproj_field
         type(ctfparams)      :: ctfvars(nthr_glob)
         integer              :: i, icls, cnt, iptcl, ithr, stkind
-        call spproj%ptr2oritype(params_glob%oritype, spproj_field)
+        call spproj%ptr2oritype(p_ptr%oritype, spproj_field)
         ! build index map
         cnt = 0
         do iptcl=istart,iend
@@ -133,15 +136,15 @@ contains
             ithr               = omp_get_thread_num() + 1
             precs(cnt)%eo      = spproj_field%get_eo(iptcl)
             precs(cnt)%pw      = spproj_field%get(iptcl,'w')
-            ctfvars(ithr)      = spproj%get_ctfparams(params_glob%oritype,iptcl)
-            precs(cnt)%tfun    = ctf(params_glob%smpd_crop, ctfvars(ithr)%kv, ctfvars(ithr)%cs, ctfvars(ithr)%fraca)
+            ctfvars(ithr)      = spproj%get_ctfparams(p_ptr%oritype,iptcl)
+            precs(cnt)%tfun    = ctf(p_ptr%smpd_crop, ctfvars(ithr)%kv, ctfvars(ithr)%cs, ctfvars(ithr)%fraca)
             precs(cnt)%dfx     = ctfvars(ithr)%dfx
             precs(cnt)%dfy     = ctfvars(ithr)%dfy
             precs(cnt)%angast  = ctfvars(ithr)%angast
             precs(cnt)%class   = spproj_field%get_class(iptcl)
             precs(cnt)%e3      = spproj_field%e3get(iptcl)
             precs(cnt)%shift   = spproj_field%get_2Dshift(iptcl)
-            call spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, stkind, precs(cnt)%ind_in_stk)
+            call spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, iptcl, stkind, precs(cnt)%ind_in_stk)
         end do
         !$omp end parallel do
     end subroutine cavger_transf_oridat
@@ -149,10 +152,10 @@ contains
     subroutine cavger_read_euclid_sigma2
         type(string) :: fname
         if( l_ml_reg )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_ptr%spproj_field)
-            call eucl_sigma%read_groups(build_ptr%spproj_field)
+            fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
+            call eucl_sigma%new(p_ptr, fname, p_ptr%box)
+            call eucl_sigma%read_part(  b_ptr%spproj_field)
+            call eucl_sigma%read_groups(b_ptr%spproj_field)
         end if
     end subroutine cavger_read_euclid_sigma2
 
@@ -162,11 +165,11 @@ contains
         use simple_sp_project, only: sp_project
         class(sp_project), target, intent(inout) :: spproj
         class(oris), pointer :: ptcl_field, cls_field
-        integer  :: pops(params_glob%ncls)
-        real(dp) :: corrs(params_glob%ncls), ws(params_glob%ncls)
+        integer  :: pops(p_ptr%ncls)
+        real(dp) :: corrs(p_ptr%ncls), ws(p_ptr%ncls)
         real     :: frc05, frc0143, rstate, w
         integer  :: i, iptcl, icls, pop, nptcls
-        select case(trim(params_glob%oritype))
+        select case(trim(p_ptr%oritype))
             case('ptcl2D')
                 ptcl_field => spproj%os_ptcl2D
                 cls_field  => spproj%os_cls2D
@@ -174,7 +177,7 @@ contains
                 ptcl_field => spproj%os_ptcl3D
                 cls_field  => spproj%os_cls3D
             case DEFAULT
-                THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
+                THROW_HARD('Unsupported ORITYPE: '//trim(p_ptr%oritype))
         end select
         nptcls = ptcl_field%get_noris()
         pops   = 0
@@ -188,7 +191,7 @@ contains
             w = ptcl_field%get(iptcl,'w')
             if( w < SMALL ) cycle
             icls = ptcl_field%get_class(iptcl)
-            if( icls<1 .or. icls>params_glob%ncls )cycle
+            if( icls<1 .or. icls>p_ptr%ncls )cycle
             pops(icls)  = pops(icls)  + 1
             corrs(icls) = corrs(icls) + real(ptcl_field%get(iptcl,'corr'),dp)
             ws(icls)    = ws(icls)    + real(w,dp)
@@ -201,10 +204,10 @@ contains
             corrs = -1.
             ws    = 0.
         end where
-        call cls_field%new(params_glob%ncls, is_ptcl=.false.)
-        do icls=1,params_glob%ncls
+        call cls_field%new(p_ptr%ncls, is_ptcl=.false.)
+        do icls=1,p_ptr%ncls
             pop = pops(icls)
-            call build_ptr%clsfrcs%estimate_res(icls, frc05, frc0143)
+            call b_ptr%clsfrcs%estimate_res(icls, frc05, frc0143)
             call cls_field%set(icls, 'class',     icls)
             call cls_field%set(icls, 'pop',       pop)
             call cls_field%set(icls, 'res',       frc0143)
@@ -302,17 +305,17 @@ contains
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
         logical :: l_conjg
-        if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        if( .not. p_ptr%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         if( l_alloc_read_cavgs )then
             call init_cavgs_sums
             if( do_frac_update )then
                 call cavger_readwrite_partial_sums('read')
-                call cavger_apply_weights(1.0-params_glob%update_frac)
+                call cavger_apply_weights(1.0-p_ptr%update_frac)
             endif
         else
             if( do_frac_update )then
-                call cavger_apply_weights(1.0-params_glob%update_frac)
+                call cavger_apply_weights(1.0-p_ptr%update_frac)
             else
                 call init_cavgs_sums
             endif
@@ -323,8 +326,8 @@ contains
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim),source=0.)
         ! Number stacks
-        first_pind = params_glob%fromp
-        call build_ptr%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
+        first_pind = p_ptr%fromp
+        call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, first_pind, first_stkind, ind_in_stk)
         last_pind = 0
         do i = partsz,1,-1
             if( precs(i)%pind > 0 )then
@@ -332,7 +335,7 @@ contains
                 exit
             endif
         enddo
-        call build_ptr%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
+        call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks     = last_stkind - first_stkind + 1
         ! scaling/croping
         reg_scale = 1.0
@@ -342,7 +345,7 @@ contains
             reg_scale         = real(ldim(1)) / real(ldim_pd(1))
         endif
         crop_scale = real(ldim_croppd(1)) / real(ldim_pd(1))
-        call memoize_ft_maps(ldim_croppd(1:2), params_glob%smpd_crop)
+        call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
         logi_lims_crop = ft_map_lims
         cyc_lims_crop  = ft_map_lims_nr
         nyq_crop       = ft_map_get_lfny()
@@ -354,8 +357,8 @@ contains
         allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ))
         !$omp parallel do schedule(static) default(shared) proc_bind(close) private(i)
         do i = 1,READBUFFSZ
-            call read_imgs(i)%new( ldim,    params_glob%smpd, wthreads=.false.)
-            call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
+            call read_imgs(i)%new( ldim,    p_ptr%smpd, wthreads=.false.)
+            call cgrid_imgs(i)%new(ldim_pd, p_ptr%smpd, wthreads=.false.)
         enddo
         !$omp end parallel do
         allocate(tvals(fdims_crop(1),fdims_crop(2),READBUFFSZ),cmats(fdims_crop(1),fdims_crop(2),READBUFFSZ),&
@@ -365,10 +368,10 @@ contains
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
             ! Particles range in stack
-            fromp = build_ptr%spproj%os_stk%get_fromp(istk)
-            top   = build_ptr%spproj%os_stk%get_top(istk)
+            fromp = b_ptr%spproj%os_stk%get_fromp(istk)
+            top   = b_ptr%spproj%os_stk%get_top(istk)
             nptcls_in_stk = top - fromp + 1 ! # of particles in stack
-            call build_ptr%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
+            call b_ptr%spproj%get_stkname_and_ind(p_ptr%oritype, max(p_ptr%fromp,fromp), stk_fname, ind_in_stk)
             ! batch loop
             nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ)) ! will be 1 most of the tme
             do ibatch = 1,nbatches
@@ -382,8 +385,8 @@ contains
                 do i = istart,iend
                     iptcl    = fromp + i - 1                         ! global particle index
                     batchind = batchind + 1                          ! index in batch
-                    if( iptcl < params_glob%fromp ) cycle            ! taking care of limits
-                    if( iptcl > params_glob%top )   cycle
+                    if( iptcl < p_ptr%fromp ) cycle            ! taking care of limits
+                    if( iptcl > p_ptr%top )   cycle
                     iprec_glob = iprec_glob + 1                      ! global particle record
                     batch_iprecs(batchind) = iprec_glob              ! particle record in batch
                     if( precs(iprec_glob)%pind == 0 ) cycle
@@ -404,7 +407,7 @@ contains
                     rhos(:,:,i)  = 0.0
                     tvals(:,:,i) = 0.0
                     ! prep image
-                    call read_imgs(i)%norm_noise_taper_edge_pad_fft_shift_2mat(build_ptr%lmsk, cgrid_imgs(i), -precs(iprec)%shift*crop_scale,&
+                    call read_imgs(i)%norm_noise_taper_edge_pad_fft_shift_2mat(b_ptr%lmsk, cgrid_imgs(i), -precs(iprec)%shift*crop_scale,&
                                                                     &ldim_croppd, logi_lims_crop, cmats(:,:,i))
                     ! apply CTF to image, stores CTF values
                     call precs(iprec)%tfun%eval_and_apply(ctfflag, precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast,&
@@ -583,13 +586,13 @@ contains
                 eo_pop = eo_class_pop(icls)
                 pop    = sum(eo_pop)
                 if( pop > 0 )then
-                    call even_imgs(icls)%mask2D_soft(params_glob%msk_crop)
-                    call odd_imgs(icls)%mask2D_soft(params_glob%msk_crop)
+                    call even_imgs(icls)%mask2D_soft(p_ptr%msk_crop)
+                    call odd_imgs(icls)%mask2D_soft(p_ptr%msk_crop)
                     call even_imgs(icls)%fft()
                     call odd_imgs(icls)%fft()
                     call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-                    call build_ptr%clsfrcs%set_frc(icls, frc, 1)
-                    find = build_ptr%clsfrcs%estimate_find_for_eoavg(icls, 1)
+                    call b_ptr%clsfrcs%set_frc(icls, frc, 1)
+                    find = b_ptr%clsfrcs%estimate_find_for_eoavg(icls, 1)
                     ! add noise term to denominator
                     call add_invtausq2rho(ctfsqsums_even(icls), frc)
                     call add_invtausq2rho(ctfsqsums_odd(icls), frc)
@@ -633,14 +636,14 @@ contains
             call even_imgs(1)%memoize_mask_coords
             !$omp parallel do default(shared) private(icls,frc,find) schedule(static) proc_bind(close)
             do icls=1,ncls
-                call even_imgs(icls)%mask2D_soft(params_glob%msk_crop)
-                call odd_imgs(icls)%mask2D_soft(params_glob%msk_crop)
+                call even_imgs(icls)%mask2D_soft(p_ptr%msk_crop)
+                call odd_imgs(icls)%mask2D_soft(p_ptr%msk_crop)
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
                 call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-                call build_ptr%clsfrcs%set_frc(icls, frc, 1)
+                call b_ptr%clsfrcs%set_frc(icls, frc, 1)
                 ! average low-resolution info between eo pairs to keep things in register
-                find = build_ptr%clsfrcs%estimate_find_for_eoavg(icls, 1)
+                find = b_ptr%clsfrcs%estimate_find_for_eoavg(icls, 1)
                 call cavgs_merged(icls)%fft()
                 call cavgs_even(icls)%fft()
                 call cavgs_odd(icls)%fft()
@@ -653,7 +656,7 @@ contains
             !$omp end parallel do
         endif
         ! write FRCs
-        call build_ptr%clsfrcs%write(fname)
+        call b_ptr%clsfrcs%write(fname)
         ! destruct
         do icls=1,ncls
             call even_imgs(icls)%kill
@@ -672,7 +675,7 @@ contains
         complex :: fcomp
         real    :: cc, scale, pad_factor, invtau2, fudge
         integer :: flims(3,2), phys(2), h, k, sh, sz, reslim_ind
-        fudge = params_glob%tau
+        fudge = p_ptr%tau
         flims = ctfsqsum%loop_lims(2)
         sz    = size(frc)
         allocate(ssnr(0:sz), rsum(0:sz), cnt(0:sz), tau2(0:sz), sig2(0:sz))
@@ -711,7 +714,7 @@ contains
         tau2 = ssnr * sig2
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
-        reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
+        reslim_ind = max(6, calc_fourier_index(p_ptr%hp, p_ptr%box, p_ptr%smpd))
         !$omp parallel do collapse(2) default(shared) schedule(static)&
         !$omp private(h,k,phys,sh,invtau2,fcomp) proc_bind(close)
         do h = flims(1,1),flims(1,2)
@@ -789,7 +792,7 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
-        innerrad = params_glob%msk_crop
+        innerrad = p_ptr%msk_crop
         call tmpimg%ring(ldim_crop, smpd_crop, min(innerrad+COSMSKHALFWIDTH, mskrad), innerrad)
         !$omp parallel do private(icls,minmax,mean,std,tvd) proc_bind(close) default(shared)
         do icls = 1,ncls
@@ -875,17 +878,17 @@ contains
     end subroutine cavger_write
 
     subroutine cavger_read_all()
-        if( .not. file_exists(params_glob%refs) ) THROW_HARD('references (REFS) does not exist in cwd')
-        call cavger_read(params_glob%refs, 'merged')
-        if( file_exists(params_glob%refs_even) )then
-            call cavger_read(params_glob%refs_even, 'even')
+        if( .not. file_exists(p_ptr%refs) ) THROW_HARD('references (REFS) does not exist in cwd')
+        call cavger_read(p_ptr%refs, 'merged')
+        if( file_exists(p_ptr%refs_even) )then
+            call cavger_read(p_ptr%refs_even, 'even')
         else
-            call cavger_read(params_glob%refs, 'even')
+            call cavger_read(p_ptr%refs, 'even')
         endif
-        if( file_exists(params_glob%refs_odd) )then
-            call cavger_read(params_glob%refs_odd, 'odd')
+        if( file_exists(p_ptr%refs_odd) )then
+            call cavger_read(p_ptr%refs_odd, 'odd')
         else
-            call cavger_read(params_glob%refs, 'odd')
+            call cavger_read(p_ptr%refs, 'odd')
         endif
     end subroutine cavger_read_all
 
@@ -940,10 +943,10 @@ contains
         type(string)   :: cae, cao, cte, cto
         type(stack_io) :: stkio(4)
         logical        :: is_ft
-        cae   = 'cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
-        cao   = 'cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
-        cte   = 'ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
-        cto   = 'ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//MRC_EXT
+        cae   = 'cavgs_even_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
+        cao   = 'cavgs_odd_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
+        cte   = 'ctfsqsums_even_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
+        cto   = 'ctfsqsums_odd_part'//int2str_pad(p_ptr%part,p_ptr%numlen)//MRC_EXT
         select case(trim(which))
             case('read')
                 call stkio(1)%open(cae, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
@@ -1036,13 +1039,13 @@ contains
             rt_io            = 0.
             rt_workshare_sum = 0.
         endif
-        do ipart=1,params_glob%nparts
+        do ipart=1,p_ptr%nparts
             if( L_BENCH_GLOB ) t_io = tic()
             ! look for files
-            cae = 'cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
-            cao = 'cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
-            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//MRC_EXT
-            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//MRC_EXT
+            cae = 'cavgs_even_part'    //int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
+            cao = 'cavgs_odd_part'     //int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
+            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
+            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,p_ptr%numlen)//MRC_EXT
             call ioimg(1)%open(cae, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
             call ioimg(2)%open(cao, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
             call ioimg(3)%open(cte, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
@@ -1151,6 +1154,8 @@ contains
         endif
         if( allocated(pptcl_mask) ) deallocate(pptcl_mask)
         if( allocated(precs)      ) deallocate(precs)
+        b_ptr => null()
+        p_ptr => null()
     end subroutine cavger_kill
 
     subroutine dealloc_cavgs_sums
@@ -1189,19 +1194,20 @@ contains
 
     ! PUBLIC UTILITIES
 
-    subroutine transform_ptcls( build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
+    subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
-        class(builder),             target, intent(inout) :: build
-        class(sp_project),                  intent(inout) :: spproj
-        character(len=*),                   intent(in)    :: oritype
-        integer,                            intent(in)    :: icls
-        type(image),           allocatable, intent(inout) :: timgs(:)
-        integer,               allocatable, intent(inout) :: pinds(:)
-        logical,     optional,              intent(in)    :: phflip
-        type(image), optional,              intent(inout) :: cavg
-        type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
+        class(parameters),         target, intent(in)    :: params
+        class(builder),            target, intent(inout) :: build
+        class(sp_project),                 intent(inout) :: spproj
+        character(len=*),                  intent(in)    :: oritype
+        integer,                           intent(in)    :: icls
+        type(image),           allocatable,intent(inout) :: timgs(:)
+        integer,               allocatable,intent(inout) :: pinds(:)
+        logical,     optional,             intent(in)    :: phflip
+        type(image), optional,             intent(inout) :: cavg
+        type(image), optional, allocatable,intent(inout) :: imgs_ori(:)
         class(oris),  pointer :: pos
         type(kbinterpol)      :: kbwin
         type(image)           :: img(nthr_glob), timg(nthr_glob)
@@ -1214,7 +1220,8 @@ contains
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
         integer :: i,iptcl, l,m, pop, h,k, hh,kk, ithr, iwinsz, wdim, physh,physk
         logical :: l_phflip, l_imgs, l_conjg
-        build_ptr => build
+        p_ptr => params
+        b_ptr => build
         l_imgs = .false.
         if( allocated(timgs) )then
             do i = 1,size(timgs)
@@ -1262,12 +1269,12 @@ contains
         endif
         allocate(timgs(pop))
         do i = 1,size(timgs)
-            call timgs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
+            call timgs(i)%new([p_ptr%box,p_ptr%box,1],p_ptr%smpd, wthreads=.false.)
         enddo
         if( l_imgs )then
             allocate(imgs_ori(pop))
             do i = 1,size(imgs_ori)
-                call imgs_ori(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
+                call imgs_ori(i)%new([p_ptr%box,p_ptr%box,1],p_ptr%smpd, wthreads=.false.)
             enddo
         endif
         ! interpolation variables
@@ -1278,8 +1285,8 @@ contains
         ! temporary objects
         call prepimgbatch(build, pop)
         do ithr = 1, nthr_glob
-            call  img(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
-            call timg(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
+            call  img(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
+            call timg(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
         end do
         call memoize_ft_maps(img(1)%get_ldim(), img(1)%get_smpd())
         logi_lims      = img(1)%loop_lims(2)
@@ -1297,7 +1304,7 @@ contains
             call img(ithr)%zero_and_flag_ft
             call timg(ithr)%zero_and_flag_ft
             ! normalisation
-            call build_ptr%imgbatch(i)%norm_noise_taper_edge_pad_fft(build_ptr%lmsk,img(ithr))
+            call b_ptr%imgbatch(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk,img(ithr))
             if( l_imgs )then
                 call img(ithr)%ifft
                 call img(ithr)%clip(imgs_ori(i))

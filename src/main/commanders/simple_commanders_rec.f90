@@ -153,7 +153,7 @@ contains
         endif
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-            call eucl_sigma%new(fname, params%box)
+            call eucl_sigma%new(params, fname, params%box)
             call eucl_sigma%read_groups(build%spproj_field)
         end if
         call calc_3Drec( build, cline, nptcls2update, pinds )

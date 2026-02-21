@@ -176,7 +176,7 @@ contains
                 call cavger_new_write_all(params%refs, params%refs_even, params%refs_odd)
                 call cavger_new_kill
             else
-                call cavger_new(build)
+                call cavger_new(params, build)
                 call cavger_transf_oridat(build%spproj)
                 call cavger_read_euclid_sigma2
                 call cavger_assemble_sums( .false. )
@@ -198,7 +198,7 @@ contains
                 call cavger_new_readwrite_partial_sums('write')
                 call cavger_new_kill
             else
-                call cavger_new(build)
+                call cavger_new(params, build)
                 call cavger_transf_oridat(build%spproj)
                 call cavger_read_euclid_sigma2
                 call cavger_assemble_sums( .false. )
@@ -307,7 +307,7 @@ contains
                 call cavger_new_write_all(params%refs, params%refs_even, params%refs_odd)
                 call cavger_new_kill
             else
-                call cavger_new(build)
+                call cavger_new(params, build)
                 call cavger_transf_oridat( build%spproj )
                 call cavger_assemble_sums_from_parts()
                 call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)

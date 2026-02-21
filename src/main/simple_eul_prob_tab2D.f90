@@ -12,7 +12,7 @@ private
 #include "simple_local_flags.inc"
 
 type :: eul_prob_tab2D
-    class(builder), pointer     :: build_ptr => null()
+    class(builder), pointer     :: b_ptr => null()
     type(ptcl_rec), allocatable :: loc_tab(:,:)   !< 2D search table (ncls x nptcls)
     type(ptcl_rec), allocatable :: assgn_map(:)   !< assignment map  (nptcls)
     integer,        allocatable :: pinds(:)       !< particle indices
@@ -80,7 +80,7 @@ contains
         integer, parameter   :: MIN_POP = 2   ! ignoring classes with one particle
         integer, allocatable :: pops(:)
         integer :: i, iptcl, icls
-        self%build_ptr => build
+        self%b_ptr => build
         call self%kill
         call seed_rnd
         self%nptcls = size(pinds)
@@ -96,19 +96,19 @@ contains
         end do
         !$omp end parallel do
         ! Classes (similar to strategy2D_alloc)
-        if( self%build_ptr%spproj%os_cls2D%get_noris() == 0 )then
-            if( self%build_ptr%spproj_field%isthere('class') )then
-                call self%build_ptr%spproj%os_ptcl2D%get_pops(pops, 'class', maxn=self%ncls)
+        if( self%b_ptr%spproj%os_cls2D%get_noris() == 0 )then
+            if( self%b_ptr%spproj_field%isthere('class') )then
+                call self%b_ptr%spproj%os_ptcl2D%get_pops(pops, 'class', maxn=self%ncls)
             else
                 allocate(pops(self%ncls), source=MINCLSPOPLIM+1)
             endif
         else
-            if( self%build_ptr%spproj_field%isthere('class') )then
-                if( self%build_ptr%spproj%os_cls2D%get_noris() /= self%ncls )then
+            if( self%b_ptr%spproj_field%isthere('class') )then
+                if( self%b_ptr%spproj%os_cls2D%get_noris() /= self%ncls )then
                     ! to be able to restart after having run cleanup with fewer classes
                     allocate(pops(self%ncls), source=MINCLSPOPLIM+1)
                 else
-                    pops = nint(self%build_ptr%spproj%os_cls2D%get_all('pop'))
+                    pops = nint(self%b_ptr%spproj%os_cls2D%get_all('pop'))
                     where( pops < MIN_POP ) pops = 0 ! ignoring classes with one particle
                 endif
             else

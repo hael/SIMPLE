@@ -29,9 +29,9 @@ private
 contains
 
     subroutine prep_class_command_lines( params, cline, projfile )
-        type(parameters), intent(inout) :: params
-        class(cmdline), intent(in) :: cline
-        class(string),  intent(in) :: projfile
+        class(parameters), intent(in) :: params
+        class(cmdline),    intent(in) :: cline
+        class(string),     intent(in) :: projfile
         cline_refine3D      = cline
         cline_symmap        = cline
         cline_reconstruct3D = cline
@@ -80,7 +80,7 @@ contains
     end subroutine prep_class_command_lines
 
     subroutine set_symmetry_class_vars( params )
-        type(parameters), intent(inout) :: params
+        class(parameters), intent(in) :: params
         type(string) :: pgrp, pgrp_start
         pgrp           = lowercase(trim(params%pgrp))
         pgrp_start     = lowercase(trim(params%pgrp_start))
@@ -104,7 +104,7 @@ contains
     end subroutine set_symmetry_class_vars
 
     subroutine set_lplims_from_frcs( params, spproj, l_cavgs, lpstart, lpstop )
-        type(parameters), intent(inout) :: params
+        class(parameters), intent(inout) :: params
         class(sp_project), intent(inout) :: spproj
         logical,           intent(in)    :: l_cavgs
         real, optional,    intent(in)    :: lpstart, lpstop
@@ -157,9 +157,9 @@ contains
     end subroutine set_lplims_from_frcs
 
     subroutine set_cline_refine3D( params, istage, l_cavgs )
-        type(parameters), intent(inout) :: params
-        integer,          intent(in)  :: istage
-        logical,          intent(in)  :: l_cavgs
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        logical,           intent(in) :: l_cavgs
         type(string) :: sh_first, prob_sh, ml_reg, fillin, cavgw, ref_type
         type(string) :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
         integer :: iphase, iter, inspace, imaxits, nsample_dyn, nspace_phase
@@ -439,7 +439,7 @@ contains
     end subroutine set_cline_refine3D
 
     subroutine exec_refine3D( params, istage, xrefine3D )
-        type(parameters), intent(inout) :: params
+        class(parameters),     intent(inout) :: params
         integer,               intent(in)    :: istage
         class(commander_base), intent(inout) :: xrefine3D
         type(string) :: stage, str_state, vol_name, vol_pproc
@@ -463,7 +463,7 @@ contains
     end subroutine exec_refine3D
 
     subroutine symmetrize( params, istage, spproj, projfile, xreconstruct3D )
-        type(parameters), intent(inout) :: params
+        class(parameters),               intent(inout) :: params
         integer,                         intent(in)    :: istage
         class(sp_project),               intent(inout) :: spproj
         class(string),                   intent(in)    :: projfile
@@ -534,7 +534,7 @@ contains
     end subroutine symmetrize
 
     subroutine calc_start_rec( params, projfile, xreconstruct3D, istage )
-        type(parameters), intent(inout) :: params
+        class(parameters),     intent(inout) :: params
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
         integer,               intent(in)    :: istage
@@ -599,7 +599,7 @@ contains
     ! Performs reconstruction at some set stages when polar=yes
     subroutine calc_rec4polar( params, xreconstruct3D, istage, projfile )
         use simple_class_frcs, only: class_frcs
-        type(parameters),        intent(inout) :: params
+        class(parameters),       intent(inout) :: params
         class(commander_base),   intent(inout) :: xreconstruct3D
         integer,                 intent(in)    :: istage
         class(string), optional, intent(in)    :: projfile
@@ -658,7 +658,7 @@ contains
     end subroutine calc_rec4polar
 
     subroutine randomize_states( params, spproj, projfile, xreconstruct3D, istage )
-        type(parameters), intent(inout) :: params
+        class(parameters),     intent(inout) :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
@@ -674,8 +674,8 @@ contains
     end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz( params, spproj )
-        type(parameters), intent(inout) :: params
-        type(sp_project), intent(inout) :: spproj
+        class(parameters), intent(in)    :: params
+        type(sp_project),  intent(inout) :: spproj
         type(string) :: str_state, fname
         type(image)  :: final_vol, reprojs
         integer      :: state, ifoo, ldim(3)
@@ -706,7 +706,7 @@ contains
     end subroutine gen_ortho_reprojs4viz
 
     subroutine calc_final_rec( params, spproj, projfile, xreconstruct3D )
-        type(parameters), intent(inout) :: params
+        class(parameters),     intent(in)    :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xreconstruct3D
@@ -731,7 +731,7 @@ contains
     end subroutine calc_final_rec
 
     subroutine postprocess_final_rec( params, spproj )
-        type(parameters), intent(inout) :: params
+        class(parameters), intent(in) :: params
         class(sp_project), intent(in) :: spproj
         type(commander_postprocess)   :: xpostprocess
         type(string) :: str_state, vol_name, vol_pproc, vol_pproc_mirr, vol_final
@@ -754,10 +754,10 @@ contains
 
     ! create starting noise volume(s)
     subroutine generate_random_volumes( params, box, smpd, cline )
-        type(parameters), intent(inout) :: params
-        integer,        intent(in)    :: box
-        real,           intent(in)    :: smpd
-        type(cmdline),  intent(inout) :: cline
+        class(parameters), intent(inout) :: params
+        integer,           intent(in)    :: box
+        real,              intent(in)    :: smpd
+        type(cmdline),     intent(inout) :: cline
         type(string) :: vol_name
         type(image)  :: noisevol, signal
         real         :: b
