@@ -96,10 +96,10 @@ contains
         smpd          = p_ptr%smpd
         smpd_crop     = p_ptr%smpd_crop
         ! set ldims
-        ldim          = [p_ptr%box,  p_ptr%box,  1]
+        ldim          = [p_ptr%box,       p_ptr%box,       1]
         ldim_crop     = [p_ptr%box_crop,  p_ptr%box_crop,  1]
         ldim_croppd   = [p_ptr%box_croppd,p_ptr%box_croppd,1]
-        ldim_pd       = [p_ptr%boxpd,p_ptr%boxpd,1]
+        ldim_pd       = [p_ptr%boxpd,     p_ptr%boxpd,     1]
         ! ML-regularization
         l_ml_reg      = p_ptr%l_ml_reg
         ! build arrays

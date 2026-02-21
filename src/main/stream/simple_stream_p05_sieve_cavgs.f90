@@ -131,9 +131,9 @@ contains
         ! Computing environment
         call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
         if(envlen > 0) then
-            call qenv%new(1, exec_bin=string('simple_exec'), qsys_partition=string(trim(chunk_part_env)))
+            call qenv%new(params, 1, exec_bin=string('simple_exec'), qsys_partition=string(trim(chunk_part_env)))
         else
-            call qenv%new(1, exec_bin=string('simple_exec'))
+            call qenv%new(params, 1, exec_bin=string('simple_exec'))
         end if
         ! Resolution based class rejection
         call set_lpthres_type("off")

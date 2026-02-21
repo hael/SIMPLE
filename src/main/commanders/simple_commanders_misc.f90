@@ -346,7 +346,7 @@ contains
         ! setup the environment for distributed execution
         params%nparts = min(nmovies, params%nparts)
         call cline%set('nparts', params%nparts)
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule

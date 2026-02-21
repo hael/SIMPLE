@@ -81,7 +81,7 @@ contains
             return
         endif
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master

@@ -94,7 +94,7 @@ contains
         ! gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -300,7 +300,7 @@ contains
         ! gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -409,7 +409,7 @@ contains
         endif
         call spproj%kill
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -504,7 +504,7 @@ contains
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', params%numlen)
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule

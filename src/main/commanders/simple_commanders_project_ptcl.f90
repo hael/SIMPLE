@@ -430,7 +430,7 @@ contains
             call part_params(ipart)%set('fromp',int2str(parts(ipart,1)))
             call part_params(ipart)%set('top',  int2str(parts(ipart,2)))
         end do
-        call qenv%new(nparts)
+        call qenv%new(params, nparts)
         ! prepare job description
         call cline_distr%gen_job_descr(job_descr)
         ! schedule & clean
@@ -746,7 +746,7 @@ contains
         params_glob%ncunits = min(MAX_NCUNITS, nparts)
         params%nthr         = 1
         params_glob%nthr    = 1
-        call qenv%new(nparts)
+        call qenv%new(params, nparts)
         ! prepares stack-based parts
         parts = split_nobjs_even(nstks, nparts)
         allocate(part_params(nparts))

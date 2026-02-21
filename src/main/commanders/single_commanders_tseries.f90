@@ -96,7 +96,7 @@ contains
         if( nframes ==0 ) THROW_HARD('no movie frames to process! exec_tseries_motion_correct_distr')
         call spproj%kill
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean

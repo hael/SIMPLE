@@ -188,9 +188,9 @@ contains
         ! setup the environment for distributed execution
         call get_environment_variable(SIMPLE_STREAM_PREPROC_PARTITION, preproc_part_env, envlen)
         if(envlen > 0) then
-            call qenv%new(1,stream=.true.,qsys_partition=string(trim(preproc_part_env)))
+            call qenv%new(params, 1,stream=.true.,qsys_partition=string(trim(preproc_part_env)))
         else
-            call qenv%new(1,stream=.true.)
+            call qenv%new(params, 1,stream=.true.)
         end if
         ! Infinite loop
         last_injection = simple_gettime()

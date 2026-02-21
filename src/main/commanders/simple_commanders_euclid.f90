@@ -81,7 +81,7 @@ contains
         call cline_calc_pspec%set('prg', 'calc_pspec' )                   ! required for distributed call
         call cline_calc_pspec_assemble%set('prg', 'calc_pspec_assemble' ) ! required for local call
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params, params%nparts)
         call cline_calc_pspec%gen_job_descr(job_descr)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)

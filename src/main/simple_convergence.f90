@@ -1,7 +1,6 @@
 !@descr: for checking convergence of 2D and 3D search
 module simple_convergence
 use simple_core_module_api
-use simple_parameters, only: params_glob
 use simple_cmdline,    only: cmdline
 use simple_progress
 implicit none
@@ -59,8 +58,10 @@ contains
         call ostats%kill
     end subroutine read
 
-    function check_conv2D( self, cline, os, ncls, msk ) result( converged )
+    function check_conv2D( self, params, cline, os, ncls, msk ) result( converged )
+        use simple_parameters, only: parameters
         class(convergence), intent(inout) :: self
+        class(parameters),  intent(inout) :: params
         class(cmdline),     intent(inout) :: cline
         class(oris),        intent(inout) :: os
         integer,            intent(in)    :: ncls
@@ -84,7 +85,7 @@ contains
         percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
         percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
         percen_avg     = percen_sampled
-        if( params_glob%l_update_frac )then
+        if( params%l_update_frac )then
             allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
@@ -113,15 +114,15 @@ contains
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
-            if( cline%defined('trs') .or. params_glob%trs >  MINSHIFT)then
+            if( cline%defined('trs') .or. params%trs >  MINSHIFT)then
                 ! no change: bound was explicitely defined or is large enough
             else
                 ! determine shift bounds
-                params_glob%trs = MSK_FRAC*msk
-                params_glob%trs = max(MINSHIFT,params_glob%trs)
-                params_glob%trs = min(MAXSHIFT,params_glob%trs)
+                params%trs = MSK_FRAC*msk
+                params%trs = max(MINSHIFT,params%trs)
+                params%trs = min(MAXSHIFT,params%trs)
                 ! set shift search flag
-                params_glob%l_doshift = .true.
+                params%l_doshift = .true.
             endif
         endif
         converged = .false.
@@ -140,10 +141,10 @@ contains
             if( ncls > 1 )then
                 converged = .false.
                 ! set limits for convergence
-                if( (params_glob%l_update_frac) .or. (params_glob%stream.eq.'yes') )then
+                if( (params%l_update_frac) .or. (params%stream.eq.'yes') )then
                     overlap_lim  = OVERLAP_2D_FRAC
                     fracsrch_lim = FRACSRCHSPACE_FRAC
-                else if( trim(params_glob%tseries) .eq. 'yes' )then
+                else if( trim(params%tseries) .eq. 'yes' )then
                     overlap_lim  = OVERLAP_2D_NANO
                 else
                     overlap_lim  = OVERLAP_2D
@@ -153,17 +154,17 @@ contains
                 if( cline%defined('overlap')  ) overlap_lim  = cline%get_rarg('overlap')
                 if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
                 ! test for convergence
-                if( trim(params_glob%refine).eq.'inpl' )then
+                if( trim(params%refine).eq.'inpl' )then
                     converged = self%dist_inpl%avg < 0.5
-                else if( (params_glob%l_update_frac) .or. (params_glob%stream.eq.'yes') )then
+                else if( (params%l_update_frac) .or. (params%stream.eq.'yes') )then
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
-                    self%progress = progress_estimate_2D(real(params_glob%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
-                else if( trim(params_glob%tseries) .eq. 'yes' )then
+                    self%progress = progress_estimate_2D(real(params%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
+                else if( trim(params%tseries) .eq. 'yes' )then
                     converged = self%mi_class > overlap_lim
-                    self%progress = progress_estimate_2D(real(params_glob%which_iter), self%mi_class, overlap_lim, 0.0, 0.0, 0.0, 0.0)
+                    self%progress = progress_estimate_2D(real(params%which_iter), self%mi_class, overlap_lim, 0.0, 0.0, 0.0, 0.0)
                 else
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
-                    self%progress = progress_estimate_2D(real(params_glob%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
+                    self%progress = progress_estimate_2D(real(params%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
                 endif
                 if( converged )then
                     write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
@@ -182,7 +183,7 @@ contains
         endif
         ! stats
         call ostats%new(1, is_ptcl=.false.)
-        call ostats%set(1,'ITERATION',                params_glob%which_iter)
+        call ostats%set(1,'ITERATION',                params%which_iter)
         call ostats%set(1,'CLASS_OVERLAP',            self%mi_class)
         call ostats%set(1,'PERCEN_PARTICLES_SAMPLED', percen_sampled)
         call ostats%set(1,'PERCEN_PARTICLES_UPDATED', percen_updated)
@@ -196,8 +197,10 @@ contains
         call ostats%kill
     end function check_conv2D
 
-    function check_conv3D( self, cline, os, msk ) result( converged )
+    function check_conv3D( self, params, cline, os, msk ) result( converged )
+        use simple_parameters, only: parameters
         class(convergence), intent(inout) :: self
+        class(parameters),  intent(inout) :: params
         class(cmdline),     intent(inout) :: cline
         class(oris),        intent(inout) :: os
         real,               intent(in)    :: msk
@@ -222,7 +225,7 @@ contains
         percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
         percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
         percen_avg     = percen_sampled
-        if( params_glob%l_update_frac )then
+        if( params%l_update_frac )then
             allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
@@ -241,7 +244,7 @@ contains
         self%frac_greedy = os%get_avg('frac_greedy', mask=mask)
         ! overlaps and particle updates
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
-        if( params_glob%nstates > 1 )then
+        if( params%nstates > 1 )then
         write(logfhandle,601) '>>> STATE OVERLAP:                            ', self%mi_state
         endif
         write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled
@@ -259,30 +262,30 @@ contains
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        write(logfhandle,609) '>>> REFINEMENT MODE IS '//trim(params_glob%refine)
-        if( trim(params_glob%gauref).eq.'yes' )then
+        write(logfhandle,609) '>>> REFINEMENT MODE IS '//trim(params%refine)
+        if( trim(params%gauref).eq.'yes' )then
         write(logfhandle,607) '>>> GAU REGULARIZATION IS ON'
         else
         write(logfhandle,609) '>>> GAU REGULARIZATION IS OFF'
         endif
-        if( params_glob%l_ml_reg )then
-        write(logfhandle,607) '>>> ML  REGULARIZATION IS ON, TAU:    ', params_glob%tau
+        if( params%l_ml_reg )then
+        write(logfhandle,607) '>>> ML  REGULARIZATION IS ON, TAU:    ', params%tau
         else
         write(logfhandle,609) '>>> ML  REGULARIZATION IS OFF'
         endif
-        if( params_glob%l_icm )then
-        write(logfhandle,607) '>>> ICM REGULARIZATION IS ON, LAMBDA: ', params_glob%lambda
+        if( params%l_icm )then
+        write(logfhandle,607) '>>> ICM REGULARIZATION IS ON, LAMBDA: ', params%lambda
         else
         write(logfhandle,609) '>>> ICM REGULARIZATION IS OFF'
         endif
-        if( params_glob%l_update_frac )then
+        if( params%l_update_frac )then
         if( cline%defined('ufrac_trec') )then
-        write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', params_glob%ufrac_trec
+        write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', params%ufrac_trec
         else
         trail_rec_ufrac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
         write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', trail_rec_ufrac
         endif
-        if( params_glob%l_fillin .and. mod(params_glob%which_iter,5) == 0 )then
+        if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
         write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS ON'
         else
         write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS OFF'
@@ -291,16 +294,16 @@ contains
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
-                & params_glob%trs <  MINSHIFT )then
-                if( cline%defined('trs') .and. params_glob%trs<0.01 )then
+                & params%trs <  MINSHIFT )then
+                if( cline%defined('trs') .and. params%trs<0.01 )then
                     ! bound was defined, no update
                 else
                     ! determine shift bounds
-                    params_glob%trs = MSK_FRAC*msk
-                    params_glob%trs = max(MINSHIFT,params_glob%trs)
-                    params_glob%trs = min(MAXSHIFT,params_glob%trs)
+                    params%trs = MSK_FRAC*msk
+                    params%trs = max(MINSHIFT,params%trs)
+                    params%trs = min(MAXSHIFT,params%trs)
                     ! set shift search flag
-                    params_glob%l_doshift = .true.
+                    params%l_doshift = .true.
                 endif
             endif
         endif
@@ -311,7 +314,7 @@ contains
         if( cline%defined('overlap')  ) overlap_lim  = cline%get_rarg('overlap')
         if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
         ! determine convergence
-        if( params_glob%nstates == 1 )then
+        if( params%nstates == 1 )then
             if( self%frac_srch%avg > fracsrch_lim .and. self%mi_proj  > overlap_lim )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
@@ -322,7 +325,7 @@ contains
         else
             ! provides convergence stats for multiple states
             ! by calculating mi_joint for individual states
-            allocate( state_mi_joint(params_glob%nstates), statepops(params_glob%nstates) )
+            allocate( state_mi_joint(params%nstates), statepops(params%nstates) )
             state_mi_joint = 0.
             statepops      = 0.
             do iptcl=1,os%get_noris()
@@ -333,12 +336,12 @@ contains
                 statepops(istate)      = statepops(istate) + 1.
             end do
             ! normalise the overlap
-            forall( istate=1:params_glob%nstates, statepops(istate)>0. )&
+            forall( istate=1:params%nstates, statepops(istate)>0. )&
                 &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)
             ! the minumum overlap is in charge of convergence
             min_state_mi_joint = minval(state_mi_joint, mask=statepops>0.)
             ! print the overlaps and pops for the different states
-            do istate=1,params_glob%nstates
+            do istate=1,params%nstates
                 write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
                 'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
@@ -353,9 +356,9 @@ contains
         endif
         ! stats
         call ostats%new(1, is_ptcl=.false.)
-        call ostats%set(1,'ITERATION',                   params_glob%which_iter)
+        call ostats%set(1,'ITERATION',                   params%which_iter)
         call ostats%set(1,'ORIENTATION_OVERLAP',         self%mi_proj)
-        if( params_glob%nstates > 1 ) call ostats%set(1,'STATE_OVERLAP', self%mi_state)
+        if( params%nstates > 1 ) call ostats%set(1,'STATE_OVERLAP', self%mi_state)
         call ostats%set(1,'PERCEN_PARTICLES_SAMPLED',    percen_sampled)
         call ostats%set(1,'PERCEN_PARTICLES_UPDATED',    percen_updated)
         call ostats%set(1,'PERCEN_PARTICLES_AVERAGED',   percen_avg)
@@ -368,22 +371,22 @@ contains
         call ostats%set(1,'LP_ESTIMATED',                self%lp_est%avg)
         call ostats%set(1,'RESOLUTION',                  self%res%avg)
         call ostats%set(1,'SCORE',                       self%score%avg)
-        if( params_glob%l_ml_reg )then
-            call ostats%set(1,'ML_REGULARIZATION',                        1.0)
-            call ostats%set(1,'ML_REGULARIZATION_TAU',        params_glob%tau)
+        if( params%l_ml_reg )then
+            call ostats%set(1,'ML_REGULARIZATION',                    1.0)
+            call ostats%set(1,'ML_REGULARIZATION_TAU',         params%tau)
         else
-            call ostats%set(1,'ML_REGULARIZATION',                        0.0)
+            call ostats%set(1,'ML_REGULARIZATION',                    0.0)
         endif
-        if( params_glob%l_icm )then
-            call ostats%set(1,'ICM_REGULARIZATION',                       1.0)
-            call ostats%set(1,'ICM_REGULARIZATION_LAMBDA', params_glob%lambda)
+        if( params%l_icm )then
+            call ostats%set(1,'ICM_REGULARIZATION',                   1.0)
+            call ostats%set(1,'ICM_REGULARIZATION_LAMBDA',  params%lambda)
         endif
-        if( params_glob%l_update_frac )then
-            call ostats%set(1,'TRAIL_REC_UPDATE_FRACTION',    trail_rec_ufrac)
+        if( params%l_update_frac )then
+            call ostats%set(1,'TRAIL_REC_UPDATE_FRACTION', trail_rec_ufrac)
         endif
         call ostats%write(string(STATS_FILE))
-        call self%append_stats(ostats)
-        call self%plot_projdirs(os, mask)
+        call self%append_stats(params, ostats)
+        call self%plot_projdirs(params, os, mask)
         ! destruct
         if( allocated(state_mi_joint) ) deallocate(state_mi_joint)
         if( allocated(statepops)      ) deallocate(statepops)
@@ -391,16 +394,18 @@ contains
         call ostats%kill
     end function check_conv3D
 
-    subroutine append_stats( self, ostats )
+    subroutine append_stats( self, params, ostats )
         use CPlot2D_wrapper_module, only: plot2D
+        use simple_parameters, only: parameters
         class(convergence), intent(in) :: self
+        class(parameters),  intent(in) :: params
         class(oris),        intent(in) :: ostats
         type(oris)        :: os_prev, os
         type(string)      :: fname
         real, allocatable :: iter(:), inpl_dist(:), proj_dist(:)
         real, allocatable :: score(:), proj_overlap(:)
         integer    :: i,nl
-        if( trim(params_glob%iterstats).ne.'yes' ) return
+        if( trim(params%iterstats).ne.'yes' ) return
         fname = ITERSTATS_FILE
         if( file_exists(fname) )then
             nl = nlines(fname )
@@ -435,9 +440,11 @@ contains
         call fname%kill
     end subroutine append_stats
 
-    subroutine plot_projdirs( self, os_in, ptcl_mask )
+    subroutine plot_projdirs( self, params, os_in, ptcl_mask )
         use CPlot2D_wrapper_module
+        use simple_parameters, only: parameters
         class(convergence),   intent(in) :: self
+        class(parameters),    intent(in) :: params
         class(oris),          intent(inout) :: os_in
         logical, allocatable, intent(in) :: ptcl_mask(:)
         type(string)                  :: title
@@ -450,10 +457,10 @@ contains
         integer,          allocatable :: pops(:), projs(:), inds(:)
         real(dp) :: color, x,y, sz
         integer  :: iptcl, nptcls, nprojs, proj, l, iostat, ind
-        if( trim(params_glob%iterstats).ne.'yes' ) return
+        if( trim(params%iterstats).ne.'yes' ) return
         nptcls = size(ptcl_mask)
         projs  = nint(os_in%get_all('proj'))
-        nprojs = max(params_glob%nspace,maxval(projs,mask=ptcl_mask))
+        nprojs = max(params%nspace,maxval(projs,mask=ptcl_mask))
         ! gather populations & euler angles
         allocate(phi(nprojs),psi(nprojs),pops(nprojs), logpops(nprojs))
         pops = 0
@@ -539,12 +546,12 @@ contains
             call CDataSet__delete(center)
         enddo
         ! write
-        fname_eps = 'iter_projdir_'//int2str_pad(params_glob%which_iter,3)//'.eps'//C_NULL_CHAR
+        fname_eps = 'iter_projdir_'//int2str_pad(params%which_iter,3)//'.eps'//C_NULL_CHAR
         call CPlot2D__OutputPostScriptPlot(figure, fname_eps%to_char())
         call CPlot2D__delete(figure)
         l = fname_eps%strlen_trim()
         fname_eps = fname_eps%to_char([1,l-1]) ! removing trailing C NULL character
-        fname_pdf = 'iter_projdir_'//int2str_pad(params_glob%which_iter,3)//'.pdf'
+        fname_pdf = 'iter_projdir_'//int2str_pad(params%which_iter,3)//'.pdf'
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=512 -dDEVICEHEIGHTPOINTS=512 -sOutputFile='&
             //fname_pdf%to_char()//' '//fname_eps%to_char()
         call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
