@@ -2,7 +2,7 @@
 module simple_euclid_sigma2
 use simple_core_module_api
 use simple_polarft_calc,   only: polarft_calc, pftc_glob
-use simple_parameters,     only: params_glob
+use simple_parameters,     only: parameters
 use simple_sigma2_binfile, only: sigma2_binfile
 use simple_starfile_wrappers
 implicit none
@@ -17,6 +17,7 @@ integer, parameter :: LENSTR = 48
 
 type euclid_sigma2
     private
+    class(parameters),    pointer :: p_ptr => null()
     real,    allocatable, public  :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
     real,    allocatable, public  :: sigma2_part(:,:)       !< the actual sigmas per particle (this part only)
     real,    allocatable          :: sigma2_groups(:,:,:)   !< sigmas for groups
@@ -50,24 +51,26 @@ class(euclid_sigma2), pointer :: eucl_sigma2_glob => null()
 
 contains
 
-    subroutine new( self, binfname, box )
+    subroutine new( self, params, binfname, box )
         ! read individual sigmas from binary file, to be modified at the end of the iteration
         ! read group sigmas from starfile, to be used for alignment and volume reconstruction
         ! set up fields for fast access to sigmas
         class(euclid_sigma2), target, intent(inout) :: self
+        class(parameters),   target, intent(in)    :: params
         class(string),                intent(in)    :: binfname
         integer,                      intent(in)    :: box
         call self%kill
+        self%p_ptr => params
         self%kfromto = [1, fdim(box)-1]
-        allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),params_glob%fromp:params_glob%top),&
-                  self%pinds(params_glob%fromp:params_glob%top) )
+        allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),self%p_ptr%fromp:self%p_ptr%top),&
+                  self%pinds(self%p_ptr%fromp:self%p_ptr%top) )
         if( associated(pftc_glob) )then
             call pftc_glob%assign_sigma2_noise(self%sigma2_noise)
             call pftc_glob%get_pinds(self%pinds)
         endif
         self%binfname     =  binfname
-        self%fromp        =  params_glob%fromp
-        self%top          =  params_glob%top
+        self%fromp        =  self%p_ptr%fromp
+        self%top          =  self%p_ptr%top
         self%sigma2_noise =  0.
         self%exists       =  .true.
         eucl_sigma2_glob  => self
@@ -79,6 +82,9 @@ contains
         integer,              intent(in)    :: pinds(:), iters(:)
         real, allocatable :: pspecs(:,:,:)
         integer :: i,nptcls,mincnt,maxcnt,icnt,ngroups,fromp,top,iptcl,eo,igroup
+        if( .not.associated(self%p_ptr) )then
+            THROW_HARD('euclid_sigma2: params pointer is not set')
+        endif
         nptcls = size(pinds)
         fromp  = minval(pinds)
         top    = maxval(pinds)
@@ -88,11 +94,11 @@ contains
         maxcnt  = maxval(iters)
         call self%init_from_group_header( sigma2_star_from_iter(mincnt) )
         allocate(self%sigma2_noise(self%kfromto(1):self%kfromto(2),self%fromp:self%top),source=0.)
-        if( params_glob%l_sigma_glob )then
+        if( self%p_ptr%l_sigma_glob )then
             do icnt = mincnt,maxcnt
                 call self%read_sigma2_groups( icnt, pspecs, ngroups )
                 if( ngroups /= 1 )then
-                    THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
+                    THROW_HARD('ngroups must be 1 when global sigma is estimated (p_ptr%l_sigma_glob == .true.)')
                 endif
                 !$omp parallel do default(shared) private(i,iptcl,eo) proc_bind(close) schedule(static)
                 do i = 1,nptcls
@@ -172,13 +178,16 @@ contains
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
         integer                             :: iptcl, igroup, ngroups, eo
+        if( .not.associated(self%p_ptr) )then
+            THROW_HARD('euclid_sigma2: params pointer is not set')
+        endif
         if( associated(pftc_glob) ) call pftc_glob%get_pinds(self%pinds)
-        call self%read_sigma2_groups( params_glob%which_iter, self%sigma2_groups, ngroups )
-        if( params_glob%l_sigma_glob )then
-            if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
+        call self%read_sigma2_groups(self%p_ptr%which_iter, self%sigma2_groups, ngroups)
+        if( self%p_ptr%l_sigma_glob )then
+            if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (p_ptr%l_sigma_glob == .true.)')
             ! copy global sigma to particles
             !$omp parallel do default(shared) private(iptcl,eo) proc_bind(close) schedule(static)
-            do iptcl = params_glob%fromp, params_glob%top
+            do iptcl = self%p_ptr%fromp, self%p_ptr%top
                 if(os%get_state(iptcl) == 0 ) cycle
                 eo = nint(os%get(iptcl, 'eo')) ! 0/1
                 self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,1,:)
@@ -187,7 +196,7 @@ contains
         else
             ! copy group sigmas to particles
             !$omp parallel do default(shared) private(iptcl,eo,igroup) proc_bind(close) schedule(static)
-            do iptcl = params_glob%fromp, params_glob%top
+            do iptcl = self%p_ptr%fromp, self%p_ptr%top
                 if(os%get_state(iptcl) == 0 ) cycle
                 igroup = os%get_int(iptcl, 'stkind')
                 eo     = os%get_eo(iptcl)  ! 0/1
@@ -213,14 +222,19 @@ contains
         class(ori),           intent(in)    :: o
         character(len=*),     intent(in)    :: refkind ! 'proj' or 'class'
         integer :: iref, irot
-        real    :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
+        real, allocatable :: sigma_contrib(:)
         real    :: shvec(2)
+        if( .not.associated(self%p_ptr) )then
+            THROW_HARD('euclid_sigma2: params pointer is not set')
+        endif
         if ( o%isstatezero() ) return
+        allocate(sigma_contrib(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2)), source=0.)
         shvec = o%get_2Dshift()
         iref  = nint(o%get(trim(refkind)))
         irot  = pftc_glob%get_roind(360. - o%e3get())
         call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
-        self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
+        self%sigma2_part(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2),iptcl) = sigma_contrib
+        deallocate(sigma_contrib)
     end subroutine calc_sigma2
 
     subroutine write_sigma2( self )
@@ -575,6 +589,7 @@ contains
             self%exists      = .false.
             eucl_sigma2_glob => null()
         endif
+        self%p_ptr => null()
     end subroutine kill
 
     subroutine test_unit

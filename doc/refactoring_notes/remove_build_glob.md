@@ -10,7 +10,7 @@ This refactor removes the global builder pointer (`build_glob`) and replaces it 
 
 ## Key Changes
 - Deleted `build_glob` from `simple_builder` and removed all assignments to it.
-- Strategy3D now stores a `build_ptr` in `strategy3D_srch`, set by constructors.
+- Strategy3D now stores a `b_ptr` in `strategy3D_srch`, set by constructors.
 - Commanders use local builder instances and pass them explicitly to helpers.
 - `commander_base::execute_safe` no longer nullifies or restores `build_glob`.
 

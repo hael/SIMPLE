@@ -69,10 +69,10 @@ contains
             lnns = .false.
             do ipeak = 1, self%s%npeaks
                 call self%s%opeaks%get_ori(ipeak, o)
-                call self%s%build_ptr%pgrpsyms%nearest_proj_neighbors(self%s%build_ptr%eulspace, o, params_glob%athres, lnns)
+                call self%s%b_ptr%pgrpsyms%nearest_proj_neighbors(self%s%b_ptr%eulspace, o, params_glob%athres, lnns)
             end do
             ! include the previous best ori in the multi-neighborhood search
-            call self%s%build_ptr%pgrpsyms%nearest_proj_neighbors(self%s%build_ptr%eulspace, self%s%o_prev, params_glob%athres, lnns)
+            call self%s%b_ptr%pgrpsyms%nearest_proj_neighbors(self%s%b_ptr%eulspace, self%s%o_prev, params_glob%athres, lnns)
             ! count the number of nearest neighbors
             self%s%nnn = count(lnns)
             ! search

@@ -16,7 +16,7 @@ interface angle_sampling
 end interface
 
 type :: eul_prob_tab
-    class(builder), pointer     :: build_ptr => null()
+    class(builder), pointer     :: b_ptr => null()
     type(ptcl_ref), allocatable :: loc_tab(:,:)    !< 2D search table (nspace*nstates, nptcls)
     type(ptcl_ref), allocatable :: state_tab(:,:)  !< 2D search table (nstates,        nptcls)
     type(ptcl_ref), allocatable :: assgn_map(:)    !< assignment map                  (nptcls)
@@ -67,15 +67,15 @@ contains
         logical :: l_empty
         l_empty = (trim(params_glob%empty3Dcavgs) .eq. 'yes')
         if( present(empty_okay) ) l_empty = empty_okay
-        self%build_ptr => build
+        self%b_ptr => build
         call self%kill
         self%nptcls       = size(pinds)
-        self%state_exists = self%build_ptr%spproj_field%states_exist(params_glob%nstates, thres=MIN_POP)
+        self%state_exists = self%b_ptr%spproj_field%states_exist(params_glob%nstates, thres=MIN_POP)
         self%nstates      = count(self%state_exists .eqv. .true.)
         if( l_empty )then
             allocate(self%proj_exists(params_glob%nspace,params_glob%nstates), source=.true.)
         else
-            self%proj_exists = self%build_ptr%spproj_field%projs_exist(params_glob%nstates,params_glob%nspace, thres=MIN_POP)
+            self%proj_exists = self%b_ptr%spproj_field%projs_exist(params_glob%nstates,params_glob%nspace, thres=MIN_POP)
         endif
         self%nrefs = count(self%proj_exists .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%jinds(self%nrefs),self%sinds(self%nrefs))
@@ -136,7 +136,7 @@ contains
         integer, allocatable :: states(:)
         integer :: i, iproj, iptcl, istate, n, iref
         real    :: x
-        self%build_ptr => build
+        self%b_ptr => build
         call self%kill
         self%nptcls  = os%get_noris(consider_state=.true.)
         self%nstates = params_glob%nstates
@@ -200,9 +200,9 @@ contains
         projs_ns = 0
         do si = 1, self%nstates
             istate = self%ssinds(si)
-            call calc_num2sample(self%build_ptr%spproj_field, params_glob%nspace, 'dist', n, state=istate)
+            call calc_num2sample(self%b_ptr%spproj_field, params_glob%nspace, 'dist', n, state=istate)
             projs_ns            = max(projs_ns, n)
-            inpl_athres(istate) = calc_athres(self%build_ptr%spproj_field, 'dist_inpl', state=istate)
+            inpl_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', state=istate)
         enddo
         if( allocated(locn) ) deallocate(locn)
         allocate(locn(projs_ns,nthr_glob), source=0)
@@ -223,10 +223,10 @@ contains
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 ! (1) identify shifts using the previously assigned best reference
-                call self%build_ptr%spproj_field%get_ori(iptcl, o_prev)        ! previous ori
+                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)        ! previous ori
                 istate     = o_prev%get_state()
                 irot       = pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                iproj      = self%build_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                iproj      = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 if( self%state_exists(istate) .and. self%proj_exists(iproj,istate) )then
                     iref_start = (istate-1)*params_glob%nspace
                     ! BFGS over shifts
@@ -372,8 +372,8 @@ contains
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 ! identify shifts using the previously assigned best reference
-                call self%build_ptr%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
-                iproj = self%build_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+                iproj = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 do is = 1, self%nstates
                     istate     = self%ssinds(is)
                     irot       = pftc%get_roind(360.-o_prev%e3get()) ! in-plane angle index
@@ -402,9 +402,9 @@ contains
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
                 ! identify shifts using the previously assigned best reference
-                call self%build_ptr%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
+                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
                 irot  = pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                iproj = self%build_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                iproj = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 do is = 1, self%nstates
                     istate      = self%ssinds(is)
                     iref_start  = (istate-1)*params_glob%nspace
@@ -481,7 +481,7 @@ contains
         !$omp end parallel do
         projs_athres = 0.
         do istate = 1, self%nstates
-            projs_athres = max(projs_athres, calc_athres(self%build_ptr%spproj_field, 'dist', state=istate))
+            projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', state=istate))
         enddo
         ! first row is the current best reference distribution
         iref_dist_inds = 1

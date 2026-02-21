@@ -32,12 +32,12 @@ contains
         use simple_parameters, only: parameters, params_glob
         class(commander_base), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-        class(parameters), pointer :: params_ptr
-        params_ptr => params_glob
+        class(parameters), pointer :: p_ptr
+        p_ptr => params_glob
         nullify(params_glob)
         call self%execute(cline)
-        params_glob => params_ptr
-        nullify(params_ptr)
+        params_glob => p_ptr
+        nullify(p_ptr)
     end subroutine execute_safe
 
 end module simple_commander_base

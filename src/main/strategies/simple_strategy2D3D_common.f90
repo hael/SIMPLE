@@ -1015,7 +1015,7 @@ contains
         ! PREPARATION OF SIGMAS
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(fname, params_glob%box)
+            call eucl_sigma%new(params_glob, fname, params_glob%box)
             call eucl_sigma%read_part(  build%spproj_field)
             call eucl_sigma%read_groups(build%spproj_field)
         end if

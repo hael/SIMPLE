@@ -108,7 +108,7 @@ type(image), target, allocatable :: cavgs_odd_new(:)          !< Odd class avera
 type(image), target, allocatable :: cavgs_merged_new(:)       !< Merged class averages for reading
 type(cavgs_set)                  :: cavgs                     !< Class averages
 type(euclid_sigma2)              :: eucl_sigma                !< Noise power estimates
-type(builder),        pointer    :: build_ptr => null()       !< active builder instance
+type(builder),        pointer    :: b_ptr => null()       !< active builder instance
 logical,             allocatable :: pptcl_mask(:)             !< selected particles
 integer                          :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
 integer                          :: istart      = 0, iend = 0 !< particle index range in partition
