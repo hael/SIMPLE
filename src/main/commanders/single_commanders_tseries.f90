@@ -177,11 +177,11 @@ contains
             ! motion corr
             frame_counter = 0
             if( cline%defined('gainref') )then
-                call mciter%iterate(cline_mcorr, ctfvars, o, string('tseries_win')//int2str_pad(iframe,numlen_nframes),&
+                call mciter%iterate(params, cline_mcorr, ctfvars, o, string('tseries_win')//int2str_pad(iframe,numlen_nframes),&
                 &frame_counter, frames2align, string('./'), tseries='yes', gainref_fname=params%gainref)
             else
-                call mciter%iterate(cline_mcorr, ctfvars, o, string('tseries_win')//int2str_pad(iframe,numlen_nframes),&
-                frame_counter, frames2align, string('./'), tseries='yes')
+                call mciter%iterate(params, cline_mcorr, ctfvars, o, string('tseries_win')//int2str_pad(iframe,numlen_nframes),&
+                &frame_counter, frames2align, string('./'), tseries='yes')
             endif
             call spproj%os_mic%set_ori(iframe, o)
         end do
@@ -263,10 +263,10 @@ contains
         frame_counter = 0
         ! motion corr
         if( cline%defined('gainref') )then
-            call mciter%iterate(cline_mcorr, ctfvars, o, string('frames2align'), frame_counter,&
+            call mciter%iterate(params, cline_mcorr, ctfvars, o, string('frames2align'), frame_counter,&
                 &string('frames2align.mrc'), string('./'), gainref_fname=params%gainref, tseries='yes')
         else
-            call mciter%iterate(cline_mcorr, ctfvars, o, string('frames2align'), frame_counter,&
+            call mciter%iterate(params, cline_mcorr, ctfvars, o, string('frames2align'), frame_counter,&
                 &string('frames2align.mrc'), string('./'), tseries='yes')
         endif
         call o%kill

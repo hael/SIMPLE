@@ -42,7 +42,7 @@ contains
         call vol%pad(vol_pad)
         call vol_pad%fft
         ! prepare for projection
-        call vol_pad%expand_cmat
+        call vol_pad%expand_cmat(params_glob%box)
         write(logfhandle,'(A)') '>>> GENERATING PROJECTIONS'
         !$omp parallel do schedule(static) default(shared)&
         !$omp private(i,ithr,o2) proc_bind(close)
@@ -89,7 +89,7 @@ contains
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
         call vol_pad%fft
-        call vol_pad%expand_cmat
+        call vol_pad%expand_cmat(params_glob%box)
         call rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
         call vol_pad%kill_expanded
         call vol_pad%kill

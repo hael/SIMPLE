@@ -1447,7 +1447,7 @@ contains
         end do
         call stkio_r%close
         ! Automasking
-        call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
+        call automask2D(params, masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
         do icavg=1,ncavgs
             call projs(icavg)%div_below(0.,10.)
             call projs(icavg)%mul(masks(icavg))

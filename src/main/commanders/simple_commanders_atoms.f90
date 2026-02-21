@@ -89,11 +89,11 @@ contains
         call params%new(cline)
         if( prefit_lattice )then
             ! fit lattice using vol3
-            call nano%new(params%vols(3))
+            call nano%new(params, params%vols(3))
             call nano%identify_lattice_params(a)
             call nano%kill
             ! calc stats
-            call nano%new(params%vols(1))
+            call nano%new(params, params%vols(1))
             call nano%set_atomic_coords(params%pdbfile)
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
@@ -103,7 +103,7 @@ contains
             call nano%kill
         else
             ! calc stats
-            call nano%new(params%vols(1))
+            call nano%new(params, params%vols(1))
             call nano%set_atomic_coords(params%pdbfile)
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
@@ -219,7 +219,7 @@ contains
             call cline_sim_atoms%set('nthr',    real(p%nthr))
             call xsim_atoms%execute(cline_sim_atoms)
             ! detecting atom positions of the simulated nanoparticle
-            call nano%new(string('tmp.mrc'))
+            call nano%new(p, string('tmp.mrc'))
             call nano%identify_atomic_pos(a, l_fit_lattice=.true., l_atom_thres=trim(p%atom_thres).eq.'yes', l_print=.false.)
             call nano%kill
             ! generating stats for the reference lattice
@@ -365,7 +365,7 @@ contains
         type(nanoparticle) :: nano
         if( .not. cline%defined('outvol') ) call cline%set('outvol', 'denoised.mrc')
         call params%new(cline)
-        call nano%new(params%vols(1), params%msk)
+        call nano%new(params, params%vols(1), params%msk)
         call nano%conv_denoise(params%outvol)
         call nano%kill
         ! end gracefully
@@ -382,18 +382,18 @@ contains
         prefit_lattice = cline%defined('vol2')
         call params%new(cline)
         if( prefit_lattice )then
-            call nano%new(params%vols(2))
+            call nano%new(params, params%vols(2))
             ! execute
             call nano%identify_lattice_params(a)
             ! kill
             call nano%kill
-            call nano%new(params%vols(1))
+            call nano%new(params, params%vols(1))
             ! execute
             call nano%identify_atomic_pos(a, l_fit_lattice=.false., l_atom_thres=trim(params%atom_thres).eq.'yes')
             ! kill
             call nano%kill
         else
-            call nano%new(params%vols(1))
+            call nano%new(params, params%vols(1))
             ! execute
             call nano%identify_atomic_pos(a, l_fit_lattice=.true., l_atom_thres=trim(params%atom_thres).eq.'yes')
             ! kill

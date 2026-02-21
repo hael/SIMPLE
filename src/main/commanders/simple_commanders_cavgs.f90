@@ -778,7 +778,7 @@ contains
         pops      = spproj%os_cls2D%get_all_asint('pop')
         pops      = pack(pops, mask=l_non_junk)
         ! Automasking
-        call automask2D(mask_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
+        call automask2D(params, mask_imgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
         ! calc integrated intesities and shift
         allocate(ints(ncls_sel), source=0.)
         do icls = 1, ncls_sel

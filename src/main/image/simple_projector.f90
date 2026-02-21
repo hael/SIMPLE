@@ -37,17 +37,10 @@ contains
 
     ! CONSTRUCTOR
 
-    ! Why params_glob%box shows up in expand_cmat (in this context)???
-    ! Given that hk is “unpadded image Fourier units,” the projector has to maintain a global, consistent Fourier normalization between:
-    !     ** images prepared by prepimg4align (which scale FFTs by 1/(n1*n2) in your snippets), and
-    !     ** projections computed from the volume FT.
-    ! Using params_glob%box as a factor inside expand_cmat is almost certainly a normalization bridge to match those conventions
-    ! (and keep scores comparable across crops / boxes).
-    ! using the global parameter ensures the projector normalization doesn’t silently change if the volume happens to be in a different 
-    ! internal box than the nominal pipeline box.
     !>  \brief  is a constructor of the expanded Fourier matrix
-    subroutine expand_cmat( self )
-        class(projector),  intent(inout) :: self
+    subroutine expand_cmat( self, orig_box )
+        class(projector), intent(inout) :: self
+        integer,          intent(in)    :: orig_box
         integer, allocatable :: cyck(:), cycm(:), cych(:)
         real    :: factor
         integer :: h, k, m, phys(3), logi(3), lims(2,3), ldim(3)
@@ -61,7 +54,7 @@ contains
         lims               = transpose(self%loop_lims(3))
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%kbwin%get_winsz())
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
-        factor = real(params_glob%box)
+        factor = real(orig_box)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
@@ -214,14 +207,6 @@ contains
         end do
     end subroutine fproject_polar
 
-    ! This oversampled version is correct if all of the following are true:
-    ! ** loc is expressed in the same logical Fourier index units as cmat_exp 
-    ! ** self%cmat_exp was built from a padded volume FT, such that the padded logical indices are 
-    !    scaled by padding_factor relative to the original lattice. In other words: the padded expanded 
-    !    FT includes indices like …,-2s,-s,0,s,2s,… that correspond exactly to the original lattice points.
-    ! ** The KB weights apod_mat_3d(loc, ...) are meant to be evaluated in original-grid coordinate units 
-    !    (i.e., distances measured in “original grid steps”). That matches the goal: keep the same 
-    !    interpolation behavior, just fetch samples from the padded FT at exact corresponding points.
     !> \brief  extracts a polar FT from a volume's expanded FT (self),
     !>         using a PADDED expanded FT.
     subroutine fproject_polar_oversamp( self, iref, e, pftc, iseven, mask )

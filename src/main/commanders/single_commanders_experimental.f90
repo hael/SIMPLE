@@ -298,7 +298,7 @@ contains
         allocate(msk_in_pix(nvols), source=0.)
         do ivol = 1,nvols
             call vol%read(volnames(ivol))
-            call mskvol%estimate_spher_mask_diam(vol, AMSKLP_NANO, msk_in_pix(ivol))
+            call mskvol%estimate_spher_mask_diam(params, vol, AMSKLP_NANO, msk_in_pix(ivol))
             write(logfhandle,*) ivol, 'mask diameter in A: ', 2. * msk_in_pix(ivol) * params%smpd
             call mskvol%kill
         end do

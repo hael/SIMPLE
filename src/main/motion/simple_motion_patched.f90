@@ -1,7 +1,7 @@
 !@descr: patched-based anisotropic motion correction
 module simple_motion_patched
 use simple_core_module_api
-use simple_parameters,          only: params_glob
+use simple_parameters,          only: parameters
 use simple_opt_factory,         only: opt_factory
 use simple_opt_spec,            only: opt_spec
 use simple_opt_lbfgsb,          only: PRINT_NEVALS
@@ -24,6 +24,7 @@ integer, parameter :: PATCH_PDIM     = 18   ! dimension of fitted polynomial
 type :: motion_patched
     private
     logical                             :: existence
+    class(parameters),      pointer     :: p_ptr => null()
     type(image_stack),      allocatable :: frame_patches(:,:)
     real,                   allocatable :: shifts_patches(:,:,:,:)
     real,                   allocatable :: shifts_patches_for_fit(:,:,:,:)
@@ -83,14 +84,16 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, npatch, trs )
-        class(motion_patched), intent(inout) :: self
-        integer,               intent(in)    :: npatch(2)
-        real, optional,        intent(in)    :: trs
+    subroutine new( self, params, npatch, trs )
+        class(motion_patched),     intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        integer,                   intent(in)    :: npatch(2)
+        real, optional,            intent(in)    :: trs
         call self%kill()
         self%npatch = npatch
         self%trs    = TRS_DEFAULT
         if (present(trs)) self%trs = trs
+        self%p_ptr => params
         allocate(self%updateres(self%npatch(1),self%npatch(2)),&
                 &self%patch_centers(self%npatch(1),self%npatch(2),2),&
                 &self%lims_patches(self%npatch(1),self%npatch(2),2,2))
@@ -148,7 +151,7 @@ contains
         integer :: iframe
         ! prep
         self%hp          = hp
-        self%lp          = params_glob%lpstart
+        self%lp          = self%p_ptr%lpstart
         self%updateres   = 0
         self%shift_fname = shift_fname%to_char() // C_NULL_CHAR
         if (allocated(self%global_shifts)) deallocate(self%global_shifts)
@@ -171,14 +174,14 @@ contains
         ! determines patch geometry
         call self%set_size_frames_ref()
         ! determine shifts for patches
-        select case(trim(params_glob%algorithm))
+        select case(trim(self%p_ptr%algorithm))
             case('patch_refine')
                 call self%det_shifts_refine(frames)
             case DEFAULT
                 call self%det_shifts(frames)
         end select
         ! deals with frame of reference convention
-        select case(trim(params_glob%mcconvention))
+        select case(trim(self%p_ptr%mcconvention))
         case('first','relion')
             self%fixed_frame        = 1
             self%interp_fixed_frame = 1
@@ -212,7 +215,7 @@ contains
         corr_avg = 0.
         ! initialize transfer matrix to correct dimensions
         call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd, wthreads=.false.)
-        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1), params_glob%lpstop)
+        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1), self%p_ptr%lpstop)
         res      = self%frame_patches(1,1)%stack(1)%get_res()
         self%hp  = min(self%hp,res(1))
         corr_avg = 0.
@@ -222,10 +225,10 @@ contains
             do j = 1,self%npatch(2)
                 ! init
                 call self%gen_patch(frames,i,j)
-                call align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
+                call align_hybrid(i,j)%new(self%p_ptr, self%frame_patches(i,j)%stack)
                 call align_hybrid(i,j)%set_rand_init_shifts(.true.)
-                call align_hybrid(i,j)%set_reslims(self%hp, self%lp, params_glob%lpstop)
-                call align_hybrid(i,j)%set_trs(params_glob%scale_movies*params_glob%trs)
+                call align_hybrid(i,j)%set_reslims(self%hp, self%lp, self%p_ptr%lpstop)
+                call align_hybrid(i,j)%set_trs(self%p_ptr%scale_movies*self%p_ptr%trs)
                 call align_hybrid(i,j)%set_coords(i,j)
                 call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
                 call align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
@@ -265,7 +268,7 @@ contains
         allocate(align_hybrid(self%npatch(1), self%npatch(2)))
         ! initialize transfer matrix to correct dimensions
         call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd, wthreads=.false.)
-        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1), params_glob%lpstop)
+        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1), self%p_ptr%lpstop)
         res      = self%frame_patches(1,1)%stack(1)%get_res()
         self%hp  = min(self%hp,res(1))
         corr_avg = 0.
@@ -277,10 +280,10 @@ contains
             do j = 1,self%npatch(2)
                 ! init
                 call self%gen_patch(frames,i,j)
-                call align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
+                call align_hybrid(i,j)%new(self%p_ptr, self%frame_patches(i,j)%stack)
                 call align_hybrid(i,j)%set_rand_init_shifts(.true.)
-                call align_hybrid(i,j)%set_reslims(self%hp, self%lp, params_glob%lpstop)
-                call align_hybrid(i,j)%set_trs(params_glob%scale_movies*params_glob%trs)
+                call align_hybrid(i,j)%set_reslims(self%hp, self%lp, self%p_ptr%lpstop)
+                call align_hybrid(i,j)%set_trs(self%p_ptr%scale_movies*self%p_ptr%trs)
                 call align_hybrid(i,j)%set_coords(i,j)
                 call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
                 call align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
@@ -307,7 +310,7 @@ contains
         !$omp proc_bind(close) schedule(dynamic) reduction(+:corr_avg)
         do i = 1,self%npatch(1)
             do j = 1,self%npatch(2)
-                call align_hybrid(i,j)%set_reslims(self%hp, params_glob%lpstop, params_glob%lpstop)
+                call align_hybrid(i,j)%set_reslims(self%hp, self%p_ptr%lpstop, self%p_ptr%lpstop)
                 call align_hybrid(i,j)%set_fitshifts(.false.)
                 call align_hybrid(i,j)%set_shsrch_tol(1.e-4)
                 ! patch shifts from global model
@@ -810,6 +813,7 @@ contains
         self%npatch = 0
         self%lp     = -1.
         call ftexp_transfmat_kill
+        self%p_ptr => null()
     end subroutine kill
 
     ! POLYNOMIAL DEFORMATION MODEL UTILITIES

@@ -3,7 +3,7 @@
 module simple_motion_align_hybrid
 use simple_core_module_api
 use simple_image,        only: image
-use simple_parameters,   only: params_glob
+use simple_parameters,   only: parameters
 use simple_ft_expanded,  only: ft_expanded
 use simple_ftexp_shsrch, only: ftexp_shsrch
 implicit none
@@ -45,9 +45,11 @@ type :: motion_align_hybrid
     real                           :: shsrch_tol     = SRCH_TOL         !< tolerance parameter for continuous srch update
     real                           :: smpd = 0.                         !< sampling distance
     real                           :: scale_factor   = 1.               !< local frame scaling
+    real                           :: scale_movies   = 1.               !< scaling of movies for shift search 
     real                           :: trs            = 10.              !< half correlation disrete search bound
     integer                        :: ldim(3) = 0, ldim_sc(3) = 0       !< frame dimensions
     integer                        :: cdim(3)        = 0
+    integer                        :: iwcrit       = 0                  !< wcrit enumerator
     integer                        :: maxits_dcorr   = MAXITS_DCORR     !< maximum number of iterations for discrete search
     integer                        :: maxits_corr    = MAXITS_CORR      !< maximum number of iterations for continuous search
     integer                        :: nframes        = 0                !< number of frames
@@ -107,11 +109,12 @@ end type motion_align_hybrid
 
 contains
 
-    subroutine new( self, frames_ptr )
+    subroutine new( self, params, frames_ptr )
         class(motion_align_hybrid),       intent(inout) :: self
+        class(parameters),                intent(in)    :: params
         type(image), allocatable, target, intent(in)    :: frames_ptr(:)
         call self%kill
-        self%trs            = params_glob%trs
+        self%trs            = params%trs
         self%ftol           = CFTOL
         self%gtol           = CGTOL
         self%fixed_frame    = 1
@@ -124,14 +127,16 @@ contains
         if ( self%nframes < 2 ) then
             THROW_HARD('nframes < 2; simple_motion_align_hybrid: align')
         end if
-        self%frames_orig => frames_ptr
-        self%smpd    = self%frames_orig(1)%get_smpd()
-        self%ldim    = self%frames_orig(1)%get_ldim()
-        self%hp      = min((real(minval(self%ldim(1:2))) * self%smpd)/4.,1000.)
-        self%hp      = min(params_glob%hp, self%hp)
-        self%lp      = params_glob%lpstart
-        self%lpstart = params_glob%lpstart
-        self%lpstop  = params_glob%lpstop
+        self%frames_orig  => frames_ptr
+        self%smpd         = self%frames_orig(1)%get_smpd()
+        self%ldim         = self%frames_orig(1)%get_ldim()
+        self%hp           = min((real(minval(self%ldim(1:2))) * self%smpd)/4.,1000.)
+        self%hp           = min(params%hp, self%hp)
+        self%lp           = params%lpstart
+        self%lpstart      = params%lpstart
+        self%lpstop       = params%lpstop
+        self%iwcrit       = params%wcrit_enum
+        self%scale_movies = params%scale_movies
         self%resstep = (self%lpstart-self%lpstop) / real(NRESUPDATES-1)
         allocate(self%frames_sh(self%nframes),self%frames(self%nframes),&
                 &self%shifts_toplot(self%nframes,2), self%opt_shifts(self%nframes,2),&
@@ -395,7 +400,7 @@ contains
             if( self%L_BENCH ) self%rt_calc_shift = self%rt_calc_shift + toc(self%t)
             self%corr = sum(self%corrs) / real(self%nframes)
             ! updates weights
-            if( l_calc_frameweights ) self%frameweights = corrs2weights(self%corrs, params_glob%wcrit_enum)
+            if( l_calc_frameweights ) self%frameweights = corrs2weights(self%corrs, self%iwcrit)
             ! convergence
             rmsd = self%calc_rmsd(opt_shifts_prev, self%opt_shifts)
             if( iter > 1 .and. rmsd < 0.5 )then
@@ -431,7 +436,7 @@ contains
             l_calc_frameweights = .true.
         endif
         ! shift boundaries
-        trs = 5.*params_glob%scale_movies
+        trs = 5.*self%scale_movies
         ! search object allocation
         allocate(ftexp_srch(self%nframes))
         do iframe=1,self%nframes
@@ -459,7 +464,7 @@ contains
         end do
         !$omp end parallel do
         self%corr = sum(self%corrs)/real(self%nframes)
-        if( l_calc_frameweights ) self%frameweights = corrs2weights(self%corrs, params_glob%wcrit_enum)
+        if( l_calc_frameweights ) self%frameweights = corrs2weights(self%corrs, self%iwcrit)
         corr_saved         = self%corr
         opt_shifts_saved   = self%opt_shifts
         frameweights_saved = self%frameweights
@@ -497,7 +502,7 @@ contains
             self%corr = sum(self%corrs)/real(self%nframes)
             if( self%L_BENCH ) self%rt_minimize = self%rt_minimize + toc(self%t)
             ! updates weights
-            if( l_calc_frameweights ) self%frameweights = corrs2weights(self%corrs, params_glob%wcrit_enum)
+            if( l_calc_frameweights ) self%frameweights = corrs2weights(self%corrs, self%iwcrit)
             ! convergence
             rmsd = self%calc_rmsd(opt_shifts_prev, self%opt_shifts)
             if( self%corr >= corr_saved ) then

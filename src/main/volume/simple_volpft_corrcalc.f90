@@ -51,7 +51,7 @@ contains
         class(projector), target,           intent(in)    :: vol_ref
         real,                               intent(in)    :: hp, lp, alpha
         class(projector), target, optional, intent(in)    :: vol_target
-        integer   :: ispace, k
+        integer   :: ispace, k, ldim(3)
         real      :: vec(3), rmat(3,3)
         type(ori) :: e
         type(sym) :: ico
@@ -107,10 +107,11 @@ contains
         end do
         ! prepare for fast interpolation
         call self%vol_ref%fft()
-        call self%vol_ref%expand_cmat
+        ldim = self%vol_ref%get_ldim()
+        call self%vol_ref%expand_cmat(ldim(1))
         if( present(vol_target) )then
             call self%vol_target%fft()
-            call self%vol_target%expand_cmat
+            call self%vol_target%expand_cmat(ldim(1))
         endif
         ! extract the reference lines
         call self%extract_ref

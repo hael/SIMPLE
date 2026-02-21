@@ -210,7 +210,7 @@ contains
         call even_icm%copy(even)
         call odd_icm%copy(odd)
         if( params%automsk.ne.'no' )then
-            call envmsk%automask3D(even, odd, l_tight=params%automsk.eq.'tight')
+            call envmsk%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
             ! apply mask to volumes
             call even_icm%zero_env_background(envmsk)
             call odd_icm%zero_env_background(envmsk)

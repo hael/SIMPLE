@@ -7,7 +7,7 @@ use simple_image,      only: image
 use simple_image_msk,  only: image_msk
 use simple_image_bin,  only: image_bin
 use simple_atoms,      only: atoms
-use simple_parameters, only: params_glob
+use simple_parameters, only: parameters
 !use simple_qr_solve
 use simple_nanoparticle_utils
 implicit none
@@ -243,8 +243,9 @@ end type nanoparticle
 
 contains
 
-    subroutine new( self, fname, msk )
+    subroutine new( self, params, fname, msk )
         class(nanoparticle), intent(inout) :: self
+        class(parameters),   intent(in)    :: params
         class(string),       intent(in)    :: fname
         real, optional,      intent(in)    :: msk
         type(image_msk)  :: mskvol
@@ -255,10 +256,10 @@ contains
         call self%kill
         self%npname    = fname
         self%fbody     = get_fbody(basename(fname), fname2ext(fname))
-        self%smpd      = params_glob%smpd
-        self%atom_name = ' '//params_glob%element
-        self%element   = params_glob%element
-        el_ucase       = upperCase(params_glob%element)
+        self%smpd      = params%smpd
+        self%atom_name = ' '//params%element
+        self%element   = params%element
+        el_ucase       = upperCase(params%element)
         call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         call find_ldim_nptcls(self%npname, self%ldim, nptcls, smpd)
@@ -268,7 +269,7 @@ contains
         if( present(msk) )then
             call self%img%mask3D_soft(msk)
         else
-            call mskvol%estimate_spher_mask_diam(self%img, AMSKLP_NANO, msk_in_pix)
+            call mskvol%estimate_spher_mask_diam(params, self%img, AMSKLP_NANO, msk_in_pix)
             write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * self%smpd
             call self%img%mask3D_soft(msk_in_pix)
             call mskvol%kill

@@ -76,7 +76,7 @@ contains
         call vol_pad%new(ldim_pd, smpd)
         call vol_in%pad(vol_pad)
         call vol_pad%fft
-        call vol_pad%expand_cmat
+        call vol_pad%expand_cmat(params%box)
         ! generate volume aligned to symaxis
         call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
         call vol_asym_aligned2axis%write(string('vol_c1_aligned2_'//trim(params%pgrp)//'axis.mrc'))
@@ -278,7 +278,7 @@ contains
         call vol_pad%new(ldim_pd, smpd)
         call vol_in%pad(vol_pad)
         call vol_pad%fft
-        call vol_pad%expand_cmat
+        call vol_pad%expand_cmat(ldim(1))
         ! make outputs
         call vol_sym%new(ldim, smpd)
         call vol_asym_aligned2axis%new(ldim, smpd)

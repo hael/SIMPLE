@@ -42,7 +42,7 @@ call pftc%new(p%nptcls, [1, p%nptcls], p%kfromto)
 call b%vol%read(p%vols(1))
 call b%vol%mask3D_soft(p%msk)
 call b%vol%fft()
-call b%vol%expand_cmat
+call b%vol%expand_cmat(p%box)
 call b%vol%fproject_polar(1, o, pftc,       iseven=.true., mask=b%l_resmsk)
 call pftc%cp_even_ref2ptcl(1,1)
 call pftc%set_eo(1, .true. )

@@ -201,10 +201,10 @@ contains
                     call o_mov%getter('movie', moviename)
                     if( .not.file_exists(moviename)) cycle
                     if( cline%defined('gainref') )then
-                        call mciter%iterate(cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
+                        call mciter%iterate(params, cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
                             &output_dir_motion_correct, gainref_fname=params%gainref)
                     else
-                        call mciter%iterate(cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
+                        call mciter%iterate(params, cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
                             &output_dir_motion_correct)
                     endif
                     moviename_forctf = mciter%get_moviename('forctf')
@@ -367,9 +367,9 @@ contains
                     call o%getter('movie', moviename)
                     ctfvars = spproj%get_micparams(imovie)
                     if( cline%defined('gainref') )then
-                        call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, output_dir, gainref_fname=params%gainref)
+                        call mciter%iterate(params, cline, ctfvars, o, fbody, frame_counter, moviename, output_dir, gainref_fname=params%gainref)
                     else
-                        call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, output_dir)
+                        call mciter%iterate(params, cline, ctfvars, o, fbody, frame_counter, moviename, output_dir)
                     endif
                     call spproj%os_mic%set_ori(imovie, o)
                     write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'

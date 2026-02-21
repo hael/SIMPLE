@@ -2,7 +2,7 @@
 module simple_motion_align_nano
 use simple_core_module_api
 use simple_image,      only: image
-use simple_parameters, only: params_glob
+use simple_parameters, only: parameters
 implicit none
 
 public :: motion_align_nano
@@ -55,11 +55,12 @@ end type motion_align_nano
 
 contains
 
-    subroutine new( self, frames_ptr )
-        class(motion_align_nano),       intent(inout) :: self
+    subroutine new( self, params, frames_ptr )
+        class(motion_align_nano),         intent(inout) :: self
+        class(parameters),                intent(in)    :: params
         type(image), allocatable, target, intent(in)    :: frames_ptr(:)
         call self%kill
-        self%trs            = params_glob%trs
+        self%trs            = params%trs
         self%maxits_dcorr   = MAXITS_DCORR
         self%bfactor        = -1.
         self%nframes        =  size(frames_ptr, 1)
@@ -70,8 +71,8 @@ contains
         self%smpd        =  self%frames_orig(1)%get_smpd()
         self%ldim        =  self%frames_orig(1)%get_ldim()
         self%hp          =  min((real(minval(self%ldim(1:2))) * self%smpd)/4.,1000.)
-        self%hp          =  min(params_glob%hp, self%hp)
-        self%lp          =  params_glob%lp
+        self%hp          =  min(params%hp, self%hp)
+        self%lp          =  params%lp
         allocate(self%frames_sh(self%nframes),self%frames(self%nframes),&
                 &self%opt_shifts(self%nframes,2),&
                 &self%frameweights(self%nframes))

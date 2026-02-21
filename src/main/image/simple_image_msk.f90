@@ -3,7 +3,7 @@ module simple_image_msk
 use simple_core_module_api
 use simple_image,      only: image
 use simple_image_bin,  only: image_bin
-use simple_parameters, only: params_glob
+use simple_parameters, only: parameters
 use simple_segmentation
 implicit none
 
@@ -33,8 +33,9 @@ end type image_msk
 
 contains
 
-    subroutine automask3D_1( self, vol_even, vol_odd, vol_masked, l_tight, pix_thres )
+    subroutine automask3D_1( self, params, vol_even, vol_odd, vol_masked, l_tight, pix_thres )
         class(image_msk),  intent(inout) :: self
+        class(parameters), intent(in)    :: params
         class(image),      intent(inout) :: vol_even, vol_odd, vol_masked
         logical,           intent(in)    :: l_tight
         real, optional,    intent(in)    :: pix_thres
@@ -43,27 +44,28 @@ contains
         call vol_masked%add(vol_odd)
         call vol_masked%mul(0.5)
         ! automasking
-        call self%automask3D_2(vol_even, vol_odd, l_tight, pix_thres)
+        call self%automask3D_2(params, vol_even, vol_odd, l_tight, pix_thres)
         ! apply mask to volume
         call vol_masked%zero_env_background(self)
         call vol_masked%mul(self)
     end subroutine automask3D_1
 
-    subroutine automask3D_2( self, vol_even, vol_odd, l_tight, pix_thres )
+    subroutine automask3D_2( self, params, vol_even, vol_odd, l_tight, pix_thres )
         class(image_msk),  intent(inout) :: self
+        class(parameters), intent(in)    :: params
         class(image),      intent(inout) :: vol_even, vol_odd
         logical,           intent(in)    :: l_tight
         real, optional,    intent(in)    :: pix_thres 
         type(image) :: vol_filt
         if( vol_even%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
         write(logfhandle,'(A)'  ) '>>> AUTOMASKING'
-        self%amsklp   = params_glob%amsklp
-        self%binwidth = params_glob%binwidth
-        self%edge     = params_glob%edge
+        self%amsklp   = params%amsklp
+        self%binwidth = params%binwidth
+        self%edge     = params%edge
         ! filter 
-        call self%automask3D_filter(vol_even, vol_odd, vol_filt)
+        call self%automask3D_filter(params, vol_even, vol_odd, vol_filt)
         ! binarization
-        call self%automask3D_binarize(l_tight, pix_thres)
+        call self%automask3D_binarize(params, l_tight, pix_thres)
         ! add layers
         call self%grow_bins(self%binwidth)
         ! add volume soft edge
@@ -72,8 +74,9 @@ contains
         call vol_filt%kill
     end subroutine automask3D_2
 
-    subroutine estimate_spher_mask_diam( self, vol, amsklp, msk_in_pix )
+    subroutine estimate_spher_mask_diam( self, params, vol, amsklp, msk_in_pix )
         class(image_msk),  intent(inout) :: self
+        class(parameters), intent(in)    :: params
         class(image),      intent(inout) :: vol
         real,              intent(in)    :: amsklp
         real,              intent(out)   :: msk_in_pix
@@ -87,7 +90,7 @@ contains
         ! transfer image to binary image
         call self%transfer2bimg(vol_filt)
         ! binarization
-        call self%automask3D_binarize(l_tight=.false.)
+        call self%automask3D_binarize(params, l_tight=.false.)
         ! mask diameter estimation
         call self%diameter_cc(1, diam)
         diam = diam / self%get_smpd() ! in pixels now
@@ -96,27 +99,29 @@ contains
         call vol_filt%kill
     end subroutine estimate_spher_mask_diam
 
-    subroutine automask3D_filter( self, vol_even, vol_odd, vol_filt )
-        class(image_msk), intent(inout) :: self
-        class(image),     intent(inout) :: vol_even, vol_odd, vol_filt
+    subroutine automask3D_filter( self, params, vol_even, vol_odd, vol_filt )
+        class(image_msk),  intent(inout) :: self
+        class(parameters), intent(in)    :: params
+        class(image),      intent(inout) :: vol_even, vol_odd, vol_filt
         real,    parameter :: LAM = 100.
         if( vol_even%is_2d() )THROW_HARD('automask3D_filter is intended for volumes only')
-        self%amsklp = params_glob%amsklp
+        self%amsklp = params%amsklp
         ! ICM filter
         call vol_even%ICM3D_eo(vol_odd, LAM)
         call vol_filt%copy(vol_even)
         call vol_filt%add(vol_odd)
         call vol_filt%mul(0.5)
-        if( L_WRITE .and. params_glob%part == 1 ) call vol_filt%write(string('ICM_avg.mrc'))
+        if( L_WRITE .and. params%part == 1 ) call vol_filt%write(string('ICM_avg.mrc'))
         ! low-pass filter
         call vol_filt%bp(0., self%amsklp)
-        if( L_WRITE .and. params_glob%part == 1 ) call vol_filt%write(string('ICM_avg_lp.mrc'))
+        if( L_WRITE .and. params%part == 1 ) call vol_filt%write(string('ICM_avg_lp.mrc'))
         ! transfer image to binary image
         call self%transfer2bimg(vol_filt)
     end subroutine automask3D_filter
 
-    subroutine automask3D_binarize( self, l_tight, pix_thres )
+    subroutine automask3D_binarize( self, params, l_tight, pix_thres )
         class(image_msk),  intent(inout) :: self
+        class(parameters), intent(in)    :: params
         logical,           intent(in)    :: l_tight
         real, optional,    intent(in)    :: pix_thres
         real,    allocatable :: ccsizes(:)
@@ -129,7 +134,7 @@ contains
             call otsu_img(self, tight=l_tight)
         endif
         call self%set_imat
-        if( L_WRITE .and. params_glob%part == 1 ) call self%write(string('binarized.mrc'))
+        if( L_WRITE .and. params%part == 1 ) call self%write(string('binarized.mrc'))
         ! identify connected components
         call self%find_ccs(ccimage, update_imat=.true.)
         ! extract all cc sizes (in # pixels)
@@ -143,7 +148,7 @@ contains
             call ccimage%cc2bin(1)
         endif
         call self%copy_bimg(ccimage)
-        if( L_WRITE .and. params_glob%part == 1 ) call self%write(string('largest_cc.mrc'))
+        if( L_WRITE .and. params%part == 1 ) call self%write(string('largest_cc.mrc'))
         ! destruct
         call ccimage%kill_bimg
         if( allocated(ccsizes) ) deallocate(ccsizes)
@@ -242,14 +247,15 @@ contains
         if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine density_inoutside_mask
 
-    subroutine automask2D( imgs, ngrow, winsz, edge, diams, shifts, write2disk )
+    subroutine automask2D( params, imgs, ngrow, winsz, edge, diams, shifts, write2disk )
         use simple_segmentation
         use simple_image_bin, only: image_bin
+        class(parameters), intent(in)    :: params
         class(image),      intent(inout) :: imgs(:)
         integer,           intent(in)    :: ngrow, winsz, edge
         real, allocatable, intent(inout) :: diams(:), shifts(:,:)
         logical, optional, intent(in)    :: write2disk
-        type(image_bin),    allocatable   :: img_bin(:), cc_img(:)
+        type(image_bin),   allocatable   :: img_bin(:), cc_img(:)
         real,              allocatable   :: ccsizes(:)
         integer :: i, n, loc, ldim(3)
         real    :: smpd, xyz(3)
@@ -257,7 +263,7 @@ contains
         n = size(imgs)
         l_write = .false.
         if( present(write2disk) ) l_write = write2disk
-        l_write = l_write .and. params_glob%part.eq.1
+        l_write = l_write .and. params%part.eq.1
         if( allocated(diams)  ) deallocate(diams)
         if( allocated(shifts) ) deallocate(shifts)
         ! allocate
@@ -270,7 +276,7 @@ contains
             call img_bin(i)%copy(imgs(i))
             call cc_img(i)%new_bimg( ldim, smpd, wthreads=.false.)
         end do
-        if( trim(params_glob%automsk).eq.'tight' )then
+        if( trim(params%automsk).eq.'tight' )then
             write(logfhandle,'(A)') '>>> 2D AUTOMASKING, TIGHT'
         else
             write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
@@ -282,11 +288,11 @@ contains
             ! dampens below zero (object positive in class averages/reprojs)
             call img_bin(i)%div_below(0.,10.)
             ! low-pass filter
-            call img_bin(i)%bp(0., params_glob%amsklp)
+            call img_bin(i)%bp(0., params%amsklp)
             ! filter with non-local means
             call img_bin(i)%NLmean2D
             ! binarize with Otsu
-            call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%automsk).eq.'tight')
+            call otsu_img(img_bin(i), mskrad=params%msk, positive=trim(params%automsk).eq.'tight')
             call img_bin(i)%masscen(xyz)
             shifts(i,:) = xyz(:2)
             call img_bin(i)%set_imat
@@ -298,9 +304,9 @@ contains
             loc     = maxloc(ccsizes,dim=1)
             ! estimate its diameter
             call cc_img(i)%diameter_cc(loc, diams(i))
-            if( diams(i) > 2.*(params_glob%msk+real(ngrow))*smpd )then
+            if( diams(i) > 2.*(params%msk+real(ngrow))*smpd )then
                 ! incorrect component was chosen, fall back on spherical mask
-                diams(i)    = 2.*(params_glob%msk-edge-COSMSKHALFWIDTH)*smpd
+                diams(i)    = 2.*(params%msk-edge-COSMSKHALFWIDTH)*smpd
                 shifts(i,:) = 0.
                 call cc_img(i)%disc(ldim, smpd, diams(i)/(2.*smpd))
                 call cc_img(i)%set_imat
