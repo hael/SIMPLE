@@ -57,7 +57,7 @@ contains
         integer :: eo_pops(2,self%ncls)
         logical :: l_3D
         l_3D = .false.
-        select case(trim(params_glob%oritype))
+        select case(trim(self%p_ptr%oritype))
         case('ptcl2D')
             ptcl_field => spproj%os_ptcl2D
             cls_field  => spproj%os_cls2D
@@ -66,7 +66,7 @@ contains
             cls_field  => spproj%os_cls3D
             l_3D       = .true.
         case DEFAULT
-            THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
+            THROW_HARD('Unsupported ORITYPE: '//trim(self%p_ptr%oritype))
         end select
         eo_pops = 0
         !$omp parallel do schedule(guided) proc_bind(close) default(shared)&
@@ -122,7 +122,7 @@ contains
         l_shift = .false.
         if( present(incr_shifts) ) l_shift = .true.
         ! retrieve particle info & pointers
-        call spproj%ptr2oritype(params_glob%oritype, spproj_field)
+        call spproj%ptr2oritype(self%p_ptr%oritype, spproj_field)
         l_ctf = self%is_with_ctf()
         ! update classes
         eopops = 0
@@ -152,7 +152,7 @@ contains
             ! Particle weight
             rptcl = real(w) * rptcl
             ! Particle ML regularization
-            if( params_glob%l_ml_reg )then
+            if( self%p_ptr%l_ml_reg )then
                 sigma2 = eucl_sigma2_glob%sigma2_noise(self%kfromto(1):self%kfromto(2),iptcl)
                 do k = self%kfromto(1),self%kfromto(2)
                     rptcl(:,k) = rptcl(:,k) / sigma2(k)
@@ -167,7 +167,7 @@ contains
                 rctf2 = w * real(rctf,kind=dp)**2
                 rptcl = rptcl * rctf    ! PhFlip(X).|CTF|
                 ! CTF2 ML regularization
-                if( params_glob%l_ml_reg )then
+                if( self%p_ptr%l_ml_reg )then
                     do k = self%kfromto(1),self%kfromto(2)
                         rctf2(:,k) = rctf2(:,k) / real(sigma2(k),dp)
                     enddo
@@ -184,7 +184,7 @@ contains
                     !$omp end critical
                 endif
             else
-                if( params_glob%l_ml_reg )then
+                if( self%p_ptr%l_ml_reg )then
                     ! CTF2=1 & ML regularization
                     call self%get_work_rpft8_ptr(rctf2)
                     do k = self%kfromto(1),self%kfromto(2)

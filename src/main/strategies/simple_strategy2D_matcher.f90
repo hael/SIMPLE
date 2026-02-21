@@ -619,7 +619,7 @@ contains
         has_been_searched = .not.b_ptr%spproj%is_virgin_field(params_glob%oritype)
         input_center      = trim(params_glob%center) .eq. 'yes'
         ! create the polarft_calc object
-        call pftc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
+        call pftc%new(params_glob, params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
         ! objective functions & sigma
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
@@ -729,7 +729,7 @@ contains
         integer      :: icls, pop, pop_even, pop_odd, centype
         logical      :: has_been_searched, do_center, l_center, l_gaufilt
         ! pftc instantiation
-        call pftc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
+        call pftc%new(params_glob, params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
         ! Sigma2
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'

@@ -205,8 +205,8 @@ contains
             call c_f_pointer(self%crmat1_many(ithr)%p, self%crmat1_many(ithr)%r, [self%nrots+2, self%nk])
         enddo
         ! plans & FFTW3 wisdoms
-        if( params_glob%l_distr_exec )then
-            allocate(fft_wisdoms_fname, source='fft_wisdoms_part'//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'//c_null_char)
+        if( self%p_ptr%l_distr_exec )then
+            allocate(fft_wisdoms_fname, source='fft_wisdoms_part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//'.dat'//c_null_char)
         else
             allocate(fft_wisdoms_fname, source='fft_wisdoms.dat'//c_null_char)
         endif

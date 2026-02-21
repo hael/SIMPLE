@@ -230,7 +230,7 @@ contains
         ! ------------------------------------------------------------------
         subroutine handle_polar_representation()
             complex, allocatable :: pft(:,:)
-            call pftc%new(params%nptcls, [1,params%nptcls], params%kfromto)
+            call pftc%new(params, params%nptcls, [1,params%nptcls], params%kfromto)
             call  build%img_crop%memoize4polarize(pftc%get_pdim())
             pft = pftc%allocate_pft()
             do i = 1, params%nptcls

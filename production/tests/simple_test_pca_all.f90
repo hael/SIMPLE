@@ -73,6 +73,7 @@ enddo
 print *, '---------------------------------------------------'
 ! kPCA test
 call kpca_obj%new(NS, NP, NC)
+call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target)
 call kpca_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS

@@ -3,7 +3,7 @@ module simple_polarft_calc
 use simple_core_module_api
 use simple_sp_project,    only: sp_project
 use simple_image,         only: image
-use simple_parameters,    only: params_glob
+use simple_parameters,    only: parameters
 use simple_fftw3
 implicit none
 
@@ -47,6 +47,7 @@ end type heap_vars
 
 type :: polarft_calc
     private
+    class(parameters), pointer :: p_ptr => null()        !< pointer to parameters object (for access to runtime parameters)
     integer                  :: nptcls     = 1           !< the total number of particles in partition (logically indexded [fromp,top])
     integer                  :: nrefs      = 1           !< the number of references (logically indexded [1,nrefs])
     integer                  :: ncls       = 0
@@ -225,8 +226,10 @@ interface
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-    module subroutine new(self, nrefs, pfromto, kfromto, eoarr)
+   module subroutine new(self, params, nrefs, pfromto, kfromto, eoarr)
+        use simple_parameters, only: parameters
         class(polarft_calc), target, intent(inout) :: self
+        class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
         integer, optional,           intent(in)    :: eoarr(pfromto(1):pfromto(2))

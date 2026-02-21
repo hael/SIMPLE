@@ -118,9 +118,7 @@ contains
         call cline%set('nthr',     1)
         call cline%set('ctf',      'no')
         call params%new(cline, silent=.true.)
-        params_glob%kfromto(1) = 5
-        params_glob%kfromto(2) = nyq-1
-        call pftc%new(1,[1,1], params_glob%kfromto)
+        call pftc%new(params, 1,[1,1], [5,nyq-1])
         angstep = abs(pftc%get_rot(2)-pftc%get_rot(1))
         nrots   = pftc%get_nrots()
         ! reference polar coordinates

@@ -392,7 +392,7 @@ contains
         real,              allocatable   :: ccmat(:,:)
         integer :: ncavgs, i, j
         ncavgs   = size(cavg_imgs)
-        algninfo = match_imgs(hp, lp, trs, cavg_imgs, cavg_imgs)
+        algninfo = match_imgs(params_glob, hp, lp, trs, cavg_imgs, cavg_imgs)
         if( allocated(dmat_res) ) deallocate(dmat_res)
         if( allocated(dmat_cc)  ) deallocate(dmat_cc)
         allocate(dmat_res(ncavgs,ncavgs), ccmat(ncavgs,ncavgs), source=0.)
@@ -421,7 +421,7 @@ contains
         integer :: ncls_ref, ncls_match, i, j
         ncls_ref   = size(cavg_imgs_ref)
         ncls_match = size(cavg_imgs_match)
-        algninfo   = match_imgs(hp, lp, trs, cavg_imgs_ref, cavg_imgs_match)
+        algninfo   = match_imgs(params_glob, hp, lp, trs, cavg_imgs_ref, cavg_imgs_match)
         if( allocated(dmat_res) ) deallocate(dmat_res)
         if( allocated(dmat_cc)  ) deallocate(dmat_cc)
         allocate(dmat_res(ncls_ref,ncls_match), ccmat(ncls_ref,ncls_match), source=0.)
@@ -704,7 +704,7 @@ contains
         end do
         !$omp end parallel do
         ! initialize pftc, polarizer
-        call pftc%new(1, [1,2*n], kfromto) ! 2*n because of mirroring
+        call pftc%new(params_glob, 1, [1,2*n], kfromto) ! 2*n because of mirroring
         call img_ref%memoize4polarize(pftc%get_pdim())
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
@@ -788,9 +788,11 @@ contains
         call pftc%kill
     end function match_imgs2ref
 
-    function match_imgs( hp, lp, trs, imgs_ref, imgs_targ ) result( algninfo )
-        real,         intent(in)        :: hp, lp, trs
-        class(image), intent(inout)     :: imgs_ref(:), imgs_targ(:)
+    function match_imgs( params, hp, lp, trs, imgs_ref, imgs_targ ) result( algninfo )
+        use simple_parameters, only: parameters
+        class(parameters), intent(in)    :: params
+        real,              intent(in)    :: hp, lp, trs
+        class(image),       intent(inout) :: imgs_ref(:), imgs_targ(:)
         integer,      parameter         :: MAXITS_SH = 60
         real,         parameter         :: FRC_CRIT = 0.5
         real,         allocatable       :: inpl_corrs(:), frc(:)
@@ -811,7 +813,7 @@ contains
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
         ! initialize mirrores images, pftc, polarizer
         call alloc_imgarr(ntargets, ldim, smpd, imgs_targ_mirr)
-        call pftc%new(nrefs, [1,2*ntargets], kfromto) ! 2*ntargets because of mirroring
+        call pftc%new(params, nrefs, [1,2*ntargets], kfromto) ! 2*ntargets because of mirroring
         call imgs_ref(1)%memoize4polarize(pftc%get_pdim())
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
@@ -1035,7 +1037,7 @@ contains
             call stk(i)%vis()
         end do
         alg_info1 = match_imgs2ref(hp, lp, trs, img, stk)
-        alg_info2 = match_imgs(hp, lp, trs, stk, stk)
+        alg_info2 = match_imgs(params, hp, lp, trs, stk, stk)
         ! ! rotate images
         allocate(tmp_stk(nimgs))
         tmp_stk = stk 
