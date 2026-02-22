@@ -59,7 +59,7 @@ do i = 1, ndata_sets
     call cline_dataset%kill()
     ! project creation
     call cline_new_project%set('projname',  params%projname)
-    call xnew_project%execute_safe(cline_new_project)
+    call xnew_project%execute(cline_new_project)
     call cline_new_project%kill()
     projfile = params%projname//'.simple'
     ! create filetab with a subset of overshoot randomly selected movies
@@ -77,7 +77,7 @@ do i = 1, ndata_sets
     call cline_import_movies%set('smpd',                   params%smpd)
     call cline_import_movies%set('filetab',               filetab_file)
     call cline_import_movies%set('ctf',                          'yes')
-    call ximport_movies%execute_safe(cline_import_movies)
+    call ximport_movies%execute(cline_import_movies)
     call cline_import_movies%kill()
     ! check either movies or micrographs
     call spproj%read(projfile)
@@ -99,7 +99,7 @@ do i = 1, ndata_sets
         call cline_preprocess%set('nparts',              params%nparts)
         call cline_preprocess%set('nthr',                  params%nthr)
         call cline_preprocess%check()
-        call xpreprocess%execute_safe(cline_preprocess)
+        call xpreprocess%execute(cline_preprocess)
         call cline_preprocess%kill()
     endif
     ! reject based on CTF resolution and ice score
@@ -110,7 +110,7 @@ do i = 1, ndata_sets
     call cline_select%set('oritype',                             'mic')
     call cline_select%set('ctfresthreshold',              CTFRES_THRES)
     call cline_select%set('icefracthreshold',                ICE_THRES)
-    call xsel%execute_safe(cline_select)
+    call xsel%execute(cline_select)
     call cline_select%kill()
     ! state=0/1 should now be in project file on disk
     ! re-run for random selection
@@ -125,7 +125,7 @@ do i = 1, ndata_sets
         call cline_select%set('mkdir',                           'yes') 
         call cline_select%set('oritype',                         'mic')
         call cline_select%set('nran',                      params%nran)
-        call xsel%execute_safe(cline_select)
+        call xsel%execute(cline_select)
         call cline_select%kill()
     endif
     call spproj%read(projfile)
@@ -143,7 +143,7 @@ do i = 1, ndata_sets
     call cline_mini_stream%set('moldiam_max',       params%moldiam_max)
     call cline_mini_stream%set('nparts',                 params%nparts)
     call cline_mini_stream%set('nthr',                     params%nthr)
-    call xmini_stream%execute_safe(cline_mini_stream)
+    call xmini_stream%execute(cline_mini_stream)
     call cline_dataset%kill()
     call cline_new_project%kill()
     call cline_import_movies%kill()

@@ -348,7 +348,7 @@ contains
             ! reextract
             write(logfhandle,'(A,F6.3)')'>>> NEW PIXEL    SIZE: ',smpd
             write(logfhandle,'(A,I6)')  '>>> NEW PARTICLE SIZE: ',box
-            call xreextract_distr%execute_safe(cline_reextract)
+            call xreextract_distr%execute(cline_reextract)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_PROJECTS NORMAL STOP ****')
@@ -489,7 +489,7 @@ contains
         end select
         ! make new project
         call cline_new_proj%set('projname', params%subprojname)
-        call xnew_proj%execute_safe(cline_new_proj)
+        call xnew_proj%execute(cline_new_proj)
         ! import particles
         call cline_import_particles%set('prg',      'import_particles') ! needs to be here for exec_dir creation
         call cline_import_particles%set('projfile', params%subprojname//'.simple')
@@ -502,7 +502,7 @@ contains
         if( ctfflag .ne. 'no' )then
             call cline_import_particles%set('deftab', '../'//DEFTAB)
         endif
-        call ximport_particles%execute_safe(cline_import_particles)
+        call ximport_particles%execute(cline_import_particles)
         ! transfer previous particle indices to project
         call spproj%read(params%subprojname//'.simple')
         np3D = spproj%os_ptcl3D%get_noris()

@@ -2,7 +2,7 @@
 module simple_exec_helpers
 use simple_core_module_api
 use simple_qsys_env,   only: qsys_env
-use simple_parameters, only: parameters, params_glob
+use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
 use simple_sp_project, only: sp_project
 implicit none
@@ -104,40 +104,39 @@ contains
         endif
     end subroutine script_exec
 
-    subroutine update_job_descriptions_in_project( cline )
-        class(cmdline), intent(in) :: cline
-        type(string)     :: exec, name
+    subroutine update_job_descriptions_in_project( exec, name, cline )
+        class(string),  intent(in)    :: exec, name
+        class(cmdline), intent(inout) :: cline
+        type(string)     :: projfile
         type(chash)      :: job_descr
         type(sp_project) :: spproj
-        logical          :: did_update
-        if( .not. associated(params_glob)         ) return
-        if( .not. associated(params_glob%ptr2prg) ) return
-        exec = params_glob%ptr2prg%get_executable()
-        if( exec%has_substr('private') ) return
-        name = params_glob%ptr2prg%get_name()
-        if( name%has_substr('print')   ) return
-        if( name%has_substr('info')    ) return
-        if( name%has_substr('report')  ) return
+        if( exec%has_substr('test')         ) return
+        if( exec%has_substr('private')      ) return
+        if( name%has_substr('print')        ) return
+        if( name%has_substr('info')         ) return
+        if( name%has_substr('report')       ) return
+        if( .not. cline%defined('projfile') ) return
         call cline%gen_job_descr(job_descr, name)
-        if( file_exists(params_glob%projfile) )then
-            call spproj%read_non_data_segments(params_glob%projfile)
-            call spproj%append_job_descr2jobproc(params_glob%exec_dir, job_descr, did_update)
-            if( did_update ) call spproj%write_non_data_segments(params_glob%projfile)
+        projfile = cline%get_carg('projfile')  
+        if( file_exists(projfile) )then
+            call spproj%read_non_data_segments(projfile)
+            call spproj%append_job_descr2jobproc(job_descr)
+            call spproj%write_non_data_segments(projfile)
         endif
     end subroutine update_job_descriptions_in_project
 
-    subroutine copy_project_file_to_root_dir( cline )
-        class(cmdline), intent(in)    :: cline
+    subroutine copy_project_file_to_root_dir( params, cline )
+        class(parameters), intent(inout) :: params
+        class(cmdline),    intent(in)    :: cline
         type(string) :: exec
         logical :: tests(3)
-        if( .not. associated(params_glob)         ) return
-        if( .not. associated(params_glob%ptr2prg) ) return
-        exec = params_glob%ptr2prg%get_executable()
+        if( .not. associated(params%ptr2prg) ) return
+        exec = params%ptr2prg%get_executable()
         if( exec%has_substr('private') ) return
-        tests(1) = trim(params_glob%mkdir) .eq. 'yes'
-        tests(2) = params_glob%ptr2prg%requires_sp_project()
-        tests(3) = file_exists(params_glob%projfile)
-        if( all(tests) ) call simple_copy_file(params_glob%projfile, string('../')//params_glob%projfile)
+        tests(1) = trim(params%mkdir) .eq. 'yes'
+        tests(2) = params%ptr2prg%requires_sp_project()
+        tests(3) = file_exists(params%projfile)
+        if( all(tests) ) call simple_copy_file(params%projfile, string('../')//params%projfile)
     end subroutine copy_project_file_to_root_dir
 
     ! deals with # multiprocessing threads of the master process in distributed execution

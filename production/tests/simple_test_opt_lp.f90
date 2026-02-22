@@ -36,7 +36,7 @@ if( command_argument_count() < 4 )then
         call cline_pdb2mrc%checkvar('smpd',                        1)
         call cline_pdb2mrc%checkvar('pdbfile',                     2)
         call cline_pdb2mrc%check()
-        call xpdb2mrc%execute_safe(cline_pdb2mrc)
+        call xpdb2mrc%execute(cline_pdb2mrc)
         call cline_pdb2mrc%kill()
         cmd = 'rm 1JYX.pdb'
         call execute_command_line(cmd%to_char(), exitstat=rc)

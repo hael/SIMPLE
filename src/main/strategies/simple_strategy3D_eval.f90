@@ -25,9 +25,9 @@ contains
     subroutine new_eval( self, params, spec, build )
         use simple_builder, only: builder
         class(strategy3D_eval),    intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
+        class(parameters),         intent(in)    :: params
         class(strategy3D_spec),    intent(inout) :: spec
-        class(builder),    target, intent(in)    :: build
+        class(builder),            intent(in)    :: build
         call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_eval

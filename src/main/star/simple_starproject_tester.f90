@@ -555,7 +555,7 @@ contains
             call proj%os_ptcl2D%set(i, "angast", 15.0)
         end do
         ! make dummy parameters (not used in export, but required by interface)
-        params = parameters(cline)
+        call params%new(cline)
         ! Run stream_export_particles_2D in full OpenMP mode.
         call stream%stream_export_particles_2D(params, proj, outdir, optics_set=.false., verbose=.true.)
         ! Check existence

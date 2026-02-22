@@ -243,7 +243,7 @@ contains
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj_glob%kill
-                call qsys_cleanup
+                call qsys_cleanup(params)
                 call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT USER STOP ****')
                 call EXIT(0)
             endif
@@ -263,7 +263,7 @@ contains
                             call cline_make_pickrefs%set('prg',   'make_pickrefs')
                             call cline_make_pickrefs%set('stream','no')
                             call cline_make_pickrefs%set('smpd',  params%smpd)
-                            call xmake_pickrefs%execute_safe(cline_make_pickrefs)
+                            call xmake_pickrefs%execute(cline_make_pickrefs)
                             call cline_pick_extract%set('pickrefs', '../'//PICKREFS_FBODY//params%ext%to_char())
                             call mrc2jpeg_tiled(string(PICKREFS_FBODY)//params%ext, string(PICKREFS_FBODY)//".jpeg",&
                             &scale=pickrefs_thumbnail_scale, ntiles=n_pickrefs, n_xtiles=xtiles, n_ytiles=ytiles)
@@ -280,7 +280,7 @@ contains
                                 endif
                             end do
                             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-                            call qsys_cleanup
+                            call qsys_cleanup(params)
                         endif
                         l_once = .false.
                     endif
@@ -372,10 +372,10 @@ contains
                 l_haschanged = .true.
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
                 if( n_imported < 1000 .and. l_haschanged )then
-                    call update_user_params(cline)
+                    call update_user_params(params, cline)
                     call write_micrographs_starfile
                 else if( n_imported > nmic_star + 100 .and. l_haschanged )then
-                    call update_user_params(cline)
+                    call update_user_params(params, cline)
                     call write_micrographs_starfile
                     nmic_star = n_imported
                 endif
@@ -385,7 +385,7 @@ contains
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                         ! write project when inactive
                         call write_project
-                        call update_user_params(cline)
+                        call update_user_params(params, cline)
                         call write_micrographs_starfile
                         l_haschanged = .false.
                     endif
@@ -398,7 +398,7 @@ contains
             end if
             ! http stats send
             call http_communicator%send_jobstats()
-            call update_user_params(cline, http_communicator)
+            call update_user_params(params, cline, http_communicator)
         end do
         ! termination
         call http_communicator%update_json("stage", "terminating", found)
@@ -409,7 +409,7 @@ contains
         call spproj_glob%write_ptcl2D_star(string("particles.star"))
         ! cleanup
         call spproj_glob%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
         call project_list%kill
         call project_list_main%kill
         ! end gracefully
@@ -427,7 +427,7 @@ contains
                 if( present(optics_set) ) l_optics_set = optics_set
                 if (spproj_glob%os_mic%get_noris() > 0) then
                     if( DEBUG_HERE ) ms0 = tic()
-                    call starproj_stream%stream_export_micrographs(params_glob, spproj_glob, params%outdir, optics_set=l_optics_set)
+                    call starproj_stream%stream_export_micrographs(params, spproj_glob, params%outdir, optics_set=l_optics_set)
                     if( DEBUG_HERE )then
                         ms_export = toc(ms0)
                         print *,'ms_export  : ', ms_export; call flush(6)

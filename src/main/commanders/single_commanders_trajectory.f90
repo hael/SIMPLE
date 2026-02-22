@@ -108,8 +108,8 @@ contains
         call qenv%new(params, params%nparts)
         ! schedule & clean
         call cline%gen_job_descr(job_descr)
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR)
-        call qsys_cleanup
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR, extra_params=params)
+        call qsys_cleanup(params)
         ! end gracefully
         call simple_end('**** SIMPLE_track_trajectory NORMAL STOP ****')
     end subroutine exec_track_particles_distr
@@ -175,7 +175,7 @@ contains
         ! clean tracker
         call kill_tracker
         ! end gracefully
-        call qsys_job_finished(string('single_commanders_trajectory :: exec_track_particles'))
+        call qsys_job_finished(params, string('single_commanders_trajectory :: exec_track_particles'))
         call spproj%kill
         call simple_end('**** SIMPLE_track_trajectory NORMAL STOP ****')
     end subroutine exec_track_particles

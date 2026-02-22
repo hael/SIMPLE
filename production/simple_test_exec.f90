@@ -1,6 +1,7 @@
 !@descr: executes SIMPLE tests workflows
 program simple_test_exec
 use simple_test_exec_api
+use simple_parameters, only: parameters
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)             :: xarg, prg
@@ -27,7 +28,7 @@ endif
 ! parse command line into cline object
 call cline%parse
 ! generate script for queue submission?
-call script_exec(cline, string(trim(prg)), string('simple_exec'))
+call script_exec(cline, string(trim(prg)), string('simple_test_exec'))
 l_silent      = .false.
 l_did_execute = .false. ! will be set to true if one program was executed
 call exec_test_class_commander(    trim(prg), cline, l_silent, l_did_execute)
@@ -45,7 +46,7 @@ call exec_test_utils_commander(    trim(prg), cline, l_silent, l_did_execute)
 if( .not. l_did_execute )then
     THROW_HARD('Program test "'//trim(prg)//'" not recognized. Use prg=list to see available programs.')
 endif
-call update_job_descriptions_in_project( cline )
+call update_job_descriptions_in_project(string('simple_test_exec'), string(trim(prg)), cline)
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)

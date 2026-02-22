@@ -194,7 +194,7 @@ contains
         deallocate(stage_parms)
         call spproj%kill
         nullify(spproj_field)
-        call qsys_cleanup
+        call qsys_cleanup(params)
         call simple_touch(ABINITIO2D_FINISHED)
         call simple_end('**** SIMPLE_ABINITIO2D NORMAL STOP ****')
         
@@ -249,7 +249,7 @@ contains
                     call cline_noisevol%set('smpd',   stage_parms(1)%smpd_crop)
                     call cline_noisevol%set('box',    stage_parms(1)%box_crop)
                     call cline_noisevol%set('nspace', params%ncls)
-                    call xnoisevol%execute_safe(cline_noisevol)
+                    call xnoisevol%execute(cline_noisevol)
                     params%refs      = 'start2Drefs.mrc'
                     params%refs_even = 'start2Drefs_even.mrc'
                     params%refs_odd  = 'start2Drefs_odd.mrc'
@@ -287,14 +287,14 @@ contains
                 call cline_scalerefs%set('smpd',   smpd)
                 call cline_scalerefs%set('newbox', stage_parms(1)%box_crop)
                 call cline_scalerefs%set('nthr',   nthr_glob)
-                call xscale%execute_safe(cline_scalerefs)
+                call xscale%execute(cline_scalerefs)
                 if( eo )then
                     call cline_scalerefs%set('stk',    refs_even)
                     call cline_scalerefs%set('outstk', params%refs_even)
-                    call xscale%execute_safe(cline_scalerefs)
+                    call xscale%execute(cline_scalerefs)
                     call cline_scalerefs%set('stk',    refs_odd)
                     call cline_scalerefs%set('outstk', params%refs_odd)
-                    call xscale%execute_safe(cline_scalerefs)
+                    call xscale%execute(cline_scalerefs)
                 endif
                 call cline_scalerefs%kill
             endif
@@ -610,13 +610,13 @@ contains
             call del_file(CLUSTER2D_FINISHED)
             ! Initial sigma2
             if( istage == 1 )then
-                call xcalc_pspec_distr%execute_safe(cline_calc_pspec)
+                call xcalc_pspec_distr%execute(cline_calc_pspec)
             endif
             ! clustering
             if( l_shmem )then
-                call xcluster2D%execute_safe(cline_cluster2D)
+                call xcluster2D%execute(cline_cluster2D)
             else
-                call xcluster2D_distr%execute_safe(cline_cluster2D)
+                call xcluster2D_distr%execute(cline_cluster2D)
             endif
         end subroutine execute_cluster2D
 
@@ -683,9 +683,9 @@ contains
                 ! Cavgs final output is regularized
                 call cline_make_cavgs%set('ml_reg',     'yes')
                 if( l_shmem )then
-                    call xmake_cavgs%execute_safe(cline_make_cavgs)
+                    call xmake_cavgs%execute(cline_make_cavgs)
                 else
-                    call xmake_cavgs_distr%execute_safe(cline_make_cavgs)
+                    call xmake_cavgs_distr%execute(cline_make_cavgs)
                 endif
             endif
             ! adding cavgs & FRCs to project

@@ -3,8 +3,8 @@ module simple_stream_chunk2D_utils
 use simple_core_module_api
 use simple_defs_environment
 use simple_stream2D_state
-use simple_parameters,             only: params_glob
 use simple_cmdline,                only: cmdline
+use simple_parameters,             only: parameters
 use simple_stream_chunk,           only: stream_chunk
 use simple_sp_project,             only: sp_project
 use simple_stream_cluster2D_utils, only: setup_downscaling
@@ -30,7 +30,8 @@ contains
 
     ! LIFECYCLE
 
-    subroutine init_chunk_clustering( cline, spproj )
+    subroutine init_chunk_clustering( params, cline, spproj )
+        class(parameters),         intent(inout) :: params
         class(cmdline),    target, intent(inout) :: cline
         class(sp_project),         intent(inout) :: spproj
         character(len=STDLEN) :: chunk_nthr_env
@@ -40,13 +41,13 @@ contains
         ! general parameters
         master_cline => cline
         l_scaling        = .true.
-        params_glob%ncls_start = params_glob%ncls ! backwards compatibility
-        nptcls_per_chunk = params_glob%nptcls_per_cls*params_glob%ncls_start
+        params%ncls_start = params%ncls ! backwards compatibility
+        nptcls_per_chunk = params%nptcls_per_cls*params%ncls_start
         ncls_glob        = 0
-        l_update_sigmas  = params_glob%l_needs_sigma
-        numlen           = len(int2str(params_glob%nparts))
+        l_update_sigmas  = params%l_needs_sigma
+        numlen           = len(int2str(params%nparts))
         l_no_chunks      = .false. ! will be using chunk indeed
-        params_glob%nparts_chunk = params_glob%nparts ! required by chunk object, to remove
+        params%nparts_chunk = params%nparts ! required by chunk object, to remove
         ! bookkeeping & directory structure
         if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
         ! pool_proj is only iused as a placeholder for computational info here
@@ -56,58 +57,58 @@ contains
         pool_proj%compenv  = spproj%compenv
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
-        if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params_glob%walltime)
+        if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params%walltime)
         ! chunk master command line
         call cline_cluster2D_chunk%set('prg', 'abinitio2D')
-        if( params_glob%nparts > 1 )then
-            call cline_cluster2D_chunk%set('nparts',       params_glob%nparts)
+        if( params%nparts > 1 )then
+            call cline_cluster2D_chunk%set('nparts',       params%nparts)
         endif
         if( cline%defined('cls_init') )then
-            call cline_cluster2D_chunk%set('cls_init',     params_glob%cls_init)
+            call cline_cluster2D_chunk%set('cls_init',     params%cls_init)
         else
             call cline_cluster2D_chunk%set('cls_init',     'rand')
         endif
         if( cline%defined('gaufreq') )then
-            call cline_cluster2D_chunk%set('gaufreq',      params_glob%gaufreq)
+            call cline_cluster2D_chunk%set('gaufreq',      params%gaufreq)
         endif
         call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
         call cline_cluster2D_chunk%set('center',    'no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
         call cline_cluster2D_chunk%set('stream',    'no')
-        call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
-        call cline_cluster2D_chunk%set('ncls',      params_glob%ncls_start)
-        call cline_cluster2D_chunk%set('sigma_est', params_glob%sigma_est)
+        call cline_cluster2D_chunk%set('mskdiam',   params%mskdiam)
+        call cline_cluster2D_chunk%set('ncls',      params%ncls_start)
+        call cline_cluster2D_chunk%set('sigma_est', params%sigma_est)
         call cline_cluster2D_chunk%set('rank_cavgs','yes')
         call cline_cluster2D_chunk%set('chunk',     'yes')
         ! objective function
         call cline_cluster2D_chunk%set('objfun', 'euclid')
-        call cline_cluster2D_chunk%set('ml_reg', params_glob%ml_reg)
-        call cline_cluster2D_chunk%set('tau',    params_glob%tau)
+        call cline_cluster2D_chunk%set('ml_reg', params%ml_reg)
+        call cline_cluster2D_chunk%set('tau',    params%tau)
         ! refinement
-        select case(trim(params_glob%refine))
+        select case(trim(params%refine))
             case('snhc','snhc_smpl','prob','prob_smpl')
-                call cline_cluster2D_chunk%set('refine', params_glob%refine)
+                call cline_cluster2D_chunk%set('refine', params%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
         ! polar representation
-        if( master_cline%defined('polar') ) call cline_cluster2D_chunk%set('polar', params_glob%polar)
+        if( master_cline%defined('polar') ) call cline_cluster2D_chunk%set('polar', params%polar)
         ! Determines dimensions for downscaling
-        call set_chunk_dimensions
+        call set_chunk_dimensions( params )
         ! updates command-line with resolution limits, defaults are handled by abinitio2D
         if( master_cline%defined('lpstart') )then
-            lpstart = max(params_glob%lpstart, 2.0*params_glob%smpd_crop)
+            lpstart = max(params%lpstart, 2.0*params%smpd_crop)
             call cline_cluster2D_chunk%set('lpstart', lpstart)
             write(logfhandle,'(A,F5.1)') '>>> STARTING RESOLUTION LIMIT (IN A): ', lpstart
         endif
         if( master_cline%defined('lpstop') )then
-            lpstop = max(params_glob%lpstop, 2.0*params_glob%smpd_crop)
+            lpstop = max(params%lpstop, 2.0*params%smpd_crop)
             call cline_cluster2D_chunk%set('lpstop', lpstop)
             write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT     (IN A): ', lpstop
         endif
         if( master_cline%defined('cenlp') )then
-            lpcen = max(params_glob%cenlp, 2.0*params_glob%smpd_crop)
+            lpcen = max(params%cenlp, 2.0*params%smpd_crop)
             call cline_cluster2D_chunk%set('cenlp', lpcen)
             write(logfhandle,'(A,F5.1)') '>>> CENTERING LOW-PASS LIMIT  (IN A): ', lpcen
         endif
@@ -116,24 +117,25 @@ contains
         if(envlen > 0) then
             call cline_cluster2D_chunk%set('nthr', str2int(chunk_nthr_env))
         else
-            call cline_cluster2D_chunk%set('nthr', params_glob%nthr) ! cf comment just below about nthr2D
+            call cline_cluster2D_chunk%set('nthr', params%nthr) ! cf comment just below about nthr2D
         end if
         ! Initialize subsets
-        allocate(chunks(params_glob%nchunks))
+        allocate(chunks(params%nchunks))
         ! deal with nthr2d .ne. nthr
         ! Joe: the whole nthr/2d is confusing. Why not pass the number of threads to chunk%init?
-        params_glob%nthr2D = cline_cluster2D_chunk%get_iarg('nthr') ! only used here  for backwards compatibility
+        params%nthr2D = cline_cluster2D_chunk%get_iarg('nthr') ! only used here  for backwards compatibility
         glob_chunk_id      = 0
-        do ichunk = 1,params_glob%nchunks
+        do ichunk = 1,params%nchunks
             glob_chunk_id = glob_chunk_id + 1
-            call chunks(ichunk)%init_chunk(ichunk, cline_cluster2D_chunk, pool_proj)
+            call chunks(ichunk)%init_chunk(params, cline_cluster2D_chunk, ichunk, pool_proj)
         enddo
         ! module variables
         l_stream2D_active = .true.
     end subroutine init_chunk_clustering
 
     ! Initiates analysis of all available chunks
-    subroutine analyze2D_new_chunks( project_list, makecavgs )
+    subroutine analyze2D_new_chunks( params, project_list, makecavgs )
+        class(parameters), intent(inout) :: params
         class(rec_list),   intent(inout) :: project_list
         logical, optional, intent(in)    :: makecavgs
         type(project_rec)  :: prec
@@ -178,7 +180,7 @@ contains
             call it%next()
         enddo
         if( n2fill == 0 ) return ! not enough particles
-        do ichunk = 1,params_glob%nchunks
+        do ichunk = 1,params%nchunks
             if(.not.chunks(ichunk)%is_available()) cycle
             if( n2fill == 0 ) exit
             n2fill   = n2fill - 1
@@ -241,8 +243,9 @@ contains
     ! GETTERS
 
     ! Are all chunks inactive
-    logical function all_chunks_available()
-        if( params_glob%nchunks == 0 )then
+    logical function all_chunks_available( params )
+        class(parameters), intent(in) :: params
+        if( params%nchunks == 0 )then
             all_chunks_available = .true.
         else
             all_chunks_available = all(chunks(:)%is_available())
@@ -267,29 +270,31 @@ contains
 
     ! SETTERS
     
-    subroutine set_chunk_dimensions
-        call setup_downscaling
-        chunk_dims%smpd  = params_glob%smpd_crop
-        chunk_dims%box   = params_glob%box_crop
-        chunk_dims%boxpd = 2 * round2even(KBALPHA * real(params_glob%box_crop/2)) ! logics from parameters
-        chunk_dims%msk   = params_glob%msk_crop
+    subroutine set_chunk_dimensions( params )
+        class(parameters), intent(inout) :: params
+        call setup_downscaling(params)
+        chunk_dims%smpd  = params%smpd_crop
+        chunk_dims%box   = params%box_crop
+        chunk_dims%boxpd = 2 * round2even(KBALPHA * real(params%box_crop/2)) ! logics from parameters
+        chunk_dims%msk   = params%msk_crop
         ! Scaling-related command lines update
         call cline_cluster2D_chunk%set('smpd_crop', chunk_dims%smpd)
         call cline_cluster2D_chunk%set('box_crop',  chunk_dims%box)
         call cline_cluster2D_chunk%set('msk_crop',  chunk_dims%msk)
-        call cline_cluster2D_chunk%set('box',       params_glob%box)
-        call cline_cluster2D_chunk%set('smpd',      params_glob%smpd)
+        call cline_cluster2D_chunk%set('box',       params%box)
+        call cline_cluster2D_chunk%set('smpd',      params%smpd)
     end subroutine set_chunk_dimensions
 
     ! UPDATERS
 
     ! Deals with chunk completion, rejection, reset
-    subroutine update_chunks
+    subroutine update_chunks( params )
+        class(parameters),              intent(inout) :: params
         type(stream_chunk), allocatable :: tmpchunks(:)
         integer :: ichunk, jchunk, nthr2D, n
         logical :: chunk_complete
         if( .not. l_stream2D_active ) return
-        do ichunk = 1,params_glob%nchunks
+        do ichunk = 1,params%nchunks
             if( chunks(ichunk)%is_available() ) cycle
             chunk_complete = .false.
             if( chunks(ichunk)%to_analyze2D() )then
@@ -298,8 +303,8 @@ contains
                     chunk_complete = .true.
                     call chunks(ichunk)%display_iter
                     ! rejection
-                    if( trim(params_glob%reject_cls).ne.'no' )then
-                        call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev)
+                    if( trim(params%reject_cls).ne.'no' )then
+                        call chunks(ichunk)%reject(params%lpthres, params%ndev)
                         call mrc2jpeg_tiled(string('cls_rejected_chunks.mrc'), string('cls_rejected_chunks.jpeg'),&
                         &scale=chunk_rejected_jpeg_scale, ntiles=chunk_rejected_jpeg_ntiles)
                         chunk_rejected_jpeg = CWD_GLOB // '/' // 'cls_rejected_chunks.jpeg'
@@ -332,10 +337,10 @@ contains
                 ! reinit and deal with nthr2D != nthr
                 glob_chunk_id = glob_chunk_id + 1
                 ! deal with nthr2d .ne. nthr
-                nthr2D = params_glob%nthr2D
-                params_glob%nthr2D = cline_cluster2D_chunk%get_iarg('nthr')
-                call chunks(ichunk)%init_chunk(glob_chunk_id, cline_cluster2D_chunk, pool_proj)
-                params_glob%nthr2D = nthr2D
+                nthr2D = params%nthr2D
+                params%nthr2D = cline_cluster2D_chunk%get_iarg('nthr')
+                call chunks(ichunk)%init_chunk(params, cline_cluster2D_chunk, glob_chunk_id, pool_proj)
+                params%nthr2D = nthr2D
             endif
         enddo
     end subroutine update_chunks

@@ -87,12 +87,12 @@ contains
         call qenv%new(params, params%nparts)
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         ! assemble volumes
         cline_volassemble = cline
         call cline_volassemble%set('prg', 'volassemble')
         call cline_volassemble%set('nthr',    nthr_here)
-        call xvolassemble%execute_safe(cline_volassemble)
+        call xvolassemble%execute(cline_volassemble)
         ! updates project file only if mkdir is set to yes
         if( params%mkdir.eq.'yes' )then
             do state = 1,params%nstates
@@ -108,7 +108,7 @@ contains
             call build%spproj%write_segment_inside('out',params%projfile)
         endif
         ! termination
-        call qsys_cleanup
+        call qsys_cleanup(params)
         call build%spproj_field%kill
         call qenv%kill
         call cline_volassemble%kill
@@ -159,7 +159,7 @@ contains
         call calc_3Drec( params, build, cline, nptcls2update, pinds )
         ! cleanup
         call eucl_sigma%kill
-        call qsys_job_finished(string('simple_commanders_rec :: exec_reconstruct3D'))
+        call qsys_job_finished(params, string('simple_commanders_rec :: exec_reconstruct3D'))
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D
@@ -193,7 +193,7 @@ contains
         allocate(res05s(params%nstates), res0143s(params%nstates))
         res0143s = 0.
         res05s   = 0.
-        call eorecvol_read%new(build%spproj, expand=.false.)
+        call eorecvol_read%new(params, build%spproj, expand=.false.)
         if( L_BENCH_GLOB )then
             ! end of init
             rt_init = toc(t_init)

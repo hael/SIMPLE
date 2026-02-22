@@ -13,7 +13,7 @@ use simple_exec_helpers,     only: set_shmem_flag, set_master_num_threads
 use simple_image,            only: image
 use simple_image_bin,        only: image_bin
 use simple_image_msk,        only: image_msk, automask2D
-use simple_parameters,       only: parameters, params_glob
+use simple_parameters,       only: parameters
 use simple_qsys_env,         only: qsys_env
 use simple_sp_project,       only: sp_project, oritype2segment
 use simple_stack_io,         only: stack_io

@@ -233,11 +233,9 @@ interface
         class(sp_project), intent(in)    :: self2
     end subroutine append_project
 
-    module subroutine append_job_descr2jobproc( self, exec_dir, job_descr, did_update )
+    module subroutine append_job_descr2jobproc( self, job_descr )
         class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: exec_dir
         class(chash),      intent(inout) :: job_descr
-        logical,           intent(out)   :: did_update
     end subroutine append_job_descr2jobproc
 
     module subroutine replace_project( self, projfile_src, oritype )

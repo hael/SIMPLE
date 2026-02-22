@@ -156,7 +156,7 @@ contains
         call cline_reconstruct3D_distr%delete('sigma_est')
         call cline_reconstruct3D_distr%delete('update_frac')
         call cline_reconstruct3D_distr%set('objfun', 'cc') ! ugly, but this is how it works in parameters
-        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
+        call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
         ! 3D refinement, phase1
         str_state = int2str_pad(1,2)
         call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
@@ -166,7 +166,7 @@ contains
         call cline%set('ufrac_trec', params%update_frac)
         call cline%set('maxits',          maxits_phase1)
         call cline%set('lp_auto',                 'yes')
-        call xrefine3D_distr%execute_safe(cline)
+        call xrefine3D_distr%execute(cline)
         ! iteration number bookkeeping
         iter = 0
         if( cline%defined('endit') )then
@@ -176,7 +176,7 @@ contains
         iter = iter + 1
         ! re-reconstruct from all particle images
         call cline_reconstruct3D_distr%set('mskfile', MSKVOL_FILE)
-        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
+        call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
         ! 3D refinement, phase2
         call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
         params%mskfile = MSKVOL_FILE
@@ -185,13 +185,13 @@ contains
         call cline%set('lp_auto', params%lp_auto)
         call cline%set('startit',           iter)
         call cline%set('which_iter',        iter)
-        call xrefine3D_distr%execute_safe(cline)
+        call xrefine3D_distr%execute(cline)
         ! re-reconstruct from all particle images
-        call xreconstruct3D_distr%execute_safe(cline_reconstruct3D_distr)
+        call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
         ! postprocess
         call cline%set('prg', 'postprocess')
         call cline%set('mkdir', 'yes')
-        call xpostprocess%execute_safe(cline)        
+        call xpostprocess%execute(cline)        
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_distr( self, cline )
@@ -383,7 +383,7 @@ contains
             if( .not.file_exists(sigma2_star_from_iter(params%startit)) )then
                 call build%spproj_field%set_all2single('w', 1.0)
                 call build%spproj%write_segment_inside(params%oritype)
-                call xcalc_pspec_distr%execute_safe(cline_calc_pspec_distr)
+                call xcalc_pspec_distr%execute(cline_calc_pspec_distr)
             endif
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .false.
@@ -413,7 +413,7 @@ contains
                 call cline_tmp%delete('needs_sigma')
                 call cline_tmp%delete('sigma_est')
                 call cline_tmp%set('objfun', 'cc') ! ugly, but this is how it works in parameters 
-                call xreconstruct3D_distr%execute_safe( cline_tmp )
+                call xreconstruct3D_distr%execute( cline_tmp )
                 do state = 1,params%nstates
                     ! rename volumes and update cline
                     str_state = int2str_pad(state,2)
@@ -445,7 +445,7 @@ contains
                     ! then, estimate first sigmas given reconstructed starting volumes(s) and previous orientations
                     if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
                     if( .not.cline%defined('athres') ) call cline%set('athres', real(params%athres))
-                    call xfirst_sigmas_distr%execute_safe(cline)
+                    call xfirst_sigmas_distr%execute(cline)
                 endif
                 ! update command lines
                 call cline%set('needs_sigma','yes')
@@ -481,7 +481,7 @@ contains
             endif
             if( trim(params%objfun).eq.'euclid' )then
                 call cline_calc_group_sigmas%set('which_iter', iter)
-                call xcalc_group_sigmas%execute_safe(cline_calc_group_sigmas)
+                call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
             endif
             if( have_oris .or. iter > params%startit )then
                 call build%spproj%read(params%projfile)
@@ -491,7 +491,7 @@ contains
                 call cline_prob_align_distr%set('which_iter', params%which_iter)
                 call cline_prob_align_distr%set('startit',    iter)
                 call build%spproj%write_segment_inside(params%oritype)
-                call xprob_align_distr%execute_safe( cline_prob_align_distr )
+                call xprob_align_distr%execute( cline_prob_align_distr )
             endif
             call job_descr%set( 'which_iter', int2str(params%which_iter))
             call cline%set(     'which_iter', params%which_iter)
@@ -504,7 +504,7 @@ contains
                 rt_init = toc(t_init)
                 t_scheduled = tic()
             endif
-            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
             ! assemble alignment docs
             if( L_BENCH_GLOB )then
                 rt_scheduled = toc(t_scheduled)
@@ -519,7 +519,7 @@ contains
                     ! nothing to do
                 case DEFAULT
                     call cline_check_3Dconv%set('nthr', nthr_here)
-                    call xcheck_3Dconv%execute_safe(cline_check_3Dconv)
+                    call xcheck_3Dconv%execute(cline_check_3Dconv)
                     if( iter >= params%startit + 2 )then
                         ! after a minimum of 2 iterations
                         if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
@@ -536,7 +536,7 @@ contains
                         cline_volassemble = cline ! transfer run-time command-line
                         call cline_volassemble%set('which_iter', params%which_iter)
                         call cline_volassemble%set('nthr',       nthr_here)
-                        call xvolassemble%execute_safe(cline_volassemble)
+                        call xvolassemble%execute(cline_volassemble)
                         ! rename & add volumes to project & update job_descr
                         call build%spproj_field%get_pops(state_pops, 'state')
                         do state = 1,params%nstates
@@ -590,7 +590,7 @@ contains
                             call cline_postprocess%set('state',    state)
                             call cline_postprocess%set('nthr', nthr_here)
                             if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
-                            call xpostprocess%execute_safe(cline_postprocess)
+                            call xpostprocess%execute(cline_postprocess)
                             volpproc = string(VOL_FBODY)//str_state//PPROC_SUFFIX//params%ext%to_char()
                             vollp    = string(VOL_FBODY)//str_state//LP_SUFFIX//params%ext%to_char()
                             if( l_automsk )then
@@ -675,7 +675,7 @@ contains
                 ! assemble sigma2 for next run
                 if( trim(params%objfun).eq.'euclid' )then
                     call cline_calc_group_sigmas%set('which_iter', iter+1)
-                    call xcalc_group_sigmas%execute_safe(cline_calc_group_sigmas)
+                    call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
                 endif
                 if(trim(params%oritype).eq.'cls3D') call build%spproj%map2ptcls
                 ! safest to write the whole thing here as multiple fields updated
@@ -690,7 +690,7 @@ contains
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
         end do
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! report the last iteration on exit
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
@@ -775,13 +775,13 @@ contains
                     endif
                     cline_calc_pspec   = cline
                     cline_first_sigmas = cline
-                    call xcalc_pspec%execute_safe( cline_calc_pspec )
+                    call xcalc_pspec%execute( cline_calc_pspec )
                     call cline_calc_group_sigmas%set('which_iter', startit)
-                    call xcalc_pspec_assemble%execute_safe(cline_calc_group_sigmas)
+                    call xcalc_pspec_assemble%execute(cline_calc_group_sigmas)
                     if( (trim(params%first_sigmas).eq.'yes') )then
                         if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', params%nspace)
                         if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', params%athres)
-                        call xfirst_sigmas%execute_safe(cline)
+                        call xfirst_sigmas%execute(cline)
                     endif
                 endif
             endif
@@ -861,7 +861,7 @@ contains
                     if( l_sigma )then
                         ! so final sigma2 can be used for a subsequent refine3D run
                         call cline_calc_group_sigmas%set('which_iter',params%which_iter+1)
-                        call xcalc_group_sigmas%execute_safe(cline_calc_group_sigmas)
+                        call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
                     endif
                     exit
                 endif
@@ -939,11 +939,11 @@ contains
             ! prepare job description
             call cline_first_sigmas%gen_job_descr(job_descr)
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
             ! assemble
-            call xcalc_group_sigmas%execute_safe(cline_calc_group_sigmas)
+            call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
             ! end gracefully
-            call qsys_cleanup
+            call qsys_cleanup(params)
         endif
         call qenv%kill
         call job_descr%kill
@@ -1029,7 +1029,7 @@ contains
         call build%kill_general_tbox
         call dealloc_imgarr(tmp_imgs)
         call dealloc_imgarr(tmp_imgs_pad)
-        call qsys_job_finished(string('simple_commanders_refine3D :: exec_prob_tab'))
+        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab
 
@@ -1068,7 +1068,7 @@ contains
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
         ! execution
         if( .not.cline_prob_tab%defined('nparts') )then
-            call xprob_tab%execute_safe(cline_prob_tab)
+            call xprob_tab%execute(cline_prob_tab)
         else
             ! setup the environment for distributed execution
             call qenv%new(params, params%nparts, nptcls=params%nptcls)
@@ -1099,8 +1099,8 @@ contains
         call qenv%kill
         call job_descr%kill
         call build%kill_general_tbox
-        call qsys_job_finished(string('simple_commanders_refine3D :: exec_prob_align'))
-        call qsys_cleanup
+        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_align'))
+        call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align
 

@@ -8,7 +8,7 @@ use simple_atoms,          only: atoms
 use simple_decay_funs
 implicit none
 
-public :: parameters, params_glob
+public :: parameters
 private
 #include "simple_local_flags.inc"
 
@@ -544,12 +544,6 @@ type :: parameters
     procedure, private :: set_img_format
 end type parameters
 
-interface parameters
-    module procedure constructor
-end interface parameters
-
-class(parameters), pointer :: params_glob => null()
-
 contains
 
     subroutine init_strings( self )
@@ -632,12 +626,6 @@ contains
         self%xmldir=''
         self%xmlloc=''
     end subroutine init_strings
-
-    function constructor(cline) result(self)
-        class(cmdline), intent(inout) :: cline
-        type(parameters) :: self
-        call self%new(cline)
-    end function constructor
 
     subroutine new( self, cline, silent )
         use simple_sp_project, only: sp_project
@@ -1845,9 +1833,6 @@ contains
             end select
         endif
         !>>> END, IMAGE-PROCESSING-RELATED
-        ! set global pointer to instance
-        ! first touch policy here
-        if( .not. associated(params_glob) ) params_glob => self
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
     contains

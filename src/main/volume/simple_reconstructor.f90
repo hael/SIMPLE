@@ -3,7 +3,7 @@ module simple_reconstructor
 use simple_core_module_api
 use simple_fftw3
 use simple_image,      only: image
-use simple_parameters, only: params_glob
+use simple_parameters, only: parameters
 implicit none
 
 public :: reconstructor
@@ -12,6 +12,7 @@ private
 
 type, extends(image) :: reconstructor
     private
+    class(parameters),  pointer :: p_ptr => null()              !< pointer to parameters object
     type(kbinterpol)            :: kbwin                        !< window function object
     type(c_ptr)                 :: kp                           !< c pointer for fftw allocation
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
@@ -60,22 +61,24 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine alloc_rho( self, spproj, expand )
+    subroutine alloc_rho( self, params, spproj, expand )
         use simple_sp_project, only: sp_project
-        class(reconstructor), intent(inout) :: self           !< this instance
-        class(sp_project),    intent(inout) :: spproj         !< project description
-        logical,              intent(in)    :: expand         !< expand flag
+        class(reconstructor),      intent(inout) :: self           !< this instance
+        class(parameters), target, intent(inout) :: params         !< parameters object
+        class(sp_project),         intent(inout) :: spproj         !< project description
+        logical,                   intent(in)    :: expand         !< expand flag
         integer :: dim
         logical :: l_expand
         if(.not. self%exists() ) THROW_HARD('construct image before allocating rho; alloc_rho')
         if(      self%is_2d()  ) THROW_HARD('only for volumes; alloc_rho')
         call self%dealloc_rho
+        self%p_ptr          => params
         l_expand            = expand
         self%ldim_img       = self%get_ldim()
         self%nyq            = self%get_lfny(1)
         self%sh_lim         = self%nyq
-        self%ctfflag        = spproj%get_ctfflag_type(params_glob%oritype)
-        self%phaseplate     = spproj%has_phaseplate(params_glob%oritype)
+        self%ctfflag        = spproj%get_ctfflag_type(self%p_ptr %oritype)
+        self%phaseplate     = spproj%has_phaseplate(self%p_ptr %oritype)
         self%kbwin          = kbinterpol(KBWINSZ,KBALPHA)
         self%wdim           = self%kbwin%get_wdim()
         self%lims           = self%loop_lims(2)
@@ -438,8 +441,6 @@ contains
         real(dp), allocatable :: rsum(:)
         real              :: fudge, cc, scale, pad_factor, invtau2
         integer           :: h, k, m, sh, phys(3), sz, reslim_ind
-        ! logical           :: l_combined
-        ! l_combined = trim(params_glob%combine_eo).eq.'yes'
         sz = size(fsc)
         allocate(ssnr(0:sz), rsum(0:sz), cnt(0:sz), tau2(0:sz), sig2(0:sz))
         rsum = 0.d0
@@ -447,16 +448,12 @@ contains
         ssnr = 0.0
         tau2 = 0.0
         sig2 = 0.0
-        scale = real(params_glob%box_crop) / real(params_glob%box_croppd)
+        scale = real(self%p_ptr %box_crop) / real(self%p_ptr %box_croppd)
         pad_factor = 1.0 / scale**3
-        fudge = params_glob%tau
+        fudge = self%p_ptr %tau
         ! SSNR
         do k = 1,sz
-            cc = max(0.001,fsc(k))
-            ! if( l_combined )then
-                ! update to filtering scheme since e/o were identical during alignment
-                ! cc = sqrt(2.*cc / (cc+1.))
-            ! endif
+            cc      = max(0.001,fsc(k))
             cc      = min(0.999,cc)
             ssnr(k) = fudge * cc / (1.-cc)
         enddo
@@ -485,7 +482,7 @@ contains
         tau2 = ssnr * sig2
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
-        reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box_crop, params_glob%smpd_crop))
+        reslim_ind = max(6, calc_fourier_index(self%p_ptr %hp, self%p_ptr %box_crop, self%p_ptr %smpd_crop))
         !$omp parallel do collapse(3) default(shared) schedule(static)&
         !$omp private(h,k,m,phys,sh,invtau2) proc_bind(close)
         do h = self%lims(1,1),self%lims(1,2)

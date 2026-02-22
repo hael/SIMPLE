@@ -219,13 +219,13 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call starproj%export_mics(spproj)
         ! cleanup
-        call qsys_cleanup
+        call qsys_cleanup(params)
         call spproj%kill
         call starproj%kill
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES_DISTR NORMAL STOP ****')
@@ -337,7 +337,7 @@ contains
         call generator%kill
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, [params%fromp,params%top], isegment=MIC_SEG)
         call spproj%kill
-        call qsys_job_finished(string('simple_commander_mic :: exec_fractionate_movies'))
+        call qsys_job_finished(params, string('simple_commander_mic :: exec_fractionate_movies'))
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES NORMAL STOP ****')
     end subroutine exec_fractionate_movies
 

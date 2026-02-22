@@ -68,14 +68,14 @@ contains
         call cline_make_cavgs%set('nparts',   1)
         call cline_make_cavgs%set('refs',    'start2Drefs'//params%ext%to_char())
         call cline_make_cavgs%set('projfile', params%projfile)
-        call xmake_cavgs%execute_safe(cline_make_cavgs)
+        call xmake_cavgs%execute(cline_make_cavgs)
         ! do centering
         cline_cluster2D_nano = cline
         call cline_cluster2D_nano%set('prg',     'cluster2D_nano')
         call cline_cluster2D_nano%set('mskdiam',  0.)
         call cline_cluster2D_nano%set('refine',  'inpl')
         call cline_cluster2D_nano%set('projfile', params%projfile)
-        call xcluster2D_nano%execute_safe(cline_cluster2D_nano)        
+        call xcluster2D_nano%execute(cline_cluster2D_nano)        
         last_iter_stage2 = cline_cluster2D_nano%get_iarg('endit')
         finalcavgs       = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//params%ext%to_char()
         ! adding cavgs & FRCs to project
@@ -128,7 +128,7 @@ contains
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        call xcluster2D%execute_safe(cline)
+        call xcluster2D%execute(cline)
         call str_refine%kill
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano

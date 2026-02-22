@@ -95,13 +95,13 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(nframes, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_TSERIES_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_tseries_motion_correct_distr
@@ -191,7 +191,7 @@ contains
         call del_file(frames2align)
         call img%kill
         call o%kill
-        call qsys_job_finished(string('single_commanders_tseries :: exec_tseries_motion_correct'))
+        call qsys_job_finished(params, string('single_commanders_tseries :: exec_tseries_motion_correct'))
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_tseries_motion_correct
 

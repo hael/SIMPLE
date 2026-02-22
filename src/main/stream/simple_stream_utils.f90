@@ -7,7 +7,7 @@ use simple_cmdline,             only: cmdline
 use simple_default_clines,      only: set_automask2D_defaults
 use simple_gui_utils,           only: mrc2jpeg_tiled
 use simple_image,               only: image
-use simple_parameters,          only: parameters, params_glob
+use simple_parameters,          only: parameters
 use simple_stack_io,            only: stack_io
 use simple_stream_communicator, only: stream_http_communicator 
 implicit none
@@ -15,9 +15,10 @@ implicit none
 
 contains
 
-    subroutine terminate_stream( msg )
+    subroutine terminate_stream( params, msg )
+        class(parameters), intent(in) :: params
         character(len=*), intent(in) :: msg
-        if(trim(params_glob%async).eq.'yes')then
+        if(trim(params%async).eq.'yes')then
             if( file_exists(TERM_STREAM) )then
                 call simple_end('**** '//trim(msg)//' ****', print_simple=.false.)
             endif
@@ -25,7 +26,8 @@ contains
     end subroutine terminate_stream
 
     !> To deal with dynamic user input diring streaming
-    subroutine update_user_params( cline_here, httpcom )
+    subroutine update_user_params( params, cline_here, httpcom )
+        class(parameters),                   intent(inout) :: params
         type(cmdline),                            intent(inout) :: cline_here
         type(stream_http_communicator), optional, intent(inout) :: httpcom
         type(oris) :: os
@@ -40,15 +42,15 @@ contains
             call os%read(string(USER_PARAMS))
             if( os%isthere(1,'tilt_thres') ) then
                 tilt_thres = os%get(1,'tilt_thres')
-                if( abs(tilt_thres-params_glob%tilt_thres) > 0.001) then
+                if( abs(tilt_thres-params%tilt_thres) > 0.001) then
                      if(tilt_thres < 0.01)then
                          write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES TOO LOW: ',tilt_thres
                      else if(tilt_thres > 1) then
                          write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES TOO HIGH: ',tilt_thres
                      else
-                         params_glob%tilt_thres = tilt_thres
-                         params_glob%updated    = 'yes'
-                         call cline_here%set('tilt_thres', params_glob%tilt_thres)
+                        params%tilt_thres = tilt_thres
+                        params%updated    = 'yes'
+                        call cline_here%set('tilt_thres', params%tilt_thres)
                          write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES UPDATED TO: ',tilt_thres
                      endif
                 endif
@@ -56,14 +58,14 @@ contains
             if( os%isthere(1,'beamtilt') ) then
                 beamtilt = os%get(1,'beamtilt')
                 if( beamtilt .eq. 1.0 ) then
-                    params_glob%beamtilt = 'yes'
-                    params_glob%updated  = 'yes'
-                    call cline_here%set('beamtilt', params_glob%beamtilt)
+                    params%beamtilt = 'yes'
+                    params%updated  = 'yes'
+                    call cline_here%set('beamtilt', params%beamtilt)
                     write(logfhandle,'(A)')'>>> OPTICS ASSIGNMENT UDPATED TO USE BEAMTILT'
                 else if( beamtilt .eq. 0.0 ) then
-                    params_glob%beamtilt = 'no'
-                    params_glob%updated  = 'yes'
-                    call cline_here%set('beamtilt', params_glob%beamtilt)
+                    params%beamtilt = 'no'
+                    params%updated  = 'yes'
+                    call cline_here%set('beamtilt', params%beamtilt)
                     write(logfhandle,'(A)')'>>> OPTICS ASSIGNMENT UDPATED TO IGNORE BEAMTILT'
                 else
                     write(logfhandle,'(A,F8.2)')'>>> OPTICS UPDATE INVALID BEAMTILT VALUE: ',beamtilt
@@ -71,59 +73,59 @@ contains
             endif
             if( os%isthere(1,'astigthreshold') ) then
                 astigthreshold = os%get(1,'astigthreshold')
-                if( abs(astigthreshold-params_glob%astigthreshold) > 0.001) then
+                if( abs(astigthreshold-params%astigthreshold) > 0.001) then
                      if(astigthreshold < 0.01)then
                          write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM THRESHOLD TOO LOW: ',astigthreshold
                      else if(astigthreshold > 100.0) then
                          write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM TOO HIGH: ',astigthreshold
                      else
-                         params_glob%astigthreshold = astigthreshold
-                         params_glob%updated    = 'yes'
-                         call cline_here%set('astigthreshold', params_glob%astigthreshold)
+                        params%astigthreshold = astigthreshold
+                        params%updated    = 'yes'
+                        call cline_here%set('astigthreshold', params%astigthreshold)
                          write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM THRESHOLD UPDATED TO: ',astigthreshold
                      endif
                 endif
             endif
             if( os%isthere(1,'ctfresthreshold') ) then
                 ctfresthreshold = os%get(1,'ctfresthreshold')
-                if( abs(ctfresthreshold-params_glob%ctfresthreshold) > 0.001) then
+                if( abs(ctfresthreshold-params%ctfresthreshold) > 0.001) then
                      if(ctfresthreshold < 0.01)then
                          write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION THRESHOLD TOO LOW: ',ctfresthreshold
                      else if(ctfresthreshold > 100.0) then
                          write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION TOO HIGH: ',ctfresthreshold
                      else
-                         params_glob%ctfresthreshold = ctfresthreshold
-                         params_glob%updated    = 'yes'
-                         call cline_here%set('ctfresthreshold', params_glob%ctfresthreshold)
+                        params%ctfresthreshold = ctfresthreshold
+                        params%updated    = 'yes'
+                        call cline_here%set('ctfresthreshold', params%ctfresthreshold)
                          write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION THRESHOLD UPDATED TO: ',ctfresthreshold
                      endif
                 endif
             endif
             if( os%isthere(1,'icefracthreshold') ) then
                 icefracthreshold = os%get(1,'icefracthreshold')
-                if( abs(icefracthreshold-params_glob%icefracthreshold) > 0.001) then
+                if( abs(icefracthreshold-params%icefracthreshold) > 0.001) then
                      if(icefracthreshold < 0.01)then
                          write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION THRESHOLD TOO LOW: ',icefracthreshold
                      else if(icefracthreshold > 100.0) then
                          write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION TOO HIGH: ',icefracthreshold
                      else
-                         params_glob%icefracthreshold = icefracthreshold
-                         params_glob%updated    = 'yes'
-                         call cline_here%set('icefracthreshold', params_glob%icefracthreshold)
+                        params%icefracthreshold = icefracthreshold
+                        params%updated    = 'yes'
+                        call cline_here%set('icefracthreshold', params%icefracthreshold)
                          write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION THRESHOLD UPDATED TO: ',icefracthreshold
                      endif
                 endif
             endif
             if( os%isthere(1,'moldiam_refine') ) then
                 moldiam_refine = os%get(1,'moldiam_refine')
-                if( abs(moldiam_refine-params_glob%moldiam_refine) > 0.001) then
+                if( abs(moldiam_refine-params%moldiam_refine) > 0.001) then
                      if(moldiam_refine < 10)then
                          write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER TOO LOW: ' , moldiam_refine
                      else if(moldiam_refine > 1000) then
                          write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER TOO HIGH: ', moldiam_refine
                      else
-                         params_glob%moldiam_refine = moldiam_refine
-                         params_glob%updated        = 'yes'
+                        params%moldiam_refine = moldiam_refine
+                        params%updated        = 'yes'
                          write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER UPDATED TO: ', moldiam_refine
                      endif
                 endif
@@ -137,14 +139,14 @@ contains
                 ! moldiam_refine
                 call httpcom%get_json_arg('moldiam_refine', moldiam_refine_int, found)
                 if(found) then
-                    if( abs(real(moldiam_refine_int)-params_glob%moldiam_refine) > 0.001) then
+                    if( abs(real(moldiam_refine_int)-params%moldiam_refine) > 0.001) then
                         if(moldiam_refine_int < 10 .and. moldiam_refine_int > 0)then
                             write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER TOO LOW: ' , real(moldiam_refine_int)
                         else if(moldiam_refine_int > 1000) then
                             write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER TOO HIGH: ', real(moldiam_refine_int)
                         else
-                            params_glob%moldiam_refine = real(moldiam_refine_int)
-                            params_glob%updated        = 'yes'
+                            params%moldiam_refine = real(moldiam_refine_int)
+                            params%updated        = 'yes'
                             write(logfhandle,'(A,F8.2)')'>>> MULTIPICK REFINE DIAMETER UPDATED TO: ', real(moldiam_refine_int)
                         end if
                     end if
@@ -152,14 +154,14 @@ contains
                 ! moldiam
                 call httpcom%get_json_arg('moldiam', moldiam_int, found)
                 if(found) then
-                    if( abs(real(moldiam_int)-params_glob%moldiam) > 0.001) then
+                    if( abs(real(moldiam_int)-params%moldiam) > 0.001) then
                         if(moldiam_int < 20 .and. moldiam_int > 0)then
                             write(logfhandle,'(A,F8.2)')'>>> MOLECULAR DIAMETER TOO LOW: ' , real(moldiam_int)
                         else if(moldiam_int > 1000) then
                             write(logfhandle,'(A,F8.2)')'>>> MOLECULAR DIAMETER TOO HIGH: ', real(moldiam_int)
                         else
-                            params_glob%moldiam = real(moldiam_int)
-                            params_glob%updated        = 'yes'
+                            params%moldiam = real(moldiam_int)
+                            params%updated        = 'yes'
                             write(logfhandle,'(A,F8.2)')'>>> MOLECULAR DIAMETER UPDATED TO: ', real(moldiam_int)
                         end if
                     end if
@@ -167,14 +169,14 @@ contains
                 ! moldiam_ring
                 call httpcom%get_json_arg('moldiam_ring', moldiam_ring_int, found)
                 if(found) then
-                    if( abs(real(moldiam_ring_int)-params_glob%moldiam_ring) > 0.001) then
+                    if( abs(real(moldiam_ring_int)-params%moldiam_ring) > 0.001) then
                         if(moldiam_ring_int < 20 .and. moldiam_ring_int > 0)then
                             write(logfhandle,'(A,F8.2)')'>>> MOLECULAR RING DIAMETER TOO LOW: ' , real(moldiam_ring_int)
                         else if(moldiam_ring_int > 1000) then
                             write(logfhandle,'(A,F8.2)')'>>> MOLECULAR RING DIAMETER TOO HIGH: ', real(moldiam_ring_int)
                         else
-                            params_glob%moldiam_ring = real(moldiam_ring_int)
-                            params_glob%updated      = 'yes'
+                            params%moldiam_ring = real(moldiam_ring_int)
+                            params%updated      = 'yes'
                             write(logfhandle,'(A,F8.2)')'>>> MOLECULAR RING DIAMETER UPDATED TO: ', real(moldiam_ring_int)
                         end if
                     end if
@@ -182,41 +184,41 @@ contains
                 ! interactive
                 call httpcom%get_json_arg('interactive', interactive, found)
                 if(found) then
-                    params_glob%interactive = interactive
-                    params_glob%updated        = 'yes'
+                    params%interactive = interactive
+                    params%updated        = 'yes'
                     write(logfhandle,'(A,A)')'>>> INTERACTIVE UPDATED TO: ', interactive
                 end if
                 ! ring
                 call httpcom%get_json_arg('ring', ring, found)
                 if(found) then
-                    params_glob%ring = ring
-                    params_glob%updated        = 'yes'
+                    params%ring = ring
+                    params%updated        = 'yes'
                     write(logfhandle,'(A,A)')'>>> RING UPDATED TO: ', ring
                 end if
                 ! astigthreshold
                 call httpcom%get_json_arg('astigthreshold', astigthreshold_int, found)
                 if(found) then
-                    if( abs(real(astigthreshold_int)-params_glob%astigthreshold) > 0.001) then
-                        params_glob%astigthreshold = real(astigthreshold_int)
-                        params_glob%updated        = 'yes'
+                    if( abs(real(astigthreshold_int)-params%astigthreshold) > 0.001) then
+                        params%astigthreshold = real(astigthreshold_int)
+                        params%updated        = 'yes'
                         write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM THRESHOLD UPDATED TO: ', real(astigthreshold_int)
                     end if
                 end if
                 ! ctfresthreshold
                 call httpcom%get_json_arg('ctfresthreshold', ctfresthreshold_int, found)
                 if(found) then
-                    if( abs(real(ctfresthreshold_int)-params_glob%ctfresthreshold) > 0.001) then
-                        params_glob%ctfresthreshold = real(ctfresthreshold_int)
-                        params_glob%updated        = 'yes'
+                    if( abs(real(ctfresthreshold_int)-params%ctfresthreshold) > 0.001) then
+                        params%ctfresthreshold = real(ctfresthreshold_int)
+                        params%updated        = 'yes'
                         write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION THRESHOLD UPDATED TO: ', real(ctfresthreshold_int)
                     end if
                 end if
                 ! icefracthreshold
                 call httpcom%get_json_arg('icefracthreshold', icefracthreshold_dp, found)
                 if(found) then
-                    if( abs(icefracthreshold_dp-params_glob%icefracthreshold) > 0.001) then
-                        params_glob%icefracthreshold = real(icefracthreshold_dp)
-                        params_glob%updated        = 'yes'
+                    if( abs(icefracthreshold_dp-params%icefracthreshold) > 0.001) then
+                        params%icefracthreshold = real(icefracthreshold_dp)
+                        params%updated        = 'yes'
                         write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION THRESHOLD UPDATED TO: ', icefracthreshold_dp
                     end if
                 end if
@@ -253,7 +255,8 @@ contains
     end subroutine wait_for_folder
 
     ! Class rejection routine based on image moments & Total Variation Distance
-    subroutine class_rejection( os, mask, adjust )
+    subroutine class_rejection( params, os, mask, adjust )
+        class(parameters), intent(in)    :: params
         class(oris),    intent(in)    :: os
         logical,        intent(inout) :: mask(:)
         real, optional, intent(in)    :: adjust
@@ -277,12 +280,12 @@ contains
             return
         endif
         ! Effective threshold
-        eff_mean_thresh    = params_glob%stream_mean_threshold
-        eff_rel_var_thresh = params_glob%stream_rel_var_threshold
-        eff_abs_var_thresh = params_glob%stream_abs_var_threshold
-        eff_tvd_thresh     = max(0.001,min(0.999,params_glob%stream_tvd_theshold))
-        eff_min_thresh     = -params_glob%stream_minmax_threshold
-        eff_max_thresh     =  params_glob%stream_minmax_threshold
+        eff_mean_thresh    = params%stream_mean_threshold
+        eff_rel_var_thresh = params%stream_rel_var_threshold
+        eff_abs_var_thresh = params%stream_abs_var_threshold
+        eff_tvd_thresh     = max(0.001,min(0.999,params%stream_tvd_theshold))
+        eff_min_thresh     = -params%stream_minmax_threshold
+        eff_max_thresh     =  params%stream_minmax_threshold
         if( present(adjust) )then
             eff_mean_thresh    = adjust * eff_mean_thresh
             eff_rel_var_thresh = adjust * eff_rel_var_thresh
@@ -359,44 +362,42 @@ contains
         write(stream_datestr, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
     end function stream_datestr
 
-    subroutine process_selected_refs( imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
+    subroutine process_selected_refs( params, imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
         use simple_image_msk, only: automask2d
+        class(parameters), intent(inout) :: params
         class(string),   intent(in)    :: imgfile
         real,            intent(in)    :: smpd
         integer,         intent(in)    :: selection(:)
         real,            intent(out)   :: mskdiam
         integer,         intent(out)   :: box_for_pick, box_for_extract
         integer,         intent(inout) :: nxtiles, nytiles
-        type(parameters)               :: params
+        type(parameters)               :: local_params
         type(cmdline)                  :: cline
         type(stack_io)                 :: stkio_r, stkio_w
         type(image),       allocatable :: cavgs(:)
-        class(parameters), pointer     :: p_ptr
         real,              allocatable :: diams(:), shifts(:,:)
         logical,           parameter   :: DEBUG = .false.
         real    :: maxdiam, mskrad_in_pix, moldiam
         integer :: ldim(3), icls, ncls, nsel
         nsel = size(selection)
         if( nsel == 0 ) return
-        p_ptr => params_glob ! for safe call to automask2D
-        nullify(params_glob)
         write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', nsel,' clusters'
         write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
         ! set defaults
         call set_automask2D_defaults(cline)
         ! parse parameters
-        call params%new(cline)
+        call local_params%new(cline)
         call find_ldim_nptcls(imgfile, ldim, ncls)
         ldim(3) = 1
-        params%msk  = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
-        params%smpd = smpd                              ! for automasking
+        local_params%msk  = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
+        local_params%smpd = smpd                              ! for automasking
         if( DEBUG )then
             print *, 'imgfile:              ', imgfile%to_char()
             print *, 'file_exists(imgfile): ', file_exists(imgfile)
             print *, 'ldim:                 ', ldim(1), ldim(2), ldim(3)
             print *, 'ncls:                 ', ncls
-            print *, 'params%msk:           ', params%msk
-            print *, 'params%smpd:          ', params%smpd
+            print *, 'params%msk:           ', local_params%msk
+            print *, 'params%smpd:          ', local_params%smpd
             print *, 'nsel:                 ', nsel
         endif
         allocate( cavgs(nsel) )
@@ -408,7 +409,7 @@ contains
         do icls = 1, nsel
             call stkio_r%get_image(selection(icls), cavgs(icls))
         end do
-        call automask2D(params, cavgs, params%ngrow, nint(params%winsz), params%edge, diams, shifts)       
+        call automask2D(local_params, cavgs, local_params%ngrow, nint(local_params%winsz), local_params%edge, diams, shifts)
         box_for_pick    = min(round2even(maxval(diams) / smpd + 2. * COSMSKHALFWIDTH), ldim(1))
         moldiam         = smpd * box_for_pick
         mskdiam         = moldiam * MSK_EXP_FAC
@@ -440,9 +441,6 @@ contains
         call stkio_r%close
         ! write jpeg
         call mrc2jpeg_tiled(string(STREAM_SELECTED_REFS)//STK_EXT, string(STREAM_SELECTED_REFS)//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
-        ! put back pointer to params_glob
-        params_glob => p_ptr
-        nullify(p_ptr)
     end subroutine process_selected_refs
     
     function get_latest_optics_map_id(optics_dir) result (lastmap)

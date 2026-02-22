@@ -352,7 +352,7 @@ contains
         endif
 
         ! REPORT CONVERGENCE
-        call qsys_job_finished(string('simple_strategy3D_matcher :: refine3D_exec'))
+        call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
         if( .not. p_ptr%l_distr_exec .and. trim(p_ptr%refine).ne.'sigma' )then
             converged = conv%check_conv3D(p_ptr, cline, b_ptr%spproj_field, p_ptr%msk)
         endif

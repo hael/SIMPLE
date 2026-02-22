@@ -2,7 +2,7 @@
 module simple_volanalyzer
 use simple_core_module_api
 use simple_dock_vols,        only: dock_vols
-use simple_parameters,       only: params_glob
+use simple_parameters,       only: parameters
 use simple_image,            only: image
 use simple_simple_volinterp, only: rotvol
 use simple_ori,              only: ori
@@ -12,19 +12,22 @@ public :: init_volanalyzer, calc_volpair_corrmat, dock_compare_volumes
 private
 #include "simple_local_flags.inc"
 
-type(string), allocatable :: volnames(:)      !< names of volumes to analyze
-type(string), allocatable :: volnames_mirr(:) !< names of mirrored volumes to analyze
-real,         allocatable :: corrmat(:,:)     !< similarity matrix
-type(dock_vols)           :: dvols
-integer                   :: nvols = 0, ldim(3) = 0
+class(parameters), pointer :: p_ptr => null()  !> parameters pointer
+type(string),  allocatable :: volnames(:)      !< names of volumes to analyze
+type(string),  allocatable :: volnames_mirr(:) !< names of mirrored volumes to analyze
+real,          allocatable :: corrmat(:,:)     !< similarity matrix
+type(dock_vols)            :: dvols
+integer                    :: nvols = 0, ldim(3) = 0
 
 contains
 
-    subroutine init_volanalyzer( voltab )
-        class(string), intent(in) :: voltab
+    subroutine init_volanalyzer( params, voltab )
+        class(parameters), target, intent(in) :: params
+        class(string),             intent(in) :: voltab
         type(image) :: vol_mirr
         integer     :: i, ifoo, ldim_read(3)
         real        :: smpd_here
+        p_ptr => params
         call read_filetable(voltab, volnames)
         nvols = size(volnames)
         if( nvols < 3 ) THROW_HARD('Need at least 3 volumes for analysis')
@@ -42,7 +45,7 @@ contains
         allocate(volnames_mirr(nvols))
         do i = 1, nvols
             volnames_mirr(i) = 'vol2analyze'//int2str_pad(i,2)//'_mirr.mrc'
-            call vol_mirr%new(ldim, params_glob%smpd)
+            call vol_mirr%new(ldim, p_ptr%smpd)
             call vol_mirr%read(volnames(i))
             call vol_mirr%mirror('x')
             call vol_mirr%write(volnames_mirr(i))
@@ -64,14 +67,14 @@ contains
                 ipair = ipair + 1
                 call progress_gfortran(ipair, npairs)
                 ! evaluate un-mirrored version
-                call dvols%new(volnames(i), volnames(j), params_glob%smpd,&
-                &params_glob%hp, params_glob%lp, params_glob%mskdiam)
+                call dvols%new(volnames(i), volnames(j), p_ptr%smpd,&
+                &p_ptr%hp, p_ptr%lp, p_ptr%mskdiam)
                 call dvols%srch()
                 call dvols%get_dock_info(eul, shift, cc)
                 call dvols%kill
                 ! evaluate mirrored version
-                call dvols%new(volnames(i), volnames_mirr(j), params_glob%smpd,&
-                &params_glob%hp, params_glob%lp, params_glob%mskdiam)
+                call dvols%new(volnames(i), volnames_mirr(j), p_ptr%smpd,&
+                &p_ptr%hp, p_ptr%lp, p_ptr%mskdiam)
                 call dvols%srch()
                 call dvols%get_dock_info(eul_mirr, shift_mirr, cc_mirr)
                 call dvols%kill
@@ -98,15 +101,15 @@ contains
         do i = 1, nvols
             call progress_gfortran(i, nvols)
             ! evaluate un-mirrored version
-            call dvols%new(volnames(i_medoid), volnames(i), params_glob%smpd,&
-            &params_glob%hp, params_glob%lp, params_glob%mskdiam)
+            call dvols%new(volnames(i_medoid), volnames(i), p_ptr%smpd,&
+            &p_ptr%hp, p_ptr%lp, p_ptr%mskdiam)
             call dvols%srch()
             call dvols%get_dock_info(eul, shift, cc)
             call dvols%rotate_target(volnames(i), string('vol_tmp1.mrc'))
             call dvols%kill
             ! evaluate mirrored version
-            call dvols%new(volnames(i_medoid), volnames_mirr(i), params_glob%smpd,&
-            &params_glob%hp, params_glob%lp, params_glob%mskdiam)
+            call dvols%new(volnames(i_medoid), volnames_mirr(i), p_ptr%smpd,&
+            &p_ptr%hp, p_ptr%lp, p_ptr%mskdiam)
             call dvols%srch()
             call dvols%get_dock_info(eul_mirr, shift_mirr, cc_mirr)
             call dvols%rotate_target(volnames_mirr(i), string('vol_tmp2.mrc'))
@@ -122,16 +125,16 @@ contains
             endif
         end do
         ! calculate volume correlations
-        call vol_medoid%new(ldim, params_glob%smpd)
+        call vol_medoid%new(ldim, p_ptr%smpd)
         call vol_medoid%read(volnames(i_medoid))
-        call vol_medoid%mask3D_soft(params_glob%msk)
-        call vol_docked%new(ldim, params_glob%smpd)
+        call vol_medoid%mask3D_soft(p_ptr%msk)
+        call vol_docked%new(ldim, p_ptr%smpd)
         call fopen(funit, string('volanayze_stats.txt'), 'replace', 'unknown')
         do i = 1, nvols
             volfname = 'vol_docked'//int2str_pad(i,2)//'.mrc'
             call vol_docked%read(volfname)
-            call vol_docked%mask3D_soft(params_glob%msk)
-            cc = vol_medoid%corr(vol_docked, params_glob%lp, params_glob%hp)
+            call vol_docked%mask3D_soft(p_ptr%msk)
+            cc = vol_medoid%corr(vol_docked, p_ptr%lp, p_ptr%hp)
             if( i == i_medoid )then
                 write(funit,'(A,1X,I2,1X,A,1X,F7.3,1X,A)') '>>> VOLUME:', i, '>>> CORRELATION:', cc, '***MEDOID***'
             else

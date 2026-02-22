@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_defs_environment
 use simple_cmdline,      only: cmdline
 use simple_image,        only: image
-use simple_parameters,   only: params_glob
+use simple_parameters,   only: parameters
 use simple_qsys_env,     only: qsys_env
 use simple_sp_project,   only: sp_project
 use simple_rec_list,     only: rec_list
@@ -19,18 +19,19 @@ private
 ! Type to handle a single chunk
 type stream_chunk
     private
-    type(sp_project)          :: spproj                ! master project
-    type(qsys_env)            :: qenv                  ! submission handler
-    type(cmdline)             :: cline                 ! command line
-    type(string), allocatable :: orig_stks(:)          ! list of stacks
-    type(string)              :: path, projfile_out    ! physical location
-    integer                   :: id                    ! unique id
-    integer                   :: it                    ! # of iterations performed
-    integer                   :: nmics                 ! # of micrographs
-    integer                   :: nptcls                ! # number of particles
-    logical                   :: toanalyze2D = .true.  ! whether to perform 2D analysis or only calculate sigmas2
-    logical                   :: converged   = .false. ! whether 2D analysis is over
-    logical                   :: available   = .true.  ! has been initialized but no 2D analysis peformed
+    class(parameters), pointer :: p_ptr => null()       ! parameters pointer
+    type(sp_project)           :: spproj                ! master project
+    type(qsys_env)             :: qenv                  ! submission handler
+    type(cmdline)              :: cline                 ! command line
+    type(string), allocatable  :: orig_stks(:)          ! list of stacks
+    type(string)               :: path, projfile_out    ! physical location
+    integer                    :: id                    ! unique id
+    integer                    :: it                    ! # of iterations performed
+    integer                    :: nmics                 ! # of micrographs
+    integer                    :: nptcls                ! # number of particles
+    logical                    :: toanalyze2D = .true.  ! whether to perform 2D analysis or only calculate sigmas2
+    logical                    :: converged   = .false. ! whether 2D analysis is over
+    logical                    :: available   = .true.  ! has been initialized but no 2D analysis peformed
   contains
     procedure          :: init_chunk
     procedure, private :: copy
@@ -70,16 +71,18 @@ contains
     end subroutine debug_print
 
     !>  Instantiator
-    subroutine init_chunk( self, id, cline, master_spproj )
-        class(stream_chunk), intent(inout) :: self
-        class(cmdline),      intent(in)    :: cline
-        integer,             intent(in)    :: id
-        class(sp_project),   intent(in)    :: master_spproj
+    subroutine init_chunk( self, params, cline, id, master_spproj )
+        class(stream_chunk),       intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(cmdline),            intent(in)    :: cline
+        integer,                   intent(in)    :: id
+        class(sp_project),         intent(in)    :: master_spproj
         type(string)          :: exec
         character(len=STDLEN) :: chunk_part_env
         integer               :: envlen
         call debug_print('in chunk%init '//int2str(id))
         call self%spproj%kill
+        self%p_ptr  => params
         self%id     = id
         self%it     = 0
         self%nmics  = 0 ! # of micrographs & stacks in chunk
@@ -94,13 +97,13 @@ contains
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
         exec = 'simple_exec'
-        if( params_glob%nparts_chunk == 1 )then
+        if( self%p_ptr%nparts_chunk == 1 )then
             ! shared memory
-            call self%qenv%new(params_glob, params_glob%nparts_chunk, exec_bin=exec, qsys_nthr=params_glob%nthr2D)
+            call self%qenv%new(self%p_ptr, self%p_ptr%nparts_chunk, exec_bin=exec, qsys_nthr=self%p_ptr%nthr2D)
             call self%spproj%compenv%set(1,'qsys_name','local')
         else
             ! we need to override the qsys_name for non local distributed execution
-            call self%qenv%new(params_glob, params_glob%nparts_chunk, exec_bin=exec, qsys_name=string('local'))
+            call self%qenv%new(self%p_ptr, self%p_ptr%nparts_chunk, exec_bin=exec, qsys_name=string('local'))
             call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, chunk_part_env, envlen)
             if(envlen > 0) call self%spproj%compenv%set(1,'qsys_partition', trim(chunk_part_env))
         endif
@@ -133,6 +136,7 @@ contains
         dest%toanalyze2D  = src%toanalyze2D
         dest%converged    = src%converged
         dest%available    = src%available
+        dest%p_ptr        => src%p_ptr
     end subroutine copy
 
     !>  \brief  assign, polymorphic assignment (=)
@@ -266,7 +270,7 @@ contains
         call cline_pspec%set('nthr',     cline_analyze2D%get_iarg('nthr'))
         call cline_pspec%set('mkdir',    'yes')
         call cline_pspec%set('nparts',   1)
-        if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',params_glob%nparts_chunk)
+        if( self%p_ptr%nparts_chunk > 1 ) call cline_pspec%set('nparts',self%p_ptr%nparts_chunk)
         call cline_pspec%set('projfile', self%projfile_out)
         call cline_pspec%set('projname', CHUNK_PROJNAME)
         call self%spproj%update_projinfo(cline_pspec)
@@ -324,17 +328,17 @@ contains
                 class(string), intent(in) :: tmpl
                 type(string) :: fname
                 integer      :: icls, ipart, numlen_chunk
-                if( params_glob%nparts_chunk > 1  )then
-                    numlen_chunk = len(int2str(params_glob%nparts_chunk)) ! as per parameters
+                if( self%p_ptr%nparts_chunk > 1  )then
+                    numlen_chunk = len(int2str(self%p_ptr%nparts_chunk)) ! as per parameters
                     call img%zero_and_flag_ft
-                    do icls = 1,params_glob%ncls_start
+                    do icls = 1,self%p_ptr%ncls_start
                         call avg%zero_and_flag_ft
-                        do ipart = 1,params_glob%nparts_chunk
+                        do ipart = 1,self%p_ptr%nparts_chunk
                             fname = tmpl//int2str_pad(ipart,numlen_chunk)//MRC_EXT
                             call img%read(fname,icls)
                             call avg%add(img)
                         enddo
-                        call avg%div(real(params_glob%nparts_chunk))
+                        call avg%div(real(self%p_ptr%nparts_chunk))
                         call avg%write(tmpl//MRC_EXT,icls)
                     enddo
                 else
@@ -353,7 +357,7 @@ contains
         type(string), allocatable :: stks(:)
         type(string) :: ext, fbody, fname, dest
         integer      :: i
-        if( trim(params_glob%sigma_est).eq.'group' )then
+        if( trim(self%p_ptr%sigma_est).eq.'group' )then
             ! one star file with # of micrograph/stack groups -> # of micrograph groups files
             allocate(stks(self%nmics))
             do i = 1, self%nmics
@@ -387,9 +391,9 @@ contains
         call cline_make_cavgs%set('mkdir',      'no')
         call cline_make_cavgs%set('refs',       finalcavgs)
         call cline_make_cavgs%set('ncls',       self%cline%get_iarg('ncls'))
-        call cline_make_cavgs%set('mskdiam',    params_glob%mskdiam)
+        call cline_make_cavgs%set('mskdiam',    self%p_ptr%mskdiam)
         call cline_make_cavgs%set('async',      'yes')
-        call cline_make_cavgs%set('nthr',       params_glob%nthr2D)
+        call cline_make_cavgs%set('nthr',       self%p_ptr%nthr2D)
         if( self%cline%defined('nparts') )then
             call cline_make_cavgs%set('nparts', self%cline%get_iarg('nparts'))
         else
@@ -421,12 +425,12 @@ contains
         integer      :: ipart, numlen
         if( self%id == 0 )   return
         if( file_exists(self%path) )then
-            numlen = len(int2str(params_glob%nparts_chunk))
+            numlen = len(int2str(self%p_ptr%nparts_chunk))
             call simple_chdir(self%path)
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
-            call qsys_cleanup(keep2D=.false.)
-            do ipart = 1,params_glob%nparts_chunk
+            call qsys_cleanup(self%p_ptr, keep2D=.false.)
+            do ipart = 1,self%p_ptr%nparts_chunk
                 call simple_touch(JOB_FINISHED_FBODY//int2str_pad(ipart,numlen))
             enddo
             call simple_touch('CAVGASSEMBLE_FINISHED')
@@ -501,11 +505,11 @@ contains
         allocate(cls_mask(ncls),moments_mask(ncls),corres_mask(ncls),source=.true.)
         allocate(pops(ncls),source=nint(self%spproj%os_cls2D%get_all('pop')))
         ! moments & total variation distance
-        if( trim(params_glob%reject_cls).ne.'old' )then
-            call class_rejection(self%spproj%os_cls2D, moments_mask)
+        if( trim(self%p_ptr%reject_cls).ne.'old' )then
+            call class_rejection(self%p_ptr, self%spproj%os_cls2D, moments_mask)
         endif
         ! correlation and resolution
-        if( params_glob%lpthres < LOWRES_REJECT_THRESHOLD )then
+        if( self%p_ptr%lpthres < LOWRES_REJECT_THRESHOLD )then
             call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
         endif
         ! overall class rejection
@@ -588,6 +592,7 @@ contains
         self%toanalyze2D = .true.
         self%converged  = .false.
         self%available  = .false.
+        self%p_ptr      => null()
     end subroutine kill
 
 end module simple_stream_chunk

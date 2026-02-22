@@ -98,13 +98,13 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! cleanup
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess_distr
@@ -268,7 +268,7 @@ contains
         call o_mov%kill
         call spproj%kill
         ! end gracefully
-        call qsys_job_finished(string('simple_commanders_preprocess :: exec_preprocess'))
+        call qsys_job_finished(params, string('simple_commanders_preprocess :: exec_preprocess'))
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess
 
@@ -304,13 +304,13 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct_distr
@@ -380,7 +380,7 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished(string('simple_commanders_preprocess :: exec_motion_correct'))
+        call qsys_job_finished(params, string('simple_commanders_preprocess :: exec_motion_correct'))
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
 
@@ -413,13 +413,13 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_GEN_PSPECS_AND_THUMBS NORMAL STOP ****')
     end subroutine exec_gen_pspecs_and_thumbs_distr
@@ -473,7 +473,7 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished(string('simple_commanders_preprocess :: exec_gen_pspecs_and_thumbs'))
+        call qsys_job_finished(params, string('simple_commanders_preprocess :: exec_gen_pspecs_and_thumbs'))
         call simple_end('**** SIMPLE_GEN_PSPECS_AND_THUMBS NORMAL STOP ****')
     end subroutine exec_gen_pspecs_and_thumbs
 
@@ -508,13 +508,13 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         ! cleanup
         call spproj%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! graceful ending
         call simple_end('**** SIMPLE_DISTR_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate_distr
@@ -593,7 +593,7 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished(string('simple_commanders_preprocess :: exec_ctf_estimate'))
+        call qsys_job_finished(params, string('simple_commanders_preprocess :: exec_ctf_estimate'))
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate
 

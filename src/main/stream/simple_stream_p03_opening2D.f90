@@ -145,7 +145,7 @@ contains
             call cline_extract%set('nparts',               params%nthr)
             call cline_extract%set('nthr',                           1)
             call cline_extract%set('projfile',   PROJFILE_GEN_PICKREFS)
-            call xextract%execute_safe(cline_extract)
+            call xextract%execute(cline_extract)
             call spproj%read(string(PROJFILE_GEN_PICKREFS))
             ! join background http heartbeats
             call join_background_heartbeats()
@@ -173,7 +173,7 @@ contains
             call cline_abinitio2D%set('nthr',                    nthr2D)
             call cline_abinitio2D%set('nparts',                NPARTS2D)
             call cline_abinitio2D%set('projfile', PROJFILE_GEN_PICKREFS)
-            call xabinitio2D%execute_safe(cline_abinitio2D)
+            call xabinitio2D%execute(cline_abinitio2D)
             ! join background http heartbeats
             call join_background_heartbeats()
             ! background http heartbeats
@@ -181,7 +181,7 @@ contains
             ! shape rank cavgs
             call cline_shape_rank%set('nthr',               params%nthr)
             call cline_shape_rank%set('projfile', PROJFILE_GEN_PICKREFS)
-            call xshape_rank%execute_safe(cline_shape_rank)
+            call xshape_rank%execute(cline_shape_rank)
             call spproj%read(string(PROJFILE_GEN_PICKREFS))
             call spproj%shape_ranked_cavgs2jpg(cavg_inds, string("shape_ranked_")//int2str(params%nmics)//JPG_EXT,&
             &xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
@@ -239,7 +239,7 @@ contains
                     call http_gen_pickrefs_communicator%get_json_arg('final_selection_source', buffer, found)
                     if(found) then
                         final_selection_source = buffer
-                        call process_selected_refs(final_selection_source, spproj%get_smpd(), final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
+                        call process_selected_refs(params, final_selection_source, spproj%get_smpd(), final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
                         call http_gen_pickrefs_communicator%add_to_json("mask_diam", nint(mskdiam_estimate))
                         call http_gen_pickrefs_communicator%add_to_json("mskscale",  dble(box_for_extract * spproj%get_smpd()))
                         call http_gen_pickrefs_communicator%add_to_json("box_size",  box_for_extract)
@@ -350,7 +350,7 @@ contains
                         ! termination
                         write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                         call spproj%kill
-                        call qsys_cleanup
+                        call qsys_cleanup(params)
                         call http_communicator%term()
                         call http_gen_pickrefs_communicator%term()
                         call simple_end('**** SIMPLE_GEN_PICKREFS USER STOP ****')
@@ -407,7 +407,7 @@ contains
                     ! http stats send
                     call send_jobstats() ! needs to be called so the gui doesn't think the process is dead, "fancy heartbeat"
                     ! update thresholds if sent from gui
-                    call update_user_params(cline, http_communicator)
+                    call update_user_params(params, cline, http_communicator)
                     if( spproj%os_mic%count_state_gt_zero() >= nmics ) then
                         ! set state=-1 mics back to 1
                         do imic = 1,spproj%os_mic%get_noris()

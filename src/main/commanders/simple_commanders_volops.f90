@@ -491,7 +491,7 @@ contains
         type(parameters) :: params
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',    'yes')
         call params%new(cline)
-        call init_volanalyzer(params%filetab)
+        call init_volanalyzer(params, params%filetab)
         if( cline%defined('ref_ind') )then
             call dock_compare_volumes(params%ref_ind)
         else
@@ -596,7 +596,7 @@ contains
             call cline_reproject%set('vol1',   'noisevol.mrc')
             call cline_reproject%set('outstk', params%refs)
             call cline_reproject%set('mskdiam',params%smpd*(real(params%box)-2.0*COSMSKHALFWIDTH))
-            call xreproject%execute_safe(cline_reproject)
+            call xreproject%execute(cline_reproject)
             call copy_imgfile(params%refs, params%refs_even, params%smpd, [1,params%nspace])
             call copy_imgfile(params%refs, params%refs_odd,  params%smpd, [1,params%nspace])
         else

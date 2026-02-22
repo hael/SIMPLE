@@ -136,19 +136,19 @@ contains
             call cline_make_pickrefs%set('smpd', params%smpd)
             call cline_make_pickrefs%set('mkdir','no')
             if( trim(params%picker).eq.'old' ) call cline_make_pickrefs%set('neg','yes')
-            call xmake_pickrefs%execute_safe(cline_make_pickrefs)
+            call xmake_pickrefs%execute(cline_make_pickrefs)
             call cline%set('pickrefs', PICKREFS_FBODY//params%ext%to_char())
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         ! cleanup
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! graceful exit
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
@@ -211,7 +211,7 @@ contains
         call spproj%kill
         call piter%kill
         ! end gracefully
-        call qsys_job_finished(string('simple_commanders_pick :: exec_pick'))
+        call qsys_job_finished(params, string('simple_commanders_pick :: exec_pick'))
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
@@ -314,7 +314,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! ASSEMBLY
         allocate(parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
@@ -397,7 +397,7 @@ contains
         call spproj%kill
         call o_mic%kill
         call o_tmp%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! end gracefully
         call simple_end('**** SIMPLE_EXTRACT_DISTR NORMAL STOP ****')
 
@@ -746,7 +746,7 @@ contains
         call o_tmp%kill
         call os_mic%kill
         ! if( prog_write ) call progressfile_update(1.0)
-        call qsys_job_finished(string('simple_commanders_pick :: exec_extract'))
+        call qsys_job_finished(params, string('simple_commanders_pick :: exec_extract'))
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
         contains
 
@@ -860,7 +860,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), part_params=part_params, array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), part_params=part_params, array=L_USE_SLURM_ARR, extra_params=params)
         ! ASSEMBLY
         allocate(spproj_parts(params%nparts),parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
@@ -927,7 +927,7 @@ contains
         ! final write
         call spproj%write( params%projfile )
         ! clean-up
-        call qsys_cleanup
+        call qsys_cleanup(params)
         call spproj%kill
         deallocate(spproj_parts,part_params)
         call o_mic%kill
@@ -1272,7 +1272,7 @@ contains
         call spproj%write(params%outfile)
         write(logfhandle,'(A,I8)')'>>> RE-EXTRACTED  PARTICLES: ', nptcls
         ! end gracefully
-        call qsys_job_finished(string('simple_commanders_pick :: exec_reextract'))
+        call qsys_job_finished(params, string('simple_commanders_pick :: exec_reextract'))
         call build%kill_general_tbox
         call o_mic%kill
         call o_stk%kill
@@ -1403,7 +1403,7 @@ contains
             call spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         ! end gracefully
-        call qsys_job_finished(string('simple_commanders_pick :: exec_pick_extract'))
+        call qsys_job_finished(params, string('simple_commanders_pick :: exec_pick_extract'))
         call o_mic%kill
         call piter%kill
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')

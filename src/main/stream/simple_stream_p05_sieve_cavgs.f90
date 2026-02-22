@@ -167,7 +167,7 @@ contains
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj_glob%kill
-                call qsys_cleanup
+                call qsys_cleanup(params)
                 call simple_end('**** SIMPLE_STREAM_SIEVE_CAVGS USER STOP ****')
                 call EXIT(0)
             endif
@@ -193,17 +193,17 @@ contains
                 call http_communicator%update_json("last_particles_imported",  stream_datestr(), found)
                 time_last_import = time8()
                 if( n_imported < 1000 )then
-                    call update_user_params(cline)
+                    call update_user_params(params, cline)
                 else if( n_imported > n_imported_prev + 100 )then
-                    call update_user_params(cline)
+                    call update_user_params(params, cline)
                     n_imported_prev = n_imported
                 endif
             endif
             ! Chunk book-keeping section
-            call update_user_params2D(cline, l_params_updated)
-            call update_chunks
+            call update_user_params2D(params, cline, l_params_updated)
+            call update_chunks(params)
             call memoize_chunks(chunk_list, nchunks_imported)
-            call update_user_params2D(cline, l_params_updated)
+            call update_user_params2D(params, cline, l_params_updated)
             if( nchunks_imported > 0 ) nchunks_glob = nchunks_glob + nchunks_imported
             ! create sets and cluster/match cavgs when required
             call manage_sets()
@@ -381,14 +381,14 @@ contains
                 endif
             endif
             ! Create new chunks and 
-            call analyze2D_new_chunks(project_list)
+            call analyze2D_new_chunks(params, project_list)
             call sleep(WAITTIME)
             ! http stats send
             call http_communicator%send_jobstats()
         end do
         ! termination
         write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
-        call terminate_chunks
+        call terminate_chunks(params)
         ! merge sets and write project
         it = set_list%begin()
         do i=1, set_list%size()
@@ -424,7 +424,7 @@ contains
         ! cleanup
         if( allocated(l_processed) ) deallocate(l_processed)
         call spproj_glob%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! end gracefully
         call http_communicator%term()
         call simple_end('**** SIMPLE_STREAM_SIEVE_CAVGS NORMAL STOP ****')
@@ -502,7 +502,7 @@ contains
                             call cline%set('mskdiam', params%mskdiam)
                             write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
                         endif
-                        call init_chunk_clustering(cline, spproj_glob)
+                        call init_chunk_clustering(params, cline, spproj_glob)
                         call cline%delete('ncls')
                     end if
                 else if( n_recs_prev == 0 )then
@@ -515,7 +515,7 @@ contains
                         call cline%set('mskdiam', params%mskdiam)
                         write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
                     endif
-                    call init_chunk_clustering(cline, spproj_glob)
+                    call init_chunk_clustering(params, cline, spproj_glob)
                     call cline%delete('ncls')
                 endif
                 ! cleanup

@@ -1,6 +1,7 @@
 !@descr: executes SIMPLE stream workflows
 program simple_stream
 use simple_core_module_api
+use simple_parameters,     only: parameters
 use iso_fortran_env,       only: output_unit
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_exec_helpers,   only: script_exec, update_job_descriptions_in_project
@@ -65,12 +66,12 @@ select case(trim(prg))
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
-call update_job_descriptions_in_project( cline )
+call update_job_descriptions_in_project(string('simple_stream'), string(trim(prg)), cline)
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('6efa3543')
+call simple_print_git_version('624516ad')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

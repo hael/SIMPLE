@@ -88,9 +88,9 @@ contains
         call generate_chunk_projects
         ! Update to global parameters prior to 2D inititalization
         nptcls_per_chunk = nint(real(sum(nptcls_per_chunk_vec)) / real(ntot_chunks))    ! average value
-        params_glob%ncls = floor(real(nptcls_per_chunk) / real(params_glob%nptcls_per_cls))
+        params%ncls = floor(real(nptcls_per_chunk) / real(params%nptcls_per_cls))
         ! General streaming initialization
-        call init_chunk_clustering( cline, spproj_glob )
+        call init_chunk_clustering( params, cline, spproj_glob )
         ! Updates folllowing streaming init
         numlen = params%numlen
         call del_file(POOL_DIR//CLUSTER2D_FINISHED)
@@ -103,11 +103,11 @@ contains
         ! call cline_cluster2D_chunk%delete('cc_iters')
         call cline_cluster2D_chunk%set('rank_cavgs', params%rank_cavgs)
         ! re-init with updated command-lines
-        do ichunk = 1,params_glob%nchunks
+        do ichunk = 1,params%nchunks
             call chunks(ichunk)%kill
-            call chunks(ichunk)%init_chunk(ichunk, cline_cluster2D_chunk, spproj_glob)
+            call chunks(ichunk)%init_chunk(params, cline_cluster2D_chunk, ichunk, spproj_glob)
         enddo
-        params_glob%nthr2D = params_glob%nthr ! ?? cf. Joe
+        params%nthr2D = params%nthr ! ?? cf. Joe
         ! Main loop
         ichunk = 0  ! # of chunks that have been submitted
         all_chunks_submitted = .false.
@@ -117,7 +117,7 @@ contains
                 if( chunks(1)%is_available() )then
                     ichunk = ichunk + 1
                     nptcls_per_chunk = nptcls_per_chunk_vec(ichunk) ! is a variable
-                    call analyze2D_new_chunks(project_list, .false.)
+                    call analyze2D_new_chunks(params, project_list, .false.)
                     all_chunks_submitted = ichunk == ntot_chunks
                 endif
             endif
@@ -155,7 +155,7 @@ contains
         call simple_rmdir(DIR_SNAPSHOT)
         call del_file(POOL_DIR//POOL_PROJFILE)
         call simple_rmdir(SIGMAS_DIR)
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! graceful end
         call simple_end('**** SIMPLE_CLUSTER2D_SUBSETS NORMAL STOP ****')
 
@@ -166,7 +166,7 @@ contains
             integer :: ichunk, jchunk, nthr2D, n
             logical :: chunk_complete
             if( .not. l_stream2D_active ) return
-            do ichunk = 1,params_glob%nchunks
+            do ichunk = 1,params%nchunks
                 if( chunks(ichunk)%is_available() ) cycle
                 chunk_complete = .false.
                 if( chunks(ichunk)%to_analyze2D() )then
@@ -197,10 +197,10 @@ contains
                     ! reinit and deal with nthr2D != nthr
                     glob_chunk_id = glob_chunk_id + 1
                     ! deal with nthr2d .ne. nthr
-                    nthr2D = params_glob%nthr2D
-                    params_glob%nthr2D = cline_cluster2D_chunk%get_iarg('nthr')
-                    call chunks(ichunk)%init_chunk(glob_chunk_id, cline_cluster2D_chunk, pool_proj)
-                    params_glob%nthr2D = nthr2D
+                    nthr2D = params%nthr2D
+                    params%nthr2D = cline_cluster2D_chunk%get_iarg('nthr')
+                    call chunks(ichunk)%init_chunk(params, cline_cluster2D_chunk, glob_chunk_id, pool_proj)
+                    params%nthr2D = nthr2D
                 endif
             enddo
         end subroutine check_completed_chunks
@@ -356,7 +356,7 @@ contains
             call simple_chdir(path)
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
-            call xcluster_cavgs%execute_safe(cline_cluster_cavgs)
+            call xcluster_cavgs%execute(cline_cluster_cavgs)
             call simple_chdir('..')
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
@@ -397,7 +397,7 @@ contains
             call simple_chdir(tmpl)
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
-            call xmatch_cavgs%execute_safe(cline_match_cavgs)
+            call xmatch_cavgs%execute(cline_match_cavgs)
             call simple_chdir('..')
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
