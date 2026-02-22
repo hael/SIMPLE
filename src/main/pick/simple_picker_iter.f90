@@ -23,8 +23,9 @@ end type picker_iter
 
 contains
 
-    subroutine iterate( self, cline, smpd, moviename_intg, dir_out, boxfile, thumb_den, nptcls_out )
+    subroutine iterate( self, params, cline, smpd, moviename_intg, dir_out, boxfile, thumb_den, nptcls_out )
         class(picker_iter), intent(inout) :: self
+        class(parameters),  intent(inout) :: params
         class(cmdline),     intent(in)    :: cline
         real,               intent(in)    :: smpd
         class(string),      intent(in)    :: moviename_intg, dir_out
@@ -34,20 +35,20 @@ contains
         l_append = .false.
         if( .not. file_exists(moviename_intg) ) write(logfhandle,*) 'inputted micrograph does not exist: ', moviename_intg%to_char()
         write(logfhandle,'(a,1x,a)') '>>> PICKING MICROGRAPH:', moviename_intg%to_char()
-        if(params_glob%append == 'yes') l_append = .true.
-        select case(trim(params_glob%picker))
+        if(params%append == 'yes') l_append = .true.
+        select case(trim(params%picker))
             case('old')
                 THROW_HARD('Old picker no longer supported')
             case('new')
                 if( cline%defined('pickrefs') )then 
-                    call self%read_pickrefs(params_glob%pickrefs)
+                    call self%read_pickrefs(params%pickrefs)
                     if( cline%defined('nboxes_max') )then
-                        call exec_refpick(moviename_intg, boxfile, thumb_den, smpd, nptcls_out, self%pickrefs, dir_out=dir_out, nboxes_max=params_glob%nboxes_max)
+                        call exec_refpick(params, moviename_intg, boxfile, thumb_den, smpd, nptcls_out, self%pickrefs, dir_out=dir_out, nboxes_max=params%nboxes_max)
                     else
-                        call exec_refpick(moviename_intg, boxfile, thumb_den, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
+                        call exec_refpick(params, moviename_intg, boxfile, thumb_den, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
                     endif
                 else if( cline%defined('moldiam') .or. cline%defined('multi_moldiams')  )then
-                    call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, dir_out=dir_out)
+                    call exec_gaupick(params, moviename_intg, boxfile, smpd, nptcls_out, dir_out=dir_out)
                 else
                     THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
@@ -56,14 +57,14 @@ contains
                     THROW_HARD('Segmentation-based picker requires lp (low-pass limit) for filtering')
                 endif
                 if( cline%defined('moldiam') )then
-                    call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out, moldiam=params_glob%moldiam)
+                    call exec_segpick(params, moviename_intg, boxfile, nptcls_out, dir_out=dir_out, moldiam=params%moldiam)
                 elseif( cline%defined('winsz') )then
-                    call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out, winsz=int(params_glob%winsz))
+                    call exec_segpick(params, moviename_intg, boxfile, nptcls_out, dir_out=dir_out, winsz=int(params%winsz))
                 else
-                    call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out)
+                    call exec_segpick(params, moviename_intg, boxfile, nptcls_out, dir_out=dir_out)
                 endif
             case('segdiam')
-                call exec_segdiampick(moviename_intg, boxfile, smpd, nptcls_out, params_glob%moldiam_max, dir_out=dir_out)
+                call exec_segdiampick(params, moviename_intg, boxfile, smpd, nptcls_out, params%moldiam_max, dir_out=dir_out)
         end select
     end subroutine iterate
 

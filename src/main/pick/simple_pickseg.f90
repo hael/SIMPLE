@@ -1,7 +1,7 @@
 !@descr: the abstract data type implementing the original version of segmentation-based picking
 module simple_pickseg
 use simple_core_module_api
-use simple_parameters,   only: params_glob
+use simple_parameters,   only: parameters
 use simple_image,        only: image
 use simple_tvfilter,     only: tvfilter
 use simple_segmentation, only: otsu_img, sauvola
@@ -45,9 +45,10 @@ end type pickseg
 
 contains
 
-    subroutine pick( self, micname, moldiam, winsz )
-        class(pickseg), intent(inout) :: self
-        class(string),  intent(in)    :: micname !< micrograph file name
+    subroutine pick( self, params, micname, moldiam, winsz )
+        class(pickseg),    intent(inout) :: self
+        class(parameters), intent(in)    :: params
+        class(string),     intent(in)    :: micname !< micrograph file name
         real,             allocatable :: diams(:)
         integer,          allocatable :: sz(:)
         type(string)    :: ext
@@ -82,7 +83,7 @@ contains
         call self%mic_shrink%new_bimg(self%ldim, self%smpd_shrink)
         call self%mic_shrink%set_ft(.true.)
         call mic_raw%clip(self%mic_shrink)
-        select case( trim(params_glob%pcontrast) )
+        select case( trim(params%pcontrast) )
             case('black')
                 ! flip contrast (assuming black particle contrast on input)
                 call self%mic_shrink%mul(-1.)
@@ -92,7 +93,7 @@ contains
                 THROW_HARD('unknown pcontrast parameter, use (black|white)')
         end select
         ! low-pass filter micrograph
-        call self%mic_shrink%bp(0., params_glob%lp)
+        call self%mic_shrink%bp(0., params%lp)
         call self%mic_shrink%ifft
         call mic_raw%ifft
         if( L_WRITE ) call self%mic_shrink%write(fbody//'_lp.mrc')
@@ -135,8 +136,8 @@ contains
         if( l_winsz )then
             ! elimination of connected components that are too small or too big with sauvola is not needed
         else
-            sz_min = nint(self%sz_stats%avg - params_glob%ndev * self%sz_stats%sdev)
-            sz_max = nint(self%sz_stats%avg + params_glob%ndev * self%sz_stats%sdev)
+            sz_min = nint(self%sz_stats%avg - params%ndev * self%sz_stats%sdev)
+            sz_max = nint(self%sz_stats%avg + params%ndev * self%sz_stats%sdev)
             ! optimal molecular diameter is inputted
             if( l_moldiam )then
                 box      = nint(PI*(moldiam/2.)**2 / smpd_raw**2)

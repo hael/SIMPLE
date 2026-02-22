@@ -1,7 +1,6 @@
 !@descr: the abstract data type implementing particle picking using templates
 module simple_pickref
 use simple_core_module_api
-use simple_parameters, only: params_glob
 use simple_image,      only: image
 use simple_segmentation
 implicit none
@@ -123,9 +122,9 @@ contains
         endif
     end subroutine refpick
 
-    subroutine new( self, pcontrast, smpd_shrink, imgs, offset, ndev, roi, nboxes_max )
+    subroutine new( self, pcontrast, pdensity, smpd_shrink, imgs, offset, ndev, roi, nboxes_max )
         class(pickref),    intent(inout) :: self
-        character(len=*),  intent(in)    :: pcontrast
+        character(len=*),  intent(in)    :: pcontrast, pdensity
         real,              intent(in)    :: smpd_shrink
         class(image),      intent(inout) :: imgs(:)
         integer, optional, intent(in)    :: offset
@@ -172,7 +171,7 @@ contains
         end do
         !$omp end parallel do
         ! set peak threshold level
-        select case(trim(params_glob%particle_density))
+        select case(trim(pdensity))
             case('low')
                 self%peak_thres_level = 1
             case('optimal')

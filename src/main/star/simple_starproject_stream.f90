@@ -3,7 +3,7 @@ module simple_starproject_stream
 use simple_core_module_api
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
-use simple_parameters, only: params_glob
+use simple_parameters, only: parameters
 use simple_histogram,  only: histogram
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
@@ -15,15 +15,16 @@ private
 #include "simple_local_flags.inc"
 
 type starproject_stream
-    type(starfile_table_type) :: starfile
-    type(string)              :: starfile_name
-    type(string)              :: starfile_tmp
-    type(string)              :: rootpath
-    real                      :: shift_threshold = 0.05
-    integer                   :: group_offset = 0
-    logical                   :: nicestream   = .false.
-    logical                   :: use_beamtilt = .false.
-    logical                   :: verbose      = .false.
+    class(parameters), pointer :: p_ptr => null()
+    type(starfile_table_type)  :: starfile
+    type(string)               :: starfile_name
+    type(string)               :: starfile_tmp
+    type(string)               :: rootpath
+    real                       :: shift_threshold = 0.05
+    integer                    :: group_offset = 0
+    logical                    :: nicestream   = .false.
+    logical                    :: use_beamtilt = .false.
+    logical                    :: verbose      = .false.
 contains
     ! export
     procedure          :: stream_export_micrographs
@@ -62,12 +63,15 @@ contains
 
     ! starfiles
 
-    subroutine starfile_init( self, fname, outdir, verbose)
+    subroutine starfile_init( self, params, fname, outdir, verbose)
         class(starproject_stream), intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
         class(string),             intent(in)    :: fname
         class(string),             intent(in)    :: outdir
         logical, optional,         intent(in)    :: verbose
         type(string) :: cwd, stem 
+        ! set pointer to params
+        self%p_ptr => params
         if(present(verbose)) self%verbose = verbose
         self%starfile_name = fname
         self%starfile_tmp  = fname // '.tmp'
@@ -375,8 +379,9 @@ contains
 
     ! export
 
-    subroutine stream_export_micrographs( self, spproj, outdir, optics_set, filename)
+    subroutine stream_export_micrographs( self, params, spproj, outdir, optics_set, filename)
         class(starproject_stream), intent(inout) :: self
+        class(parameters),         intent(in)    :: params
         class(sp_project),         intent(inout) :: spproj
         class(string),             intent(in)    :: outdir
         class(string), optional,   intent(in)    :: filename
@@ -387,9 +392,9 @@ contains
         if(present(optics_set)) l_optics_set = optics_set
         if(.not. l_optics_set) call self%assign_optics_single(spproj)
         if(present(filename)) then
-            call self%starfile_init(filename, outdir)
+            call self%starfile_init(params, filename, outdir)
         else
-            call self%starfile_init(string('micrographs.star'), outdir)
+            call self%starfile_init(params, string('micrographs.star'), outdir)
         endif
         call self%starfile_set_optics_table(spproj)
         call self%starfile_write_table(append = .false.)
@@ -398,18 +403,19 @@ contains
         call self%starfile_deinit()
     end subroutine stream_export_micrographs
  
-    subroutine stream_export_optics( self, spproj, outdir )
+    subroutine stream_export_optics( self, params, spproj, outdir )
         class(starproject_stream), intent(inout) :: self
+        class(parameters),         intent(in)    :: params
         class(sp_project),         intent(inout) :: spproj
         class(string),             intent(in)    :: outdir
         integer :: ioptics
-        if(params_glob%beamtilt .eq. 'yes') then
+        if(self%p_ptr%beamtilt .eq. 'yes') then
             self%use_beamtilt = .true.
         else
             self%use_beamtilt = .false.
         end if
         call self%assign_optics(spproj)
-        call self%starfile_init(string('optics.star'), outdir)
+        call self%starfile_init(params, string('optics.star'), outdir)
         call self%starfile_set_optics_table(spproj)
         call self%starfile_write_table(append = .false.)
         do ioptics = 1, spproj%os_optics%get_noris()
@@ -419,8 +425,9 @@ contains
         call self%starfile_deinit()
     end subroutine stream_export_optics
 
-    subroutine stream_export_particles_2D( self, spproj, outdir, optics_set, filename, verbose)
+    subroutine stream_export_particles_2D( self, params, spproj, outdir, optics_set, filename, verbose)
         class(starproject_stream), intent(inout) :: self
+        class(parameters),         intent(in)    :: params
         class(sp_project),         intent(inout) :: spproj
         class(string),             intent(in)    :: outdir
         class(string), optional,   intent(in)    :: filename
@@ -440,9 +447,9 @@ contains
         if(present(verbose))    l_verbose    = verbose
         if(.not. l_optics_set) call self%assign_optics_single(spproj)
         if(present(filename)) then
-            call self%starfile_init(filename, outdir, verbose=l_verbose)
+            call self%starfile_init(params, filename, outdir, verbose=l_verbose)
         else
-            call self%starfile_init(string('particles2D.star'), outdir, verbose=l_verbose)
+            call self%starfile_init(params, string('particles2D.star'), outdir, verbose=l_verbose)
         endif
         if(file_exists(self%starfile_tmp)) call del_file(self%starfile_tmp)
         if(self%verbose) ms0 = tic()
@@ -512,30 +519,32 @@ contains
         if(allocated(starparts)) deallocate(starparts)
     end subroutine stream_export_particles_2D
 
-    subroutine stream_export_pick_diameters( self, outdir, histogram_moldiams, filename)
+    subroutine stream_export_pick_diameters( self, params, outdir, histogram_moldiams, filename)
         class(starproject_stream), intent(inout) :: self
+        class(parameters),         intent(in)    :: params
         type(histogram),           intent(inout) :: histogram_moldiams
         class(string),             intent(in)    :: outdir
         class(string), optional,   intent(in)    :: filename
         if(present(filename)) then
-            call self%starfile_init(filename, outdir)
+            call self%starfile_init(params, filename, outdir)
         else
-            call self%starfile_init(string('pick.star'), outdir)
+            call self%starfile_init(params, string('pick.star'), outdir)
         endif
         call self%starfile_set_pick_diameters_table(histogram_moldiams)
         call self%starfile_write_table(append = .true.)
         call self%starfile_deinit()
     end subroutine stream_export_pick_diameters
 
-    subroutine stream_export_picking_references( self, spproj, outdir, filename)
+    subroutine stream_export_picking_references( self, params, spproj, outdir, filename)
         class(starproject_stream), intent(inout) :: self
+        class(parameters),         intent(in)    :: params
         class(sp_project),         intent(inout) :: spproj
         class(string),             intent(in)    :: outdir
         class(string),optional,    intent(in)    :: filename
         if(present(filename)) then
-            call self%starfile_init(filename, outdir)
+            call self%starfile_init(params, filename, outdir)
         else
-            call self%starfile_init(string('pickrefs.star'), outdir)
+            call self%starfile_init(params, string('pickrefs.star'), outdir)
         endif
         call self%starfile_set_clusters2D_table(spproj)
         call self%starfile_write_table(append = .true.)
@@ -574,7 +583,7 @@ contains
         type(ori)                                 :: template_ori
         real                                      :: grp_info(10000, 3) ! max 10000 optics groups ! 1: centroid x, 2: centroid y, 3: population
         integer                                   :: i, ntilt, nshift
-        self%shift_threshold = params_glob%tilt_thres
+        self%shift_threshold = self%p_ptr%tilt_thres
         call assign_tiltgroups()
         call assign_shiftgroups()
         do i=1, spproj%os_mic%get_noris()
@@ -823,10 +832,10 @@ contains
         l_write   = .false.
         if( present(verbose) ) l_verbose = verbose
         if( present(write)   ) l_write   = write
-        if( (params_glob%projfile_optics .ne. '') .and.&
-           &(file_exists(string('../')//params_glob%projfile_optics)) ) then
+        if( (self%p_ptr%projfile_optics .ne. '') .and.&
+           &(file_exists(string('../')//self%p_ptr%projfile_optics)) ) then
             if( l_verbose ) ms0 = tic()
-            call spproj_optics%read(string('../')//params_glob%projfile_optics)
+            call spproj_optics%read(string('../')//self%p_ptr%projfile_optics)
             call self%copy_optics(spproj_dest, spproj_optics)
             call spproj_optics%kill()
             if( l_write ) call spproj_dest%write

@@ -459,9 +459,9 @@ contains
                 if( present(copy_optics) ) l_copy_optics = copy_optics
                 if(l_copy_optics) then
                     call starproj_stream%copy_micrographs_optics(spproj_glob, verbose=DEBUG_HERE)
-                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir, optics_set=.true.)
+                    call starproj_stream%stream_export_micrographs(params_glob, spproj_glob, params%outdir, optics_set=.true.)
                 else
-                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
+                    call starproj_stream%stream_export_micrographs(params_glob, spproj_glob, params%outdir)
                 end if
                 if( l_wfield )then
                     call spproj_glob%write_segment_inside('mic', params%projfile)
