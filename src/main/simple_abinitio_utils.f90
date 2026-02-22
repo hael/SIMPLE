@@ -445,7 +445,7 @@ contains
         type(string) :: stage, str_state, vol_name, vol_pproc
         integer      :: state
         call cline_refine3D%delete('endit')
-        call xrefine3D%execute_safe(cline_refine3D)
+        call xrefine3D%execute(cline_refine3D)
         call del_files(DIST_FBODY,      params%nparts,ext='.dat')
         call del_files(ASSIGNMENT_FBODY,params%nparts,ext='.dat')
         call del_file(DIST_FBODY//'.dat')
@@ -492,7 +492,7 @@ contains
                 call cline_asymrec%set('needs_sigma','no')
                 call cline_asymrec%delete('which_iter')
                 call cline_asymrec%delete('endit')
-                call xreconstruct3D%execute_safe(cline_asymrec)
+                call xreconstruct3D%execute(cline_asymrec)
                 vol_iter = 'asymmetric_map'//MRC_EXT
                 call simple_copy_file(string(VOL_FBODY)//int2str_pad(1,2)//MRC_EXT, vol_iter)
                 call cline_asymrec%kill
@@ -513,7 +513,7 @@ contains
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> MAP SYMMETRIZATION'
             write(logfhandle,'(A)') '>>>'
-            call xsymmap%execute_safe(cline_symmap)
+            call xsymmap%execute(cline_symmap)
             call del_file('SYMAXIS_SEARCH_FINISHED')
             if( present(xreconstruct3D) )then
                 ! symmetric reconstruction
@@ -524,7 +524,7 @@ contains
                 call cline_symrec%set('pgrp',       params%pgrp)
                 call cline_symrec%set('which_iter', cline_refine3D%get_iarg('endit'))
                 call cline_symrec%delete('endit')
-                call xreconstruct3D%execute_safe(cline_symrec)
+                call xreconstruct3D%execute(cline_symrec)
                 vol_sym = VOL_FBODY//int2str_pad(1,2)//MRC_EXT
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
                 call cline_symrec%kill
@@ -557,7 +557,7 @@ contains
         call cline_startrec%delete('automsk') ! no automask generated
         call cline_startrec%delete('mskfile') ! no masked FSC
         ! endif
-        call xreconstruct3D%execute_safe(cline_startrec)
+        call xreconstruct3D%execute(cline_startrec)
         do state = 1,params%nstates
             ! rename volumes and update cline
             str_state = int2str_pad(state,2)
@@ -589,7 +589,7 @@ contains
             call cline_automask%set('automsk', 'yes')
             call cline_automask%set('mkdir',    'no')
             call cline_automask%set('nthr', params%nthr)
-            call xautomask%execute_safe(cline_automask)
+            call xautomask%execute(cline_automask)
             params%mskfile = MSKVOL_FILE
             call cline_refine3D%set('mskfile', MSKVOL_FILE)
         endif
@@ -633,7 +633,7 @@ contains
         call cline_rec%delete('needs_sigma')
         call cline_rec%delete('automsk')
         call cline_rec%delete('mskfile')
-        call xreconstruct3D%execute_safe(cline_rec)
+        call xreconstruct3D%execute(cline_rec)
         ! preserve volume (e/o will be overwritten in next iteration)
         sstate = int2str_pad(1,2)
         sstage = int2str_pad(istage-1,2)
@@ -715,7 +715,7 @@ contains
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'
-        call xreconstruct3D%execute_safe(cline_reconstruct3D)
+        call xreconstruct3D%execute(cline_reconstruct3D)
         call spproj%read_segment('out', projfile)
         call spproj%read_segment('ptcl3D', projfile)
         do state = 1, params%nstates
@@ -742,7 +742,7 @@ contains
             vol_name       = string(VOL_FBODY)//str_state//MRC_EXT  ! reconstruction from particles stored in project
             if( .not. file_exists(vol_name) )cycle
             call cline_postprocess%set('state', state)
-            call xpostprocess%execute_safe(cline_postprocess)
+            call xpostprocess%execute(cline_postprocess)
             vol_pproc      = add2fbody(vol_name,MRC_EXT, PPROC_SUFFIX)
             vol_pproc_mirr = add2fbody(vol_name,MRC_EXT, PPROC_SUFFIX//MIRR_SUFFIX)
             vol_final      = string(REC_FBODY)//str_state//MRC_EXT

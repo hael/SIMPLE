@@ -323,35 +323,17 @@ contains
         endif
     end subroutine append_project
 
-    module subroutine append_job_descr2jobproc( self, exec_dir, job_descr, did_update )
+    module subroutine append_job_descr2jobproc( self, job_descr )
         class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: exec_dir
         class(chash),      intent(inout) :: job_descr
-        logical,           intent(out)   :: did_update
         type(string)  :: edir
         type(ori)     :: o
         integer       :: njobs, ijob, ind
         character(8)  :: date
         character(10) :: time
-        did_update = .true.
         njobs = self%jobproc%get_noris()
-        if( njobs > 0 )then
-            if( exec_dir%to_char() .ne. './')then
-                do ijob=1,njobs
-                    if( self%jobproc%isthere(ijob, 'exec_dir') )then
-                        call self%jobproc%getter(ijob, 'exec_dir', edir)
-                        if( exec_dir%has_substr(edir) )then
-                            ! we already have a job description for this exec dir stored
-                            did_update = .false.
-                            return
-                        endif
-                    endif
-                end do
-            endif
-        endif
-        ! store job description along with exec_dir & execution time
+        ! store job description along with execution time
         call o%chash2ori(job_descr)
-        call o%set('exec_dir', exec_dir%to_char())
         call date_and_time(date=date, time=time)
         call o%set('date', date)
         call o%set('time', time)

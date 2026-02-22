@@ -434,7 +434,7 @@ contains
         ! prepare job description
         call cline_distr%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR, extra_params=params)
         ! ASSEMBLY
         do ipart = 1,nparts
             fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
@@ -527,7 +527,7 @@ contains
         call spproj%write(params%projfile)
         ! clean up
         call spproj%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
         do ipart = 1,nparts
             call part_params(ipart)%kill
             call spproj_part(ipart)%kill
@@ -593,7 +593,7 @@ contains
         nstks = count(stks_mask)
         nstks_part = count(stks_mask(params%fromp:params%top))
         if( nstks_part == 0 )then
-            call qsys_job_finished(string('simple_commanders_project_ptcl :: exec_prune_project'))
+            call qsys_job_finished(params, string('simple_commanders_project_ptcl :: exec_prune_project'))
             return
         endif
         call spproj_out%os_stk%new(nstks_part, is_ptcl=.false.)
@@ -677,7 +677,7 @@ contains
         call img%kill
         call o_stk%kill
         ! end gracefully
-        call qsys_job_finished(string('simple_commanders_project_ptcl :: exec_prune_project'))
+        call qsys_job_finished(params, string('simple_commanders_project_ptcl :: exec_prune_project'))
     end subroutine exec_prune_project
 
     subroutine exec_scale_project_distr( self, cline )
@@ -767,7 +767,7 @@ contains
         ! delete copy in working directory
         if( gen_sc_project ) call del_file(params%projfile)
         ! clean
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! end gracefully
         params%nparts  = nparts_orig
         params%ncunits = ncunits_orig

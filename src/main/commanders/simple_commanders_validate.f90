@@ -64,7 +64,7 @@ contains
         ! project creation
         call cline_new_proj%set('dir',                      PATH_HERE)
         call cline_new_proj%set('projname',     string('mini_stream'))
-        call xnew_project%execute_safe(cline_new_proj)
+        call xnew_project%execute(cline_new_proj)
         ! movie import
         call cline_import_movies%set('prg',           'import_movies')
         call cline_import_movies%set('mkdir',                    'no')
@@ -75,7 +75,7 @@ contains
         call cline_import_movies%set('filetab',        params%filetab)
         call cline_import_movies%set('ctf',                     'yes')
         call cline_import_movies%set('projfile', PROJFILE_MINI_STREAM)
-        call ximport_movies%execute_safe(cline_import_movies)
+        call ximport_movies%execute(cline_import_movies)
         ! CTF estimation
         call cline_ctf_estimate%set('prg',            'ctf_estimate')
         call cline_ctf_estimate%set('mkdir',                    'no')
@@ -87,7 +87,7 @@ contains
         call cline_ctf_estimate%set('nparts',                      1)
         call cline_ctf_estimate%set('nthr',              params%nthr)
         call cline_ctf_estimate%set('projfile', PROJFILE_MINI_STREAM)
-        call xctf_estimate%execute_safe(cline_ctf_estimate)
+        call xctf_estimate%execute(cline_ctf_estimate)
         ! this is the actual test
         call spproj%read(string(PROJFILE_MINI_STREAM))
         call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, box_in_pix, mskdiam_estimate)
@@ -98,7 +98,7 @@ contains
         call cline_extract%set('nparts',                           1)
         call cline_extract%set('nthr',                   params%nthr)
         call cline_extract%set('projfile',      PROJFILE_MINI_STREAM)
-        call xextract%execute_safe(cline_extract)
+        call xextract%execute(cline_extract)
         ! 2D analysis
         call spproj%read(string(PROJFILE_MINI_STREAM))
         nptcls = spproj%os_ptcl2D%get_noris()
@@ -113,11 +113,11 @@ contains
         call cline_abinitio2D%set('mskdiam',        mskdiam_estimate)
         call cline_abinitio2D%set('nthr',                params%nthr)
         call cline_abinitio2D%set('projfile',   PROJFILE_MINI_STREAM)
-        call xabinitio2D%execute_safe(cline_abinitio2D)
+        call xabinitio2D%execute(cline_abinitio2D)
         ! shape rank cavgs
         call cline_shape_rank%set('nthr',                params%nthr)
         call cline_shape_rank%set('projfile',   PROJFILE_MINI_STREAM)
-        call xshape_rank%execute_safe(cline_shape_rank)
+        call xshape_rank%execute(cline_shape_rank)
         ! destruct
         call spproj%kill
     end subroutine exec_mini_stream
@@ -164,7 +164,7 @@ contains
         ! project creation
         call cline_new_proj%set('dir',                         PATH_HERE)
         call cline_new_proj%set('projname',      string('check_refpick'))
-        call xnew_project%execute_safe(cline_new_proj)
+        call xnew_project%execute(cline_new_proj)
         ! movie import
         call cline_import_movies%set('prg',              'import_movies')
         call cline_import_movies%set('mkdir',                       'no')
@@ -175,7 +175,7 @@ contains
         call cline_import_movies%set('filetab',           params%filetab)
         call cline_import_movies%set('ctf',                        'yes')
         call cline_import_movies%set('projfile',  PROJFILE_CHECK_REFPICK)
-        call ximport_movies%execute_safe(cline_import_movies)
+        call ximport_movies%execute(cline_import_movies)
         ! CTF estimation
         call cline_ctf_estimate%set('prg',                'ctf_estimate')
         call cline_ctf_estimate%set('mkdir',                        'no')
@@ -187,13 +187,13 @@ contains
         call cline_ctf_estimate%set('nparts',                          1)
         call cline_ctf_estimate%set('nthr',                  params%nthr)
         call cline_ctf_estimate%set('projfile',   PROJFILE_CHECK_REFPICK)
-        call xctf_estimate%execute_safe(cline_ctf_estimate)
+        call xctf_estimate%execute(cline_ctf_estimate)
         ! make pickrefs
         call cline_make_pickrefs%set('mkdir',                       'no')
         call cline_make_pickrefs%set('pickrefs',         params%pickrefs)
         call cline_make_pickrefs%set('smpd',                 params%smpd)
         call cline_make_pickrefs%set('nthr',                 params%nthr)
-        call xmake_pickrefs%execute_safe(cline_make_pickrefs)
+        call xmake_pickrefs%execute(cline_make_pickrefs)
         mskdiam_estimate = cline_make_pickrefs%get_rarg('mskdiam')
         ! pick and extract
         cline_pick_extract = cline
@@ -205,7 +205,7 @@ contains
         call cline_pick_extract%set('fromp',                           1)
         call cline_pick_extract%set('top',                         nmics)
         call cline_pick_extract%set('projfile',   PROJFILE_CHECK_REFPICK)
-        call xpickextract%execute_safe(cline_pick_extract)
+        call xpickextract%execute(cline_pick_extract)
         ! 2D analysis
         call spproj%read(string(PROJFILE_CHECK_REFPICK))
         nptcls = spproj%os_ptcl2D%get_noris()
@@ -220,11 +220,11 @@ contains
         call cline_abinitio2D%set('mskdiam',            mskdiam_estimate)
         call cline_abinitio2D%set('nthr',                    params%nthr)
         call cline_abinitio2D%set('projfile',     PROJFILE_CHECK_REFPICK)
-        call xabinitio2D%execute_safe(cline_abinitio2D)
+        call xabinitio2D%execute(cline_abinitio2D)
         ! shape rank cavgs
         call cline_shape_rank%set('nthr',                    params%nthr)
         call cline_shape_rank%set('projfile',     PROJFILE_CHECK_REFPICK)
-        call xshape_rank%execute_safe(cline_shape_rank)
+        call xshape_rank%execute(cline_shape_rank)
         ! organize output in folders
         call simple_list_files('*jpg', fnames)
         call simple_mkdir(DIR_THUMBS)

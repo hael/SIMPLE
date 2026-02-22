@@ -86,14 +86,14 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         ! assemble
-        call xcalc_pspec_assemble%execute_safe(cline_calc_pspec_assemble)
+        call xcalc_pspec_assemble%execute(cline_calc_pspec_assemble)
         ! end gracefully
         call spproj%kill
         call cline_calc_pspec%kill
         call cline_calc_pspec_assemble%kill
         call qenv%kill
         call job_descr%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
         call simple_touch(CALCPSPEC_FINISHED)
         call simple_end('**** SIMPLE_DISTR_CALC_PSPEC NORMAL STOP ****')
     end subroutine exec_calc_pspec_distr
@@ -176,7 +176,7 @@ contains
         call killimgbatch(build)
         call sum_img%kill
         ! end gracefully
-        call qsys_job_finished(string('simple_commanders_euclid :: exec_calc_pspec'))
+        call qsys_job_finished(params, string('simple_commanders_euclid :: exec_calc_pspec'))
         call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_pspec
 

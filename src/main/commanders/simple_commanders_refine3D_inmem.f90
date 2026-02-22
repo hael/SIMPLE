@@ -66,7 +66,7 @@ contains
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
     end subroutine exec_prob_align_inmem
 
     !> In-memory prob_tab path used by exec_prob_align_inmem when running locally.

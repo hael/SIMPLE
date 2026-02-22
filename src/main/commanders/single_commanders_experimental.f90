@@ -74,7 +74,7 @@ contains
             call cline_refine3D_cavgs%set('nspace',             10000)
             call cline_refine3D_cavgs%set('center',              'no')
             ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
-            call xrefine3D_nano%execute_safe(cline_refine3D_cavgs)
+            call xrefine3D_nano%execute(cline_refine3D_cavgs)
             ! align cavgs
             call spproj%read_segment('cls3D', params%projfile) ! now the newly generated cls3D field will be read...
             ! ...so write out its content
@@ -89,7 +89,7 @@ contains
             call cline_reproject%set('oritab',  'cavgs_oris.txt')
             call cline_reproject%set('pgrp',         params%pgrp)
             call cline_reproject%set('nthr',         params%nthr)
-            call xreproject%execute_safe(cline_reproject)
+            call xreproject%execute(cline_reproject)
             ! compute radial cross-correlation between cavgs and reproj
             allocate(rad_cc(ncavgs,params%box/2), rad_dists(ncavgs,params%box/2))
             ! write cavgs & reprojections

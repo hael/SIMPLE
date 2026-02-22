@@ -34,7 +34,7 @@ call os_peak2%write(string('os_peak2_facit.txt'))
 call cline%set('projname', projname)
 call cline%set('mkdir',        'no')
 call cline%check()
-call xnew_project%execute_safe(cline)
+call xnew_project%execute(cline)
 print *,'>>> OPEN BINORIS'
 call bos%open(fname)
 print *,'>>> WRITE HEADER '

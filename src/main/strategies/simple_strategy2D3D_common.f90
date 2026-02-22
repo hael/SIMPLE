@@ -489,14 +489,14 @@ contains
 
     !>  \brief  initializes all volumes for reconstruction
     subroutine preprecvols( params, build )
-        class(parameters), intent(in) :: params
+        class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer, allocatable :: pops(:)
         integer :: istate
         call build%spproj_field%get_pops(pops, 'state', maxn=params%nstates)
         do istate = 1, params%nstates
             if( pops(istate) > 0)then
-                call build%eorecvols(istate)%new(build%spproj)
+                call build%eorecvols(istate)%new(params, build%spproj)
                 call build%eorecvols(istate)%reset_all
             endif
         end do

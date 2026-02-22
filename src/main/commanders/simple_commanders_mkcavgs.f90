@@ -76,7 +76,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         if( l_shmem  )then
-            call xmk_cavgs_shmem%execute_safe(cline)
+            call xmk_cavgs_shmem%execute(cline)
             if(trim(params%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
             return
         endif
@@ -92,11 +92,11 @@ contains
             call cline_cavgassemble%set('ncls', params%nspace)
         endif
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         ! assemble class averages
-        call xcavgassemble%execute_safe(cline_cavgassemble)
+        call xcavgassemble%execute(cline_cavgassemble)
         ! end
-        call qsys_cleanup
+        call qsys_cleanup(params)
         call simple_end('**** SIMPLE_DISTR_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
         if(trim(params%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
     end subroutine exec_make_cavgs_distr
@@ -205,7 +205,7 @@ contains
                 call cavger_readwrite_partial_sums('write')
                 call cavger_kill
             endif
-            call qsys_job_finished(string('simple_commanders_cluster2D :: exec_make_cavgs'))
+            call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_make_cavgs'))
         endif
         ! book-keeping
         if( l_shmem )then
@@ -289,7 +289,7 @@ contains
                 call pftc%polar_cavger_calc_pops(build%spproj)
                 call pftc%polar_cavger_assemble_sums_from_parts
             endif
-            call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
+            call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP 1')
             call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), params%frcs, cline)
             call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call pftc%polar_cavger_gen2Dclassdoc(build%spproj, build%clsfrcs)
@@ -303,7 +303,7 @@ contains
                 ! classdoc gen needs to be after calc of FRCs
                 call cavger_new_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
                 ! write references
-                call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP')
+                call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP')
                 call cavger_new_write_all(params%refs, params%refs_even, params%refs_odd)
                 call cavger_new_kill
             else
@@ -314,7 +314,7 @@ contains
                 ! classdoc gen needs to be after calc of FRCs
                 call cavger_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
                 ! write references
-                call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP')
+                call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP')
                 call cavger_write(params%refs,      'merged')
                 call cavger_write(params%refs_even, 'even'  )
                 call cavger_write(params%refs_odd,  'odd'   )

@@ -98,14 +98,14 @@ contains
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
-            call xrefine3D_nano%execute_safe(cline_refine3D_nano)
+            call xrefine3D_nano%execute(cline_refine3D_nano)
             call cline_refine3D_nano%set('vol1', SIMVOL)         ! the reference volume is ALWAYS SIMVOL
             call cline_refine3D_nano%delete('lp')                ! uses the default 1.0 A low-pass limit
             endit = cline_refine3D_nano%get_iarg('endit')        ! last iteration executed by refine3D_nano
             call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
             call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
             ! model building
-            call xdetect_atms%execute_safe(cline_detect_atms)
+            call xdetect_atms%execute(cline_detect_atms)
             ! copy critical output
             iter_dir = 'iteration_'//int2str_pad(i,2)//'/'
             call simple_mkdir(iter_dir)
@@ -130,7 +130,7 @@ contains
             call del_file(SPLITTED)
             iter = iter + 1
         end do
-        call xdetect_atms%execute_safe(cline_detect_atms)
+        call xdetect_atms%execute(cline_detect_atms)
         call simple_mkdir(FINAL_MAPS)
         call simple_copy_file(string(RECVOL),   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'.mrc')
         call simple_copy_file(string(EVEN),     string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_even.mrc')
@@ -157,7 +157,7 @@ contains
         call cline_make_cavgs%set('refs',     cavgs_stk)
         call cline_make_cavgs%set('outfile',  'cavgs_oris.txt')
         call cline_make_cavgs%set('ml_reg',   'no')
-        call xmake_cavgs%execute_safe(cline_make_cavgs)
+        call xmake_cavgs%execute(cline_make_cavgs)
         call spproj%os_cls3D%new(NSPACE_CLS3D, is_ptcl=.false.)
         call spproj%os_cls3D%read(string('cavgs_oris.txt')) ! will not be written as part of document
         if( allocated(rstates) ) deallocate(rstates)
@@ -169,11 +169,11 @@ contains
         call cline_reproject%set('oritab', 'cavgs_oris.txt')
         call cline_reproject%set('pgrp',   params%pgrp)
         call cline_reproject%set('nthr',   params%nthr)
-        call xreproject%execute_safe(cline_reproject)
+        call xreproject%execute(cline_reproject)
         call cline_reproject%set('vol1',   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
         call cline_reproject%set('outstk', 'reprojs_SIM.mrc')
         ! re-project
-        call xreproject%execute_safe(cline_reproject)
+        call xreproject%execute(cline_reproject)
         ! write cavgs & reprojections in triplets
         allocate(imgs(3), state_mask(NSPACE_CLS3D))
         call imgs(1)%new([params%box,params%box,1], smpd)
@@ -216,7 +216,7 @@ contains
         call cline_vizoris%set('pgrp',        params%pgrp)
         call cline_vizoris%set('nspace',     NSPACE_CLS3D)
         call cline_vizoris%set('tseries',           'yes')
-        call xvizoris%execute_safe(cline_vizoris)
+        call xvizoris%execute(cline_vizoris)
         ! print CSV file of correlation vs particle number
         corrs = spproj%os_ptcl3D%get_all('corr')
         fname = 'ptcls_vs_reprojs_corrs.csv'
@@ -260,7 +260,7 @@ contains
         if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global') ! only sensible option for this kind of data
         if( .not. cline%defined('icm')            ) call cline%set('icm',           'yes') ! ICM regualrization works 
         if( .not. cline%defined('lambda')         ) call cline%set('lambda',          0.1) ! this is an empirically determined regularization parameter
-        call xrefine3D_distr%execute_safe(cline)
+        call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano
 
     subroutine exec_commander_trajectory_reconstruct3D_distr( self, cline )

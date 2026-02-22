@@ -2,7 +2,6 @@
 module simple_opt_mask
 use simple_core_module_api
 use simple_image,      only: image
-use simple_parameters, only: params_glob
 implicit none
 #include "simple_local_flags.inc"
 

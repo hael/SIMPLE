@@ -121,7 +121,7 @@ contains
                 call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.0)
                 call pool_proj%os_ptcl2D%set(iptcl, 'eo',        merge(0, 1, is_even(iptcl)))
                 call pool_proj%os_ptcl2D%set(iptcl, 'w',         1.0)
-                call pool_proj%os_ptcl2D%set_class(iptcl, irnd_uni(params_glob%ncls))
+                call pool_proj%os_ptcl2D%set_class(iptcl, irnd_uni(ncls_glob))
             enddo
             !$omp end parallel do
             fromp = fromp + prec%nptcls
@@ -137,7 +137,8 @@ contains
 
     ! CALCULATORS
 
-    subroutine init_pool_clustering( cline, spproj, projfilegui, reference_generation )
+    subroutine init_pool_clustering( params, cline, spproj, projfilegui, reference_generation )
+        class(parameters), intent(inout) :: params
         class(cmdline),    target, intent(inout) :: cline
         class(sp_project), intent(inout) :: spproj
         class(string),     intent(in)    :: projfilegui
@@ -152,17 +153,17 @@ contains
         if( present(reference_generation) ) l_no_chunks = reference_generation
         ! general parameters
         master_cline => cline
-        call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
+        call mskdiam2lplimits(params%mskdiam, lpstart, lpstop, lpcen)
         l_scaling          = .true.
-        ncls_max           = params_glob%ncls
-        ncls_glob          = params_glob%ncls
+        ncls_max           = params%ncls
+        ncls_glob          = params%ncls
         ncls_rejected_glob = 0
-        orig_projfile      = params_glob%projfile
+        orig_projfile      = params%projfile
         projfile4gui       = projfilegui
-        l_update_sigmas    = params_glob%l_needs_sigma
-        params_glob%nparts_pool = params_glob%nparts ! backwards compatibility
+        l_update_sigmas    = params%l_needs_sigma
+        params%nparts_pool = params%nparts ! backwards compatibility
         ! bookkeeping & directory structure
-        numlen             = len(int2str(params_glob%nparts))
+        numlen             = len(int2str(params%nparts))
         refs_glob          = ''
         l_pool_available   = .true.
         pool_iter          = 0
@@ -175,13 +176,13 @@ contains
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
         ! update to computational parameters to pool, will be transferred to chunks upon init
-        if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params_glob%walltime)
+        if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params%walltime)
         ! commit to disk
         call pool_proj%write(string(POOL_DIR)//POOL_PROJFILE)
         ! reference generation
         if( l_no_chunks )then
             iterswitch2euclid = 0
-            ncls_glob         = params_glob%ncls
+            ncls_glob         = params%ncls
         else
             iterswitch2euclid = -1 ! because objfun=euclid always
         endif
@@ -191,9 +192,9 @@ contains
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
         call cline_cluster2D_pool%set('projfile',  POOL_PROJFILE)
         call cline_cluster2D_pool%set('projname',  get_fbody(POOL_PROJFILE,'simple'))
-        call cline_cluster2D_pool%set('sigma_est', params_glob%sigma_est)
+        call cline_cluster2D_pool%set('sigma_est', params%sigma_est)
         if( cline%defined('cls_init') )then
-            call cline_cluster2D_pool%set('cls_init', params_glob%cls_init)
+            call cline_cluster2D_pool%set('cls_init', params%cls_init)
         else
             call cline_cluster2D_pool%set('cls_init', 'rand')
         endif
@@ -210,31 +211,31 @@ contains
         call cline_cluster2D_pool%set('extr_iter', 99999)
         call cline_cluster2D_pool%set('extr_lim',  MAX_EXTRLIM2D)
         call cline_cluster2D_pool%set('mkdir',     'no')
-        call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
+        call cline_cluster2D_pool%set('mskdiam',   params%mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes')
-        call cline_cluster2D_pool%set('nparts',    params_glob%nparts)
+        call cline_cluster2D_pool%set('nparts',    params%nparts)
         call cline_cluster2D_pool%delete('autoscale')
         ! when the 2D analysis is started from raw particles
         if( l_no_chunks ) l_update_sigmas = .false.
         ! set # of ptcls beyond which fractional updates will be used
         lim_ufrac_nptcls = STREAM_NPTCLS_MAX
-        if( master_cline%defined('nsample_max') ) lim_ufrac_nptcls = params_glob%nsample_max
+        if( master_cline%defined('nsample_max') ) lim_ufrac_nptcls = params%nsample_max
         ! EV override
-        params_glob%nthr2D = params_glob%nthr ! will be deprecated
+        params%nthr2D = params%nthr ! will be deprecated
         if( l_no_chunks )then
             call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
             if(envlen > 0) then
                 call cline_cluster2D_pool%set('nthr', str2int(refgen_nthr_env))
             else
-                call cline_cluster2D_pool%set('nthr', params_glob%nthr)
+                call cline_cluster2D_pool%set('nthr', params%nthr)
             end if
             call get_environment_variable(SIMPLE_STREAM_REFGEN_PARTITION, refgen_part_env, envlen)
             if(envlen > 0) then
-                call pool_qenv%new(params_glob, params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
+                call pool_qenv%new(params, params%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
                 &qsys_partition=string(trim(refgen_part_env)))
             else
-                call pool_qenv%new(params_glob, params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'))
+                call pool_qenv%new(params, params%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'))
             end if
         else
             call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
@@ -242,40 +243,41 @@ contains
                 call cline_cluster2D_pool%set('nthr',   str2int(pool_nthr_env))
                 call cline_cluster2D_pool%set('nthr2D', str2int(pool_nthr_env))
             else
-                call cline_cluster2D_pool%set('nthr', params_glob%nthr)
+                call cline_cluster2D_pool%set('nthr', params%nthr)
             end if
             call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
             if(envlen > 0) then
-                call pool_qenv%new(params_glob, params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
+                call pool_qenv%new(params, params%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
                 &qsys_partition=string(trim(pool_part_env)))
             else
-                call pool_qenv%new(params_glob, params_glob%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'))
+                call pool_qenv%new(params, params%nparts,exec_bin=string('simple_private_exec'),qsys_name=string('local'))
             end if
         end if
         ! objective function
         call cline_cluster2D_pool%set('objfun', 'euclid')
-        call cline_cluster2D_pool%set('ml_reg', params_glob%ml_reg)
-        call cline_cluster2D_pool%set('tau',    params_glob%tau)
+        call cline_cluster2D_pool%set('ml_reg', params%ml_reg)
+        call cline_cluster2D_pool%set('tau',    params%tau)
         ! refinement
-        select case(trim(params_glob%refine))
+        select case(trim(params%refine))
             case('snhc','snhc_smpl','prob','prob_smpl')
-                call cline_cluster2D_pool%set( 'refine', params_glob%refine)
+                call cline_cluster2D_pool%set( 'refine', params%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
         ! polar representation
-        if( master_cline%defined('polar') ) call cline_cluster2D_pool%set('polar', params_glob%polar)
+        if( master_cline%defined('polar') ) call cline_cluster2D_pool%set('polar', params%polar)
         ! Determines dimensions for downscaling
-        call set_pool_dimensions
+        call set_pool_dimensions(params)
         ! updates command-lines with resolution limits
-        call set_pool_resolution_limits
+        call set_pool_resolution_limits(params)
         ! module variables
         l_stream2D_active = .true.
     end subroutine init_pool_clustering
 
     ! Performs one iteration:
     ! updates to command-line, particles sampling, temporary project & execution
-    subroutine iterate_pool
+    subroutine iterate_pool( params )
+        class(parameters), intent(inout) :: params
         logical, parameter            :: L_BENCH = .false.
         type(sp_project)              :: spproj, spproj_history
         type(sp_project), allocatable :: pool_proj_history_tmp(:)
@@ -442,7 +444,7 @@ contains
             !$omp end parallel do
         endif
         ! Consolidate sigmas doc
-        call consolidate_sigmas(spproj, nstks2update)
+        call consolidate_sigmas(params, spproj, nstks2update)
         ! update command line with fractional update parameters
         call cline_cluster2D_pool%delete('update_frac')
         frac_update = 1.0
@@ -453,7 +455,7 @@ contains
         endif
         ! User override
         if( frac_update < 0.99999 )then
-            if( master_cline%defined('update_frac') ) frac_update = params_glob%update_frac
+            if( master_cline%defined('update_frac') ) frac_update = params%update_frac
             call cline_cluster2D_pool%set('update_frac', frac_update)
             call cline_cluster2D_pool%set('center',      'no')
             do icls = 1,ncls_glob
@@ -465,7 +467,7 @@ contains
         call spproj%write(string(POOL_DIR)//POOL_PROJFILE)
         call spproj%kill
         ! pool stats
-        call generate_pool_stats
+        call generate_pool_stats(params)
         ! execution
         call pool_qenv%exec_simple_prg_in_queue_async(cline_cluster2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
         l_pool_available = .false.
@@ -609,59 +611,63 @@ contains
         lpthres_type = type
     end subroutine set_lpthres_type
 
-    subroutine set_pool_dimensions
-        call setup_downscaling
-        pool_dims%smpd  = params_glob%smpd_crop
-        pool_dims%box   = params_glob%box_crop
-        pool_dims%boxpd = 2*round2even(KBALPHA*real(params_glob%box_crop/2)) ! logics from parameters
-        pool_dims%msk   = params_glob%msk_crop
+    subroutine set_pool_dimensions( params )
+        class(parameters), intent(inout) :: params
+        call setup_downscaling(params)
+        pool_dims%smpd  = params%smpd_crop
+        pool_dims%box   = params%box_crop
+        pool_dims%boxpd = 2*round2even(KBALPHA*real(params%box_crop/2)) ! logics from parameters
+        pool_dims%msk   = params%msk_crop
         ! chunk & pool have the same dimensions to start with (used for import)
         chunk_dims = pool_dims
         ! Scaling-related command lines update
         call cline_cluster2D_pool%set('smpd_crop',  pool_dims%smpd)
         call cline_cluster2D_pool%set('box_crop',   pool_dims%box)
         call cline_cluster2D_pool%set('msk_crop',   pool_dims%msk)
-        call cline_cluster2D_pool%set('box',        params_glob%box)
-        call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
+        call cline_cluster2D_pool%set('box',        params%box)
+        call cline_cluster2D_pool%set('smpd',       params%smpd)
     end subroutine set_pool_dimensions
 
     ! private routine for pool resolution-related updates to command-lines
-    subroutine set_pool_resolution_limits
-        lpstart = max(lpstart, 2.0*params_glob%smpd_crop)
+    subroutine set_pool_resolution_limits( params )
+        class(parameters), intent(inout) :: params
+        lpstart = max(lpstart, 2.0*params%smpd_crop)
         if( l_no_chunks )then
-            params_glob%lpstop = lpstop
+            params%lpstop = lpstop
         else
             if( master_cline%defined('lpstop') )then
-                params_glob%lpstop = max(2.0*params_glob%smpd_crop,params_glob%lpstop)
+                params%lpstop = max(2.0*params%smpd_crop,params%lpstop)
             else
-                params_glob%lpstop = 2.0*params_glob%smpd_crop
+                params%lpstop = 2.0*params%smpd_crop
             endif
         endif
         call cline_cluster2D_pool%set('lpstart',  lpstart)
-        call cline_cluster2D_pool%set('lpstop',   params_glob%lpstop)
+        call cline_cluster2D_pool%set('lpstop',   params%lpstop)
         if( .not.master_cline%defined('cenlp') )then
             call cline_cluster2D_pool%set( 'cenlp', lpcen)
         else
-            call cline_cluster2D_pool%set( 'cenlp', params_glob%cenlp)
+            call cline_cluster2D_pool%set( 'cenlp', params%cenlp)
         endif
         write(logfhandle,'(A,F5.1)') '>>> STARTING LOW-PASS LIMIT  (IN A): ', lpstart
-        write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT    (IN A): ', params_glob%lpstop
+        write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT    (IN A): ', params%lpstop
         write(logfhandle,'(A,F5.1)') '>>> CENTERING LOW-PASS LIMIT (IN A): ', lpcen
     end subroutine set_pool_resolution_limits
 
     ! UPDATERS
 
-    subroutine update_mskdiam(new_mskdiam)
+    subroutine update_mskdiam( params, new_mskdiam)
+        class(parameters), intent(inout) :: params
         integer, intent(in) :: new_mskdiam
         write(*,'(A,I4,A)')'>>> UPDATED MASK DIAMETER TO',new_mskdiam ,'Å'
-        params_glob%mskdiam = real(new_mskdiam)
-        call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
+        params%mskdiam = real(new_mskdiam)
+        call cline_cluster2D_pool%set('mskdiam',   params%mskdiam)
     end subroutine update_mskdiam
 
     ! Reports alignment info from completed iteration of subset
     ! of particles back to the pool
-    subroutine update_pool
+    subroutine update_pool( params )
         use simple_euclid_sigma2, only: split_sigma2_into_groups
+        class(parameters), intent(inout) :: params
         type(string), allocatable :: sigma_fnames(:)
         integer,      allocatable :: pops(:)
         type(sp_project) :: spproj
@@ -717,7 +723,7 @@ contains
             call pool_proj%os_cls2D%set_all('pop', real(pops))
             ! updates sigmas
             if( l_update_sigmas )then
-                if( trim(params_glob%sigma_est).eq.'group' )then
+                if( trim(params%sigma_est).eq.'group' )then
                     ! propagate sigma2 changes back to the micrograph/stack document
                     nstks = spproj%os_stk%get_noris()
                     allocate(sigma_fnames(nstks))
@@ -739,9 +745,9 @@ contains
             write(logfhandle,'(A,F5.1)')'>>> CURRENT POOL RESOLUTION: ',current_resolution
             call frcs%kill
             ! deal with dimensions/resolution update
-            call update_pool_dims
+            call update_pool_dims(params)
             ! for gui
-            call update_pool_for_gui
+            call update_pool_for_gui(params)
         endif
         call spproj%kill
     end subroutine update_pool
@@ -783,8 +789,9 @@ contains
     end subroutine update_pool_aln_params
 
     ! Deals with pool dimensions & resolution update
-    subroutine update_pool_dims
+    subroutine update_pool_dims( params )
         use simple_procimgstk, only: pad_imgfile, scale_imgfile
+        class(parameters), intent(inout) :: params
         type(scaled_dims) :: new_dims, prev_dims
         type(oris)        :: os
         type(class_frcs)  :: frcs
@@ -796,10 +803,10 @@ contains
         resolutions(POOL_NPREV_RES)     = current_resolution
         if( l_no_chunks ) return
         ! optional
-        if( trim(params_glob%dynreslim).ne.'yes' ) return
+        if( trim(params%dynreslim).ne.'yes' ) return
         prev_dims = pool_dims
         ! Auto-scaling?
-        if( trim(params_glob%autoscale) .ne. 'yes' ) return
+        if( trim(params%autoscale) .ne. 'yes' ) return
         ! Hard limit reached?
         if( pool_dims%smpd < POOL_SMPD_HARD_LIMIT ) return
         ! Too early?
@@ -811,29 +818,29 @@ contains
         if( any(abs(resolutions-current_resolution) > 0.01 ) ) return
         ! determines new dimensions
         new_dims%box   = find_larger_magic_box(pool_dims%box+1)
-        scale_factor   = real(new_dims%box) / real(params_glob%box)
+        scale_factor   = real(new_dims%box) / real(params%box)
         if( scale_factor > 0.99 ) return ! safety
-        new_dims%smpd  = params_glob%smpd / scale_factor
+        new_dims%smpd  = params%smpd / scale_factor
         new_dims%boxpd = 2 * round2even(KBALPHA * real(new_dims%box/2)) ! logics from parameters
-        new_dims%msk   = round2even(params_glob%mskdiam / new_dims%smpd / 2.)
+        new_dims%msk   = round2even(params%mskdiam / new_dims%smpd / 2.)
         ! New dimensions are accepted when new Nyquist is > 5/4 of original
-        if( new_dims%smpd < 1.25*params_glob%smpd ) return
+        if( new_dims%smpd < 1.25*params%smpd ) return
         ! Update global variables
         l_scaling = .true.
         pool_dims = new_dims
         if( master_cline%defined('lpstop') )then
-            params_glob%lpstop = max(2.0*pool_dims%smpd, master_cline%get_rarg('lpstop'))
+            params%lpstop = max(2.0*pool_dims%smpd, master_cline%get_rarg('lpstop'))
         else
-            params_glob%lpstop = 2.0*pool_dims%smpd
+            params%lpstop = 2.0*pool_dims%smpd
         endif
-        call cline_cluster2D_pool%set('lpstop',    params_glob%lpstop)
+        call cline_cluster2D_pool%set('lpstop',    params%lpstop)
         call cline_cluster2D_pool%set('smpd_crop', pool_dims%smpd)
         call cline_cluster2D_pool%set('box_crop',  pool_dims%box)
         call cline_cluster2D_pool%set('msk_crop',  pool_dims%msk)
         write(logfhandle,'(A)')             '>>> UPDATING POOL DIMENSIONS '
-        write(logfhandle,'(A,I5,A1,I5)')    '>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',pool_dims%box
-        write(logfhandle,'(A,F5.2,A1,F5.2)')'>>> ORIGINAL/CROPPED PIXEL SIZE (Angs)  : ',params_glob%smpd,'/',pool_dims%smpd
-        write(logfhandle,'(A,F5.1)')        '>>> POOL   HARD RESOLUTION LIMIT (Angs) : ',params_glob%lpstop
+        write(logfhandle,'(A,I5,A1,I5)')    '>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',pool_dims%box
+        write(logfhandle,'(A,F5.2,A1,F5.2)')'>>> ORIGINAL/CROPPED PIXEL SIZE (Angs)  : ',params%smpd,'/',pool_dims%smpd
+        write(logfhandle,'(A,F5.1)')        '>>> POOL   HARD RESOLUTION LIMIT (Angs) : ',params%lpstop
         ! upsample cavgs
         ldim = [pool_dims%box,pool_dims%box,1]
         str_tmp_mrc = TMP_STK_FNAME
@@ -847,7 +854,7 @@ contains
         call simple_rename(str_tmp_mrc,str)
         ! upsample cavgs matrices
         ldim = [pool_dims%boxpd,pool_dims%boxpd,1]
-        do p = 1,params_glob%nparts_pool
+        do p = 1,params%nparts_pool
             str = POOL_DIR//'cavgs_even_part'//int2str_pad(p,numlen)//MRC_EXT
             call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
@@ -876,7 +883,8 @@ contains
     end subroutine update_pool_dims
 
     !> Updates the project watched by the gui for display
-    subroutine update_pool_for_gui
+    subroutine update_pool_for_gui( params )
+        class(parameters), intent(in) :: params
         type(oris)        :: os_backup
         type(starproject) :: starproj
         type(string)      :: src
@@ -906,7 +914,8 @@ contains
     ! JPGS / GUI
 
     ! write jpeg of refs_glob    
-    subroutine generate_pool_jpeg(filename)
+    subroutine generate_pool_jpeg( params, filename)
+        class(parameters), intent(in) :: params
         class(string), optional, intent(in) :: filename
         type(string)   :: jpeg_path, cwd
         type(image)    :: img, img_pad, img_jpeg
@@ -949,7 +958,7 @@ contains
             pool_jpeg_res = [pool_jpeg_res, pool_proj%os_cls2D%get(icls,'res')]
             call img%zero_and_unflag_ft
             call stkio_r%get_image(icls, img)
-            call img%mask2D_softavg(params_glob%mskdiam / (2 * pool_dims%smpd))
+            call img%mask2D_softavg(params%mskdiam / (2 * pool_dims%smpd))
             call img%fft
             if(ldim_stk(1) > JPEG_DIM) then
                 call img%clip(img_pad)
@@ -971,14 +980,15 @@ contains
         current_jpeg_ntiles  = ntiles
         current_jpeg_ntilesx = xtiles
         current_jpeg_ntilesy = ytiles
-        current_jpeg_scale = real(JPEG_DIM) / real(params_glob%box)
+        current_jpeg_scale = real(JPEG_DIM) / real(params%box)
         call img%kill()
         call img_pad%kill()
         call img_jpeg%kill()
     end subroutine generate_pool_jpeg
 
     ! Reports stats to GUI
-    subroutine generate_pool_stats
+    subroutine generate_pool_stats( params )
+        class(parameters), intent(in) :: params
         type(guistats) :: pool_stats
         type(string)   :: cwd
         integer        :: iter_loc = 0
@@ -995,8 +1005,8 @@ contains
         call pool_stats%set('2D', 'iteration',                  iter_loc,             primary=.true.)
         call pool_stats%set('2D', 'number_classes',             ncls_glob,            primary=.true.)
         call pool_stats%set('2D', 'number_classes_rejected',    ncls_rejected_glob,   primary=.true.)
-        call mskdiam2streamresthreshold(params_glob%mskdiam, lpthres_sugg)
-        if(current_resolution < lpthres_sugg / 4 .and. params_glob%lpthres > lpthres_sugg) then
+        call mskdiam2streamresthreshold(params%mskdiam, lpthres_sugg)
+        if(current_resolution < lpthres_sugg / 4 .and. params%lpthres > lpthres_sugg) then
             call pool_stats%set('2D', 'maximum_resolution', current_resolution, primary=.true., alert=.true., alerttext='maximum_resolution_suggests_&
             &using_a_cutoff_of_' // int2str(int(lpthres_sugg)) // 'Å_or_better' , notify=.false.)
         else
@@ -1011,7 +1021,7 @@ contains
             ! nice
             call set_iteration_time() ! called in wrong place
             ! current_jpeg = trim(adjustl(cwd)) // '/' // CAVGS_ITER_FBODY // int2str_pad(iter_loc, 3) // '.jpg'
-            call generate_pool_jpeg()
+            call generate_pool_jpeg(params)
         endif
         call pool_stats%write(string(POOLSTATS_FILE))
         call pool_stats%kill

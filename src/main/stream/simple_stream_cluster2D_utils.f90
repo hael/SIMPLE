@@ -9,7 +9,7 @@ use simple_cmdline,              only: cmdline
 use simple_commanders_cluster2D, only: commander_rank_cavgs
 use simple_euclid_sigma2,        only: sigma2_star_from_iter
 use simple_image,                only: image
-use simple_parameters,           only: params_glob
+use simple_parameters,           only: parameters
 use simple_qsys_funs,            only: qsys_cleanup
 use simple_rec_list,             only: rec_list
 use simple_sp_project,           only: sp_project
@@ -92,7 +92,6 @@ contains
         logical, optional, intent(in)  :: all
         type(string), allocatable :: files(:), folders(:)
         integer :: i
- !       call qsys_cleanup(nparts=params_glob%nparts_pool) ! cyril - fails on stream 2d classification restart
         call simple_rmdir(SIGMAS_DIR)
  !       call simple_rmdir(DIR_SNAPSHOT) ! need snapshots keeping 
         call del_file(USER_PARAMS2D)
@@ -121,15 +120,16 @@ contains
     end subroutine cleanup_root_folder
 
     ! Private utility to aggregate sigma2
-    subroutine consolidate_sigmas( project, nstks )
+    subroutine consolidate_sigmas( params, project, nstks )
         use simple_euclid_sigma2, only: consolidate_sigma2_groups, average_sigma2_groups
+        class(parameters),          intent(in) :: params
         type(sp_project),           intent(in) :: project
         integer,                    intent(in) :: nstks
         type(string) :: stack_fname, ext, fbody
         type(string), allocatable :: sigma_fnames(:)
         integer :: i, istk
         if( l_update_sigmas )then
-            if( trim(params_glob%sigma_est).eq.'group' )then
+            if( trim(params%sigma_est).eq.'group' )then
                 allocate(sigma_fnames(nstks))
                 do istk = 1,nstks
                     call project%os_stk%getter(istk,'stk',stack_fname)
@@ -151,7 +151,7 @@ contains
                     deallocate(sigma_fnames)
                 endif
             endif
-            do i = 1,params_glob%nparts_pool
+            do i = 1,params%nparts_pool
                 call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
             enddo
         endif
@@ -187,12 +187,13 @@ contains
         stk = string(POOL_DIR)//refs_glob
         call cline_rank_cavgs%set('stk',            stk)
         call cline_rank_cavgs%set('outstk', refs_ranked)
-        call xrank_cavgs%execute_safe(cline_rank_cavgs)
+        call xrank_cavgs%execute(cline_rank_cavgs)
         call cline_rank_cavgs%kill
     end subroutine rank_cavgs
 
     ! Final rescaling of references
-    subroutine rescale_cavgs( src, dest )
+    subroutine rescale_cavgs( params, src, dest )
+        class(parameters), intent(in) :: params
         class(string), intent(in) :: src, dest
         integer, allocatable :: cls_pop(:)
         type(image)    :: img, img_pad
@@ -206,12 +207,12 @@ contains
             dest_here = dest
         endif
         call img%new([pool_dims%box,pool_dims%box,1],pool_dims%smpd)
-        call img_pad%new([params_glob%box,params_glob%box,1],params_glob%smpd)
+        call img_pad%new([params%box,params%box,1],params%smpd)
         cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
         call find_ldim_nptcls(src,ldim,ncls_here)
         call stkio_r%open(src, pool_dims%smpd, 'read', bufsz=ncls_here)
         call stkio_r%read_whole
-        call stkio_w%open(dest_here, params_glob%smpd, 'write', box=params_glob%box, bufsz=ncls_here)
+        call stkio_w%open(dest_here, params%smpd, 'write', box=params%box, bufsz=ncls_here)
         do icls = 1,ncls_here
             if( cls_pop(icls) > 0 )then
                 call img%zero_and_unflag_ft
@@ -232,49 +233,51 @@ contains
         call debug_print('end rescale_cavgs')
     end subroutine rescale_cavgs
 
-    subroutine set_dimensions
-        call setup_downscaling
-        pool_dims%smpd  = params_glob%smpd_crop
-        pool_dims%box   = params_glob%box_crop
-        pool_dims%boxpd = 2 * round2even(KBALPHA * real(params_glob%box_crop/2)) ! logics from parameters
-        pool_dims%msk   = params_glob%msk_crop
+    subroutine set_dimensions( params )
+        class(parameters), intent(inout) :: params
+        call setup_downscaling( params )
+        pool_dims%smpd  = params%smpd_crop
+        pool_dims%box   = params%box_crop
+        pool_dims%boxpd = 2 * round2even(KBALPHA * real(params%box_crop/2)) ! logics from parameters
+        pool_dims%msk   = params%msk_crop
         chunk_dims = pool_dims ! chunk & pool have the same dimensions to start with
         ! Scaling-related command lines update
         call cline_cluster2D_chunk%set('smpd_crop', chunk_dims%smpd)
         call cline_cluster2D_chunk%set('box_crop',  chunk_dims%box)
         call cline_cluster2D_chunk%set('msk_crop',  chunk_dims%msk)
-        call cline_cluster2D_chunk%set('box',       params_glob%box)
-        call cline_cluster2D_chunk%set('smpd',      params_glob%smpd)
+        call cline_cluster2D_chunk%set('box',       params%box)
+        call cline_cluster2D_chunk%set('smpd',      params%smpd)
         call cline_cluster2D_pool%set('smpd_crop',  pool_dims%smpd)
         call cline_cluster2D_pool%set('box_crop',   pool_dims%box)
         call cline_cluster2D_pool%set('msk_crop',   pool_dims%msk)
-        call cline_cluster2D_pool%set('box',        params_glob%box)
-        call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
+        call cline_cluster2D_pool%set('box',        params%box)
+        call cline_cluster2D_pool%set('smpd',       params%smpd)
     end subroutine set_dimensions
 
     ! private routine for resolution-related updates to command-lines
-    subroutine set_resolution_limits
-        lpstart = max(lpstart, 2.0*params_glob%smpd_crop)
+    subroutine set_resolution_limits( params )
+        class(parameters), intent(inout) :: params
+        lpstart = max(lpstart, 2.0*params%smpd_crop)
         if( l_no_chunks )then
-            params_glob%lpstop = lpstop
+            params%lpstop = lpstop
         else
             if( master_cline%defined('lpstop') )then
-                params_glob%lpstop = max(2.0*params_glob%smpd_crop,params_glob%lpstop)
+                params%lpstop = max(2.0*params%smpd_crop,params%lpstop)
             else
-                params_glob%lpstop = 2.0*params_glob%smpd_crop
+                params%lpstop = 2.0*params%smpd_crop
             endif
             call cline_cluster2D_chunk%delete('lp')
             call cline_cluster2D_chunk%set('lpstart', lpstart)
             call cline_cluster2D_chunk%set('lpstop',  lpstart)
         endif
         call cline_cluster2D_pool%set('lpstart',  lpstart)
-        call cline_cluster2D_pool%set('lpstop',   params_glob%lpstop)
+        call cline_cluster2D_pool%set('lpstop',   params%lpstop)
         if( .not.master_cline%defined('cenlp') )then
             call cline_cluster2D_chunk%set('cenlp', lpcen)
             call cline_cluster2D_pool%set( 'cenlp', lpcen)
         else
-            call cline_cluster2D_chunk%set('cenlp', params_glob%cenlp)
-            call cline_cluster2D_pool%set( 'cenlp', params_glob%cenlp)
+            call cline_cluster2D_chunk%set('cenlp', params%cenlp)
+            call cline_cluster2D_pool%set( 'cenlp', params%cenlp)
         endif
         ! Will use resolution update scheme from abinitio2D
         if( .not.l_no_chunks )then
@@ -285,46 +288,49 @@ contains
             endif
         endif
         write(logfhandle,'(A,F5.1)') '>>> POOL STARTING LOW-PASS LIMIT (IN A): ', lpstart
-        write(logfhandle,'(A,F5.1)') '>>> POOL   HARD RESOLUTION LIMIT (IN A): ', params_glob%lpstop
+        write(logfhandle,'(A,F5.1)') '>>> POOL   HARD RESOLUTION LIMIT (IN A): ', params%lpstop
         write(logfhandle,'(A,F5.1)') '>>> CENTERING     LOW-PASS LIMIT (IN A): ', lpcen
     end subroutine set_resolution_limits
 
     ! Determines dimensions for downscaling
-    subroutine setup_downscaling
+    subroutine setup_downscaling( params )
+        class(parameters), intent(inout) :: params
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         real    :: smpd, scale_factor
         integer :: box
-        if( params_glob%box == 0 ) THROW_HARD('FATAL ERROR')
+        if( params%box == 0 ) THROW_HARD('FATAL ERROR')
         scale_factor          = 1.0
-        params_glob%smpd_crop = params_glob%smpd
-        params_glob%box_crop  = params_glob%box
-        if( l_scaling .and. params_glob%box >= CHUNK_MINBOXSZ )then
-            call autoscale(params_glob%box, params_glob%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=CHUNK_MINBOXSZ)
-            l_scaling = box < params_glob%box
+        params%smpd_crop = params%smpd
+        params%box_crop  = params%box
+        if( l_scaling .and. params%box >= CHUNK_MINBOXSZ )then
+            call autoscale(params%box, params%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=CHUNK_MINBOXSZ)
+            l_scaling = box < params%box
             if( l_scaling )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',box
-                params_glob%smpd_crop = smpd
-                params_glob%box_crop  = box
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',box
+                params%smpd_crop = smpd
+                params%box_crop  = box
             endif
         endif
-        params_glob%msk_crop = round2even(params_glob%mskdiam / params_glob%smpd_crop / 2.)
+        params%msk_crop = round2even(params%mskdiam / params%smpd_crop / 2.)
     end subroutine setup_downscaling
 
     ! ends chunks processing
-    subroutine terminate_chunks
+    subroutine terminate_chunks( params )
+        class(parameters), intent(in) :: params
         integer :: ichunk
-        do ichunk = 1,params_glob%nchunks
+        do ichunk = 1,params%nchunks
             call chunks(ichunk)%terminate_chunk
         enddo
     end subroutine terminate_chunks
 
     ! ends processing, generates project & cleanup
-    subroutine terminate_stream2D( project_list, optics_dir)
+    subroutine terminate_stream2D( params, project_list, optics_dir)
+        class(parameters),         intent(inout) :: params
         class(rec_list), optional, intent(inout) :: project_list
         class(string),   optional, intent(in)    :: optics_dir
         type(string) :: mapfileprefix
         integer      :: ipart, lastmap
-        call terminate_chunks
+        call terminate_chunks( params )
         if( pool_iter <= 0 )then
             ! no 2D yet
             call write_raw_project
@@ -338,14 +344,14 @@ contains
                     refs_glob = CAVGS_ITER_FBODY//int2str_pad(pool_iter,3)//MRC_EXT
                     ! tricking the asynchronous master process to come to a hard stop
                     call simple_touch(POOL_DIR//TERM_STREAM)
-                    do ipart = 1,params_glob%nparts_pool
+                    do ipart = 1,params%nparts_pool
                         call simple_touch(POOL_DIR//JOB_FINISHED_FBODY//int2str_pad(ipart,numlen))
                     enddo
                     call simple_touch(POOL_DIR//'CAVGASSEMBLE_FINISHED')
                 endif
             endif
             if( pool_iter >= 1 )then
-                call write_project_stream2D(write_star=.true., clspath=.true., optics_dir=optics_dir)
+                call write_project_stream2D(params, write_star=.true., clspath=.true., optics_dir=optics_dir)
                 call rank_cavgs
             endif
         endif
@@ -354,7 +360,7 @@ contains
         call del_file(POOL_DIR//POOL_PROJFILE)
         call del_file(projfile4gui)
         if( .not. DEBUG_HERE )then
-            call qsys_cleanup
+            call qsys_cleanup(params)
         endif
 
         contains
@@ -373,8 +379,8 @@ contains
                         endif
                         call pool_proj%projrecords2proj(project_list)
                         call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
-                        call starproj_stream%stream_export_micrographs(params_glob, pool_proj, params_glob%outdir, optics_set=.true.)
-                        call starproj_stream%stream_export_particles_2D(params_glob, pool_proj, params_glob%outdir, optics_set=.true.)
+                        call starproj_stream%stream_export_micrographs(params, pool_proj, params%outdir, optics_set=.true.)
+                        call starproj_stream%stream_export_particles_2D(params, pool_proj, params%outdir, optics_set=.true.)
                         call pool_proj%write(orig_projfile)
                     endif
                 endif
@@ -424,7 +430,8 @@ contains
     end subroutine tidy_2Dstream_iter
 
     !>  Transfers references & partial arrays from a chunk to the pool
-    subroutine transfer_cavg( refs_in, dir, indin, refs_out, indout )
+    subroutine transfer_cavg( params, refs_in, dir, indin, refs_out, indout )
+        class(parameters), intent(in) :: params
         class(string), intent(in) :: refs_in, dir, refs_out
         integer,       intent(in) :: indin, indout
         type(image)  :: img, img2
@@ -480,12 +487,12 @@ contains
                 call img%read(stkin, indin)
                 if( pool_dims%box > chunk_dims%box )then
                     call img%pad(img2, antialiasing=.false.)
-                    do ipart = 1,params_glob%nparts_pool
+                    do ipart = 1,params%nparts_pool
                         stkout = POOL_DIR//trim(tmplout)//int2str_pad(ipart,numlen)//MRC_EXT
                         call img2%write(stkout,indout)
                     enddo
                 else
-                    do ipart = 1,params_glob%nparts_pool
+                    do ipart = 1,params%nparts_pool
                         stkout = POOL_DIR//trim(tmplout)//int2str_pad(ipart,numlen)//MRC_EXT
                         call img%write(stkout,indout)
                     enddo
@@ -495,7 +502,8 @@ contains
     end subroutine transfer_cavg
 
     !> Updates current parameters with user input
-    subroutine update_user_params2D( cline_here, updated, update_arguments)
+    subroutine update_user_params2D( params, cline_here, updated, update_arguments)
+        class(parameters), intent(inout) :: params
         type(cmdline), intent(inout) :: cline_here
         logical,       intent(out)   :: updated
         type(json_value), pointer, optional, intent(inout) :: update_arguments
@@ -514,12 +522,12 @@ contains
             ! class resolution threshold for rejection
             if( os%isthere(1,'lpthres') )then
                 lpthres = os%get(1,'lpthres')
-                if( abs(lpthres-params_glob%lpthres) > 0.001 )then
+                if( abs(lpthres-params%lpthres) > 0.001 )then
                     if( lpthres < 3.0*chunk_dims%smpd )then
                         write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres TOO LOW: ',lpthres
                     else
-                        params_glob%lpthres = lpthres
-                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params_glob%lpthres
+                        params%lpthres = lpthres
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params%lpthres
                         updated = .true.
                     endif
                 endif
@@ -527,12 +535,12 @@ contains
             ! class standard deviation of resolution threshold for rejection
             if( os%isthere(1,'ndev2D') )then
                 ndev = os%get(1,'ndev2D')
-                if( abs(ndev-params_glob%ndev) > 0.001 )then
+                if( abs(ndev-params%ndev) > 0.001 )then
                     if( ndev < 0.1 )then
                         write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV TOO LOW: ',ndev
                     else
-                        params_glob%ndev = ndev
-                        write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV   UPDATED TO: ',params_glob%ndev
+                        params%ndev = ndev
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV   UPDATED TO: ',params%ndev
                         updated = .true.
                     endif
                 endif
@@ -540,19 +548,19 @@ contains
             ! class rejection
             if( os%isthere(1,'reject_cls') )then
                 val = os%get_str(1, 'reject_cls')
-                if( val .ne. trim(params_glob%reject_cls) )then
+                if( val .ne. trim(params%reject_cls) )then
                     select case(val%to_char())
                         case('yes')
                             write(logfhandle,'(A)')'>>> ACTIVATING CLASS REJECTION'
-                            params_glob%reject_cls = val%to_char()
+                            params%reject_cls = val%to_char()
                             updated = .true.
                         case('no')
                             write(logfhandle,'(A)')'>>> DE-ACTIVATING CLASS REJECTION'
-                            params_glob%reject_cls = val%to_char()
+                            params%reject_cls = val%to_char()
                             updated = .true.
                         case('old')
                             write(logfhandle,'(A)')'>>> DE-ACTIVATING IMAGE MOMENTS-BASED CLASS REJECTION'
-                            params_glob%reject_cls = val%to_char()
+                            params%reject_cls = val%to_char()
                             updated = .true.
                         case DEFAULT
                             THROW_WARN('Unknown flag for class rejection: '//val%to_char())
@@ -571,8 +579,8 @@ contains
                     if(found) then
                         if(allocated(snapshot_selection)) deallocate(snapshot_selection)
                         allocate(snapshot_selection(0))
-                        params_glob%snapshot = snapshot
-                        params_glob%updated  = 'yes'
+                        params%snapshot = snapshot
+                        params%updated  = 'yes'
                         write(logfhandle,'(A,A)')'>>> SNAPSHOT REQUESTED: ', snapshot
                     end if
                     ! snapshot selection
@@ -612,18 +620,18 @@ contains
                     write(logfhandle,'(A,A)')'>>> LPTHRES UPDATE RECEIVED'
                     if( real(lpthres_int) < 1.0)then
                         lpthres_type = "auto"
-                        call mskdiam2streamresthreshold(params_glob%mskdiam, params_glob%lpthres)
-                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres SET TO AUTO: ', params_glob%lpthres
+                        call mskdiam2streamresthreshold(params%mskdiam, params%lpthres)
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres SET TO AUTO: ', params%lpthres
                         updated = .true.
                     else if( real(lpthres_int) .gt. LOWRES_REJECT_THRESHOLD)then
                         lpthres_type = "off"
-                        params_glob%lpthres = real(lpthres_int)
-                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres SET TO OFF: ', params_glob%lpthres
+                        params%lpthres = real(lpthres_int)
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres SET TO OFF: ', params%lpthres
                         updated = .true.
                     else
                         lpthres_type = "manual"
-                        params_glob%lpthres = real(lpthres_int)
-                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params_glob%lpthres
+                        params%lpthres = real(lpthres_int)
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params%lpthres
                         updated = .true.
                     endif 
                 end if
@@ -632,10 +640,10 @@ contains
                 if(found) then
                     write(logfhandle,'(A,A)')'>>> MASK DIAMETER UPDATE RECEIVED'
                     if( real(mskdiam_int) .gt. 49.0)then
-                        params_glob%mskdiam = real(mskdiam_int)
-                        call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
-                        call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
-                        write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER UPDATED TO: ', params_glob%mskdiam
+                        params%mskdiam = real(mskdiam_int)
+                        call cline_cluster2D_chunk%set('mskdiam',   params%mskdiam)
+                        call cline_cluster2D_pool%set('mskdiam',   params%mskdiam)
+                        write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER UPDATED TO: ', params%mskdiam
                         updated = .true.
                     endif 
                 end if
@@ -646,7 +654,8 @@ contains
     end subroutine update_user_params2D
 
     !> produces consolidated project
-    subroutine write_project_stream2D( write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir)
+    subroutine write_project_stream2D( params, write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir)
+        class(parameters), intent(inout) :: params
         logical,       optional, intent(in) :: write_star
         logical,       optional, intent(in) :: clspath
         class(string), optional, intent(in) :: snapshot_projfile, snapshot_starfile_base, optics_dir
@@ -681,7 +690,7 @@ contains
         lastmap = 0
         if( l_snapshot ) then
             write(logfhandle, '(A,I4,A,A,A,I0,A)') ">>> WRITING SNAPSHOT FROM ITERATION ", snapshot_iteration, snapshot_projfile%to_char(),&
-            &' AT: ',cast_time_char(simple_gettime()), snapshot_jobid, params_glob%niceserver%to_char()
+            &' AT: ',cast_time_char(simple_gettime()), snapshot_jobid, params%niceserver%to_char()
             call json%destroy(snapshot_json)
             nullify(snapshot_json)
             if(snapshot_iteration .eq. pool_iter) then
@@ -712,7 +721,7 @@ contains
                 call simple_copy_file(add2fbody(l_stkname, MRC_EXT,'_odd'),  stemname(snapshot_projfile)//"/cavgs_odd" //STK_EXT)
                 call simple_copy_file(l_frcsname, frcsfname)
                 call snapshot_proj%os_out%kill
-                call snapshot_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg')
+                call snapshot_proj%add_cavgs2os_out(cavgsfname, params%smpd, 'cavg')
                 call snapshot_proj%add_frcs2os_out(frcsfname, 'frc2D')
                 call snapshot_proj%set_cavgs_thumb(snapshot_projfile)
                 snapshot_proj%os_ptcl3D = snapshot_proj%os_ptcl2D
@@ -744,20 +753,20 @@ contains
             endif
             if( l_scaling )then
                 os_backup = pool_proj%os_cls2D
-                call rescale_refs( cavgsfname )
+                call rescale_refs( params, cavgsfname )
                 call pool_proj%os_out%kill
-                call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
+                call pool_proj%add_cavgs2os_out(cavgsfname, params%smpd, 'cavg', clspath=l_clspath)
                 pool_proj%os_cls2D = os_backup
                 call os_backup%kill
                 ! rescale frcs
                 call frcs%read(string(POOL_DIR)//FRCS_FILE)
-                call frcs%pad(params_glob%smpd, params_glob%box)
+                call frcs%pad(params%smpd, params%box)
                 call frcs%write(frcsfname)
                 call frcs%kill
                 call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
             else
                 call pool_proj%os_out%kill
-                call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg', clspath=l_clspath)
+                call pool_proj%add_cavgs2os_out(cavgsfname, params%smpd, 'cavg', clspath=l_clspath)
                 call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
             endif
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D ! test addition
@@ -772,9 +781,9 @@ contains
         if(l_write_star) then
             call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
             if( DEBUG_HERE ) t = tic()
-            call starproj_stream%stream_export_micrographs(params_glob, pool_proj, params_glob%outdir, optics_set=.true.)
+            call starproj_stream%stream_export_micrographs(params, pool_proj, params%outdir, optics_set=.true.)
             if( DEBUG_HERE ) print *,'ms_export  : ', toc(t); call flush(6); t = tic()
-            call starproj_stream%stream_export_particles_2D(params_glob, pool_proj, params_glob%outdir, optics_set=.true.)
+            call starproj_stream%stream_export_particles_2D(params, pool_proj, params%outdir, optics_set=.true.)
             if( DEBUG_HERE ) print *,'ptcl_export  : ', toc(t); call flush(6)
         end if
         call pool_proj%os_ptcl3D%kill
@@ -818,16 +827,17 @@ contains
         end subroutine get_latest_optics_map
         
         ! rescale classes to original scale
-        subroutine rescale_refs( cavgs_fname )
+        subroutine rescale_refs( params, cavgs_fname )
+            class(parameters), intent(in) :: params
             class(string), intent(in) :: cavgs_fname
             type(string) :: source, destination
-            call rescale_cavgs(pool_refs, cavgs_fname)
+            call rescale_cavgs(params, pool_refs, cavgs_fname)
             source  = add2fbody(pool_refs, MRC_EXT, '_even')
             destination = add2fbody(cavgs_fname, MRC_EXT, '_even')
-            call rescale_cavgs(source, destination)
+            call rescale_cavgs(params, source, destination)
             source  = add2fbody(pool_refs, MRC_EXT,'_odd')
             destination = add2fbody(cavgs_fname, MRC_EXT,'_odd')
-            call rescale_cavgs(source, destination)
+            call rescale_cavgs(params, source, destination)
         end subroutine rescale_refs
 
     end subroutine write_project_stream2D

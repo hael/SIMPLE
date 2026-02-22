@@ -42,11 +42,11 @@ contains
         call spproj%read_segment('mic',   params%projfile)
         call spproj%read_segment('stk',   params%projfile)
         call spproj%read_segment('ptcl2D',params%projfile)
-        call xabinitio2D%execute_safe(cline)
+        call xabinitio2D%execute(cline)
         call cline%set('prune', 'no')
         ! if ncls set, defaults to kmedoids clustering
         call cline%delete('ncls')
-        call xcluster_cavgs%execute_safe(cline)
+        call xcluster_cavgs%execute(cline)
         call params%new(cline)
         call spproj%read(params%projfile)
         labels = spproj%os_cls2D%get_all_asint('cluster')
@@ -72,7 +72,7 @@ contains
             call cline_clust_js(jcls)%set('prune', 'yes')
             call cline_clust_js(jcls)%set('clustind', icls)
             call cline_clust_js(jcls)%set('subprojname', 'subproj' // int2str(icls))
-            call xextract_subproj%execute_safe(cline_clust_js(jcls))
+            call xextract_subproj%execute(cline_clust_js(jcls))
             call params%new(cline_clust_js(jcls))
             ! original project file, updated params
             call spproj%os_cls2D%get_pinds(params%clustind, 'cluster', pinds)
@@ -96,8 +96,8 @@ contains
             print *, 'mskdiam after', mskdiam
 
             ! compute abinitio2D and cluster cavgs with more suitable mask
-            call xabinitio2D%execute_safe(cline_clust_js(jcls))
-            call xcluster_cavgs%execute_safe(cline_clust_js(jcls))
+            call xabinitio2D%execute(cline_clust_js(jcls))
+            call xcluster_cavgs%execute(cline_clust_js(jcls))
             call params%new(cline_clust_js(jcls))
             call spproj%read(params%projfile)
 
@@ -120,7 +120,7 @@ contains
                 jcls2 = jcls2 + 1
                 call cline_clust_pop(jcls2)%set('clustind', icls2)
                 call cline_clust_pop(jcls2)%set('subprojname', 'subsubproj' // int2str(icls2))
-                call xextract_subproj%execute_safe(cline_clust_pop(jcls2))
+                call xextract_subproj%execute(cline_clust_pop(jcls2))
                 call cline_clust_pop(jcls2)%set('prune', 'yes')
                 call params%new(cline_clust_pop(jcls2))
                 chunk_fnames_pop(jcls2) = params%projfile

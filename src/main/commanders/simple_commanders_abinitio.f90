@@ -265,7 +265,7 @@ contains
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
                 call cline_reproject%set('vol'//int2str(s), REC_FBODY//int2str_pad(s,2)//PPROC_SUFFIX//MRC_EXT)
             enddo
-            call xreproject%execute_safe(cline_reproject)
+            call xreproject%execute(cline_reproject)
             ! write alternated stack
             call img%new([params%box,params%box,1],         params%smpd)
             call stkio_r%open(orig_stk,                     params%smpd, 'read',                                 bufsz=500)
@@ -320,7 +320,7 @@ contains
                 call work_proj%write_segment_inside('ptcl3D', work_projfile)
                 call cline%set('mkdir', 'no') ! to avoid nested dirs
                 call cline%set('objfun', 'cc')
-                call xreconstruct3D%execute_safe(cline)
+                call xreconstruct3D%execute(cline)
                 call cline%set('objfun', trim(params%objfun))
                 do s = 1,params%nstates
                     state = int2str_pad(s,2)
@@ -393,7 +393,7 @@ contains
                 call cline_rank_cavgs%set('oritype',  'cls3D')
                 call cline_rank_cavgs%set('stk',      orig_stk)
                 call cline_rank_cavgs%set('outstk',   basename(add2fbody(stk, ext, '_sorted')))
-                call xrank_cavgs%execute_safe(cline_rank_cavgs)
+                call xrank_cavgs%execute(cline_rank_cavgs)
                 call cline_rank_cavgs%kill
             end subroutine rank_cavgs
 
@@ -434,7 +434,7 @@ contains
         call prune_junk_classes
         call cline%delete('prune')
         ! execution
-        call xabinitio3D_cavgs%execute_safe( cline )
+        call xabinitio3D_cavgs%execute( cline )
         ! end
         call simple_end('**** SIMPLE_ABINITIO3D_CAVGS_FAST NORMAL STOP ****')
       contains
@@ -765,7 +765,7 @@ contains
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj%kill
-                call qsys_cleanup
+                call qsys_cleanup(params)
                 call nice_communicator%terminate(stop=.true.)
                 call simple_end('**** SIMPLE_ABINITIO3D USER STOP ****')
                 call EXIT(0)
@@ -821,7 +821,7 @@ contains
         ! cleanup
         call nice_communicator%terminate(export_project=spproj)
         call spproj%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
         if( l_stream ) call simple_touch(ABINITIO3D_FINISHED)
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
 
@@ -856,7 +856,7 @@ contains
             call cline_ini3D%delete('oritype')
             call cline_ini3D%delete('imgkind')
             call cline_ini3D%delete('prob_athres')
-            call xini3D%execute_safe(cline_ini3D)
+            call xini3D%execute(cline_ini3D)
             ! update point-group symmetry
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp

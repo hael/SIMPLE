@@ -474,7 +474,7 @@ contains
         ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         call pftc%kill
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
-        call qsys_job_finished(string('simple_strategy2D_matcher :: cluster2D_exec'))
+        call qsys_job_finished(p_ptr, string('simple_strategy2D_matcher :: cluster2D_exec'))
         if( L_BENCH_GLOB )then
             if( p_ptr%part == 1 )then
                 rt_tot  = toc(t_tot)

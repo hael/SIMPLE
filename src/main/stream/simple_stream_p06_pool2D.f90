@@ -137,13 +137,13 @@ contains
             ! check on progress, updates particles & alignment parameters
             ! TODO: class remapping
             if( l_pause )then
-                call generate_pool_stats
+                call generate_pool_stats(params)
                 ! TODO Flush raw particles
             else
                 ! progress
                 call update_pool_status
                 ! updates particles if iteration completes
-                call update_pool
+                call update_pool(params)
             endif
             ! Import new particles & clustering init
             call import_sets_into_pool( nimported )
@@ -156,7 +156,7 @@ contains
             endif
             l_imported = setslist%get_included_flags()
             nsets_imported = count(l_imported)
-            call update_user_params2D(cline, l_params_updated, nice_communicator%update_arguments)
+            call update_user_params2D(params, cline, l_params_updated, nice_communicator%update_arguments)
             if( l_params_updated ) call unpause_pool
             ! pause?
             if( (pool_iter >= iter_last_import+PAUSE_NITERS+extra_pause_iters) .or.&
@@ -175,7 +175,7 @@ contains
                 call update_pool_aln_params
                 ! initiates new iteration
                 pool_iter = get_pool_iter()
-                call iterate_pool
+                call iterate_pool(params)
                 if( get_pool_iter() > pool_iter )then
                     nice_communicator%stat_root%user_input = .true.
                     time_last_iter = time8()
@@ -226,7 +226,7 @@ contains
                     if(found) then
                         call http_communicator%get_json_arg("snapshot_filename", snapshot_filename, found)
                         if(found) then
-                            call write_project_stream2D(&
+                            call write_project_stream2D(params,&
                                 &snapshot_projfile=string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' //snapshot_filename,&
                                 &snapshot_starfile_base=string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' // swap_suffix(snapshot_filename, "", ".simple"),&
                                 &optics_dir=params%optics_dir)
@@ -239,7 +239,7 @@ contains
                 ! update mskdiam if requested
                 call http_communicator%get_json_arg("mskdiam", mskdiam_update, found) 
                 if(found) then
-                    call update_mskdiam(mskdiam_update)
+                    call update_mskdiam(params, mskdiam_update)
                     if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
                     time_last_import = time8()
                     call unpause_pool()
@@ -256,10 +256,10 @@ contains
         enddo
         ! Cleanup and final project
         if( allocated(l_imported) ) deallocate(l_imported)
-        call terminate_stream2D(optics_dir=params%optics_dir)
+        call terminate_stream2D(params, optics_dir=params%optics_dir)
         ! cleanup
         call spproj_glob%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! end gracefully 
         call http_communicator%term()
         call simple_end('**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
@@ -407,7 +407,7 @@ contains
                         call cline%set('mskdiam', params%mskdiam)
                         write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
                     endif
-                    call init_pool_clustering(cline, spproj_glob, string(MICSPPROJ_FNAME), reference_generation=.false.)
+                    call init_pool_clustering(params, cline, spproj_glob, string(MICSPPROJ_FNAME), reference_generation=.false.)
                 endif
                 ! global count
                 nptcls_glob = nptcls_glob + nptcls_sel

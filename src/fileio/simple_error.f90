@@ -32,9 +32,7 @@ contains
     subroutine simple_error_check(io_stat, msg)
         integer,                    intent(in) :: io_stat
         character(len=*), optional, intent(in) :: msg
-        if (io_stat==IOSTAT_END)  write(logfhandle,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat
-        if (io_stat==IOSTAT_EOR)  write(logfhandle,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat
-        if( io_stat /= 0 ) then
+        if( io_stat /= 0 .and. io_stat /= IOSTAT_END .and. io_stat /= IOSTAT_EOR ) then
             write(logfhandle,'(a,1x,I0 )') 'ERROR: IOS# ', io_stat
             if(present(msg)) write(logfhandle,'(a)') trim(adjustl(msg))
         endif

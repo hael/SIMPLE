@@ -1,8 +1,7 @@
 !@descr: optimization(search)-based filtering
 module simple_opt_filter
 use simple_core_module_api
-use simple_image,      only: image
-use simple_parameters, only: params_glob
+use simple_image, only: image
 use simple_butterworth
 implicit none
 #include "simple_local_flags.inc"

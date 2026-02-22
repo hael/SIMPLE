@@ -26,10 +26,10 @@ abstract interface
         import :: parameters
         import :: strategy3D_spec
         import :: builder
-        class(strategy3D),         intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(strategy3D_spec),    intent(inout) :: spec
-        class(builder),    target, intent(in)    :: build
+        class(strategy3D),      intent(inout) :: self
+        class(parameters),      intent(in)    :: params
+        class(strategy3D_spec), intent(inout) :: spec
+        class(builder),         intent(in)    :: build
     end subroutine generic_new
 
     subroutine generic_srch( self, os, ithr )

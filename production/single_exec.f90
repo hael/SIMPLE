@@ -1,6 +1,7 @@
 !@descr: executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows
 program single_exec
 use single_exec_api
+use simple_parameters, only: parameters
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)      :: args, prg
@@ -42,13 +43,13 @@ call exec_validate_commander(   trim(prg), cline, l_silent, l_did_execute)
 if( .not. l_did_execute )then
     THROW_HARD('Program "'//trim(prg)//'"  not recognized. Use prg=list to see available programs.')
 endif
-call update_job_descriptions_in_project( cline )
+call update_job_descriptions_in_project(string('single_exec'), string(trim(prg)), cline)
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('6efa3543')
+    call simple_print_git_version('624516ad')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

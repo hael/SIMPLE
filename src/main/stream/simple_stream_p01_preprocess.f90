@@ -220,7 +220,7 @@ contains
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj_glob%kill
-                call qsys_cleanup
+                call qsys_cleanup(params)
                 !call http_communicator%terminate(stop=.true.)
                 call simple_end('**** SIMPLE_STREAM_PREPROC USER STOP ****')
                 call EXIT(0)
@@ -367,19 +367,20 @@ contains
             endif
             ! http stats send
             call http_communicator%send_jobstats()
-            call update_user_params(cline, http_communicator)
+            call update_user_params(params, cline, http_communicator)
         end do
         ! termination
         call http_communicator%update_json( "stage", "terminating", found) 
         call http_communicator%send_jobstats()
-        call update_user_params(cline)
+        call update_user_params(params, cline)
         call write_mic_star_and_field(write_field=.true., copy_optics=.true.)
         ! cleanup
         call spproj_glob%kill
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! end gracefully
         call http_communicator%term()
         call simple_end('**** SIMPLE_STREAM_PREPROC NORMAL STOP ****')
+
         contains
 
             subroutine mics_window_stats(key, fromto, avg, sdev)
@@ -459,9 +460,9 @@ contains
                 if( present(copy_optics) ) l_copy_optics = copy_optics
                 if(l_copy_optics) then
                     call starproj_stream%copy_micrographs_optics(spproj_glob, verbose=DEBUG_HERE)
-                    call starproj_stream%stream_export_micrographs(params_glob, spproj_glob, params%outdir, optics_set=.true.)
+                    call starproj_stream%stream_export_micrographs(params, spproj_glob, params%outdir, optics_set=.true.)
                 else
-                    call starproj_stream%stream_export_micrographs(params_glob, spproj_glob, params%outdir)
+                    call starproj_stream%stream_export_micrographs(params, spproj_glob, params%outdir)
                 end if
                 if( l_wfield )then
                     call spproj_glob%write_segment_inside('mic', params%projfile)
@@ -575,7 +576,7 @@ contains
                             xmldir = stemname(movie_names(imov))
                         else
                             ! single folder
-                            xmldir = params_glob%dir_meta
+                            xmldir = params%dir_meta
                         endif
                         xmlfile = basename(movie_names(imov))
                         if(xmlfile%substr_ind('_fractions') > 0) xmlfile = xmlfile%to_char([1,xmlfile%substr_ind('_fractions') - 1])

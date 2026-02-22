@@ -173,7 +173,9 @@ contains
             class is(qsys_pbs)
                 aarray = .false.
         end select
-        call qsys_cleanup
+        if( present(extra_params) ) then
+            call qsys_cleanup(extra_params)
+        endif
         if( aarray )then
             call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr,&
             &outfile_body=algnfbody, part_params=part_params)

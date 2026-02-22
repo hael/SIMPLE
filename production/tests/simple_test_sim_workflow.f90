@@ -46,7 +46,7 @@ if( .not. mrc_exists )then
    call cline_pdb2mrc%checkvar('smpd',        1)
    call cline_pdb2mrc%checkvar('pdbfile',     2)
    call cline_pdb2mrc%check()
-   call xpdb2mrc%execute_safe(cline_pdb2mrc)
+   call xpdb2mrc%execute(cline_pdb2mrc)
    call cline_pdb2mrc%kill()
    cmd = 'rm 1JYX.pdb'
    call execute_command_line(cmd%to_char(), exitstat=rc)
@@ -60,13 +60,13 @@ call cline_projection%set('pgrp',       'c1')
 call cline_projection%set('mskdiam',    180.)
 call cline_projection%set('nspace',      10.)
 call cline_projection%set('nthr',        16.)
-call xreproject%execute_safe(cline_projection)
+call xreproject%execute(cline_projection)
 call cline_projection%kill()
 
 ! Make pick references
 call cline_make_pick_refs%set('pickrefs', 'reprojs.mrcs')
 call cline_make_pick_refs%set('nthr',                16.)
-call xmakepickrefs%execute_safe(cline_make_pick_refs)
+call xmakepickrefs%execute(cline_make_pick_refs)
 call cline_make_pick_refs%kill()
 
 ! Simulate movie
@@ -74,12 +74,12 @@ call cline_sim_mov%set('stk', 'reprojs.mrcs')
 call cline_sim_mov%set('xdim',          4096)
 call cline_sim_mov%set('ydim',          4096)
 call cline_sim_mov%set('nthr',           16.)
-call xsimov%execute_safe(cline_sim_mov)
+call xsimov%execute(cline_sim_mov)
 call cline_sim_mov%kill()
 
 ! Project creation
 call cline_new_project%set('projname',  params%projname)
-call xnew_project%execute_safe(cline_new_project)
+call xnew_project%execute(cline_new_project)
 call cline_new_project%kill()
 projfile = params%projname//'.simple'
 
@@ -92,7 +92,7 @@ call cline_import_movies%set('kv',                       params%kv)
 call cline_import_movies%set('smpd',                   params%smpd)
 call cline_import_movies%set('filetab',               filetab_file)
 call cline_import_movies%set('ctf',                          'yes')
-call ximport_movies%execute_safe(cline_import_movies)
+call ximport_movies%execute(cline_import_movies)
 call cline_import_movies%kill()
 
 ! Motion correction - algorithm iso
@@ -100,28 +100,28 @@ call cline_mot_corr%set('stk', 'simulated_movies.mrcs')
 call cline_mot_corr%set('algorithm',    'iso')
 call cline_mot_corr%set('nparts',           4)
 call cline_mot_corr%set('nthr',            16)
-call xmotcorr%execute_safe(cline_mot_corr)
+call xmotcorr%execute(cline_mot_corr)
 call cline_mot_corr%kill()
 ! Motion correction - algorithm patch
 call cline_mot_corr%set('stk',      'simulated_movies.mrcs')
 call cline_mot_corr%set('algorithm',                'patch')
 call cline_mot_corr%set('nparts',                         4)
 call cline_mot_corr%set('nthr',                          16)
-call xmotcorr%execute_safe(cline_mot_corr)
+call xmotcorr%execute(cline_mot_corr)
 call cline_mot_corr%kill()
 
 ! CTF estimate - patch yes
 call cline_ctf_est%set('ctfpatch', 'yes')
 call cline_ctf_est%set('nparts',       4)
 call cline_ctf_est%set('nthr',        16)
-call xctf_estimate%execute_safe(cline_ctf_est)
+call xctf_estimate%execute(cline_ctf_est)
 call cline_ctf_est%kill()
 ! CTF estimate - patch yes
 call cline_ctf_est%set('prg',     'ctf_estimate')
 call cline_ctf_est%set('ctfpatch',          'no')
 call cline_ctf_est%set('nparts',               4)
 call cline_ctf_est%set('nthr',                16)
-call xctf_estimate%execute_safe(cline_ctf_est)
+call xctf_estimate%execute(cline_ctf_est)
 call cline_ctf_est%kill()
 
 ! Segmentation-based picking
@@ -129,7 +129,7 @@ call cline_segpick%set('prg',       'pick')
 call cline_segpick%set('picker', 'segdiam')
 call cline_segpick%set('nparts',         4)
 call cline_segpick%set('nthr',          16)      
-call xsegpick%execute_safe(cline_segpick)
+call xsegpick%execute(cline_segpick)
 call cline_segpick%kill()  
 
 ! Reference-based picking
@@ -137,7 +137,7 @@ call cline_segpick%kill()
  call cline_refpick%set('pickrefs', 'pickrefs.mrcs')
  call cline_refpick%set('nparts',                 4)
  call cline_refpick%set('nthr',                  16)      
- call xrefpick%execute_safe(cline_refpick)
+ call xrefpick%execute(cline_refpick)
  call cline_refpick%kill()  
 
 ! 2D analysis
@@ -151,14 +151,14 @@ call cline_sim_ptcls%set('snr',                  0.5)
 call cline_sim_ptcls%set('pgrp',                'c1')
 call cline_sim_ptcls%set('mskdiam',              180)
 call cline_sim_ptcls%set('nthr',                  16)
-call xsim_ptcls%execute_safe(cline_sim_ptcls)
+call xsim_ptcls%execute(cline_sim_ptcls)
 call cline_sim_ptcls%kill()
 ! abinitio2D
  call cline_abinitio2D%set('prg', 'abinitio2D')
  call cline_abinitio2D%set('mskdiam',      180)
  call cline_abinitio2D%set('ncls',         100)
  call cline_abinitio2D%set('nthr',          16)
- call xabinitio2D%execute_safe(cline_abinitio2D)
+ call xabinitio2D%execute(cline_abinitio2D)
  call cline_abinitio2D%kill()
 
 ! cluster2D
@@ -166,7 +166,7 @@ call cline_cluster2D%set('prg', 'cluster2D')
 call cline_cluster2D%set('mskdiam',     180)
 call cline_cluster2D%set('ncls',        100)
 call cline_cluster2D%set('nthr',         16)
-call xcluster2D%execute_safe(cline_abinitio2D)
+call xcluster2D%execute(cline_abinitio2D)
 call cline_cluster2D%kill()
 
 end program simple_test_sim_workflow 

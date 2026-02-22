@@ -70,7 +70,7 @@ print *,'>>> STRLEN_TRIM',o%ori_strlen_trim()
 call cline%set('projname', projname)
 call cline%set('mkdir',        'no')
 call cline%check()
-call xnew_project%execute_safe(cline)
+call xnew_project%execute(cline)
 projfile=projname%to_char()//'.simple'
 call spproj%read_segment('compenv', projfile)
 print *,'>>> ORI2CHASH '

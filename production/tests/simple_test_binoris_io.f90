@@ -23,7 +23,7 @@ call params%new(cline)
 call cline%set('projname', projname)
 call cline%set('mkdir',        'no')
 call cline%check()
-call xnew_project%execute_safe(cline)
+call xnew_project%execute(cline)
 print *, '>>> BINREAD ORITAB'
 call binread_oritab(fname, spproj, o, fromto)
 print *, '>>> CTFPARAMS STATE EO'

@@ -187,7 +187,7 @@ contains
                             end do
                             call build%spproj%write_segment_inside(params%oritype, params%projfile)
                             call cline_make_cavgs%set('refs', params%refs)
-                            call xmake_cavgs%execute_safe(cline_make_cavgs)
+                            call xmake_cavgs%execute(cline_make_cavgs)
                             l_scale_inirefs = .false.
                         case DEFAULT
                             THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
@@ -195,7 +195,7 @@ contains
                 endif
             else
                 call cline_make_cavgs%set('refs', params%refs)
-                call xmake_cavgs%execute_safe(cline_make_cavgs)
+                call xmake_cavgs%execute(cline_make_cavgs)
                 l_scale_inirefs = .false.
             endif
             ! scale references to box_crop
@@ -206,7 +206,7 @@ contains
                 call cline_scalerefs%set('smpd',   params%smpd)
                 call cline_scalerefs%set('newbox', params%box_crop)
                 call cline_scalerefs%set('nthr',   nthr_here)
-                call xscale%execute_safe(cline_scalerefs)
+                call xscale%execute(cline_scalerefs)
                 call simple_rename(refs_sc, params%refs)
             endif
             call copy_imgfile(params%refs, params%refs_even, params%smpd_crop, [1,params%ncls])
@@ -256,7 +256,7 @@ contains
                 call cline_prob_tab2D_distr%set('frcs',      FRCS_FILE)
                 call cline_prob_tab2D_distr%set('startit',   iter)
                 call cline_prob_tab2D_distr%set('extr_iter', params%extr_iter)
-                call xprob_tab2D_distr%execute_safe(cline_prob_tab2D_distr)
+                call xprob_tab2D_distr%execute(cline_prob_tab2D_distr)
             endif
             ! updates
             call job_descr%set('refs', refs)
@@ -269,7 +269,7 @@ contains
                 t_scheduled = tic()
             endif
             call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
-            call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 1')
+            call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 1')
             ! assemble alignment docs
             if( L_BENCH_GLOB )then
                 rt_scheduled = toc(t_scheduled)
@@ -287,15 +287,15 @@ contains
                 refs_odd  = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // params%ext%to_char()
                 call cline_cavgassemble%set('refs', refs)
                 call cline_cavgassemble%set('nthr', nthr_here)
-                call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
-                call xcavgassemble%execute_safe(cline_cavgassemble)
+                call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
+                call xcavgassemble%execute(cline_cavgassemble)
                 if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
             endif
             ! objfun=euclid, part 4: sigma2 consolidation
             if( params%l_needs_sigma )then
                 call cline_calc_sigma%set('which_iter', params%which_iter+1)
                 call cline_calc_sigma%set('nthr',       nthr_here)
-                call xcalc_group_sigmas%execute_safe(cline_calc_sigma)
+                call xcalc_group_sigmas%execute(cline_calc_sigma)
             endif
             ! print out particle parameters per iteration
             if( trim(params%print_corrs).eq.'yes' )then
@@ -354,7 +354,7 @@ contains
                 call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
             endif
         endif
-        call qsys_cleanup
+        call qsys_cleanup(params)
         ! report the last iteration on exit
         call cline%delete( 'startit' )
         call cline%set('endit', iter)
@@ -406,7 +406,7 @@ contains
             call cluster2D_exec( params, build, cline, startit, converged )
             ! end gracefully
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
-            call qsys_job_finished(string('simple_commanders_cluster2D :: exec_cluster2D'))
+            call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_cluster2D'))
         else
             ! Polar specifics
             if( (trim(params%polar)=='yes') .and. (trim(params%ref_type)=='comlin_hybrid') )then
@@ -440,7 +440,7 @@ contains
                             call cline%set('ncls', params%ncls)
                             call cline_make_cavgs%set('ncls', params%ncls)
                             call cline_make_cavgs%set('refs', params%refs)
-                            call xmake_cavgs%execute_safe(cline_make_cavgs)
+                            call xmake_cavgs%execute(cline_make_cavgs)
                             l_scale_inirefs  = .false.
                         else
                             if( trim(params%refine).eq.'inpl' )then
@@ -449,7 +449,7 @@ contains
                                 call cline_make_cavgs%set('ncls', params%ncls)
                                 call cline_make_cavgs%delete('tseries')
                                 call cline_make_cavgs%set('refs', params%refs)
-                                call xmake_cavgs%execute_safe(cline_make_cavgs)
+                                call xmake_cavgs%execute(cline_make_cavgs)
                                 l_scale_inirefs  = .false.
                             else
                                 call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
@@ -477,7 +477,7 @@ contains
                                 end do
                                 call build%spproj%write_segment_inside(params%oritype, params%projfile)
                                 call cline_make_cavgs%set('refs', params%refs)
-                                call xmake_cavgs%execute_safe(cline_make_cavgs)
+                                call xmake_cavgs%execute(cline_make_cavgs)
                                 l_scale_inirefs  = .false.
                             case DEFAULT
                                 THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
@@ -490,14 +490,14 @@ contains
                         call cline_scalerefs%set('outstk', refs_sc)
                         call cline_scalerefs%set('smpd',   params%smpd)
                         call cline_scalerefs%set('newbox', params%box_crop)
-                        call xscale%execute_safe(cline_scalerefs)
+                        call xscale%execute(cline_scalerefs)
                         call simple_rename(refs_sc, params%refs)
                     endif
                     call copy_imgfile(params%refs, params%refs_even, params%smpd_crop, [1,params%ncls])
                     call copy_imgfile(params%refs, params%refs_odd,  params%smpd_crop, [1,params%ncls])
                 else
                     call cline_make_cavgs%set('refs', params%refs)
-                    call xmake_cavgs%execute_safe(cline_make_cavgs)
+                    call xmake_cavgs%execute(cline_make_cavgs)
                 endif
                 call cline%set('refs', params%refs)
             endif
@@ -707,7 +707,7 @@ contains
         ! execution
         if( .not.cline_prob_tab2D%defined('nparts') )then
             ! shared memory
-            call xprob_tab2D%execute_safe(cline_prob_tab2D)
+            call xprob_tab2D%execute(cline_prob_tab2D)
         else
             ! setup the environment for distributed execution
             call qenv%new(params, params%nparts, nptcls=params%nptcls)
@@ -754,8 +754,8 @@ contains
         call cline_prob_tab2D%kill
         call qenv%kill
         call job_descr%kill
-        call qsys_job_finished(string('simple_commanders_cluster2D :: exec_prob_tab2D_distr'))
-        call qsys_cleanup
+        call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_prob_tab2D_distr'))
+        call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_TAB2D_DISTR NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab2D_distr
 
@@ -856,7 +856,7 @@ contains
         call eulprob%kill
         call build%kill_general_tbox
         call build%kill_strategy2D_tbox
-        call qsys_job_finished(string('simple_commanders_cluster2D :: exec_prob_tab'))
+        call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB2D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab2D
 

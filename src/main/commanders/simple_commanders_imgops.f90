@@ -646,7 +646,7 @@ contains
         call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
-        call qsys_job_finished(string('simple_commanders_imgops :: exec_scale'))
+        call qsys_job_finished(params, string('simple_commanders_imgops :: exec_scale'))
     end subroutine exec_scale
 
 end module simple_commanders_imgops

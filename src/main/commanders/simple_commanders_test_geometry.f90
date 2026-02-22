@@ -112,7 +112,7 @@ subroutine exec_test_ori_test( self, cline )
     call cline%set('projname', projname)
     call cline%set('mkdir',        'no')
     call cline%check()
-    call xnew_project%execute_safe(cline)
+    call xnew_project%execute(cline)
     projfile=projname%to_char()//'.simple'
     call spproj%read_segment('compenv', projfile)
     print *,'>>> ORI2CHASH '

@@ -336,7 +336,7 @@ contains
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         call self%kill_rec_eo_tbox
-        call self%eorecvol%new(self%spproj)
+        call self%eorecvol%new(params, self%spproj)
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         self%eo_rec_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'

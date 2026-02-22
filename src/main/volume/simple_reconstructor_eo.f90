@@ -3,7 +3,7 @@ module simple_reconstructor_eo
 use simple_core_module_api
 use simple_reconstructor, only: reconstructor
 use simple_image_msk,     only: image_msk
-use simple_parameters,    only: params_glob
+use simple_parameters,    only: parameters
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
 use simple_fsc
@@ -15,6 +15,7 @@ private
 
 type :: reconstructor_eo
     private
+    class(parameters), pointer :: p_ptr=>null()
     type(reconstructor) :: even
     type(reconstructor) :: odd
     type(reconstructor) :: eosum
@@ -75,41 +76,44 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    subroutine new( self, spproj, expand  )
-        class(reconstructor_eo), intent(inout) :: self   !< instance
-        class(sp_project),       intent(inout) :: spproj !< project description
-        logical, optional,       intent(in)    :: expand !< create expanded matrix versions or not
+    subroutine new( self, params, spproj, expand  )
+        class(reconstructor_eo),   intent(inout) :: self   !< instance
+        class(parameters), target, intent(in)    :: params !< global parameters
+        class(sp_project),         intent(inout) :: spproj !< project description
+        logical, optional,         intent(in)    :: expand !< create expanded matrix versions or not
         logical :: l_expand
         call self%kill
+        ! set pointer to params
+        self%p_ptr => params
         l_expand = .true.
         if( present(expand) ) l_expand = expand
         ! set constants
-        self%box     = params_glob%box_crop
-        self%boxpd   = params_glob%box_croppd
-        self%smpd    = params_glob%smpd_crop
+        self%box     = self%p_ptr %box_crop
+        self%boxpd   = self%p_ptr %box_croppd
+        self%smpd    = self%p_ptr %smpd_crop
         self%fny     = 2.*self%smpd
-        self%nstates = params_glob%nstates
+        self%nstates = self%p_ptr %nstates
         self%ext     = MRC_EXT
-        self%numlen  = params_glob%numlen
+        self%numlen  = self%p_ptr %numlen
         self%filtsz  = fdim(self%box) - 1
         self%msk     = real(self%box / 2) - COSMSKHALFWIDTH - 1.
-        self%automsk = params_glob%l_filemsk .and. params_glob%l_envfsc
+        self%automsk = self%p_ptr %l_filemsk .and. self%p_ptr %l_envfsc
         ! oversampled Fourier interpolation, so construct this at native size
-        self%mag_correction = real(params_glob%box) ! consistent with the current scheme
+        self%mag_correction = real(self%p_ptr %box) ! consistent with the current scheme
         self%ldim           = [self%box,self%box,self%box]
         ! create composites
         if( self%automsk )then
             call self%envmask%new([self%box,self%box,self%box],self%smpd)
-            call self%envmask%read(params_glob%mskfile)
+            call self%envmask%read(self%p_ptr %mskfile)
         endif
-        call self%even%new(self%ldim, params_glob%smpd)
-        call self%even%alloc_rho(spproj, expand=l_expand)
+        call self%even%new(self%ldim, self%p_ptr %smpd)
+        call self%even%alloc_rho(self%p_ptr, spproj, expand=l_expand)
         call self%even%set_ft(.true.)
-        call self%odd%new(self%ldim, params_glob%smpd)
-        call self%odd%alloc_rho(spproj, expand=l_expand)
+        call self%odd%new(self%ldim, self%p_ptr %smpd)
+        call self%odd%alloc_rho(self%p_ptr, spproj, expand=l_expand)
         call self%odd%set_ft(.true.)
-        call self%eosum%new(self%ldim, params_glob%smpd)
-        call self%eosum%alloc_rho(spproj, expand=.false.)
+        call self%eosum%new(self%ldim, self%p_ptr %smpd)
+        call self%eosum%alloc_rho(self%p_ptr, spproj, expand=.false.)
         ! set existence
         self%exists = .true.
     end subroutine new
@@ -257,7 +261,7 @@ contains
         here(4)  = file_exists(odd_rho)
         if( all(here) )then
             l_pad_with_zeros = .false.
-            if( params_glob%l_update_frac )then
+            if( self%p_ptr %l_update_frac )then
                 ! check dimensions
                 call find_ldim_nptcls(even_vol, prev_ldim, dummy, smpd=prev_smpd)
                 if( prev_ldim(1) == self%ldim(1) )then
@@ -442,7 +446,7 @@ contains
             l_have_fsc = .false.
         endif
         ! ML-regularization
-        if( params_glob%l_ml_reg )then
+        if( self%p_ptr %l_ml_reg )then
             ! preprocessing for FSC calculation
             ! even
             cmat = self%even%get_cmat()
@@ -469,8 +473,8 @@ contains
                 if( self%automsk )then
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
-                else if( trim(params_glob%automsk).eq.'yes' )then
-                    call self%envmask%automask3D(params_glob, even, odd, trim(params_glob%automsk).eq.'tight')
+                else if( trim(self%p_ptr %automsk).eq.'yes' )then
+                    call self%envmask%automask3D(self%p_ptr , even, odd, trim(self%p_ptr %automsk).eq.'tight')
                     call even%zero_env_background(self%envmask)
                     call odd%zero_env_background(self%envmask)
                     call even%mul(self%envmask)
@@ -534,8 +538,8 @@ contains
                 if( self%automsk )then
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
-                else if( trim(params_glob%automsk).eq.'yes' )then
-                    call self%envmask%automask3D(params_glob, even, odd, trim(params_glob%automsk).eq.'tight')
+                else if( trim(self%p_ptr %automsk).eq.'yes' )then
+                    call self%envmask%automask3D(self%p_ptr , even, odd, trim(self%p_ptr %automsk).eq.'tight')
                     call even%zero_env_background(self%envmask)
                     call odd%zero_env_background(self%envmask)
                     call even%mul(self%envmask)
@@ -644,6 +648,7 @@ contains
             call self%odd%kill
             call self%eosum%dealloc_rho
             call self%eosum%kill
+            self%p_ptr => null()
             ! set existence
             self%exists = .false.
         endif
