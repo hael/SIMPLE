@@ -251,7 +251,7 @@ contains
         flims_crop  = cavgs%even%flims                    ! crop Fourier limits of complex matrix
         nyq_crop    = cavgs%even%fit%get_lfny(1)          ! crop Nyquist limit
         ! Work images
-        call prepimgbatch(b_ptr, READBUFFSZ)
+        call prepimgbatch(p_ptr, b_ptr, READBUFFSZ)
         call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
         ! sigma2 prep for regularization
         if( p_ptr%l_ml_reg )then
@@ -466,7 +466,7 @@ contains
         call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks     = last_stkind - first_stkind + 1
         ! Work images
-        call prepimgbatch(b_ptr, READBUFFSZ)
+        call prepimgbatch(p_ptr, b_ptr, READBUFFSZ)
         call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
         ! Memoization for padded image
         call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
@@ -1063,7 +1063,7 @@ contains
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim),source=0.)
         ! temporary objects
-        call prepimgbatch(b_ptr, pop)
+        call prepimgbatch(p_ptr, b_ptr, pop)
         do ithr = 1, nthr_glob
             call  img(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
             call timg(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
@@ -1073,7 +1073,7 @@ contains
         cyc_lims       = img(1)%loop_lims(3)
         cyc_limsR(:,1) = cyc_lims(1,:)
         cyc_limsR(:,2) = cyc_lims(2,:)
-        call discrete_read_imgbatch(b_ptr, pop, pinds(:), [1,pop])
+        call discrete_read_imgbatch(p_ptr, b_ptr, pop, pinds(:), [1,pop])
         !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,h,k,hh,kk,loc,win,l,m,physh,physk,kbw,fcomp,fcompl,l_conjg) &
         !$omp default(shared) schedule(static) proc_bind(close)
         do i = 1,pop

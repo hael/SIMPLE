@@ -34,7 +34,7 @@ contains
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
             call sample_ptcls4fillin(build, [1,params%nptcls], .true., nptcls, pinds)
         else
-            call sample_ptcls4update(build, [1,params%nptcls], .true., nptcls, pinds)
+            call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         call build%spproj%write_segment_inside(params%oritype)
         call eulprob_obj_glob%new(params, build, pinds)
@@ -84,15 +84,15 @@ contains
         type(eul_prob_tab) :: eulprob_obj_part
         type(euclid_sigma2) :: eucl_sigma
         integer :: nptcls
-        call set_bp_range(build, cline)
+        call set_bp_range(params, build, cline)
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
         else
             THROW_HARD('exec_prob_tab_inmem requires prior particle sampling (in exec_prob_align_inmem)')
         endif
-        call prepare_refs_sigmas_ptcls(build, pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls(params, build, pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
-        call build_batch_particles(build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build_batch_particles(params, build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         call eulprob_obj_part%new(params, build, pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( str_has_substr(params%refine, 'prob_state') )then

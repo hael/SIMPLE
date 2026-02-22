@@ -1170,7 +1170,7 @@ contains
                         call spproj_in%os_ptcl3D%set(iptcl, 'indstk', cnt)
                     enddo
                     ptcl_inds = ptcl_inds -fromp+1 ! because indexing range lost when passed to extractor
-                    call prepimgbatch(build, nptcls2extract)
+                    call prepimgbatch(params, build, nptcls2extract)
                     if( l_movie_frames )then
                         ! extraction from movie
                         call extractor%init_mov(o_mic, params%box, (params%pcontrast .eq. 'black'))

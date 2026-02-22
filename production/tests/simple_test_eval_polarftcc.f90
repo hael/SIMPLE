@@ -28,7 +28,7 @@ call cline%set('nptcls',1.0)
 call cline%set('ctf','no')
 call cline%check
 call b%init_params_and_build_strategy3D_tbox(cline,p)
-call set_bp_range(b, cline)
+call set_bp_range(p, b, cline)
 
 ang_err   = 16.
 shift_err = 8.

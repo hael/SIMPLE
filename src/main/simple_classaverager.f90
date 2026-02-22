@@ -1198,8 +1198,8 @@ contains
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
-        class(parameters),         target, intent(in)    :: params
-        class(builder),            target, intent(inout) :: build
+        class(parameters),                 intent(in)    :: params
+        class(builder),                    intent(inout) :: build
         class(sp_project),                 intent(inout) :: spproj
         character(len=*),                  intent(in)    :: oritype
         integer,                           intent(in)    :: icls
@@ -1220,8 +1220,6 @@ contains
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
         integer :: i,iptcl, l,m, pop, h,k, hh,kk, ithr, iwinsz, wdim, physh,physk
         logical :: l_phflip, l_imgs, l_conjg
-        p_ptr => params
-        b_ptr => build
         l_imgs = .false.
         if( allocated(timgs) )then
             do i = 1,size(timgs)
@@ -1269,12 +1267,12 @@ contains
         endif
         allocate(timgs(pop))
         do i = 1,size(timgs)
-            call timgs(i)%new([p_ptr%box,p_ptr%box,1],p_ptr%smpd, wthreads=.false.)
+            call timgs(i)%new([params%box,params%box,1],params%smpd, wthreads=.false.)
         enddo
         if( l_imgs )then
             allocate(imgs_ori(pop))
             do i = 1,size(imgs_ori)
-                call imgs_ori(i)%new([p_ptr%box,p_ptr%box,1],p_ptr%smpd, wthreads=.false.)
+                call imgs_ori(i)%new([params%box,params%box,1],params%smpd, wthreads=.false.)
             enddo
         endif
         ! interpolation variables
@@ -1283,17 +1281,17 @@ contains
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim),source=0.)
         ! temporary objects
-        call prepimgbatch(build, pop)
+        call prepimgbatch(params, build, pop)
         do ithr = 1, nthr_glob
-            call  img(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
-            call timg(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
+            call  img(ithr)%new([params%boxpd,params%boxpd,1],params%smpd, wthreads=.false.)
+            call timg(ithr)%new([params%boxpd,params%boxpd,1],params%smpd, wthreads=.false.)
         end do
         call memoize_ft_maps(img(1)%get_ldim(), img(1)%get_smpd())
         logi_lims      = img(1)%loop_lims(2)
         cyc_lims       = img(1)%loop_lims(3)
         cyc_limsR(:,1) = cyc_lims(1,:)
         cyc_limsR(:,2) = cyc_lims(2,:)
-        call discrete_read_imgbatch(build, pop, pinds(:), [1,pop])
+        call discrete_read_imgbatch(params, build, pop, pinds(:), [1,pop])
         !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,h,k,hh,kk,loc,win,l,m,physh,physk,kbw,fcomp,fcompl,l_conjg) &
         !$omp default(shared) schedule(static) proc_bind(close)
         do i = 1,pop
@@ -1304,7 +1302,7 @@ contains
             call img(ithr)%zero_and_flag_ft
             call timg(ithr)%zero_and_flag_ft
             ! normalisation
-            call b_ptr%imgbatch(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk,img(ithr))
+            call build%imgbatch(i)%norm_noise_taper_edge_pad_fft(build%lmsk,img(ithr))
             if( l_imgs )then
                 call img(ithr)%ifft
                 call img(ithr)%clip(imgs_ori(i))

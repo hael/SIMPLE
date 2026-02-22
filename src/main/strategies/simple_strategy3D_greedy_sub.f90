@@ -3,7 +3,7 @@ module simple_strategy3D_greedy_sub
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_parameters,       only: params_glob
+use simple_parameters,       only: parameters
 use simple_polarft_calc,     only: pftc_glob
 use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D
@@ -24,12 +24,13 @@ end type strategy3D_greedy_sub
 
 contains
 
-    subroutine new_greedy_sub( self, spec, build )
+    subroutine new_greedy_sub( self, params, spec, build )
         use simple_builder, only: builder
         class(strategy3D_greedy_sub), intent(inout) :: self
+        class(parameters), target,    intent(in)    :: params
         class(strategy3D_spec),       intent(inout) :: spec
-        class(builder), target,       intent(inout) :: build
-        call self%s%new(spec, build)
+        class(builder),    target,    intent(in)    :: build
+        call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_greedy_sub
 
@@ -40,7 +41,7 @@ contains
         integer,                      intent(in)    :: ithr
         integer   :: iref, isample, loc(1), iproj, ipeak, inds(self%s%nrots)
         real      :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots)
-        logical   :: lnns(params_glob%nspace)
+        logical   :: lnns(self%s%p_ptr%nspace)
         type(ori) :: o
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -54,7 +55,7 @@ contains
                 iref = s3D%srch_order_sub(isample,self%s%ithr) ! set the reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
-                    if( params_glob%l_sh_first )then
+                    if( self%s%p_ptr%l_sh_first )then
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
@@ -69,25 +70,25 @@ contains
             lnns = .false.
             do ipeak = 1, self%s%npeaks
                 call self%s%opeaks%get_ori(ipeak, o)
-                call self%s%b_ptr%pgrpsyms%nearest_proj_neighbors(self%s%b_ptr%eulspace, o, params_glob%athres, lnns)
+                call self%s%b_ptr%pgrpsyms%nearest_proj_neighbors(self%s%b_ptr%eulspace, o, self%s%p_ptr%athres, lnns)
             end do
             ! include the previous best ori in the multi-neighborhood search
-            call self%s%b_ptr%pgrpsyms%nearest_proj_neighbors(self%s%b_ptr%eulspace, self%s%o_prev, params_glob%athres, lnns)
+            call self%s%b_ptr%pgrpsyms%nearest_proj_neighbors(self%s%b_ptr%eulspace, self%s%o_prev, self%s%p_ptr%athres, lnns)
             ! count the number of nearest neighbors
             self%s%nnn = count(lnns)
             ! search
-            do iproj=1,params_glob%nspace
+            do iproj=1,self%s%p_ptr%nspace
                 if( .not. lnns(iproj) ) cycle
-                iref = (self%s%prev_state - 1) * params_glob%nspace + iproj
+                iref = (self%s%prev_state - 1) * self%s%p_ptr%nspace + iproj
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
-                    if( params_glob%l_sh_first )then
+                    if( self%s%p_ptr%l_sh_first )then
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                     endif
-                    if( params_glob%l_prob_inpl )then
-                        loc = angle_sampling(eulprob_dist_switch(inpl_corrs, params_glob%cc_objfun), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), params_glob%prob_athres)
+                    if( self%s%p_ptr%l_prob_inpl )then
+                        loc = angle_sampling(eulprob_dist_switch(inpl_corrs, self%s%p_ptr%cc_objfun), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres)
                     else
                         loc = maxloc(inpl_corrs)
                     endif

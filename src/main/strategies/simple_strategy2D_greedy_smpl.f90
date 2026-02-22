@@ -3,8 +3,10 @@ module simple_strategy2D_greedy_smpl
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
 use simple_eul_prob_tab2D,  only: squared_sampling
+use simple_parameters,       only: parameters
 use simple_strategy2D,      only: strategy2D
 use simple_strategy2D_srch, only: strategy2D_spec
+use simple_oris,             only: oris
 implicit none
 
 public :: strategy2D_greedy_smpl
@@ -21,10 +23,11 @@ end type strategy2D_greedy_smpl
 
 contains
 
-    subroutine new_greedy_smpl( self, spec )
+    subroutine new_greedy_smpl( self, params, spec )
         class(strategy2D_greedy_smpl), intent(inout) :: self
-        class(strategy2D_spec),   intent(inout) :: spec
-        call self%s%new( spec )
+        class(parameters),             intent(in)    :: params
+        class(strategy2D_spec),        intent(inout) :: spec
+        call self%s%new( params, spec )
         self%spec = spec
     end subroutine new_greedy_smpl
 

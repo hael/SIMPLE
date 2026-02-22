@@ -20,10 +20,11 @@ end type strategy2D_inpl
 
 contains
 
-    subroutine new_inpl( self, spec )
-        class(strategy2D_inpl), intent(inout) :: self
-        class(strategy2D_spec),   intent(inout) :: spec
-        call self%s%new( spec )
+    subroutine new_inpl( self, params, spec )
+        class(strategy2D_inpl),  intent(inout) :: self
+        class(parameters),       intent(in)    :: params
+        class(strategy2D_spec),  intent(inout) :: spec
+        call self%s%new(params, spec)
         self%spec = spec
     end subroutine new_inpl
 

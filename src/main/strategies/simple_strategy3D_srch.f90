@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_builder,          only: builder
 use simple_eul_prob_tab,     only: eul_prob_tab
-use simple_parameters,       only: params_glob
+use simple_parameters,       only: parameters
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_polarft_calc,     only: pftc_glob
 implicit none
@@ -19,42 +19,43 @@ type strategy3D_spec
 end type strategy3D_spec
 
 type strategy3D_srch
-    character(len=:), allocatable :: refine                !< 3D refinement flag
-    type(pftc_shsrch_grad) :: grad_shsrch_obj              !< origin shift search object, L-BFGS with gradient
-    type(pftc_shsrch_grad) :: grad_shsrch_obj2             !<
-    type(pftc_shsrch_grad) :: grad_shsrch_first_obj        !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
-    type(ori)               :: o_prev                      !< previous orientation
-    type(oris)              :: opeaks                      !< peak orientations to consider for refinement
-    class(builder), pointer :: b_ptr       => null()    !< build handle for access to spproj/eulspace/symmetry
-    integer                 :: iptcl           = 0         !< global particle index
-    integer                 :: iptcl_map       = 0         !< map particle index
-    integer                 :: ithr            = 0         !< thread index
-    integer                 :: nrefs           = 0         !< total # references (nstates*nprojs)
-    integer                 :: nrefs_sub       = 0         !< total # references (nstates*nprojs), subspace
-    integer                 :: npeaks          = 0         !< # peak subspace orientations to consider
-    integer                 :: npeaks_inpl     = 0         !< # # multi-neighborhood peaks to refine with L-BFGS
-    integer                 :: nstates         = 0         !< # states
-    integer                 :: nprojs          = 0         !< # projections
-    integer                 :: nprojs_sub      = 0         !< # projections, subspace
-    integer                 :: nrots           = 0         !< # in-plane rotations
-    integer                 :: nsym            = 0         !< symmetry order
-    integer                 :: nnn             = 0         !< # nearest neighbors
-    integer                 :: nbetter         = 0         !< # better orientations identified
-    integer                 :: nrefs_eval      = 0         !< # references evaluated
-    integer                 :: ntrs_eval       = 0         !< # shifts evaluated
-    integer                 :: prev_roind      = 0         !< previous in-plane rotation index
-    integer                 :: prev_state      = 0         !< previous state index
-    integer                 :: prev_ref        = 0         !< previous reference index
-    integer                 :: prev_proj       = 0         !< previous projection direction index
-    real                    :: athres          = 10.       !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
-    real                    :: prev_corr       = 1.        !< previous best correlation
-    real                    :: prev_shvec(2)   = 0.        !< previous origin shift vector
-    real                    :: xy_first(2)     = 0.        !< initial shifts identified by searching the previous best reference
-    real                    :: xy_first_rot(2) = 0.        !< initial shifts identified by searching the previous best reference, rotated
-    logical                 :: l_neigh         = .false.   !< neighbourhood refinement flag
-    logical                 :: l_greedy        = .false.   !< greedy        refinement flag
-    logical                 :: doshift         = .true.    !< 2 indicate whether 2 serch shifts
-    logical                 :: exists          = .false.   !< 2 indicate existence
+    character(len=:), allocatable :: refine                   !< 3D refinement flag
+    type(pftc_shsrch_grad)     :: grad_shsrch_obj             !< origin shift search object, L-BFGS with gradient
+    type(pftc_shsrch_grad)     :: grad_shsrch_obj2            !<
+    type(pftc_shsrch_grad)     :: grad_shsrch_first_obj       !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
+    type(ori)                  :: o_prev                      !< previous orientation
+    type(oris)                 :: opeaks                      !< peak orientations to consider for refinement
+    class(parameters), pointer :: p_ptr        => null()      !< global parameters
+    class(builder),    pointer :: b_ptr        => null()      !< build handle for access to spproj/eulspace/symmetry
+    integer                    :: iptcl           = 0         !< global particle index
+    integer                    :: iptcl_map       = 0         !< map particle index
+    integer                    :: ithr            = 0         !< thread index
+    integer                    :: nrefs           = 0         !< total # references (nstates*nprojs)
+    integer                    :: nrefs_sub       = 0         !< total # references (nstates*nprojs), subspace
+    integer                    :: npeaks          = 0         !< # peak subspace orientations to consider
+    integer                    :: npeaks_inpl     = 0         !< # # multi-neighborhood peaks to refine with L-BFGS
+    integer                    :: nstates         = 0         !< # states
+    integer                    :: nprojs          = 0         !< # projections
+    integer                    :: nprojs_sub      = 0         !< # projections, subspace
+    integer                    :: nrots           = 0         !< # in-plane rotations
+    integer                    :: nsym            = 0         !< symmetry order
+    integer                    :: nnn             = 0         !< # nearest neighbors
+    integer                    :: nbetter         = 0         !< # better orientations identified
+    integer                    :: nrefs_eval      = 0         !< # references evaluated
+    integer                    :: ntrs_eval       = 0         !< # shifts evaluated
+    integer                    :: prev_roind      = 0         !< previous in-plane rotation index
+    integer                    :: prev_state      = 0         !< previous state index
+    integer                    :: prev_ref        = 0         !< previous reference index
+    integer                    :: prev_proj       = 0         !< previous projection direction index
+    real                       :: athres          = 10.       !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
+    real                       :: prev_corr       = 1.        !< previous best correlation
+    real                       :: prev_shvec(2)   = 0.        !< previous origin shift vector
+    real                       :: xy_first(2)     = 0.        !< initial shifts identified by searching the previous best reference
+    real                       :: xy_first_rot(2) = 0.        !< initial shifts identified by searching the previous best reference, rotated
+    logical                    :: l_neigh         = .false.   !< neighbourhood refinement flag
+    logical                    :: l_greedy        = .false.   !< greedy        refinement flag
+    logical                    :: doshift         = .true.    !< 2 indicate whether 2 serch shifts
+    logical                    :: exists          = .false.   !< 2 indicate existence
   contains
     procedure :: new
     procedure :: prep4srch
@@ -67,45 +68,48 @@ end type strategy3D_srch
 
 contains
 
-    subroutine new( self, spec, build )
-        class(strategy3D_srch), intent(inout) :: self
-        class(strategy3D_spec), intent(in)    :: spec
-        class(builder), target, intent(inout) :: build
+    subroutine new( self, params, spec, build )
+        class(strategy3D_srch),    intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(strategy3D_spec),    intent(in)    :: spec
+        class(builder),    target, intent(in)    :: build
         real :: lims(2,2), lims_init(2,2)
+        ! set pointers
+        self%p_ptr         => params
+        self%b_ptr         => build
         ! set constants
         self%iptcl         = spec%iptcl
         self%iptcl_map     = spec%iptcl_map
-        self%nstates       = params_glob%nstates
-        self%nprojs        = params_glob%nspace
-        self%nprojs_sub    = params_glob%nspace_sub
+        self%nstates       = self%p_ptr%nstates
+        self%nprojs        = self%p_ptr%nspace
+        self%nprojs_sub    = self%p_ptr%nspace_sub
         self%nrefs         = self%nprojs     * self%nstates
         self%nrefs_sub     = self%nprojs_sub * self%nstates
-        self%npeaks        = params_glob%npeaks
-        self%npeaks_inpl   = params_glob%npeaks_inpl
-        self%athres        = params_glob%athres
+        self%npeaks        = self%p_ptr%npeaks
+        self%npeaks_inpl   = self%p_ptr%npeaks_inpl
+        self%athres        = self%p_ptr%athres
         self%nbetter       = 0
         self%nrefs_eval    = 0
         self%ntrs_eval     = 0
-        self%b_ptr     => build
         self%nsym          = self%b_ptr%pgrpsyms%get_nsym()
-        self%doshift       = params_glob%l_doshift
-        self%l_neigh       = params_glob%l_neigh
-        self%refine        = trim(params_glob%refine)
-        self%l_greedy      = str_has_substr(params_glob%refine, 'greedy')
-        lims(:,1)          = -params_glob%trs
-        lims(:,2)          =  params_glob%trs
+        self%doshift       = self%p_ptr%l_doshift
+        self%l_neigh       = self%p_ptr%l_neigh
+        self%refine        = trim(self%p_ptr%refine)
+        self%l_greedy      = str_has_substr(self%p_ptr%refine, 'greedy')
+        lims(:,1)          = -self%p_ptr%trs
+        lims(:,2)          =  self%p_ptr%trs
         lims_init(:,1)     = -SHC_INPL_TRSHWDTH
         lims_init(:,2)     =  SHC_INPL_TRSHWDTH
         call self%o_prev%new(is_ptcl=.true.)
         call self%opeaks%new(self%npeaks, is_ptcl=.true.)
         ! create in-plane search objects
         self%nrots = pftc_glob%get_nrots()
-        call self%grad_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-        &maxits=params_glob%maxits_sh, opt_angle=.true.)
-        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh,&
-        &shbarrier=params_glob%shbarrier, opt_angle=.false.)
-        call self%grad_shsrch_first_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier,&
-        &maxits=params_glob%maxits_sh, opt_angle=.true., coarse_init=.true.)
+        call self%grad_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+        &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
+        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=self%p_ptr%maxits_sh,&
+        &shbarrier=self%p_ptr%shbarrier, opt_angle=.false.)
+        call self%grad_shsrch_first_obj%new(lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+        &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
         self%exists = .true.
     end subroutine new
 
@@ -139,7 +143,7 @@ contains
             do iref_sub = 1, self%nrefs_sub
                 ! index for b_ptr%subspace_inds needs to be a projection direction
                 prev_proj_sub = self%b_ptr%subspace_inds(&
-                &tmp_inds(iref_sub) - (self%prev_state - 1) * params_glob%nspace_sub)
+                &tmp_inds(iref_sub) - (self%prev_state - 1) * self%p_ptr%nspace_sub)
                 ! but then we need to turn it back into a reference index in the full search space
                 s3D%srch_order_sub(iref_sub,self%ithr) = (self%prev_state - 1) * self%nprojs + prev_proj_sub
             enddo
@@ -164,7 +168,7 @@ contains
         real    :: cxy(3), rotmat(2,2)
         integer :: irot
         if( .not. self%doshift           ) return
-        if( .not. params_glob%l_sh_first ) return
+        if( .not. self%p_ptr%l_sh_first ) return
         ! BFGS over shifts with in-plane rot exhaustive callback
         irot = self%prev_roind
         call self%grad_shsrch_first_obj%set_indices(self%prev_ref, self%iptcl)
@@ -196,7 +200,7 @@ contains
         if( present(irot_in) ) irot = irot_in
         ! BFGS over shifts with in-plane rot exhaustive callback
         call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
-        if( params_glob%l_sh_first )then
+        if( self%p_ptr%l_sh_first )then
             cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
         else
             cxy = self%grad_shsrch_obj%minimize(irot=irot)
@@ -214,7 +218,7 @@ contains
         refs = maxnloc(s3D%proj_space_corrs(:,self%ithr), self%npeaks_inpl)
         do ipeak = 1, self%npeaks_inpl
             call self%grad_shsrch_obj%set_indices(refs(ipeak), self%iptcl)
-            if( params_glob%l_sh_first )then
+            if( self%p_ptr%l_sh_first )then
                 cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
             else
                 cxy = self%grad_shsrch_obj%minimize(irot=irot)

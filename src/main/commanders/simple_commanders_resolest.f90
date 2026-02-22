@@ -111,11 +111,11 @@ contains
         integer :: nptcls, ithr
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range( build, cline )
+        call set_bp_range( params, build, cline )
         call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, incr_sampled=.false.)
         ! PREPARATION OF PARTICLES
         call pftc%new(params, params%nspace, [1,nptcls], params%kfromto)
-        call prepimgbatch(build, nptcls)
+        call prepimgbatch(params, build, nptcls)
         allocate(tmp_imgs(nthr_glob), tmp_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
         do ithr = 1,nthr_glob
@@ -125,7 +125,7 @@ contains
         !$omp end parallel do
         ! Build polar particle images
         call pftc%allocate_refs_memoization
-        call build_batch_particles(build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build_batch_particles(params, build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Dealing with polar cavgs
         call pftc%polar_cavger_new(.true.)
         call pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, is3D=.true.)

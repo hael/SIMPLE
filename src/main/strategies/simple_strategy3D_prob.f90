@@ -3,7 +3,7 @@ module simple_strategy3D_prob
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_parameters,       only: params_glob
+use simple_parameters,       only: parameters
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
 use simple_oris,             only: oris
@@ -24,12 +24,13 @@ end type strategy3D_prob
 
 contains
 
-    subroutine new_prob( self, spec, build )
+    subroutine new_prob( self, params, spec, build )
         use simple_builder, only: builder
-        class(strategy3D_prob), intent(inout) :: self
-        class(strategy3D_spec), intent(inout) :: spec
-        class(builder), target, intent(inout) :: build
-        call self%s%new(spec, build)
+        class(strategy3D_prob),    intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(strategy3D_spec),    intent(inout) :: spec
+        class(builder),    target, intent(in)    :: build
+        call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_prob
 
@@ -49,11 +50,11 @@ contains
             iptcl_map = self%s%iptcl_map
             istate    =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%istate
             iproj     =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%iproj
-            corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, params_glob%cc_objfun)
+            corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
-            iref      = (istate-1)*params_glob%nspace + iproj
+            iref      = (istate-1)*self%s%p_ptr%nspace + iproj
             if( self%s%doshift )then
-                if( params_glob%l_sh_first .or. params_glob%l_prob_sh )then
+                if( self%s%p_ptr%l_sh_first .or. self%s%p_ptr%l_prob_sh )then
                     if( self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
                         call assign_ori(self%s, iref, irot, corr,&
                         &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&

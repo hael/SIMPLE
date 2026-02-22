@@ -5,7 +5,7 @@ use simple_strategy3D_alloc
 use simple_strategy3D_utils
 use simple_decay_funs,       only: extremal_decay
 use simple_eul_prob_tab2D,   only: neighfrac2nsmpl, power_sampling
-use simple_parameters,       only: params_glob
+use simple_parameters,       only: parameters
 use simple_polarft_calc,     only: pftc_glob
 use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D
@@ -26,12 +26,13 @@ end type strategy3D_snhc_smpl
 
 contains
 
-    subroutine new_snhc_smpl( self, spec, build )
+    subroutine new_snhc_smpl( self, params, spec, build )
         use simple_builder, only: builder
         class(strategy3D_snhc_smpl), intent(inout) :: self
+        class(parameters), target,   intent(in)    :: params
         class(strategy3D_spec),      intent(inout) :: spec
-        class(builder), target,      intent(inout) :: build
-        call self%s%new(spec, build)
+        class(builder),    target,   intent(in)    :: build
+        call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_snhc_smpl
 
@@ -50,14 +51,14 @@ contains
             ! prep
             call self%s%prep4srch
             ! # of references to evaluate (extremal optimization)
-            neigh_frac  = extremal_decay( params_glob%extr_iter, params_glob%extr_lim )
+            neigh_frac  = extremal_decay( self%s%p_ptr%extr_iter, self%s%p_ptr%extr_lim )
             nrefs_bound = max(2,min(self%s%nrefs, nint(real(self%s%nrefs)*(1.-neigh_frac))))
             ! # for out-of-plane sampling
             smpl_nrefs = neighfrac2nsmpl(neigh_frac, self%s%nrefs)
             ! # for in-plane sampling
             smpl_ninpl = neighfrac2nsmpl(neigh_frac, self%s%nrots)
             ! greediness of sampling
-            power = merge(EXTR_POWER, POST_EXTR_POWER, params_glob%extr_iter<=params_glob%extr_lim)
+            power = merge(EXTR_POWER, POST_EXTR_POWER, self%s%p_ptr%extr_iter<=self%s%p_ptr%extr_lim)
             ! initialize
             self%s%nrefs_eval =  0
             ! search

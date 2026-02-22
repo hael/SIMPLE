@@ -3,7 +3,7 @@ module simple_strategy3D_shc_smpl
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_parameters,       only: params_glob
+use simple_parameters,       only: parameters
 use simple_polarft_calc,     only: pftc_glob
 use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D
@@ -24,19 +24,20 @@ end type strategy3D_shc_smpl
 
 contains
 
-    subroutine new_shc_smpl( self, spec, build )
+    subroutine new_shc_smpl( self, params, spec, build )
         use simple_builder, only: builder
         class(strategy3D_shc_smpl), intent(inout) :: self
+        class(parameters), target,  intent(in)    :: params
         class(strategy3D_spec),     intent(inout) :: spec
-        class(builder), target,     intent(inout) :: build
-        call self%s%new(spec, build)
+        class(builder),    target,  intent(in)    :: build
+        call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_shc_smpl
 
     subroutine srch_shc_smpl( self, os, ithr )
         use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy3D_shc_smpl), intent(inout) :: self
-        class(oris),                 intent(inout) :: os
+        class(oris),                intent(inout) :: os
         integer,                    intent(in)    :: ithr
         integer :: iref, isample, loc(1), inds(self%s%nrots)
         real    :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots)
@@ -54,12 +55,12 @@ contains
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr)  ! set the stochastic reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
-                    if( params_glob%l_sh_first )then
+                    if( self%s%p_ptr%l_sh_first )then
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                     endif
-                    loc = angle_sampling(eulprob_dist_switch(inpl_corrs, params_glob%cc_objfun), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), params_glob%prob_athres)
+                    loc = angle_sampling(eulprob_dist_switch(inpl_corrs, self%s%p_ptr%cc_objfun), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                     ! update nbetter to keep track of how many improving solutions we have identified
                     if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1

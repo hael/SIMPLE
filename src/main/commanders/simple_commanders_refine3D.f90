@@ -729,7 +729,7 @@ contains
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
-            call refine3D_exec(build, cline, startit, converged)
+            call refine3D_exec(params, build, cline, startit, converged)
         else
             if( trim(params%continue) == 'yes' ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             ! Input reference
@@ -819,7 +819,7 @@ contains
                     call xprob_align%execute( cline_prob_align )
                 endif
                 ! in strategy3D_matcher:
-                call refine3D_exec(build, cline, params%which_iter, converged)
+                call refine3D_exec(params, build, cline, params%which_iter, converged)
                 ! making sure the input volume is only used once
                 if( params%l_polar ) call cline%delete('vol1')
                 ! convergence
@@ -930,7 +930,7 @@ contains
         ! init
         if( l_shmem )then
             call build%init_params_and_build_strategy3D_tbox(cline_first_sigmas, params )
-            call refine3D_exec(build, cline_first_sigmas, params%which_iter, converged)
+            call refine3D_exec(params, build, cline_first_sigmas, params%which_iter, converged)
             call build%kill_strategy3D_tbox
         else
             call build%init_params_and_build_spproj(cline_first_sigmas, params)
@@ -998,7 +998,7 @@ contains
         integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range( build, cline )
+        call set_bp_range( params, build, cline )
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
@@ -1008,11 +1008,11 @@ contains
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( build, pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls( params, build, pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
                                         
         ! Build polar particle images
-        call build_batch_particles(build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build_batch_particles(params, build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
         call eulprob_obj_part%new(params, build, pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
@@ -1057,7 +1057,7 @@ contains
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
             call sample_ptcls4fillin(build, [1,params%nptcls], .true., nptcls, pinds)
         else
-            call sample_ptcls4update(build, [1,params%nptcls], .true., nptcls, pinds)
+            call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)

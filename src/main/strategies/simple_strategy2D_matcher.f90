@@ -27,30 +27,32 @@ public :: build_batch_particles2D, clean_batch_particles2D
 private
 #include "simple_local_flags.inc"
 
-type(polarft_calc)       :: pftc
-type(euclid_sigma2)      :: eucl_sigma
-type(image), allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
-class(builder), pointer  :: b_ptr => null()
-real(timer_int_kind)     :: rt_init, rt_prep_pftc, rt_align, rt_cavg, rt_projio, rt_tot
-integer(timer_int_kind)  :: t, t_init,  t_prep_pftc,  t_align,  t_cavg,  t_projio,  t_tot
-type(string)             :: benchfname
+type(polarft_calc)         :: pftc
+type(euclid_sigma2)        :: eucl_sigma
+type(image),   allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+class(builder),    pointer :: b_ptr => null()
+class(parameters), pointer :: p_ptr => null()
+real(timer_int_kind)       :: rt_init, rt_prep_pftc, rt_align, rt_cavg, rt_projio, rt_tot
+integer(timer_int_kind)    :: t, t_init,  t_prep_pftc,  t_align,  t_cavg,  t_projio,  t_tot
+type(string)               :: benchfname
 
 contains
 
     !>  \brief  is the prime2D algorithm
-    subroutine cluster2D_exec( build, cline, which_iter, converged )
+    subroutine cluster2D_exec( params, build, cline, which_iter, converged )
         use simple_convergence,    only: convergence
         use simple_eul_prob_tab2D, only: eul_prob_tab2D
         use simple_decay_funs,     only: inv_cos_decay, extremal_decay2D
-        class(builder), target,  intent(inout) :: build
-        class(cmdline),          intent(inout) :: cline
-        integer,                 intent(in)    :: which_iter
-        logical,                 intent(inout) :: converged
-        type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
-        character(len=STDLEN)                  :: refine_flag
-        real,                      allocatable :: states(:), incr_shifts(:,:)
-        integer,                   allocatable :: pinds(:), batches(:,:)
-        type(eul_prob_tab2D),           target :: probtab
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        class(cmdline),            intent(inout) :: cline
+        integer,                   intent(in)    :: which_iter
+        logical,                   intent(inout) :: converged
+        type(strategy2D_per_ptcl), allocatable   :: strategy2Dsrch(:)
+        character(len=STDLEN)                    :: refine_flag
+        real,                      allocatable   :: states(:), incr_shifts(:,:)
+        integer,                   allocatable   :: pinds(:), batches(:,:)
+        type(eul_prob_tab2D),           target   :: probtab
         type(ori)             :: orientation
         type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
@@ -60,9 +62,11 @@ contains
         logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc, l_polar
         logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs, l_clin
 
+        ! assign parameters pointer
+        p_ptr => params
         ! assign builder pointer
         b_ptr => build
-
+        
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -72,29 +76,29 @@ contains
         frac_srch_space = b_ptr%spproj_field%get_avg('frac')
 
         ! SWITCHES
-        refine_flag    = trim(params_glob%refine)
+        refine_flag    = trim(p_ptr%refine)
         l_snhc         = str_has_substr(refine_flag, 'snhc')
         l_greedy       = str_has_substr(refine_flag, 'greedy')
         l_prob         = str_has_substr(refine_flag, 'prob')
-        l_stream       = trim(params_glob%stream).eq.'yes'
-        l_update_frac  = params_glob%l_update_frac  ! refers to particles sampling
+        l_stream       = trim(p_ptr%stream).eq.'yes'
+        l_update_frac  = p_ptr%l_update_frac  ! refers to particles sampling
         l_partial_sums = l_update_frac              ! to apply fractional momentum to class averages
-        if( params_glob%extr_iter == 1 )then
+        if( p_ptr%extr_iter == 1 )then
             l_greedy       = .true.     ! greedy start
             l_snhc         = .false.
             l_partial_sums = .false.
-        else if( params_glob%extr_iter > params_glob%extr_lim )then
+        else if( p_ptr%extr_iter > p_ptr%extr_lim )then
             ! snhc_smpl turns to snhc after extremal phase
             if( trim(refine_flag)=='snhc_smpl' ) refine_flag = 'snhc'
         endif
         if( l_stream )then
             l_update_frac = .false.
-            if( (which_iter>1) .and. (params_glob%update_frac<0.99) )then
-                params_glob%l_update_frac = .true.
+            if( (which_iter>1) .and. (p_ptr%update_frac<0.99) )then
+                p_ptr%l_update_frac = .true.
                 l_partial_sums            = .true.
             else
-                params_glob%update_frac   = 1.
-                params_glob%l_update_frac = .false.
+                p_ptr%update_frac   = 1.
+                p_ptr%l_update_frac = .false.
                 l_partial_sums            = .false.
             endif
         endif
@@ -102,13 +106,13 @@ contains
             ! all search decisions are made beforehand in prob_tab2D
             l_snhc         = .false.
             l_greedy       = .false.
-            l_update_frac  = params_glob%l_update_frac
-            l_partial_sums = l_update_frac .and. (params_glob%extr_iter>1)
+            l_update_frac  = p_ptr%l_update_frac
+            l_partial_sums = l_update_frac .and. (p_ptr%extr_iter>1)
         endif
-        l_polar = trim(params_glob%polar).eq.'yes'
+        l_polar = trim(p_ptr%polar).eq.'yes'
         l_clin  = .false.
-        if( l_polar .and. trim(params_glob%ref_type)=='comlin_hybrid' )then
-            if( l_snhc .or. (params_glob%extr_iter==1 .and.l_greedy))then
+        if( l_polar .and. trim(p_ptr%ref_type)=='comlin_hybrid' )then
+            if( l_snhc .or. (p_ptr%extr_iter==1 .and.l_greedy))then
                 l_clin =.true.
             else
                 THROW_HARD('REF_TYPE=COMLIN_HYBRID only supported with refine=snhc|snhc_smpl')
@@ -119,31 +123,31 @@ contains
         if( allocated(pinds) ) deallocate(pinds)
         if( l_prob )then
             ! generation of random sample and incr of updatecnts delegated to prob_tab2D_distr
-            call b_ptr%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+            call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top],&
             &nptcls2update, pinds )
         else
-            call sample_ptcls4update2D([params_glob%fromp,params_glob%top], l_update_frac, nptcls2update, pinds)
+            call sample_ptcls4update2D([p_ptr%fromp,p_ptr%top], l_update_frac, nptcls2update, pinds)
         endif
 
         ! SNHC LOGICS
         neigh_frac = 0.
-        if( params_glob%extr_iter > params_glob%extr_lim )then
+        if( p_ptr%extr_iter > p_ptr%extr_lim )then
             ! done
         else
             if( l_snhc )then
-                neigh_frac = extremal_decay2D( params_glob%extr_iter, params_glob%extr_lim )
+                neigh_frac = extremal_decay2D( p_ptr%extr_iter, p_ptr%extr_lim )
                 if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-neigh_frac)
             endif
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        if( file_exists(params_glob%frcs) ) call b_ptr%clsfrcs%read(params_glob%frcs)
+        if( file_exists(p_ptr%frcs) ) call b_ptr%clsfrcs%read(p_ptr%frcs)
 
         ! PREP REFERENCES
         if( b_ptr%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
             call b_ptr%spproj_field%partition_eo
-            call b_ptr%spproj%write_segment_inside(params_glob%oritype)
+            call b_ptr%spproj%write_segment_inside(p_ptr%oritype)
         endif
         if( l_polar .and. which_iter>1 )then
             ! references are read in prep_polar_pftc4align2D below
@@ -154,7 +158,7 @@ contains
                 l_alloc_read_cavgs = which_iter==1
             endif
             if( L_NEW_CAVGER )then
-                call cavger_new_new(params_glob, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
+                call cavger_new_new(p_ptr, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
                 if( l_alloc_read_cavgs )then
                     if( .not. cline%defined('refs') )then
                         THROW_HARD('need refs to be part of command line for cluster2D execution')
@@ -162,7 +166,7 @@ contains
                     call cavger_new_read_all
                 endif
             else
-                call cavger_new(params_glob, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
+                call cavger_new(p_ptr, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
                 if( l_alloc_read_cavgs )then
                     if( .not. cline%defined('refs') )then
                         THROW_HARD('need refs to be part of command line for cluster2D execution')
@@ -173,10 +177,10 @@ contains
         endif
 
         ! SET FOURIER INDEX RANGE
-        call set_bp_range2D(b_ptr, cline, which_iter, frac_srch_space)
+        call set_bp_range2D(p_ptr, b_ptr, cline, which_iter, frac_srch_space)
 
         ! PREP BATCH ALIGNEMENT
-        batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
+        batchsz_max = min(nptcls2update,p_ptr%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
@@ -203,7 +207,7 @@ contains
         endif
 
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftc initialization
-        call prep_strategy2D_glob( b_ptr%spproj, neigh_frac )
+        call prep_strategy2D_glob( p_ptr, b_ptr%spproj, neigh_frac )
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 
         ! SETUP WEIGHTS
@@ -215,14 +219,14 @@ contains
 
         ! READ THE ASSIGNMENT FOR PROB MODE
         if( l_prob )then
-            call probtab%new(params_glob, b_ptr, pinds)
+            call probtab%new(p_ptr, b_ptr, pinds)
             call probtab%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
             s2D%probtab => probtab ! table accessible to strategies
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         rt_align         = 0.
-        l_ctf            = b_ptr%spproj%get_ctfflag('ptcl2D',iptcl=params_glob%fromp).ne.'no'
+        l_ctf            = b_ptr%spproj%get_ctfflag('ptcl2D',iptcl=p_ptr%fromp).ne.'no'
         l_np_cls_defined = cline%defined('nptcls_per_cls')
         write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
 
@@ -237,7 +241,7 @@ contains
             if( L_BENCH_GLOB ) rt_prep_pftc = rt_prep_pftc + toc(t_prep_pftc)
             ! batch strategy2D objects
             if( L_BENCH_GLOB ) t_init = tic()
-            call prep_strategy2D_batch( b_ptr%spproj, pftc, which_iter, batchsz, pinds(batch_start:batch_end) )
+            call prep_strategy2D_batch( p_ptr, b_ptr%spproj, pftc, which_iter, batchsz, pinds(batch_start:batch_end) )
             if( L_BENCH_GLOB ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -278,7 +282,7 @@ contains
                             endif
                         else if( l_greedy .or. (updatecnt==1 .or. (.not.b_ptr%spproj_field%has_been_searched(iptcl))) )then
                             ! first iteration | refine=*greedy*
-                            if( trim(params_glob%tseries).eq.'yes' )then
+                            if( trim(p_ptr%tseries).eq.'yes' )then
                                 if( l_np_cls_defined )then
                                     allocate(strategy2D_tseries     :: strategy2Dsrch(iptcl_batch)%ptr)
                                 else
@@ -308,12 +312,12 @@ contains
                 strategy2Dspec%iptcl_batch = iptcl_batch
                 strategy2Dspec%iptcl_map   = iptcl_map
                 strategy2Dspec%stoch_bound = neigh_frac
-                call strategy2Dsrch(iptcl_batch)%ptr%new(strategy2Dspec)
+                call strategy2Dsrch(iptcl_batch)%ptr%new(p_ptr, strategy2Dspec)
                 call strategy2Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field)
                 ! keep track of incremental shift
                 incr_shifts(:,iptcl_batch) = strategy2Dsrch(iptcl_batch)%ptr%s%best_shvec
                 ! calculate sigma2 for ML-based refinement
-                if ( params_glob%l_needs_sigma ) then
+                if ( p_ptr%l_needs_sigma ) then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch)) ! incremental shift
                     call eucl_sigma%calc_sigma2(pftc, iptcl, orientation, 'class')
@@ -335,14 +339,14 @@ contains
             ! done before, when assigning class from table
         else
             if( l_stream )then
-                if( params_glob%l_update_frac .and. params_glob%maxpop>0 )then
+                if( p_ptr%l_update_frac .and. p_ptr%maxpop>0 )then
                     call b_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
-                        &params_glob%maxpop, params_glob%nparts)
+                        &p_ptr%maxpop, p_ptr%nparts)
                 endif
             else
-                if( params_glob%maxpop>0 )then
+                if( p_ptr%maxpop>0 )then
                     call b_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
-                        &params_glob%maxpop, params_glob%nparts)
+                        &p_ptr%maxpop, p_ptr%nparts)
                 endif
             endif
         endif
@@ -358,19 +362,19 @@ contains
         deallocate(strategy2Dsrch,pinds,batches)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
-        if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
+        if( p_ptr%l_needs_sigma ) call eucl_sigma%write_sigma2
 
         ! OUTPUT ORIENTATIONS
         if( L_BENCH_GLOB ) t_projio = tic()
-        call binwrite_oritab(params_glob%outfile, b_ptr%spproj, b_ptr%spproj_field, &
-            &[params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
-        params_glob%oritab = params_glob%outfile
+        call binwrite_oritab(p_ptr%outfile, b_ptr%spproj, b_ptr%spproj_field, &
+            &[p_ptr%fromp,p_ptr%top], isegment=PTCL2D_SEG)
+        p_ptr%oritab = p_ptr%outfile
         if( L_BENCH_GLOB ) rt_projio = toc(t_projio)
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH_GLOB ) t_cavg = tic()
         if( l_distr_exec_glob )then
-            if( trim(params_glob%restore_cavgs).eq.'yes' )then
+            if( trim(p_ptr%restore_cavgs).eq.'yes' )then
                 if( l_polar )then
                     call pftc%polar_cavger_readwrite_partial_sums('write')
                 else
@@ -393,16 +397,16 @@ contains
             call pftc%polar_cavger_kill
         else
             ! check convergence
-            converged = conv%check_conv2D(params_glob, cline, b_ptr%spproj_field, b_ptr%spproj_field%get_n('class'), params_glob%msk)
-            converged = converged .and. (params_glob%which_iter >= params_glob%minits)
-            converged = converged .or.  (params_glob%which_iter >= params_glob%maxits)
+            converged = conv%check_conv2D(p_ptr, cline, b_ptr%spproj_field, b_ptr%spproj_field%get_n('class'), p_ptr%msk)
+            converged = converged .and. (p_ptr%which_iter >= p_ptr%minits)
+            converged = converged .or.  (p_ptr%which_iter >= p_ptr%maxits)
             ! Update progress file if not stream
             if(.not. l_stream) call progressfile_update(conv%get('progress'))
-            if( trim(params_glob%restore_cavgs).eq.'yes' )then
+            if( trim(p_ptr%restore_cavgs).eq.'yes' )then
                 if( cline%defined('which_iter') )then
-                    params_glob%refs      = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//MRC_EXT
-                    params_glob%refs_even = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//'_even'//MRC_EXT
-                    params_glob%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(params_glob%which_iter,3)//'_odd'//MRC_EXT
+                    p_ptr%refs      = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//MRC_EXT
+                    p_ptr%refs_even = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//'_even'//MRC_EXT
+                    p_ptr%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//'_odd'//MRC_EXT
                 else
                     THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                 endif
@@ -414,7 +418,7 @@ contains
                     endif
                     ! polar restoration
                     if( l_clin )then
-                        clinw = min(1.0, max(0.0, 1.0-max(0.0, real(params_glob%extr_iter-4)/real(params_glob%extr_lim-3))))
+                        clinw = min(1.0, max(0.0, 1.0-max(0.0, real(p_ptr%extr_iter-4)/real(p_ptr%extr_lim-3))))
                         call pftc%polar_cavger_merge_eos_and_norm(b_ptr%eulspace, b_ptr%pgrpsyms, clinw)
                     else
                         call pftc%polar_cavger_merge_eos_and_norm2D
@@ -428,13 +432,13 @@ contains
                     if( L_NEW_CAVGER )then
                         call cavger_new_transf_oridat( b_ptr%spproj )
                         call cavger_new_assemble_sums( l_partial_sums )
-                        call cavger_new_restore_cavgs( params_glob%frcs )
+                        call cavger_new_restore_cavgs( p_ptr%frcs )
                         ! classdoc gen needs to be after calc of FRCs
                         call cavger_new_gen2Dclassdoc( b_ptr%spproj )
                         ! write references
-                        call cavger_new_write_merged( params_glob%refs )
+                        call cavger_new_write_merged( p_ptr%refs )
                         if( l_stream )then
-                            call cavger_new_write_eo( params_glob%refs_even, params_glob%refs_odd )
+                            call cavger_new_write_eo( p_ptr%refs_even, p_ptr%refs_odd )
                             call cavger_new_readwrite_partial_sums( 'write' )
                         endif
                         call cavger_new_kill(dealloccavgs=.false.)
@@ -442,27 +446,27 @@ contains
                         call cavger_transf_oridat( b_ptr%spproj )
                         call cavger_assemble_sums( l_partial_sums )
                         call cavger_merge_eos_and_norm
-                        call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs, params_glob%which_iter)
+                        call cavger_calc_and_write_frcs_and_eoavg(p_ptr%frcs, p_ptr%which_iter)
                         ! classdoc gen needs to be after calc of FRCs
                         call cavger_gen2Dclassdoc(b_ptr%spproj)
                         ! write references
-                        call cavger_write(params_glob%refs,'merged')
+                        call cavger_write(p_ptr%refs,'merged')
                         if( l_stream )then
-                            call cavger_write(params_glob%refs_even,'even')
-                            call cavger_write(params_glob%refs_odd, 'odd')
+                            call cavger_write(p_ptr%refs_even,'even')
+                            call cavger_write(p_ptr%refs_odd, 'odd')
                             call cavger_readwrite_partial_sums('write')
                         endif
                         call cavger_kill(dealloccavgs=.false.)
                     endif
                 endif
                 ! update command line
-                call cline%set('refs', params_glob%refs)
+                call cline%set('refs', p_ptr%refs)
                 ! write project: cls2D and state congruent cls3D
-                call b_ptr%spproj%os_cls3D%new(params_glob%ncls, is_ptcl=.false.)
+                call b_ptr%spproj%os_cls3D%new(p_ptr%ncls, is_ptcl=.false.)
                 states = b_ptr%spproj%os_cls2D%get_all('state')
                 call b_ptr%spproj%os_cls3D%set_all('state',states)
-                call b_ptr%spproj%write_segment_inside('cls2D', params_glob%projfile)
-                call b_ptr%spproj%write_segment_inside('cls3D', params_glob%projfile)
+                call b_ptr%spproj%write_segment_inside('cls2D', p_ptr%projfile)
+                call b_ptr%spproj%write_segment_inside('cls3D', p_ptr%projfile)
                 deallocate(states)
             endif
         endif
@@ -472,7 +476,7 @@ contains
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished(string('simple_strategy2D_matcher :: cluster2D_exec'))
         if( L_BENCH_GLOB )then
-            if( params_glob%part == 1 )then
+            if( p_ptr%part == 1 )then
                 rt_tot  = toc(t_tot)
                 benchfname = 'CLUSTER2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
@@ -504,7 +508,7 @@ contains
         integer, allocatable, intent(inout) :: pinds(:)
         if( l_updatefrac )then
             ! fractional sampling
-            call b_ptr%spproj_field%sample4update_rnd(pfromto, params_glob%update_frac,&
+            call b_ptr%spproj_field%sample4update_rnd(pfromto, p_ptr%update_frac,&
                 &nptcls, pinds, .true.)
         else
             ! we sample all state > 0
@@ -516,14 +520,14 @@ contains
     subroutine prep_batch_particles2D( batchsz_max )
         integer, intent(in) :: batchsz_max
         integer :: ithr
-        call prepimgbatch(b_ptr, batchsz_max)
-        allocate(ptcl_match_imgs(params_glob%nthr), ptcl_match_imgs_pad(params_glob%nthr))
+        call prepimgbatch(p_ptr, b_ptr, batchsz_max)
+        allocate(ptcl_match_imgs(p_ptr%nthr), ptcl_match_imgs_pad(p_ptr%nthr))
         !$omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
-        do ithr = 1,params_glob%nthr
-            call ptcl_match_imgs(ithr)%new(    [params_glob%box_crop,   params_glob%box_crop,   1],&
-            &params_glob%smpd_crop, wthreads=.false.)
-            call ptcl_match_imgs_pad(ithr)%new([params_glob%box_croppd, params_glob%box_croppd, 1],&
-            &params_glob%smpd_crop, wthreads=.false.)
+        do ithr = 1,p_ptr%nthr
+            call ptcl_match_imgs(ithr)%new(    [p_ptr%box_crop,   p_ptr%box_crop,   1],&
+            &p_ptr%smpd_crop, wthreads=.false.)
+            call ptcl_match_imgs_pad(ithr)%new([p_ptr%box_croppd, p_ptr%box_croppd, 1],&
+            &p_ptr%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
     end subroutine prep_batch_particles2D
@@ -545,7 +549,7 @@ contains
         ! real(timer_int_kind)    :: rt_prep1, rt_prep2, rt_prep, rt_polarize, rt_sum, rt_loop
         ! integer(timer_int_kind) :: t_polarize, t_loop
         integer     :: iptcl_batch, iptcl, ithr
-        call discrete_read_imgbatch(b_ptr, nptcls_here, pinds, [1,nptcls_here])
+        call discrete_read_imgbatch(p_ptr, b_ptr, nptcls_here, pinds, [1,nptcls_here])
         ! reassign particles indices & associated variables
         call pftc%reallocate_ptcls(nptcls_here, pinds)
         ! memoization for polarize_oversamp
@@ -565,7 +569,7 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            call prepimg4align(b_ptr, iptcl, b_ptr%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
+                call prepimg4align(p_ptr, b_ptr, iptcl, b_ptr%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             ! t_polarize = tic()
             ! call prepimg4align_bench(iptcl, b_ptr%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr),&
             ! &rt_prep1, rt_prep2, rt_prep)
@@ -616,25 +620,25 @@ contains
         real         :: xyz(3)
         integer      :: icls, pop, pop_even, pop_odd, centype, ithr
         logical      :: do_center, has_been_searched, input_center
-        has_been_searched = .not.b_ptr%spproj%is_virgin_field(params_glob%oritype)
-        input_center      = trim(params_glob%center) .eq. 'yes'
+        has_been_searched = .not.b_ptr%spproj%is_virgin_field(p_ptr%oritype)
+        input_center      = trim(p_ptr%center) .eq. 'yes'
         ! create the polarft_calc object
-        call pftc%new(params_glob, params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
+        call pftc%new(p_ptr, p_ptr%ncls, [1,batchsz_max], p_ptr%kfromto)
         ! objective functions & sigma
-        if( params_glob%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(params_glob, fname, params_glob%box)
+        if( p_ptr%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
+            call eucl_sigma%new(p_ptr, fname, p_ptr%box)
             if( l_stream )then
                 call eucl_sigma%read_groups(b_ptr%spproj_field)
                 call eucl_sigma%allocate_ptcls
             else
                 call eucl_sigma%read_part(  b_ptr%spproj_field)
-                if( params_glob%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(b_ptr%spproj_field)
+                if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(b_ptr%spproj_field)
             endif
         endif
         ! prepare the polarizer images
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pftc%get_pdim())
-        allocate(match_imgs(params_glob%ncls))
+        allocate(match_imgs(p_ptr%ncls))
         if( L_NEW_CAVGER )then
             cavgs_m => cavgs_merged_new
             cavgs_e => cavgs_even_new
@@ -648,12 +652,12 @@ contains
         ! mask memoization
         call cavgs_m(1)%memoize_mask_coords
         ! mode of cavg centering
-        centype = get_centype(params_glob%center_type)
+        centype = get_centype(p_ptr%center_type)
         ! PREPARATION OF REFERENCES IN pftc
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,ithr,pop,pop_even,pop_odd,do_center,xyz,pft)&
         !$omp schedule(static) proc_bind(close)
-        do icls=1,params_glob%ncls
+        do icls=1,p_ptr%ncls
             pop      = 1
             pop_even = 0
             pop_odd  = 0
@@ -664,24 +668,24 @@ contains
             endif
             ithr = omp_get_thread_num() + 1
             if( pop > 0 )then
-                call match_imgs(icls)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
+                call match_imgs(icls)%new([p_ptr%box_crop, p_ptr%box_crop, 1], p_ptr%smpd_crop, wthreads=.false.)
                 ! Calculate center
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
-                    &.and. .not.params_glob%l_update_frac)
+                    &.and. .not.p_ptr%l_update_frac)
                 do_center = input_center .and. do_center
                 if( do_center )then
                     call match_imgs(icls)%copy_fast(cavgs_m(icls))
-                    call calc_2Dref_offset(b_ptr, match_imgs(icls), icls, centype, xyz)
+                    call calc_2Dref_offset(p_ptr, b_ptr, match_imgs(icls), icls, centype, xyz)
                 else
                     xyz = 0.0
                 endif
                 ! Prepare the references
                 ! allocte pft
                 pft = pftc%allocate_pft()
-                if( params_glob%l_lpset )then
+                if( p_ptr%l_lpset )then
                     ! merged class average in both even and odd positions
                     call match_imgs(icls)%copy_fast(cavgs_m(icls))
-                    call prep2Dref(b_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
+                    call prep2Dref(p_ptr, b_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                     call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=b_ptr%l_resmsk)
                     call pftc%set_ref_pft(icls, pft, iseven=.true.)
                     call pftc%cp_even2odd_ref(icls)
@@ -689,17 +693,17 @@ contains
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! even & odd
                         call match_imgs(icls)%copy_fast(cavgs_e(icls))
-                        call prep2Dref(b_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
+                        call prep2Dref(p_ptr, b_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=b_ptr%l_resmsk)
                         call pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call match_imgs(icls)%copy_fast(cavgs_o(icls))
-                        call prep2Dref(b_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
+                        call prep2Dref(p_ptr, b_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=b_ptr%l_resmsk)
                         call pftc%set_ref_pft(icls, pft, iseven=.false.)
                     else
                         ! merged class average in both even and odd positions
                         call match_imgs(icls)%copy_fast(cavgs_m(icls))
-                        call prep2Dref(b_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
+                        call prep2Dref(p_ptr, b_ptr, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=b_ptr%l_resmsk)
                         call pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call pftc%cp_even2odd_ref(icls)
@@ -729,43 +733,43 @@ contains
         integer      :: icls, pop, pop_even, pop_odd, centype
         logical      :: has_been_searched, do_center, l_center, l_gaufilt
         ! pftc instantiation
-        call pftc%new(params_glob, params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
+        call pftc%new(p_ptr, p_ptr%ncls, [1,batchsz_max], p_ptr%kfromto)
         ! Sigma2
-        if( params_glob%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(params_glob, fname, params_glob%box)
+        if( p_ptr%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
+            call eucl_sigma%new(p_ptr, fname, p_ptr%box)
             if( l_stream )then
                 call eucl_sigma%read_groups(b_ptr%spproj_field)
                 call eucl_sigma%allocate_ptcls
             else
                 call eucl_sigma%read_part(  b_ptr%spproj_field)
-                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
                     call eucl_sigma%read_groups(b_ptr%spproj_field)
                 endif
             endif
         endif
         ! Read polar references
-        call pftc%polar_cavger_new(trim(params_glob%ref_type)=='comlin_hybrid')
+        call pftc%polar_cavger_new(trim(p_ptr%ref_type)=='comlin_hybrid')
         call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY)//BIN_EXT)
-        has_been_searched = .not.b_ptr%spproj%is_virgin_field(params_glob%oritype)
+        has_been_searched = .not.b_ptr%spproj%is_virgin_field(p_ptr%oritype)
         ! Centering-related objects
-        do_center = (params_glob%center .eq. 'yes') .and. has_been_searched&
-             &.and. (which_iter > 2) .and. (.not.params_glob%l_update_frac)
+        do_center = (p_ptr%center .eq. 'yes') .and. has_been_searched&
+             &.and. (which_iter > 2) .and. (.not.p_ptr%l_update_frac)
         if( do_center )then
-            allocate(tmp_imgs(params_glob%ncls))
+            allocate(tmp_imgs(p_ptr%ncls))
             call pftc%polar_cavger_refs2cartesian(tmp_imgs, 'merged')
             call tmp_imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
             ! mask memoization
             call tmp_imgs(1)%memoize_mask_coords
         endif
         ! Filtering
-        l_gaufilt = trim(params_glob%gauref)=='yes'
+        l_gaufilt = trim(p_ptr%gauref)=='yes'
         ! Mode of cavg centering
-        centype = get_centype(params_glob%center_type)
+        centype = get_centype(p_ptr%center_type)
         ! PREPARATION OF REFERENCES IN pftc
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,xyz,l_center)&
         !$omp schedule(static) proc_bind(close)
-        do icls=1,params_glob%ncls
+        do icls=1,p_ptr%ncls
             ! populations
             pop      = 1
             pop_even = 0
@@ -779,11 +783,11 @@ contains
                 ! centering
                 l_center = do_center .and. (pop > MINCLSPOPLIM)
                 xyz      = 0.
-                if( l_center ) call calc_2Dref_offset(b_ptr, tmp_imgs(icls), icls, centype, xyz)
+                if( l_center ) call calc_2Dref_offset(p_ptr, b_ptr, tmp_imgs(icls), icls, centype, xyz)
                 ! Prep for alignment
                 call pftc%polar_prep2Dref(b_ptr%clsfrcs, icls, l_gaufilt)
                 ! transfer to pftc
-                if( params_glob%l_lpset )then
+                if( p_ptr%l_lpset )then
                     ! merged class average in both even and odd positions
                     call pftc%polar_cavger_set_ref_pft(icls, 'merged')
                     call pftc%cp_even2odd_ref(icls)

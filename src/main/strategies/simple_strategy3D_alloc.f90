@@ -35,16 +35,17 @@ logical                :: srch_order_allocated = .false.
 
 contains
 
-    subroutine prep_strategy3D( build )
+    subroutine prep_strategy3D( params, build )
         use simple_eul_prob_tab, only: calc_athres
-        class(builder), intent(inout) :: build
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
         integer :: istate, iproj, ithr, cnt, nrefs, nrefs_sub
         real    :: areal
         ! clean all class arrays & types
         call clean_strategy3D()
         ! parameters
-        nrefs     = params_glob%nspace     * params_glob%nstates
-        nrefs_sub = params_glob%nspace_sub * params_glob%nstates
+        nrefs     = params%nspace     * params%nstates
+        nrefs_sub = params%nspace_sub * params%nstates
         ! shared-memory arrays
         allocate(master_proj_space_euls(3,nrefs), s3D%proj_space_euls(3,nrefs,nthr_glob),&
             &s3D%proj_space_shift(2,nrefs,nthr_glob), s3D%proj_space_state(nrefs),&
@@ -52,19 +53,19 @@ contains
             &s3D%proj_space_inplinds(nrefs,nthr_glob),&
             &s3D%proj_space_proj(nrefs),s3D%proj_space_w(nrefs,nthr_glob))
         ! states existence
-        if( .not.build%spproj%is_virgin_field(params_glob%oritype) )then
-            if( str_has_substr(params_glob%refine,'greedy') )then
-                allocate(s3D%state_exists(params_glob%nstates), source=.true.)
+        if( .not.build%spproj%is_virgin_field(params%oritype) )then
+            if( str_has_substr(params%refine,'greedy') )then
+                allocate(s3D%state_exists(params%nstates), source=.true.)
             else
-                s3D%state_exists = build%spproj_field%states_exist(params_glob%nstates)
+                s3D%state_exists = build%spproj_field%states_exist(params%nstates)
             endif
         else
-            allocate(s3D%state_exists(params_glob%nstates), source=.true.)
+            allocate(s3D%state_exists(params%nstates), source=.true.)
         endif
         ! reference projection directions & state
         cnt = 0
-        do istate=1,params_glob%nstates
-            do iproj=1,params_glob%nspace
+        do istate=1,params%nstates
+            do iproj=1,params%nspace
                 cnt = cnt + 1
                 s3D%proj_space_state(cnt)     = istate
                 s3D%proj_space_proj(cnt)      = iproj
@@ -75,7 +76,7 @@ contains
         s3D%proj_space_corrs = -HUGE(areal)
         s3D%proj_space_euls  = 0.
         ! search orders allocation
-        select case( trim(params_glob%refine) )
+        select case( trim(params%refine) )
             case( 'cluster','clustersym','clustersoft')
                 srch_order_allocated = .false.
             case DEFAULT
@@ -94,10 +95,10 @@ contains
         ! calculate peak thresholds for probabilistic searches
         if( allocated(s3D%smpl_refs_athres) ) deallocate(s3D%smpl_refs_athres)
         if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
-        allocate(s3D%smpl_refs_athres(params_glob%nstates), s3D%smpl_inpl_athres(params_glob%nstates))
-        do istate = 1, params_glob%nstates
-            s3D%smpl_refs_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist',      prob_athres=params_glob%prob_athres, state=istate)
-            s3D%smpl_inpl_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist_inpl', prob_athres=params_glob%prob_athres, state=istate)
+        allocate(s3D%smpl_refs_athres(params%nstates), s3D%smpl_inpl_athres(params%nstates))
+        do istate = 1, params%nstates
+            s3D%smpl_refs_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist',      prob_athres=params%prob_athres, state=istate)
+            s3D%smpl_inpl_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist_inpl', prob_athres=params%prob_athres, state=istate)
         enddo
     end subroutine prep_strategy3D
 
