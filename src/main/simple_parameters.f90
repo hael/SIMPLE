@@ -544,6 +544,10 @@ type :: parameters
     procedure, private :: set_img_format
 end type parameters
 
+interface parameters
+    module procedure constructor
+end interface parameters
+
 class(parameters), pointer :: params_glob => null()
 
 contains
@@ -628,6 +632,12 @@ contains
         self%xmldir=''
         self%xmlloc=''
     end subroutine init_strings
+
+    function constructor(cline) result(self)
+        class(cmdline), intent(inout) :: cline
+        type(parameters) :: self
+        call self%new(cline)
+    end function constructor
 
     subroutine new( self, cline, silent )
         use simple_sp_project, only: sp_project

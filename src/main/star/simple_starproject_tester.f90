@@ -520,10 +520,14 @@ contains
     !  PART 3: Parallel batching and parallel starfile export tests
     !-----------------------------------------------------------------------
     subroutine test_parallel_particle_export()
+        use simple_cmdline,    only: cmdline
+        use simple_parameters, only: parameters
         use omp_lib
         type(starproject_stream) :: stream
         type(sp_project)         :: proj
         type(string)             :: outdir, fname
+        type(cmdline)            :: cline
+        type(parameters)         :: params
         integer :: nptcls, i
         logical :: exists
         write(*,'(A)') "test_parallel_particle_export"
@@ -550,8 +554,10 @@ contains
             call proj%os_ptcl2D%set(i, "dfy",  2.0)
             call proj%os_ptcl2D%set(i, "angast", 15.0)
         end do
+        ! make dummy parameters (not used in export, but required by interface)
+        params = parameters(cline)
         ! Run stream_export_particles_2D in full OpenMP mode.
-        call stream%stream_export_particles_2D(proj, outdir, optics_set=.false., verbose=.true.)
+        call stream%stream_export_particles_2D(params, proj, outdir, optics_set=.false., verbose=.true.)
         ! Check existence
         fname = outdir // "/particles2D.star"
         inquire(file=fname%to_char(), exist=exists)

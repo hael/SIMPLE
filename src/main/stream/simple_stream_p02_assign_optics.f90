@@ -112,8 +112,8 @@ contains
                     call spproj_part%kill()
                 enddo
                 write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * STREAM_NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
-                call starproj_stream%stream_export_optics(spproj, params%outdir)
-                call starproj_stream%stream_export_micrographs(spproj, params%outdir, optics_set=.true.)
+                call starproj_stream%stream_export_optics(params_glob, spproj, params%outdir)
+                call starproj_stream%stream_export_micrographs(params_glob, spproj, params%outdir, optics_set=.true.)
                 ! http stats
                 call http_communicator%update_json("micrographs_assigned",     spproj%os_mic%get_noris(),    found)
                 call http_communicator%update_json("optics_groups_assigned",   spproj%os_optics%get_noris(), found)
@@ -150,7 +150,7 @@ contains
             endif
             call update_user_params(cline)
             if(params%updated .eq. 'yes') then
-                call starproj_stream%stream_export_optics(spproj, params%outdir)
+                call starproj_stream%stream_export_optics(params_glob, spproj, params%outdir)
                 params%updated = 'no'
             end if
             ! http stats send
