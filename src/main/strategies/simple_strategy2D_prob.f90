@@ -2,9 +2,10 @@
 module simple_strategy2D_prob
 use simple_core_module_api
 use simple_strategy2D_alloc
-use simple_parameters,       only: params_glob
+use simple_parameters,       only: parameters
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
+use simple_oris,             only: oris
 implicit none
 
 public :: strategy2D_prob
@@ -21,10 +22,11 @@ end type strategy2D_prob
 
 contains
 
-    subroutine new_prob( self, spec )
-        class(strategy2D_prob), intent(inout) :: self
-        class(strategy2D_spec),   intent(inout) :: spec
-        call self%s%new( spec )
+    subroutine new_prob( self, params, spec )
+        class(strategy2D_prob),  intent(inout) :: self
+        class(parameters),       intent(in)    :: params
+        class(strategy2D_spec),  intent(inout) :: spec
+        call self%s%new(params, spec)
         self%spec = spec
     end subroutine new_prob
 
@@ -38,7 +40,7 @@ contains
             call self%s%prep4srch(os)
             ! Assignment
             self%s%best_class = s2D%probtab%assgn_map(self%s%iptcl_map)%cls
-            self%s%best_corr  = eulprob_corr_switch(s2D%probtab%assgn_map(self%s%iptcl_map)%dist, params_glob%cc_objfun)
+            self%s%best_corr  = eulprob_corr_switch(s2D%probtab%assgn_map(self%s%iptcl_map)%dist, self%s%p_ptr%cc_objfun)
             self%s%best_rot   = s2D%probtab%assgn_map(self%s%iptcl_map)%inpl
             self%s%best_shvec = 0.
             if( s2D%do_inplsrch(self%s%iptcl_batch) )then

@@ -2,8 +2,10 @@
 module simple_strategy2D_eval
 use simple_core_module_api
 use simple_strategy2D_alloc
+use simple_parameters,      only: parameters
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
+use simple_oris,             only: oris
 implicit none
 
 public :: strategy2D_eval
@@ -18,10 +20,11 @@ end type strategy2D_eval
 
 contains
 
-    subroutine new_eval( self, spec )
+    subroutine new_eval( self, params, spec )
         class(strategy2D_eval), intent(inout) :: self
+        class(parameters),      intent(in)    :: params
         class(strategy2D_spec), intent(inout) :: spec
-        call self%s%new( spec )
+        call self%s%new( params, spec )
         self%spec = spec
     end subroutine new_eval
 

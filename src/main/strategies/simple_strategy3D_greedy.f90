@@ -3,7 +3,7 @@ module simple_strategy3D_greedy
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_parameters,       only: params_glob
+use simple_parameters,       only: parameters
 use simple_polarft_calc,     only: pftc_glob
 use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D
@@ -24,12 +24,13 @@ end type strategy3D_greedy
 
 contains
 
-    subroutine new_greedy( self, spec, build )
+    subroutine new_greedy( self, params, spec, build )
         use simple_builder, only: builder
-        class(strategy3D_greedy), intent(inout) :: self
-        class(strategy3D_spec),   intent(inout) :: spec
-        class(builder), target,   intent(inout) :: build
-        call self%s%new(spec, build)
+        class(strategy3D_greedy),  intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(strategy3D_spec),    intent(inout) :: spec
+        class(builder),    target, intent(in)    :: build
+        call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_greedy
 
@@ -51,7 +52,7 @@ contains
                 iref = s3D%srch_order(isample,self%s%ithr) ! set the reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
-                    if( params_glob%l_sh_first )then
+                    if( self%s%p_ptr%l_sh_first )then
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
                         call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)

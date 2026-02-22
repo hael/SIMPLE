@@ -1,7 +1,9 @@
 !@descr: abstract base class defining the common strategy3D interface
 module simple_strategy3D
-use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
+use simple_builder,         only: builder
 use simple_oris,            only: oris
+use simple_parameters,      only: parameters
+use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
 implicit none
 
 public :: strategy3D
@@ -19,13 +21,15 @@ end type strategy3D
 
 abstract interface
 
-    subroutine generic_new( self, spec, build )
-        use simple_strategy3D_srch, only: strategy3D_spec
-        use simple_builder,         only: builder
+    subroutine generic_new( self, params, spec, build )
         import :: strategy3D
-        class(strategy3D),      intent(inout) :: self
-        class(strategy3D_spec), intent(inout) :: spec
-        class(builder), target, intent(inout) :: build
+        import :: parameters
+        import :: strategy3D_spec
+        import :: builder
+        class(strategy3D),         intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(strategy3D_spec),    intent(inout) :: spec
+        class(builder),    target, intent(in)    :: build
     end subroutine generic_new
 
     subroutine generic_srch( self, os, ithr )

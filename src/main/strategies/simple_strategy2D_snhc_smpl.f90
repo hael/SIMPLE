@@ -21,10 +21,11 @@ end type strategy2D_snhc_smpl
 
 contains
 
-    subroutine new_snhc_smpl( self, spec )
+    subroutine new_snhc_smpl( self, params, spec )
         class(strategy2D_snhc_smpl), intent(inout) :: self
-        class(strategy2D_spec), intent(inout) :: spec
-        call self%s%new( spec )
+        class(parameters),           intent(in)    :: params
+        class(strategy2D_spec),      intent(inout) :: spec
+        call self%s%new(params, spec)
         self%spec = spec
     end subroutine new_snhc_smpl
 

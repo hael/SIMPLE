@@ -2,7 +2,6 @@
 module simple_strategy3D_utils
 use simple_core_module_api
 use simple_strategy3D_alloc
-use simple_parameters,      only: params_glob
 use simple_polarft_calc,    only: pftc_glob
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
@@ -73,7 +72,7 @@ contains
         ! CONVERGENCE STATS
         ! projection direction overlap
         mi_proj  = 0.
-        if( euldist <= params_glob%angthres_mi_proj ) mi_proj  = 1.
+        if( euldist <= s%p_ptr%angthres_mi_proj ) mi_proj  = 1.
         call s%b_ptr%spproj_field%set(s%iptcl, 'mi_proj', mi_proj)
         ! fraction of search space scanned
         neff_states = 1
@@ -102,7 +101,7 @@ contains
         call s%b_ptr%spproj_field%set(s%iptcl, 'frac', frac)
         ! weight
         pw = s3D%proj_space_w(ref, s%ithr)
-        if( (trim(params_glob%ptclw) .eq. 'yes') .and. present(w) ) pw = w
+        if( (trim(s%p_ptr%ptclw) .eq. 'yes') .and. present(w) ) pw = w
         call s%b_ptr%spproj_field%set(s%iptcl, 'w', pw)
         ! destruct
         call osym%kill
@@ -119,7 +118,7 @@ contains
         corr = s3D%proj_space_corrs(   ref,s%ithr)
         sh   = s3D%proj_space_shift(:, ref,s%ithr)
         inpl = s3D%proj_space_inplinds(ref,s%ithr)
-        if( params_glob%cc_objfun == OBJFUN_CC .and. corr < 0. ) corr = 0.
+        if( s%p_ptr%cc_objfun == OBJFUN_CC .and. corr < 0. ) corr = 0.
         call assign_ori( s, ref, inpl, corr, sh )
     end subroutine extract_peak_ori
 
@@ -144,7 +143,7 @@ contains
             endif
             call s%opeaks%set_state(ipeak, state)
             corr = s3D%proj_space_corrs(refs(ipeak),s%ithr)
-            if( params_glob%cc_objfun == OBJFUN_CC )then
+            if( s%p_ptr%cc_objfun == OBJFUN_CC )then
                 if( corr < 0. ) corr = 0.
             end if
             call s%opeaks%set(ipeak, 'corr', corr)

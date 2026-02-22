@@ -384,7 +384,8 @@ contains
         if( allocated(dmat_hist) ) deallocate(dmat_hist)
     end subroutine calc_sigstats_dmats_ref
 
-    subroutine calc_cc_and_res_dmats( cavg_imgs, hp, lp, trs, dmat_cc, dmat_res )
+    subroutine calc_cc_and_res_dmats( params, cavg_imgs, hp, lp, trs, dmat_cc, dmat_res )
+        class(parameters), intent(in)    :: params
         class(image),      intent(inout) :: cavg_imgs(:)
         real,              intent(in)    :: hp, lp, trs
         real,allocatable,  intent(inout) :: dmat_cc(:,:), dmat_res(:,:)
@@ -392,7 +393,7 @@ contains
         real,              allocatable   :: ccmat(:,:)
         integer :: ncavgs, i, j
         ncavgs   = size(cavg_imgs)
-        algninfo = match_imgs(params_glob, hp, lp, trs, cavg_imgs, cavg_imgs)
+        algninfo = match_imgs(params, hp, lp, trs, cavg_imgs, cavg_imgs)
         if( allocated(dmat_res) ) deallocate(dmat_res)
         if( allocated(dmat_cc)  ) deallocate(dmat_cc)
         allocate(dmat_res(ncavgs,ncavgs), ccmat(ncavgs,ncavgs), source=0.)
@@ -412,7 +413,8 @@ contains
         deallocate(algninfo, ccmat)
     end subroutine calc_cc_and_res_dmats
 
-    subroutine calc_cc_and_res_dmats_ref( cavg_imgs_ref, cavg_imgs_match, hp, lp, trs, dmat_cc, dmat_res )
+    subroutine calc_cc_and_res_dmats_ref( params, cavg_imgs_ref, cavg_imgs_match, hp, lp, trs, dmat_cc, dmat_res )
+        class(parameters), intent(in)    :: params
         class(image),      intent(inout) :: cavg_imgs_ref(:), cavg_imgs_match(:)
         real,              intent(in)    :: hp, lp, trs
         real,allocatable,  intent(inout) :: dmat_cc(:,:), dmat_res(:,:)
@@ -421,7 +423,7 @@ contains
         integer :: ncls_ref, ncls_match, i, j
         ncls_ref   = size(cavg_imgs_ref)
         ncls_match = size(cavg_imgs_match)
-        algninfo   = match_imgs(params_glob, hp, lp, trs, cavg_imgs_ref, cavg_imgs_match)
+        algninfo   = match_imgs(params, hp, lp, trs, cavg_imgs_ref, cavg_imgs_match)
         if( allocated(dmat_res) ) deallocate(dmat_res)
         if( allocated(dmat_cc)  ) deallocate(dmat_cc)
         allocate(dmat_res(ncls_ref,ncls_match), ccmat(ncls_ref,ncls_match), source=0.)
@@ -447,7 +449,7 @@ contains
         write(logfhandle,'(A)') '>>> GENERATING DISTANCE MATRICES FOR SIGNAL STATISTICS'
         call calc_sigstats_dmats(params, cavg_imgs, oa_minmax, dmat_sig)
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS & FRCS THROUGH FULL IN-PLANE SEARCH'
-        call calc_cc_and_res_dmats(cavg_imgs, params%hp, params%lp, params%trs, dmat_cc, dmat_res)
+        call calc_cc_and_res_dmats(params, cavg_imgs, params%hp, params%lp, params%trs, dmat_cc, dmat_res)
         select case(trim(which))    
             case('sig')
                 dmat = dmat_sig
@@ -470,7 +472,7 @@ contains
         write(logfhandle,'(A)') '>>> GENERATING DISTANCE MATRICES FOR SIGNAL STATISTICS'
         call calc_sigstats_dmats_ref(params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, dmat_sig)
         write(logfhandle,'(A)') '>>> PAIRWISE CORRELATIONS & FRCS THROUGH FULL IN-PLANE SEARCH'
-        call calc_cc_and_res_dmats_ref(cavg_imgs_ref, cavg_imgs_match, params%hp, params%lp, params%trs, dmat_cc, dmat_res)
+        call calc_cc_and_res_dmats_ref(params, cavg_imgs_ref, cavg_imgs_match, params%hp, params%lp, params%trs, dmat_cc, dmat_res)
         select case(trim(which))    
             case('sig')
                 dmat = dmat_sig
@@ -504,7 +506,7 @@ contains
         l_msk = img_msk%bin2logical()
         call img_msk%kill
         ! align clusters to medoids and gather information
-        clust_info_arr = align_clusters2medoids(i_medoids, labels, cavg_imgs, params%hp, params%lp, params%trs, l_msk )
+        clust_info_arr = align_clusters2medoids(params, i_medoids, labels, cavg_imgs, params%hp, params%lp, params%trs, l_msk )
         nclust         = maxval(labels)
         ! set particle populations
         do iclust = 1, nclust
@@ -586,7 +588,8 @@ contains
 
     end function align_and_score_cavg_clusters
 
-    function align_clusters2medoids( i_medoids, labels, cavg_imgs, hp, lp, trs, l_msk ) result( clust_info_arr )
+    function align_clusters2medoids( params, i_medoids, labels, cavg_imgs, hp, lp, trs, l_msk ) result( clust_info_arr )
+        class(parameters),    intent(in)    :: params
         integer,          intent(in)    :: i_medoids(:), labels(:)
         class(image),     intent(inout) :: cavg_imgs(:)
         real,             intent(in)    :: hp, lp, trs
@@ -609,7 +612,7 @@ contains
             clust_info_arr(iclust)%pop = count(labels == iclust)
             if( clust_info_arr(iclust)%pop == 0 ) cycle
             cluster_imgs = pack_imgarr(cavg_imgs, mask=labels == iclust)
-            clust_info_arr(iclust)%algninfo%params = match_imgs2ref(hp, lp, trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
+            clust_info_arr(iclust)%algninfo%params = match_imgs2ref(params, hp, lp, trs, cavg_imgs(i_medoids(iclust)), cluster_imgs)
             call rtsq_imgs(clust_info_arr(iclust)%pop, clust_info_arr(iclust)%algninfo%params, cluster_imgs)
             ! estimate resolution
             ! FWD FT
@@ -670,16 +673,17 @@ contains
         end do
     end subroutine write_aligned_cavgs
 
-    function match_imgs2ref( hp, lp, trs, img_ref, imgs ) result( algninfo )
-        real,                     intent(in)    :: hp, lp, trs
-        class(image),             intent(inout) :: imgs(:), img_ref
-        integer,     parameter          :: MAXITS_SH = 60
-        real,        allocatable        :: inpl_corrs(:)
-        complex,     allocatable        :: pft(:,:)
-        type(image), allocatable        :: imgs_mirr(:)
-        type(pftc_shsrch_grad)          :: grad_shsrch_obj(nthr_glob)
-        type(polarft_calc)              :: pftc
-        type(inpl_struct), allocatable  :: algninfo(:), algninfo_mirr(:)
+    function match_imgs2ref( params, hp, lp, trs, img_ref, imgs ) result( algninfo )
+        class(parameters), intent(in)    :: params
+        real,              intent(in)    :: hp, lp, trs
+        class(image),      intent(inout) :: imgs(:), img_ref
+        integer,     parameter           :: MAXITS_SH = 60
+        real,        allocatable         :: inpl_corrs(:)
+        complex,     allocatable         :: pft(:,:)
+        type(image), allocatable         :: imgs_mirr(:)
+        type(pftc_shsrch_grad)           :: grad_shsrch_obj(nthr_glob)
+        type(polarft_calc)               :: pftc
+        type(inpl_struct), allocatable   :: algninfo(:), algninfo_mirr(:)
         integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, n
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
         logical :: didft
@@ -704,7 +708,7 @@ contains
         end do
         !$omp end parallel do
         ! initialize pftc, polarizer
-        call pftc%new(params_glob, 1, [1,2*n], kfromto) ! 2*n because of mirroring
+        call pftc%new(params, 1, [1,2*n], kfromto) ! 2*n because of mirroring
         call img_ref%memoize4polarize(pftc%get_pdim())
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
@@ -1013,7 +1017,6 @@ contains
         params%ctf = 'no'
         params%trs = 20.
         call params%new(cline)
-        params_glob => params
         allocate(stk(nimgs))
         allocate(alg_info1(nimgs))
         allocate(alg_info2(nimgs, nimgs))
@@ -1036,7 +1039,7 @@ contains
             call stk(i)%rtsq(20.*real(i),3.*real(i),3.*real(i))
             call stk(i)%vis()
         end do
-        alg_info1 = match_imgs2ref(hp, lp, trs, img, stk)
+        alg_info1 = match_imgs2ref(params, hp, lp, trs, img, stk)
         alg_info2 = match_imgs(params, hp, lp, trs, stk, stk)
         ! ! rotate images
         allocate(tmp_stk(nimgs))

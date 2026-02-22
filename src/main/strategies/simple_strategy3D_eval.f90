@@ -3,6 +3,7 @@ module simple_strategy3D_eval
 use simple_core_module_api
 use simple_strategy3D_utils
 use simple_strategy3D_alloc
+use simple_parameters,      only: parameters
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_spec
 use simple_oris,            only: oris
@@ -21,12 +22,13 @@ end type strategy3D_eval
 
 contains
 
-    subroutine new_eval( self, spec, build )
+    subroutine new_eval( self, params, spec, build )
         use simple_builder, only: builder
-        class(strategy3D_eval), intent(inout) :: self
-        class(strategy3D_spec), intent(inout) :: spec
-        class(builder), target, intent(inout) :: build
-        call self%s%new( spec, build )
+        class(strategy3D_eval),    intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(strategy3D_spec),    intent(inout) :: spec
+        class(builder),    target, intent(in)    :: build
+        call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_eval
 

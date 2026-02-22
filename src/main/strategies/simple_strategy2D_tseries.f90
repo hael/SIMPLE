@@ -22,10 +22,11 @@ end type strategy2D_tseries
 
 contains
 
-    subroutine new_tseries( self, spec )
+    subroutine new_tseries( self, params, spec )
         class(strategy2D_tseries), intent(inout) :: self
+        class(parameters),         intent(in)    :: params
         class(strategy2D_spec),    intent(inout) :: spec
-        call self%s%new( spec )
+        call self%s%new(params, spec)
         self%spec = spec
     end subroutine new_tseries
 

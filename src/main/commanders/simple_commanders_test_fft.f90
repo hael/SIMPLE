@@ -106,7 +106,7 @@ subroutine exec_test_eval_polarftcc( self, cline )
     call cline%set('ctf','no')
     call cline%check
     call b%init_params_and_build_strategy3D_tbox(cline,p)
-    call set_bp_range(b, cline)
+    call set_bp_range(p, b, cline)
     ang_err   = 16.
     shift_err = 8.
     call b%eulspace%get_ori(irnd_uni(p%nspace), o)

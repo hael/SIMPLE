@@ -38,25 +38,26 @@ contains
     end subroutine clean_strategy2D
 
     !>  prep class & global parameters
-    subroutine prep_strategy2D_glob( spproj, neigh_frac )
+    subroutine prep_strategy2D_glob( params, spproj, neigh_frac )
         use simple_eul_prob_tab, only: calc_athres
-        type(sp_project), intent(inout) :: spproj
-        real,             intent(in)    :: neigh_frac
+        class(parameters), intent(in)    :: params
+        type(sp_project),  intent(inout) :: spproj
+        real,              intent(in)    :: neigh_frac
         real    :: overlap, avg_dist_inpl
         logical :: zero_oris, ncls_diff
         ! gather class populations
         zero_oris = spproj%os_cls2D%get_noris() == 0
-        ncls_diff = spproj%os_cls2D%get_noris() /= params_glob%ncls
+        ncls_diff = spproj%os_cls2D%get_noris() /= params%ncls
         if( spproj%os_ptcl2D%isthere('class') )then
             if( zero_oris .or. ncls_diff  )then
                 ! the ==0    is to overcome bug in shared-memory version
                 ! the ==ncls is to be able to restart after having run cleanup with fewer classes
                 if( zero_oris )then
-                    call spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', maxn=params_glob%ncls)
+                    call spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', maxn=params%ncls)
                     return
                 endif
                 if( ncls_diff )then
-                    allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
+                    allocate(s2D%cls_pops(params%ncls), source=MINCLSPOPLIM+1)
                     return
                 endif
             endif
@@ -67,36 +68,37 @@ contains
             end where
         else
             ! first iteration, no class assignment: all classes are up for grab
-            allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
+            allocate(s2D%cls_pops(params%ncls), source=MINCLSPOPLIM+1)
         endif
         if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
         ! snhc
-        s2D%snhc_nrefs_bound = min(params_glob%ncls, nint(real(params_glob%ncls)*(1.-neigh_frac)))
+        s2D%snhc_nrefs_bound = min(params%ncls, nint(real(params%ncls)*(1.-neigh_frac)))
         s2D%snhc_nrefs_bound = max(2, s2D%snhc_nrefs_bound)
         ! snhc_smpl
-        s2D%snhc_smpl_ncls  = neighfrac2nsmpl(neigh_frac, params_glob%ncls)
+        s2D%snhc_smpl_ncls  = neighfrac2nsmpl(neigh_frac, params%ncls)
         s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, pftc_glob%get_nrots())
-        select case(trim(params_glob%refine))
+        select case(trim(params%refine))
         case('greedy_smpl','inpl_smpl')
             overlap        = spproj%os_ptcl2D%get_avg('mi_class', state=1)
-            avg_dist_inpl  = calc_athres(os=spproj%os_ptcl2D, field_str='dist_inpl', prob_athres=params_glob%prob_athres, state=1)
+            avg_dist_inpl  = calc_athres(os=spproj%os_ptcl2D, field_str='dist_inpl', prob_athres=params%prob_athres, state=1)
             avg_dist_inpl  = avg_dist_inpl * (1.-overlap)
             s2D%smpl_ninpl = max(2,nint(avg_dist_inpl*real(pftc_glob%get_nrots())/180.))
-            s2D%smpl_ncls  = nint(real(params_glob%ncls) * (1.-overlap)**2)
-            s2D%smpl_ncls  = max(1,min(s2D%smpl_ncls, ceiling(params_glob%prob_athres/180.*real(params_glob%ncls))))
+            s2D%smpl_ncls  = nint(real(params%ncls) * (1.-overlap)**2)
+            s2D%smpl_ncls  = max(1,min(s2D%smpl_ncls, ceiling(params%prob_athres/180.*real(params%ncls))))
         end select
         ! Sampling function power parameter
-        if( (trim(params_glob%stream)=='yes') )then
+        if( (trim(params%stream)=='yes') )then
             s2D%power = EXTR_POWER
         else
-            if( (trim(params_glob%refine)=='snhc_smpl') .and. (params_glob%extr_iter>params_glob%extr_lim) )then
+            if( (trim(params%refine)=='snhc_smpl') .and. (params%extr_iter>params%extr_lim) )then
                 s2D%power = POST_EXTR_POWER
             endif
         endif
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)
-    subroutine prep_strategy2D_batch( spproj, pftc, which_iter, nptcls, pinds )
+    subroutine prep_strategy2D_batch( params, spproj, pftc, which_iter, nptcls, pinds )
+        class(parameters),  intent(in) :: params  
         type(sp_project),   intent(in) :: spproj
         type(polarft_calc), intent(in) :: pftc
         integer,            intent(in) :: which_iter
@@ -110,12 +112,12 @@ contains
             l_alloc = size(s2D%do_inplsrch) /= nptcls
             if( l_alloc ) deallocate(s2D%do_inplsrch,s2D%srch_order)
         endif
-        if( l_alloc ) allocate(s2D%do_inplsrch(1:nptcls), s2D%srch_order(1:nptcls, params_glob%ncls))
+        if( l_alloc ) allocate(s2D%do_inplsrch(1:nptcls), s2D%srch_order(1:nptcls, params%ncls))
         ! in plane search
-        s2D%do_inplsrch = params_glob%l_doshift .and. which_iter>2
+        s2D%do_inplsrch = params%l_doshift .and. which_iter>2
         ! stochastic search order
         s2D%srch_order = 0
-        rt = ran_tabu(params_glob%ncls)
+        rt = ran_tabu(params%ncls)
         do i = 1,nptcls
             iptcl = pinds(i)
             call rt%ne_ran_iarr(s2D%srch_order(i,:))

@@ -403,7 +403,7 @@ contains
         endif
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
-            call cluster2D_exec( build, cline, startit, converged )
+            call cluster2D_exec( params, build, cline, startit, converged )
             ! end gracefully
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
             call qsys_job_finished(string('simple_commanders_cluster2D :: exec_cluster2D'))
@@ -546,7 +546,7 @@ contains
                     call xprob_tab2D_distr%execute( cline_prob_tab2D )
                 endif
                 ! stochastic search
-                call cluster2D_exec( build, cline, params%startit, converged )
+                call cluster2D_exec( params, build, cline, params%startit, converged )
                 ! objective functions
                 if( params%l_needs_sigma )then
                     params%which_iter = params%which_iter + 1
@@ -789,7 +789,7 @@ contains
         ! Resolution range
         frac_srch_space = build%spproj_field%get_avg('frac')
         if( file_exists(params%frcs) ) call build%clsfrcs%read(params%frcs)
-        call set_bp_range2D( build, cline, params%which_iter, frac_srch_space )
+        call set_bp_range2D( params, build, cline, params%which_iter, frac_srch_space )
         ! Read references
         l_alloc_read_cavgs = .true.
         if( .not.l_distr_exec_glob )then

@@ -19,9 +19,10 @@ type strategy2D_spec
 end type strategy2D_spec
 
 type strategy2D_srch
-    type(pftc_shsrch_grad) :: grad_shsrch_obj        !< origin shift search object, L-BFGS with gradient
-    type(pftc_shsrch_grad) :: grad_shsrch_obj2       !< origin shift search object, L-BFGS with gradient, no call back
-    type(pftc_shsrch_grad) :: grad_shsrch_first_obj  !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
+    class(parameters), pointer :: p_ptr => null()     ! pointer to parameters
+    type(pftc_shsrch_grad) :: grad_shsrch_obj         !< origin shift search object, L-BFGS with gradient
+    type(pftc_shsrch_grad) :: grad_shsrch_obj2        !< origin shift search object, L-BFGS with gradient, no call back
+    type(pftc_shsrch_grad) :: grad_shsrch_first_obj   !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
     integer                 :: nrefs           =  0   !< number of references
     integer                 :: nrots           =  0   !< number of in-plane rotations in polar representation
     integer                 :: nrefs_eval      =  0   !< nr of references evaluated
@@ -52,37 +53,40 @@ end type strategy2D_srch
 
 contains
 
-    subroutine new( self, spec )
-        class(strategy2D_srch), intent(inout) :: self
-        class(strategy2D_spec), intent(in)    :: spec
+    subroutine new( self, params, spec )
+        class(strategy2D_srch),    intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(strategy2D_spec),    intent(in)    :: spec
         real :: lims(2,2), lims_init(2,2)
         call self%kill
+        ! set pointer to parameters
+        self%p_ptr => params
         ! set constants
         self%iptcl       = spec%iptcl
         self%iptcl_batch = spec%iptcl_batch
         self%iptcl_map   = spec%iptcl_map
-        self%nrefs       = params_glob%ncls
+        self%nrefs       = self%p_ptr%ncls
         self%nrots       = pftc_glob%get_nrots()
         self%nrefs_eval  = 0
         ! construct composites
-        self%trs        =  params_glob%trs
-        lims(:,1)       = -params_glob%trs
-        lims(:,2)       =  params_glob%trs
+        self%trs        =  self%p_ptr%trs
+        lims(:,1)       = -self%p_ptr%trs
+        lims(:,2)       =  self%p_ptr%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-        if( trim(params_glob%tseries).eq.'yes' )then
+        if( trim(self%p_ptr%tseries).eq.'yes' )then
             ! shift only search
             call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-            maxits=params_glob%maxits_sh, opt_angle=.false.)
+            maxits=self%p_ptr%maxits_sh, opt_angle=.false.)
             call self%grad_shsrch_first_obj%new(lims, lims_init=lims_init,&
-            maxits=params_glob%maxits_sh, opt_angle=.false., coarse_init=.true.)
+            maxits=self%p_ptr%maxits_sh, opt_angle=.false., coarse_init=.true.)
         else
             call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-            maxits=params_glob%maxits_sh)
+            maxits=self%p_ptr%maxits_sh)
             call self%grad_shsrch_first_obj%new(lims, lims_init=lims_init,&
-            maxits=params_glob%maxits_sh, coarse_init=.true.)
+            maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
         endif
-        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=params_glob%maxits_sh, opt_angle=.false.)
+        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=self%p_ptr%maxits_sh, opt_angle=.false.)
     end subroutine new
 
     subroutine prep4srch( self, os )
@@ -118,14 +122,14 @@ contains
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
         call pftc_glob%gen_objfun_vals(self%prev_class, self%iptcl, [0.,0.], corrs)
-        if( params_glob%cc_objfun == OBJFUN_CC )then
+        if( self%p_ptr%cc_objfun == OBJFUN_CC )then
             self%prev_corr  = max(0., corrs(self%prev_rot))
         else
             self%prev_corr  = corrs(self%prev_rot)
         endif
         self%best_corr = self%prev_corr
         ! whether to search shifts first
-        self%l_sh_first   = s2D%do_inplsrch(self%iptcl_batch) .and. params_glob%l_sh_first
+        self%l_sh_first   = s2D%do_inplsrch(self%iptcl_batch) .and. self%p_ptr%l_sh_first
         self%xy_first     =  0.
         self%xy_first_rot =  0.
     end subroutine prep4srch
