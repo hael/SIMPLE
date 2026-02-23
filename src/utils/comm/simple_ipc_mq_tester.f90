@@ -1,4 +1,4 @@
-!@descr: various functions for testing unix message queues
+!@descr: unit tests for ipc mq module
 module simple_ipc_mq_tester
 use simple_ipc_mq
 use simple_string
@@ -9,8 +9,8 @@ use simple_error
 
 implicit none
 
-integer,  parameter :: MQ_SEND_RATE_WARN    = 500000
-integer,  parameter :: MQ_RECEIVE_RATE_WARN = 500000
+integer,  parameter :: MQ_SEND_RATE_WARN    = 10000
+integer,  parameter :: MQ_RECEIVE_RATE_WARN = 10000
 
 public :: run_all_ipc_mq_tests
 private

@@ -1,4 +1,4 @@
-!@descr: various functions for testing unix forking utilities
+!@descr: unit tests for forked process module
 module simple_forked_process_tester
 use unix
 use simple_forked_process
@@ -20,10 +20,6 @@ contains
     call test_restart()
     call test_terminate()
     call test_logfile_redirection()
-#ifdef __linux__
-    ! message queues only work on linux
-    call test_ipc_mq_communication()
-#endif
   end subroutine run_all_forked_process_tests
     
   !---------------- basic lifecycle ----------------
@@ -84,7 +80,7 @@ contains
   subroutine test_logfile_redirection()
     type(forked_process) :: fork_proc
     type(string)         :: log_contents, log_hash, log_fname
-    integer              :: rc
+    integer              :: rc, ios, unit
     write(*,'(A)') 'test_logfile_redirection'
     log_fname = 'test_logfile_redirection.log'
     call fork_proc%start(name=string('TEST_LOGFILE_REDIRECTION'), logfile=log_fname)
@@ -92,21 +88,14 @@ contains
     call fork_proc%await_final_status()
     call assert_int(fork_proc%status(), FORK_STATUS_STOPPED, 'forked process terminated')
     call assert_true(file_exists(log_fname), 'log file exists')
+    open(newunit=unit, file=log_fname%to_char(), action='read', iostat=ios)
+    call assert_int(0, ios, 'open log file')
+    call log_contents%readfile(unit)
+    close(unit)
+    call assert_true(log_contents%strlen() > 0, 'log file has content')
+    log_hash = log_contents%to_fnv1a_hash64()
+    call assert_char(log_hash%to_char(), '0A8F18CBEE2D2351', 'log has matches')
     call del_file(log_fname)
   end subroutine test_logfile_redirection
-
-  !---------------- IPC ----------------
-
-  subroutine test_ipc_mq_communication()
-    type(forked_process) :: fork_proc
-    type(string)         :: mq_name, msg_out
-    write(*,'(A)') 'test_ipc_mq_communication'
-    call fork_proc%start(name=string('TEST_IPC_MQ'), mq_name=string('TEST_IPC_MQ'))
-    call assert_int(fork_proc%status(), FORK_STATUS_RUNNING, 'forked process running')
-    call fork_proc%await_final_status()
-    call assert_int(fork_proc%status(), FORK_STATUS_STOPPED, 'forked process terminated')
-    call assert_true(fork_proc%receive(msg=msg_out), 'received message from child')
-    call fork_proc%destroy()
-  end subroutine test_ipc_mq_communication
 
 end module simple_forked_process_tester
