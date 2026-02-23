@@ -190,7 +190,7 @@ contains
         endif
         if( l_polar )then
             ! for restoration
-            if( which_iter == 1 ) call pftc%polar_cavger(l_clin)
+            if( which_iter == 1 ) call pftc%polar_cavger_new(l_clin)
             call pftc%polar_cavger_zero_pft_refs
         endif
 
@@ -700,7 +700,7 @@ contains
             endif
         endif
         ! Read polar references
-        call pftc%polar_cavger(trim(p_ptr%ref_type)=='comlin_hybrid')
+        call pftc%polar_cavger_new(trim(p_ptr%ref_type)=='comlin_hybrid')
         call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY)//BIN_EXT)
         has_been_searched = .not.b_ptr%spproj%is_virgin_field(p_ptr%oritype)
         ! Centering-related objects

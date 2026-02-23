@@ -5,7 +5,7 @@ implicit none
 contains
 
     !> Module initialization
-    module subroutine polar_cavger( self, l_comlin, nrefs )
+    module subroutine polar_cavger_new( self, l_comlin, nrefs )
         class(polarft_calc), intent(inout) :: self
         logical,             intent(in)    :: l_comlin
         integer,   optional, intent(in)    :: nrefs
@@ -22,7 +22,7 @@ contains
                 &self%pfts_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls))
         call self%polar_cavger_zero_pft_refs
         self%pfts_merg = DCMPLX_ZERO
-    end subroutine polar_cavger
+    end subroutine polar_cavger_new
 
     module subroutine polar_cavger_zero_pft_refs( self )
         class(polarft_calc), intent(inout) :: self

@@ -250,7 +250,7 @@ contains
             call fname%kill
             call pftc%new(params, 1, [1,1], kfromto)
             if( trim(params%ref_type)=='comlin_hybrid' )then
-                call pftc%polar_cavger(.true., nrefs=params%ncls)
+                call pftc%polar_cavger_new(.true., nrefs=params%ncls)
                 call pftc%polar_cavger_calc_pops(build%spproj)
                 call build%pgrpsyms%new('c1')
                 params%nsym    = build%pgrpsyms%get_nsym()
@@ -260,7 +260,7 @@ contains
                 clw = min(1.0, max(0.0, 1.0-max(0.0, real(params%extr_iter-4)/real(params%extr_lim-3))))
                 call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms, clin_anneal=clw)
             else
-                call pftc%polar_cavger(.false., nrefs=params%ncls)
+                call pftc%polar_cavger_new(.false., nrefs=params%ncls)
                 call pftc%polar_cavger_calc_pops(build%spproj)
                 call pftc%polar_cavger_assemble_sums_from_parts
             endif

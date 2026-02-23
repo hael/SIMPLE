@@ -177,7 +177,7 @@ type :: polarft_calc
     procedure          :: gen_sigma_contrib
 
     ! ===== STATE: simple_polarft_ops_state.f90
-    procedure          :: polar_cavger
+    procedure          :: polar_cavger_new
     procedure          :: polar_cavger_zero_pft_refs
     procedure          :: polar_cavger_set_ref_pft
     procedure          :: polar_cavger_calc_pops
@@ -687,11 +687,11 @@ interface
 
     ! ===== STATE: simple_polarft_ops_state.f90
 
-    module subroutine polar_cavger( self, l_comlin, nrefs )
+    module subroutine polar_cavger_new( self, l_comlin, nrefs )
         class(polarft_calc), intent(inout) :: self
         logical,             intent(in)    :: l_comlin
         integer,   optional, intent(in)    :: nrefs
-    end subroutine polar_cavger
+    end subroutine polar_cavger_new
 
     module subroutine polar_cavger_zero_pft_refs( self )
         class(polarft_calc), intent(inout) :: self

@@ -8,7 +8,7 @@ use simple_binoris_io,       only: binread_nlines, binread_oritab, binwrite_orit
 use simple_builder,          only: builder
 use simple_cmdline,          only: cmdline
 use simple_commander_base,   only: commander_base
-use simple_euclid_sigma2,    only: write_groups_starfile, sigma2_star_from_iter !euclid_sigma2
+use simple_euclid_sigma2,    only: write_groups_starfile, sigma2_star_from_iter
 use simple_exec_helpers,     only: set_shmem_flag, set_master_num_threads
 use simple_image,            only: image
 use simple_image_bin,        only: image_bin

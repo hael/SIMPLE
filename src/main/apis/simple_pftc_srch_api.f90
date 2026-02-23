@@ -4,7 +4,6 @@ use simple_core_module_api
 use simple_class_frcs,      only: class_frcs
 use simple_cmdline,         only: cmdline
 use simple_ctf,             only: ctf
-! use simple_euclid_sigma2,   only: euclid_sigma2
 use simple_image,           only: image
 use simple_imgarr_utils,    only: read_cavgs_into_imgarr,  read_stk_into_imgarr, dealloc_imgarr, alloc_imgarr, pack_imgarr, write_imgarr
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
