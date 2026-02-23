@@ -31,8 +31,10 @@ subroutine exec_test_units( self, cline )
     use simple_oris_tester
     use simple_rec_list_tester
     ! hand-written unit tests
-    use simple_ipc_mq_tester,         only:  run_all_ipc_mq_tests
+    use simple_ipc_mq_tester,         only: run_all_ipc_mq_tests
     use simple_forked_process_tester, only: run_all_forked_process_tests
+    use simple_gui_metadata_tester,   only: run_all_gui_metadata_tests
+    use simple_gui_assembler_tester,  only: run_all_gui_assembler_tests
     use simple_aff_prop,              only: test_aff_prop
     use simple_hclust,                only: test_hclust
     use simple_ftexp_shsrch,          only: test_ftexp_shsrch
@@ -65,6 +67,8 @@ subroutine exec_test_units( self, cline )
     call run_all_rec_list_tests
     call run_all_ipc_mq_tests
     call run_all_forked_process_tests
+    call run_all_gui_metadata_tests
+    call run_all_gui_assembler_tests
     call report_summary()
     ! hand-written unit tests
     write(*,*)'VALIDATING UI JSON FILE:'

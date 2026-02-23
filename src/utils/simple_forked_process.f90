@@ -27,7 +27,6 @@ type :: forked_process
   type(string)          :: name
   type(string)          :: description
   type(string)          :: logfile
-  type(ipc_mq)          :: mq
   integer(kind=c_pid_t) :: pid          = -1
   integer               :: n_restarts   = 0
   logical               :: running      = .false.
@@ -43,30 +42,19 @@ contains
   procedure :: destroy
   procedure :: status
   procedure :: await_final_status
-  procedure :: receive_1
-  procedure :: receive_2
   procedure :: get_pid
-  generic   :: receive => receive_1, receive_2
 end type forked_process
 
 contains
 
-  subroutine start( self, restart, name, logfile, mq_name, mq_maxmsg )
+  subroutine start( self, restart, name, logfile)
     class(forked_process),           intent(inout) :: self
-    type(string),          optional, intent(in)    :: name, logfile, mq_name
+    type(string),          optional, intent(in)    :: name, logfile
     logical,               optional, intent(in)    :: restart
-    integer,               optional, intent(in)    :: mq_maxmsg
     integer(kind=c_int)                            :: ios
     if( present(restart) ) self%restart = restart
     if( present(logfile) ) self%logfile = logfile
     if( present(name)    ) self%name    = name
-    if( present(mq_name) ) then
-      if( present(mq_maxmsg) ) then
-        call self%mq%new(name=mq_name, max_msgsize=mq_maxmsg)
-      else
-        call self%mq%new(name=mq_name)
-      endif
-    endif
     self%pid = c_fork()
     if( self%pid < 0 ) then
       ! Fork failed. Terminal
@@ -128,15 +116,14 @@ contains
     integer                              :: rc
     call signal(SIGTERM, sigterm_handler)
     ! note: changing this output will require updating the log hash comparison in test_logfile_redirection
-    rc = c_usleep(FORK_POLL_TIME * 5)
-    mq_msg = 'TEST MESSAGE'
-    if( self%mq%is_active() ) call self%mq%send( msg=mq_msg )
+    if( .not. self%logfile%is_blank() ) write(logfhandle, '(A)') "LOGFILE CONTENTS TEST"
+    rc = c_usleep(FORK_POLL_TIME * 20)
 
     contains
 
     subroutine sigterm_handler()
-      call flush( logfhandle )
-      call exit( EXIT_SUCCESS )
+      call flush(logfhandle)
+      call exit(EXIT_SUCCESS)
     end subroutine sigterm_handler
 
   end subroutine execute_test
@@ -163,7 +150,6 @@ contains
 
   subroutine destroy( self )
     class(forked_process), intent(inout) :: self
-    if( self%mq%is_active() ) call self%mq%kill()
   end subroutine destroy
 
   function status( self ) result( status_code )
@@ -205,20 +191,6 @@ contains
       end if
     end if
   end function status
-
-  function receive_1( self, msg ) result( received )
-    class(forked_process), intent(inout) :: self
-    class(string),         intent(inout) :: msg
-    logical                              :: received
-    received = self%mq%receive(msg=msg)
-  end function receive_1
-
-  function receive_2( self, buffer ) result( received )
-    class(forked_process),              intent(inout) :: self
-    character(len=:),      allocatable, intent(inout) :: buffer
-    logical                                           :: received
-    received = self%mq%receive(buffer=buffer)
-  end function receive_2
 
   function get_pid( self ) result( pid )
     class(forked_process), intent(inout) :: self

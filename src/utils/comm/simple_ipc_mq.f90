@@ -1,3 +1,4 @@
+!@descr: various unix message queue utilities
 module simple_ipc_mq
 use unix
 use simple_core_module_api
@@ -47,13 +48,15 @@ end type ipc_mq
 
 contains
 
+
+#ifdef __linux__
+! message queues only work on linux 
+
   subroutine new( self, name, max_msgsize )
     class(ipc_mq),             intent(inout) :: self 
     type(string),    optional, intent(in)    :: name
     integer,         optional, intent(in)    :: max_msgsize
-#ifdef __linux__
-    ! message queues only work on linux 
-    type(c_mq_attr), target :: attr
+    type(c_mq_attr), target                  :: attr
     if( present( name )        ) self%name        = name
     if( present( max_msgsize ) ) self%max_msgsize = max_msgsize
     self%mq_ppid = c_getpid()
@@ -81,18 +84,12 @@ contains
     end if
     self%active = .true.
     call self%update_attributes()
-#else
-    ! always inactive on mac -> no message queues
-    self%active = .true.
-    THROW_WARN('message queues are not available on this system')
-#endif
   end subroutine new
 
   subroutine unlink( self )
     class(ipc_mq), intent(inout) :: self
     integer                      :: stat, err
     if( .not.self%active ) return
-#ifdef __linux__
     ! message queues only work on linux
     stat = c_mq_unlink(self%mq_path%to_char() // c_null_char)
     if( stat < 0 ) then
@@ -103,14 +100,12 @@ contains
       end if
       return
     end if
-#endif
   end subroutine unlink
 
   subroutine kill( self )
     class(ipc_mq), intent(inout) :: self
     integer                      :: stat
     if( .not. self%active ) return
-#ifdef __linux__
     ! message queues only work on linux
     stat = c_mq_close(self%mqfd)
     if( stat < 0 ) then
@@ -119,15 +114,12 @@ contains
     endif
     call self%unlink()
     self%active = .false.
-#endif
   end subroutine kill
 
   subroutine update_attributes( self )
     class(ipc_mq), intent(inout) :: self
     type(ipc_mq_attr)            :: attr
     integer                      :: stat 
-#ifdef __linux__
-    ! message queues only work on linux
     type(c_mq_attr)              :: mq_attr  
     stat = c_mq_getattr(self%mqfd, mq_attr)
     if( stat < 0 ) then
@@ -139,33 +131,13 @@ contains
     attr%mq_msgsize = mq_attr%mq_msgsize
     attr%mq_curmsgs = mq_attr%mq_curmsgs
     self%attr = attr
-#endif
   end subroutine update_attributes
-
-  subroutine get_attributes( self, attr )
-    class(ipc_mq),     intent(inout) :: self
-    type(ipc_mq_attr), intent(out)   :: attr
-    attr = self%attr
-  end subroutine get_attributes
-
-  subroutine print_attributes( self )
-    class(ipc_mq), intent(inout) :: self
-    if( .not. self%active ) return
-#ifdef __linux__    
-    ! message queues only work on linux
-    write(logfhandle, '(A,I0)') 'MQ Flags            :', self%attr%mq_flags
-    write(logfhandle, '(A,I0)') 'MQ Max Messages     :', self%attr%mq_maxmsg
-    write(logfhandle, '(A,I0)') 'MQ Max Message Size :', self%attr%mq_msgsize
-    write(logfhandle, '(A,I0)') 'MQ Current Messages :', self%attr%mq_curmsgs
-#endif
-  end subroutine print_attributes
 
   subroutine send_1( self, msg )
     class(ipc_mq), intent(inout) :: self
     class(string), intent( in )  :: msg
     integer                      :: stat
     if( .not. self%active ) return
-#ifdef __linux__
     ! message queues only work on linux
     stat = c_mq_send(self%mqfd, msg%to_char(), int(msg%strlen_trim(), kind=c_size_t), 1)
     if(stat < 0) then
@@ -173,7 +145,6 @@ contains
         THROW_HARD('failed to send message queue message')
     end if
     call self%update_attributes()
-#endif
   end subroutine send_1
 
   subroutine send_2( self, buffer )
@@ -181,7 +152,6 @@ contains
     character(len=:), allocatable, intent(inout) :: buffer
     integer                                      :: stat
     if( .not. self%active ) return
-#ifdef __linux__
     ! message queues only work on linux
     stat = c_mq_send(self%mqfd, buffer, int(len(buffer), kind=c_size_t), 1)
     if( stat < 0 ) then
@@ -189,10 +159,9 @@ contains
         THROW_HARD('failed to send message queue message')
     end if
     call self%update_attributes()
-#endif
   end subroutine send_2
 
-  function receive_1( self, msg ) result( received )
+function receive_1( self, msg ) result( received )
     class(ipc_mq), intent(inout) :: self
     class(string), intent(inout) :: msg
     character( len=XLONGSTRLEN ) :: buf 
@@ -201,8 +170,6 @@ contains
     received = .false.
     if( .not. self%active ) return
     call msg%kill()
-#ifdef __linux__
-    ! message queues only work on linux
     call self%update_attributes()
     if( self%attr%mq_curmsgs > 0 ) then
       sz = c_mq_receive(self%mqfd, buf, len(buf, kind=c_size_t), prio)
@@ -215,7 +182,6 @@ contains
       end if
     end if
     call self%update_attributes()
-#endif
   end function receive_1
 
   function receive_2( self, buffer ) result( received )
@@ -227,8 +193,6 @@ contains
     received = .false.
     if( .not. self%active ) return
     if( allocated(buffer) ) deallocate(buffer)
-#ifdef __linux__
-    ! message queues only work on linux
     call self%update_attributes()
     if( self%attr%mq_curmsgs > 0 ) then
       sz = c_mq_receive(self%mqfd, buf, len(buf, kind=c_size_t), prio)
@@ -242,8 +206,79 @@ contains
       end if
     end if
     call self%update_attributes()
-#endif
   end function receive_2
+
+#else
+! always inactive on mac -> no message queues
+
+  subroutine new( self, name, max_msgsize )
+    class(ipc_mq),             intent(inout) :: self 
+    type(string),    optional, intent(in)    :: name
+    integer,         optional, intent(in)    :: max_msgsize
+    self%active = .true.
+    THROW_WARN('message queues are not available on this system')
+  end subroutine new  
+
+  subroutine unlink( self )
+    class(ipc_mq), intent(inout) :: self
+  end subroutine unlink
+
+  subroutine kill( self )
+    class(ipc_mq), intent(inout) :: self
+  end subroutine kill
+
+  subroutine update_attributes( self )
+    class(ipc_mq), intent(inout) :: self
+  end subroutine update_attributes
+
+  subroutine send_1( self, msg )
+    class(ipc_mq), intent(inout) :: self
+    class(string), intent( in )  :: msg
+    integer                      :: stat
+  end subroutine send_1
+
+  subroutine send_2( self, buffer )
+    class(ipc_mq),                 intent(inout) :: self
+    character(len=:), allocatable, intent(inout) :: buffer
+    integer                                      :: stat
+  end subroutine send_2
+
+  function receive_1( self, msg ) result( received )
+    class(ipc_mq), intent(inout) :: self
+    class(string), intent(inout) :: msg
+    character( len=XLONGSTRLEN ) :: buf 
+    logical                      :: received
+    integer                      :: sz, prio
+    received = .false.
+    call msg%kill()
+  end function receive_1
+
+  function receive_2( self, buffer ) result( received )
+    class(ipc_mq),                 intent(inout) :: self
+    character(len=:), allocatable, intent(inout) :: buffer
+    character(len=XLONGSTRLEN)                   :: buf
+    logical                                      :: received
+    integer                                      :: sz, prio
+    received = .false.
+    if( allocated(buffer) ) deallocate(buffer)
+  end function receive_2
+
+#endif
+
+  subroutine get_attributes( self, attr )
+    class(ipc_mq),     intent(inout) :: self
+    type(ipc_mq_attr), intent(out)   :: attr
+    attr = self%attr
+  end subroutine get_attributes
+
+  subroutine print_attributes( self )
+    class(ipc_mq), intent(inout) :: self
+    if( .not. self%active ) return 
+    write(logfhandle, '(A,I0)') 'MQ Flags            :', self%attr%mq_flags
+    write(logfhandle, '(A,I0)') 'MQ Max Messages     :', self%attr%mq_maxmsg
+    write(logfhandle, '(A,I0)') 'MQ Max Message Size :', self%attr%mq_msgsize
+    write(logfhandle, '(A,I0)') 'MQ Current Messages :', self%attr%mq_curmsgs
+  end subroutine print_attributes
 
   function get_queue_length( self ) result( queue_length )
     class(ipc_mq),       intent(inout) :: self 
