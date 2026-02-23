@@ -133,7 +133,7 @@ contains
         if( l_polar .and. l_restore )then
             ! for restoration
             if( cline%defined('vol1') )then
-                call pftc%polar_cavger(.true.)
+                call pftc%polar_cavger_new(.true.)
                 if( p_ptr%l_trail_rec )then
                     ! In the first iteration the polarized cartesian references are written down
                     call pftc%polar_cavger_writeall_pftcrefs(string(POLAR_REFS_FBODY))

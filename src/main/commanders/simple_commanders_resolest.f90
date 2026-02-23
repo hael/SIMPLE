@@ -127,7 +127,7 @@ contains
         call pftc%allocate_refs_memoization
         call build_batch_particles(params, build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Dealing with polar cavgs
-        call pftc%polar_cavger(.true.)
+        call pftc%polar_cavger_new(.true.)
         call pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, build%esig%sigma2_noise, is3D=.true.)
         call pftc%polar_cavger_merge_eos_and_norm(reforis=build%eulspace, symop=build%pgrpsyms)
         ! write

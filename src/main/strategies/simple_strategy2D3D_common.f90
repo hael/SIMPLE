@@ -994,7 +994,7 @@ contains
             nrefs = params%nspace * params%nstates
             call pftc%new(params, nrefs, [1,batchsz], params%kfromto)
             ! Read polar references
-            call pftc%polar_cavger(.true.)
+            call pftc%polar_cavger_new(.true.)
             call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
             call build%clsfrcs%read(string(FRCS_FILE))
             ! prepare filter

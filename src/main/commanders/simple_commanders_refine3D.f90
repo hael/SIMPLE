@@ -639,7 +639,7 @@ contains
             if( params%l_polar )then
                 ! Assemble polar references
                 params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
-                call pftc%polar_cavger(.true., nrefs=params%nspace)
+                call pftc%polar_cavger_new(.true., nrefs=params%nspace)
                 call pftc%polar_cavger_calc_pops(build%spproj)
                 call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
