@@ -3,7 +3,6 @@ module simple_commanders_cluster2D
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_classaverager
-use simple_new_classaverager
 use simple_commanders_cavgs,   only: commander_rank_cavgs
 use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr, commander_cavgassemble
 use simple_commanders_euclid,  only: commander_calc_pspec_distr, commander_calc_group_sigmas
@@ -574,32 +573,15 @@ contains
                             finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%startit,3)//params%ext%to_char()
                             call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
                             if( trim(params%chunk).eq.'yes' )then
-                                if( L_NEW_CAVGER )then
-                                    call cavger_new_write_eo(params%refs_even, params%refs_odd)
-                                    call cavger_new_readwrite_partial_sums('write')
-                                    call cavger_new_kill
-                                else
-                                    call cavger_write(params%refs_even,'even')
-                                    call cavger_write(params%refs_odd, 'odd')
-                                    call cavger_readwrite_partial_sums('write')
-                                    call cavger_kill
-                                endif
+                                call cavger_write_eo(params%refs_even, params%refs_odd)
+                                call cavger_readwrite_partial_sums('write')
+                                call cavger_kill
                             else
-                                if( L_NEW_CAVGER )then
-                                    if( trim(params%tseries).eq.'yes' )then
-                                        call cavger_new_write_eo(params%refs_even, params%refs_odd)
-                                        call cavger_new_kill
-                                    else
-                                        call cavger_new_kill(dealloccavgs=.false.)
-                                    endif
+                               if( trim(params%tseries).eq.'yes' )then
+                                    call cavger_write_eo(params%refs_even, params%refs_odd)
+                                    call cavger_kill
                                 else
-                                    if( trim(params%tseries).eq.'yes' )then
-                                        call cavger_write(params%refs_even,'even')
-                                        call cavger_write(params%refs_odd, 'odd')
-                                        call cavger_kill
-                                    else
-                                        call cavger_kill(dealloccavgs=.false.)
-                                    endif
+                                    call cavger_kill(dealloccavgs=.false.)
                                 endif
                             endif
                         endif
@@ -799,19 +781,10 @@ contains
             if( .not. cline%defined('refs') )then
                 THROW_HARD('need refs to be part of command line for cluster2D execution')
             endif
-            if( L_NEW_CAVGER )then
-                call cavger_new(params, build, pinds, alloccavgs=.true.)
-                call cavger_new_read_all
-            else
-                call cavger_new(params, build, pinds, alloccavgs=.true.)
-                call cavger_read_all
-            endif
+            call cavger_new(params, build, pinds, alloccavgs=.true.)
+            call cavger_read_all
         else
-            if( L_NEW_CAVGER )then
-                call cavger_new_new(params, build, pinds, alloccavgs=.false.)
-            else
-                call cavger_new(params, build, pinds, alloccavgs=.false.)
-            endif
+            call cavger_new(params, build, pinds, alloccavgs=.false.)
         endif
         ! init scorer & prep references
         call preppftc4align2D(pftc, nptcls, params%which_iter, l_stream)
@@ -848,7 +821,7 @@ contains
             endif
         endif
         call pftc%kill
-        if(associated(eucl_sigma2_glob)) call eucl_sigma2_glob%kill
+        ! call build%esig%kill
         call clean_batch_particles2D
         ! write
         call eulprob%write_table(fname)

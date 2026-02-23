@@ -8,7 +8,6 @@ contains
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
     module subroutine new(self, params, nrefs, pfromto, kfromto, eoarr)
-        use simple_parameters, only: parameters
         class(polarft_calc), target, intent(inout) :: self
         class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs

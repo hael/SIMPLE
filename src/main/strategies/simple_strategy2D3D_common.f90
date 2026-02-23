@@ -777,6 +777,11 @@ contains
             t_2dprep = 0.
             t_grid   = 0.
         endif
+        if( params%l_ml_reg )then
+            if( .not. allocated(build%esig%sigma2_noise) )then
+                THROW_HARD('build%esig%sigma2_noise is not allocated while ml_reg is enabled; calc_3Drec')
+            endif
+        endif
         ! logical/physical adress mapping
         call memoize_ft_maps([params%boxpd, params%boxpd, 1], build%imgbatch(1)%get_smpd())
         ! heap of padded images
@@ -799,7 +804,7 @@ contains
                 call build%imgbatch(ibatch)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
                 ctfparms(ibatch) = build%spproj%get_ctfparams(params%oritype, iptcl)
                 shift = build%spproj_field%get_2Dshift(iptcl)
-                call build%img_pad_heap(ithr)%gen_fplane4rec(params%smpd_crop, ctfparms(ibatch), shift, params%l_ml_reg, iptcl, fpls(ibatch))
+                call build%img_pad_heap(ithr)%gen_fplane4rec(build%esig%sigma2_noise, params%smpd_crop, ctfparms(ibatch), shift, params%l_ml_reg, iptcl, fpls(ibatch))
             end do
             !$omp end parallel do
             if( DEBUG )then
@@ -967,12 +972,11 @@ contains
         call gridcorr_img%kill
     end subroutine norm_struct_facts
 
-    subroutine prepare_refs_sigmas_ptcls( params, build, pftc, cline, eucl_sigma, ptcl_imgs, ptcl_imgs_pad, batchsz, which_iter, do_polar )
+    subroutine prepare_refs_sigmas_ptcls( params, build, pftc, cline, ptcl_imgs, ptcl_imgs_pad, batchsz, which_iter, do_polar )
         class(parameters),        intent(inout) :: params
         class(builder),           intent(inout) :: build
         class(polarft_calc),      intent(inout) :: pftc
         class(cmdline),           intent(in)    :: cline !< command line
-        class(euclid_sigma2),     intent(inout) :: eucl_sigma
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
         type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
         integer,                  intent(in)    :: batchsz
@@ -990,7 +994,7 @@ contains
             nrefs = params%nspace * params%nstates
             call pftc%new(params, nrefs, [1,batchsz], params%kfromto)
             ! Read polar references
-            call pftc%polar_cavger_new(.true.)
+            call pftc%polar_cavger(.true.)
             call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
             call build%clsfrcs%read(string(FRCS_FILE))
             ! prepare filter
@@ -1033,9 +1037,9 @@ contains
         ! PREPARATION OF SIGMAS
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-            call eucl_sigma%new(params, fname, params%box)
-            call eucl_sigma%read_part(  build%spproj_field)
-            call eucl_sigma%read_groups(build%spproj_field)
+            call build%esig%new(params, fname, params%box)
+            call build%esig%read_part(  build%spproj_field)
+            call build%esig%read_groups(build%spproj_field)
         end if
         ! PREPARATION OF PARTICLES
         call prepimgbatch(params, build, batchsz)

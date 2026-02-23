@@ -639,7 +639,7 @@ contains
             if( params%l_polar )then
                 ! Assemble polar references
                 params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
-                call pftc%polar_cavger_new(.true., nrefs=params%nspace)
+                call pftc%polar_cavger(.true., nrefs=params%nspace)
                 call pftc%polar_cavger_calc_pops(build%spproj)
                 call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
@@ -994,7 +994,6 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(eul_prob_tab)            :: eulprob_obj_part
-        type(euclid_sigma2)           :: eucl_sigma
         integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
@@ -1008,7 +1007,7 @@ contains
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( params, build, pftc, cline, eucl_sigma, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls( params, build, pftc, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
                                         
         ! Build polar particle images

@@ -74,8 +74,8 @@ do i = 1,NIMGS
     call img%polarize(pft, mask=b%l_resmsk)
     call pftc%set_ptcl_pft(i, pft)
 enddo
-call pftc%polar_cavger_new(.false.)
-call pftc%polar_cavger_update_sums(NIMGS, pinds, b%spproj, shifts)
+call pftc%polar_cavger(.false.)
+call pftc%polar_cavger_update_sums(NIMGS, pinds, b%spproj, b%esig%sigma2_noise, shifts)
 call pftc%polar_cavger_merge_eos_and_norm2D
 call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(b%clsfrcs, b%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
 ! write
@@ -90,7 +90,7 @@ call pftc%polar_cavger_refs2cartesian(cavgs, 'merged')
 call write_imgarr(cavgs, string('cavgs_merged.mrc'))
 call pftc%polar_cavger_kill
 ! read & write again
-call pftc%polar_cavger_new(.false.)
+call pftc%polar_cavger(.false.)
 call pftc%polar_cavger_read(string('cavgs_even.bin'), 'even')
 call pftc%polar_cavger_read(string('cavgs_odd.bin'),  'odd')
 call pftc%polar_cavger_read(string('cavgs.bin'),      'merged')

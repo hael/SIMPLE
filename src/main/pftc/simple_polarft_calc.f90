@@ -1,10 +1,6 @@
 !@descr: polarft class complete interface
 module simple_polarft_calc
-use simple_core_module_api
-use simple_sp_project,    only: sp_project
-use simple_image,         only: image
-use simple_parameters,    only: parameters
-use simple_fftw3
+use simple_pftc_api
 implicit none
 
 public :: polarft_calc, pftc_glob, polaft_dims_from_file_header
@@ -181,7 +177,7 @@ type :: polarft_calc
     procedure          :: gen_sigma_contrib
 
     ! ===== STATE: simple_polarft_ops_state.f90
-    procedure          :: polar_cavger_new
+    procedure          :: polar_cavger
     procedure          :: polar_cavger_zero_pft_refs
     procedure          :: polar_cavger_set_ref_pft
     procedure          :: polar_cavger_calc_pops
@@ -691,11 +687,11 @@ interface
 
     ! ===== STATE: simple_polarft_ops_state.f90
 
-    module subroutine polar_cavger_new( self, l_comlin, nrefs )
+    module subroutine polar_cavger( self, l_comlin, nrefs )
         class(polarft_calc), intent(inout) :: self
         logical,             intent(in)    :: l_comlin
         integer,   optional, intent(in)    :: nrefs
-    end subroutine polar_cavger_new
+    end subroutine polar_cavger
 
     module subroutine polar_cavger_zero_pft_refs( self )
         class(polarft_calc), intent(inout) :: self
@@ -712,11 +708,12 @@ interface
         class(sp_project), target, intent(in)    :: spproj
     end subroutine polar_cavger_calc_pops
 
-    module subroutine polar_cavger_update_sums( self, nptcls, pinds, spproj, incr_shifts, is3D )
+    module subroutine polar_cavger_update_sums( self, nptcls, pinds, spproj, sig2arr, incr_shifts, is3D )
         class(polarft_calc),         intent(inout) :: self
         integer,                     intent(in)    :: nptcls
         integer,                     intent(in)    :: pinds(nptcls)
         class(sp_project),           intent(inout) :: spproj
+        real,                        intent(in)    :: sig2arr(self%kfromto(1):self%kfromto(2),self%pfromto(1):self%pfromto(2))
         real,              optional, intent(in)    :: incr_shifts(2,nptcls)
         logical,           optional, intent(in)    :: is3d
     end subroutine polar_cavger_update_sums

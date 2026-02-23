@@ -1,5 +1,5 @@
 !@descr: Implementations of core types and routines underpinning cavg restoration
-submodule (simple_new_classaverager) simple_new_classaverager_core
+submodule (simple_classaverager) simple_classaverager_core
 implicit none
 #include "simple_local_flags.inc"
 
@@ -463,4 +463,4 @@ contains
         self%nslices = 0
     end subroutine kill_stack
 
-end submodule simple_new_classaverager_core
+end submodule simple_classaverager_core

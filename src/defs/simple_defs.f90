@@ -58,7 +58,6 @@ logical,          parameter   :: L_BENCH_GLOB       = .true.   !< global benchma
 logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arrays for jobs where we know nparts
 logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estmate memory usage for parts
 logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not
-logical,          parameter   :: L_NEW_CAVGER       = .true.   ! Temporary flag for testing the classaverager
 real,             parameter   :: HPLIM_GUINIER      = 20.      !< high-pass limit for Guinier plot
 ! general parameters
 real,    parameter    :: PRUNE_FRAC                = 0.3       !< fraction of particles after which a project is automatically pruned

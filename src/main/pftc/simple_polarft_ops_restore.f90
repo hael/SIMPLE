@@ -1,7 +1,5 @@
 !@descr: submodule for class average restoration in the polar Fourier domain
 submodule (simple_polarft_calc) simple_polarft_ops_restore
-use simple_class_frcs, only: class_frcs
-use simple_cmdline,    only: cmdline
 implicit none
 #include "simple_local_flags.inc"
 contains               

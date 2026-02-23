@@ -115,8 +115,8 @@ src/main/ctf/simple_ctf_estimate_iter.f90	1	1	0
 src/main/image/simple_image_bin.f90	1	1	0
 src/main/image/simple_image_norm.f90	1	1	0
 src/main/image/simple_image_seg.f90	1	1	0
-src/main/image/simple_new_classaverager.f90	1	1	0
-src/main/image/simple_new_classaverager_restore.f90	1	1	0
+src/main/image/simple_classaverager.f90	1	1	0
+src/main/image/simple_classaverager_restore.f90	1	1	0
 src/main/nano/simple_tseries_tracker.f90	1	1	0
 src/main/ori/simple_ori.f90	1	1	0
 src/main/ori/simple_oris_weights.f90	1	1	0

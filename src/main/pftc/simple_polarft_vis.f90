@@ -1,6 +1,5 @@
 !@descr: polarft class submodule supporting visualization
 submodule (simple_polarft_calc) simple_polarft_vis
-use gnufor2, only: gnufor_image
 implicit none
 
 contains

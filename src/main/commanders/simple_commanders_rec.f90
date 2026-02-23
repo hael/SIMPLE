@@ -121,7 +121,6 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(parameters)            :: params
         type(builder)               :: build
-        type(euclid_sigma2), target :: eucl_sigma
         type(string)                :: fname
         integer, allocatable        :: pinds(:)
         integer                     :: nptcls2update
@@ -151,14 +150,14 @@ contains
             ! we sample all state > 0 and updatecnt > 0
             call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds)
         endif
-        if( params%l_needs_sigma )then
+        if( params%l_ml_reg )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-            call eucl_sigma%new(params, fname, params%box)
-            call eucl_sigma%read_groups(build%spproj_field)
+            call build%esig%new(params, fname, params%box)
+            call build%esig%read_groups(build%spproj_field)
         end if
         call calc_3Drec( params, build, cline, nptcls2update, pinds )
         ! cleanup
-        call eucl_sigma%kill
+        call build%esig%kill
         call qsys_job_finished(params, string('simple_commanders_rec :: exec_reconstruct3D'))
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)

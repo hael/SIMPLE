@@ -31,7 +31,6 @@ type(image),   allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
 integer,       allocatable :: pinds(:)
 type(string)               :: fname
 integer                    :: nptcls2update
-type(euclid_sigma2)        :: eucl_sigma
 type(polarft_calc)         :: pftc
 class(parameters), pointer :: p_ptr => null()
 class(builder),    pointer :: b_ptr => null()
@@ -125,7 +124,7 @@ contains
             rt_init = toc(t_init)
             t_prepare_refs_sigmas_ptcls = tic()
         endif
-        call prepare_refs_sigmas_ptcls( p_ptr, b_ptr, pftc, cline, eucl_sigma, ptcl_match_imgs, ptcl_match_imgs_pad,&
+        call prepare_refs_sigmas_ptcls( p_ptr, b_ptr, pftc, cline, ptcl_match_imgs, ptcl_match_imgs_pad,&
                                         &batchsz_max, which_iter, do_polar=(l_polar .and. .not.cline%defined('vol1')) )
         if( L_BENCH_GLOB )then
             rt_prepare_refs_sigmas_ptcls = toc(t_prepare_refs_sigmas_ptcls)
@@ -134,7 +133,7 @@ contains
         if( l_polar .and. l_restore )then
             ! for restoration
             if( cline%defined('vol1') )then
-                call pftc%polar_cavger_new(.true.)
+                call pftc%polar_cavger(.true.)
                 if( p_ptr%l_trail_rec )then
                     ! In the first iteration the polarized cartesian references are written down
                     call pftc%polar_cavger_writeall_pftcrefs(string(POLAR_REFS_FBODY))
@@ -251,7 +250,7 @@ contains
                 if ( p_ptr%l_needs_sigma ) then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
-                    call eucl_sigma%calc_sigma2(pftc, iptcl, orientation, 'proj')
+                    call b_ptr%esig%calc_sigma2(pftc, iptcl, orientation, 'proj')
                 end if
             enddo ! Particles loop
             !$omp end parallel do
@@ -260,7 +259,7 @@ contains
             if( l_polar .and. l_restore )then
                 if( L_BENCH_GLOB ) t_rec = tic()
                 call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
+                    &b_ptr%spproj, b_ptr%esig%sigma2_noise, incr_shifts(:,1:batchsz), is3D=.true.)
                 if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
             endif
         enddo
@@ -279,7 +278,7 @@ contains
         call deallocate_class_samples(clssmp)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
-        if( p_ptr%l_needs_sigma ) call eucl_sigma%write_sigma2
+        if( p_ptr%l_needs_sigma ) call b_ptr%esig%write_sigma2
 
         ! CALCULATE PARTICLE WEIGHTS
         if( trim(p_ptr%ptclw).eq.'yes' )then
@@ -327,7 +326,7 @@ contains
             if( l_polar )then
                 ! Polar representation
                 call killimgbatch(b_ptr)
-                call eucl_sigma%kill
+                call b_ptr%esig%kill
                 if( l_distr_exec_glob )then
                     call pftc%polar_cavger_readwrite_partial_sums('write')
                 else
@@ -340,14 +339,14 @@ contains
                 if( trim(p_ptr%volrec).eq.'yes' )then
                      call calc_3Drec( p_ptr, b_ptr, cline, nptcls2update, pinds )
                 endif
-                call eucl_sigma%kill
+                call b_ptr%esig%kill
                 call killimgbatch(b_ptr)
             endif
             if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
         else
             ! cleanup
             call killimgbatch(b_ptr)
-            call eucl_sigma%kill
+            call b_ptr%esig%kill
             call pftc%kill
         endif
 
