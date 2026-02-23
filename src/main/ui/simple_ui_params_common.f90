@@ -594,8 +594,8 @@ subroutine set_ui_params
                                    '(yes|no){yes}', .false., 'yes')
 
     call picker%set_param(         'picker',          'multi',  'Which picker to use', &
-                                   'Which picker to use(old|new|seg){new}', &
-                                   '(old|new|seg){new}', .false., 'new')
+                                   'Which picker to use(old|new|segdiam){new}', &
+                                   '(old|new|segdiam){new}', .false., 'new')
 
     call pickrefs%set_param(       'pickrefs',        'file',   'Stack of class-averages/reprojections for picking', &
                                    'Stack of class-averages/reprojections for picking', &

@@ -60,8 +60,10 @@ contains
         write(logfhandle,'(a,f5.1)')  '>>> % AMORPHOUS CARBON IDENTIFIED: ', 100. * (real(nmasked) / real(product(ldim)))
         if( real(nmasked) > 0.98 * real(product(ldim)) ) return
         call cascade_filter_biomol( mic_shrink, mic_den )
-        if( present(denfname) ) call mic_den%write(denfname)
-        write(logfhandle,'(a)')  '>>> DENOISED MICROGRAPH: '//denfname%to_char()
+        if( present(denfname) )then
+            call mic_den%write(denfname)
+            write(logfhandle,'(a)')  '>>> DENOISED MICROGRAPH: '//denfname%to_char()
+        endif
         if( present(topofname) ) call mic_shrink%write(topofname)
         call binarize_mic_den(mic_shrink, FRAC_FG, mic_bin)
         write(logfhandle,'(a)')  '>>> BINARIZATION, CONNECTED COMPONENT IDENTIFICATION, DIAMETER ESTIMATION'

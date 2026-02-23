@@ -102,7 +102,7 @@ contains
         real,                       intent(in)  :: smpd    !< sampling distance in A
         integer,                    intent(out) :: nptcls
         real,                       intent(in)  :: moldiam_max
-        class(string), optional, intent(in)  :: dir_out
+        class(string), optional,    intent(in)  :: dir_out
         type(string)      :: boxfile
         type(picksegdiam) :: picker
         boxfile = basename(fname_new_ext(micname,'box'))
