@@ -3,7 +3,6 @@ module simple_commanders_mkcavgs
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_classaverager
-use simple_new_classaverager
 implicit none
 #include "simple_local_flags.inc"
 
@@ -166,45 +165,22 @@ contains
         endif
         ! choice of algorithm
         if( l_shmem )then
-            if( L_NEW_CAVGER )then
-                call cavger_new_new(params, build)
-                call cavger_new_transf_oridat( build%spproj )
-                call cavger_new_read_euclid_sigma2
-                call cavger_new_assemble_sums( .false. )
-                call cavger_new_restore_cavgs( params%frcs )
-                call cavger_new_gen2Dclassdoc( build%spproj )
-                call cavger_new_write_all(params%refs, params%refs_even, params%refs_odd)
-                call cavger_new_kill
-            else
-                call cavger_new(params, build)
-                call cavger_transf_oridat(build%spproj)
-                call cavger_read_euclid_sigma2
-                call cavger_assemble_sums( .false. )
-                call cavger_merge_eos_and_norm
-                call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
-                call cavger_gen2Dclassdoc(build%spproj)
-                call cavger_write(params%refs,      'merged')
-                call cavger_write(params%refs_even, 'even'  )
-                call cavger_write(params%refs_odd,  'odd'   )
-                call cavger_kill
-            endif
+            call cavger_new(params, build)
+            call cavger_transf_oridat( build%spproj )
+            call cavger_read_euclid_sigma2
+            call cavger_assemble_sums( .false. )
+            call cavger_restore_cavgs( params%frcs )
+            call cavger_gen2Dclassdoc( build%spproj )
+            call cavger_write_all(params%refs, params%refs_even, params%refs_odd)
+            call cavger_kill
         else
             ! distributed: write partial sums only
-            if( L_NEW_CAVGER )then
-                call cavger_new_new(params, build)
-                call cavger_new_transf_oridat(build%spproj)
-                call cavger_new_read_euclid_sigma2
-                call cavger_new_assemble_sums( .false. )
-                call cavger_new_readwrite_partial_sums('write')
-                call cavger_new_kill
-            else
-                call cavger_new(params, build)
-                call cavger_transf_oridat(build%spproj)
-                call cavger_read_euclid_sigma2
-                call cavger_assemble_sums( .false. )
-                call cavger_readwrite_partial_sums('write')
-                call cavger_kill
-            endif
+            call cavger_new(params, build)
+            call cavger_transf_oridat(build%spproj)
+            call cavger_read_euclid_sigma2
+            call cavger_assemble_sums( .false. )
+            call cavger_readwrite_partial_sums('write')
+            call cavger_kill
             call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_make_cavgs'))
         endif
         ! book-keeping
@@ -239,7 +215,6 @@ contains
     end subroutine exec_make_cavgs
 
     subroutine exec_cavgassemble( self, cline )
-        use simple_classaverager
         class(commander_cavgassemble), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)   :: params
@@ -275,7 +250,7 @@ contains
             call fname%kill
             call pftc%new(params, 1, [1,1], kfromto)
             if( trim(params%ref_type)=='comlin_hybrid' )then
-                call pftc%polar_cavger_new(.true., nrefs=params%ncls)
+                call pftc%polar_cavger(.true., nrefs=params%ncls)
                 call pftc%polar_cavger_calc_pops(build%spproj)
                 call build%pgrpsyms%new('c1')
                 params%nsym    = build%pgrpsyms%get_nsym()
@@ -285,7 +260,7 @@ contains
                 clw = min(1.0, max(0.0, 1.0-max(0.0, real(params%extr_iter-4)/real(params%extr_lim-3))))
                 call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms, clin_anneal=clw)
             else
-                call pftc%polar_cavger_new(.false., nrefs=params%ncls)
+                call pftc%polar_cavger(.false., nrefs=params%ncls)
                 call pftc%polar_cavger_calc_pops(build%spproj)
                 call pftc%polar_cavger_assemble_sums_from_parts
             endif
@@ -296,30 +271,15 @@ contains
             call pftc%kill
             call pftc%polar_cavger_kill
         else
-            if( L_NEW_CAVGER )then
-                call cavger_new_new(params, build)
-                call cavger_new_transf_oridat( build%spproj )
-                call cavger_new_assemble_sums_from_parts()
-                ! classdoc gen needs to be after calc of FRCs
-                call cavger_new_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
-                ! write references
-                call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP')
-                call cavger_new_write_all(params%refs, params%refs_even, params%refs_odd)
-                call cavger_new_kill
-            else
-                call cavger_new(params, build)
-                call cavger_transf_oridat( build%spproj )
-                call cavger_assemble_sums_from_parts()
-                call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
-                ! classdoc gen needs to be after calc of FRCs
-                call cavger_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
-                ! write references
-                call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP')
-                call cavger_write(params%refs,      'merged')
-                call cavger_write(params%refs_even, 'even'  )
-                call cavger_write(params%refs_odd,  'odd'   )
-                call cavger_kill
-            endif
+            call cavger_new(params, build)
+            call cavger_transf_oridat( build%spproj )
+            call cavger_assemble_sums_from_parts()
+            ! classdoc gen needs to be after calc of FRCs
+            call cavger_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
+            ! write references
+            call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP')
+            call cavger_write_all(params%refs, params%refs_even, params%refs_odd)
+            call cavger_kill
         endif
         ! get iteration from which_iter else from refs filename and write cavgs starfile
         if( cline%defined('which_iter') ) then

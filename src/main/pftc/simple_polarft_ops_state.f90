@@ -1,12 +1,11 @@
 !@descr: submodule for controlling various state-related things in the polarops module
 submodule (simple_polarft_calc) simple_polarft_ops_state
-use simple_euclid_sigma2, only: eucl_sigma2_glob
 implicit none
 #include "simple_local_flags.inc"
 contains
 
     !> Module initialization
-    module subroutine polar_cavger_new( self, l_comlin, nrefs )
+    module subroutine polar_cavger( self, l_comlin, nrefs )
         class(polarft_calc), intent(inout) :: self
         logical,             intent(in)    :: l_comlin
         integer,   optional, intent(in)    :: nrefs
@@ -23,7 +22,7 @@ contains
                 &self%pfts_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls))
         call self%polar_cavger_zero_pft_refs
         self%pfts_merg = DCMPLX_ZERO
-    end subroutine polar_cavger_new
+    end subroutine polar_cavger
 
     module subroutine polar_cavger_zero_pft_refs( self )
         class(polarft_calc), intent(inout) :: self
@@ -102,11 +101,12 @@ contains
     end subroutine polar_cavger_calc_pops
 
     !>  \brief  Updates Fourier components and normalization matrices with new particles
-    module subroutine polar_cavger_update_sums( self, nptcls, pinds, spproj, incr_shifts, is3D )
+    module subroutine polar_cavger_update_sums( self, nptcls, pinds, spproj, sig2arr, incr_shifts, is3D )
         class(polarft_calc),         intent(inout) :: self
         integer,                     intent(in)    :: nptcls
         integer,                     intent(in)    :: pinds(nptcls)
         class(sp_project),           intent(inout) :: spproj
+        real,                        intent(in)    :: sig2arr(self%kfromto(1):self%kfromto(2),self%pfromto(1):self%pfromto(2))
         real,              optional, intent(in)    :: incr_shifts(2,nptcls)
         logical,           optional, intent(in)    :: is3d
         class(oris), pointer :: spproj_field
@@ -153,7 +153,7 @@ contains
             rptcl = real(w) * rptcl
             ! Particle ML regularization
             if( self%p_ptr%l_ml_reg )then
-                sigma2 = eucl_sigma2_glob%sigma2_noise(self%kfromto(1):self%kfromto(2),iptcl)
+                sigma2 = sig2arr(self%kfromto(1):self%kfromto(2),iptcl)
                 do k = self%kfromto(1),self%kfromto(2)
                     rptcl(:,k) = rptcl(:,k) / sigma2(k)
                 enddo

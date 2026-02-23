@@ -9,6 +9,7 @@ use simple_reconstructor_eo, only: reconstructor_eo
 use simple_projector,        only: projector
 use simple_class_frcs,       only: class_frcs
 use simple_parameters,       only: parameters
+use simple_euclid_sigma2,    only: euclid_sigma2
 implicit none
 
 public :: builder
@@ -21,6 +22,7 @@ type :: builder
     class(oris), pointer                :: spproj_field => null() !< pointer to field in spproj
     type(oris)                          :: eulspace               !< discrete projection direction search space
     type(sym)                           :: pgrpsyms               !< symmetry elements object
+    type(euclid_sigma2)                 :: esig                   !< object for euclidean sigma2 noise variance
     type(image)                         :: img                    !< individual image/projector objects
     type(image)                         :: img_crop               !< for cropped image
     type(image)                         :: img_pad                !< -"-
@@ -31,6 +33,7 @@ type :: builder
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     type(image),            allocatable :: img_pad_heap(:)        !< heap of padded images for use in norm_noise_taper_edge_pad_fft_gen_fplane4rec
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
+
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
     ! RECONSTRUCTION TOOLBOX
@@ -42,6 +45,7 @@ type :: builder
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
     logical,                allocatable :: lmsk_crop(:,:,:)       !< logical circular 2D mask for cropped image
     logical,                allocatable :: l_resmsk(:)            !< logical resolution mask
+
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
     logical, private                    :: eo_rec_tbox_exists     = .false.

@@ -7,7 +7,7 @@ use simple_sigma2_binfile, only: sigma2_binfile
 use simple_starfile_wrappers
 implicit none
 
-public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile
+public :: euclid_sigma2, write_groups_starfile
 public :: split_sigma2_into_groups, consolidate_sigma2_groups, average_sigma2_groups
 public :: sigma2_star_from_iter, fill_sigma2_before_nyq, test_unit
 private
@@ -19,7 +19,7 @@ type euclid_sigma2
     private
     class(parameters),    pointer :: p_ptr => null()
     real,    allocatable, public  :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
-    real,    allocatable, public  :: sigma2_part(:,:)       !< the actual sigmas per particle (this part only)
+    real,    allocatable          :: sigma2_part(:,:)       !< the actual sigmas per particle (this part only)
     real,    allocatable          :: sigma2_groups(:,:,:)   !< sigmas for groups
     integer, allocatable          :: pinds(:)
     integer, allocatable          :: micinds(:)
@@ -47,8 +47,6 @@ contains
     procedure          :: kill
 end type euclid_sigma2
 
-class(euclid_sigma2), pointer :: eucl_sigma2_glob => null()
-
 contains
 
     subroutine new( self, params, binfname, box )
@@ -73,7 +71,6 @@ contains
         self%top          =  self%p_ptr%top
         self%sigma2_noise =  0.
         self%exists       =  .true.
-        eucl_sigma2_glob  => self
     end subroutine new
 
     subroutine consolidate_sigma2_history( self, os, pinds, iters )
@@ -587,7 +584,6 @@ contains
             self%fromp       = -1
             self%top         = -1
             self%exists      = .false.
-            eucl_sigma2_glob => null()
         endif
         self%p_ptr => null()
     end subroutine kill

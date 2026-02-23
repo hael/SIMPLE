@@ -3,7 +3,6 @@ submodule (simple_image) simple_image_ctf
 use simple_memoize_ft_maps
 use simple_math_ctf,      only: ft_map_ctf_kernel
 use simple_parameters,    only: parameters
-use simple_euclid_sigma2, only: eucl_sigma2_glob
 implicit none
 #include "simple_local_flags.inc"
 
@@ -128,15 +127,17 @@ contains
         end do
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, smpd_crop, ctfparms, shift, l_ml_reg, iptcl, fplane )
-        use simple_math_ft, only: upsample_sigma2
-        class(image),      intent(inout) :: self
-        real,              intent(in)    :: smpd_crop
-        class(ctfparams),  intent(in)    :: ctfparms
-        real,              intent(in)    :: shift(2)
-        logical,           intent(in)    :: l_ml_reg
-        integer,           intent(in)    :: iptcl
-        type(fplane_type), intent(out)   :: fplane
+    module subroutine gen_fplane4rec( self, sig2arr, smpd_crop, ctfparms, shift, l_ml_reg, iptcl, fplane )
+        use simple_math_ft,       only: upsample_sigma2
+        use simple_euclid_sigma2, only: euclid_sigma2
+        class(image),         intent(inout) :: self
+        real,                 intent(in)    :: sig2arr(:,:)
+        real,                 intent(in)    :: smpd_crop
+        class(ctfparams),     intent(in)    :: ctfparms
+        real,                 intent(in)    :: shift(2)
+        logical,              intent(in)    :: l_ml_reg
+        integer,              intent(in)    :: iptcl
+        type(fplane_type),    intent(out)   :: fplane
         type(ctf)                :: tfun
         type(ctfvars)            :: ctfvals
         real, allocatable        :: sigma2_noise_tmp(:), sigma2_noise(:) !< Noise power spectrum for ML regularization
@@ -198,9 +199,9 @@ contains
         ! -----------------------
         if (l_ml_reg) then
             allocate(sigma2_noise_tmp(1:sigma_nyq), sigma2_noise(0:fplane%nyq), source=0.0)
-            sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
-            sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
-            sigma2_noise_tmp(sigma2_kfromto(1):sigma_nyq) = eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1):sigma_nyq, iptcl)
+            sigma2_kfromto(1) = lbound(sig2arr,1)
+            sigma2_kfromto(2) = ubound(sig2arr,1)
+            sigma2_noise_tmp(sigma2_kfromto(1):sigma_nyq) = sig2arr(sigma2_kfromto(1):sigma_nyq, iptcl)
             call upsample_sigma2(sigma2_kfromto(1), sigma_nyq, sigma2_noise_tmp, fplane%nyq, sigma2_noise)
         end if
         ! -----------------------

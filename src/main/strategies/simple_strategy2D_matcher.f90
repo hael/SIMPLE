@@ -3,7 +3,6 @@ module simple_strategy2D_matcher
 use simple_pftc_srch_api
 use simple_binoris_io
 use simple_classaverager
-use simple_new_classaverager
 use simple_progress
 use simple_strategy2D_alloc
 use simple_builder,                only: builder
@@ -28,7 +27,6 @@ private
 #include "simple_local_flags.inc"
 
 type(polarft_calc)         :: pftc
-type(euclid_sigma2)        :: eucl_sigma
 type(image),   allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
 class(builder),    pointer :: b_ptr => null()
 class(parameters), pointer :: p_ptr => null()
@@ -157,22 +155,12 @@ contains
             if( .not.l_distr_exec_glob )then
                 l_alloc_read_cavgs = which_iter==1
             endif
-            if( L_NEW_CAVGER )then
-                call cavger_new_new(p_ptr, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
-                if( l_alloc_read_cavgs )then
-                    if( .not. cline%defined('refs') )then
-                        THROW_HARD('need refs to be part of command line for cluster2D execution')
-                    endif
-                    call cavger_new_read_all
+            call cavger_new(p_ptr, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
+            if( l_alloc_read_cavgs )then
+                if( .not. cline%defined('refs') )then
+                    THROW_HARD('need refs to be part of command line for cluster2D execution')
                 endif
-            else
-                call cavger_new(p_ptr, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
-                if( l_alloc_read_cavgs )then
-                    if( .not. cline%defined('refs') )then
-                        THROW_HARD('need refs to be part of command line for cluster2D execution')
-                    endif
-                    call cavger_read_all
-                endif
+                call cavger_read_all
             endif
         endif
 
@@ -202,7 +190,7 @@ contains
         endif
         if( l_polar )then
             ! for restoration
-            if( which_iter == 1 ) call pftc%polar_cavger_new(l_clin)
+            if( which_iter == 1 ) call pftc%polar_cavger(l_clin)
             call pftc%polar_cavger_zero_pft_refs
         endif
 
@@ -320,7 +308,7 @@ contains
                 if ( p_ptr%l_needs_sigma ) then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch)) ! incremental shift
-                    call eucl_sigma%calc_sigma2(pftc, iptcl, orientation, 'class')
+                    call b_ptr%esig%calc_sigma2(pftc, iptcl, orientation, 'class')
                 end if
                 ! cleanup
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
@@ -330,7 +318,7 @@ contains
             ! restore polar cavgs
             if( l_polar )then
                 call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &b_ptr%spproj, incr_shifts(:,1:batchsz))
+                    &b_ptr%spproj, b_ptr%esig%sigma2_noise, incr_shifts(:,1:batchsz))
             endif
         enddo ! Batch loop
 
@@ -362,7 +350,7 @@ contains
         deallocate(strategy2Dsrch,pinds,batches)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
-        if( p_ptr%l_needs_sigma ) call eucl_sigma%write_sigma2
+        if( p_ptr%l_needs_sigma ) call b_ptr%esig%write_sigma2
 
         ! OUTPUT ORIENTATIONS
         if( L_BENCH_GLOB ) t_projio = tic()
@@ -378,22 +366,12 @@ contains
                 if( l_polar )then
                     call pftc%polar_cavger_readwrite_partial_sums('write')
                 else
-                    if( L_NEW_CAVGER )then
-                        call cavger_new_transf_oridat( b_ptr%spproj )
-                        call cavger_new_assemble_sums( l_partial_sums )
-                        call cavger_new_readwrite_partial_sums('write')
-                    else
-                        call cavger_transf_oridat( b_ptr%spproj )
-                        call cavger_assemble_sums( l_partial_sums )
-                        call cavger_readwrite_partial_sums('write')
-                    endif
+                    call cavger_transf_oridat( b_ptr%spproj )
+                    call cavger_assemble_sums( l_partial_sums )
+                    call cavger_readwrite_partial_sums('write')
                 endif
             endif
-            if( L_NEW_CAVGER )then
-                call cavger_new_kill
-            else
-                call cavger_kill
-            endif
+            call cavger_kill
             call pftc%polar_cavger_kill
         else
             ! check convergence
@@ -411,11 +389,7 @@ contains
                     THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                 endif
                 if( l_polar )then
-                    if( L_NEW_CAVGER )then
-                        if( which_iter == 1) call cavger_new_kill
-                    else
-                        if( which_iter == 1) call cavger_kill
-                    endif
+                    if( which_iter == 1) call cavger_kill
                     ! polar restoration
                     if( l_clin )then
                         clinw = min(1.0, max(0.0, 1.0-max(0.0, real(p_ptr%extr_iter-4)/real(p_ptr%extr_lim-3))))
@@ -429,35 +403,18 @@ contains
                     call pftc%polar_cavger_kill
                 else
                     ! cartesian restoration
-                    if( L_NEW_CAVGER )then
-                        call cavger_new_transf_oridat( b_ptr%spproj )
-                        call cavger_new_assemble_sums( l_partial_sums )
-                        call cavger_new_restore_cavgs( p_ptr%frcs )
-                        ! classdoc gen needs to be after calc of FRCs
-                        call cavger_new_gen2Dclassdoc( b_ptr%spproj )
-                        ! write references
-                        call cavger_new_write_merged( p_ptr%refs )
-                        if( l_stream )then
-                            call cavger_new_write_eo( p_ptr%refs_even, p_ptr%refs_odd )
-                            call cavger_new_readwrite_partial_sums( 'write' )
-                        endif
-                        call cavger_new_kill(dealloccavgs=.false.)
-                    else
-                        call cavger_transf_oridat( b_ptr%spproj )
-                        call cavger_assemble_sums( l_partial_sums )
-                        call cavger_merge_eos_and_norm
-                        call cavger_calc_and_write_frcs_and_eoavg(p_ptr%frcs, p_ptr%which_iter)
-                        ! classdoc gen needs to be after calc of FRCs
-                        call cavger_gen2Dclassdoc(b_ptr%spproj)
-                        ! write references
-                        call cavger_write(p_ptr%refs,'merged')
-                        if( l_stream )then
-                            call cavger_write(p_ptr%refs_even,'even')
-                            call cavger_write(p_ptr%refs_odd, 'odd')
-                            call cavger_readwrite_partial_sums('write')
-                        endif
-                        call cavger_kill(dealloccavgs=.false.)
+                    call cavger_transf_oridat( b_ptr%spproj )
+                    call cavger_assemble_sums( l_partial_sums )
+                    call cavger_restore_cavgs( p_ptr%frcs )
+                    ! classdoc gen needs to be after calc of FRCs
+                    call cavger_gen2Dclassdoc( b_ptr%spproj )
+                    ! write references
+                    call cavger_write_merged( p_ptr%refs )
+                    if( l_stream )then
+                        call cavger_write_eo( p_ptr%refs_even, p_ptr%refs_odd )
+                        call cavger_readwrite_partial_sums( 'write' )
                     endif
+                    call cavger_kill(dealloccavgs=.false.)
                 endif
                 ! update command line
                 call cline%set('refs', p_ptr%refs)
@@ -470,7 +427,7 @@ contains
                 deallocate(states)
             endif
         endif
-        call eucl_sigma%kill
+        call b_ptr%esig%kill
         ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         call pftc%kill
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
@@ -627,27 +584,21 @@ contains
         ! objective functions & sigma
         if( p_ptr%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
-            call eucl_sigma%new(p_ptr, fname, p_ptr%box)
+            call b_ptr%esig%new(p_ptr, fname, p_ptr%box)
             if( l_stream )then
-                call eucl_sigma%read_groups(b_ptr%spproj_field)
-                call eucl_sigma%allocate_ptcls
+                call b_ptr%esig%read_groups(b_ptr%spproj_field)
+                call b_ptr%esig%allocate_ptcls
             else
-                call eucl_sigma%read_part(  b_ptr%spproj_field)
-                if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(b_ptr%spproj_field)
+                call b_ptr%esig%read_part(  b_ptr%spproj_field)
+                if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%read_groups(b_ptr%spproj_field)
             endif
         endif
         ! prepare the polarizer images
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pftc%get_pdim())
         allocate(match_imgs(p_ptr%ncls))
-        if( L_NEW_CAVGER )then
-            cavgs_m => cavgs_merged_new
-            cavgs_e => cavgs_even_new
-            cavgs_o => cavgs_odd_new
-        else
-            cavgs_m => cavgs_merged
-            cavgs_e => cavgs_even
-            cavgs_o => cavgs_odd
-        endif
+        cavgs_m => cavgs_merged_new
+        cavgs_e => cavgs_even_new
+        cavgs_o => cavgs_odd_new
         call cavgs_m(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! mask memoization
         call cavgs_m(1)%memoize_mask_coords
@@ -737,19 +688,19 @@ contains
         ! Sigma2
         if( p_ptr%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
-            call eucl_sigma%new(p_ptr, fname, p_ptr%box)
+            call b_ptr%esig%new(p_ptr, fname, p_ptr%box)
             if( l_stream )then
-                call eucl_sigma%read_groups(b_ptr%spproj_field)
-                call eucl_sigma%allocate_ptcls
+                call b_ptr%esig%read_groups(b_ptr%spproj_field)
+                call b_ptr%esig%allocate_ptcls
             else
-                call eucl_sigma%read_part(  b_ptr%spproj_field)
+                call b_ptr%esig%read_part(  b_ptr%spproj_field)
                 if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
-                    call eucl_sigma%read_groups(b_ptr%spproj_field)
+                    call b_ptr%esig%read_groups(b_ptr%spproj_field)
                 endif
             endif
         endif
         ! Read polar references
-        call pftc%polar_cavger_new(trim(p_ptr%ref_type)=='comlin_hybrid')
+        call pftc%polar_cavger(trim(p_ptr%ref_type)=='comlin_hybrid')
         call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY)//BIN_EXT)
         has_been_searched = .not.b_ptr%spproj%is_virgin_field(p_ptr%oritype)
         ! Centering-related objects

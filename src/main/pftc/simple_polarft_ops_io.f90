@@ -1,6 +1,5 @@
 !@descr: submodule for parallel I/O and polar->Cartesian conversion
 submodule (simple_polarft_calc) simple_polarft_ops_io
-use simple_imgarr_utils, only: alloc_imgarr, write_imgarr, dealloc_imgarr
 implicit none
 #include "simple_local_flags.inc"
 contains

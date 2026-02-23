@@ -41,7 +41,6 @@ contains
 
     subroutine exec_abinitio2D( self, cline )
         use simple_classaverager
-        use simple_new_classaverager
         class(commander_abinitio2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
@@ -162,27 +161,7 @@ contains
         endif
         ! final class generation & ranking
         last_iter = cline_cluster2D%get_iarg('endit')
-        if ( trim(params%rank_cavgs).eq.'yes' )then
-            call gen_final_cavgs(last_iter)
-        else
-            if( l_shmem )then
-                ! making sure e/o are written
-                params%refs      = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//params%ext%to_char()
-                params%refs_even = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//'_even'//params%ext%to_char()
-                params%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//'_odd'//params%ext%to_char()
-                if( L_NEW_CAVGER )then
-                    call cavger_new_write_all(params%refs, params%refs_even, params%refs_odd)
-                    if( trim(params%chunk).eq.'yes') call cavger_new_readwrite_partial_sums('write')
-                    call cavger_new_kill
-                else
-                    call cavger_write(params%refs,     'merged')
-                    call cavger_write(params%refs_even,'even')
-                    call cavger_write(params%refs_odd, 'odd')
-                    if( trim(params%chunk).eq.'yes') call cavger_readwrite_partial_sums('write')
-                    call cavger_kill
-                endif
-            endif
-        endif
+        call gen_final_cavgs(last_iter)
         ! cleanup
         call del_file('start2Drefs'//params%ext%to_char())
         call del_file('start2Drefs_even'//params%ext%to_char())
@@ -670,31 +649,27 @@ contains
             integer :: iter
             finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
             ! classes generation
-            if( params%l_autoscale )then
-                cline_make_cavgs = cline ! ncls is transferred here
-                call cline_make_cavgs%delete('polar')
-                call cline_make_cavgs%delete('autoscale')
-                call cline_make_cavgs%delete('balance')
-                call cline_make_cavgs%delete('smpd_crop')
-                call cline_make_cavgs%delete('box_crop')
-                call cline_make_cavgs%set('prg',        'make_cavgs')
-                call cline_make_cavgs%set('refs',       finalcavgs)
-                call cline_make_cavgs%set('which_iter', iter)
-                ! Cavgs final output is regularized
-                call cline_make_cavgs%set('ml_reg',     'yes')
-                if( l_shmem )then
-                    call xmake_cavgs%execute(cline_make_cavgs)
-                else
-                    call xmake_cavgs_distr%execute(cline_make_cavgs)
-                endif
+            cline_make_cavgs = cline ! ncls is transferred here
+            call cline_make_cavgs%delete('polar')
+            call cline_make_cavgs%delete('autoscale')
+            call cline_make_cavgs%delete('balance')
+            call cline_make_cavgs%delete('smpd_crop')
+            call cline_make_cavgs%delete('box_crop')
+            call cline_make_cavgs%set('prg',        'make_cavgs')
+            call cline_make_cavgs%set('refs',       finalcavgs)
+            call cline_make_cavgs%set('which_iter', iter)
+            ! Cavgs final output is regularized
+            call cline_make_cavgs%set('ml_reg', 'yes')
+            if( l_shmem )then
+                call xmake_cavgs%execute(cline_make_cavgs)
+            else
+                call xmake_cavgs_distr%execute(cline_make_cavgs)
             endif
             ! adding cavgs & FRCs to project
             call spproj%read_segment('out', params%projfile)
             call spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
             call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg')
-            if( (params%cc_objfun == OBJFUN_EUCLID) .and. params%sigma_est == 'global')then
-                call spproj%add_sigma22os_out(sigma2_star_from_iter(iter))
-            endif
+            call spproj%add_sigma22os_out(sigma2_star_from_iter(iter))
             call spproj%write_segment_inside('out', params%projfile)
             ! rank based on gold-standard resolution estimates
             finalcavgs_ranked = CAVGS_ITER_FBODY//int2str_pad(iter,3)//'_ranked'//params%ext%to_char()
