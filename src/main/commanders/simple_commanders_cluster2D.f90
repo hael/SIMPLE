@@ -543,6 +543,8 @@ contains
                     call cline_prob_tab2D%set('frcs',       FRCS_FILE)
                     call cline_prob_tab2D%set('extr_iter',  params%extr_iter)
                     call xprob_tab2D_distr%execute( cline_prob_tab2D )
+                    ! read back sampling
+                    call build%spproj%read_segment(params%oritype, params%projfile)
                 endif
                 ! stochastic search
                 call cluster2D_exec( params, build, cline, params%startit, converged )
