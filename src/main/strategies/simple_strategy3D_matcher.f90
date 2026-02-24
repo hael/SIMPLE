@@ -259,7 +259,7 @@ contains
             if( l_polar .and. l_restore )then
                 if( L_BENCH_GLOB ) t_rec = tic()
                 call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &b_ptr%spproj, b_ptr%esig%sigma2_noise, incr_shifts(:,1:batchsz), is3D=.true.)
+                &b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
                 if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
             endif
         enddo

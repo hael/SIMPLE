@@ -708,12 +708,10 @@ interface
         class(sp_project), target, intent(in)    :: spproj
     end subroutine polar_cavger_calc_pops
 
-    module subroutine polar_cavger_update_sums( self, nptcls, pinds, spproj, sig2arr, incr_shifts, is3D )
+    module subroutine polar_cavger_update_sums( self, nptcls, pinds, spproj, incr_shifts, is3D )
         class(polarft_calc),         intent(inout) :: self
-        integer,                     intent(in)    :: nptcls
-        integer,                     intent(in)    :: pinds(nptcls)
+        integer,                     intent(in)    :: nptcls, pinds(nptcls)
         class(sp_project),           intent(inout) :: spproj
-        real,                        intent(in)    :: sig2arr(self%kfromto(1):self%kfromto(2),self%pfromto(1):self%pfromto(2))
         real,              optional, intent(in)    :: incr_shifts(2,nptcls)
         logical,           optional, intent(in)    :: is3d
     end subroutine polar_cavger_update_sums
