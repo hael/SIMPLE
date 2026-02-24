@@ -127,31 +127,33 @@ contains
         end do
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, sig2arr, smpd_crop, ctfparms, shift, l_ml_reg, iptcl, fplane )
+    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, iptcl, fplane, sig2arr )
         use simple_math_ft,       only: upsample_sigma2
         use simple_euclid_sigma2, only: euclid_sigma2
-        class(image),         intent(inout) :: self
-        real,                 intent(in)    :: sig2arr(:,:)
-        real,                 intent(in)    :: smpd_crop
-        class(ctfparams),     intent(in)    :: ctfparms
-        real,                 intent(in)    :: shift(2)
-        logical,              intent(in)    :: l_ml_reg
-        integer,              intent(in)    :: iptcl
-        type(fplane_type),    intent(out)   :: fplane
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: kfromto(2)
+        real,              intent(in)    :: smpd_crop
+        class(ctfparams),  intent(in)    :: ctfparms
+        real,              intent(in)    :: shift(2)
+        integer,           intent(in)    :: iptcl
+        type(fplane_type), intent(out)   :: fplane
+        real, optional,    intent(in)    :: sig2arr(kfromto(1):kfromto(2))
         type(ctf)                :: tfun
         type(ctfvars)            :: ctfvals
-        real, allocatable        :: sigma2_noise_tmp(:), sigma2_noise(:) !< Noise power spectrum for ML regularization
+        real, allocatable        :: sigma2_noise(:) !< Noise power spectrum for ML regularization
         complex(c_float_complex) :: c, w1, w2, ph0, ph_h, ph_k
         real(dp)                 :: pshift(2)
+        logical :: l_ml_reg
         type(ftiter) :: fiterator
         ! CTF kernel scalars (precomputed)
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
-        integer :: physh, physk, sigma2_kfromto(2), h, k, shell, hmin, hmax, kmin, kmax,  frlims_crop(3,2), sigma_nyq
+        integer :: physh, physk, h, k, shell, hmin, hmax, kmin, kmax,  frlims_crop(3,2), sigma_nyq
         integer :: box_croppd, box_crop
         logical :: l_ctf, l_flip
         ! Shell LUT: shell = nint(sqrt(r2)) via lookup table
         integer, allocatable :: shell_lut(:)
         integer :: max_r2, r2, abs_hmax, abs_kmax
+        l_ml_reg = present(sig2arr)
         ! shift is with respect to the original image dimension
         fplane%shconst = self%get_shconst()
         ! -----------------------
@@ -198,11 +200,8 @@ contains
         ! ML regularization noise spectrum
         ! -----------------------
         if (l_ml_reg) then
-            allocate(sigma2_noise_tmp(1:sigma_nyq), sigma2_noise(0:fplane%nyq), source=0.0)
-            sigma2_kfromto(1) = lbound(sig2arr,1)
-            sigma2_kfromto(2) = ubound(sig2arr,1)
-            sigma2_noise_tmp(sigma2_kfromto(1):sigma_nyq) = sig2arr(sigma2_kfromto(1):sigma_nyq, iptcl)
-            call upsample_sigma2(sigma2_kfromto(1), sigma_nyq, sigma2_noise_tmp, fplane%nyq, sigma2_noise)
+            allocate(sigma2_noise(0:fplane%nyq), source=0.0)
+            call upsample_sigma2(kfromto(1), sigma_nyq, sig2arr, fplane%nyq, sigma2_noise)
         end if
         ! -----------------------
         ! Shift phase recurrence
@@ -274,9 +273,8 @@ contains
             end do
             ph_k = ph_k * w2
         end do
-        if (allocated(shell_lut)       ) deallocate(shell_lut)
-        if (allocated(sigma2_noise_tmp)) deallocate(sigma2_noise_tmp)
-        if (allocated(sigma2_noise)    ) deallocate(sigma2_noise)
+        if (allocated(shell_lut)    ) deallocate(shell_lut)
+        if (allocated(sigma2_noise) ) deallocate(sigma2_noise)
     end subroutine gen_fplane4rec
 
     ! Calculate Joe's Ice Fraction Score for images, not intended for micrographs

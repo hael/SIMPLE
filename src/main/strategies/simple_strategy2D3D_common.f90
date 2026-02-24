@@ -752,7 +752,7 @@ contains
         type(ctfparams),   allocatable   :: ctfparms(:)
         type(ori) :: orientation, o_thres, o_mirr
         real      :: shift(2), euls(3), euls_mirr(3)
-        integer   :: batchlims(2), iptcl, i, i_batch, ibatch, nptcls_eff, ithr
+        integer   :: batchlims(2), iptcl, i, i_batch, ibatch, nptcls_eff, ithr, kfromto(2)
         logical   :: l_rec_state
         logical   :: DEBUG = .false.
         integer(timer_int_kind) :: t
@@ -796,7 +796,7 @@ contains
                 t_ini = t_ini + toc(t)
                 t = tic()
             endif
-            !$omp parallel do default(shared) private(i,ithr,iptcl,ibatch,shift) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(i,ithr,iptcl,ibatch,shift,kfromto) schedule(static) proc_bind(close)
             do i=batchlims(1),batchlims(2)
                 ithr   = omp_get_thread_num() + 1
                 iptcl  = pinds(i)
@@ -804,7 +804,14 @@ contains
                 call build%imgbatch(ibatch)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
                 ctfparms(ibatch) = build%spproj%get_ctfparams(params%oritype, iptcl)
                 shift = build%spproj_field%get_2Dshift(iptcl)
-                call build%img_pad_heap(ithr)%gen_fplane4rec(build%esig%sigma2_noise, params%smpd_crop, ctfparms(ibatch), shift, params%l_ml_reg, iptcl, fpls(ibatch))
+                kfromto = build%esig%get_kfromto()
+                if( params%l_ml_reg )then
+                    call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ibatch),&
+                    &shift, iptcl, fpls(ibatch), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
+                else
+                    call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ibatch),&
+                    &shift, iptcl, fpls(ibatch))
+                endif
             end do
             !$omp end parallel do
             if( DEBUG )then
