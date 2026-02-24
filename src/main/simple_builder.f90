@@ -10,6 +10,7 @@ use simple_projector,        only: projector
 use simple_class_frcs,       only: class_frcs
 use simple_parameters,       only: parameters
 use simple_euclid_sigma2,    only: euclid_sigma2
+use simple_polarft_calc,     only: polarft_calc
 implicit none
 
 public :: builder
@@ -23,6 +24,7 @@ type :: builder
     type(oris)                          :: eulspace               !< discrete projection direction search space
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(euclid_sigma2)                 :: esig                   !< object for euclidean sigma2 noise variance
+    type(polarft_calc)                  :: pftc                   !< object for polar Fourier transform calculations
     type(image)                         :: img                    !< individual image/projector objects
     type(image)                         :: img_crop               !< for cropped image
     type(image)                         :: img_pad                !< -"-

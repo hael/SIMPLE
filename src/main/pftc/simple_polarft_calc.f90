@@ -3,7 +3,7 @@ module simple_polarft_calc
 use simple_pftc_api
 implicit none
 
-public :: polarft_calc, pftc_glob, polaft_dims_from_file_header
+public :: polarft_calc, polaft_dims_from_file_header
 private
 #include "simple_local_flags.inc"
 
@@ -933,7 +933,6 @@ end interface
 ! CLASS PARAMETERS/VARIABLES
 complex(sp), parameter       :: zero            = cmplx(0.,0.) !< just a complex zero
 integer,     parameter       :: FFTW_USE_WISDOM = 16
-class(polarft_calc), pointer :: pftc_glob       => null()
 
 contains
 

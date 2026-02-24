@@ -1,9 +1,9 @@
 !@descr: rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
 module simple_pftc_shsrch_grad
 use simple_core_module_api
-use simple_polarft_calc, only: pftc_glob
-use simple_opt_spec,     only: opt_spec
-use simple_optimizer,    only: optimizer
+use simple_opt_spec,  only: opt_spec
+use simple_optimizer, only: optimizer
+use simple_builder,   only: builder
 implicit none
 
 public :: pftc_shsrch_grad
@@ -16,7 +16,8 @@ integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps i
 type :: pftc_shsrch_grad
     private
     type(opt_spec)            :: ospec                  !< optimizer specification object
-    class(optimizer), pointer :: opt_obj      =>null()  !< optimizer object
+    class(optimizer), pointer :: opt_obj => null()      !< optimizer object
+    class(builder),   pointer :: b_ptr   => null()      !< pointer to polarft_calc object for cost function evaluations
     integer,      allocatable :: irefs(:)               !< reference indeces
     real,         allocatable :: prefs(:)               !< reference probs
     integer                   :: reference    = 0       !< reference pft
@@ -42,17 +43,20 @@ end type pftc_shsrch_grad
 
 contains
 
-    subroutine grad_shsrch_new( self, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init )
+    subroutine grad_shsrch_new( self, build, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init )
         use simple_opt_factory, only: opt_factory
-        class(pftc_shsrch_grad),   intent(inout) :: self           !< instance
-        real,                       intent(in)    :: lims(:,:)      !< limits for barrier constraint
-        real,             optional, intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
-        character(len=*), optional, intent(in)    :: shbarrier      !< shift barrier constraint or not
-        integer,          optional, intent(in)    :: maxits         !< maximum iterations
-        logical,          optional, intent(in)    :: opt_angle      !< optimise in-plane angle with callback flag
-        logical,          optional, intent(in)    :: coarse_init    !< coarse inital search
+        class(pftc_shsrch_grad),     intent(inout) :: self           !< instance
+        class(builder),      target, intent(in)    :: build          !< builder object for pftc access 
+        real,                        intent(in)    :: lims(:,:)      !< limits for barrier constraint
+        real,              optional, intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
+        character(len=*),  optional, intent(in)    :: shbarrier      !< shift barrier constraint or not
+        integer,           optional, intent(in)    :: maxits         !< maximum iterations
+        logical,           optional, intent(in)    :: opt_angle      !< optimise in-plane angle with callback flag
+        logical,           optional, intent(in)    :: coarse_init    !< coarse inital search
         type(opt_factory) :: opt_fact
         call self%kill
+        ! set pointer to pftc instance for cost function evaluations
+        self%b_ptr => build
         ! flag the barrier constraint
         self%shbarr = .true.
         if( present(shbarrier) )then
@@ -70,7 +74,7 @@ contains
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%opt_obj)
         ! get # rotations
-        self%nrots = pftc_glob%get_nrots()
+        self%nrots = self%b_ptr%pftc%get_nrots()
         ! set costfun pointers
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
@@ -85,7 +89,7 @@ contains
 
     subroutine set_limits( self, lims )
         class(pftc_shsrch_grad), intent(inout) :: self              !< instance
-        real,                     intent(in)    :: lims(self%ospec%ndim,2) !< new limits
+        real,                    intent(in)    :: lims(self%ospec%ndim,2) !< new limits
         call self%ospec%set_limits(lims)
     end subroutine set_limits
 
@@ -96,7 +100,7 @@ contains
         real(dp)                :: cost
         select type(self)
             class is (pftc_shsrch_grad)
-                cost = - pftc_glob%gen_corr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+                cost = - self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
@@ -111,7 +115,7 @@ contains
         grad = 0.
         select type(self)
             class is (pftc_shsrch_grad)
-                call pftc_glob%gen_corr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
+                call self%b_ptr%pftc%gen_corr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
                 grad = - corrs_grad
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
@@ -129,7 +133,7 @@ contains
         grad = 0.
         select type(self)
             class is (pftc_shsrch_grad)
-                call pftc_glob%gen_corr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+                call self%b_ptr%pftc%gen_corr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                 f    = - corrs
                 grad = - corrs_grad
             class default
@@ -139,8 +143,8 @@ contains
 
     subroutine grad_shsrch_optimize_angle( self )
         class(pftc_shsrch_grad), intent(inout) :: self
-        real                                    :: corrs(self%nrots)
-        call pftc_glob%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+        real :: corrs(self%nrots)
+        call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
         self%cur_inpl_idx = maxloc(corrs, dim=1)
     end subroutine grad_shsrch_optimize_angle
 
@@ -157,7 +161,7 @@ contains
     !> set indicies for shift search
     subroutine grad_shsrch_set_indices( self, ref, ptcl )
         class(pftc_shsrch_grad), intent(inout) :: self
-        integer,                  intent(in)    :: ref, ptcl
+        integer,                 intent(in)    :: ref, ptcl
         self%reference = ref
         self%particle  = ptcl
     end subroutine grad_shsrch_set_indices
@@ -165,9 +169,9 @@ contains
     !> minimisation routine
     function grad_shsrch_minimize( self, irot, sh_rot, xy_in ) result( cxy )
         class(pftc_shsrch_grad), intent(inout) :: self
-        integer,                  intent(inout) :: irot
-        logical, optional,        intent(in)    :: sh_rot
-        real,    optional,        intent(in)    :: xy_in(2)
+        integer,                 intent(inout) :: irot
+        logical, optional,       intent(in)    :: sh_rot
+        real,    optional,       intent(in)    :: xy_in(2)
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
         integer  :: loc, i, lowest_rot, init_rot
@@ -184,7 +188,7 @@ contains
         self%ospec%x_8 = dble(self%ospec%x)
         found_better   = .false.
         if( self%opt_angle )then
-            call pftc_glob%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+            call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
             self%cur_inpl_idx   = maxloc(corrs,dim=1)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
@@ -199,7 +203,7 @@ contains
             ! shift search / in-plane rot update
             do i = 1,self%max_evals
                 call self%opt_obj%minimize(self%ospec, self, lowest_cost)
-                call pftc_glob%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+                call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
                 loc = maxloc(corrs,dim=1)
                 if( loc == self%cur_inpl_idx ) exit
                 self%cur_inpl_idx = loc
@@ -218,7 +222,7 @@ contains
                 cxy(2:) =   real(lowest_shift)         ! shift
                 if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
-                    call rotmat2d(pftc_glob%get_rot(irot), rotmat)
+                    call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
                     cxy(2:) = matmul(cxy(2:), rotmat)
                 endif
             else
@@ -226,7 +230,7 @@ contains
             endif
         else
             self%cur_inpl_idx   = irot
-            lowest_cost_overall = -pftc_glob%gen_corr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
+            lowest_cost_overall = -self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
             if( self%coarse_init )then
                 call self%coarse_search(coarse_cost, init_xy)
@@ -248,7 +252,7 @@ contains
                 cxy(2:) =   lowest_shift               ! shift
                 if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
-                    call rotmat2d(pftc_glob%get_rot(irot), rotmat)
+                    call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
                     cxy(2:) = matmul(cxy(2:), rotmat)
                 endif
             else
@@ -260,7 +264,7 @@ contains
 
     subroutine coarse_search(self, lowest_cost, init_xy)
         class(pftc_shsrch_grad), intent(inout) :: self
-        real(dp),                 intent(out)   :: lowest_cost, init_xy(2)
+        real(dp),                intent(out)   :: lowest_cost, init_xy(2)
         real(dp) :: x, y, cost, stepx, stepy
         integer  :: ix, iy
         lowest_cost = huge(lowest_cost)
@@ -272,7 +276,7 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y    = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                cost = -pftc_glob%gen_corr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
+                cost = -self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
                 if (cost < lowest_cost) then
                     lowest_cost = cost
                     init_xy     = [x,y]
@@ -283,8 +287,8 @@ contains
 
     subroutine coarse_search_opt_angle(self, init_xy, irot)
         class(pftc_shsrch_grad), intent(inout) :: self
-        real(dp),                 intent(out)   :: init_xy(2)
-        integer,                  intent(out)   :: irot
+        real(dp),                intent(out)   :: init_xy(2)
+        integer,                 intent(out)   :: irot
         real(dp) :: x, y, stepx,stepy
         real     :: corrs(self%nrots), lowest_cost, cost
         integer  :: loc, ix,iy
@@ -298,7 +302,7 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                call pftc_glob%gen_objfun_vals(self%reference, self%particle, real([x,y]), corrs)
+                call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, real([x,y]), corrs)
                 loc  = maxloc(corrs,dim=1)
                 cost = - corrs(loc)
                 if (cost < lowest_cost) then
@@ -317,6 +321,7 @@ contains
             call self%ospec%kill
             call self%opt_obj%kill
             nullify(self%opt_obj)
+            nullify(self%b_ptr)
         end if
     end subroutine grad_shsrch_kill
 
@@ -328,7 +333,7 @@ contains
 
     subroutine grad_shsrch_get_peaks( self, peaks )
         class(pftc_shsrch_grad), intent(inout) :: self
-        real, allocatable,        intent(out)   :: peaks(:,:) !< output peak matrix
+        real, allocatable,       intent(out)   :: peaks(:,:) !< output peak matrix
         allocate(peaks(1,2))
         peaks(1,:) = self%ospec%x
     end subroutine grad_shsrch_get_peaks

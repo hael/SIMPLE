@@ -139,7 +139,7 @@ contains
     subroutine fill_table_greedy( self )
         class(eul_prob_tab2D), intent(inout) :: self
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
-        real    :: scores(pftc_glob%get_nrots())
+        real    :: scores(self%b_ptr%pftc%get_nrots())
         real    :: lims(2,2), lims_init(2,2), cxy(3), best_score
         integer :: i, j, iptcl, ithr, irot, icls, best_rot
         if( self%params%l_doshift )then
@@ -149,7 +149,7 @@ contains
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=self%params%shbarrier,&
+                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%params%shbarrier,&
                     &maxits=self%params%maxits_sh, opt_angle=.true.)
             end do
             ! search
@@ -160,7 +160,7 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 do icls = 1, self%ncls
                     if( .not.self%populated(icls) ) cycle
-                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
+                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     irot     = maxloc(scores, dim=1)
                     best_rot = irot
                     call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
@@ -187,7 +187,7 @@ contains
                 do j = 1, self%neffcls
                     iptcl = self%pinds(i)
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
+                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     irot = maxloc(scores, dim=1)
                     self%loc_tab(icls,i)%dist = eulprob_dist_switch(scores(irot), self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl = irot
@@ -204,10 +204,10 @@ contains
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         real,       allocatable :: sorted_scores(:)
         integer,    allocatable :: sorted_inds(:)
-        real    :: scores(pftc_glob%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),P,score,neigh_frac
-        integer :: vec(pftc_glob%get_nrots())
+        real    :: scores(self%b_ptr%pftc%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),P,score,neigh_frac
+        integer :: vec(self%b_ptr%pftc%get_nrots())
         integer :: nrots, i, j, iptcl, ithr, irot, icls, jrot, rank, ninpl_smpl, ncls_smpl
-        nrots = pftc_glob%get_nrots()
+        nrots = self%b_ptr%pftc%get_nrots()
         ! power of sampling distribution
         P = EXTR_POWER
         if( self%params%extr_iter > self%params%extr_lim ) P = POST_EXTR_POWER
@@ -222,7 +222,7 @@ contains
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
+                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init,&
                     &shbarrier=self%params%shbarrier, maxits=self%params%maxits_sh,&
                     &opt_angle=.true., coarse_init=.false.)
             end do
@@ -235,7 +235,7 @@ contains
                 ! exhaustive evaluation without shifts
                 do j = 1,self%neffcls
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
+                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
                     self%loc_tab(icls,i)%dist   = eulprob_dist_switch(score, self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl   = irot
@@ -256,7 +256,7 @@ contains
                     cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
                     if( irot == 0 )then
                         irot = jrot
-                        cxy  = [real(pftc_glob%gen_corr_for_rot_8(icls, iptcl, irot)), 0.,0.]
+                        cxy  = [real(self%b_ptr%pftc%gen_corr_for_rot_8(icls, iptcl, irot)), 0.,0.]
                     endif
                     self%loc_tab(icls,i)%dist = eulprob_dist_switch(cxy(1), self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl = irot
@@ -273,7 +273,7 @@ contains
                 do j = 1, self%neffcls
                     iptcl = self%pinds(i)
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
+                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     call power_sampling(P, nrots, scores, vec, ninpl_smpl, irot, rank, score)
                     self%loc_tab(icls,i)%dist = eulprob_dist_switch(score, self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl = irot
@@ -292,11 +292,11 @@ contains
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         real,       allocatable :: sorted_scores(:)
         integer,    allocatable :: sorted_inds(:)
-        real    :: scores(pftc_glob%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),P,score
-        integer :: vec(pftc_glob%get_nrots())
+        real    :: scores(self%b_ptr%pftc%get_nrots()),lims(2,2),lims_init(2,2),cxy(3),P,score
+        integer :: vec(self%b_ptr%pftc%get_nrots())
         integer :: nrots, i, j, iptcl, ithr, irot, icls, jrot, rank, ninpl_smpl, ncls_smpl
         logical :: greedy
-        nrots = pftc_glob%get_nrots()
+        nrots = self%b_ptr%pftc%get_nrots()
         ! power of sampling distribution
         P = EXTR_POWER
         ! size of stochastic neighborhood (# of in-plane angles to draw from)
@@ -309,7 +309,7 @@ contains
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
+                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init,&
                     &shbarrier=self%params%shbarrier, maxits=self%params%maxits_sh,&
                     &opt_angle=.true., coarse_init=.false.)
             end do
@@ -323,7 +323,7 @@ contains
                 ! exhaustive evaluation without shifts
                 do j = 1,self%neffcls
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
+                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     if( greedy )then
                         ! greedy in-plane
                         irot  = maxloc(scores,dim=1)
@@ -351,7 +351,7 @@ contains
                     cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
                     if( irot == 0 )then
                         irot = jrot
-                        cxy  = [real(pftc_glob%gen_corr_for_rot_8(icls, iptcl, irot)), 0.,0.]
+                        cxy  = [real(self%b_ptr%pftc%gen_corr_for_rot_8(icls, iptcl, irot)), 0.,0.]
                     endif
                     self%loc_tab(icls,i)%dist = eulprob_dist_switch(cxy(1), self%params%cc_objfun)
                     self%loc_tab(icls,i)%inpl = irot
@@ -369,7 +369,7 @@ contains
                 greedy = (os%get_updatecnt(iptcl)==1).or.(.not.os%has_been_searched(iptcl))
                 do j = 1, self%neffcls
                     icls  = self%clsinds(j)
-                    call pftc_glob%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
+                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], scores)
                     if( greedy )then
                         ! new particle
                         irot  = maxloc(scores,dim=1)

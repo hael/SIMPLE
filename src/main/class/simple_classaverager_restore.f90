@@ -94,9 +94,9 @@ contains
         type(string) :: fname
         if( p_ptr%l_ml_reg )then
             fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
-            call b_ptr%esig%new(p_ptr, fname, p_ptr%box)
+            call b_ptr%esig%new(p_ptr, b_ptr%pftc, fname, p_ptr%box)
             call b_ptr%esig%read_part(  b_ptr%spproj_field)
-            call b_ptr%esig%read_groups(b_ptr%spproj_field)
+            call b_ptr%esig%read_groups(b_ptr%pftc, b_ptr%spproj_field)
         end if
     end subroutine cavger_read_euclid_sigma2
 

@@ -2,7 +2,6 @@
 module simple_strategy3D_utils
 use simple_core_module_api
 use simple_strategy3D_alloc
-use simple_polarft_calc,    only: pftc_glob
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
 
@@ -22,7 +21,7 @@ contains
         integer   :: state, neff_states, nrefs_eval, nrefs_tot
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw
         logical   :: l_multistates
-        s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftc_glob%get_rot(inpl)
+        s3D%proj_space_euls(3,ref,s%ithr) = 360. - s%b_ptr%pftc%get_rot(inpl)
         ! stash previous ori
         call s%b_ptr%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)

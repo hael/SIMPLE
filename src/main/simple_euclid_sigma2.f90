@@ -1,7 +1,7 @@
 !@descr: the abstract data type for sigma2 used when objfun=euclid
 module simple_euclid_sigma2
 use simple_core_module_api
-use simple_polarft_calc,   only: polarft_calc, pftc_glob
+use simple_polarft_calc,   only: polarft_calc
 use simple_parameters,     only: parameters
 use simple_sigma2_binfile, only: sigma2_binfile
 use simple_starfile_wrappers
@@ -49,23 +49,20 @@ end type euclid_sigma2
 
 contains
 
-    subroutine new( self, params, binfname, box )
+    subroutine new( self, params, pftc, binfname, box )
         ! read individual sigmas from binary file, to be modified at the end of the iteration
         ! read group sigmas from starfile, to be used for alignment and volume reconstruction
         ! set up fields for fast access to sigmas
         class(euclid_sigma2), target, intent(inout) :: self
         class(parameters),    target, intent(in)    :: params
+        class(polarft_calc),          intent(inout) :: pftc
         class(string),                intent(in)    :: binfname
         integer,                      intent(in)    :: box
         call self%kill
         self%p_ptr => params
         self%kfromto = [1, fdim(box)-1]
-        allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),self%p_ptr%fromp:self%p_ptr%top),&
-                  self%pinds(self%p_ptr%fromp:self%p_ptr%top) )
-        if( associated(pftc_glob) )then
-            call pftc_glob%assign_sigma2_noise(self%sigma2_noise)
-            call pftc_glob%get_pinds(self%pinds)
-        endif
+        allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),self%p_ptr%fromp:self%p_ptr%top))
+        call pftc%assign_sigma2_noise(self%sigma2_noise)
         self%binfname     =  binfname
         self%fromp        =  self%p_ptr%fromp
         self%top          =  self%p_ptr%top
@@ -171,14 +168,14 @@ contains
         call binfile%read(self%sigma2_part)
     end subroutine read_part
 
-    subroutine read_groups( self, os )
+    subroutine read_groups( self, pftc, os )
         class(euclid_sigma2), intent(inout) :: self
+        class(polarft_calc),  intent(in)    :: pftc
         class(oris),          intent(inout) :: os
         integer                             :: iptcl, igroup, ngroups, eo
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
-        if( associated(pftc_glob) ) call pftc_glob%get_pinds(self%pinds)
         call self%read_sigma2_groups(self%p_ptr%which_iter, self%sigma2_groups, ngroups)
         if( self%p_ptr%l_sigma_glob )then
             if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (p_ptr%l_sigma_glob == .true.)')
@@ -228,7 +225,7 @@ contains
         allocate(sigma_contrib(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2)), source=0.)
         shvec = o%get_2Dshift()
         iref  = nint(o%get(trim(refkind)))
-        irot  = pftc_glob%get_roind(360. - o%e3get())
+        irot  = pftc%get_roind(360. - o%e3get())
         call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
         self%sigma2_part(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2),iptcl) = sigma_contrib
         deallocate(sigma_contrib)
@@ -575,7 +572,6 @@ contains
     subroutine kill( self )
         class(euclid_sigma2), intent(inout) :: self
         if( self%exists )then
-            if(allocated(self%pinds)  )       deallocate(self%pinds)
             if(allocated(self%micinds))       deallocate(self%micinds)
             if(allocated(self%sigma2_groups)) deallocate(self%sigma2_groups)
             if(allocated(self%sigma2_noise))  deallocate(self%sigma2_noise)

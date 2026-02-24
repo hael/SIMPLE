@@ -789,13 +789,13 @@ contains
             call cavger_new(params, build, pinds, alloccavgs=.false.)
         endif
         ! init scorer & prep references
-        call preppftc4align2D(pftc, nptcls, params%which_iter, l_stream)
+        call preppftc4align2D(nptcls, params%which_iter, l_stream)
         ! minor cleanup
         call cavger_kill(dealloccavgs=l_distr_exec_glob)
         ! prep particles
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=params%fromp).ne.'no'
         call prep_batch_particles2D(nptcls)
-        call build_batch_particles2D(pftc, nptcls, pinds)
+        call build_batch_particles2D(nptcls, pinds)
         ! init prob table
         call eulprob%new(params, build, pinds)
         fname = DIST_FBODY//int2str_pad(params%part,params%numlen)//'.dat'

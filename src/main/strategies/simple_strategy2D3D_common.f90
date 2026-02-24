@@ -980,10 +980,9 @@ contains
         call gridcorr_img%kill
     end subroutine norm_struct_facts
 
-    subroutine prepare_refs_sigmas_ptcls( params, build, pftc, cline, ptcl_imgs, ptcl_imgs_pad, batchsz, which_iter, do_polar )
+    subroutine prepare_refs_sigmas_ptcls( params, build, cline, ptcl_imgs, ptcl_imgs_pad, batchsz, which_iter, do_polar )
         class(parameters),        intent(inout) :: params
         class(builder),           intent(inout) :: build
-        class(polarft_calc),      intent(inout) :: pftc
         class(cmdline),           intent(in)    :: cline !< command line
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
         type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
@@ -1000,10 +999,10 @@ contains
         if( l_polar )then
             ! PREPARATION OF pftc AND REFERENCES
             nrefs = params%nspace * params%nstates
-            call pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+            call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
             ! Read polar references
-            call pftc%polar_cavger_new(.true.)
-            call pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
+            call build%pftc%polar_cavger_new(.true.)
+            call build%pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
             call build%clsfrcs%read(string(FRCS_FILE))
             ! prepare filter
             l_filtrefs = .false.
@@ -1017,16 +1016,16 @@ contains
             !$omp parallel do default(shared) private(iproj)&
             !$omp schedule(static) proc_bind(close)
             do iproj = 1,params%nspace
-                if( l_filtrefs ) call pftc%polar_filterrefs(iproj, gaufilter)
+                if( l_filtrefs ) call build%pftc%polar_filterrefs(iproj, gaufilter)
                 ! transfer to pftc
                 if( params%l_lpset )then
                     ! put the merged class average in both even and odd positions
-                    call pftc%polar_cavger_set_ref_pft(iproj, 'merged')
-                    call pftc%cp_even2odd_ref(iproj)
+                    call build%pftc%polar_cavger_set_ref_pft(iproj, 'merged')
+                    call build%pftc%cp_even2odd_ref(iproj)
                 else
                     ! transfer e/o refs to pftc
-                    call pftc%polar_cavger_set_ref_pft(iproj, 'even')
-                    call pftc%polar_cavger_set_ref_pft(iproj, 'odd')
+                    call build%pftc%polar_cavger_set_ref_pft(iproj, 'even')
+                    call build%pftc%polar_cavger_set_ref_pft(iproj, 'odd')
                 endif
             end do
             !$omp end parallel do
@@ -1034,20 +1033,20 @@ contains
             if( (trim(params%center)=='yes') .and. (trim(params%center_type)=='params') .and.&
                 &(params%pgrp(:1)=='c1') .and. (.not.params%l_update_frac) .and.&
                 &(params%nstates==1) .and. params%l_doshift )then
-                call pftc%center_3Dpolar_refs(build%spproj_field, build%eulspace)
+                call build%pftc%center_3Dpolar_refs(build%spproj_field, build%eulspace)
             endif
             ! Memoize
-            call pftc%memoize_refs
+            call build%pftc%memoize_refs
         else
             ! (if needed) estimating lp (over all states) and reseting params%lp and params%kfromto
-            call prepare_polar_references(params, build, pftc, cline, batchsz)
+            call prepare_polar_references(params, build, cline, batchsz)
         endif
         ! PREPARATION OF SIGMAS
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-            call build%esig%new(params, fname, params%box)
+            call build%esig%new(params, build%pftc, fname, params%box)
             call build%esig%read_part(  build%spproj_field)
-            call build%esig%read_groups(build%spproj_field)
+            call build%esig%read_groups(build%pftc, build%spproj_field)
         end if
         ! PREPARATION OF PARTICLES
         call prepimgbatch(params, build, batchsz)
@@ -1064,10 +1063,9 @@ contains
         if( allocated(gaufilter) ) deallocate(gaufilter)
     end subroutine prepare_refs_sigmas_ptcls
 
-    subroutine prepare_polar_references( params, build, pftc, cline, batchsz )
+    subroutine prepare_polar_references( params, build, cline, batchsz )
         class(parameters),   intent(inout) :: params
         class(builder),      intent(inout) :: build
-        class(polarft_calc), intent(inout) :: pftc
         class(cmdline),      intent(in)    :: cline !< command line
         integer,             intent(in)    :: batchsz
         type(ori) :: o_tmp
@@ -1081,7 +1079,7 @@ contains
         endif
         ! pftc
         nrefs = params%nspace * params%nstates
-        call pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+        call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
         ! read reference volumes and create polar projections
         do s=1,params%nstates
             if( str_has_substr(params%refine, 'prob') )then
@@ -1111,7 +1109,7 @@ contains
             do iproj=1,params%nspace
                 iref = (s - 1) * params%nspace + iproj
                 call build%eulspace%get_ori(iproj, o_tmp)
-                call build%vol_pad%fproject_polar_oversamp(iref, o_tmp, pftc, iseven=.true., mask=build%l_resmsk)
+                call build%vol_pad%fproject_polar_oversamp(iref, o_tmp, build%pftc, iseven=.true., mask=build%l_resmsk)
                 call o_tmp%kill
             end do
             !$omp end parallel do
@@ -1135,34 +1133,33 @@ contains
             do iproj=1,params%nspace
                 iref = (s - 1) * params%nspace + iproj
                 call build%eulspace%get_ori(iproj, o_tmp)
-                call build%vol_odd_pad%fproject_polar_oversamp(iref, o_tmp, pftc, iseven=.false., mask=build%l_resmsk)
+                call build%vol_odd_pad%fproject_polar_oversamp(iref, o_tmp, build%pftc, iseven=.false., mask=build%l_resmsk)
                 call o_tmp%kill
             end do
             !$omp end parallel do
             call build%vol_odd_pad%kill
             call build%vol_odd_pad%kill_expanded
         end do
-        call pftc%memoize_refs
+        call build%pftc%memoize_refs
     end subroutine prepare_polar_references
 
-    subroutine build_batch_particles( params, build, pftc, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad )
+    subroutine build_batch_particles( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad )
         class(parameters),   intent(in)    :: params
         class(builder),      intent(inout) :: build
-        class(polarft_calc), intent(inout) :: pftc
         integer,             intent(in)    :: nptcls_here
         integer,             intent(in)    :: pinds_here(nptcls_here)
         type(image),         intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
         complex, allocatable :: pft(:,:)
         integer     :: iptcl_batch, iptcl, ithr
         ! reassign particles indices & associated variables
-        call pftc%reallocate_ptcls(nptcls_here, pinds_here)
+        call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
         call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
         ! mask memoization for prepimg4align
         call tmp_imgs(1)%memoize_mask_coords
         ! memoize CTF stuff
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())   
         ! memoize for polarize_oversamp
-        call tmp_imgs_pad(1)%memoize4polarize_oversamp(pftc%get_pdim())     
+        call tmp_imgs_pad(1)%memoize4polarize_oversamp(build%pftc%get_pdim())     
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,pft) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
@@ -1170,17 +1167,17 @@ contains
             ! prep
             call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
             ! transfer to polar coordinates
-            pft = pftc%allocate_pft()
+            pft = build%pftc%allocate_pft()
             call tmp_imgs_pad(ithr)%polarize_oversamp(pft, mask=build%l_resmsk)
-            call pftc%set_ptcl_pft(iptcl, pft)
+            call build%pftc%set_ptcl_pft(iptcl, pft)
             deallocate(pft)
             ! e/o flags
-            call pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
+            call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
-        call pftc%create_polar_absctfmats(build%spproj, 'ptcl3D')
+        call build%pftc%create_polar_absctfmats(build%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
-        call pftc%memoize_ptcls
+        call build%pftc%memoize_ptcls
         ! destruct
         call forget_ft_maps
     end subroutine build_batch_particles

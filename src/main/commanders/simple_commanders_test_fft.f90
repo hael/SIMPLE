@@ -84,7 +84,6 @@ subroutine exec_test_eval_polarftcc( self, cline )
     class(commander_test_eval_polarftcc), intent(inout) :: self
     class(cmdline),                       intent(inout) :: cline
     type(parameters)         :: p
-    type(polarft_calc)       :: pftc
     type(builder)            :: b
     type(ori)                :: o
     real                     :: shvec(2), shift_err, ang_err, lims(2,2), cxy(3)
@@ -114,45 +113,45 @@ subroutine exec_test_eval_polarftcc( self, cline )
     call o%print_ori
     print *,'Shift= 0.0 0.0'
     print *,'---------------------'
-    call pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
+    call b%pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
     call b%vol%read(p%vols(1))
     call b%vol%mask3D_soft(p%msk)
     call b%vol%fft()
     call b%vol%expand_cmat(p%box)
-    call b%vol%fproject_polar(1, o, pftc,       iseven=.true., mask=b%l_resmsk)
-    call pftc%cp_even_ref2ptcl(1,1)
-    call pftc%set_eo(1, .true. )
+    call b%vol%fproject_polar(1, o, b%pftc,       iseven=.true., mask=b%l_resmsk)
+    call b%pftc%cp_even_ref2ptcl(1,1)
+    call b%pftc%set_eo(1, .true. )
     if( o%e3get() < 0.)then
         call o%e3set(o%e3get() - 29.5)
     else
         call o%e3set(o%e3get() + 29.5)
     endif
-    call b%vol%fproject_polar(1, o, pftc,       iseven=.true., mask=b%l_resmsk)
+    call b%vol%fproject_polar(1, o, b%pftc,       iseven=.true., mask=b%l_resmsk)
     shvec(1) = -2.
     shvec(2) =  2.
     print *,'Ref orientation:'
     call o%print_ori
     print *,'Shift= ',shvec
     print *,'---------------------'
-    call pftc%shift_ptcl(1,shvec)
-    call pftc%memoize_ptcls
+    call b%pftc%shift_ptcl(1,shvec)
+    call b%pftc%memoize_ptcls
     !### TIMING
-    allocate(cc_fft(pftc%get_nrots()))
+    allocate(cc_fft(b%pftc%get_nrots()))
     tfft = tic()
-    call pftc%gen_objfun_vals(1, 1, [0.,0.], cc_fft)
+    call b%pftc%gen_objfun_vals(1, 1, [0.,0.], cc_fft)
     print *, 'time of gen_corrs (no cache): ', toc(tfft)
     loc = maxloc(cc_fft, dim=1)
-    print *, pftc%get_rot(loc)
+    print *, b%pftc%get_rot(loc)
     ! searching
     lims(:,1) = -5.
     lims(:,2) =  5.
-    call grad_shsrch_obj%new(lims)
+    call grad_shsrch_obj%new(b, lims)
     call grad_shsrch_obj%set_indices(1, 1)
     loc = 1
     tfft = tic()
     cxy = grad_shsrch_obj%minimize(irot=loc)
     print *, 'time of shift_search: ', toc(tfft)
-    print *, cxy, pftc%get_rot(loc)
+    print *, cxy, b%pftc%get_rot(loc)
     call simple_end('**** SIMPLE_TEST_EVAL_POLARFTCC_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_eval_polarftcc
 
@@ -173,7 +172,6 @@ subroutine exec_test_gencorrs_fft( self, cline )
     class(commander_test_gencorrs_fft), intent(inout) :: self
     class(cmdline),                     intent(inout) :: cline
     type(parameters)        :: p
-    type(polarft_calc)      :: pftc
     type(builder)           :: b
     real,    allocatable    :: cc(:), cc_fft(:)
     complex, allocatable    :: pft(:,:)
@@ -193,26 +191,26 @@ subroutine exec_test_gencorrs_fft( self, cline )
     p%kfromto(1) = 2
     p%kfromto(2) = 100
     call b%build_general_tbox(p, cline)
-    call pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
-    call b%img_crop%memoize4polarize(pftc%get_pdim())
-    pft = pftc%allocate_pft()
+    call b%pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
+    call b%img_crop%memoize4polarize(b%pftc%get_pdim())
+    pft = b%pftc%allocate_pft()
     do iptcl=1,p%nptcls
         call b%img_crop%read(p%stk, iptcl)
         call b%img_crop%fft()
         ! transfer to polar coordinates
         call b%img_crop%polarize(pft, mask=b%l_resmsk)
-        call pftc%set_ref_pft(iptcl, pft, iseven=.true.)
+        call b%pftc%set_ref_pft(iptcl, pft, iseven=.true.)
         call b%img_crop%polarize(pft, mask=b%l_resmsk)
-        call pftc%set_ptcl_pft(iptcl, pft)
+        call b%pftc%set_ptcl_pft(iptcl, pft)
     end do
-    allocate(cc(pftc%get_nrots()), cc_fft(pftc%get_nrots()))
+    allocate(cc(b%pftc%get_nrots()), cc_fft(b%pftc%get_nrots()))
 
     !### TIMING
 
     tfft = tic()
     do iptcl=1,p%nptcls - 1
         do jptcl=iptcl + 1, p%nptcls
-            call pftc%gen_objfun_vals(iptcl, jptcl, [0.,0.], cc_fft)
+            call b%pftc%gen_objfun_vals(iptcl, jptcl, [0.,0.], cc_fft)
         end do
     end do
     print *, 'time of fft_mod: ', toc(tfft)

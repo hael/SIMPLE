@@ -6,6 +6,7 @@ use simple_parameters,       only: parameters
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_oris,             only: oris
+use simple_builder,          only: builder
 implicit none
 
 public :: strategy2D_greedy
@@ -22,11 +23,12 @@ end type strategy2D_greedy
 
 contains
 
-    subroutine new_greedy( self, params, spec )
+    subroutine new_greedy( self, params, spec, build )
         class(strategy2D_greedy), intent(inout) :: self
         class(parameters),        intent(in)    :: params
         class(strategy2D_spec),   intent(inout) :: spec
-        call self%s%new( params, spec )
+        class(builder),           intent(in)    :: build
+        call self%s%new( params, spec, build )
         self%spec = spec
     end subroutine new_greedy
 
@@ -46,9 +48,9 @@ contains
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! class best
                 if( self%s%l_sh_first )then
-                    call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, corrs)
+                    call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, corrs)
                 else
-                    call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         corrs)
+                    call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         corrs)
                 endif
                 inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)

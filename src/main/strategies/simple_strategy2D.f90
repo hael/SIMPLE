@@ -3,6 +3,7 @@ module simple_strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 use simple_oris,             only: oris
 use simple_parameters,       only: parameters
+use simple_builder,          only: builder
 implicit none
 
 public :: strategy2D, strategy2D_per_ptcl
@@ -20,13 +21,15 @@ end type strategy2D
 
 abstract interface
 
-    subroutine generic_new( self, params, spec )
+    subroutine generic_new( self, params, spec, build )
         import :: strategy2D
         import :: strategy2D_spec
         import :: parameters
+        import :: builder
         class(strategy2D),      intent(inout) :: self
         class(parameters),      intent(in)    :: params
         class(strategy2D_spec), intent(inout) :: spec
+        class(builder),         intent(in)    :: build
     end subroutine generic_new
 
     subroutine generic_srch( self, os )

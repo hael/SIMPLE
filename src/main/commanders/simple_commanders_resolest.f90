@@ -105,7 +105,6 @@ contains
         class(cmdline),            intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         type(image),      allocatable :: tmp_imgs(:), cavgs(:), tmp_imgs_pad(:)
-        type(polarft_calc)            :: pftc
         type(builder)                 :: build
         type(parameters)              :: params
         integer :: nptcls, ithr
@@ -114,7 +113,7 @@ contains
         call set_bp_range( params, build, cline )
         call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, incr_sampled=.false.)
         ! PREPARATION OF PARTICLES
-        call pftc%new(params, params%nspace, [1,nptcls], params%kfromto)
+        call build%pftc%new(params, params%nspace, [1,nptcls], params%kfromto)
         call prepimgbatch(params, build, nptcls)
         allocate(tmp_imgs(nthr_glob), tmp_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
@@ -124,26 +123,26 @@ contains
         enddo
         !$omp end parallel do
         ! Build polar particle images
-        call pftc%allocate_refs_memoization
-        call build_batch_particles(params, build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build%pftc%allocate_refs_memoization
+        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Dealing with polar cavgs
-        call pftc%polar_cavger_new(.true.)
-        call pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, is3D=.true.)
-        call pftc%polar_cavger_merge_eos_and_norm(reforis=build%eulspace, symop=build%pgrpsyms)
+        call build%pftc%polar_cavger_new(.true.)
+        call build%pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, is3D=.true.)
+        call build%pftc%polar_cavger_merge_eos_and_norm(reforis=build%eulspace, symop=build%pgrpsyms)
         ! write
         allocate(cavgs(params%nspace))
-        call pftc%polar_cavger_write(string('cavgs_even.bin'), 'even')
-        call pftc%polar_cavger_write(string('cavgs_odd.bin'),   'odd')
-        call pftc%polar_cavger_write(string('cavgs.bin'),    'merged')
-        call pftc%polar_cavger_refs2cartesian(cavgs, 'even')
+        call build%pftc%polar_cavger_write(string('cavgs_even.bin'), 'even')
+        call build%pftc%polar_cavger_write(string('cavgs_odd.bin'),   'odd')
+        call build%pftc%polar_cavger_write(string('cavgs.bin'),    'merged')
+        call build%pftc%polar_cavger_refs2cartesian(cavgs, 'even')
         call write_imgarr(cavgs, string('cavgs_even.mrc'))
-        call pftc%polar_cavger_refs2cartesian(cavgs, 'odd')
+        call build%pftc%polar_cavger_refs2cartesian(cavgs, 'odd')
         call write_imgarr(cavgs, string('cavgs_odd.mrc'))
-        call pftc%polar_cavger_refs2cartesian(cavgs, 'merged')
+        call build%pftc%polar_cavger_refs2cartesian(cavgs, 'merged')
         call write_imgarr(cavgs, string('cavgs_merged.mrc'))
-        call pftc%polar_cavger_kill
+        call build%pftc%polar_cavger_kill
         call killimgbatch(build)
-        call pftc%kill
+        call build%pftc%kill
         call build%kill_general_tbox
         call dealloc_imgarr(tmp_imgs)
         call dealloc_imgarr(tmp_imgs_pad)
