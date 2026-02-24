@@ -9,7 +9,17 @@ https://zenodo.org/records/18663655
 
 ABOUT
 
-Single-particle IMage Processing Linux Engine (SIMPLE) is an open-source software package for analysis of cryogenic transmission electron microscopy (cryo-EM) movies of single-particles (Single-Particle Analysis, SPA). SIMPLE includes a full SPA processing pipeline and a streaming SPA platform for informing data acquisition in real time, using only minimal CPU computing resources. Our stream SPA tool implements the steps of anisotropic motion correction, particle identification and 2D clustering with automatic class rejection. SIMPLE features an easy-to-use web-based graphical user interface that can be run on any device (workstation, laptop, tablet or iphone) and supports remote multi-user execution over the network. The project-based execution model automatically records the executed workflow, facilitates meta-data handling and greatly simplifies usage. Using SIMPLE, it is possible to automatically obtain a clean SP data set amenable to high-resolution 3D reconstruction directly upon completion of the data acquisition, without the need for extensive batch image processing.
+SIMPLE is an end-to-end image processing and reconstruction platform. It takes raw electron microscopy data 
+(movies, micrographs, particle images), processes and analyzes them through many stages (motion correction, 
+CTF estimation, picking, classification, alignment, reconstruction), and produces scientifically meaningful 
+outputs such as 2D class averages, 3D reconstructions, symmetry analysis, and atomic-level models. SIMPLE 
+supports both interactive batch workflows and highly automated streaming pipelines, and it is designed to 
+scale from a single workstation to distributed, high-performance computing environments. SIMPLE is a modular, 
+high-performance scientific framework for cryo-EM and nanoparticle image analysis that combines low-level 
+numerical kernels, rich domain abstractions, and high-level workflow orchestration into a scalable, test-
+driven application suite. It is not a library in the narrow sense, nor a single executable—it is a full 
+scientific computing environment, engineered for correctness, performance, extensibility, and real-world 
+experimental workflows.
 
 SIMPLE is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the license, or (at your option) any later version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
