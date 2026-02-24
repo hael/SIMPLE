@@ -2,6 +2,7 @@
 module simple_atoms
 use simple_core_module_api
 use simple_defs_atoms
+use simple_molecule_data
 implicit none
 
 public :: atoms
@@ -65,7 +66,8 @@ type :: atoms
     ! CONSTRUCTORS
     procedure, private :: new_instance
     procedure, private :: new_from_pdb
-    generic            :: new => new_from_pdb, new_instance
+    procedure, private :: new_from_molecule
+    generic            :: new => new_instance, new_from_pdb, new_from_molecule
     generic            :: assignment(=) => copy
     procedure          :: copy
     procedure          :: extract_atom
@@ -193,6 +195,32 @@ contains
             end function
 
     end subroutine new_from_pdb
+
+    subroutine new_from_molecule( self, mol )
+        class(atoms),        intent(inout) :: self
+        type(molecule_data), intent(in)    :: mol
+        integer :: n
+        call self%kill
+        n = mol%n
+        if( n <= 0 )then
+            THROW_HARD('molecule%n must be > 0; new_from_molecule')
+        endif
+        call self%new_instance(n)
+        ! Required fields
+        self%xyz(1:n,:) = mol%xyz(1:n,:)
+        self%name(1:n)  = mol%name(1:n)
+        ! Optional-ish fields: fill if allocated, otherwise defaults remain
+        if (allocated(mol%resname))   self%resname(1:n)   = mol%resname(1:n)
+        if (allocated(mol%chain))     self%chain(1:n)     = mol%chain(1:n)
+        if (allocated(mol%element))   self%element(1:n)   = mol%element(1:n)
+        if (allocated(mol%num))       self%num(1:n)       = mol%num(1:n)
+        if (allocated(mol%resnum))    self%resnum(1:n)    = mol%resnum(1:n)
+        if (allocated(mol%occupancy)) self%occupancy(1:n) = mol%occupancy(1:n)
+        if (allocated(mol%beta))      self%beta(1:n)      = mol%beta(1:n)
+        if (allocated(mol%het))       self%het(1:n)       = mol%het(1:n)
+        ! If element not provided, reuse your existing logic
+        call self%guess_element
+    end subroutine new_from_molecule
 
     subroutine new_instance( self, n, dummy )
         class(atoms),      intent(inout) :: self
@@ -1203,30 +1231,32 @@ contains
         cc = cc / real(cnt)
     end function cc_res
 
-    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, center_pdb, pdb_out, vol_dim )
+    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, center_pdb, pdb_out, vol_dim, mol )
         use simple_image, only: image
-        class(atoms),            intent(inout) :: self
-        real,                    intent(in)    :: smpd
-        type(string),            intent(in)    :: pdb_file, vol_file
-        class(string), optional, intent(in)    :: pdb_out
-        logical,       optional, intent(in)    :: center_pdb
-        integer,       optional, intent(in)    :: vol_dim(3)
+        class(atoms),                  intent(inout) :: self
+        real,                          intent(in)    :: smpd
+        type(string),                  intent(in)    :: pdb_file, vol_file
+        class(string),       optional, intent(in)    :: pdb_out
+        logical,             optional, intent(in)    :: center_pdb
+        integer,             optional, intent(in)    :: vol_dim(3)
+        type(molecule_data), optional, intent(in)    :: mol
         type(string) :: pdbfile_centered
         type(image)  :: vol
         real         :: mol_dim(3), center(3), max_dist, dist
         integer      :: ldim(3), i_atom, j_atom
         logical      :: use_center = .false.
-        if( present(pdb_out) )then
-            pdbfile_centered = pdb_out
-        else
-            pdbfile_centered = get_fbody(pdb_file,string('pdb'))//'_centered.pdb'
-        endif
+        call self%kill()
         if( present(center_pdb) )then
             if( center_pdb ) use_center = .true.
         endif
+        if( present(mol) )then !pdb2mrc with molecule input instead of pdb file input
+            call self%new(mol)
+            call self%writepdb(pdb_file) ! write the input molecule to a PDB file for record
+        else !pdb2mrc with pdb file input
+            call self%new(pdb_file)
+        endif
         if( self%check_center() ) use_center = .true. ! it needs to be centered because PDB coordinates do not come from cryoEM
         write(logfhandle,'(A,f8.3,A)') 'Sampling distance: ',smpd,' Angstrom'
-        call self%new(pdb_file)
         ! dimensions of the molecule
         write(logfhandle,'(A,f8.2,1X,A,f8.2)') "Bounding box(Angstrom) x:", minval(self%xyz(:,1)),"-", maxval(self%xyz(:,1))
         write(logfhandle,'(A,f8.2,1X,A,f8.2)') "                       y:", minval(self%xyz(:,2)),"-", maxval(self%xyz(:,2))
@@ -1254,6 +1284,11 @@ contains
         endif
         call vol%new([ldim(1), ldim(2), ldim(3)], smpd)
         if( use_center )then
+            if( present(pdb_out) )then
+                pdbfile_centered = pdb_out
+            else
+                pdbfile_centered = get_fbody(pdb_file,string('pdb'))//'_centered.pdb'
+            endif
             ! 0,0,0 in PDB space is map to the center of the volume 
             call self%center_pdbcoord(ldim, smpd)
             call self%writepdb(pdbfile_centered)

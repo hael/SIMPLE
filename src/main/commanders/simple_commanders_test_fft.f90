@@ -249,16 +249,14 @@ subroutine exec_test_order_corr( self, cline )
 end subroutine exec_test_order_corr
 
 subroutine exec_test_phasecorr( self, cline )
+    use mod_phasecorr
     class(commander_test_phasecorr), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
-!    use mod_phasecorr
-!    class(commander_test_phasecorr), intent(inout) :: self
-!    class(cmdline),                  intent(inout) :: cline
-!    type(t_phasecorr) :: tphasecorr
-!    call tphasecorr%new
-!    call tphasecorr%run
-!    call tphasecorr%kill
-!    call simple_end('**** SIMPLE_TEST_PHASECORR_WORKFLOW NORMAL STOP ****')
+    type(t_phasecorr) :: tphasecorr
+    call tphasecorr%new
+    call tphasecorr%run
+    call tphasecorr%kill
+    call simple_end('**** SIMPLE_TEST_PHASECORR_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_phasecorr
 
 subroutine exec_test_polarops( self, cline )

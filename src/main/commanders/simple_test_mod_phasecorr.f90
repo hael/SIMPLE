@@ -121,12 +121,3 @@ contains
     end subroutine vis_imgs
 
 end module mod_phasecorr
-
-program test_phasecorr
-    use mod_phasecorr
-    implicit none
-    type(t_phasecorr) :: tphasecorr
-    call tphasecorr%new
-    call tphasecorr%run
-    call tphasecorr%kill
-end program test_phasecorr
