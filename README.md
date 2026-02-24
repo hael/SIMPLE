@@ -181,9 +181,9 @@ See the GNU General Public License for details.
 
 SIMPLE combines:
 
--   High-performance numerical kernels\
--   Cryo‑EM domain abstractions\
--   Workflow orchestration\
+-   High-performance numerical kernels
+-   Cryo‑EM domain abstractions
+-   Workflow orchestration
 -   Engineering discipline
 
 into a scalable scientific application suite built for real experimental
