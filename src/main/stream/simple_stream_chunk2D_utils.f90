@@ -302,14 +302,6 @@ contains
                 if( chunks(ichunk)%has_converged() )then
                     chunk_complete = .true.
                     call chunks(ichunk)%display_iter
-                    ! rejection
-                    if( trim(params%reject_cls).ne.'no' )then
-                        call chunks(ichunk)%reject(params%lpthres, params%ndev)
-                        call mrc2jpeg_tiled(string('cls_rejected_chunks.mrc'), string('cls_rejected_chunks.jpeg'),&
-                        &scale=chunk_rejected_jpeg_scale, ntiles=chunk_rejected_jpeg_ntiles)
-                        chunk_rejected_jpeg = CWD_GLOB // '/' // 'cls_rejected_chunks.jpeg'
-                        chunk_rejected_thumbnail_id = chunk_rejected_jpeg_ntiles
-                    endif
                 endif
             else
                 ! placeholder chunk (no analysis performed, sigma2 only)

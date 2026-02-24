@@ -49,7 +49,6 @@ type stream_chunk
     procedure, private :: gen_final_cavgs
     procedure          :: remove_folder
     procedure          :: display_iter
-    procedure          :: reject
     procedure          :: has_converged
     procedure          :: print_info
     procedure          :: terminate_chunk
@@ -481,86 +480,6 @@ contains
         endif
         has_converged  = self%converged
     end function has_converged
-
-    ! Handles automated 2D analysis
-    subroutine reject( self, res_thresh, ndev)
-        class(stream_chunk), intent(inout) :: self
-        real,                intent(in)    :: res_thresh, ndev
-        logical, allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
-        integer, allocatable :: pops(:)
-        type(image)  :: img
-        type(string) :: cavgs, projfile
-        real         :: smpd_here
-        integer      :: nptcls_rejected, ncls_rejected, iptcl, box
-        integer      :: icls, ncls, ncls_rejected_populated, ncls_populated
-        call debug_print('in chunk%reject '//int2str(self%id))
-        projfile        = self%path//self%projfile_out
-        ncls_rejected   = 0
-        nptcls_rejected = 0
-        call self%spproj%read_segment('cls2D',projfile)
-        call self%spproj%read_segment('out',  projfile)
-        call self%spproj%get_cavgs_stk(cavgs, ncls, smpd_here)
-        cavgs = self%path//basename(cavgs)
-        box   = self%cline%get_iarg('box_crop')
-        allocate(cls_mask(ncls),moments_mask(ncls),corres_mask(ncls),source=.true.)
-        allocate(pops(ncls),source=nint(self%spproj%os_cls2D%get_all('pop')))
-        ! moments & total variation distance
-        if( trim(self%p_ptr%reject_cls).ne.'old' )then
-            call class_rejection(self%p_ptr, self%spproj%os_cls2D, moments_mask)
-        endif
-        ! correlation and resolution
-        if( self%p_ptr%lpthres < LOWRES_REJECT_THRESHOLD )then
-            call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
-        endif
-        ! overall class rejection
-        cls_mask      = moments_mask .and. corres_mask
-        ncls_rejected = count(.not.cls_mask)
-        ncls_rejected_populated = count((.not.cls_mask).and.(pops>0))
-        ncls_populated          = count(pops>0)
-        if( ncls_rejected == 0 .or.&
-            &ncls_rejected_populated >= min(ncls_populated,nint(real(ncls_populated)*FRAC_SKIP_REJECTION)) )then
-            ! no or too many classes to reject
-        else
-            call self%spproj%read_segment('ptcl2D',projfile)
-            ! rejects particles 2D
-            !$omp parallel do private(iptcl,icls) reduction(+:nptcls_rejected) proc_bind(close)
-            do iptcl=1,self%nptcls
-                if( self%spproj%os_ptcl2D%get_state(iptcl) == 0 )cycle
-                icls = self%spproj%os_ptcl2D%get_class(iptcl)
-                if( cls_mask(icls) ) cycle
-                nptcls_rejected = nptcls_rejected+1
-                call self%spproj%os_ptcl2D%delete_2Dclustering(iptcl)
-                call self%spproj%os_ptcl2D%set_state(iptcl,0)
-            enddo
-            !$omp end parallel do
-            call self%spproj%write_segment_inside('ptcl2D',projfile)
-            ! updates class averages
-            call img%new([box,box,1],smpd_here)
-            do icls = 1,ncls
-                if( cls_mask(icls) ) cycle
-                if( pops(icls) > 0 )then
-                    ! update to global counter, does not include empty classes
-                    ncls_rejected_glob = ncls_rejected_glob + 1
-                    call img%read(cavgs,icls)
-                    call img%write(string(CHUNK_CLS_REJECTED),ncls_rejected_glob)
-                endif
-            enddo
-            call img%kill
-            ! updates cls2D field
-            do icls=1,ncls
-                if( .not.cls_mask(icls) )then
-                    call self%spproj%os_cls2D%set(icls,'pop',    0)
-                    call self%spproj%os_cls2D%set_state(icls,    0)
-                    call self%spproj%os_cls2D%set(icls,'corr', -1.)
-                endif
-            enddo
-            call self%spproj%write_segment_inside('cls2D',projfile)
-            write(logfhandle,'(A,I6,A,I6,A,I6,A,I6,A)')'>>> REJECTED FROM CHUNK ',self%id,': ',&
-                &nptcls_rejected,' / ',self%nptcls,' PARTICLES IN ',ncls_rejected_populated,' CLUSTERS'
-        endif
-        call self%spproj%kill
-        call debug_print('end chunk%reject '//int2str(self%id))
-    end subroutine reject
 
     ! For debugging
     subroutine print_info( self )

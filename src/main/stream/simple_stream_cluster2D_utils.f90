@@ -545,28 +545,6 @@ contains
                     endif
                 endif
             endif
-            ! class rejection
-            if( os%isthere(1,'reject_cls') )then
-                val = os%get_str(1, 'reject_cls')
-                if( val .ne. trim(params%reject_cls) )then
-                    select case(val%to_char())
-                        case('yes')
-                            write(logfhandle,'(A)')'>>> ACTIVATING CLASS REJECTION'
-                            params%reject_cls = val%to_char()
-                            updated = .true.
-                        case('no')
-                            write(logfhandle,'(A)')'>>> DE-ACTIVATING CLASS REJECTION'
-                            params%reject_cls = val%to_char()
-                            updated = .true.
-                        case('old')
-                            write(logfhandle,'(A)')'>>> DE-ACTIVATING IMAGE MOMENTS-BASED CLASS REJECTION'
-                            params%reject_cls = val%to_char()
-                            updated = .true.
-                        case DEFAULT
-                            THROW_WARN('Unknown flag for class rejection: '//val%to_char())
-                    end select
-                endif
-            endif
             ! remove once processed
             call del_file(USER_PARAMS2D)
         endif

@@ -251,7 +251,6 @@ type :: oris
     procedure          :: calc_soft_weights, calc_cavg_soft_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
-    procedure          :: find_best_classes
     !======================================================================
     ! NEIGHBORS / CORRELATION / OVERLAP (simple_oris_neigh.f90)
     !======================================================================
@@ -1646,13 +1645,6 @@ interface
     module subroutine calc_soft_weights2D( self )
         class(oris), intent(inout) :: self
     end subroutine calc_soft_weights2D
-
-    module subroutine find_best_classes( self, box, smpd, res_thresh, cls_mask, ndev )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: box
-        real,        intent(in)    :: smpd, res_thresh, ndev
-        logical,     intent(inout) :: cls_mask(1:self%n)
-    end subroutine find_best_classes
 
     !======================================================================
     ! NEIGHBORS / CORRELATION / OVERLAP (simple_oris_neigh.f90)

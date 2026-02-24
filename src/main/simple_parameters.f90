@@ -101,7 +101,6 @@ type :: parameters
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
-    character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion (yes|no){yes}
@@ -797,7 +796,6 @@ contains
         call check_carg('ref_type',       self%ref_type)
         call check_carg('refine',         self%refine)
         call check_carg('refine_type',    self%refine_type)
-        call check_carg('reject_cls',     self%reject_cls)
         call check_carg('reject_mics',    self%reject_mics)
         call check_carg('remove_chunks',  self%remove_chunks)
         call check_carg('remap_cls',      self%remap_cls)
