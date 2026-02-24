@@ -409,6 +409,7 @@ contains
         call cmd_dict%push('pcontrast',     'particle contrast(black|white){black}')
         call cmd_dict%push('pdbfile',       'input PDB formatted file')
         call cmd_dict%push('pdbout',        'output PDB formatted file')
+        call cmd_dict%push('pftsz',         'half the number of rotations used in polart_calc')
         call cmd_dict%push('pgrp',          'point-group symmetry(cn|dn|t|o|i)')
         call cmd_dict%push('phaseplate',    'images obtained with Volta phaseplate(yes|no){no}')
         call cmd_dict%push('phrand',        'phase randomize(yes|no){no}')

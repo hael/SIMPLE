@@ -18,23 +18,37 @@ integer, parameter :: boxsizes(NSZS) = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 
 1008, 1014, 1020, 1024,1296, 1536, 1728, 1944,2048, 2304, 2592, 3072, 3200, 3456, 3888, 4096, 4608, 5000, 5184, 6144,&
 6250, 6400, 6912, 7776, 8192, 9216, 10240, 12288, 12500]
 
+interface magic_pftsz
+    module procedure magic_pftsz_1, magic_pftsz_2
+end interface magic_pftsz
 
 contains
 
-    !>  For finding fftw-friendly dimension for polar representation
-    integer function magic_pftsz( msk )
-        integer, intent(in) :: msk
+    !>  For finding fftw-friendly dimension for polar representation from mask radius
+    pure integer function magic_pftsz_1( msk )
+        real, intent(in) :: msk
         real    :: a
         integer :: pftsz, pftsz_old
-        a = PI*real(msk)
+        a = PI*real(nint(msk))
         pftsz_old   = round2even(a)
         pftsz       = find_magic_box(nint(a))
-        magic_pftsz = pftsz
+        magic_pftsz_1 = pftsz
         if( real(abs(pftsz-pftsz_old))/real(pftsz_old) > 0.1 )then
             ! defaults to original logic when relative size difference > 10%
-            magic_pftsz = pftsz_old
+            magic_pftsz_1 = pftsz_old
         endif
-    end function magic_pftsz
+    end function magic_pftsz_1
+
+    !>  For finding fftw-friendly dimension for polar representation
+    !   from original mask radius & image sizes
+    pure integer function magic_pftsz_2( msk, box, box_crop )
+        real,    intent(in) :: msk
+        integer, intent(in) :: box, box_crop
+        real :: msk_crop
+        msk_crop      = min((real(box_crop)-COSMSKHALFWIDTH)/2., msk*real(box_crop)/real(box))
+        msk_crop      = real(round2even(msk_crop))
+        magic_pftsz_2 = magic_pftsz_1(msk_crop)
+    end function magic_pftsz_2
 
     elemental function find_larger_magic_box( trial_box ) result( best_box )
         integer, intent(in) :: trial_box
@@ -52,7 +66,7 @@ contains
     end function find_larger_magic_box
 
     ! closest size
-    function find_magic_box( trial_box ) result( best_box )
+    pure function find_magic_box( trial_box ) result( best_box )
         integer, intent(in) :: trial_box
         integer :: best_box, dist, ind
         call find(boxsizes, NSZS, trial_box, ind, dist)

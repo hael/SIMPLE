@@ -364,6 +364,7 @@ type :: parameters
     integer :: optics_offset=0
     integer :: part=1
     integer :: pid=0               !< process ID
+    integer :: pftsz=0             !< Desired size of polarft_calc object (half the # of rotations)
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
     integer :: ref_ind=0           !> reference index
@@ -973,6 +974,7 @@ contains
         call check_iarg('offset',         self%offset)
         call check_iarg('optics_offset',  self%optics_offset)
         call check_iarg('part',           self%part)
+        call check_iarg('pftsz',          self%pftsz)
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('ref_ind',        self%ref_ind)
         call check_iarg('shift_stage',    self%shift_stage)
@@ -1580,6 +1582,12 @@ contains
             if( .not.cline%defined('msk_crop') )then
                 self%msk_crop = min(round2even((real(self%box_crop)-COSMSKHALFWIDTH)/2.),&
                     &round2even(self%msk * real(self%box_crop) / real(self%box)))
+            endif
+        endif
+        ! size of the polarft_calc as it is indexed on molecular radius (msk/msk_crop)
+        if( self%box > 0 )then
+            if( .not.cline%defined('pftsz') )then
+                self%pftsz = magic_pftsz(self%msk_crop)
             endif
         endif
         ! automasking options
