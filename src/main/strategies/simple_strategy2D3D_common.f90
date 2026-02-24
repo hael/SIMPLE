@@ -847,7 +847,7 @@ contains
 
     subroutine norm_struct_facts( params, build, cline )
         use simple_gridding, only: prep3D_inv_instrfun4mul
-        class(parameters), intent(in)    :: params
+        class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
         type(string) :: recname, volname, volname_prev, volname_prev_even
@@ -964,8 +964,9 @@ contains
                 endif
                 call build%vol%fft()
                 call build%vol2%fft()
-                ! updating command-line accordingly (needed in multi-stage wflows)
-                call cline%set('vol'//int2str(s), volname)
+                ! updating command-line and parameters objects accordingly (needed in multi-stage wflows)
+                params%vols(s) = volname
+                call cline%set('vol'//int2str(s), params%vols(s))
             endif
         end do
         call build%vol2%kill

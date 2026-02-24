@@ -812,11 +812,15 @@ contains
                     call cline_prob_align%set('which_iter', params%which_iter)
                     if( trim(params%polar).ne.'yes' )then
                         do state = 1, params%nstates
-                            call cline%set('vol'//int2str(state), params%vols(state))
+                            call cline_prob_align%set('vol'//int2str(state), params%vols(state))
                         enddo
                     endif
+                    ! to communicate changes to prob_align
                     call build%spproj%write_segment_inside(params%oritype)
+                    ! execute refine=prob*
                     call xprob_align%execute( cline_prob_align )
+                    ! to communicate back changes made by prob_align including sampling
+                    call build%spproj%read_segment(params%oritype, params%projfile)
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(params, build, cline, params%which_iter, converged)
