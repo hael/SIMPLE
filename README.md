@@ -17,9 +17,9 @@ and reconstruction platform.
 It transforms raw electron microscopy data --- movies, micrographs, and
 particle images --- into scientifically meaningful outputs including:
 
--   2D class averages\
--   High-resolution 3D reconstructions\
--   Symmetry analysis\
+-   2D class averages
+-   High-resolution 3D reconstructions
+-   Symmetry analysis
 -   Atomic-level structural models
 
 SIMPLE supports interactive batch workflows and fully automated
