@@ -48,26 +48,10 @@ contains
         ! PROGRAM SPECIFICATION
         call corrs2weights_test%new(&
         &'corrs2weights_test',&                ! name
-        &'corrs2weights_test ',&               ! descr_short
-        &'is a test program for ',&
+        &'corrs2weights test ',&               ! descr_short
+        &'is a test program for generating correlation-based weights ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        !call corrs2weights_test%add_input(UI_IO, )
-        ! parameter input/output
-        !call corrs2weights_test%add_input(UI_IMG, )
-        ! alternative inputs
-        !call corrs2weights_test%add_input(UI_PARM, )
-        ! search controls
-        !call corrs2weights_test%add_input(UI_SRCH, )
-        ! filter controls
-        !call corrs2weights_test%add_input(UI_FILT, )
-        ! mask controls
-        !call corrs2weights_test%add_input(UI_MASK, )
-        ! computer controls
-        !call corrs2weights_test%add_input(UI_COMP, )
-        ! add to ui_hash
         call add_ui_program('corrs2weights_test', corrs2weights_test, tsttab)
     end subroutine new_corrs2weights_test
 
@@ -77,7 +61,7 @@ contains
         call eval_polarftcc%new(&
         &'eval_polarftcc',&                    ! name
         &'eval_polarftcc ',&                   ! descr_short
-        &'is a test program for ',&
+        &'is a test program for evaluating polar fourier cross-correlations ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -105,7 +89,7 @@ contains
         call ft_expanded%new(&
         &'ft_expanded',&                       ! name
         &'ft_expanded ',&                      ! descr_short
-        &'is a test program for ',&
+        &'is a test program for shift search with L-BFGS-B using expanded Fourier transforms',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
