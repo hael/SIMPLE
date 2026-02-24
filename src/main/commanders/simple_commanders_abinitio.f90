@@ -61,20 +61,20 @@ contains
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('objfun')           ) call cline%set('objfun',  'euclid') ! use noise normalized Euclidean distances from the start
-        if( .not. cline%defined('overlap')          ) call cline%set('overlap',     0.95)
-        if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',  90.) ! reduces # failed runs on trpv1 from 4->2/10
-        if( .not. cline%defined('cenlp')            ) call cline%set('cenlp', CENLP_DEFAULT)
-        if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',   'cavg')
-        if( .not. cline%defined('lp_auto')          ) call cline%set('lp_auto',    'yes')
-        if( .not. cline%defined('noise_norm')       ) call cline%set('noise_norm',  'no')
-        if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',       'no')
-        if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',      20.)
-        if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',        8.)
-        if( .not. cline%defined('ref_type')         ) call cline%set('ref_type', 'comlin_noself')
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',                         'yes')
+        if( .not. cline%defined('objfun')           ) call cline%set('objfun',                     'euclid') ! noise normalized Euclidean distances from the start
+        if( .not. cline%defined('overlap')          ) call cline%set('overlap',                        0.95)
+        if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',                     90.) ! reduces # failed runs on trpv1 from 4->2/10
+        if( .not. cline%defined('cenlp')            ) call cline%set('cenlp',                 CENLP_DEFAULT)
+        if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',                      'cavg')
+        if( .not. cline%defined('lp_auto')          ) call cline%set('lp_auto',                       'yes')
+        if( .not. cline%defined('noise_norm')       ) call cline%set('noise_norm',                     'no')
+        if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',                          'no')
+        if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',               LPSTART_INI3D)
+        if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',                 LPSTOP_INI3D)
+        if( .not. cline%defined('ref_type')         ) call cline%set('ref_type',            'comlin_noself')
         if( .not. cline%defined('gauref_last_stage')) call cline%set('gauref_last_stage', GAUREF_LAST_STAGE)
-        if( .not. cline%defined('gauref')           ) call cline%set('gauref',     'yes')
+        if( .not. cline%defined('gauref')           ) call cline%set('gauref',                        'yes')
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
@@ -572,6 +572,7 @@ contains
             ! nice
             nice_communicator%stat_root%stage = "initialising 3D volume from class averages"
             call nice_communicator%cycle()
+            ! execution
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
             call spproj%read(params%projfile)
@@ -588,7 +589,7 @@ contains
         nice_communicator%stat_root%stage = "preparing workflow"
         call nice_communicator%cycle()
         ! initialization on class averages done outside this workflow (externally)?
-        if( trim(params%cavg_ini_ext).eq.'yes' )then 
+        if( trim(params%cavg_ini_ext).eq.'yes' )then
             ! check that ptcl3D field is not virgin
             if( spproj%is_virgin_field('ptcl3D') )then
                 THROW_HARD('Prior 3D alignment required for abinitio workflow when cavg_ini_ext is set to yes')
@@ -833,10 +834,9 @@ contains
             type(cmdline)                    :: cline_ini3D
             type(string),    allocatable     :: files_that_stay(:)
             character(len=*), parameter      :: INI3D_DIR='abinitio3D_cavgs/'
-            real,             parameter      :: LPSTART_INI3D = 20.
-            real,             parameter      :: LPSTOP_INI3D  = 6.
             cline_ini3D = cline
             call cline_ini3D%set('nstages', NSTAGES_INI3D)
+            ! Resolution limits
             if( .not. cline_ini3D%defined('lpstart_ini3D') ) call cline_ini3D%set('lpstart_ini3D', LPSTART_INI3D)
             if( .not. cline_ini3D%defined('lpstop_ini3D')  ) call cline_ini3D%set('lpstop_ini3D',  LPSTOP_INI3D)
             if( cline%defined('lpstart_ini3D') )then
@@ -847,6 +847,7 @@ contains
                 call cline_ini3D%set('lpstop', params%lpstop_ini3D)
                 call cline_ini3D%delete('lpstop_ini3D')
             endif
+            ! Compute
             if( cline%defined('nthr_ini3D') )then
                 call cline_ini3D%set('nthr', params%nthr_ini3D)
                 call cline_ini3D%delete('nthr_ini3D')
