@@ -50,7 +50,6 @@ contains
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
         call cline%set('reject_mics',  'no')
-        call cline%set('reject_cls',   'no') ! refers to previous implementation
         call cline%set('prune',        'no')
         call cline%set('wiener',       'full')
         call cline%set('refine',       'snhc_smpl')

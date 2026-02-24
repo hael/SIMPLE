@@ -50,7 +50,6 @@ contains
         call cline%set('wiener',       'full')
         call cline%set('autoscale',    'yes')
         call cline%set('remove_chunks','no')
-        call cline%set('reject_cls',   'no')
         call cline%set('objfun',       'euclid')
         call cline%set('numlen',       5)
         call cline%set('sigma_est',    'global')

@@ -126,7 +126,6 @@ type(ui_param) :: qsys_name
 type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
 type(ui_param) :: qsys_reservation
-type(ui_param) :: reject_cls
 type(ui_param) :: remap_cls
 type(ui_param) :: remove_chunks
 type(ui_param) :: script
@@ -644,10 +643,6 @@ subroutine set_ui_params
     call qsys_reservation%set_param('qsys_reservation','str',   'Name of reserved partition', &
                                     'Name of reserved target partition of distributed computer system (SLURM/PBS/LSF)', &
                                     'give your part', .false., '')
-
-    call reject_cls%set_param(     'reject_cls',      'binary', 'Whether to reject class averages', &
-                                   'Whether to automatically reject 2D clusters and associated particles(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
 
     call remap_cls%set_param(      'remap_cls',       'binary', 'Whether to remap 2D clusters', &
                                    'Whether to remap the number of 2D clusters(yes|no){no}', &

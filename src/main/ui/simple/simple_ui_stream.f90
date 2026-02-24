@@ -5,7 +5,6 @@ implicit none
 
 type(ui_program), target :: abinitio2D_stream
 type(ui_program), target :: assign_optics
-type(ui_program), target :: cluster2D_stream 
 type(ui_program), target :: gen_pickrefs
 type(ui_program), target :: pick_extract
 type(ui_program), target :: preproc
@@ -17,7 +16,6 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D_stream(prgtab)
         call new_assign_optics(prgtab)
-        call new_cluster2D_stream(prgtab)
         call new_gen_pickrefs(prgtab)
         call new_pick_extract(prgtab)
         call new_preproc(prgtab)
@@ -29,7 +27,6 @@ contains
         write(logfhandle,'(A)') format_str('STREAM WORKFLOWS:', C_UNDERLINED)
         write(logfhandle,'(A)') abinitio2D_stream%name%to_char()
         write(logfhandle,'(A)') assign_optics%name%to_char()
-        write(logfhandle,'(A)') cluster2D_stream%name%to_char()
         write(logfhandle,'(A)') gen_pickrefs%name%to_char()
         write(logfhandle,'(A)') pick_extract%name%to_char()
         write(logfhandle,'(A)') preproc%name%to_char()
@@ -102,48 +99,6 @@ contains
         ! add to ui_hash
         call add_ui_program('assign_optics', assign_optics, prgtab)
     end subroutine new_assign_optics
-
-    subroutine new_cluster2D_stream( prgtab )
-        class(ui_hash), intent(inout) :: prgtab 
-        ! PROGRAM SPECIFICATION
-        call cluster2D_stream%new(&
-        &'cluster2D_stream', &                                                   ! name
-        &'2D analysis in streaming mode',&                                       ! descr_short
-        &'is a distributed workflow that executes 2D analysis'//&                ! descr_long
-        &' in streaming mode as the microscope collects the data',&
-        &'simple_stream',&                                                       ! executable
-        &.true.,&                                                                ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")     ! GUI
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call cluster2D_stream%add_input(UI_PARM, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', gui_submenu="data", gui_advanced=.false.)
-        call cluster2D_stream%add_input(UI_PARM, 'dir_exec', 'file', 'Previous run directory',&
-        &'Directory where previous 2D analysis took place', 'e.g. 3_cluster2D_stream', .false., '', gui_submenu="data")
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call cluster2D_stream%add_input(UI_SRCH, ncls_start,                               gui_submenu="cluster 2D", gui_advanced=.false.)
-        call cluster2D_stream%add_input(UI_SRCH, nptcls_per_cls, required_override=.true., gui_submenu="cluster 2D", gui_advanced=.false.)
-        call cluster2D_stream%add_input(UI_SRCH, 'ncls', 'num', 'Maximum number of 2D clusters',&
-        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., gui_submenu="cluster 2D",&
-        &gui_advanced=.false.)
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        call cluster2D_stream%add_input(UI_MASK, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
-        &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
-        ! computer controls
-        call cluster2D_stream%add_input(UI_COMP, nchunks,                                gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_stream%add_input(UI_COMP, nparts_chunk, required_override=.true., gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_stream%add_input(UI_COMP, nparts_pool,  required_override=.true., gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_stream%add_input(UI_COMP, nthr,                                   gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
-        &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
-        ! add to ui_hash
-        call add_ui_program('cluster2D_stream', cluster2D_stream, prgtab)
-    end subroutine new_cluster2D_stream
 
     subroutine new_gen_pickrefs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
