@@ -80,7 +80,6 @@ contains
         integer, allocatable :: pinds(:)
         type(image), allocatable :: tmp_imgs(:), tmp_imgs_pad(:)
         type(string) :: fname
-        type(polarft_calc) :: pftc
         type(eul_prob_tab) :: eulprob_obj_part
         integer :: nptcls
         call set_bp_range(params, build, cline)
@@ -89,21 +88,21 @@ contains
         else
             THROW_HARD('exec_prob_tab_inmem requires prior particle sampling (in exec_prob_align_inmem)')
         endif
-        call prepare_refs_sigmas_ptcls(params, build, pftc, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls(params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
-        call build_batch_particles(params, build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         call eulprob_obj_part%new(params, build, pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( str_has_substr(params%refine, 'prob_state') )then
-            call eulprob_obj_part%fill_tab_state_only(pftc)
+            call eulprob_obj_part%fill_tab_state_only
             call eulprob_obj_part%write_state_tab(fname)
         else
-            call eulprob_obj_part%fill_tab(pftc)
+            call eulprob_obj_part%fill_tab
             call eulprob_obj_part%write_tab(fname)
         endif
         call eulprob_obj_part%kill
         call killimgbatch(build)
-        call pftc%kill
+        call build%pftc%kill
         call dealloc_imgarr(tmp_imgs)
         call dealloc_imgarr(tmp_imgs_pad)
     end subroutine exec_prob_tab_inmem

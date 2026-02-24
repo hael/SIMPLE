@@ -3,6 +3,7 @@ module simple_corrmat
 use simple_pftc_srch_api
 use simple_defs
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
+use simple_builder,          only: builder
 implicit none
 
 public :: calc_cartesian_corrmat, calc_inpl_invariant_cc_nomirr
@@ -136,7 +137,7 @@ contains
         integer,      parameter     :: MAXITS_SH = 60
         real,         allocatable   :: inpl_corrs(:)
         type(pftc_shsrch_grad)      :: grad_shsrch_obj(nthr_glob)
-        type(polarft_calc)          :: pftc
+        type(builder)               :: build
         real,         allocatable   :: ccmat(:,:)
         complex,      allocatable   :: pft(:,:)
         integer :: ldim(3), box, kfromto(2), ithr, i, j, k, loc, nrots, irot, nimgs
@@ -148,32 +149,32 @@ contains
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
         ! initialize
-        call pftc%new(params, nimgs, [1,nimgs], kfromto)
-        call imgs(1)%memoize4polarize(pftc%get_pdim())
+        call build%pftc%new(params, nimgs, [1,nimgs], kfromto)
+        call imgs(1)%memoize4polarize(build%pftc%get_pdim())
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         do ithr = 1, nthr_glob
-            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier='yes',&
+            call grad_shsrch_obj(ithr)%new(build, lims, lims_init=lims_init, shbarrier='yes',&
             &maxits=MAXITS_SH, opt_angle=.true.)
         end do
         !$omp parallel do default(shared)  private(i,ithr,pft) proc_bind(close) schedule(static)
         do i = 1, nimgs
-            pft = pftc%allocate_pft()
+            pft = build%pftc%allocate_pft()
             call imgs(i)%fft()
             call imgs(i)%polarize(pft)
-            call pftc%set_ref_pft(i, pft, iseven=.true.)
-            call pftc%cp_even_ref2ptcl(i, i)
+            call build%pftc%set_ref_pft(i, pft, iseven=.true.)
+            call build%pftc%cp_even_ref2ptcl(i, i)
             call imgs(i)%ifft
             deallocate(pft)
         end do
         !$omp end parallel do
-        call pftc%memoize_refs
-        call pftc%memoize_ptcls
+        call build%pftc%memoize_refs
+        call build%pftc%memoize_ptcls
         ! register imgs
-        nrots = pftc%get_nrots()
+        nrots = build%pftc%get_nrots()
         allocate(inpl_corrs(nrots), ccmat(nimgs,nimgs))
         ccmat = 1. ! takes care of diagonal elements
         !$omp parallel do private(i,j,ithr,inpl_corrs,loc,irot,cxy)&
@@ -181,7 +182,7 @@ contains
         do i = 1, nimgs - 1
             do j = i + 1, nimgs
                 ithr = omp_get_thread_num() + 1
-                call pftc%gen_objfun_vals(j, i, [0.,0.], inpl_corrs)
+                call build%pftc%gen_objfun_vals(j, i, [0.,0.], inpl_corrs)
                 loc  = maxloc(inpl_corrs,dim=1)
                 irot = loc
                 call grad_shsrch_obj(ithr)%set_indices(j, i)
@@ -201,7 +202,7 @@ contains
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
-        call pftc%kill
+        call build%pftc%kill
     end function calc_inpl_invariant_cc_nomirr
 
 end module simple_corrmat

@@ -38,10 +38,11 @@ contains
     end subroutine clean_strategy2D
 
     !>  prep class & global parameters
-    subroutine prep_strategy2D_glob( params, spproj, neigh_frac )
+    subroutine prep_strategy2D_glob( params, spproj, nrots, neigh_frac )
         use simple_eul_prob_tab, only: calc_athres
         class(parameters), intent(in)    :: params
         type(sp_project),  intent(inout) :: spproj
+        integer,           intent(in)    :: nrots
         real,              intent(in)    :: neigh_frac
         real    :: overlap, avg_dist_inpl
         logical :: zero_oris, ncls_diff
@@ -76,13 +77,13 @@ contains
         s2D%snhc_nrefs_bound = max(2, s2D%snhc_nrefs_bound)
         ! snhc_smpl
         s2D%snhc_smpl_ncls  = neighfrac2nsmpl(neigh_frac, params%ncls)
-        s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, pftc_glob%get_nrots())
+        s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, nrots)
         select case(trim(params%refine))
         case('greedy_smpl','inpl_smpl')
             overlap        = spproj%os_ptcl2D%get_avg('mi_class', state=1)
             avg_dist_inpl  = calc_athres(os=spproj%os_ptcl2D, field_str='dist_inpl', prob_athres=params%prob_athres, state=1)
             avg_dist_inpl  = avg_dist_inpl * (1.-overlap)
-            s2D%smpl_ninpl = max(2,nint(avg_dist_inpl*real(pftc_glob%get_nrots())/180.))
+            s2D%smpl_ninpl = max(2,nint(avg_dist_inpl*real(nrots)/180.))
             s2D%smpl_ncls  = nint(real(params%ncls) * (1.-overlap)**2)
             s2D%smpl_ncls  = max(1,min(s2D%smpl_ncls, ceiling(params%prob_athres/180.*real(params%ncls))))
         end select
@@ -97,10 +98,9 @@ contains
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)
-    subroutine prep_strategy2D_batch( params, spproj, pftc, which_iter, nptcls, pinds )
+    subroutine prep_strategy2D_batch( params, spproj, which_iter, nptcls, pinds )
         class(parameters),  intent(in) :: params  
         type(sp_project),   intent(in) :: spproj
-        type(polarft_calc), intent(in) :: pftc
         integer,            intent(in) :: which_iter
         integer,            intent(in) :: nptcls        ! # of particles in batch
         integer,            intent(in) :: pinds(nptcls)

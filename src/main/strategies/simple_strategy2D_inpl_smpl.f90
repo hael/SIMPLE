@@ -5,6 +5,7 @@ use simple_strategy2D_alloc
 use simple_eul_prob_tab2D,   only: power_sampling
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
+use simple_builder,          only: builder
 implicit none
 
 public :: strategy2D_inpl_smpl
@@ -21,11 +22,12 @@ end type strategy2D_inpl_smpl
 
 contains
 
-    subroutine new_inpl_smpl( self, params, spec )
+    subroutine new_inpl_smpl( self, params, spec, build )
         class(strategy2D_inpl_smpl), intent(inout) :: self
         class(parameters),           intent(in)    :: params
         class(strategy2D_spec),      intent(inout) :: spec
-        call self%s%new(params, spec)
+        class(builder),              intent(in)    :: build
+        call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_inpl_smpl
 
@@ -41,9 +43,9 @@ contains
             call self%s%inpl_srch_first
             ! In-plane sampling
             if( self%s%l_sh_first )then
-                call pftc_glob%gen_objfun_vals(self%s%best_class, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                call self%s%b_ptr%pftc%gen_objfun_vals(self%s%best_class, self%s%iptcl, self%s%xy_first, inpl_corrs)
             else
-                call pftc_glob%gen_objfun_vals(self%s%best_class, self%s%iptcl, [0.,0.],         inpl_corrs)
+                call self%s%b_ptr%pftc%gen_objfun_vals(self%s%best_class, self%s%iptcl, [0.,0.],         inpl_corrs)
             endif
             ! Shift search
             if( s2D%do_inplsrch(self%s%iptcl_batch) )then
@@ -60,14 +62,14 @@ contains
                         cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%s%xy_first)
                         if( inpl_ind == 0 )then
                             inpl_ind = sorted_inds(isample)
-                            cxy(1)   = real(pftc_glob%gen_corr_for_rot_8(self%s%best_class, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
+                            cxy(1)   = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(self%s%best_class, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
                             cxy(2:3) = self%s%xy_first_rot
                         endif
                     else
                         cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
                         if( inpl_ind == 0 )then
                             inpl_ind = sorted_inds(isample)
-                            cxy      = [real(pftc_glob%gen_corr_for_rot_8(self%s%best_class, self%s%iptcl, inpl_ind)), 0.,0.]
+                            cxy      = [real(self%s%b_ptr%pftc%gen_corr_for_rot_8(self%s%best_class, self%s%iptcl, inpl_ind)), 0.,0.]
                         endif
                     endif
                     inpl_corrs(inpl_ind) = cxy(1)

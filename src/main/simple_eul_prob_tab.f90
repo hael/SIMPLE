@@ -190,17 +190,16 @@ contains
     end subroutine new_2
 
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
-    subroutine fill_tab( self, pftc )
+    subroutine fill_tab( self )
         class(eul_prob_tab), intent(inout) :: self
-        class(polarft_calc), intent(inout) :: pftc
         integer, allocatable   :: locn(:,:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
-        integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(pftc%get_nrots(),nthr_glob),&
+        integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
                   &istate, iref_start
         logical :: l_doshift
         real    :: rotmat(2,2), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres(self%p_ptr%nstates)
-        real    :: dists_inpl(pftc%get_nrots(),nthr_glob), dists_inpl_sorted(pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
+        real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         call seed_rnd
         projs_ns = 0
         do si = 1, self%nstates
@@ -218,7 +217,7 @@ contains
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             ! fill the table
@@ -230,7 +229,7 @@ contains
                 ! (1) identify shifts using the previously assigned best reference
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)        ! previous ori
                 istate     = o_prev%get_state()
-                irot       = pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
+                irot       = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                 iproj      = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 if( self%state_exists(istate) .and. self%proj_exists(iproj,istate) )then
                     iref_start = (istate-1)*self%p_ptr%nspace
@@ -245,11 +244,11 @@ contains
                 do ri = 1, self%nrefs
                     istate = self%sinds(ri)
                     iproj  = self%jinds(ri)
-                    call pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
+                    call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
                     dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
                     irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
                     ! rotate the shift vector to the frame of reference
-                    call rotmat2d(pftc%get_rot(irot), rotmat)
+                    call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
                     rot_xy                    = matmul(cxy(2:3), rotmat)
                     self%loc_tab(ri,i)%dist   = dists_inpl(irot,ithr)
                     dists_refs(  ri,ithr)     = dists_inpl(irot,ithr)
@@ -290,7 +289,7 @@ contains
                 lims_init(:,1) = -SHC_INPL_TRSHWDTH
                 lims_init(:,2) =  SHC_INPL_TRSHWDTH
                 do ithr = 1,nthr_glob
-                    call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+                    call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
                         &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
                 end do
                 ! fill the table
@@ -301,7 +300,7 @@ contains
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
-                        call pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
+                        call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
                         dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
                         irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
                         self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
@@ -336,7 +335,7 @@ contains
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
                         iproj  = self%jinds(ri)
-                        call pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
+                        call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
                         dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
                         irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
                         self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
@@ -352,9 +351,8 @@ contains
         call o_prev%kill
     end subroutine fill_tab
 
-    subroutine fill_tab_state_only( self, pftc )
-        class(eul_prob_tab),     intent(inout) :: self
-        class(polarft_calc), intent(inout) :: pftc
+    subroutine fill_tab_state_only( self )
+        class(eul_prob_tab), intent(inout) :: self
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
         integer :: i, iproj, iptcl, ithr, irot, istate, iref_start, is
@@ -367,7 +365,7 @@ contains
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
             end do
             ! fill the table
@@ -381,14 +379,14 @@ contains
                 iproj = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 do is = 1, self%nstates
                     istate     = self%ssinds(is)
-                    irot       = pftc%get_roind(360.-o_prev%e3get()) ! in-plane angle index
+                    irot       = self%b_ptr%pftc%get_roind(360.-o_prev%e3get()) ! in-plane angle index
                     iref_start = (istate-1)*self%p_ptr%nspace
                     ! BFGS over shifts
                     call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
                     if( irot == 0 )then
-                        irot     = pftc%get_roind(360.-o_prev%e3get())
-                        cxy(1)   = real(pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot))
+                        irot     = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())
+                        cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot))
                         cxy(2:3) = 0.
                     endif
                     self%state_tab(istate,i)%dist   = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
@@ -408,12 +406,12 @@ contains
                 iptcl = self%pinds(i)
                 ! identify shifts using the previously assigned best reference
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
-                irot  = pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
+                irot  = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                 iproj = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 do is = 1, self%nstates
                     istate      = self%ssinds(is)
                     iref_start  = (istate-1)*self%p_ptr%nspace
-                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot)), self%p_ptr%cc_objfun)
+                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(self%b_ptr%pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot)), self%p_ptr%cc_objfun)
                     self%state_tab(istate,i)%iproj  = iproj
                     self%state_tab(istate,i)%inpl   = irot
                     self%state_tab(istate,i)%x      = 0.

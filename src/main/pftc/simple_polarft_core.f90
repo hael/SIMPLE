@@ -138,8 +138,6 @@ contains
         call self%allocate_ptcls_memoization
         ! flag existence
         self%existence = .true.
-        ! set pointer to global instance
-        pftc_glob => self
     end subroutine new
 
     module subroutine kill(self)
@@ -162,7 +160,7 @@ contains
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
-            nullify(self%sigma2_noise, pftc_glob)
+            nullify(self%sigma2_noise)
             self%p_ptr => null()
             self%existence = .false.
         endif

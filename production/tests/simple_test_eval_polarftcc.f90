@@ -5,7 +5,6 @@ use simple_builder,             only: builder
 use simple_pftc_shsrch_grad,    only: pftc_shsrch_grad
 implicit none
 type(parameters)         :: p
-type(polarft_calc)       :: pftc
 type(cmdline)            :: cline
 type(builder)            :: b
 type(ori)                :: o
@@ -13,7 +12,7 @@ real                     :: shvec(2), shift_err, ang_err, lims(2,2), cxy(3)
 real, allocatable        :: cc_fft(:)
 integer(timer_int_kind)  :: tfft
 integer                  :: loc
-type(pftc_shsrch_grad)  :: grad_shsrch_obj
+type(pftc_shsrch_grad)   :: grad_shsrch_obj
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_eval_polarftcc vol1=xx mskdiam=xx lp=xx'
     write(logfhandle,'(a)') ' smpd=xx>'
@@ -38,21 +37,21 @@ call o%print_ori
 print *,'Shift= 0.0 0.0'
 print *,'---------------------'
 
-call pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
+call b%pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
 call b%vol%read(p%vols(1))
 call b%vol%mask3D_soft(p%msk)
 call b%vol%fft()
 call b%vol%expand_cmat(p%box)
-call b%vol%fproject_polar(1, o, pftc,       iseven=.true., mask=b%l_resmsk)
-call pftc%cp_even_ref2ptcl(1,1)
-call pftc%set_eo(1, .true. )
+call b%vol%fproject_polar(1, o, b%pftc,       iseven=.true., mask=b%l_resmsk)
+call b%pftc%cp_even_ref2ptcl(1,1)
+call b%pftc%set_eo(1, .true. )
 
 if( o%e3get() < 0.)then
     call o%e3set(o%e3get() - 29.5)
 else
     call o%e3set(o%e3get() + 29.5)
 endif
-call b%vol%fproject_polar(1, o, pftc,       iseven=.true., mask=b%l_resmsk)
+call b%vol%fproject_polar(1, o, b%pftc,       iseven=.true., mask=b%l_resmsk)
 shvec(1) = -2.
 shvec(2) =  2.
 print *,'Ref orientation:'
@@ -60,25 +59,25 @@ call o%print_ori
 print *,'Shift= ',shvec
 print *,'---------------------'
 
-call pftc%shift_ptcl(1,shvec)
-call pftc%memoize_ptcls
+call b%pftc%shift_ptcl(1,shvec)
+call b%pftc%memoize_ptcls
 
 !### TIMING
-allocate(cc_fft(pftc%get_nrots()))
+allocate(cc_fft(b%pftc%get_nrots()))
 tfft = tic()
-call pftc%gen_objfun_vals(1, 1, [0.,0.], cc_fft)
+call b%pftc%gen_objfun_vals(1, 1, [0.,0.], cc_fft)
 print *, 'time of gen_corrs (no cache): ', toc(tfft)
 loc = maxloc(cc_fft, dim=1)
-print *, pftc%get_rot(loc)
+print *, b%pftc%get_rot(loc)
 
 ! searching
 lims(:,1) = -5.
 lims(:,2) =  5.
-call grad_shsrch_obj%new(lims)
+call grad_shsrch_obj%new(b, lims)
 call grad_shsrch_obj%set_indices(1, 1)
 loc = 1
 tfft = tic()
 cxy = grad_shsrch_obj%minimize(irot=loc)
 print *, 'time of shift_search: ', toc(tfft)
-print *, cxy, pftc%get_rot(loc)
+print *, cxy, b%pftc%get_rot(loc)
 end program simple_test_eval_polarftcc

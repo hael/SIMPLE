@@ -2,10 +2,11 @@
 module simple_strategy2D_eval
 use simple_core_module_api
 use simple_strategy2D_alloc
-use simple_parameters,      only: parameters
+use simple_parameters,       only: parameters
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_oris,             only: oris
+use simple_builder,          only: builder
 implicit none
 
 public :: strategy2D_eval
@@ -20,11 +21,12 @@ end type strategy2D_eval
 
 contains
 
-    subroutine new_eval( self, params, spec )
+    subroutine new_eval( self, params, spec, build )
         class(strategy2D_eval), intent(inout) :: self
         class(parameters),      intent(in)    :: params
         class(strategy2D_spec), intent(inout) :: spec
-        call self%s%new( params, spec )
+        class(builder),         intent(in)    :: build
+        call self%s%new( params, spec, build )
         self%spec = spec
     end subroutine new_eval
 

@@ -4,6 +4,7 @@ use simple_pftc_srch_api
 use simple_strategy2D_alloc
 use simple_strategy2D,      only: strategy2D
 use simple_strategy2D_srch, only: strategy2D_spec
+use simple_builder,         only: builder
 implicit none
 
 public :: strategy2D_inpl
@@ -20,11 +21,12 @@ end type strategy2D_inpl
 
 contains
 
-    subroutine new_inpl( self, params, spec )
+    subroutine new_inpl( self, params, spec, build )
         class(strategy2D_inpl),  intent(inout) :: self
         class(parameters),       intent(in)    :: params
         class(strategy2D_spec),  intent(inout) :: spec
-        call self%s%new(params, spec)
+        class(builder),          intent(in)    :: build
+        call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_inpl
 
@@ -37,7 +39,7 @@ contains
             ! Prep
             call self%s%prep4srch(os)
             ! inpl search
-            call pftc_glob%gen_objfun_vals(self%s%prev_class, self%s%iptcl, [0.,0.], corrs)
+            call self%s%b_ptr%pftc%gen_objfun_vals(self%s%prev_class, self%s%iptcl, [0.,0.], corrs)
             inpl_ind          = maxloc(corrs, dim=1)
             inpl_corr         = corrs(inpl_ind)
             self%s%best_class = self%s%prev_class

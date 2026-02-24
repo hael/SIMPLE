@@ -4,6 +4,7 @@ use simple_pftc_srch_api
 use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
+use simple_builder,          only: builder
 implicit none
 
 public :: strategy2D_tseries
@@ -22,11 +23,12 @@ end type strategy2D_tseries
 
 contains
 
-    subroutine new_tseries( self, params, spec )
+    subroutine new_tseries( self, params, spec, build )
         class(strategy2D_tseries), intent(inout) :: self
         class(parameters),         intent(in)    :: params
         class(strategy2D_spec),    intent(inout) :: spec
-        call self%s%new(params, spec)
+        class(builder),            intent(in)    :: build
+        call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_tseries
 
@@ -62,7 +64,7 @@ contains
                 call self%s%inpl_srch
             else
                 ! coarse solution
-                call rotmat2d(pftc_glob%get_rot(self%s%best_rot), rotmat)
+                call rotmat2d(self%s%b_ptr%pftc%get_rot(self%s%best_rot), rotmat)
                 self%s%best_shvec = matmul(self%s%best_shvec, rotmat)
             endif
             call self%s%store_solution(os)
@@ -75,7 +77,7 @@ contains
                 if( s2D%cls_pops(iref) == 0 )return
                 do i = -itrs,itrs,TRSSTEP
                     do j = -itrs,itrs,TRSSTEP
-                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, real([i,j]), corrs)
+                        call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, real([i,j]), corrs)
                         inpl_ind  = maxloc(corrs, dim=1)
                         inpl_corr = corrs(inpl_ind)
                         if( inpl_corr >= corr )then

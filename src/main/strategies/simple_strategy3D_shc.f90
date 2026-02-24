@@ -4,7 +4,6 @@ use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
 use simple_parameters,      only: parameters
-use simple_polarft_calc,    only: pftc_glob
 use simple_oris,            only: oris
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_spec
@@ -56,9 +55,9 @@ contains
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
                     if( self%s%p_ptr%l_sh_first )then
-                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                        call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
-                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
+                        call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                     endif
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))

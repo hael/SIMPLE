@@ -209,7 +209,6 @@ contains
         type(estimate_first_sigmas_commander) :: xfirst_sigmas_distr
         type(commander_prob_align)            :: xprob_align_distr
         type(commander_volassemble)           :: xvolassemble
-        type(polarft_calc)                    :: pftc
         ! command lines
         type(cmdline) :: cline_reconstruct3D_distr
         type(cmdline) :: cline_calc_pspec_distr
@@ -253,7 +252,7 @@ contains
         call build%init_params_and_build_spproj(cline, params)
         if( params%l_polar )then
             call build%build_general_tbox(params, cline, do3d=.true.)
-            call pftc%new(params, 1, [1,1], params%kfromto)
+            call build%pftc%new(params, 1, [1,1], params%kfromto)
         endif
         ! sanity check
         fall_over = .false.
@@ -639,13 +638,13 @@ contains
             if( params%l_polar )then
                 ! Assemble polar references
                 params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
-                call pftc%polar_cavger_new(.true., nrefs=params%nspace)
-                call pftc%polar_cavger_calc_pops(build%spproj)
-                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms)
+                call build%pftc%polar_cavger_new(.true., nrefs=params%nspace)
+                call build%pftc%polar_cavger_calc_pops(build%spproj)
+                call build%pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
-                call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
-                call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                call pftc%polar_cavger_kill
+                call build%pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
+                call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+                call build%pftc%polar_cavger_kill
                 call job_descr%delete('vol1')
                 call cline%delete('vol1')
                 if( iter > 1 .and. params%keepvol.eq.'no' )then
@@ -696,7 +695,7 @@ contains
         call cline%set('endit', real(iter))
         ! end gracefully
         call build%kill_general_tbox
-        call pftc%kill
+        call build%pftc%kill
         call simple_end('**** SIMPLE_DISTR_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D_distr
 
@@ -994,7 +993,6 @@ contains
         integer,          allocatable :: pinds(:)
         type(image),      allocatable :: tmp_imgs(:), tmp_imgs_pad(:)
         type(string)                  :: fname
-        type(polarft_calc)            :: pftc
         type(builder)                 :: build
         type(parameters)              :: params
         type(eul_prob_tab)            :: eulprob_obj_part
@@ -1011,24 +1009,24 @@ contains
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( params, build, pftc, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
                                         
         ! Build polar particle images
-        call build_batch_particles(params, build, pftc, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
         call eulprob_obj_part%new(params, build, pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( str_has_substr(params%refine, 'prob_state') )then
-            call eulprob_obj_part%fill_tab_state_only(pftc)
+            call eulprob_obj_part%fill_tab_state_only
             call eulprob_obj_part%write_state_tab(fname)
         else
-            call eulprob_obj_part%fill_tab(pftc)
+            call eulprob_obj_part%fill_tab
             call eulprob_obj_part%write_tab(fname)
         endif
         call eulprob_obj_part%kill
         call killimgbatch(build)
-        call pftc%kill
+        call build%pftc%kill
         call build%kill_general_tbox
         call dealloc_imgarr(tmp_imgs)
         call dealloc_imgarr(tmp_imgs_pad)

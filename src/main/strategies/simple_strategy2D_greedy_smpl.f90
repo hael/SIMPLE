@@ -3,10 +3,11 @@ module simple_strategy2D_greedy_smpl
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
 use simple_eul_prob_tab2D,  only: squared_sampling
-use simple_parameters,       only: parameters
+use simple_parameters,      only: parameters
 use simple_strategy2D,      only: strategy2D
 use simple_strategy2D_srch, only: strategy2D_spec
-use simple_oris,             only: oris
+use simple_oris,            only: oris
+use simple_builder,         only: builder
 implicit none
 
 public :: strategy2D_greedy_smpl
@@ -23,11 +24,12 @@ end type strategy2D_greedy_smpl
 
 contains
 
-    subroutine new_greedy_smpl( self, params, spec )
+    subroutine new_greedy_smpl( self, params, spec, build )
         class(strategy2D_greedy_smpl), intent(inout) :: self
         class(parameters),             intent(in)    :: params
         class(strategy2D_spec),        intent(inout) :: spec
-        call self%s%new( params, spec )
+        class(builder),                intent(in)    :: build
+        call self%s%new( params, spec, build )
         self%spec = spec
     end subroutine new_greedy_smpl
 
@@ -53,9 +55,9 @@ contains
                 else
                     ! in-plane sampling
                     if( self%s%l_sh_first )then
-                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                        call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
-                        call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
+                        call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
                     endif
                     call squared_sampling(self%s%nrots, inpl_corrs, inds,&
                                         &s2D%smpl_ninpl, inpl_ind, order_ind, inpl_corr)
@@ -94,14 +96,14 @@ contains
                             cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%s%xy_first)
                             if( inpl_ind == 0 )then
                                 inpl_ind = refs_inplinds(iref)
-                                cxy(1)   = real(pftc_glob%gen_corr_for_rot_8(iref, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
+                                cxy(1)   = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(iref, self%s%iptcl, real(self%s%xy_first,dp), inpl_ind))
                                 cxy(2:3) = self%s%xy_first_rot
                             endif
                         else
                             cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
                             if( inpl_ind == 0 )then
                                 inpl_ind = refs_inplinds(iref)
-                                cxy      = [real(pftc_glob%gen_corr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
+                                cxy      = [real(self%s%b_ptr%pftc%gen_corr_for_rot_8(iref, self%s%iptcl, inpl_ind)), 0.,0.]
                             endif
                         endif
                     endif
