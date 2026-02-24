@@ -317,8 +317,7 @@ contains
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
             ! restore polar cavgs
             if( l_polar )then
-                call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                    &b_ptr%spproj, b_ptr%esig%sigma2_noise, incr_shifts(:,1:batchsz))
+                call pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), b_ptr%spproj, incr_shifts(:,1:batchsz))
             endif
         enddo ! Batch loop
 

@@ -101,12 +101,11 @@ contains
     end subroutine polar_cavger_calc_pops
 
     !>  \brief  Updates Fourier components and normalization matrices with new particles
-    module subroutine polar_cavger_update_sums( self, nptcls, pinds, spproj, sig2arr, incr_shifts, is3D )
+    module subroutine polar_cavger_update_sums( self, nptcls, pinds, spproj, incr_shifts, is3D )
         class(polarft_calc),         intent(inout) :: self
         integer,                     intent(in)    :: nptcls
         integer,                     intent(in)    :: pinds(nptcls)
         class(sp_project),           intent(inout) :: spproj
-        real,                        intent(in)    :: sig2arr(self%kfromto(1):self%kfromto(2),self%pfromto(1):self%pfromto(2))
         real,              optional, intent(in)    :: incr_shifts(2,nptcls)
         logical,           optional, intent(in)    :: is3d
         class(oris), pointer :: spproj_field
@@ -153,7 +152,7 @@ contains
             rptcl = real(w) * rptcl
             ! Particle ML regularization
             if( self%p_ptr%l_ml_reg )then
-                sigma2 = sig2arr(self%kfromto(1):self%kfromto(2),iptcl)
+                sigma2 = self%sigma2_noise(self%kfromto(1):self%kfromto(2),iptcl)
                 do k = self%kfromto(1),self%kfromto(2)
                     rptcl(:,k) = rptcl(:,k) / sigma2(k)
                 enddo
