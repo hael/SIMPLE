@@ -184,23 +184,21 @@ contains
         use simple_commanders_sim, only: commander_simulate_atoms
         class(commander_crys_score), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(string),                allocatable   :: pdbfnames(:), corenames(:)
+        type(string),                allocatable   :: pdbfnames(:)
         real,                        allocatable   :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:)
         integer,                     allocatable   :: cnts(:)
         logical,                     allocatable   :: l_dists(:)
         type(commander_simulate_atoms) :: xsim_atoms
-        type(nanoparticle)             :: nano
         type(parameters)               :: p
         type(cmdline)                  :: cline_sim_atoms
-        type(string)                   :: t_name, cmd
-        integer :: npdbs, ipdb, icore, ncores, Natoms, cnt, i, j, nclus
+        integer :: npdbs, ipdb, Natoms, cnt, i, j, nclus
         real    :: min_dist, dist, prob, d, moldiam, a(3)
         call p%new(cline)
         call read_filetable(p%fname, pdbfnames)
         npdbs = size(pdbfnames)
         do ipdb = 1, npdbs
             ! finding max_dist for moldiam
-            call read_pdb2matrix( p%pdbfile, mat )
+            call read_pdb2matrix(pdbfnames(ipdb), mat )
             Natoms  = size(mat,2)
             moldiam = 0.
             do i = 1, Natoms-1
@@ -214,16 +212,13 @@ contains
             call cline_sim_atoms%set('smpd',    p%smpd)
             call cline_sim_atoms%set('element', p%element)
             call cline_sim_atoms%set('outvol',  'tmp.mrc')
+            call cline_sim_atoms%set('pdbout',  'tmp.pdb')
             call cline_sim_atoms%set('moldiam', moldiam)
             call cline_sim_atoms%set('box',     p%box)
             call cline_sim_atoms%set('nthr',    real(p%nthr))
             call xsim_atoms%execute(cline_sim_atoms)
-            ! detecting atom positions of the simulated nanoparticle
-            call nano%new(p, string('tmp.mrc'))
-            call nano%identify_atomic_pos(a, l_fit_lattice=.true., l_atom_thres=trim(p%atom_thres).eq.'yes', l_print=.false.)
-            call nano%kill
             ! generating stats for the reference lattice
-            call read_pdb2matrix(string('tmp_ATMS.pdb'), mat )
+            call read_pdb2matrix(string('tmp.pdb'), mat )
             Natoms = size(mat,2)
             if( allocated(l_dists) )deallocate(l_dists)
             if( allocated(  dists) )deallocate(  dists)
@@ -243,26 +238,17 @@ contains
             dists = pack(dists, mask=l_dists)
             call sort_cluster(dists, nclus, dists_cen, cnts, vars, delta=min_dist / 10.)
             call hpsort(dists_cen)
+            ! dists_cen now contains the reference distance points for computing stats
             if( allocated(ref_stats) )deallocate(ref_stats)
             if( allocated(cur_stats) )deallocate(cur_stats)
             allocate(ref_stats(nclus), cur_stats(nclus), source=0.)
             call compute_stats(mat, dists_cen(1:nclus), ref_stats)
-            ! generating stats for the core
-            t_name = pdbfnames(ipdb)
-            print *, '--------------------------'
-            print *, 'Computing crystal score of cores in folder : ', t_name%to_char()
-            cmd = 'ls '// t_name%to_char() // '/*_core.pdb | xargs -n 1 basename > output_'//int2str(ipdb)//'.log'
-            call execute_command_line(cmd%to_char())
-            call read_filetable(string('output_'//int2str(ipdb)//'.log'), corenames)
-            ncores = size(corenames)
-            do icore = 1, ncores
-                call read_pdb2matrix( t_name // '/' // corenames(icore), cur_mat )
-                call compute_stats(cur_mat, dists_cen(1:nclus), cur_stats)
-                call kstwo( ref_stats, nclus, cur_stats, nclus, d, prob )
-                print *, 'Core : ', corenames(icore)%to_char(), ' with score : ', prob
-            enddo
-            call execute_command_line('rm largest_cc.mrc split_ccs.mrc binarized.mrc tmp* output_'//int2str(ipdb)//'.log')
-            print *, '--------------------------'
+            ! generating stats for the NP in the input pdb file
+            call read_pdb2matrix(pdbfnames(ipdb), cur_mat)
+            call compute_stats(cur_mat, dists_cen(1:nclus), cur_stats)
+            ! comparing the two distributions using the two-sample Kolmogorov-Smirnov test
+            call kstwo( ref_stats, nclus, cur_stats, nclus, d, prob )
+            print *, 'NP : ', pdbfnames(ipdb)%to_char(), ' with score : ', prob
         enddo
         ! end gracefully
         call simple_end('**** SIMPLE_CRYS_SCORE NORMAL STOP ****')
@@ -356,6 +342,7 @@ contains
             allocate(out_cnts(1:cur_clusN),   source=cnts(1:cur_clusN))
             allocate(out_vars(1:cur_clusN),   source=vars(1:cur_clusN))
         end subroutine sort_cluster
+
     end subroutine exec_crys_score
 
     subroutine exec_conv_atom_denoise( self, cline )
@@ -599,7 +586,7 @@ contains
 
     subroutine exec_core_atoms_analysis( self, cline )
         class(commander_core_atoms_analysis), intent(inout) :: self
-        class(cmdline),                               intent(inout) :: cline !< command line input
+        class(cmdline),                       intent(inout) :: cline !< command line input
         type(string),       allocatable :: pdbfnames(:), pdbfnames_core(:), pdbfnames_bfac(:), pdbfnames_fringe(:)
         type(common_atoms), allocatable :: atms_common(:)
         real,               allocatable :: betas(:), pdbmat(:,:)
