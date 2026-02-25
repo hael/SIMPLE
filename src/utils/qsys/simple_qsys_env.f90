@@ -46,7 +46,7 @@ contains
     subroutine new( self, params, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition )
         use simple_sp_project, only: sp_project
         class(qsys_env),         intent(inout) :: self
-        class(parameters),       intent(inout) :: params
+        class(parameters),       intent(in)    :: params
         integer,                 intent(in)    :: nparts
         logical,       optional, intent(in)    :: stream
         integer,       optional, intent(in)    :: numlen, nptcls, qsys_nthr

@@ -40,6 +40,127 @@ end type commander_ppca_denoise_classes
 
 contains
 
+    subroutine exec_cluster2D_unified(self, cline)
+        use simple_cluster2D_strategy
+        use simple_cluster2D_common
+        class(commander_base),   intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(parameters)                       :: params
+        type(builder),                  target :: build
+        class(cluster2D_strategy), allocatable :: strategy
+        type(simple_nice_communicator)         :: nice_communicator
+        type(cmdline)                          :: cline_prob_tab2D
+        type(string)                           :: finalcavgs
+        logical                                :: converged, l_stream, l_prob
+        integer                                :: iter
+        ! Initialize
+        call cline%set('prg','cluster2D')
+        call set_cluster2D_defaults(cline)
+        l_stream = .false.
+        if( cline%defined('stream') ) l_stream = cline%get_carg('stream')=='yes'
+        if( l_stream ) call cline%set('stream','no')
+        call build%init_params_and_build_spproj(cline, params)
+        if( l_stream ) call cline%set('stream','yes')
+        if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
+        call handle_objfun(params, cline)
+        call cline%set('mkdir', 'no')
+        ! Nice communicator
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        nice_communicator%stat_root%stage = "initialising"
+        call nice_communicator%cycle()
+        if(cline%defined("niceserver")) call cline%delete('niceserver')
+        if(cline%defined("niceprocid")) call cline%delete('niceprocid')
+        call setup_polar_specifics(params, build)
+        call init_cluster2D_refs(cline, params, build)
+        if( cline%defined('extr_iter') )then
+            params%extr_iter = params%extr_iter - 1
+        else
+            params%extr_iter = params%startit - 1
+        endif
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            call build%spproj_field%partition_eo
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
+        ! Create strategy
+        strategy = create_strategy(params)
+        call strategy%initialize(params, build, cline)
+        if(.not. l_stream) call progressfile_init()
+        ! Main loop - ultra-simple now
+        l_prob = str_has_substr(params%refine, 'prob')
+        iter = params%startit - 1
+        do
+            iter = iter + 1
+            params%which_iter = iter
+            call cline%set('which_iter', int2str(params%which_iter))
+            write(logfhandle,'(A)')   '>>>'
+            write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
+            write(logfhandle,'(A)')   '>>>'
+            nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
+            call nice_communicator%cycle()
+            params%extr_iter = params%extr_iter + 1
+            call cline%set('extr_iter', params%extr_iter)
+            ! Build probability table if needed
+            if( l_prob ) call build_probability_table(cline, params, iter)
+            ! Strategy handles everything: alignment + cavgs + convergence
+            call strategy%execute_iteration(params, build, cline, iter, converged)
+            if( converged .or. iter >= params%maxits ) exit
+            call strategy%finalize_iteration(params, build, iter)
+        end do
+        ! Cleanup
+        nice_communicator%stat_root%stage = "terminating"
+        call nice_communicator%cycle()
+        ! At the end:
+        if( trim(params%restore_cavgs).eq.'yes' )then
+            if( file_exists(FRCS_FILE) )then
+                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+            endif
+            call build%spproj%write_segment_inside('out', params%projfile)
+            if( .not. params%l_polar )then
+                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
+                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+            endif
+        endif
+        call strategy%cleanup(params)
+        call cline%delete('startit')
+        call cline%set('endit', iter)
+        call build%spproj_field%kill
+        call nice_communicator%terminate()
+        call simple_touch(CLUSTER2D_FINISHED)
+        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
+    end subroutine exec_cluster2D_unified
+
+    subroutine build_probability_table(cline, params, iter)
+        class(cmdline),   intent(inout) :: cline
+        type(parameters), intent(inout) :: params
+        integer,          intent(in)    :: iter
+        type(commander_prob_tab2D_distr) :: xprob_tab2D_distr
+        type(cmdline)                    :: cline_prob_tab2D
+        cline_prob_tab2D = cline
+        call cline_prob_tab2D%set('refs',      params%refs)
+        call cline_prob_tab2D%set('frcs',      FRCS_FILE)
+        call cline_prob_tab2D%set('startit',   iter)
+        call cline_prob_tab2D%set('extr_iter', params%extr_iter)
+        call xprob_tab2D_distr%execute(cline_prob_tab2D)
+    end subroutine build_probability_table
+
+    ! Replace exec_cluster2D
+    ! subroutine exec_cluster2D(self, cline)
+    !     class(commander_cluster2D), intent(inout) :: self
+    !     class(cmdline),             intent(inout) :: cline
+        
+    !     ! Simply delegate to unified implementation
+    !     call exec_cluster2D_unified(self, cline)
+    ! end subroutine exec_cluster2D
+
+    ! ! Replace exec_cluster2D_distr
+    ! subroutine exec_cluster2D_distr(self, cline)
+    !     class(commander_cluster2D_distr), intent(inout) :: self
+    !     class(cmdline),                   intent(inout) :: cline
+        
+    !     ! Simply delegate to unified implementation
+    !     call exec_cluster2D_unified(self, cline)
+    ! end subroutine exec_cluster2D_distr
+
     subroutine exec_cluster2D_distr( self, cline )
         class(commander_cluster2D_distr), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
