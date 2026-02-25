@@ -5,7 +5,7 @@ use simple_defs_atoms
 use simple_molecule_data
 implicit none
 
-public :: atoms
+public :: atoms, test_atoms
 private
 #include "simple_local_flags.inc"
 
@@ -240,17 +240,17 @@ contains
         self%altloc(:)  = ' '
         self%icode(:)   = ' '
         self%element(:) = '  '
-        self%mw        = 0.
-        self%xyz       = 0.
-        self%beta      = 0.
-        self%occupancy = 0.
-        self%radius    = 0.
-        self%atom_corr = 0.
-        self%num    = 0
-        self%resnum = 0
-        self%Z      = 0
-        self%n      = n
-        self%het    = .false.
+        self%mw         = 0.
+        self%xyz        = 0.
+        self%beta       = 0.
+        self%occupancy  = 0.
+        self%radius     = 0.
+        self%atom_corr  = 0.
+        self%num        = 0
+        self%resnum     = 0
+        self%Z          = 0
+        self%n          = n
+        self%het        = .false.
         if(ddummy)then
             do i=1,self%n
                 self%name(i)      = ' X  '
@@ -417,7 +417,7 @@ contains
         get_radius = self%radius(i)
     end function get_radius
 
-    real function get_resnum( self, i )
+    integer function get_resnum( self, i )
         class(atoms), intent(in) :: self
         integer,      intent(in) :: i
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_resnum')
@@ -1549,4 +1549,145 @@ contains
         self%exists = .false.
     end subroutine kill
 
+    ! test suite
+    subroutine test_atoms()
+        use simple_image, only: image
+        type(atoms)        :: a, b, c, one
+        logical            :: do_io, do_img, chatty
+        real               :: v3(3), cen1(3), cen2(3), mcen(3), mat(3,3), cc
+        real, allocatable  :: aniso(:,:,:)
+        integer            :: i
+        type(string)       :: tmp_pdb, tmp_pdb2, tmp_geom
+        type(image)        :: vol, vol2
+        write(logfhandle,'(a)') "***** running atoms tests *****"
+        call assert_true(.true., "test start")
+        ! Constructor + basic checks
+        call a%new(3, dummy=.true.)
+        call assert_true(a%does_exist(), "new() should set exists true")
+        call assert_int_eq(a%get_n(), 3, "get_n after new")
+        ! Setters / getters
+        call a%set_num(1, 10)
+        call assert_int_eq(a%get_num(1), 10, "set/get num")
+        call a%set_resnum(1, 7)
+        call a%set_resnum(2, 7)
+        call a%set_resnum(3, 8)
+        call assert_int_eq(a%get_resnum(1), 7, "set/get resnum")
+        call a%set_chain(1, 'A')
+        call assert_true(len_trim(a%get_name(1)) >= 0, "get_name callable")
+        v3 = [1.25, -2.50, 3.75]
+        call a%set_coord(2, v3)
+        call assert_vec3_close(a%get_coord(2), v3, 1.0e-6, "coord roundtrip")
+        call a%set_beta(2, 12.5)
+        call assert_close(a%get_beta(2), 12.5, 1.0e-6, "beta roundtrip")
+        call a%set_atom_corr(1, 0.1)
+        call a%set_atom_corr(2, 0.3)
+        call a%set_atom_corr(3, 0.5)
+        call assert_close(a%get_atom_corr(3), 0.5, 1.0e-6, "atom_corr roundtrip")
+        ! element guess / existence
+        call a%set_name(1, ' C  ')
+        call a%set_name(2, ' O  ')
+        call a%set_name(3, ' N  ')
+        call a%guess_element()
+        call assert_true(a%element_exists("C"), "element_exists('C')")
+        ! copy / assignment (concrete)
+        call b%copy(a)
+        call assert_int_eq(b%get_n(), a%get_n(), "copy preserves n")
+        call assert_vec3_close(b%get_coord(2), a%get_coord(2), 1.0e-6, "copy coords")
+        c = a
+        call assert_int_eq(c%get_n(), a%get_n(), "assignment preserves n")
+        ! extract single atom (concrete)
+        call a%extract_atom(one, 2)
+        call assert_int_eq(one%get_n(), 1, "extract_atom -> one atom")
+        call assert_vec3_close(one%get_coord(1), a%get_coord(2), 1.0e-6, "extract coord")
+        ! geometry / transforms
+        cen1 = a%get_geom_center()
+        mcen = a%find_masscen()
+        call assert_vec3_close(cen1, mcen, 1.0e-5, "geom center ~= mass center")
+        cc = a%cc_res(7)
+        call assert_true(cc > -1.0e30, "cc_res sanity")
+        call a%translate([1.0,2.0,3.0])
+        cen2 = a%get_geom_center()
+        call assert_vec3_close(cen2, cen1 + [1.0,2.0,3.0], 1.0e-6, "translate works")
+        mat = 0.0
+        mat(1,1)=1.0; mat(2,2)=1.0; mat(3,3)=1.0
+        call a%rotate(mat)
+        call assert_vec3_close(a%get_geom_center(), cen2, 1.0e-6, "rotate(identity) no-op")
+        call a%center_inbox(1, boxsize=20, smpd=1.5)
+        call a%center_pdbcoord([33,33,33], smpd=1.0)
+        ! I/O tests
+        tmp_pdb  = 'atoms_selftest_tmp.pdb'
+        tmp_pdb2 = 'atoms_selftest_tmp_aniso.pdb'
+        tmp_geom = 'atoms_selftest_geom.pdb'
+        call a%writepdb(tmp_pdb)
+        call b%new(tmp_pdb)
+        call assert_int_eq(b%get_n(), a%get_n(), "pdb roundtrip n")
+        allocate(aniso(3,3,a%get_n()))
+        aniso = 0.0
+        do i=1,a%get_n()
+            aniso(1,1,i)=1.0e-3; aniso(2,2,i)=2.0e-3; aniso(3,3,i)=3.0e-3
+        enddo
+        call a%writepdb_aniso(tmp_pdb2, aniso)
+        ! geometry analysis smoke
+        call c%new(2, dummy=.true.)
+        call c%set_name(1,' C  '); call c%set_name(2,' O  ')
+        call c%set_coord(1,[0.0,0.0,0.0]); call c%set_coord(2,[2.0,0.0,0.0])
+        call c%set_num(1,1); call c%set_num(2,2)
+        call c%set_resnum(1,1); call c%set_resnum(2,1)
+        call c%set_element(1,'C '); call c%set_element(2,'O ')
+        call c%writepdb(tmp_geom)
+        call c%geometry_analysis_pdb(tmp_geom)
+        ! image-heavy calls (environment dependent)
+        call a%guess_element()
+        call vol%new([16,16,16], 1.0)
+        call vol2%new([16,16,16], 1.0)
+        call a%convolve(vol, cutoff=3.0)
+        call a%atom_validate(vol)
+        call a%map_validate(vol, vol2)
+        call vol%kill()
+        call vol2%kill()
+        ! print and kill
+        if (chatty) call a%print_atom(1)
+        call a%kill()
+        call assert_true(.not.a%does_exist(), "kill clears object")
+        call assert_int_eq(a%get_n(), 0, "n=0 after kill")
+        call assert_true(.true., "all atoms tests passed")
+        write(logfhandle,'(a)') 'SIMPLE_ATOMS_TEST COMPLETED ;-)'
+
+    contains
+
+        subroutine assert_true(cond, msg)
+            logical,          intent(in) :: cond
+            character(len=*), intent(in) :: msg
+            if (.not. cond) then
+                THROW_HARD("Test failed: assert_true failed: "//trim(msg))
+            endif
+        end subroutine assert_true
+
+        subroutine assert_int_eq(a, b, msg)
+            integer,          intent(in) :: a, b
+            character(len=*), intent(in) :: msg
+            if (a /= b) then
+                THROW_HARD("Test failed: assert_int_eq failed: "//trim(msg))
+            endif
+        end subroutine assert_int_eq
+
+        subroutine assert_close(x, y, tol, msg)
+            real,             intent(in) :: x, y, tol
+            character(len=*), intent(in) :: msg
+            if (abs(x-y) > tol) then
+                THROW_HARD("Test failed: assert_close failed: "//trim(msg)) 
+            endif
+        end subroutine assert_close
+
+        subroutine assert_vec3_close(x, y, tol, msg)
+            real,             intent(in) :: x(3), y(3), tol
+            character(len=*), intent(in) :: msg
+            if (any(abs(x-y) > tol)) then
+                THROW_HARD("Test failed: assert_vec3_close failed: "//trim(msg))
+            endif
+        end subroutine assert_vec3_close
+
+    end subroutine test_atoms
+        
+    
 end module

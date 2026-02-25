@@ -15,6 +15,7 @@ contains
 subroutine exec_test_units( self, cline )
     use simple_imghead, only: test_imghead
     use simple_oris,    only: test_oris
+    use simple_atoms,   only: test_atoms
     ! core library tester modules generated with help from chatgpt
     use simple_test_utils
     use simple_string_tester
@@ -86,6 +87,7 @@ subroutine exec_test_units( self, cline )
     call simple_test_fit_line
     call test_aff_prop
     call test_hclust
+    call test_atoms
     call simple_chdir( "../" )
     call simple_end('**** SIMPLE_TEST_UNITS NORMAL STOP ****')
 
