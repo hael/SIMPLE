@@ -6,16 +6,16 @@ use simple_binary_tree,   only: bt_node
 implicit none
 
 public :: gen_eulspace_block_tree
+public :: srch_eul_bl_tree_exhaustive
 public :: srch_eul_bl_tree_greedy
-public :: srch_eul_bl_tree_stoch
-public :: srch_eul_bl_tree_prob
+! public :: srch_eul_bl_tree_stoch
+! public :: srch_eul_bl_tree_prob
 private
+#include "simple_local_flags.inc"
 
 integer, parameter :: LINK_SINGLE   = 1
 integer, parameter :: LINK_COMPLETE = 2
 integer, parameter :: LINK_AVERAGE  = 3
-integer, parameter :: LEAF_BUDGET   = 128
-integer, parameter :: MAX_LEVELS    = 64
 
 contains
 
@@ -73,6 +73,84 @@ contains
         if (allocated(labels)) deallocate(labels)
     end function gen_eulspace_block_tree
 
+    ! Exhaustive search over *leaf nodes only* reachable from the root.
+    ! Intended for testing/validation against greedy descent.
+    subroutine srch_eul_bl_tree_exhaustive(otrial, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
+        class(ori),         intent(in)    :: otrial
+        class(oris),        intent(in)    :: eulspace
+        class(sym),         intent(inout) :: pgrpsym
+        type(multi_dendro), intent(in)    :: block_tree
+        integer,            intent(in)    :: itree
+        integer,            intent(out)   :: best_ref
+        real,               intent(out)   :: dist_min
+        type(ori)     :: o, osym
+        real          :: inplrotdist, dist
+        type(bt_node) :: node_root, node_cur
+        integer, allocatable :: stack(:)
+        integer :: top, inode
+        integer :: ref, nfun, pop
+        ! Initialize outputs
+        best_ref = 0
+        dist_min = huge(1.0)
+        node_root = block_tree%get_root_node(itree)
+        if (node_root%node_idx == 0) then
+            THROW_HARD('srch_eul_bl_tree_exhaustive_leaves: empty tree / invalid itree')
+        end if
+        allocate(stack(64))
+        top = 1
+        stack(top) = node_root%node_idx
+        nfun = 0
+        pop = block_tree%get_tree_pop(itree)
+        do while (top > 0)
+            inode = stack(top)
+            top = top - 1
+            if (inode == 0) cycle
+            node_cur = block_tree%get_node(itree, inode)
+            ! Only evaluate leaves
+            if (block_tree%is_leaf(itree, inode)) then
+                ref = node_cur%ref_idx
+                if (ref == 0) then
+                    THROW_HARD('srch_eul_bl_tree_exhaustive_leaves: leaf has ref_idx=0')
+                end if
+                call eulspace%get_ori(ref, o)
+                call pgrpsym%sym_dists(otrial, o, osym, dist, inplrotdist)
+                nfun = nfun + 1
+                if (dist < dist_min) then
+                    dist_min = dist
+                    best_ref = ref
+                end if
+            else
+                ! Push children
+                if (node_cur%left_idx /= 0)  call push_stack(stack, top, node_cur%left_idx)
+                if (node_cur%right_idx /= 0) call push_stack(stack, top, node_cur%right_idx)
+            end if
+        end do
+        if (allocated(stack)) deallocate(stack)
+
+        print *, 'Exhaustive search: nfun=', nfun, 'tree population=', pop
+
+        contains
+
+            subroutine push_stack(stk, top, val)
+                integer, allocatable, intent(inout) :: stk(:)
+                integer,              intent(inout) :: top
+                integer,              intent(in)    :: val
+                integer, allocatable :: tmp(:)
+                integer :: n
+                if (val == 0) return
+                n = size(stk)
+                if (top + 1 > n) then
+                    allocate(tmp(2*n))
+                    tmp(1:n) = stk
+                    tmp(n+1:) = 0
+                    call move_alloc(tmp, stk)
+                end if
+                top = top + 1
+                stk(top) = val
+            end subroutine push_stack
+
+    end subroutine srch_eul_bl_tree_exhaustive
+
     subroutine srch_eul_bl_tree_greedy( otrial, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
         class(ori),         intent(in)    :: otrial
         class(oris),        intent(in)    :: eulspace
@@ -82,189 +160,183 @@ contains
         integer,            intent(out)   :: best_ref
         real,               intent(out)   :: dist_min
         type(ori)     :: o, osym
-        integer       :: inode, level, lidx, ridx, local_k, j
+        integer       :: inode, level, local_k, j, max_levs
         real          :: dist_left, dist_right, inplrotdist, dist
-        type(bt_node) :: node_L, node_R, node_cur
-        inode = block_tree%get_root_node_idx(itree)
-        do level = 1, MAX_LEVELS
+        type(bt_node) :: node_L, node_R, node_cur, node_root
+        node_root = block_tree%get_root_node(itree)
+        if( node_root%ref_idx == 0 ) THROW_HARD('root node has no ref_idx')
+        call eulspace%get_ori(node_root%ref_idx, o)
+        call pgrpsym%sym_dists(otrial, o, osym, dist_min, inplrotdist)
+        inode = node_root%node_idx
+        max_levs = block_tree%get_tree_height(itree)
+        do
             if (inode == 0) exit
             if (block_tree%is_leaf(itree, inode)) exit
-            if (block_tree%get_subset_size(itree, inode) <= LEAF_BUDGET) exit
-            call block_tree%get_children_idx(itree, inode, lidx, ridx)
-            if (lidx == 0 .and. ridx == 0) exit
+            node_cur = block_tree%get_node(itree, inode)
+            if (node_cur%left_idx == 0 .and. node_cur%right_idx == 0) exit
             dist_left  = huge(1.0)
             dist_right = huge(1.0)
-            if (lidx /= 0) then
-                node_L = block_tree%get_node_by_idx(itree, lidx)
+            if (node_cur%left_idx /= 0) then
+                node_L = block_tree%get_node(itree, node_cur%left_idx)
                 call eulspace%get_ori(node_L%ref_idx, o)
                 call pgrpsym%sym_dists(otrial, o, osym, dist_left, inplrotdist)
             end if
-            if (ridx /= 0) then
-                node_R = block_tree%get_node_by_idx(itree, ridx)
+            if (node_cur%right_idx /= 0) then
+                node_R = block_tree%get_node(itree, node_cur%right_idx)
                 call eulspace%get_ori(node_R%ref_idx, o)
                 call pgrpsym%sym_dists(otrial, o, osym, dist_right, inplrotdist)
             end if
+            ! travel down the closer child
             if (dist_left <= dist_right) then
-                inode = lidx
+                inode = node_cur%left_idx
             else
-                inode = ridx
+                inode = node_cur%right_idx
+            end if
+            ! best-first search
+            if( any([dist_left, dist_right] < dist_min) ) then
+                dist_min = min(dist_left, dist_right)
+                best_ref = merge(node_L%ref_idx, node_R%ref_idx, dist_left <= dist_right)
             end if
         end do
-        ! ---- (final) brute-force scan the selected cluster ----
-        dist_min = huge(1.0)
-        best_ref = 0
-        if (inode /= 0) then
-            node_cur = block_tree%get_node_by_idx(itree, inode)
-            do j = 1, size(node_cur%subset)
-                local_k  = node_cur%subset(j)                              ! LOCAL index
-                best_ref = block_tree%local_to_global_ref(itree, local_k)  ! GLOBAL ref id
-                if (best_ref == 0) cycle
-                call eulspace%get_ori(best_ref, o)
-                call pgrpsym%sym_dists(otrial, o, osym, dist, inplrotdist)
-                if (dist < dist_min) then
-                    dist_min = dist
-                end if
-            end do
-        end if
     end subroutine srch_eul_bl_tree_greedy
 
-    subroutine srch_eul_bl_tree_stoch( otrial, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
-        class(ori),         intent(in)    :: otrial
-        class(oris),        intent(in)    :: eulspace
-        class(sym),         intent(inout) :: pgrpsym
-        type(multi_dendro), intent(in)    :: block_tree
-        integer,            intent(in)    :: itree
-        integer,            intent(out)   :: best_ref
-        real,               intent(out)   :: dist_min
-        type(ori)     :: o, osym
-        integer       :: inode, level, lidx, ridx, local_k, j, max_levs, rnd_levs
-        real          :: dist_left, dist_right, inplrotdist, dist
-        type(bt_node) :: node_L, node_R, node_cur
-        inode = block_tree%get_root_node_idx(itree)
-        max_levs = block_tree%get_tree_height(itree)
-        if( max_levs > 2)then
-            rnd_levs = irnd_uni(max_levs)
-            rnd_levs = max(2, rnd_levs) ! ensure at least 2 levels of descent
-        else
-            rnd_levs = max_levs
-        end if
-        do level = 1, rnd_levs
-            if (inode == 0) exit
-            if (block_tree%is_leaf(itree, inode)) exit
-            if (block_tree%get_subset_size(itree, inode) <= LEAF_BUDGET) exit
-            call block_tree%get_children_idx(itree, inode, lidx, ridx)
-            if (lidx == 0 .and. ridx == 0) exit
-            dist_left  = huge(1.0)
-            dist_right = huge(1.0)
-            if (lidx /= 0) then
-                node_L = block_tree%get_node_by_idx(itree, lidx)
-                call eulspace%get_ori(node_L%ref_idx, o)
-                call pgrpsym%sym_dists(otrial, o, osym, dist_left, inplrotdist)
-            end if
-            if (ridx /= 0) then
-                node_R = block_tree%get_node_by_idx(itree, ridx)
-                call eulspace%get_ori(node_R%ref_idx, o)
-                call pgrpsym%sym_dists(otrial, o, osym, dist_right, inplrotdist)
-            end if
-            if (dist_left <= dist_right) then
-                inode = lidx
-            else
-                inode = ridx
-            end if
-        end do
-        ! ---- (final) brute-force scan the selected cluster ----
-        dist_min = huge(1.0)
-        best_ref = 0
-        if (inode /= 0) then
-            node_cur = block_tree%get_node_by_idx(itree, inode)
-            do j = 1, size(node_cur%subset)
-                local_k  = node_cur%subset(j)                              ! LOCAL index
-                best_ref = block_tree%local_to_global_ref(itree, local_k)  ! GLOBAL ref id
-                if (best_ref == 0) cycle
-                call eulspace%get_ori(best_ref, o)
-                call pgrpsym%sym_dists(otrial, o, osym, dist, inplrotdist)
-                if (dist < dist_min) then
-                    dist_min = dist
-                end if
-            end do
-        end if
-    end subroutine srch_eul_bl_tree_stoch
+    ! subroutine srch_eul_bl_tree_stoch( otrial, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
+    !     class(ori),         intent(in)    :: otrial
+    !     class(oris),        intent(in)    :: eulspace
+    !     class(sym),         intent(inout) :: pgrpsym
+    !     type(multi_dendro), intent(in)    :: block_tree
+    !     integer,            intent(in)    :: itree
+    !     integer,            intent(out)   :: best_ref
+    !     real,               intent(out)   :: dist_min
+    !     type(ori)     :: o, osym
+    !     integer       :: inode, level, lidx, ridx, local_k, j, max_levs, rnd_levs
+    !     real          :: dist_left, dist_right, inplrotdist, dist
+    !     type(bt_node) :: node_L, node_R, node_cur
+    !     inode = block_tree%get_root_node_idx(itree)
+    !     max_levs = block_tree%get_tree_height(itree)
+    !     if( max_levs > 2)then
+    !         rnd_levs = irnd_uni(max_levs)
+    !         rnd_levs = max(2, rnd_levs) ! ensure at least 2 levels of descent
+    !     else
+    !         rnd_levs = max_levs
+    !     end if
+    !     do level = 1, rnd_levs
+    !         if (inode == 0) exit
+    !         if (block_tree%is_leaf(itree, inode)) exit
+    !         if (block_tree%get_subset_size(itree, inode) <= LEAF_BUDGET) exit
+    !         call block_tree%get_children_idx(itree, inode, lidx, ridx)
+    !         if (lidx == 0 .and. ridx == 0) exit
+    !         dist_left  = huge(1.0)
+    !         dist_right = huge(1.0)
+    !         if (lidx /= 0) then
+    !             node_L = block_tree%get_node_by_idx(itree, lidx)
+    !             call eulspace%get_ori(node_L%ref_idx, o)
+    !             call pgrpsym%sym_dists(otrial, o, osym, dist_left, inplrotdist)
+    !         end if
+    !         if (ridx /= 0) then
+    !             node_R = block_tree%get_node_by_idx(itree, ridx)
+    !             call eulspace%get_ori(node_R%ref_idx, o)
+    !             call pgrpsym%sym_dists(otrial, o, osym, dist_right, inplrotdist)
+    !         end if
+    !         if (dist_left <= dist_right) then
+    !             inode = lidx
+    !         else
+    !             inode = ridax
+    !         end if
+    !     end do
+    !     ! ---- (final) brute-force scan the selected cluster ----
+    !     dist_min = huge(1.0)
+    !     best_ref = 0
+    !     if (inode /= 0) then
+    !         node_cur = block_tree%get_node_by_idx(itree, inode)
+    !         do j = 1, size(node_cur%subset)
+    !             local_k  = node_cur%subset(j)                              ! LOCAL index
+    !             best_ref = block_tree%local_to_global_ref(itree, local_k)  ! GLOBAL ref id
+    !             if (best_ref == 0) cycle
+    !             call eulspace%get_ori(best_ref, o)
+    !             call pgrpsym%sym_dists(otrial, o, osym, dist, inplrotdist)
+    !             if (dist < dist_min) then
+    !                 dist_min = dist
+    !             end if
+    !         end do
+    !     end if
+    ! end subroutine srch_eul_bl_tree_stoch
 
-    subroutine srch_eul_bl_tree_prob( otrial, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
-        class(ori),         intent(in)    :: otrial
-        class(oris),        intent(in)    :: eulspace
-        class(sym),         intent(inout) :: pgrpsym
-        type(multi_dendro), intent(in)    :: block_tree
-        integer,            intent(in)    :: itree
-        integer,            intent(out)   :: best_ref
-        real,               intent(out)   :: dist_min
-        type(ori)     :: o, osym
-        integer       :: inode, level, lidx, ridx, local_k, j
-        real          :: dist_left, dist_right, inplrotdist, dist
-        type(bt_node) :: node_L, node_R, node_cur
-        inode = block_tree%get_root_node_idx(itree)
-        do level = 1, MAX_LEVELS
-            if (inode == 0) exit
-            if (block_tree%is_leaf(itree, inode)) exit
-            if (block_tree%get_subset_size(itree, inode) <= LEAF_BUDGET) exit
-            call block_tree%get_children_idx(itree, inode, lidx, ridx)
-            if (lidx == 0 .and. ridx == 0) exit
-            dist_left  = huge(1.0)
-            dist_right = huge(1.0)
-            if (lidx /= 0) then
-                node_L = block_tree%get_node_by_idx(itree, lidx)
-                call eulspace%get_ori(node_L%ref_idx, o)
-                call pgrpsym%sym_dists(otrial, o, osym, dist_left, inplrotdist)
-            end if
-            if (ridx /= 0) then
-                node_R = block_tree%get_node_by_idx(itree, ridx)
-                call eulspace%get_ori(node_R%ref_idx, o)
-                call pgrpsym%sym_dists(otrial, o, osym, dist_right, inplrotdist)
-            end if
-            ! ---- probabilistic choice 
-            if (lidx /= 0 .and. ridx /= 0) then
-                if (sample_two(dist_left, dist_right) == 1) then
-                    inode = lidx
-                else
-                    inode = ridx
-                end if
-            else if (lidx /= 0) then
-                inode = lidx
-            else
-                inode = ridx
-            end if
-        end do
-        ! ---- (final) brute-force scan the selected cluster ----
-        dist_min = huge(1.0)
-        best_ref = 0
-        if (inode /= 0) then
-            node_cur = block_tree%get_node_by_idx(itree, inode)
-            do j = 1, size(node_cur%subset)
-                local_k  = node_cur%subset(j)                              ! LOCAL index
-                best_ref = block_tree%local_to_global_ref(itree, local_k)  ! GLOBAL ref id
-                if (best_ref == 0) cycle
-                call eulspace%get_ori(best_ref, o)
-                call pgrpsym%sym_dists(otrial, o, osym, dist, inplrotdist)
-                if (dist < dist_min) dist_min = dist
-            end do
-        end if
+    ! subroutine srch_eul_bl_tree_prob( otrial, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
+    !     class(ori),         intent(in)    :: otrial
+    !     class(oris),        intent(in)    :: eulspace
+    !     class(sym),         intent(inout) :: pgrpsym
+    !     type(multi_dendro), intent(in)    :: block_tree
+    !     integer,            intent(in)    :: itree
+    !     integer,            intent(out)   :: best_ref
+    !     real,               intent(out)   :: dist_min
+    !     type(ori)     :: o, osym
+    !     integer       :: inode, level, lidx, ridx, local_k, j
+    !     real          :: dist_left, dist_right, inplrotdist, dist
+    !     type(bt_node) :: node_L, node_R, node_cur
+    !     inode = block_tree%get_root_node_idx(itree)
+    !     do level = 1, MAX_LEVELS
+    !         if (inode == 0) exit
+    !         if (block_tree%is_leaf(itree, inode)) exit
+    !         if (block_tree%get_subset_size(itree, inode) <= LEAF_BUDGET) exit
+    !         call block_tree%get_children_idx(itree, inode, lidx, ridx)
+    !         if (lidx == 0 .and. ridx == 0) exit
+    !         dist_left  = huge(1.0)
+    !         dist_right = huge(1.0)
+    !         if (lidx /= 0) then
+    !             node_L = block_tree%get_node_by_idx(itree, lidx)
+    !             call eulspace%get_ori(node_L%ref_idx, o)
+    !             call pgrpsym%sym_dists(otrial, o, osym, dist_left, inplrotdist)
+    !         end if
+    !         if (ridx /= 0) then
+    !             node_R = block_tree%get_node_by_idx(itree, ridx)
+    !             call eulspace%get_ori(node_R%ref_idx, o)
+    !             call pgrpsym%sym_dists(otrial, o, osym, dist_right, inplrotdist)
+    !         end if
+    !         ! ---- probabilistic choice 
+    !         if (lidx /= 0 .and. ridx /= 0) then
+    !             if (sample_two(dist_left, dist_right) == 1) then
+    !                 inode = lidx
+    !             else
+    !                 inode = ridx
+    !             end if
+    !         else if (lidx /= 0) then
+    !             inode = lidx
+    !         else
+    !             inode = ridx
+    !         end if
+    !     end do
+    !     ! ---- (final) brute-force scan the selected cluster ----
+    !     dist_min = huge(1.0)
+    !     best_ref = 0
+    !     if (inode /= 0) then
+    !         node_cur = block_tree%get_node_by_idx(itree, inode)
+    !         do j = 1, size(node_cur%subset)
+    !             local_k  = node_cur%subset(j)                              ! LOCAL index
+    !             best_ref = block_tree%local_to_global_ref(itree, local_k)  ! GLOBAL ref id
+    !             if (best_ref == 0) cycle
+    !             call eulspace%get_ori(best_ref, o)
+    !             call pgrpsym%sym_dists(otrial, o, osym, dist, inplrotdist)
+    !             if (dist < dist_min) dist_min = dist
+    !         end do
+    !     end if
 
-        contains
+    !     contains
 
-            function sample_two(p1, p2) result(which)
-                real, intent(in) :: p1, p2
-                integer          :: which
-                real             :: r, psum
-                psum = p1 + p2
-                if (psum <= 0.0) then
-                    ! policy: choose uniformly between 1 and 2 if both zero
-                    which = merge(1,2,ran3() < 0.5)
-                    return
-                end if
-                r = ran3() ! assumed in [0,1)
-                which = merge(1,2,r < p1/psum)
-            end function sample_two
+    !         function sample_two(p1, p2) result(which)
+    !             real, intent(in) :: p1, p2
+    !             integer          :: which
+    !             real             :: r, psum
+    !             psum = p1 + p2
+    !             if (psum <= 0.0) then
+    !                 ! policy: choose uniformly between 1 and 2 if both zero
+    !                 which = merge(1,2,ran3() < 0.5)
+    !                 return
+    !             end if
+    !             r = ran3() ! assumed in [0,1)
+    !             which = merge(1,2,r < p1/psum)
+    !         end function sample_two
             
-    end subroutine srch_eul_bl_tree_prob
+    ! end subroutine srch_eul_bl_tree_prob
 
 end module simple_block_tree
