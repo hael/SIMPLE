@@ -1,9 +1,9 @@
 !@descr: the class implementing command line parsing
 module simple_cmdline
 use simple_core_module_api
-use simple_ui,             only: get_prg_ptr, get_test_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
-use simple_ui_program,     only: ui_program
-use simple_args,           only: args
+use simple_ui,         only: get_prg_ptr, get_test_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
+use simple_ui_program, only: ui_program
+use simple_args,       only: args
 use simple_private_prgs 
 implicit none
 private
