@@ -88,8 +88,9 @@ do i = 1, NSAMPLE
     end do
     dist_subspace = dist_min
     itree = ind_min
-    call srch_eul_bl_tree_best_first_greedy(osmp, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
-    !  call srch_eul_bl_tree_best_first_stoch(osmp, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
+    ! call srch_eul_bl_tree_greedy(osmp, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
+    !  call srch_eul_bl_tree_stoch(osmp, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
+    call srch_eul_bl_tree_prob(osmp, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
     dist_min_tot      = dist_min_tot + dist_min
     dist_subspace_tot = dist_subspace_tot + dist_subspace
     print *, 'SAMPLE ', irnd, ': itree=', itree, ' dist=', dist_min, ' dist_subspace=', dist_subspace
