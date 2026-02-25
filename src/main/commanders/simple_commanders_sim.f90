@@ -401,6 +401,7 @@ contains
         real             :: center(3),ha,x,x1,x2,x3,y,y1,y2,y3,z,z1,z2,z3,msksq,cutoff
         real             :: a ! lattice parameter
         integer          :: i, j, k, n, ncubes
+        if( .not. cline%defined('pdbout') ) call cline%set('pdbout', 'simatms.pdb')
         call params%new(cline)
         if( .not.is_even(params%box) ) THROW_HARD('BOX must be even')
         call vol%new([params%box,params%box,params%box], params%smpd)
@@ -600,12 +601,12 @@ contains
                 call atoms_obj%set_chain(i,'A')
                 call atoms_obj%set_occupancy(i,1.)
             enddo
-            call atoms_obj%writePDB(params%outvol)
             ! for convolution
             cutoff = 3.*a
         else
             THROW_HARD('A PDB file or ELEMENT & MOLDIAM must be defined!')
         endif
+        call atoms_obj%writePDB(params%pdbout)
         if( cline%defined('lp') )then
             cutoff = max(cutoff,4.*params%lp)
             call atoms_obj%convolve(vol,cutoff,lp=params%lp)

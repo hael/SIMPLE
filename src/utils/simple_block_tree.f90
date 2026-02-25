@@ -248,22 +248,23 @@ contains
                 if (dist < dist_min) dist_min = dist
             end do
         end if
+
         contains
+
             function sample_two(p1, p2) result(which)
                 real, intent(in) :: p1, p2
                 integer          :: which
                 real             :: r, psum
                 psum = p1 + p2
                 if (psum <= 0.0) then
-                    which = 1
+                    ! policy: choose uniformly between 1 and 2 if both zero
+                    which = merge(1,2,ran3() < 0.5)
                     return
                 end if
-                r = ran3()
-                if (r < p1 / psum) then
-                    which = 1
-                else
-                    which = 2
-                end if
+                r = ran3() ! assumed in [0,1)
+                which = merge(1,2,r < p1/psum)
             end function sample_two
+            
     end subroutine srch_eul_bl_tree_prob
+
 end module simple_block_tree
