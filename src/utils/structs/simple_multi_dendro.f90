@@ -17,22 +17,16 @@ type :: multi_dendro
    logical,           allocatable :: tree_map(:,:)
    integer :: n_trees = 0
    integer :: n_refs  = 0
-   logical :: exists  = .false.
 contains
    procedure :: new
    procedure :: get_n_trees
    procedure :: get_n_refs
    procedure :: get_tree_pop
    procedure :: get_tree_refs
-   procedure :: get_medoid
    procedure :: get_tree_height
-   procedure :: local_to_global_ref
    procedure :: build_tree_from_subdistmat
-   procedure :: get_root_node_idx
-   procedure :: get_node_by_idx
-   procedure :: get_children_idx
-   procedure :: get_children_ref
-   procedure :: get_subset_size
+   procedure :: get_root_node           ! returns bt_node
+   procedure :: get_node                ! returns bt_node
    procedure :: is_leaf
    procedure :: kill
 end type multi_dendro
@@ -58,7 +52,6 @@ contains
          end do
       end do
       allocate(self%trees(self%n_trees))
-      self%exists = .true.
    end subroutine new
 
    pure integer function get_n_trees(self) result(n)
@@ -95,43 +88,26 @@ contains
       refs = mask2inds(self%tree_map(itree,:))
    end function get_tree_refs
 
-   pure integer function get_medoid(self, itree) result(m)
-      class(multi_dendro), intent(in) :: self
-      integer, intent(in) :: itree
-      m = 0
-      if (itree < 1 .or. itree > self%n_trees) return
-      if (.not. allocated(self%trees)) return
-      ! root medoid is stored as GLOBAL ref inside binary_tree
-      m = self%trees(itree)%get_medoid()
-   end function get_medoid
-
    pure integer function get_tree_height(self, itree) result(h)
       class(multi_dendro), intent(in) :: self
       integer,             intent(in) :: itree
       h = 0
       if (itree < 1 .or. itree > self%n_trees) return
+      if (.not. allocated(self%trees)) return
       h = self%trees(itree)%get_height()
    end function get_tree_height
-
-   pure integer function local_to_global_ref(self, itree, local_k) result(global_ref)
-      class(multi_dendro), intent(in) :: self
-      integer,            intent(in) :: itree, local_k
-      global_ref = 0
-      if (itree < 1 .or. itree > self%n_trees) return
-      global_ref = self%trees(itree)%local_to_global_ref(local_k)
-   end function local_to_global_ref
 
    !--- Build a single tree from an externally provided sub-distance matrix.
    subroutine build_tree_from_subdistmat(self, itree, refs, sub_distmat, linkage)
       class(multi_dendro), intent(inout) :: self
-      integer,            intent(in)    :: itree
-      integer,            intent(in)    :: refs(:)            ! GLOBAL ref ids (tree members)
-      real,               intent(in)    :: sub_distmat(:,:)   ! (n,n) LOCAL to refs ordering
-      integer,            intent(in)    :: linkage
-      integer :: n
+      integer,             intent(in)    :: itree
+      integer,             intent(in)    :: refs(:)            ! GLOBAL ref ids (tree members)
+      real,                intent(in)    :: sub_distmat(:,:)   ! (n,n) LOCAL to refs ordering
+      integer,             intent(in)    :: linkage
       integer, allocatable :: merge_mat(:,:)
       real,    allocatable :: height(:)
       type(hclust) :: hc
+      integer :: n
       if (itree < 1 .or. itree > self%n_trees) then
          THROW_HARD('build_tree_from_subdistmat: itree out of range')
       end if
@@ -142,9 +118,8 @@ contains
       end if
       call self%trees(itree)%kill()
       if (n == 1) then
-         ! Degenerate single-node tree
-         allocate(merge_mat(2,1))
-         merge_mat = 1
+         ! For n=1, merge_mat must be (2, n-1) = (2,0)
+         allocate(merge_mat(2,0))
          call self%trees(itree)%build_from_hclust(merge_mat, refs, sub_distmat)
          deallocate(merge_mat)
          return
@@ -157,21 +132,24 @@ contains
       deallocate(merge_mat, height)
    end subroutine build_tree_from_subdistmat
 
-   ! ==========================
-   ! New wrappers for dendrogram search (node-index based)
-   ! ==========================
-
-   pure integer function get_root_node_idx(self, itree) result(root_idx)
+   pure function get_root_node(self, itree) result(root_node)
       class(multi_dendro), intent(in) :: self
       integer,            intent(in) :: itree
-      root_idx = 0
+      type(bt_node) :: root_node
+      root_node%left_idx   = 0
+      root_node%right_idx  = 0
+      root_node%parent_idx = 0
+      root_node%level      = 0
+      root_node%ref_idx    = 0
+      root_node%node_idx   = 0
       if (itree < 1 .or. itree > self%n_trees) return
-      root_idx = self%trees(itree)%get_root_idx()
-   end function get_root_node_idx
+      if (.not. allocated(self%trees)) return
+      root_node = self%trees(itree)%get_root_node()
+   end function get_root_node
 
-   pure function get_node_by_idx(self, itree, inode) result(node)
+   pure function get_node(self, itree, inode) result(node)
       class(multi_dendro), intent(in) :: self
-      integer,            intent(in) :: itree, inode
+      integer,             intent(in) :: itree, inode
       type(bt_node) :: node
       node%left_idx   = 0
       node%right_idx  = 0
@@ -180,48 +158,22 @@ contains
       node%ref_idx    = 0
       node%node_idx   = 0
       if (itree < 1 .or. itree > self%n_trees) return
-      if (inode < 1 .or. inode > self%trees(itree)%n_nodes()) return
+      if (.not. allocated(self%trees)) return
       node = self%trees(itree)%get_node(inode)
-   end function get_node_by_idx
-
-   pure subroutine get_children_idx(self, itree, inode, lidx, ridx)
-      class(multi_dendro), intent(in)  :: self
-      integer,            intent(in)  :: itree, inode
-      integer,            intent(out) :: lidx, ridx
-      lidx = 0; ridx = 0
-      if (itree < 1 .or. itree > self%n_trees) return
-      call self%trees(itree)%get_children_idx(inode, lidx, ridx)
-   end subroutine get_children_idx
-
-   pure subroutine get_children_ref(self, itree, inode, lref, rref)
-      class(multi_dendro), intent(in)  :: self
-      integer,            intent(in)  :: itree, inode
-      integer,            intent(out) :: lref, rref
-      lref = 0; rref = 0
-      if (itree < 1 .or. itree > self%n_trees) return
-      call self%trees(itree)%get_children_ref(inode, lref, rref)
-   end subroutine get_children_ref
-
-   pure integer function get_subset_size(self, itree, inode) result(n)
-      class(multi_dendro), intent(in) :: self
-      integer,            intent(in) :: itree, inode
-      n = 0
-      if (itree < 1 .or. itree > self%n_trees) return
-      n = self%trees(itree)%get_subset_size(inode)
-   end function get_subset_size
+   end function get_node
 
    pure logical function is_leaf(self, itree, inode) result(leaf)
       class(multi_dendro), intent(in) :: self
       integer,            intent(in) :: itree, inode
       leaf = .false.
       if (itree < 1 .or. itree > self%n_trees) return
+      if (.not. allocated(self%trees)) return
       leaf = self%trees(itree)%is_leaf(inode)
    end function is_leaf
 
    subroutine kill(self)
       class(multi_dendro), intent(inout) :: self
       integer :: i
-      if (.not. self%exists) return
       if (allocated(self%trees)) then
          do i = 1, size(self%trees)
             call self%trees(i)%kill()
@@ -232,7 +184,6 @@ contains
       if (allocated(self%tree_map))   deallocate(self%tree_map)
       self%n_trees = 0
       self%n_refs  = 0
-      self%exists  = .false.
    end subroutine kill
 
 end module simple_multi_dendro

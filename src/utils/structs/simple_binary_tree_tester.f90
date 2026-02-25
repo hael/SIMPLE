@@ -1,4 +1,4 @@
-!@descr: unit test routines for simple_binary_tree class
+!@descr: unit test routines for refactored simple_binary_tree class (no subsets; node-only getters)
 module simple_binary_tree_tester
 use simple_binary_tree
 use simple_test_utils
@@ -7,22 +7,13 @@ implicit none
 public :: run_all_tree_tests
 private
 
-!-----------------------------------
-! Visitor capture utilities
-!-----------------------------------
-integer, allocatable, save :: visited_nodes(:)
-integer, save :: nvisited = 0
-
 contains
 
     subroutine run_all_tree_tests()
         write(*,'(A)') '**** running binary_tree tests ****'
         call test_initial_state()
-        call test_empty_traversals_noop()
-        call test_build_from_hclust_basic_structure()
-        call test_getters_and_copy_semantics()
-        call test_new_helpers_and_mapping()
-        call test_traversal_orders()
+        call test_build_from_hclust_basic_invariants()
+        call test_get_node_copy_semantics()
         call test_kill_and_rebuild()
         write(*,'(A)') '**** finished binary_tree tests ****'
     end subroutine run_all_tree_tests
@@ -31,42 +22,14 @@ contains
     ! Helpers
     !===========================
 
-    subroutine reset_visit_buffer(nmax)
-        integer, intent(in) :: nmax
-        if (allocated(visited_nodes)) deallocate(visited_nodes)
-        allocate(visited_nodes(nmax))
-        visited_nodes = 0
-        nvisited = 0
-    end subroutine reset_visit_buffer
-
-    subroutine record_visit(node)
-        type(bt_node), intent(in) :: node
-        nvisited = nvisited + 1
-        if (.not. allocated(visited_nodes)) stop "visit buffer not allocated"
-        if (nvisited > size(visited_nodes)) stop "visit buffer overflow"
-        visited_nodes(nvisited) = node%node_idx
-    end subroutine record_visit
-
-    subroutine assert_visit_sequence(expected, msg)
-        integer, intent(in) :: expected(:)
-        character(*), intent(in) :: msg
-        integer :: i
-        call assert_int(size(expected), nvisited, trim(msg)//' (count)')
-        do i = 1, size(expected)
-            call assert_int(expected(i), visited_nodes(i), trim(msg)//' (seq)')
-        end do
-    end subroutine assert_visit_sequence
-
     subroutine build_test_tree(t)
         type(binary_tree), intent(inout) :: t
         integer, allocatable :: merge_mat(:,:)
         integer :: refs(4)
         real, allocatable :: dist(:,:)
-        integer :: i
 
         ! Leaves: 1..4, internal: 5..7
-        ! merges:
-        !   (1,2)->5, (3,4)->6, (5,6)->7
+        ! merges: (1,2)->5, (3,4)->6, (5,6)->7
         allocate(merge_mat(2,3))
         merge_mat(1,:) = [1, 3, 5]
         merge_mat(2,:) = [2, 4, 6]
@@ -75,10 +38,6 @@ contains
 
         allocate(dist(4,4))
         dist = 0.0
-
-        ! pair (1,2): tie => choose local 1 => global 1
-        ! pair (3,4): tie => choose local 3 => global 3
-        ! root (1,2,3,4): best is local 2 => global 2
         dist(1,2)=1.0;  dist(2,1)=1.0
         dist(3,4)=1.0;  dist(4,3)=1.0
         dist(1,3)=10.0; dist(3,1)=10.0
@@ -92,6 +51,12 @@ contains
         deallocate(dist)
     end subroutine build_test_tree
 
+    subroutine assert_idx_valid(idx, n, msg)
+        integer, intent(in) :: idx, n
+        character(*), intent(in) :: msg
+        call assert_true(idx >= 1 .and. idx <= n, trim(msg))
+    end subroutine assert_idx_valid
+
     !===========================
     ! Tests
     !===========================
@@ -99,212 +64,142 @@ contains
     subroutine test_initial_state()
         type(binary_tree) :: t
         write(*,'(A)') 'test_initial_state'
-        call assert_int(0, t%n_nodes(), 'new tree has 0 nodes')
-        call assert_int(0, t%get_root_idx(), 'new tree root_idx=0')
-        call assert_int(0, t%get_nref(), 'new tree nref=0')
-        call assert_int(0, t%get_medoid(), 'new tree medoid=0')
+        call assert_int(0, t%get_n_nodes(), 'new tree has 0 nodes')
+        call assert_int(0, t%get_nrefs(),   'new tree nrefs=0')
+        call assert_int(0, t%get_height(),  'new tree height=0')
+
+        ! root node getter should return zero-initialized node
+        block
+            type(bt_node) :: r
+            r = t%get_root_node()
+            call assert_int(0, r%node_idx, 'new tree root node_idx=0')
+            call assert_int(0, r%ref_idx,  'new tree root ref_idx=0')
+            call assert_int(0, r%left_idx, 'new tree root left_idx=0')
+            call assert_int(0, r%right_idx,'new tree root right_idx=0')
+            call assert_int(0, r%parent_idx,'new tree root parent_idx=0')
+        end block
     end subroutine test_initial_state
 
-    subroutine test_empty_traversals_noop()
+    subroutine test_build_from_hclust_basic_invariants()
         type(binary_tree) :: t
-        write(*,'(A)') 'test_empty_traversals_noop'
-        call reset_visit_buffer(10)
-        call t%traverse_preorder(record_visit)
-        call assert_int(0, nvisited, 'preorder on empty visits 0')
-        call t%traverse_inorder(record_visit)
-        call assert_int(0, nvisited, 'inorder on empty visits 0')
-        call t%traverse_postorder(record_visit)
-        call assert_int(0, nvisited, 'postorder on empty visits 0')
-        call t%traverse_levelorder(record_visit)
-        call assert_int(0, nvisited, 'levelorder on empty visits 0')
-    end subroutine test_empty_traversals_noop
+        type(bt_node) :: root, n1, n2, n3, n4, n5, n6
+        integer :: nrefs, n_total
 
-    subroutine test_build_from_hclust_basic_structure()
-        type(binary_tree) :: t
-        type(bt_node) :: n
-        integer :: lidx, ridx
-        integer :: lref, rref
-
-        write(*,'(A)') 'test_build_from_hclust_basic_structure'
+        write(*,'(A)') 'test_build_from_hclust_basic_invariants'
         call build_test_tree(t)
 
-        call assert_int(7, t%n_nodes(), 'n_nodes = 2*nref-1')
-        call assert_int(7, t%get_root_idx(), 'root is last node')
-        call assert_int(4, t%get_nref(), 'nref stored in tree')
+        nrefs = t%get_nrefs()
+        call assert_int(4, nrefs, 'nrefs stored')
+        n_total = 2*nrefs - 1
+        call assert_int(n_total, t%get_n_nodes(), 'n_nodes = 2*nrefs-1')
 
-        ! Leaf nodes 1..4
-        n = t%get_node(1)
-        call assert_int(1, n%node_idx, 'leaf1 node_idx')
-        call assert_int(1, n%ref_idx,  'leaf1 ref (global)')
-        call assert_int(0, n%left_idx, 'leaf1 left=0')
-        call assert_int(0, n%right_idx,'leaf1 right=0')
-        call assert_int(5, n%parent_idx,'leaf1 parent=5')
-        call assert_int(1, size(n%subset), 'leaf1 subset size')
-        call assert_int(1, n%subset(1), 'leaf1 subset local=1')
+        ! For a full 4-leaf binary merge tree, height must be 3 (nodes along root->leaf path)
+        call assert_int(3, t%get_height(), 'height=3 for 4-leaf full merge')
 
-        n = t%get_node(2)
-        call assert_int(5, n%parent_idx,'leaf2 parent=5')
-        call assert_int(2, n%subset(1), 'leaf2 subset local=2')
+        root = t%get_root_node()
+        call assert_int(n_total, root%node_idx, 'root node_idx is last slot')
+        call assert_int(0, root%parent_idx, 'root parent_idx=0')
+        call assert_true(.not. t%is_leaf(root%node_idx), 'root is not leaf')
+        call assert_idx_valid(root%left_idx,  n_total, 'root left_idx valid')
+        call assert_idx_valid(root%right_idx, n_total, 'root right_idx valid')
+        call assert_true(root%left_idx /= 0 .and. root%right_idx /= 0, 'root has two children')
 
-        n = t%get_node(3)
-        call assert_int(6, n%parent_idx,'leaf3 parent=6')
-        call assert_int(3, n%subset(1), 'leaf3 subset local=3')
+        ! Leaves: nodes 1..4 are leaves with refs 1..4 (GLOBAL ids)
+        n1 = t%get_node(1)
+        call assert_true(t%is_leaf(1), 'node1 is leaf')
+        call assert_int(1, n1%ref_idx, 'leaf1 ref_idx=1')
+        call assert_int(0, n1%left_idx, 'leaf1 left=0')
+        call assert_int(0, n1%right_idx,'leaf1 right=0')
+        call assert_int(5, n1%parent_idx,'leaf1 parent=5')
 
-        n = t%get_node(4)
-        call assert_int(6, n%parent_idx,'leaf4 parent=6')
-        call assert_int(4, n%subset(1), 'leaf4 subset local=4')
+        n2 = t%get_node(2)
+        call assert_true(t%is_leaf(2), 'node2 is leaf')
+        call assert_int(2, n2%ref_idx, 'leaf2 ref_idx=2')
+        call assert_int(5, n2%parent_idx,'leaf2 parent=5')
+
+        n3 = t%get_node(3)
+        call assert_true(t%is_leaf(3), 'node3 is leaf')
+        call assert_int(3, n3%ref_idx, 'leaf3 ref_idx=3')
+        call assert_int(6, n3%parent_idx,'leaf3 parent=6')
+
+        n4 = t%get_node(4)
+        call assert_true(t%is_leaf(4), 'node4 is leaf')
+        call assert_int(4, n4%ref_idx, 'leaf4 ref_idx=4')
+        call assert_int(6, n4%parent_idx,'leaf4 parent=6')
 
         ! Internal node 5 merges (1,2)
-        n = t%get_node(5)
-        call assert_int(1, n%left_idx,  'node5 left')
-        call assert_int(2, n%right_idx, 'node5 right')
-        call assert_int(7, n%parent_idx, 'node5 parent=7')
-        call assert_int(1, n%level, 'node5 level=1')
-        call assert_int(2, size(n%subset), 'node5 subset size=2')
-        call assert_int(1, n%subset(1), 'node5 subset local(1)=1')
-        call assert_int(2, n%subset(2), 'node5 subset local(2)=2')
-        call assert_int(1, n%ref_idx, 'node5 medoid global ref=1')
+        n5 = t%get_node(5)
+        call assert_true(.not. t%is_leaf(5), 'node5 is internal')
+        call assert_int(1, n5%left_idx,  'node5 left=1')
+        call assert_int(2, n5%right_idx, 'node5 right=2')
+        call assert_int(7, n5%parent_idx,'node5 parent=7')
+        call assert_int(1, n5%level,     'node5 level=1')
+        ! Deterministic medoid for {1,2} tie -> local 1 -> global 1
+        call assert_int(1, n5%ref_idx,   'node5 ref_idx (medoid)=1')
 
         ! Internal node 6 merges (3,4)
-        n = t%get_node(6)
-        call assert_int(3, n%left_idx,  'node6 left')
-        call assert_int(4, n%right_idx, 'node6 right')
-        call assert_int(7, n%parent_idx,'node6 parent=7')
-        call assert_int(2, n%level, 'node6 level=2')
-        call assert_int(2, size(n%subset), 'node6 subset size=2')
-        call assert_int(3, n%subset(1), 'node6 subset local(1)=3')
-        call assert_int(4, n%subset(2), 'node6 subset local(2)=4')
-        call assert_int(3, n%ref_idx, 'node6 medoid global ref=3')
+        n6 = t%get_node(6)
+        call assert_true(.not. t%is_leaf(6), 'node6 is internal')
+        call assert_int(3, n6%left_idx,  'node6 left=3')
+        call assert_int(4, n6%right_idx, 'node6 right=4')
+        call assert_int(7, n6%parent_idx,'node6 parent=7')
+        call assert_int(2, n6%level,     'node6 level=2')
+        ! Deterministic medoid for {3,4} tie -> local 3 -> global 3
+        call assert_int(3, n6%ref_idx,   'node6 ref_idx (medoid)=3')
 
         ! Root node 7 merges (5,6)
-        n = t%get_node(7)
-        call assert_int(5, n%left_idx,  'root left=5')
-        call assert_int(6, n%right_idx, 'root right=6')
-        call assert_int(0, n%parent_idx,'root parent=0')
-        call assert_int(3, n%level, 'root level=3')
-        call assert_int(4, size(n%subset), 'root subset size=4')
-        call assert_int(1, n%subset(1), 'root subset local(1)=1')
-        call assert_int(2, n%subset(2), 'root subset local(2)=2')
-        call assert_int(3, n%subset(3), 'root subset local(3)=3')
-        call assert_int(4, n%subset(4), 'root subset local(4)=4')
-        call assert_int(2, n%ref_idx, 'root medoid global ref=2')
-        call assert_int(2, t%get_medoid(), 'tree get_medoid() matches root medoid')
-
-        ! Sanity-check new child helpers on the root
-        call t%get_children_idx(t%get_root_idx(), lidx, ridx)
-        call assert_int(5, lidx, 'get_children_idx(root) left=5')
-        call assert_int(6, ridx, 'get_children_idx(root) right=6')
-
-        call t%get_children_ref(t%get_root_idx(), lref, rref)
-        call assert_int(1, lref, 'get_children_ref(root) left medoid=1')
-        call assert_int(3, rref, 'get_children_ref(root) right medoid=3')
+        call assert_int(5, root%left_idx,  'root left=5')
+        call assert_int(6, root%right_idx, 'root right=6')
+        call assert_int(3, root%level,     'root level=3')
+        ! Deterministic medoid for {1,2,3,4} is global 2
+        call assert_int(2, root%ref_idx,   'root ref_idx (medoid)=2')
 
         call t%kill()
-    end subroutine test_build_from_hclust_basic_structure
+    end subroutine test_build_from_hclust_basic_invariants
 
-    subroutine test_getters_and_copy_semantics()
+    subroutine test_get_node_copy_semantics()
         type(binary_tree) :: t
         type(bt_node) :: a, b
-        write(*,'(A)') 'test_getters_and_copy_semantics'
+        write(*,'(A)') 'test_get_node_copy_semantics'
         call build_test_tree(t)
 
-        call assert_int(7, t%get_root_idx(), 'get_root_idx ok')
-        a = t%get_node(1)
-        call assert_int(1, a%ref_idx, 'get_node returns correct ref')
+        a = t%get_node(5)
+        call assert_int(5, a%node_idx, 'get_node returns correct node_idx')
+        call assert_int(1, a%ref_idx,  'get_node returns correct ref_idx')
 
-        ! Ensure get_node returns a copy (mutating local should not affect tree)
+        ! mutate local copy; tree must be unchanged
         a%ref_idx = 999
-        b = t%get_node(1)
+        b = t%get_node(5)
         call assert_int(1, b%ref_idx, 'tree unaffected by local mutation')
 
         call t%kill()
-    end subroutine test_getters_and_copy_semantics
-
-    subroutine test_new_helpers_and_mapping()
-        type(binary_tree) :: t
-        integer :: root, lidx, ridx
-        integer :: g
-
-        write(*,'(A)') 'test_new_helpers_and_mapping'
-        call build_test_tree(t)
-
-        call assert_int(4, t%get_nref(), 'get_nref=4')
-
-        ! local_to_global_ref is identity in this test because refs=[1,2,3,4]
-        g = t%local_to_global_ref(1); call assert_int(1, g, 'local_to_global_ref(1)=1')
-        g = t%local_to_global_ref(4); call assert_int(4, g, 'local_to_global_ref(4)=4')
-        g = t%local_to_global_ref(0); call assert_int(0, g, 'local_to_global_ref(0)=0 out-of-range')
-        g = t%local_to_global_ref(999); call assert_int(0, g, 'local_to_global_ref(999)=0 out-of-range')
-
-        root = t%get_root_idx()
-        call assert_int(0, merge(1,0,t%is_leaf(root)), 'root is not leaf')  ! avoid assert_logical dependency
-        call assert_int(4, t%get_subset_size(root), 'root subset size=4')
-        call assert_int(2, t%get_node_ref(root), 'get_node_ref(root)=2')
-
-        call t%get_children_idx(root, lidx, ridx)
-        call assert_int(5, lidx, 'children_idx(root) left=5')
-        call assert_int(6, ridx, 'children_idx(root) right=6')
-
-        call assert_int(2, t%get_subset_size(5), 'subset size(node5)=2')
-        call assert_int(1, t%get_node_ref(5), 'node_ref(node5)=1')
-
-        call assert_int(1, merge(1,0,t%is_leaf(1)), 'leaf1 is leaf')
-        call assert_int(1, t%get_subset_size(1), 'leaf1 subset size=1')
-
-        call t%kill()
-    end subroutine test_new_helpers_and_mapping
-
-    subroutine test_traversal_orders()
-        type(binary_tree) :: t
-        integer, allocatable :: seq(:)
-        write(*,'(A)') 'test_traversal_orders'
-        call build_test_tree(t)
-
-        ! Preorder: root, left, right
-        call reset_visit_buffer(t%n_nodes())
-        call t%traverse_preorder(record_visit)
-        seq = [7,5,1,2,6,3,4]
-        call assert_visit_sequence(seq, 'preorder node_idx order')
-
-        ! Inorder: left, root, right
-        call reset_visit_buffer(t%n_nodes())
-        call t%traverse_inorder(record_visit)
-        seq = [1,5,2,7,3,6,4]
-        call assert_visit_sequence(seq, 'inorder node_idx order')
-
-        ! Postorder: left, right, root
-        call reset_visit_buffer(t%n_nodes())
-        call t%traverse_postorder(record_visit)
-        seq = [1,2,5,3,4,6,7]
-        call assert_visit_sequence(seq, 'postorder node_idx order')
-
-        ! Levelorder: BFS
-        call reset_visit_buffer(t%n_nodes())
-        call t%traverse_levelorder(record_visit)
-        seq = [7,5,6,1,2,3,4]
-        call assert_visit_sequence(seq, 'levelorder node_idx order')
-
-        call t%kill()
-    end subroutine test_traversal_orders
+    end subroutine test_get_node_copy_semantics
 
     subroutine test_kill_and_rebuild()
         type(binary_tree) :: t
+        type(bt_node) :: root
+        integer :: n_total
+
         write(*,'(A)') 'test_kill_and_rebuild'
         call build_test_tree(t)
 
-        call assert_int(7, t%n_nodes(), 'built tree has nodes')
-        call assert_int(4, t%get_nref(), 'built tree has nref')
-
+        call assert_true(t%get_n_nodes() > 0, 'tree built has nodes')
         call t%kill()
-        call assert_int(0, t%n_nodes(), 'kill deallocates nodes')
-        call assert_int(0, t%get_root_idx(), 'kill resets root')
-        call assert_int(0, t%get_nref(), 'kill resets nref')
+        call assert_int(0, t%get_n_nodes(), 'kill deallocates nodes')
+        call assert_int(0, t%get_nrefs(),   'kill resets nrefs')
+        call assert_int(0, t%get_height(),  'kill => height 0')
 
-        ! Rebuild after kill should work
         call build_test_tree(t)
-        call assert_int(7, t%n_nodes(), 'rebuild after kill works')
-        call assert_int(7, t%get_root_idx(), 'rebuild root ok')
-        call assert_int(4, t%get_nref(), 'rebuild nref ok')
+        call assert_int(4, t%get_nrefs(), 'rebuild nrefs ok')
+        n_total = 2*t%get_nrefs() - 1
+        call assert_int(n_total, t%get_n_nodes(), 'rebuild n_nodes ok')
+
+        root = t%get_root_node()
+        call assert_int(n_total, root%node_idx, 'rebuild root in last slot')
+        call assert_int(0, root%parent_idx,     'rebuild root parent_idx=0')
+        call assert_true(.not. t%is_leaf(root%node_idx), 'rebuild root is internal')
+        call assert_int(3, t%get_height(), 'rebuild height=3')
+        call assert_int(2, root%ref_idx,   'rebuild root medoid=2')
 
         call t%kill()
     end subroutine test_kill_and_rebuild
