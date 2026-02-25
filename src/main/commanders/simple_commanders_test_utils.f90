@@ -252,7 +252,7 @@ end subroutine exec_test_stringmatch
 
 subroutine exec_test_units( self, cline )
     class(commander_test_units),    intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
+    class(cmdline),                 intent(inout) :: cline
     call simple_end('**** SIMPLE_TEST_UNITS_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_units
 
