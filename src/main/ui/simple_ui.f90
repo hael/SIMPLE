@@ -1,6 +1,16 @@
 !@descr: the main user interface module 
 module simple_ui
-use simple_ui_all
+! core helpers
+use simple_core_module_api
+use simple_ansi_ctrls
+use simple_ui_params_common
+use simple_ui_hash,         only: ui_hash
+use simple_ui_program,      only: ui_program
+! program table grouping helpers
+use simple_ui_simple_group, only: add_simple_programs, print_simple_programs
+use simple_ui_stream_group, only: add_stream_programs, print_stream_programs_group
+use simple_ui_single_group, only: add_single_programs, print_single_programs
+use simple_ui_test_group,   only: add_test_programs, print_test_programs
 implicit none
 
 public :: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr
@@ -24,35 +34,11 @@ contains
         integer :: i
         call set_ui_params
         ! SIMPLE PROGRAMS
-        call construct_project_programs(prgtab)
-        call construct_preproc_programs(prgtab)
-        call construct_cluster2D_programs(prgtab)
-        call construct_cavgproc_programs(prgtab)
-        call construct_abinitio3D_programs(prgtab)
-        call construct_refine3D_programs(prgtab)
-        call construct_denoise_programs(prgtab)
-        call construct_filter_programs(prgtab)
-        call construct_image_programs(prgtab)
-        call construct_mask_programs(prgtab)
-        call construct_ori_programs(prgtab)
-        call construct_print_programs(prgtab)
-        call construct_res_programs(prgtab)
-        call construct_sim_programs(prgtab)
-        call construct_validate_programs(prgtab)
-        call construct_symmetry_programs(prgtab)
-        call construct_dock_programs(prgtab)
-        call construct_volume_programs(prgtab)
-        call construct_other_programs(prgtab)
+        call add_simple_programs(prgtab)
         ! SIMPLE STREAM PROGRAMS
-        call construct_stream_programs(prgtab)
+        call add_stream_programs(prgtab)
         ! SINGLE PROGRAMS
-        call construct_single_atom_programs(prgtab)
-        call construct_single_map_programs(prgtab)
-        call construct_single_nano2D_programs(prgtab)
-        call construct_single_nano3D_programs(prgtab)
-        call construct_single_trajectory_programs(prgtab)
-        call construct_single_tseries_programs(prgtab)
-        call construct_single_validate_programs(prgtab)
+        call add_single_programs(prgtab)
         prgnames = prgtab%keys_sorted()
     end subroutine make_ui
 
@@ -60,18 +46,7 @@ contains
         integer :: i
         call set_ui_params
         ! SIMPLE TEST PROGRAMS
-        call construct_test_class_programs(tsttab)
-        call construct_test_fft_programs(tsttab)
-        call construct_test_geometry_programs(tsttab)
-        call construct_test_highlevel_programs(tsttab)
-        call construct_test_io_programs(tsttab)
-        call construct_test_masks_programs(tsttab)
-        call construct_test_network_programs(tsttab)
-        call construct_test_numerics_programs(tsttab)
-        call construct_test_optimize_programs(tsttab)
-        call construct_test_parallel_programs(tsttab)
-        call construct_test_stats_programs(tsttab)
-        call construct_test_utils_programs(tsttab)
+        call add_test_programs(tsttab)
         tstnames = tsttab%keys_sorted()
     end subroutine make_test_ui
 
@@ -90,54 +65,19 @@ contains
     end subroutine get_test_prg_ptr
 
     subroutine list_simple_prgs_in_ui
-        call print_project_programs(logfhandle)
-        call print_preproc_programs(logfhandle)
-        call print_cluster2D_programs(logfhandle)
-        call print_cavgproc_programs(logfhandle)
-        call print_abinitio3D_programs(logfhandle)
-        call print_refine3D_programs(logfhandle)
-        call print_denoise_programs(logfhandle)
-        call print_filter_programs(logfhandle)
-        call print_image_programs(logfhandle)
-        call print_mask_programs(logfhandle)
-        call print_ori_programs(logfhandle)
-        call print_print_programs(logfhandle)
-        call print_res_programs(logfhandle)
-        call print_sim_programs(logfhandle)
-        call print_validate_programs(logfhandle)
-        call print_symmetry_programs(logfhandle)
-        call print_dock_programs(logfhandle)
-        call print_volume_programs(logfhandle)
-        call print_other_programs(logfhandle)
+        call print_simple_programs(logfhandle)
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_simple_test_prgs_in_ui
-        call print_test_class_programs(logfhandle)
-        call print_test_fft_programs(logfhandle)
-        call print_test_geometry_programs(logfhandle)
-        call print_test_highlevel_programs(logfhandle)
-        call print_test_io_programs(logfhandle)
-        call print_test_masks_programs(logfhandle)
-        call print_test_network_programs(logfhandle)
-        call print_test_numerics_programs(logfhandle)
-        call print_test_optimize_programs(logfhandle)
-        call print_test_parallel_programs(logfhandle)
-        call print_test_stats_programs(logfhandle)
-        call print_test_utils_programs(logfhandle)
+        call print_test_programs(logfhandle)
     end subroutine list_simple_test_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui
-        call print_stream_programs(logfhandle)
+        call print_stream_programs_group(logfhandle)
     end subroutine list_stream_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
-        call print_single_tseries_programs(logfhandle)
-        call print_single_trajectory_programs(logfhandle)
-        call print_single_nano2D_programs(logfhandle)
-        call print_single_nano3D_programs(logfhandle)
-        call print_single_map_programs(logfhandle)
-        call print_single_atom_programs(logfhandle)
-        call print_single_validate_programs(logfhandle)
+        call print_single_programs(logfhandle)
     end subroutine list_single_prgs_in_ui
 
     subroutine print_ui_json
