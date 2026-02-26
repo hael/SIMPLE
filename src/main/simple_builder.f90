@@ -68,7 +68,7 @@ type :: builder
     procedure                           :: kill_rec_eo_tbox
     procedure                           :: build_strategy3D_tbox
     procedure                           :: kill_strategy3D_tbox
-    procedure, private                  :: build_strategy2D_tbox
+    procedure                           :: build_strategy2D_tbox
     procedure                           :: kill_strategy2D_tbox
 end type builder
 
