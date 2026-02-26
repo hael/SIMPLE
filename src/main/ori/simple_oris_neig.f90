@@ -73,6 +73,17 @@ contains
         end do
     end subroutine nearest_proj_neighbors_3
 
+    module subroutine replace_with_closest( self, other )
+        class(oris), intent(inout) :: self
+        class(oris), intent(in)    :: other
+        integer :: i, ind_closest
+        if( other%n <= self%n ) THROW_HARD('other must have more oris than self; replace_with_closest')
+        do i=1,self%n
+            ind_closest = other%find_closest_proj(self%o(i))
+            self%o(i) = other%o(ind_closest)
+        end do
+    end subroutine replace_with_closest
+
     module function corr_oris( self1, self2 ) result( corr )
         class(oris), intent(inout) :: self1, self2
         real :: arr1(5), arr2(5), corr
