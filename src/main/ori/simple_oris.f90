@@ -257,6 +257,7 @@ type :: oris
     procedure          :: find_closest_proj
     procedure, private :: nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
     generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
+    procedure          :: replace_with_closest
     procedure          :: corr_oris
     procedure, private :: diststat_1, diststat_2
     generic            :: diststat => diststat_1, diststat_2
@@ -1675,6 +1676,11 @@ interface
         integer,     intent(in)    :: k
         logical,     intent(inout) :: lnns(self%n)
     end subroutine nearest_proj_neighbors_3
+
+    module subroutine replace_with_closest( self, other )
+        class(oris), intent(inout) :: self
+        class(oris), intent(in)    :: other
+    end subroutine replace_with_closest
 
     module function corr_oris( self1, self2 ) result( corr )
         class(oris), intent(inout) :: self1, self2

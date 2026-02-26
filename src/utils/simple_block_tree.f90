@@ -42,6 +42,7 @@ contains
             end do
         end do
         !$omp end parallel do
+        call normalize_minmax(distmat)
         call mapper%new(nspace, nspace_sub, distmat)
         labels = mapper%get_full2sub_map()
         call block_tree%new(labels)
@@ -51,7 +52,10 @@ contains
         do itree = 1, ntrees
             refs  = block_tree%get_tree_refs(itree)
             nrefs = size(refs)
-            if( nrefs == 0 ) cycle
+            if( nrefs == 0 ) then
+                write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
+                cycle
+            end if
             write(*,'(a,1x,i0,a,1x,i0)') 'TREE ', itree, ': NUMBER OF REFS :', nrefs
             allocate(sub_distmat(nrefs, nrefs), source=0.0)  
             do i = 1, nrefs - 1
@@ -63,6 +67,7 @@ contains
                     sub_distmat(j,i) = dtmp
                 end do
             end do
+            call normalize_minmax(sub_distmat)
             call block_tree%build_tree_from_subdistmat(itree, refs, sub_distmat, LINK_AVERAGE)
             deallocate(sub_distmat)
             deallocate(refs)
@@ -96,7 +101,7 @@ contains
         if (node_root%node_idx == 0) then
             THROW_HARD('srch_eul_bl_tree_exhaustive_leaves: empty tree / invalid itree')
         end if
-        allocate(stack(64))
+        allocate(stack(64)) ! whatever, chat wanted 64
         top = 1
         stack(top) = node_root%node_idx
         nfun = 0
@@ -126,8 +131,6 @@ contains
             end if
         end do
         if (allocated(stack)) deallocate(stack)
-
-        ! print *, 'Exhaustive search: nfun=', nfun, 'tree population=', pop
 
         contains
 
@@ -162,8 +165,9 @@ contains
         logical,            intent(in)    :: l_greedy
         type(ori)     :: o, osym
         integer       :: inode, level, local_k, j, max_levs, endit
-        real          :: dist_left, dist_right, inplrotdist, dist
+        real          :: dist_left, dist_right, inplrotdist, dist, dist_subspace
         type(bt_node) :: node_L, node_R, node_cur, node_root
+        dist_subspace = dist_min ! true on input
         node_root = block_tree%get_root_node(itree)
         if( node_root%ref_idx == 0 ) THROW_HARD('root node has no ref_idx')
         call eulspace%get_ori(node_root%ref_idx, o)
@@ -207,6 +211,10 @@ contains
             end if
             if (.not. l_greedy .and. level > endit) exit
         end do
+         if( dist_min >= dist_subspace)then
+            ! fallback to exhaustive descent if we ended up in a bad leaf
+            call srch_eul_bl_tree_exhaustive(otrial, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
+        end if
     end subroutine srch_eul_bl_tree
 
     subroutine srch_eul_bl_tree_prob( otrial, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
@@ -219,8 +227,9 @@ contains
         real,               intent(out)   :: dist_min
         type(ori)     :: o, osym
         integer       :: inode, level, local_k, j
-        real          :: dist_left, dist_right, inplrotdist, dist, p_left, p_right
+        real          :: dist_left, dist_right, inplrotdist, dist, p_left, p_right, dist_subspace
         type(bt_node) :: node_L, node_R, node_cur, node_root
+        dist_subspace = dist_min ! true on input
         node_root = block_tree%get_root_node(itree)
         if( node_root%ref_idx == 0 ) THROW_HARD('root node has no ref_idx')
         call eulspace%get_ori(node_root%ref_idx, o)
@@ -257,7 +266,11 @@ contains
                 best_ref = merge(node_L%ref_idx, node_R%ref_idx, dist_left <= dist_right)
             end if
         end do
-
+        if( dist_min >= dist_subspace)then
+            ! fallback to exhaustive descent if we ended up in a bad leaf due to randomness
+            call srch_eul_bl_tree_exhaustive(otrial, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min)
+        end if
+            
         contains
 
             function sample_two(p1, p2) result(which)

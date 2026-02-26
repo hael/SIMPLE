@@ -55,7 +55,7 @@ integer,          parameter :: NSAMPLE    = 1000
 type(sym)          :: pgrpsym
 type(multi_dendro) :: block_tree
 type(oris)         :: eulspace, eulspace_sub
-integer            :: i, j, ind_min, irnd
+integer            :: i, j, ind_min, irnd, exhaustive_cnt
 integer            :: itree, best_ref
 type(ori)          :: osmp, o, osym
 real               :: inplrotdist, dist, dist_min, dist_subspace, dists(NSAMPLE)
@@ -68,6 +68,8 @@ call eulspace    %new(NSPACE,     is_ptcl=.false.)
 call eulspace_sub%new(NSPACE_SUB, is_ptcl=.false.)
 call pgrpsym%build_refspiral(eulspace)
 call pgrpsym%build_refspiral(eulspace_sub)
+! this transformation is necessary to make the subspace a bona fide subset of the full space
+call eulspace_sub%replace_with_closest(eulspace)
 
 print *, 'Building block tree...'
 
