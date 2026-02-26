@@ -20,6 +20,7 @@ type :: multi_dendro
 contains
    procedure :: new
    procedure :: get_n_trees
+   procedure :: get_n_nodes
    procedure :: get_n_refs
    procedure :: get_tree_pop
    procedure :: get_tree_refs
@@ -58,6 +59,15 @@ contains
       class(multi_dendro), intent(in) :: self
       n = self%n_trees
    end function get_n_trees
+
+   pure integer function get_n_nodes(self, itree) result(n)
+      class(multi_dendro), intent(in) :: self
+      integer,             intent(in) :: itree
+      n = 0
+      if (itree < 1 .or. itree > self%n_trees) return
+      if (.not. allocated(self%trees)) return
+      n = self%trees(itree)%get_n_nodes()
+   end function get_n_nodes
 
    pure integer function get_n_refs(self) result(n)
       class(multi_dendro), intent(in) :: self
