@@ -506,29 +506,22 @@ contains
         class(class_frcs),   intent(inout) :: clsfrcs
         integer,             intent(in) :: icls
         logical,             intent(in) :: gaufilt
-        real, allocatable :: frc(:), filter(:), gaufilter(:)
-        integer :: k, filtsz
-        filtsz = clsfrcs%get_filtsz()
-        allocate(frc(filtsz), filter(filtsz), gaufilter(filtsz))
+        real    :: frc(clsfrcs%get_filtsz()), filter(clsfrcs%get_filtsz())
         if( self%p_ptr%l_ml_reg )then
-            ! no filtering, not supported yet in 2D
+            ! no filtering, not supported in 2D yet
         else
             ! FRC-based optimal filter
             call clsfrcs%frc_getter(icls, frc)
             if( any(frc > 0.143) )then
                 call fsc2optlp_sub(size(frc), frc, filter, merged=self%p_ptr%l_lpset)
-            else
-                filter = 1.0
+                call self%polar_filterrefs(icls, filter)
             endif
-            ! gaussian filter
-            if( gaufilt )then
-                call gaussian_filter(self%p_ptr%gaufreq, self%p_ptr%smpd, self%p_ptr%box, gaufilter)
-                ! minimum of FRC-based & gaussian filters
-                forall(k = 1:size(filter)) filter(k) = min(filter(k), gaufilter(k))
-            endif
+        endif
+        ! Optional gaussian filter
+        if( gaufilt )then
+            call gaussian_filter(self%p_ptr%gaufreq, self%p_ptr%smpd, self%p_ptr%box, filter)
             call self%polar_filterrefs(icls, filter)
         endif
-        deallocate(frc, filter, gaufilter)
     end subroutine polar_prep2Dref
 
     !>  \brief prepares a 2D class document with class index, resolution,

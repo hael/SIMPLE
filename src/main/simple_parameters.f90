@@ -519,6 +519,7 @@ type :: parameters
     logical :: l_frac_best    = .false.
     logical :: l_frac_worst   = .false.
     logical :: l_update_frac  = .false.
+    logical :: l_gauref       = .false.
     logical :: l_graphene     = .false.
     logical :: l_icm          = .false.
     logical :: l_incrreslim   = .false.
@@ -1610,8 +1611,9 @@ contains
         self%l_lpset  = cline%defined('lp')
         ! set envfsc flag
         self%l_envfsc = self%envfsc .ne. 'no'
-        ! set reference filtering flag
-        if( cline%defined('icm') ) self%l_icm = (trim(self%icm).eq.'yes')
+        ! set reference filtering flags
+        if( cline%defined('icm')    ) self%l_icm    = (trim(self%icm).eq.'yes')
+        if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         ! set wiener mode

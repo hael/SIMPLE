@@ -464,25 +464,28 @@ contains
         if( params%l_ml_reg )then
             ! no filtering
         else
-            if( params%l_lpset.and.params%l_icm )then
-                ! ICM filter only applied when lp is set and performed below, FRC filtering turned off
+            if( params%l_lpset.and.(params%l_icm.or.params%l_gauref) )then
+                ! ICM/Gaussian filter only applied when lp is set, FRC filtering turned off
+                if( params%l_icm )then
+                    call img%ifft
+                    call img%ICM2D( params%lambda, verbose=.false. )
+                else if( params%l_gauref )then
+                    call img%fft
+                    call img%bpgau2d(0., params%gaufreq)
+                endif
             else
                 ! FRC-based filtering
                 call build%clsfrcs%frc_getter(icls, frc)
                 if( any(frc > 0.143) )then
                     filtsz = img%get_filtsz()
                     call fsc2optlp_sub(filtsz, frc, filter, merged=params%l_lpset)
-                    call img%fft() ! needs to be here in case the shift was never applied (above)
+                    call img%fft    ! in case the shift was not applied above
                     call img%apply_filter_serial(filter)
                 endif
             endif
         endif
         ! ensure we are in real-space
         call img%ifft()
-        ! ICM filter
-        if( params%l_lpset.and.params%l_icm )then
-            call img%ICM2D( params%lambda, verbose=.false. )
-        endif
         ! mask, pad, FFT
         call img%mask_pad_fft(params%msk_crop, img_pd)
     end subroutine prep2Dref
