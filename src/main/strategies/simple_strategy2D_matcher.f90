@@ -387,7 +387,7 @@ contains
                     THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                 endif
                 if( l_polar )then
-                    if( which_iter == 1) call b_ptr%pftc%polar_cavger_kill
+                    ! if( which_iter == 1) call b_ptr%pftc%polar_cavger_kill
                     ! polar restoration
                     if( l_clin )then
                         clinw = min(1.0, max(0.0, 1.0-max(0.0, real(p_ptr%extr_iter-4)/real(p_ptr%extr_lim-3))))
