@@ -3,7 +3,7 @@ use simple_core_module_api
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_cmdline,            only: cmdline
-use simple_commanders_mkcavgs, only: commander_make_cavgs
+use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr
 use simple_commanders_imgops,  only: commander_scale
 implicit none
 
@@ -19,7 +19,6 @@ contains
         class(cmdline),   intent(inout) :: cline
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
-        type(commander_make_cavgs) :: xmake_cavgs
         type(commander_scale)      :: xscale
         type(cmdline)              :: cline_make_cavgs, cline_scalerefs
         type(string)               :: refs_sc
@@ -40,12 +39,15 @@ contains
         else
             ! Use existing classifications
             call cline_make_cavgs%set('refs', params%refs)
-            call xmake_cavgs%execute(cline_make_cavgs)
+            call execute_make_cavgs(params, cline_make_cavgs)
             l_scale_inirefs = .false.
         endif
         ! Scale references if needed
         if( l_scale_inirefs )then
             refs_sc = 'refs'//SCALE_SUFFIX//params%ext%to_char()
+            cline_scalerefs = cline
+            call cline_scalerefs%set('prg',    'scale')
+            call cline_scalerefs%set('mkdir',  'no')
             call cline_scalerefs%set('stk',    params%refs)
             call cline_scalerefs%set('outstk', refs_sc)
             call cline_scalerefs%set('smpd',   params%smpd)
@@ -66,7 +68,6 @@ contains
         type(builder),    intent(inout) :: build
         type(cmdline),    intent(inout) :: cline_make_cavgs
         logical,          intent(out)   :: l_scale_inirefs
-        type(commander_make_cavgs) :: xmake_cavgs
         integer :: cnt, iptcl, ptclind
         if( cline%defined('nptcls_per_cls') )then
             if( build%spproj%os_ptcl2D%any_state_zero() )then
@@ -83,7 +84,7 @@ contains
             call cline%set('ncls', params%ncls)
             call cline_make_cavgs%set('ncls', params%ncls)
             call cline_make_cavgs%set('refs', params%refs)
-            call xmake_cavgs%execute(cline_make_cavgs)
+            call execute_make_cavgs(params, cline_make_cavgs)
             l_scale_inirefs = .false.
         else
             if( trim(params%refine).eq.'inpl' )then
@@ -92,7 +93,7 @@ contains
                 call cline_make_cavgs%set('ncls', params%ncls)
                 call cline_make_cavgs%delete('tseries')
                 call cline_make_cavgs%set('refs', params%refs)
-                call xmake_cavgs%execute(cline_make_cavgs)
+                call execute_make_cavgs(params, cline_make_cavgs)
                 l_scale_inirefs = .false.
             else
                 call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
@@ -108,7 +109,6 @@ contains
         type(builder),    intent(inout) :: build
         type(cmdline),    intent(inout) :: cline_make_cavgs
         logical,          intent(out)   :: l_scale_inirefs
-        type(commander_make_cavgs) :: xmake_cavgs
         integer :: iptcl
         select case(trim(params%cls_init))
             case('ptcl')
@@ -130,13 +130,24 @@ contains
                 end do
                 call build%spproj%write_segment_inside(params%oritype, params%projfile)
                 call cline_make_cavgs%set('refs', params%refs)
-                call xmake_cavgs%execute(cline_make_cavgs)
+                call execute_make_cavgs(params, cline_make_cavgs)
                 l_scale_inirefs = .false.
-                
             case DEFAULT
                 THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
         end select
     end subroutine init_standard_refs
+
+    subroutine execute_make_cavgs(params, cline)
+        type(parameters), intent(in)    :: params
+        class(cmdline),   intent(inout) :: cline
+        type(commander_make_cavgs)       :: xmake_cavgs
+        type(commander_make_cavgs_distr) :: xmake_cavgs_distr
+        if( params%l_distr_exec )then
+            call xmake_cavgs_distr%execute(cline)
+        else
+            call xmake_cavgs%execute(cline)
+        endif
+    end subroutine execute_make_cavgs
 
     subroutine setup_polar_specifics(params, build)
         type(parameters), intent(inout) :: params
