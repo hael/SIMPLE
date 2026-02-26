@@ -1,11 +1,15 @@
 module simple_block_tree
 use simple_core_module_api
-use simple_srchspace_map, only: srchspace_map
-use simple_multi_dendro,  only: multi_dendro
-use simple_binary_tree,   only: bt_node
+use simple_srchspace_map,    only: srchspace_map
+use simple_multi_dendro,     only: multi_dendro
+use simple_binary_tree,      only: bt_node
+use simple_strategy2D_utils, only: calc_cluster_cavgs_dmat
+use simple_image,            only: image
+use simple_parameters,       only: parameters
 implicit none
 
 public :: gen_eulspace_block_tree
+public :: gen_eulspace_block_tree2D
 public :: srch_eul_bl_tree_exhaustive
 public :: srch_eul_bl_tree
 public :: srch_eul_bl_tree_prob
@@ -77,6 +81,62 @@ contains
         if (allocated(labels)) deallocate(labels)
         if( DEBUG) print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree
+
+    function gen_eulspace_block_tree2D(eulspace, eulspace_sub, pgrpsym, refimgs, params) result(block_tree)
+        class(oris), intent(in)        :: eulspace, eulspace_sub
+        class(image), intent(in)       :: refimgs(:)
+        class(parameters), intent(in)  :: params
+        class(sym),  intent(inout)     :: pgrpsym
+        type(ori)                  :: o, o_sub, oi, oj, osym
+        type(srchspace_map)        :: mapper
+        type(multi_dendro)         :: block_tree
+        type(image), allocatable   :: sub_imgs(:)     
+        integer, allocatable       :: labels(:), refs(:)
+        real,    allocatable       :: distmat(:,:), sub_distmat(:,:)
+        integer                    :: i, j, ntrees, itree, nrefs, nspace, nspace_sub
+        real                       :: inplrotdist, dtmp, oa_minmax(2)
+        nspace     = eulspace%get_noris()
+        nspace_sub = eulspace_sub%get_noris()
+        allocate(distmat(nspace_sub, nspace))
+        !$omp parallel do default(shared) proc_bind(close) private(i,j,o,o_sub,osym,dtmp,inplrotdist) schedule(static)
+        do i = 1, nspace_sub
+            call eulspace_sub%get_ori(i, o_sub)
+            do j = 1, nspace
+                call eulspace%get_ori(j, o)
+                call pgrpsym%sym_dists(o_sub, o, osym, dtmp, inplrotdist)
+                distmat(i,j) = dtmp
+            end do
+        end do
+        !$omp end parallel do
+        call normalize_minmax(distmat)
+        call mapper%new(nspace, nspace_sub, distmat)
+        labels = mapper%get_full2sub_map()
+        call block_tree%new(labels)
+        ntrees = block_tree%get_n_trees()
+        write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
+        !$omp parallel do default(shared) proc_bind(close) private(itree,refs,nrefs,sub_distmat,sub_imgs,i,j,oi,oj,osym,inplrotdist,dtmp) schedule(static)
+        do itree = 1, ntrees
+            refs  = block_tree%get_tree_refs(itree)
+            nrefs = size(refs)
+            if( nrefs == 0 ) then
+                write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
+                cycle
+            end if
+            write(*,'(a,1x,i0,a,1x,i0)') 'TREE ', itree, ': NUMBER OF REFS :', nrefs
+            allocate(sub_distmat(nrefs, nrefs), source=0.0)  
+            allocate(sub_imgs(nrefs))
+            ! need images corresponding to refs in sub tree
+            sub_imgs = refimgs(refs)
+            oa_minmax  = [0.,1.]
+            sub_distmat = calc_cluster_cavgs_dmat(params, sub_imgs, oa_minmax, 'cc')
+            call block_tree%build_tree_from_subdistmat(itree, refs, sub_distmat, LINK_AVERAGE)
+            deallocate(sub_distmat, refs, sub_imgs)
+        end do
+        !$omp end parallel do
+        deallocate(distmat)
+        if (allocated(labels)) deallocate(labels)
+        if( DEBUG) print *, 'Finished building block tree.'
+    end function gen_eulspace_block_tree2D
 
     ! Exhaustive search over *leaf nodes only* reachable from the root.
     ! Intended for testing/validation against greedy descent.
