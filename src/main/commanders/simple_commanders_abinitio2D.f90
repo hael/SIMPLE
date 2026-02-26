@@ -23,8 +23,6 @@ integer, parameter :: NSTAGES_SINGLE  = 1
 integer, parameter :: ITS_INCR_SINGLE = 4
 integer, parameter :: ITS_INCR        = 5
 integer, parameter :: PHASES(2)       = [4, 6]
-! Stages variables
-real,    parameter :: ICM_LAMBDA      = 1.0
 integer, parameter :: EXTR_LIM_LOCAL  = 20
 
 ! convenience type
@@ -63,11 +61,8 @@ contains
         if( .not. cline%defined('center_type')) call cline%set('center_type','seg')
         if( .not. cline%defined('sh_first')   ) call cline%set('sh_first',   'no')
         if( .not. cline%defined('cls_init')   ) call cline%set('cls_init',   'rand')
-        if( .not. cline%defined('icm')        ) call cline%set('icm',        'yes')
         if( .not. cline%defined('gauref')     ) call cline%set('gauref',     'yes')
         if( .not. cline%defined('polar')      ) call cline%set('polar',      'no')
-        if( .not. cline%defined('ml_reg')     ) call cline%set('ml_reg',     'no')
-        if( .not. cline%defined('lambda')     ) call cline%set('lambda',     ICM_LAMBDA)
         if( .not. cline%defined('extr_lim')   ) call cline%set('extr_lim',   EXTR_LIM_LOCAL)
         if( .not. cline%defined('rank_cavgs') ) call cline%set('rank_cavgs', 'yes')
         if( .not. cline%defined('stats')      ) call cline%set('stats',      'no')
@@ -368,7 +363,6 @@ contains
             call cline_cluster2D%set('prg',       'cluster2D')
             call cline_cluster2D%set('wiener',    'full')
             call cline_cluster2D%set('ptclw',     'no')
-            call cline_cluster2D%set('ml_reg',    'no')
             call cline_cluster2D%set('cenlp',     params%cenlp)
             call cline_cluster2D%set('chunk',     'no')
             call set_automask2D_defaults( cline_cluster2D )
@@ -376,9 +370,9 @@ contains
 
         subroutine set_cline_cluster2D( istage )
             integer, intent(in) :: istage
-            type(string) :: sh_first, refine, center, objfun, refs, icm, gauref
+            type(string) :: sh_first, refine, center, objfun, refs, gauref, ml_reg
             integer      :: iphase, iter, imaxits, minits, extr_iter
-            real         :: trs, lambda, gaufreq
+            real         :: trs, gaufreq
             logical      :: l_gauref, l_gaufreq_input
             refine = trim(params%refine)
             ! filter for Fourier polar representation
@@ -387,8 +381,6 @@ contains
             if( params%l_polar )then
                 l_gauref        = trim(params%gauref).eq.'yes'
                 l_gaufreq_input = cline%defined('gaufreq')
-                ! ICM used for cartesian filtering of random refs
-                params%l_icm    = istage==1
             endif
             ! objective function
             if( params%cc_objfun == OBJFUN_CC )then
@@ -413,8 +405,8 @@ contains
                 ! cc_iters  = 0
                 objfun    = 'euclid'
                 ! Filters deactivated
-                icm       = 'no'
                 gauref    = 'no'
+                ml_reg    = 'no'
                 ! continue from previous references
                 refs      = params%refs
                 ! resolution limit
@@ -433,106 +425,63 @@ contains
                 endif
                 ! stages
                 select case(iphase)
-                case(1)
-                    ! phase constants
-                    extr_iter = 0
-                    ! phase variables
-                    imaxits   = nint(real(istage)*real(maxits)/real(PHASES(1)))
-                    minits    = imaxits
-                    select case(istage)
                     case(1)
-                        trs      = 0.
-                        sh_first = 'no'
-                        center   = 'no'
-                        if( cline%defined('refs') )then
-                            refs     = params%refs
-                        else
-                            refs     = NIL
-                        endif
-                        if( params%l_icm )then
-                            icm      = 'yes'
-                            lambda   = params%lambda
-                        else
-                            icm      = 'no'
-                        endif
-                        if( l_gauref )then
-                            gauref   = 'yes'
-                            if( l_gaufreq_input )then
-                                gaufreq  = params%gaufreq
-                            else
-                                gaufreq  = stage_parms(istage)%lp
-                            endif
-                        else
-                            gauref   = 'no'
-                        endif
-                    case(2)
-                        trs          = stage_parms(istage)%trslim
-                        sh_first     = trim(params%sh_first)
-                        center       = trim(params%center)
-                        refs         = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
-                        if( params%l_icm )then
-                            icm      = 'yes'
-                            lambda   = params%lambda/2.
-                        else
-                            icm      = 'no'
-                        endif
-                        if( l_gauref )then
-                            gauref   = 'yes'
-                            if( l_gaufreq_input )then
-                                gaufreq  = params%gaufreq * stage_parms(2)%lp / stage_parms(1)%lp
-                            else
-                                gaufreq  = stage_parms(istage)%lp
-                            endif
-                        else
-                            gauref   = 'no'
-                        endif
-                    case(3)
-                        trs          = stage_parms(istage)%trslim
-                        sh_first     = trim(params%sh_first)
-                        center       = trim(params%center)
-                        refs         = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
-                        if( params%l_icm )then
-                            icm      = 'yes'
-                            lambda   = params%lambda/4.
-                        else
-                            icm      = 'no'
-                        endif
-                        if( l_gauref )then
-                            gauref   = 'yes'
-                            if( l_gaufreq_input )then
-                                gaufreq  = params%gaufreq * stage_parms(3)%lp / stage_parms(2)%lp
-                            else
-                                gaufreq  = stage_parms(istage)%lp
-                            endif
-                        else
-                            gauref   = 'no'
-                        endif
-                    case(4)
-                        trs          = stage_parms(istage)%trslim
-                        sh_first     = trim(params%sh_first)
-                        center       = trim(params%center)
-                        refs         = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
-                        icm          = 'no'
-                        gauref       = 'no'
-                        if( l_gauref )then
-                            gauref   = 'yes'
-                            gaufreq  = 2.0 * params%smpd
-                        else
-                            gauref   = 'no'
-                        endif
+                        ! phase constants
+                        extr_iter = 0
+                        ! phase variables
+                        imaxits = nint(real(istage)*real(maxits)/real(PHASES(1)))
+                        minits  = imaxits
+                        select case(istage)
+                            case(1)
+                                trs      = 0.
+                                sh_first = 'no'
+                                center   = 'no'
+                                if( cline%defined('refs') )then
+                                    refs     = params%refs
+                                else
+                                    refs     = NIL
+                                endif
+                                ml_reg   = 'no'
+                                gauref   = 'yes'
+                                if( l_gaufreq_input )then
+                                    gaufreq  = params%gaufreq
+                                else
+                                    gaufreq  = stage_parms(istage)%lp
+                                endif
+                            case(2)
+                                trs      = stage_parms(istage)%trslim
+                                sh_first = trim(params%sh_first)
+                                center   = trim(params%center)
+                                refs     = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
+                                ml_reg   = 'yes'
+                                gauref   = 'no'
+                            case(3)
+                                trs      = stage_parms(istage)%trslim
+                                sh_first = trim(params%sh_first)
+                                center   = trim(params%center)
+                                refs     = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
+                                ml_reg   = 'yes'
+                                gauref   = 'no'
+                            case(4)
+                                trs      = stage_parms(istage)%trslim
+                                sh_first = trim(params%sh_first)
+                                center   = trim(params%center)
+                                refs     = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
+                                ml_reg   = 'yes'
+                                gauref   = 'no'
+                            end select
+                        case(2)
+                            ! phase constants
+                            imaxits   = iter+ITS_INCR-1
+                            sh_first  = trim(params%sh_first)
+                            trs       = stage_parms(istage)%trslim
+                            center    = trim(params%center)
+                            extr_iter = params%extr_lim+1
+                            refs      = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
+                            ml_reg    = 'yes'
+                            gauref    = 'no'
+                            minits    = iter+1
                     end select
-                case(2)
-                    ! phase constants
-                    imaxits   = iter+ITS_INCR-1
-                    sh_first  = trim(params%sh_first)
-                    trs       = stage_parms(istage)%trslim
-                    center    = trim(params%center)
-                    extr_iter = params%extr_lim+1
-                    refs      = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
-                    icm       = 'no'
-                    gauref    = 'no'
-                    minits    = iter+1
-                end select
                 if( stage_parms(istage)%max_cls_pop > 0 )then
                     call cline_cluster2D%set('maxpop', stage_parms(istage)%max_cls_pop)
                     if( cline%defined('update_frac') )then
@@ -552,12 +501,7 @@ contains
             else
                 call cline_cluster2D%delete('extr_iter')
             endif
-            call cline_cluster2D%set('icm', icm)
-            if( icm.eq.'yes' )then
-                call cline_cluster2D%set('lambda', lambda)
-            else
-                call cline_cluster2D%delete('lambda')
-            endif
+            call cline_cluster2D%set('ml_reg', ml_reg)
             call cline_cluster2D%set('gauref', gauref)
             if( gauref.eq.'yes' )then
                 call cline_cluster2D%set('gaufreq', gaufreq)
@@ -628,9 +572,7 @@ contains
             call cline_cluster2D%set('smpd_crop', stage_parms(NSTAGES)%smpd_crop)
             call cline_cluster2D%set('refs',      refs)
             call cline_cluster2D%set('extr_iter', params%extr_lim+1)
-            call cline_cluster2D%set('icm',       'no')
             call cline_cluster2D%delete('lp')
-            call cline_cluster2D%delete('lambda')
             call cline_cluster2D%delete('nsample_max')
             call cline_cluster2D%delete('nsample')
             call cline_cluster2D%delete('autosample')
