@@ -375,13 +375,9 @@ contains
             real         :: trs, gaufreq
             logical      :: l_gauref, l_gaufreq_input
             refine = trim(params%refine)
-            ! filter for Fourier polar representation
-            l_gauref        = .false.
-            l_gaufreq_input = .false.
-            if( params%l_polar )then
-                l_gauref        = trim(params%gauref).eq.'yes'
-                l_gaufreq_input = cline%defined('gaufreq')
-            endif
+            ! Gaussian filter
+            l_gauref        = trim(params%gauref).eq.'yes'
+            l_gaufreq_input = cline%defined('gaufreq')
             ! objective function
             if( params%cc_objfun == OBJFUN_CC )then
                 objfun   = 'cc'
