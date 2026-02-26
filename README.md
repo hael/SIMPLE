@@ -36,7 +36,7 @@ https://github.com/hael/SIMPLE/releases/tag/v3.0.0
 
 Public unit tests:
 
-https://zenodo.org/records/18663655
+https://zenodo.org/records/18789533
 
 ------------------------------------------------------------------------
 
