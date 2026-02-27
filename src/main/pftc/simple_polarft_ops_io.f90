@@ -264,9 +264,7 @@ contains
     module subroutine polar_cavger_readwrite_partial_sums( self, which )
         class(polarft_calc), intent(inout) :: self
         character(len=*),    intent(in)    :: which
-        complex(dp), allocatable :: pfte(:,:,:),      pfto(:,:,:)
         complex(sp), allocatable :: pfte_buf(:,:,:),  pfto_buf(:,:,:)
-        real(dp),    allocatable :: ctf2e(:,:,:),     ctf2o(:,:,:)
         real(sp),    allocatable :: ctf2e_buf(:,:,:), ctf2o_buf(:,:,:)
         type(string) :: cae, cao, cte, cto
         integer :: dims_cae(4), dims_cao(4), dims_cte(4), dims_cto(4)
@@ -384,13 +382,6 @@ contains
             call fclose(funit_cto)
         enddo
         deallocate(pfte_buf, pfto_buf, ctf2e_buf, ctf2o_buf) ! needs to be explicit, the others are in local scope
-        ! merge eo-pairs and normalize
-        select case(trim(self%p_ptr%ref_type))
-            case('polar_cavg')
-                call self%polar_cavger_merge_eos_and_norm2D
-            case DEFAULT
-                call self%polar_cavger_merge_eos_and_norm(reforis=reforis, symop=symop, cl_weight=clin_anneal)
-        end select
     end subroutine polar_cavger_assemble_sums_from_parts
 
     ! PFT IO HELPERS THAT ENABLE PARALLEL IO
@@ -466,7 +457,10 @@ contains
             allocate(array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls))
         endif
         if( .not. all(dims == [self%pftsz, self%kfromto(1), self%kfromto(2), self%ncls]) )then
-            if( self%pftsz /= dims(1) )then
+            if( self%pftsz > dims(1) )then
+                ! padding required
+            elseif( self%pftsz < dims(1) )then
+                ! cropping required, not implemented yet
                 THROW_HARD('Incompatible PFT size in '//fname%to_char()//': '//int2str(self%pftsz)//' vs '//int2str(dims(1)))
             endif
             if( self%ncls /= dims(4) )then
@@ -490,14 +484,10 @@ contains
         ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
         klo = max(self%kfromto(1), dims(2))
         khi = min(self%kfromto(2), dims(3))
-        if( klo <= khi )then
-            do k = klo, khi
-                array(:,k,:) = cmplx(buffer(:,k,:), kind=dp)
-            enddo
-        endif
+        if( klo <= khi ) array(:,klo:khi,:) = cmplx(buffer(:,klo:khi,:), kind=dp)
     end subroutine transfer_pft_array_buffer
 
-    ! private h
+    ! private helper
     module subroutine read_pft_array( self, fname, array)
         class(polarft_calc),      intent(inout) :: self
         class(string),            intent(in)    :: fname
@@ -551,22 +541,9 @@ contains
         klo = max(self%kfromto(1), dims(2))
         khi = min(self%kfromto(2), dims(3))
         if( klo <= khi )then
-            do k = klo, khi
-                array(:,k,:) = real(buffer(:,k,:), dp)
-            enddo
+            array(:,klo:khi,:) = real(buffer(:,klo:khi,:), dp)
         endif
     end subroutine transfer_ctf2_array_buffer
-
-    ! module subroutine read_ctf2_array( fname, array )
-    !     class(string),         intent(in)    :: fname
-    !     real(dp), allocatable, intent(inout) :: array(:,:,:)
-    !     real(sp), allocatable :: buffer(:,:,:)
-    !     integer :: dims(4), funit
-    !     call open_ctf2_array_for_read(fname, array, funit, dims, buffer)
-    !     call transfer_ctf2_array_buffer(     array, funit, dims, buffer)
-    !     deallocate(buffer)
-    !     call fclose(funit)
-    ! end subroutine read_ctf2_array
 
     ! writes out |PFTs_MERG| as mrcs
     ! module subroutine pft2img( self )

@@ -61,6 +61,7 @@ contains
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
+        call cline%set('polar',        'yes') ! Always use polar=yes for fast initialization
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',                         'yes')
         if( .not. cline%defined('objfun')           ) call cline%set('objfun',                     'euclid') ! noise normalized Euclidean distances from the start
         if( .not. cline%defined('overlap')          ) call cline%set('overlap',                        0.95)
@@ -201,8 +202,8 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
             ! Reconstruction for polar representation
-            if( l_polar )then
-                call calc_rec4polar(params, xreconstruct3D, istage, work_projfile)
+            if( l_polar .and. istage>1 )then
+                call calc_rec(params, work_projfile, xreconstruct3D, istage)
             endif
             ! Probabilistic search
             call exec_refine3D(params, istage, xrefine3D)
@@ -579,6 +580,7 @@ contains
             start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
             l_ini3D     = .true.
             ! symmetry dealt with by ini3D
+            l_polar = params%l_polar ! because was reset in abinitio3D_cavgs
         else
             if( trim(params%multivol_mode).eq.'independent' )then
                 ! turn off symmetry axis search and put the symmetry in from the start
@@ -713,7 +715,7 @@ contains
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! calc recs
-            call calc_start_rec(params, params%projfile, xreconstruct3D_distr, start_stage)
+            call calc_rec(params, params%projfile, xreconstruct3D_distr, start_stage)
         else if( .not. l_ini3D )then
             ! the ptcl3D field should be clean of updates at this stage
             call spproj%os_ptcl3D%clean_entry('updatecnt')
@@ -750,7 +752,7 @@ contains
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! create starting volume(s)
-            call calc_start_rec(params, params%projfile, xreconstruct3D_distr, start_stage)
+            call calc_rec(params, params%projfile, xreconstruct3D_distr, start_stage)
         endif
         ! Frequency marching
         maxits_dyn = 0
@@ -786,18 +788,17 @@ contains
             ! Need to be here since rec cline depends on refine3D cline
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 call randomize_states(params, spproj, params%projfile, xreconstruct3D_distr, istage=split_stage)
-            else if( istage >= RECALC_STARTREC_STAGE )then
-                if( .not.l_polar ) call calc_start_rec(params, params%projfile, xreconstruct3D_distr, istage)
             endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
             ! Reconstruction for polar representation
             if( l_polar )then
-                if( l_ini3D .and. (istage==start_stage) )then
-                    ! reconstruction has been performed above
+                if( (istage == start_stage) .or. (l_sym .and. (istage == SYMSRCH_STAGE+1))&
+                &.or. (istage > TRAILREC_STAGE_SINGLE) )then
+                    ! exceptions: first stage, after symmetry search, trail_rec is on
                 else
-                    call calc_rec4polar(params, xreconstruct3D_distr, istage)
+                    call calc_rec( params, params%projfile, xreconstruct3D_distr, istage )
                 endif
             endif
             ! Executing the refinement with the above settings
