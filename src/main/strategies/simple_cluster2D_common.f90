@@ -7,7 +7,7 @@ use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_
 use simple_commanders_imgops,  only: commander_scale
 implicit none
 
-public :: init_cluster2D_refs, setup_polar_specifics, handle_objfun
+public :: init_cluster2D_refs, handle_objfun
 private
 #include "simple_local_flags.inc"
 
@@ -19,18 +19,18 @@ contains
         class(cmdline),   intent(inout) :: cline
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
-        type(commander_scale)      :: xscale
-        type(cmdline)              :: cline_make_cavgs, cline_scalerefs
-        type(string)               :: refs_sc
-        logical                    :: l_scale_inirefs
-        integer                    :: cnt, iptcl, ptclind
+        type(commander_scale) :: xscale
+        type(cmdline)         :: cline_make_cavgs, cline_scalerefs
+        type(string)          :: refs_sc
+        logical               :: l_scale_inirefs
+        integer               :: cnt, iptcl, ptclind
         if( cline%defined('refs') ) return  ! References already provided
         cline_make_cavgs = cline
-        params%refs      = 'start2Drefs'//params%ext%to_char()
-        params%refs_even = 'start2Drefs_even'//params%ext%to_char()
-        params%refs_odd  = 'start2Drefs_odd'//params%ext%to_char()
+        params%refs      = 'start2Drefs'     //MRC_EXT
+        params%refs_even = 'start2Drefs_even'//MRC_EXT
+        params%refs_odd  = 'start2Drefs_odd' //MRC_EXT
         l_scale_inirefs  = .false.
-        if( build%spproj%is_virgin_field('ptcl2D') .or. params%startit == 1 )then
+        if( build%spproj%is_virgin_field('ptcl2D') .or. params%which_iter <= 1 )then
             if( params%tseries .eq. 'yes' )then
                 call init_tseries_refs(cline, params, build, cline_make_cavgs, l_scale_inirefs)
             else
@@ -39,15 +39,12 @@ contains
         else
             ! Use existing classifications
             call cline_make_cavgs%set('refs', params%refs)
-            call execute_make_cavgs(params, cline_make_cavgs)
+            call execute_make_cavgs(cline_make_cavgs, cline, params)
             l_scale_inirefs = .false.
         endif
         ! Scale references if needed
         if( l_scale_inirefs )then
-            refs_sc = 'refs'//SCALE_SUFFIX//params%ext%to_char()
-            cline_scalerefs = cline
-            call cline_scalerefs%set('prg',    'scale')
-            call cline_scalerefs%set('mkdir',  'no')
+            refs_sc = 'refs'//SCALE_SUFFIX//MRC_EXT
             call cline_scalerefs%set('stk',    params%refs)
             call cline_scalerefs%set('outstk', refs_sc)
             call cline_scalerefs%set('smpd',   params%smpd)
@@ -84,7 +81,7 @@ contains
             call cline%set('ncls', params%ncls)
             call cline_make_cavgs%set('ncls', params%ncls)
             call cline_make_cavgs%set('refs', params%refs)
-            call execute_make_cavgs(params, cline_make_cavgs)
+            call execute_make_cavgs(cline_make_cavgs, cline, params)
             l_scale_inirefs = .false.
         else
             if( trim(params%refine).eq.'inpl' )then
@@ -93,7 +90,7 @@ contains
                 call cline_make_cavgs%set('ncls', params%ncls)
                 call cline_make_cavgs%delete('tseries')
                 call cline_make_cavgs%set('refs', params%refs)
-                call execute_make_cavgs(params, cline_make_cavgs)
+                call execute_make_cavgs(cline_make_cavgs, cline, params)
                 l_scale_inirefs = .false.
             else
                 call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
@@ -120,46 +117,34 @@ contains
                 call noise_imgfile(params%refs, params%ncls, params%box_crop, params%smpd_crop)
                 l_scale_inirefs = .false.
             case('randcls')
-                if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provided with CLS_INIT=RANDCLS')
-                ! Random class assignment
+                if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with CLS_INIT=RANDCLS')
                 do iptcl=1,params%nptcls
                     if( build%spproj_field%get_state(iptcl) == 0 ) cycle
                     call build%spproj_field%set(iptcl, 'class', irnd_uni(params%ncls))
                     call build%spproj_field%set(iptcl, 'w',     1.0)
-                    call build%spproj_field%e3set(iptcl, ran3()*360.0)
+                    call build%spproj_field%e3set(iptcl,ran3()*360.0)
                 end do
                 call build%spproj%write_segment_inside(params%oritype, params%projfile)
                 call cline_make_cavgs%set('refs', params%refs)
-                call execute_make_cavgs(params, cline_make_cavgs)
+                call execute_make_cavgs(cline_make_cavgs, cline, params)
                 l_scale_inirefs = .false.
             case DEFAULT
                 THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
         end select
     end subroutine init_standard_refs
 
-    subroutine execute_make_cavgs(params, cline)
+    subroutine execute_make_cavgs(cline_make_cavgs, cline, params)
+        type(cmdline),    intent(inout) :: cline_make_cavgs
+        class(cmdline),   intent(in)    :: cline
         type(parameters), intent(in)    :: params
-        class(cmdline),   intent(inout) :: cline
         type(commander_make_cavgs)       :: xmake_cavgs
         type(commander_make_cavgs_distr) :: xmake_cavgs_distr
-        if( params%l_distr_exec )then
-            call xmake_cavgs_distr%execute(cline)
+        if( (params%nparts > 1) .and. (.not.cline%defined('part')) )then
+            call xmake_cavgs_distr%execute(cline_make_cavgs)
         else
-            call xmake_cavgs%execute(cline)
+            call xmake_cavgs%execute(cline_make_cavgs)
         endif
     end subroutine execute_make_cavgs
-
-    subroutine setup_polar_specifics(params, build)
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        if( trim(params%polar) .ne. 'yes' ) return
-        if( trim(params%ref_type) .ne. 'comlin_hybrid' ) return
-        call build%pgrpsyms%new('c1')
-        params%nsym    = build%pgrpsyms%get_nsym()
-        params%eullims = build%pgrpsyms%get_eullims()
-        call build%eulspace%new(params%ncls, is_ptcl=.false.)
-        call build%pgrpsyms%build_refspiral(build%eulspace)
-    end subroutine setup_polar_specifics
 
     subroutine handle_objfun(params, cline)
         type(parameters), intent(inout) :: params
