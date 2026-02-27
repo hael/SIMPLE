@@ -133,12 +133,16 @@ contains
         end select
     end subroutine init_standard_refs
 
+    ! The mode should really be explicit here, not inferred. 
+    ! I guess as more subclasses will be added to the cluster2D strategy, 
+    ! this will need to be refactored.
     subroutine execute_make_cavgs(cline_make_cavgs, cline, params)
         type(cmdline),    intent(inout) :: cline_make_cavgs
         class(cmdline),   intent(in)    :: cline
         type(parameters), intent(in)    :: params
         type(commander_make_cavgs)       :: xmake_cavgs
         type(commander_make_cavgs_distr) :: xmake_cavgs_distr
+        call cline_make_cavgs%set('prg', 'make_cavgs')
         if( (params%nparts > 1) .and. (.not.cline%defined('part')) )then
             call xmake_cavgs_distr%execute(cline_make_cavgs)
         else

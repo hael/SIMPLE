@@ -537,6 +537,7 @@ type :: parameters
     logical :: l_sh_first     = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_trail_rec    = .false.
+    logical :: l_worker_distr = .false.
     logical :: l_remap_cls    = .false.
     logical :: sp_required    = .false.
     contains

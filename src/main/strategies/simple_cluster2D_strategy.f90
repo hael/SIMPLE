@@ -9,7 +9,7 @@ use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
 implicit none
 
-public :: cluster2D_strategy, cluster2D_inmem_strategy, cluster2D_distr_strategy, create_strategy
+public :: cluster2D_strategy, cluster2D_inmem_strategy, cluster2D_distr_strategy, create_cluster2D_strategy
 private
 #include "simple_local_flags.inc"
 
@@ -91,7 +91,7 @@ end interface
 
 contains
 
-    function create_strategy(params, cline) result(strategy)
+    function create_cluster2D_strategy(params, cline) result(strategy)
         type(parameters), intent(in) :: params
         class(cmdline),   intent(in) :: cline
         class(cluster2D_strategy), allocatable :: strategy
@@ -102,7 +102,7 @@ contains
             allocate(cluster2D_inmem_strategy :: strategy)
             if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SHARED-MEMORY EXECUTION'
         endif
-    end function create_strategy
+    end function create_cluster2D_strategy
 
     ! ========================================================================
     ! SHARED-MEMORY IMPLEMENTATION
@@ -113,7 +113,10 @@ contains
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
-        if( params%which_iter <= 1 .and. (.not.str_has_substr(params%refine,'prob')) )then
+        integer :: startit
+        startit = 1
+        if( cline%defined('startit') )startit = params%startit
+        if( startit == 1 )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
     end subroutine inmem_initialize
@@ -130,9 +133,7 @@ contains
         logical,                         intent(out)   :: converged
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(starproject) :: starproj
-        logical           :: l_worker_distr
-        l_worker_distr = cline%defined('part') .or. cline%defined('outfile')
-        if( l_worker_distr )then
+        if( .not. params%l_worker_distr )then
             call cline%set('startit',    which_iter)
             call cline%set('which_iter', which_iter)
             call cline%set('extr_iter',  params%extr_iter)
@@ -140,9 +141,9 @@ contains
         endif
         ! Execute alignment (cluster2D_exec handles everything: refs prep, alignment, cavgs)
         call cluster2D_exec(params, build, cline, which_iter, converged)
-        if( l_worker_distr )then
-            converged = .true.
-            return  ! Worker subprocesses execute one iteration and exit
+        if( params%l_worker_distr )then
+            converged = .true. ! Worker subprocesses execute one iteration and exit
+            return
         endif
         ! Euclid sigma2 consolidation for next iteration
         if( params%l_needs_sigma )then
@@ -156,17 +157,10 @@ contains
 
     subroutine inmem_finalize_iteration(self, params, build, which_iter)
         class(cluster2D_inmem_strategy), intent(inout)  :: self
-        type(parameters),                intent(in)    :: params
-        type(builder),                   intent(inout) :: build
-        integer,                         intent(in)    :: which_iter
-        type(string) :: str_iter
-        ! Generate JPEG
-        str_iter = int2str_pad(which_iter, 3)
-        if( file_exists(string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//MRC_EXT) )then
-            call mrc2jpeg_tiled(string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//MRC_EXT, &
-                               string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//JPG_EXT)
-            write(logfhandle,'(A,A)') '>>> JPEG ', CWD_GLOB//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//JPG_EXT
-        endif
+        type(parameters),                intent(in)     :: params
+        type(builder),                   intent(inout)  :: build
+        integer,                         intent(in)     :: which_iter
+        if( .not. params%l_worker_distr ) call gen_jpeg( which_iter ) 
     end subroutine inmem_finalize_iteration
 
     subroutine inmem_cleanup(self, params)
@@ -181,7 +175,7 @@ contains
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         integer,                         intent(in)    :: last_iter
-        call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        if( .not. params%l_worker_distr ) call build%spproj%write_segment_inside(params%oritype, params%projfile)
     end subroutine inmem_finalize_run
 
     ! ========================================================================
@@ -238,12 +232,12 @@ contains
         ! Assemble class averages
         if( trim(params%restore_cavgs) .eq. 'yes' )then
             str_iter   = int2str_pad(which_iter, 3)
-            refs       = CAVGS_ITER_FBODY // str_iter%to_char()            // params%ext%to_char()
-            refs_even  = CAVGS_ITER_FBODY // str_iter%to_char() // '_even' // params%ext%to_char()
-            refs_odd   = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // params%ext%to_char()
+            refs       = CAVGS_ITER_FBODY // str_iter%to_char()            // MRC_EXT
+            refs_even  = CAVGS_ITER_FBODY // str_iter%to_char() // '_even' // MRC_EXT
+            refs_odd   = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // MRC_EXT
             cline_cavgassemble = cline
             call cline_cavgassemble%set('prg',  'cavgassemble')
-            if( cline_cavgassemble%defined('which_iter') ) call cline_cavgassemble%delete('which_iter')
+            call cline_cavgassemble%delete('which_iter')
             call cline_cavgassemble%set('refs', refs)
             call cline_cavgassemble%set('nthr', self%nthr_master)
             call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
@@ -261,7 +255,7 @@ contains
             call cline_calc_sigma%set('nthr',       self%nthr_master)
             call xcalc_group_sigmas%execute(cline_calc_sigma)
         endif
-        ! Check convergence using persistent strategy object
+        ! Check convergence
         converged = self%conv%check_conv2D(params, cline, build%spproj_field, &
                                            build%spproj_field%get_n('class'), params%msk)
         l_stream = trim(params%stream) .eq. 'yes'
@@ -283,13 +277,9 @@ contains
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
         integer,                         intent(in)    :: which_iter
-        type(string) :: str_iter
+        type(string) :: str_iter, fbody
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        ! Generate JPEG
-        str_iter = int2str_pad(which_iter, 3)
-        call mrc2jpeg_tiled(string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//MRC_EXT, &
-                           string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//JPG_EXT)
-        write(logfhandle,'(A,A)') '>>> JPEG ', CWD_GLOB//'/'//CAVGS_ITER_FBODY//str_iter%to_char()//JPG_EXT
+        call gen_jpeg(which_iter)
     end subroutine distr_finalize_iteration
 
     subroutine distr_cleanup(self, params)
@@ -307,5 +297,25 @@ contains
         type(cmdline),                   intent(inout) :: cline
         integer,                         intent(in)    :: last_iter
     end subroutine distr_finalize_run
+
+    ! private helpers
+
+    subroutine gen_jpeg( which_iter ) 
+        integer, intent(in) :: which_iter
+        type(string) :: str_iter, fbody, mrc, jpg
+        ! Generate JPEG
+        str_iter = int2str_pad(which_iter, 3)
+        fbody = string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()
+        mrc   = fbody//MRC_EXT
+        jpg   = fbody//JPG_EXT
+        if( file_exists(mrc) )then
+            call mrc2jpeg_tiled(mrc, jpg)
+            write(logfhandle,'(A,A)') '>>> JPEG ', jpg%to_char()
+        endif
+        call str_iter%kill
+        call fbody%kill
+        call mrc%kill
+        call jpg%kill
+    end subroutine gen_jpeg
 
 end module simple_cluster2D_strategy
