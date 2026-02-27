@@ -4,74 +4,155 @@ implicit none
 #include "simple_local_flags.inc"
 contains               
 
+    ! 2D restoration routines
+
     !>  \brief  Restores 2D class-averages only
-    module subroutine polar_cavger_merge_eos_and_norm2D( self )
+    !>  Calculates and writes FRCs and uses regularized wiener restoration
+    module subroutine polar_cavger_merge_eos_and_norm2D( self, clsfrcs, fname )
         class(polarft_calc), intent(inout) :: self
+        class(class_frcs),   intent(inout) :: clsfrcs
+        class(string),       intent(in)    :: fname
         complex(dp) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp) :: even(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp) :: odd(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer     :: icls, eo_pop(2), pop
+        real        :: frc(fdim(self%p_ptr%box_crop)-1)
+        integer     :: icls, eo_pop(2), pop, find, filtsz
         select case(trim(self%p_ptr%ref_type))
         case('polar_cavg')
             ! all good
         case DEFAULT
             THROW_HARD('polar_cavger_merge_eos_and_norm2D only for 2D cavgs restoration')
         end select
-        self%pfts_merg = DCMPLX_ZERO
+        ! In case nspace/self%ncls has changed OR volume/frcs were downsampled
+        filtsz = fdim(self%p_ptr%box_crop)-1
+        if( (clsfrcs%get_ncls() /= self%ncls) .or. (clsfrcs%get_filtsz() /= filtsz) )then
+            call clsfrcs%new(self%ncls, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
+        endif
         !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-        !$omp private(icls,eo_pop,pop,pft,ctf2)
+        !$omp private(icls,eo_pop,pop,pft,ctf2,even,odd,frc,find)
         do icls = 1,self%ncls
+            self%pfts_merg(:,:,icls) = DCMPLX_ZERO
+            frc    = 0.0
             eo_pop = self%prev_eo_pops(:,icls) + self%eo_pops(:,icls)
             pop    = sum(eo_pop)
             if(pop == 0)then
+                ! Empty class
                 self%pfts_even(:,:,icls) = DCMPLX_ZERO
                 self%pfts_odd(:,:,icls)  = DCMPLX_ZERO
                 self%ctf2_even(:,:,icls) = 0.d0
                 self%ctf2_odd(:,:,icls)  = 0.d0
             else
+                ! e/o Normalization
+                if( eo_pop(1) > 1) call self%safe_norm(self%pfts_even(:,:,icls), self%ctf2_even(:,:,icls), even)
+                if( eo_pop(2) > 1) call self%safe_norm(self%pfts_odd(:,:,icls),  self%ctf2_odd(:,:,icls),  odd)
+                ! FRC
+                call self%polar_cavger_calc_frc(even, odd, filtsz, frc)
+                ! Regularization
+                if( self%p_ptr%l_ml_reg )then                    
+                    if( pop > 1 )then
+                        call add_invtausq2rho(frc(self%kfromto(1):self%kfromto(2)), self%ctf2_even(:,:,icls), self%ctf2_odd(:,:,icls))
+                    endif
+                    ! e/o re-normalization
+                    if( eo_pop(1) > 1) call self%safe_norm(self%pfts_even(:,:,icls), self%ctf2_even(:,:,icls), even)
+                    if( eo_pop(2) > 1) call self%safe_norm(self%pfts_odd(:,:,icls),  self%ctf2_odd(:,:,icls),  odd)
+                endif
+                ! merged class
                 if(pop > 1)then
                     pft  = self%pfts_even(:,:,icls) + self%pfts_odd(:,:,icls)
                     ctf2 = self%ctf2_even(:,:,icls) + self%ctf2_odd(:,:,icls)
                     call self%safe_norm(pft, ctf2, self%pfts_merg(:,:,icls))
                 endif
-                if(eo_pop(1) > 1)then
-                    pft = self%pfts_even(:,:,icls)
-                    call self%safe_norm(pft, self%ctf2_even(:,:,icls), self%pfts_even(:,:,icls))
+                ! average low-resolution info between eo pairs to keep things in register
+                find = min(self%kfromto(2), clsfrcs%estimate_find_for_eoavg(icls, 1))
+                if( find >= self%kfromto(1) )then
+                    even(:,self%kfromto(1):find) = self%pfts_merg(:,self%kfromto(1):find,icls)
+                    odd(:,self%kfromto(1):find)  = self%pfts_merg(:,self%kfromto(1):find,icls)
                 endif
-                if(eo_pop(2) > 1)then
-                    pft = self%pfts_odd(:,:,icls)
-                    call self%safe_norm(pft, self%ctf2_odd(:,:,icls), self%pfts_odd(:,:,icls))
-                endif
+                ! updates arrays
+                self%pfts_even(:,:,icls) = even
+                self%pfts_odd(:,:,icls)  = odd
             endif
+            ! store FRC
+            call clsfrcs%set_frc(icls, frc, 1)
         end do
         !$omp end parallel do
+        ! Write FRCs
+        call clsfrcs%write(fname)
+        contains
+
+            subroutine add_invtausq2rho( frc, ctf2e, ctf2o )
+                real,     intent(in)    :: frc(self%kfromto(1):self%kfromto(2))
+                real(dp), intent(inout) :: ctf2e(self%pftsz,self%kfromto(1):self%kfromto(2))
+                real(dp), intent(inout) :: ctf2o(self%pftsz,self%kfromto(1):self%kfromto(2))
+                real(dp) :: sig2e(self%kfromto(1):self%kfromto(2)), sig2o(self%kfromto(1):self%kfromto(2))
+                real(dp) :: ssnr(self%kfromto(1):self%kfromto(2)), tau2e(self%kfromto(1):self%kfromto(2))
+                real(dp) :: tau2o(self%kfromto(1):self%kfromto(2))
+                real(dp) :: cc, fudge
+                integer  :: k, kstart, p
+                sig2e = 0.d0
+                sig2o = 0.d0
+                do k = self%kfromto(1),self%kfromto(2)
+                    sig2e(k) = sig2e(k) + sum(ctf2e(:,k))
+                    sig2o(k) = sig2o(k) + sum(ctf2o(:,k))
+                enddo
+                ! SSNR
+                fudge = real(self%p_ptr%tau,dp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    cc      = max(0.001d0, min(0.999d0, frc(k)))
+                    ssnr(k) = fudge * cc / (1.d0 - cc)
+                enddo
+                where( sig2e > DTINY )
+                    sig2e = real(self%ncls*self%pftsz,dp) / sig2e
+                elsewhere
+                    sig2e = 0.d0
+                end where
+                tau2e = ssnr * sig2e
+                where( sig2o > DTINY )
+                    sig2o = real(self%ncls*self%pftsz,dp) / sig2o
+                elsewhere
+                    sig2o = 0.d0
+                end where
+                tau2o = ssnr * sig2o
+                ! Add Tau2 inverse to denominators
+                ! because signal assumed infinite at very low resolution there is no addition
+                kstart = max(6, calc_fourier_index(self%p_ptr%hp, self%p_ptr%box_crop, self%p_ptr%smpd_crop))
+                do k = kstart,self%kfromto(2)
+                    if( tau2e(k) > DTINY )then
+                        ! CTF2 <- CTF2 + avgCTF2/(tau*SSNR)
+                        ctf2e(:,k) = ctf2e(:,k) + 1.d0 / (fudge * tau2e(k))
+                    else
+                        do p = 1,self%pftsz
+                            ctf2e(p,k) = ctf2e(p,k) + min(1.d3, 1.d3 * ctf2e(p,k))
+                        enddo
+                    endif
+                    if( tau2o(k) > DTINY )then
+                        ctf2o(:,k) = ctf2o(:,k) + 1.d0 / (fudge * tau2o(k))
+                    else
+                        do p = 1,self%pftsz
+                            ctf2o(p,k) = ctf2o(p,k) + min(1.d3, 1.d3 * ctf2o(p,k))
+                        enddo
+                    endif
+                enddo
+            end subroutine add_invtausq2rho
+
     end subroutine polar_cavger_merge_eos_and_norm2D
 
+    ! 3D restoration routines
+
     !>  \brief  Restores 3D slices
-    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop, cl_weight )
+    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop )
         class(polarft_calc),  intent(inout) :: self
         type(oris),           intent(in)    :: reforis
-        type(sym),        intent(in)    :: symop
-        real,       optional, intent(in)    :: cl_weight
+        type(sym),            intent(in)    :: symop
         type(class_frcs)   :: cavg2clin_frcs
         real,  allocatable :: cavg_clin_frcs(:,:,:)
         complex(dp) :: pfts_clin_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         complex(dp) :: pfts_clin_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         real(dp)    :: ctf2_clin_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         real(dp)    :: ctf2_clin_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        real(dp)    :: fsc(self%kfromto(1):self%kfromto(2)), clw
-        clw = 1.d0
+        real(dp)    :: fsc(self%kfromto(1):self%kfromto(2))
         select case(trim(self%p_ptr%ref_type))
-            case('comlin_hybrid')
-                ! 2.5D: cavgs + variable CLs contribution
-                ! Common-line contribution weight
-                if( present(cl_weight) ) clw = min(max(0.d0,real(cl_weight,dp)),1.d0)
-                if( clw > 1.d-6 )then
-                    ! Mirroring slices
-                    call mirror_slices(reforis, symop)
-                    ! Common-lines conribution
-                    call self%calc_comlin_contrib(reforis, symop,&
-                    &pfts_clin_even, pfts_clin_odd, ctf2_clin_even, ctf2_clin_odd)
-                endif
             case('comlin_noself', 'comlin')
                 ! Mirroring slices
                 call mirror_slices(reforis, symop)
@@ -86,15 +167,6 @@ contains
         ! Restoration of references
         self%pfts_merg = DCMPLX_ZERO
         select case(trim(self%p_ptr%ref_type))
-            case('comlin_hybrid')
-                if( clw > 1.d-6 )then
-                    call calc_cavg_comlin_frcs(cavg2clin_frcs)
-                    call restore_cavgs_comlins(clw)
-                else
-                    call mirr_and_calc_cavg_comlin_frcs(cavg2clin_frcs)
-                    call self%polar_cavger_merge_eos_and_norm2D
-                endif
-                call cavg2clin_frcs%write(string('frcs_cavg2clin'//BIN_EXT))
             case('comlin_noself')
                 call restore_comlins
             case('comlin')
@@ -122,8 +194,6 @@ contains
             vare = 0.d0; varo = 0.d0
             sig2e = 0.d0; sig2o = 0.d0
             select case(trim(self%p_ptr%ref_type))
-            case('comlin_hybrid')
-                THROW_HARD('Not supported yet')
             case('comlin_noself')
                 !$omp parallel do default(shared) schedule(static) proc_bind(close)&
                 !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo,sig2e,sig2o)
@@ -430,7 +500,7 @@ contains
 
     end subroutine polar_cavger_merge_eos_and_norm
 
-    !>  \brief  calculates Fourier ring correlations
+    !>  \brief  calculates & writes Fourier ring correlations, 3D only
     module subroutine polar_cavger_calc_and_write_frcs_and_eoavg( self, clsfrcs, update_frac, fname, cline )
         class(polarft_calc), intent(inout) :: self
         class(class_frcs),   intent(inout) :: clsfrcs
@@ -500,6 +570,8 @@ contains
         endif
     end subroutine polar_cavger_calc_and_write_frcs_and_eoavg
 
+    ! Alignment and filtering routines
+
     !>  \brief  Filters one polar cluster centre for alignment
     module subroutine polar_prep2Dref( self, clsfrcs, icls, gaufilt )
         class(polarft_calc), intent(inout) :: self
@@ -508,7 +580,7 @@ contains
         logical,             intent(in) :: gaufilt
         real    :: frc(clsfrcs%get_filtsz()), filter(clsfrcs%get_filtsz())
         if( self%p_ptr%l_ml_reg )then
-            ! no filtering, not supported in 2D yet
+            ! no filtering
         else
             ! FRC-based optimal filter
             call clsfrcs%frc_getter(icls, frc)

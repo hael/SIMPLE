@@ -510,14 +510,6 @@ contains
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
             call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_cluster2D'))
         else
-            ! Polar specifics
-            if( (trim(params%polar)=='yes') .and. (trim(params%ref_type)=='comlin_hybrid') )then
-                call build%pgrpsyms%new('c1')
-                params%nsym    = build%pgrpsyms%get_nsym()
-                params%eullims = build%pgrpsyms%get_eullims()
-                call build%eulspace%new(params%ncls, is_ptcl=.false.)
-                call build%pgrpsyms%build_refspiral(build%eulspace)
-            endif
             ! Initial references
             if( .not. cline%defined('refs') )then
                 cline_make_cavgs = cline ! ncls is transferred here
