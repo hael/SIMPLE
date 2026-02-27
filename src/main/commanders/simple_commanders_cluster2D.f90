@@ -140,6 +140,37 @@ contains
         call simple_touch(CLUSTER2D_FINISHED)
     end subroutine exec_cluster2D_unified
 
+    subroutine exec_cluster2D_distr_worker(self, cline)
+        use simple_cluster2D_common,   only: handle_objfun
+        use simple_strategy2D_matcher, only: cluster2D_exec
+        class(commander_base),   intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        logical          :: converged
+        call set_cluster2D_defaults(cline)
+        call params%new(cline)
+        ! flag subprocess executed through simple_private_exec 
+        if( .not. cline%defined('part')    ) THROW_HARD('PART must be defined for distributed worker execution')
+        if( .not. cline%defined('outfile') ) THROW_HARD('OUTFILE must be defined for distributed worker execution')
+        ! this is the distributed worker, set the flag accordingly
+        params%l_worker_distr = .true.
+        call build%build_spproj(params, cline, wthreads=.true.)
+        call build%build_general_tbox(params, cline, do3d=.false.)
+        call build%build_strategy2D_tbox(params)
+        call handle_objfun(params, cline)
+        params%which_iter = max(1, params%startit)
+        params%extr_iter  = params%which_iter
+        call cline%set('which_iter', int2str(params%which_iter))
+        write(logfhandle,'(A)')   '>>>'
+        write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
+        write(logfhandle,'(A)')   '>>>'
+        call cluster2D_exec(params, build, cline, params%which_iter, converged)
+        call build%kill_general_tbox()
+        call build%kill_strategy2D_tbox()
+        call simple_touch(CLUSTER2D_FINISHED)
+    end subroutine exec_cluster2D_distr_worker
+
     ! Replace exec_cluster2D
     ! subroutine exec_cluster2D(self, cline)
     !     class(commander_cluster2D), intent(inout) :: self
