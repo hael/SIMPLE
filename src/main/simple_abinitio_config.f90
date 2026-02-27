@@ -30,14 +30,11 @@ integer,          parameter :: STOCH_SAMPL_STAGE     = PROBREFINE_STAGE     ! we
 integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE    ! we start trailing when we start sampling particles randomly
 integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES              ! we start trailing in the last stage
 integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1          ! cannot be switched on too early
-integer,          parameter :: RECALC_STARTREC_STAGE = LPAUTO_STAGE         ! re-estimate starting volume for optimal LP and AUTOMSK
 integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE         ! swith on automasking when lpauto is switched on
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
 integer,          parameter :: CAVGWEIGHTS_STAGE     = 3                    ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
 integer,          parameter :: GAUREF_LAST_STAGE     = PHASES(1)            ! When to stop using gaussian filtering of the references with polar=yes
-integer,          parameter :: NSPACE_PHASE_POLAR(3) = [  2, PROBREFINE_STAGE, NSTAGES]
-integer,          parameter :: NSPACE_POLAR(3)       = [500,             1000,    1500]
 integer,          parameter :: MAXITS_BETWEEN        = 10                   ! Development
 
 ! singleton variables
