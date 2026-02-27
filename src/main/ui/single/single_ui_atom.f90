@@ -170,8 +170,7 @@ contains
         &.false., gui_advanced=.false.)                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call crys_score%add_input(UI_IMG, 'fname',   'file', 'Core PDB folder list', 'Core PDB folder list', 'e.g. core_pdbs.txt', .true., '')
-        call crys_score%add_input(UI_IMG, 'pdbfile', 'file', 'PDB input coordinates file to estimate moldiam', 'Input coordinates file in PDB format', 'PDB file e.g. startvol_ATMS.pdb', .true., 'startvol_ATMS.pdb')
+        call crys_score%add_input(UI_IMG, 'fname', 'file', 'PDB file list', 'PDB file list', 'e.g. np_pdbs.txt', .true., '')
         ! parameter input/output
         call crys_score%add_input(UI_PARM, smpd)
         call crys_score%add_input(UI_PARM, box)

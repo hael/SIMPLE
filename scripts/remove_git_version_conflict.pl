@@ -9,6 +9,7 @@ my @files = qw(
   simple_stream.f90
   simple_test_exec.f90
   single_exec.f90
+  simple_exec.f90
 );
 
 my $prod_dir = File::Spec->catdir($Bin, '..', 'production');
@@ -16,7 +17,8 @@ my $prod_dir = File::Spec->catdir($Bin, '..', 'production');
 # Regex: a single Fortran line calling simple_print_git_version('...').
 # Allows leading/trailing whitespace.
 # Accepts hex-ish hashes or numeric IDs inside the quotes.
-my $CALL_RE = qr/^\s*call\s+simple_print_git_version\s*\(\s*'([0-9A-Fa-f]+)'\s*\)\s*$/i;
+# Also allows an optional trailing Fortran inline comment: ! ...
+my $CALL_RE = qr/^\s*call\s+simple_print_git_version\s*\(\s*'([0-9A-Fa-f]+)'\s*\)\s*(?:!.*)?$/i;
 
 sub extract_nonblank_lines {
     my ($text) = @_;
@@ -37,7 +39,8 @@ for my $fname (@files) {
     close $in;
 
     # Fast pre-check: if file can't possibly contain a targeted exact conflict, do nothing.
-    if ($content !~ /^<<<<<<< /m || $content !~ /simple_print_git_version\s*\(/i) {
+    # NOTE: allow optional leading whitespace before conflict markers.
+    if ($content !~ /^\s*<<<<<<< /m || $content !~ /simple_print_git_version\s*\(/i) {
         print "OK (no targeted exact conflicts): $path\n";
         next;
     }
@@ -53,7 +56,8 @@ for my $fname (@files) {
         my $line = $lines[$i];
 
         # Not a conflict start: pass through
-        if ($line !~ /^<<<<<<< /) {
+        # NOTE: allow optional leading whitespace before conflict markers.
+        if ($line !~ /^\s*<<<<<<< /) {
             push @out, $line;
             $i++;
             next;
@@ -64,7 +68,7 @@ for my $fname (@files) {
         push @block, $lines[$i++]; # <<<<<<<
 
         my @first_lines;
-        while ($i < @lines && $lines[$i] !~ /^=======\s*$/) {
+        while ($i < @lines && $lines[$i] !~ /^\s*=======\s*$/) {
             push @first_lines, $lines[$i];
             push @block,       $lines[$i];
             $i++;
@@ -81,7 +85,7 @@ for my $fname (@files) {
         push @block, $lines[$i++]; # =======
 
         my @second_lines;
-        while ($i < @lines && $lines[$i] !~ /^>>>>>>> /) {
+        while ($i < @lines && $lines[$i] !~ /^\s*>>>>>>> /) {
             push @second_lines, $lines[$i];
             push @block,        $lines[$i];
             $i++;
@@ -117,7 +121,7 @@ for my $fname (@files) {
             my ($kept_line) = grep { $_ !~ /^\s*$/ } @first_lines;
 
             # Ensure it ends with a newline (since we split with (?<=\n), it should already)
-            $kept_line .= "\n" if $kept_line !~ /\n\z/;
+            $kept_line .= "\n" if defined($kept_line) && $kept_line !~ /\n\z/;
 
             push @out, $kept_line;
 
@@ -130,7 +134,7 @@ for my $fname (@files) {
     }
 
     # If we hit a malformed conflict and cleared @out, skip writing
-    if (!@out && $changed == 0 && $content =~ /^<<<<<<< /m) {
+    if (!@out && $changed == 0 && $content =~ /^\s*<<<<<<< /m) {
         next;
     }
 
