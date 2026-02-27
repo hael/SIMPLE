@@ -104,9 +104,13 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
+        call cleanup2D%add_input(UI_SRCH, nptcls_per_cls_cleanup2D)
         ! filter controls
         ! mask controls
         ! computer controls
+         ! computer controls
+        call cleanup2D%add_input(UI_COMP, nparts)
+        call cleanup2D%add_input(UI_COMP, nthr)
         ! add 2 ui_hash
         call add_ui_program('cleanup2D', cleanup2D, prgtab)
     end subroutine new_cleanup2D

@@ -4,6 +4,7 @@ use simple_srchspace_map,    only: srchspace_map
 use simple_multi_dendro,     only: multi_dendro
 use simple_binary_tree,      only: bt_node
 use simple_strategy2D_utils, only: calc_cluster_cavgs_dmat
+use simple_corrmat,          only: calc_inpl_invariant_cc_nomirr
 use simple_image,            only: image
 use simple_parameters,       only: parameters
 implicit none
@@ -128,7 +129,8 @@ contains
             ! need images corresponding to refs in sub tree
             sub_imgs = refimgs(refs)
             oa_minmax  = [0.,1.]
-            sub_distmat = calc_cluster_cavgs_dmat(params, sub_imgs, oa_minmax, 'cc')
+            ! sub_distmat = calc_cluster_cavgs_dmat(params, sub_imgs, oa_minmax, 'cc')
+            sub_distmat = calc_inpl_invariant_cc_nomirr(params, params%hp, params%lp, params%trs, sub_imgs)
             call block_tree%build_tree_from_subdistmat(itree, refs, sub_distmat, LINK_AVERAGE)
             deallocate(sub_distmat, refs, sub_imgs)
         end do

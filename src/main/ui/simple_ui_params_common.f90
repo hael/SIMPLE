@@ -86,6 +86,7 @@ type(ui_param) :: nparts_chunk
 type(ui_param) :: nparts_pool
 type(ui_param) :: nptcls
 type(ui_param) :: nptcls_per_cls
+type(ui_param) :: nptcls_per_cls_cleanup2D
 type(ui_param) :: nran
 type(ui_param) :: nrestarts
 type(ui_param) :: nsample
@@ -490,7 +491,11 @@ subroutine set_ui_params
 
     call nptcls_per_cls%set_param( 'nptcls_per_cls',  'num',    'Number of particles per cluster', &
                                    'Initial number of particles per cluster{35}', &
-                                   '# initial particles per cluster{35}', .false., 500.)
+                                   '# initial particles per cluster{35}', .false., 35.)
+
+    call nptcls_per_cls_cleanup2D%set_param( 'nptcls_per_cls',  'num',    'Number of particles per cluster', &
+                                   'Number of particles per cluster{500}', &
+                                   '# particles per cluster{500}', .false., 500.)
 
     call nran%set_param(           'nran',            'num',    'Number of random samples', &
                                    'Number of entries to randomly sample', &

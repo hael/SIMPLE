@@ -149,9 +149,10 @@ contains
         call extract_subproj%add_input(UI_PARM, 'subprojname', 'str', 'Subproject name', 'Name of subproject to create ./myproject/myproject.simple',&
         &'e.g. to create ./myproject/myproject.simple', .true., '')
         ! alternative inputs
-        call extract_subproj%add_input(UI_ALT, 'fromp',    'num', 'From index', 'Start index for extraction', 'start index', .false., 1.0)
-        call extract_subproj%add_input(UI_ALT, 'top',      'num', 'To index', 'Stop index for extraction', 'stop index', .false., 1.0)
-        call extract_subproj%add_input(UI_ALT, 'clustind', 'num', 'Cluster index', 'Cluster index', 'e.g. 5', .false., 0.)
+        call extract_subproj%add_input(UI_ALT, 'fromp',    'num', 'From index',     'Start index for extraction', 'start index', .false., 1.0)
+        call extract_subproj%add_input(UI_ALT, 'top',      'num', 'To index',       'Stop index for extraction',  'stop index',  .false., 1.0)
+        call extract_subproj%add_input(UI_ALT, 'clustind', 'num', 'Cluster index',  'Cluster index',              'e.g. 5',      .false., 0.)
+        call extract_subproj%add_input(UI_ALT, 'class',    'num', '2D class index', '2D classs index',            'e.g. 5',      .false., 0.)
         ! search controls
         ! <empty>
         ! filter controls
