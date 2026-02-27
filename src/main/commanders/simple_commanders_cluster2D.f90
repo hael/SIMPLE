@@ -48,10 +48,9 @@ contains
         type(parameters)                       :: params
         type(builder),                  target :: build
         class(cluster2D_strategy), allocatable :: strategy
-        type(commander_prob_tab2D)             :: xprob_tab2D       ! here to avoid circular dependencies
-        type(commander_prob_tab2D_distr)       :: xprob_tab2D_distr ! here to avoid circular dependencies
         type(simple_nice_communicator)         :: nice_communicator
-        logical                                :: converged, l_stream, l_prob
+        type(string)                           :: finalcavgs
+        logical                                :: converged, l_stream
         integer                                :: iter
         ! Initialize
         call cline%set('prg','cluster2D')
@@ -60,6 +59,9 @@ contains
         if( cline%defined('stream') ) l_stream = cline%get_carg('stream')=='yes'
         if( l_stream ) call cline%set('stream','no')
         call params%new(cline)
+        if( str_has_substr(params%refine, 'prob') )then
+            THROW_HARD('REFINE=prob* is temporarily unsupported in cluster2D')
+        endif
         call build%build_spproj(params, cline, wthreads=.true.)
         call build%build_general_tbox(params, cline, do3d=.false.)
         call build%build_strategy2D_tbox(params)
@@ -73,24 +75,18 @@ contains
         call nice_communicator%cycle()
         if(cline%defined("niceserver")) call cline%delete('niceserver')
         if(cline%defined("niceprocid")) call cline%delete('niceprocid')
-        call setup_polar_specifics(params, build)
-        ! Create and initialize strategy before refs setup (distributed setup needs this)
-        strategy = create_strategy(params, cline)
-        call strategy%initialize(params, build, cline)
         call init_cluster2D_refs(cline, params, build)
-        if( cline%defined('extr_iter') )then
-            params%extr_iter = params%extr_iter - 1
-        else
-            params%extr_iter = params%startit - 1
-        endif
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
+        ! Create strategy
+        strategy = create_strategy(params, cline)
+        call strategy%initialize(params, build, cline)
         if(.not. l_stream) call progressfile_init()
-        ! Main loop - ultra-simple now
-        l_prob = str_has_substr(params%refine, 'prob')
-        iter = params%startit - 1
+        ! Main loop
+        params%which_iter = max(1, params%startit)
+        iter = params%which_iter - 1
         do
             iter = iter + 1
             params%which_iter = iter
@@ -100,21 +96,28 @@ contains
             write(logfhandle,'(A)')   '>>>'
             nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
             call nice_communicator%cycle()
-            params%extr_iter = params%extr_iter + 1
-            call cline%set('extr_iter', params%extr_iter)
-            ! Build probability table if needed
-            if( l_prob ) call strategy%build_probability_table(params, cline, iter, xprob_tab2D, xprob_tab2D_distr)
+            params%extr_iter = params%which_iter
             ! Strategy handles everything: alignment + cavgs + convergence
             call strategy%execute_iteration(params, build, cline, iter, converged)
-            if( converged .or. iter >= params%maxits ) exit
             call strategy%finalize_iteration(params, build, iter)
+            if( converged .or. iter >= params%maxits ) exit
         end do
         ! Cleanup
         nice_communicator%stat_root%stage = "terminating"
         call nice_communicator%cycle()
         call strategy%finalize_run(params, build, cline, iter)
+        ! At the end:
+        if( trim(params%restore_cavgs).eq.'yes' )then
+            if( file_exists(FRCS_FILE) )then
+                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+            endif
+            call build%spproj%write_segment_inside('out', params%projfile)
+            if( .not. params%l_polar )then
+                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//MRC_EXT
+                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+            endif
+        endif
         call strategy%cleanup(params)
-        call cline%delete('startit')
         call cline%set('endit', iter)
         call build%spproj_field%kill
         call nice_communicator%terminate()
