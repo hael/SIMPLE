@@ -249,23 +249,10 @@ contains
             call polaft_dims_from_file_header(fname, pftsz, kfromto, ncls)
             call fname%kill
             call pftc%new(params, 1, [1,1], kfromto)
-            if( trim(params%ref_type)=='comlin_hybrid' )then
-                call pftc%polar_cavger_new(.true., nrefs=params%ncls)
-                call pftc%polar_cavger_calc_pops(build%spproj)
-                call build%pgrpsyms%new('c1')
-                params%nsym    = build%pgrpsyms%get_nsym()
-                params%eullims = build%pgrpsyms%get_eullims()
-                call build%eulspace%new(params%ncls, is_ptcl=.false.)
-                call build%pgrpsyms%build_refspiral(build%eulspace)
-                clw = min(1.0, max(0.0, 1.0-max(0.0, real(params%extr_iter-4)/real(params%extr_lim-3))))
-                call pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms, clin_anneal=clw)
-            else
-                call pftc%polar_cavger_new(.false., nrefs=params%ncls)
-                call pftc%polar_cavger_calc_pops(build%spproj)
-                call pftc%polar_cavger_assemble_sums_from_parts
-            endif
-            call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP 1')
-            call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), params%frcs, cline)
+            call pftc%polar_cavger_new(.false., nrefs=params%ncls)
+            call pftc%polar_cavger_calc_pops(build%spproj)
+            call pftc%polar_cavger_assemble_sums_from_parts
+            call pftc%polar_cavger_merge_eos_and_norm2D(build%clsfrcs, params%frcs)
             call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call pftc%polar_cavger_gen2Dclassdoc(build%spproj, build%clsfrcs)
             call pftc%kill

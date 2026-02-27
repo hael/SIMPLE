@@ -76,8 +76,7 @@ do i = 1,NIMGS
 enddo
 call pftc%polar_cavger_new(.false.)
 call pftc%polar_cavger_update_sums(NIMGS, pinds, b%spproj, shifts)
-call pftc%polar_cavger_merge_eos_and_norm2D
-call pftc%polar_cavger_calc_and_write_frcs_and_eoavg(b%clsfrcs, b%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
+call pftc%polar_cavger_merge_eos_and_norm2D(b%clsfrcs, string(FRCS_FILE))
 ! write
 call pftc%polar_cavger_write(string('cavgs_even.bin'), 'even')
 call pftc%polar_cavger_write(string('cavgs_odd.bin'),  'odd')

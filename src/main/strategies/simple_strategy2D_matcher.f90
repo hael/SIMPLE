@@ -53,11 +53,11 @@ contains
         type(ori)             :: orientation
         type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
-        real    :: frac_srch_space, neigh_frac, clinw
+        real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
         logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc, l_polar
-        logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs, l_clin
+        logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs
 
         ! assign parameters pointer
         p_ptr => params
@@ -107,14 +107,6 @@ contains
             l_partial_sums = l_update_frac .and. (p_ptr%extr_iter>1)
         endif
         l_polar = trim(p_ptr%polar).eq.'yes'
-        l_clin  = .false.
-        if( l_polar .and. trim(p_ptr%ref_type)=='comlin_hybrid' )then
-            if( l_snhc .or. (p_ptr%extr_iter==1 .and.l_greedy))then
-                l_clin =.true.
-            else
-                THROW_HARD('REF_TYPE=COMLIN_HYBRID only supported with refine=snhc|snhc_smpl')
-            endif
-        endif
 
         ! PARTICLE SAMPLING
         if( allocated(pinds) ) deallocate(pinds)
@@ -189,7 +181,7 @@ contains
         endif
         if( l_polar )then
             ! for restoration
-            if( which_iter == 1 ) call b_ptr%pftc%polar_cavger_new(l_clin)
+            if( which_iter == 1 ) call b_ptr%pftc%polar_cavger_new(.false.)
             call b_ptr%pftc%polar_cavger_zero_pft_refs
         endif
 
@@ -389,13 +381,7 @@ contains
                 if( l_polar )then
                     if( which_iter == 1) call cavger_kill
                     ! polar restoration
-                    if( l_clin )then
-                        clinw = min(1.0, max(0.0, 1.0-max(0.0, real(p_ptr%extr_iter-4)/real(p_ptr%extr_lim-3))))
-                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm(b_ptr%eulspace, b_ptr%pgrpsyms, clinw)
-                    else
-                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm2D
-                    endif
-                    call b_ptr%pftc%polar_cavger_calc_and_write_frcs_and_eoavg(b_ptr%clsfrcs, b_ptr%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
+                    call b_ptr%pftc%polar_cavger_merge_eos_and_norm2D(b_ptr%clsfrcs, string(FRCS_FILE))
                     call b_ptr%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
                     call b_ptr%pftc%polar_cavger_gen2Dclassdoc(b_ptr%spproj, b_ptr%clsfrcs)
                     call b_ptr%pftc%polar_cavger_kill
@@ -695,7 +681,7 @@ contains
             endif
         endif
         ! Read polar references
-        call b_ptr%pftc%polar_cavger_new(trim(p_ptr%ref_type)=='comlin_hybrid')
+        call b_ptr%pftc%polar_cavger_new(.false.)
         call b_ptr%pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY)//BIN_EXT)
         has_been_searched = .not.b_ptr%spproj%is_virgin_field(p_ptr%oritype)
         ! Centering-related objects

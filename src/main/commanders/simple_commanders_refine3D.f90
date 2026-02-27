@@ -642,6 +642,7 @@ contains
                 call build%pftc%polar_cavger_calc_pops(build%spproj)
                 call build%pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms)
                 call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
+                call build%pftc%polar_cavger_merge_eos_and_norm(reforis=build%eulspace, symop=build%pgrpsyms)
                 call build%pftc%polar_cavger_calc_and_write_frcs_and_eoavg(build%clsfrcs, build%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
                 call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
                 call build%pftc%polar_cavger_kill

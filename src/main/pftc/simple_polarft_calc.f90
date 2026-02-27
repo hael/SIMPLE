@@ -728,15 +728,16 @@ interface
 
     ! ===== RESTORE: simple_polarft_ops_restore.f90
 
-    module subroutine polar_cavger_merge_eos_and_norm2D( self )
+    module subroutine polar_cavger_merge_eos_and_norm2D( self, clsfrcs, fname )
         class(polarft_calc), intent(inout) :: self
+        class(class_frcs),   intent(inout) :: clsfrcs
+        class(string),       intent(in)    :: fname
     end subroutine polar_cavger_merge_eos_and_norm2D
 
-    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop, cl_weight )
+    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop )
         class(polarft_calc),  intent(inout) :: self
         type(oris),           intent(in)    :: reforis
         type(sym),            intent(in)    :: symop
-        real,       optional, intent(in)    :: cl_weight
     end subroutine polar_cavger_merge_eos_and_norm
 
     module subroutine polar_cavger_calc_and_write_frcs_and_eoavg( self, clsfrcs, update_frac, fname, cline )

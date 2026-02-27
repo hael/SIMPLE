@@ -1599,7 +1599,7 @@ contains
         self%l_polar = trim(self%polar).eq.'yes'
         if( self%l_polar )then
             select case(trim(self%ref_type))
-                case('comlin_noself', 'comlin', 'polar_cavg', 'comlin_hybrid')
+                case('comlin_noself', 'comlin', 'polar_cavg')
                     ! supported
                 case DEFAULT
                     THROW_HARD('Unsupported REF_TYPE argument: '//trim(self%ref_type))
