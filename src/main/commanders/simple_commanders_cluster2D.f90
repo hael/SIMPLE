@@ -46,21 +46,27 @@ contains
         class(commander_base),   intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters)                       :: params
-        type(builder),                  target :: build
+        type(builder)                          :: build
         class(cluster2D_strategy), allocatable :: strategy
         type(simple_nice_communicator)         :: nice_communicator
         type(string)                           :: finalcavgs
-        logical                                :: converged, l_stream
+        logical                                :: converged, l_stream, l_worker_distr
         integer                                :: iter
         ! Initialize
         call cline%set('prg','cluster2D')
+
+        !!!!!!!!!!!!! Replace this when this becomes the only workflow for cluster2D
         call set_cluster2D_defaults(cline)
-        l_stream = .false.
+
+        
+        l_stream       = .false.
         if( cline%defined('stream') ) l_stream = cline%get_carg('stream')=='yes'
         if( l_stream ) call cline%set('stream','no')
         call params%new(cline)
+        ! flag subprocess executed through simple_private_exec 
+        params%l_worker_distr = cline%defined('part')
         if( str_has_substr(params%refine, 'prob') )then
-            THROW_HARD('REFINE=prob* is temporarily unsupported in cluster2D')
+            THROW_HARD('REFINE=prob* is unsupported in cluster2D')
         endif
         call build%build_spproj(params, cline, wthreads=.true.)
         call build%build_general_tbox(params, cline, do3d=.false.)
@@ -69,77 +75,82 @@ contains
         if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
         call handle_objfun(params, cline)
         call cline%set('mkdir', 'no')
-        ! Nice communicator
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        nice_communicator%stat_root%stage = "initialising"
-        call nice_communicator%cycle()
-        if(cline%defined("niceserver")) call cline%delete('niceserver')
-        if(cline%defined("niceprocid")) call cline%delete('niceprocid')
+        if( .not. params%l_worker_distr ) then
+            ! Nice communicator
+            call nice_communicator%init(params%niceprocid, params%niceserver)
+            nice_communicator%stat_root%stage = "initialising"
+            call nice_communicator%cycle()
+            if(cline%defined("niceserver")) call cline%delete('niceserver')
+            if(cline%defined("niceprocid")) call cline%delete('niceprocid')
+        endif
+        ! This needs to be before init_cluster2D_refs since it uses which_iter
+        params%which_iter = max(1, params%startit)
+        iter = params%which_iter - 1
         call init_cluster2D_refs(cline, params, build)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         ! Create strategy
-        strategy = create_strategy(params, cline)
+        strategy = create_cluster2D_strategy(params, cline)
         call strategy%initialize(params, build, cline)
         if(.not. l_stream) call progressfile_init()
         ! Main loop
-        params%which_iter = max(1, params%startit)
-        iter = params%which_iter - 1
         do
             iter = iter + 1
             params%which_iter = iter
+            params%extr_iter  = params%which_iter
             call cline%set('which_iter', int2str(params%which_iter))
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
-            nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
-            call nice_communicator%cycle()
-            params%extr_iter = params%which_iter
+            if( .not. params%l_worker_distr ) then
+                nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
+                call nice_communicator%cycle()
+            endif
             ! Strategy handles everything: alignment + cavgs + convergence
             call strategy%execute_iteration(params, build, cline, iter, converged)
             call strategy%finalize_iteration(params, build, iter)
             if( converged .or. iter >= params%maxits ) exit
         end do
-        ! Cleanup
-        nice_communicator%stat_root%stage = "terminating"
-        call nice_communicator%cycle()
-        call strategy%finalize_run(params, build, cline, iter)
-        ! At the end:
-        if( trim(params%restore_cavgs).eq.'yes' )then
-            if( file_exists(FRCS_FILE) )then
-                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+        if( .not. params%l_worker_distr )then
+            ! Cleanup
+            nice_communicator%stat_root%stage = "terminating"
+            call nice_communicator%cycle()
+            call strategy%finalize_run(params, build, cline, iter)
+            ! At the end:
+            if( trim(params%restore_cavgs).eq.'yes' )then
+                if( file_exists(FRCS_FILE) )then
+                    call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+                endif
+                call build%spproj%write_segment_inside('out', params%projfile)
+                if( .not. params%l_polar )then
+                    finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//MRC_EXT
+                    call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+                endif
             endif
-            call build%spproj%write_segment_inside('out', params%projfile)
-            if( .not. params%l_polar )then
-                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//MRC_EXT
-                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
-            endif
+            call strategy%cleanup(params)
+            call cline%set('endit', iter)
+            call nice_communicator%terminate()
+            call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         endif
-        call strategy%cleanup(params)
-        call cline%set('endit', iter)
-        call build%spproj_field%kill
-        call nice_communicator%terminate()
+        if (allocated(strategy)) deallocate(strategy)
+        call build%kill_general_tbox()
+        call build%kill_strategy2D_tbox()
         call simple_touch(CLUSTER2D_FINISHED)
-        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
     end subroutine exec_cluster2D_unified
 
     ! Replace exec_cluster2D
     ! subroutine exec_cluster2D(self, cline)
     !     class(commander_cluster2D), intent(inout) :: self
     !     class(cmdline),             intent(inout) :: cline
-        
-    !     ! Simply delegate to unified implementation
     !     call exec_cluster2D_unified(self, cline)
     ! end subroutine exec_cluster2D
 
-    ! ! Replace exec_cluster2D_distr
+    ! Replace exec_cluster2D_distr
     ! subroutine exec_cluster2D_distr(self, cline)
     !     class(commander_cluster2D_distr), intent(inout) :: self
     !     class(cmdline),                   intent(inout) :: cline
-        
-    !     ! Simply delegate to unified implementation
     !     call exec_cluster2D_unified(self, cline)
     ! end subroutine exec_cluster2D_distr
 
