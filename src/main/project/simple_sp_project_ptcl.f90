@@ -377,7 +377,7 @@ contains
         call self%os_cls3D%set_all('state',real(cls_states))
     end subroutine map_ptcls_state_to_cls
 
-        ! Removes in place mics, stacks and particles with state=0
+    ! Removes in place mics, stacks and particles with state=0
     ! new images are not generated & the indstk field is updated
     module subroutine prune_particles( self )
         class(sp_project), target, intent(inout) :: self

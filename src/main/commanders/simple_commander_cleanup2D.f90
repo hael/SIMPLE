@@ -21,29 +21,26 @@ contains
         integer, parameter :: NCLS_COARSE   = 30
         integer, parameter :: NCLS_FINE_MAX = 300, NCLS_FINE_MIN = 6
         real,    parameter :: LP_COARSE     = 6.
-        type(cmdline)                   :: cline_coarse_abinitio2D, cline_extract_subproj, cline_subproj_abinitio2D
+        type(cmdline)                   :: cline_coarse_abinitio2D, cline_subproj_abinitio2D
+        type(cmdline)                   :: cline_new_subproject
         type(commander_abinitio2D)      :: xabinitio2D
         ! type(commander_cluster_cavgs)   :: xcluster_cavgs
-        type(commander_extract_subproj) :: xextract_subproj
         type(image),  allocatable       :: cavgs_coarse(:)
-        real,         allocatable       :: diams(:), shifts(:,:)
+        real,         allocatable       :: diams(:), shifts(:,:), state_labels(:)
+        integer,      allocatable       :: class_labels(:)
         type(sp_project)     :: spproj, spproj_sub
         type(parameters)     :: params
         type(string)         :: projname_sub, projfile_sub
         integer :: icls_coarse, ncls_sub, nptcls_sub, box_coarse
         real    :: mskdiam_sub, moldiam_sub
-        
         if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 500)
         if( .not. cline%defined('nparts')         ) THROW_HARD('NPARTS need to be defined')
         if( .not. cline%defined('nthr')           ) THROW_HARD('NTHR need to be defined')
- 
+        if( .not. cline%defined('mkdir')          ) call cline%set('mkdir', 'yes')
         ! master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call spproj%read(params%projfile)
-
-        print *, '# particles: ', params%nptcls
-
         ! do first pass of coarse ab initio 2D
         cline_coarse_abinitio2D = cline
         call cline_coarse_abinitio2D%set('mskdiam',          0.)
@@ -51,10 +48,11 @@ contains
         call cline_coarse_abinitio2D%set('lpstop',    LP_COARSE)
         call cline_coarse_abinitio2D%set('center',        'yes')
         call cline_coarse_abinitio2D%set('cls_init',     'rand')
-
         call cline_coarse_abinitio2D%printline
-
         call xabinitio2D%execute(cline_coarse_abinitio2D)
+        call spproj%read(params%projfile)
+
+        print *, 'read projfile: ', params%projfile%to_char()
 
         ! estimate per coarse-class mask diameters
         cavgs_coarse = read_cavgs_into_imgarr(spproj)
@@ -71,21 +69,50 @@ contains
             mskdiam_sub = moldiam_sub * MSK_EXP_FAC
 
             print *, 'coarse class index: ', icls_coarse, ' estimated mask diameter: ', mskdiam_sub
-
+            
             ! (2) extract subproject from coarse clustering (class index)
             projname_sub = 'subproj'//int2str_pad(icls_coarse,2)
             projfile_sub = 'subproj'//int2str_pad(icls_coarse,2)//'.simple'
-            call cline_extract_subproj%set('projfile',    params%projfile)
-            call cline_extract_subproj%set('subprojname', projname_sub)
-            call cline_extract_subproj%set('class',       icls_coarse)
-            call xextract_subproj%execute(cline_extract_subproj)
+            ! get class labels
+            class_labels = spproj%os_ptcl2D%get_all_asint('class')
+            ! update project info
+            call cline_new_subproject%set('projname', projname_sub) 
+            call spproj_sub%update_projinfo(cline_new_subproject)
+            ! update computer environment
+            call spproj_sub%update_compenv(cline_new_subproject)
+            ! copy relevant project fields
+            spproj_sub%os_stk    = spproj%os_stk
+            spproj_sub%os_ptcl2D = spproj%os_ptcl2D
+            spproj_sub%os_ptcl3D = spproj%os_ptcl3D            
+            ! compress ptcl 2D & 3D fields
+            allocate(state_labels(size(class_labels)))
+            where(class_labels == icls_coarse)
+                state_labels = 1.0
+            else where
+                state_labels = 0.0
+            endwhere
+            call spproj_sub%os_ptcl2D%set_all('state', state_labels)
+            call spproj_sub%os_ptcl3D%set_all('state', state_labels)
+            call spproj_sub%prune_particles
+            deallocate(state_labels)
+            ! write subproject file
+            call spproj_sub%write 
+
+
 
             ! (3) execute distributed ab initio 2D on subproject with dynamically estimated ncls
-            call spproj_sub%read(projfile_sub)
+
             nptcls_sub = spproj_sub%get_nptcls()
+
+            print *, 'nptcls_sub: ', nptcls_sub
+
             ncls_sub   = max(NCLS_FINE_MIN, min(NCLS_FINE_MAX, nint(real(nptcls_sub) / real(params%nptcls_per_cls))))
+            
+            print *, 'ncls_sub: ', ncls_sub
+
             ! setup command line
             cline_subproj_abinitio2D = cline
+            call cline_subproj_abinitio2D%set('prg',      'abinitio2D')
             call cline_subproj_abinitio2D%set('projfile', projfile_sub)
             call cline_subproj_abinitio2D%set('ncls',         ncls_sub)
             call cline_subproj_abinitio2D%set('mskdiam',   mskdiam_sub)
@@ -96,6 +123,8 @@ contains
             call cline_subproj_abinitio2D%printline
 
             call xabinitio2D%execute(cline_subproj_abinitio2D)
+            call spproj_sub%kill
+            call simple_chdir('../')
         end do
 
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****', print_simple = .false.)
