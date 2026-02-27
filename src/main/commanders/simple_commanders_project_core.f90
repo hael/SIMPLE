@@ -461,9 +461,13 @@ contains
             if( cline%defined('clustind') )then
                 call spproj%os_ptcl2D%get_pinds(params%clustind, 'cluster', pinds)
             else
-                call spproj%os_ptcl2D%get_pinds(params%clustind, 'class',   pinds)
+                call spproj%os_ptcl2D%get_pinds(params%class,    'class',   pinds)
             endif
             n = size(pinds)
+            if( n == 0 )then
+                THROW_WARN('Size of index array zero, aborting...')
+                return
+            endif
             call spproj%write_substk(pinds, params%outstk)
             ! extract previous oris
             os_ptcl2D_prev = spproj%os_ptcl2D%extract_subset(pinds)

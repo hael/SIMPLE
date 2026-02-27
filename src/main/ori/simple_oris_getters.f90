@@ -536,7 +536,8 @@ contains
                 call rt%kill
             endif
         else
-            deallocate(indices,mask)
+            allocate(indices(0))
+            deallocate(mask)
         endif
     end subroutine get_pinds
 
