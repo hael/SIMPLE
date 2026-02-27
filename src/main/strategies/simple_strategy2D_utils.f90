@@ -1002,63 +1002,54 @@ contains
     end subroutine calc_cavg_offset
 
     subroutine test_strat2D_utils
-        type(parameters), target    :: params
-        type(image)         :: test
+        use simple_molecule_data,           only: molecule_data,  sars_cov2_spkgp_6vxx
+        use simple_atoms,                   only: atoms
+        use simple_simple_volinterp,        only: reproject
+        type(inpl_struct), allocatable  :: alg_info1(:), alg_info2(:,:)
+        type(image), allocatable        :: stk(:), reproj_stk(:)
+        type(parameters)    :: params
         type(cmdline)       :: cline
-        type(inpl_struct), allocatable  :: alg_info1(:), alg_info2(:,:), alg_info_tmp(:)
-        type(image), allocatable    :: stk(:), tmp_stk(:)
-        type(image) :: img, tmp
-        integer :: i, j, nimgs = 10, ldim(3) = [256, 256, 1]
-        real    :: mskdiam, smpd = 3.0, hp = 20., lp = 3.0, trs = 20.
-        logical :: passed = .true. 
+        type(image)         :: img, vol
+        type(string)        :: pdb_file, vol_file
+        type(oris)          :: spiral
+        type(atoms)         :: molecule
+        type(molecule_data) :: mol
+        integer             :: i, nimgs
+        real                :: mskdiam, smpd, hp, lp, trs, cen(3)
+        integer, parameter  :: NPROJ = 5
+        params%smpd   = 3.
+        params%lp     = 3.
+        params%trs    = 5.
+        params%ctf    = 'no'
         params%objfun = 'cc'
-        params%box = 256
-        params%nthr = 1
-        params%ctf = 'no'
-        params%trs = 20.
+        mol = sars_cov2_spkgp_6vxx()
+        pdb_file = '6VXX.pdb'
+        vol_file = '6VXX.mrc'
+        call molecule%pdb2mrc( pdb_file, vol_file, params%smpd, mol=mol)
+        call find_ldim_nptcls(vol_file, params%ldim, params%nptcls)
+        params%box = params%ldim(1)
+        params%mskdiam = params%smpd * params%ldim(1) / 2.
         call params%new(cline)
+        call vol%new(params%ldim, params%smpd)
+        call vol%read(vol_file)
+        call spiral%new(NPROJ, is_ptcl=.false.)
+        call spiral%spiral()
+        reproj_stk = reproject(vol, spiral)
+        nimgs = 10
         allocate(stk(nimgs))
-        allocate(alg_info1(nimgs))
-        allocate(alg_info2(nimgs, nimgs))
-        call img%new(ldim, smpd)
-        call img%gauimg(ldim(1) / 6, 0.2)
-        call img%rtsq(20., 30., 30.)
-        call tmp%new(ldim, smpd)
-        call tmp%gauimg(ldim(1) / 8, 0.4)
-        call tmp%rtsq(30.,-10., -10.)
-        call img%add(tmp)
-        call tmp%zero()
-        call tmp%ran(0.1)
-        call img%add(tmp)
-        call tmp%zero()
-        call img%add(tmp)
-        stk(1) = img
-        do i = 2, nimgs
-            call stk(i)%new(ldim, smpd)
-            call stk(i)%copy(img)
-            call stk(i)%rtsq(20.*real(i),3.*real(i),3.*real(i))
-            call stk(i)%vis()
-        end do
-        alg_info1 = match_imgs2ref(params, hp, lp, trs, img, stk)
+        call stk(1)%copy(reproj_stk(2))
+        call stk(1)%masscen(cen)
+        call stk(1)%shift(cen)
+        call stk(1)%vis()
+        do i = 2, nimgs  
+            call stk(i)%copy(stk(1))
+            call stk(i)%rtsq(real(i)*10., 0., 0.) 
+        end do 
+        ! match_imgs2ref searches shifts
+        alg_info1 = match_imgs2ref(params, hp, lp, trs, stk(1), stk)
+        ! match_imgs does not search shifts
         alg_info2 = match_imgs(params, hp, lp, trs, stk, stk)
-        ! ! rotate images
-        allocate(tmp_stk(nimgs))
-        tmp_stk = stk 
-        call rtsq_imgs(nimgs, alg_info1, tmp_stk)
-        ! check rtsq images
-        do i = 1, nimgs 
-            print *, 'corr', alg_info1(i)%corr
-            print *, 'angle:', alg_info1(i)%e3
-            print *, 'x:', alg_info1(i)%x
-            print *, 'y:', alg_info1(i)%y
-        end do
-        ! check match_imgs2ref
-        ! check match_imgs
-
-        ! if(passed) then 
-        !     print *, 'SIMPLE_STRATEGY2D_UTILS UNIT TEST TEST PASSED'
-        ! else 
-        !     print *, 'SIMPLE_STRATEGY2D_UTILS UNIT TEST TEST FAILED'
-        ! end if 
+        print *, alg_info2(1,2)%corr
+        print *, alg_info2(3,1)%corr
     end subroutine test_strat2D_utils
 end module simple_strategy2D_utils
