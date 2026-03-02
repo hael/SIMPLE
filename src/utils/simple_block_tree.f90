@@ -3,7 +3,6 @@ use simple_core_module_api
 use simple_srchspace_map,    only: srchspace_map
 use simple_multi_dendro,     only: multi_dendro
 use simple_binary_tree,      only: bt_node
-use simple_strategy2D_utils, only: calc_cluster_cavgs_dmat
 use simple_corrmat,          only: calc_inpl_invariant_cc_nomirr
 use simple_image,            only: image
 use simple_parameters,       only: parameters
@@ -95,7 +94,7 @@ contains
         integer, allocatable       :: labels(:), refs(:)
         real,    allocatable       :: distmat(:,:), sub_distmat(:,:)
         integer                    :: i, j, ntrees, itree, nrefs, nspace, nspace_sub
-        real                       :: inplrotdist, dtmp, oa_minmax(2)
+        real                       :: inplrotdist, dtmp
         nspace     = eulspace%get_noris()
         nspace_sub = eulspace_sub%get_noris()
         allocate(distmat(nspace_sub, nspace))
@@ -115,7 +114,6 @@ contains
         call block_tree%new(labels)
         ntrees = block_tree%get_n_trees()
         write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
-        !$omp parallel do default(shared) proc_bind(close) private(itree,refs,nrefs,sub_distmat,sub_imgs,i,j,oi,oj,osym,inplrotdist,dtmp) schedule(static)
         do itree = 1, ntrees
             refs  = block_tree%get_tree_refs(itree)
             nrefs = size(refs)
@@ -128,13 +126,11 @@ contains
             allocate(sub_imgs(nrefs))
             ! need images corresponding to refs in sub tree
             sub_imgs = refimgs(refs)
-            oa_minmax  = [0.,1.]
-            ! sub_distmat = calc_cluster_cavgs_dmat(params, sub_imgs, oa_minmax, 'cc')
             sub_distmat = calc_inpl_invariant_cc_nomirr(params, params%hp, params%lp, params%trs, sub_imgs)
-            call block_tree%build_tree_from_subdistmat(itree, refs, sub_distmat, LINK_AVERAGE)
+            call normalize_minmax(sub_distmat)
+            call block_tree%build_tree_from_subdistmat(itree, refs, sub_distmat, LINK_SINGLE)
             deallocate(sub_distmat, refs, sub_imgs)
         end do
-        !$omp end parallel do
         deallocate(distmat)
         if (allocated(labels)) deallocate(labels)
         if( DEBUG) print *, 'Finished building block tree.'
