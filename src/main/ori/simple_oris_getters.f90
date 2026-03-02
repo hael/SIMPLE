@@ -536,6 +536,7 @@ contains
                 call rt%kill
             endif
         else
+            if( allocated(indices) ) deallocate(indices)
             allocate(indices(0))
             deallocate(mask)
         endif
