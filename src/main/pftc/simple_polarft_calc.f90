@@ -187,7 +187,6 @@ type :: polarft_calc
     ! ===== RESTORE: simple_polarft_ops_restore.f90
     procedure          :: polar_cavger_merge_eos_and_norm2D
     procedure          :: polar_cavger_merge_eos_and_norm
-    procedure          :: polar_cavger_calc_and_write_frcs_and_eoavg
     procedure          :: polar_prep2Dref
     procedure          :: polar_cavger_gen2Dclassdoc
     procedure          :: polar_filterrefs
@@ -211,6 +210,7 @@ type :: polarft_calc
     procedure, private :: write_pft_array
     procedure, private :: write_ctf2_array_local
     procedure, private :: write_ctf2_array
+    procedure, private :: get_pft_array_dims
     procedure, private :: open_pft_array_for_read
     procedure, private :: transfer_pft_array_buffer
     procedure, private :: read_pft_array
@@ -734,21 +734,13 @@ interface
         class(string),       intent(in)    :: fname
     end subroutine polar_cavger_merge_eos_and_norm2D
 
-    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop )
-        class(polarft_calc),  intent(inout) :: self
-        type(oris),           intent(in)    :: reforis
-        type(sym),            intent(in)    :: symop
-    end subroutine polar_cavger_merge_eos_and_norm
-
-    module subroutine polar_cavger_calc_and_write_frcs_and_eoavg( self, clsfrcs, update_frac, fname, cline )
-        use simple_cmdline, only: cmdline
-        use simple_class_frcs, only: class_frcs
+    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
-        class(class_frcs),   intent(inout) :: clsfrcs
-        real,                intent(in)    :: update_frac
-        class(string),       intent(in)    :: fname
+        type(oris),          intent(in)    :: reforis
+        type(sym),           intent(in)    :: symop
         type(cmdline),       intent(in)    :: cline
-    end subroutine polar_cavger_calc_and_write_frcs_and_eoavg
+        real,                intent(in)    :: update_frac
+    end subroutine polar_cavger_merge_eos_and_norm
 
     module subroutine polar_prep2Dref( self, clsfrcs, icls, gaufilt )
         use simple_class_frcs, only: class_frcs
@@ -892,6 +884,12 @@ interface
         real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         class(string),       intent(in) :: fname
     end subroutine write_ctf2_array
+
+    module subroutine get_pft_array_dims( self, fname, pftsz, kfromto, nrefs )
+        class(polarft_calc),      intent(in)  :: self
+        class(string),            intent(in)  :: fname
+        integer,                  intent(out) :: pftsz, kfromto(2), nrefs
+    end subroutine get_pft_array_dims
 
     module subroutine open_pft_array_for_read( self, fname, array, funit, dims, buffer )
         class(polarft_calc),      intent(in)    :: self
