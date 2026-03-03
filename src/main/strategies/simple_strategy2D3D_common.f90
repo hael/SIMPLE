@@ -1033,9 +1033,9 @@ contains
             end do
             !$omp end parallel do
             ! Center prior to memoization
-            if( (trim(params%center)=='yes') .and. (trim(params%center_type)=='params') .and.&
-                &(params%pgrp.eq.'c1') .and. (.not.params%l_update_frac) .and.&
-                &(params%nstates==1) .and. params%l_doshift )then
+            if( (trim(params%center)=='yes')   .and. (trim(params%center_type)=='params') .and.&
+                    &(params%pgrp(:2).eq.'c1') .and. (.not.params%l_update_frac)          .and.&
+                    &(params%nstates==1)       .and.       params%l_doshift )then
                 call build%pftc%center_3Dpolar_refs(build%spproj_field, build%eulspace)
             endif
             ! Memoize
