@@ -300,8 +300,8 @@ contains
                 frac_best     = 1.0 ! means it does not control sampling, greedy selection
                 endif
                 if( istage > SYMSRCH_STAGE )then
-                overlap       = 0.90 ! early stopping
-                fracsrch      = 90.  ! early stopping
+                overlap       = merge(0.85,0.90,l_polar) ! early stopping
+                fracsrch      = 90.                      ! early stopping
                 else
                 overlap       = 0.99 ! no early stopping before symmetry search
                 fracsrch      = 99.  ! no early stopping before symmetry search
@@ -319,8 +319,8 @@ contains
                 else
                 frac_best     = 0.85 ! means sampling is done from top-ranking 85% particles in class
                 endif
-                overlap       = 0.90 ! early stopping
-                fracsrch      = 90.  ! early stopping
+                overlap       = merge(0.85,0.90,l_polar) ! early stopping
+                fracsrch      = 90.                      ! early stopping
                 snr_noise_reg = 6.0
         end select
         ! Specific options for polar representation
