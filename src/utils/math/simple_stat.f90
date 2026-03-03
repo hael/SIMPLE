@@ -933,6 +933,65 @@ contains
         corr2distweight = 2.d0 * (1.d0-real(cc,dp)) * real(npix,dp) / real(tau,dp)
     end function corr2distweight
 
+    ! sampling methods
+
+    subroutine power_sampling( P, n, corrs, order, nb, ind, rank, cc )
+        use simple_rnd, only: ran3
+        real,    intent(in)    :: P
+        integer, intent(in)    :: n, nb
+        real,    intent(inout) :: corrs(n), cc
+        integer, intent(inout) :: order(n), ind, rank
+        real    :: cdf(nb), r
+        integer :: i
+        if( nb == 1 )then
+            rank = n
+            ind  = maxloc(corrs,dim=1)
+            cc   = corrs(ind)
+            return
+        endif
+        order = (/(i,i=1,n)/)
+        call hpsort(corrs, order)
+        cdf = corrs(n-nb+1:n)
+        if( all(cdf<TINY) )then
+            rank = n
+            ind  = order(rank)
+            cc   = corrs(rank)
+            return
+        endif
+        where( cdf < TINY ) cdf = 0.
+        do i = 2,nb
+            cdf(i) = cdf(i) + cdf(i-1)
+        enddo
+        cdf = cdf / sum(cdf)
+        r   = ran3()
+        r   = min(1.,max(0.,1.-r**P))
+        rank = 0
+        do i = 1,nb
+            if( cdf(i) > r )then
+                rank = i
+                exit
+            endif
+        enddo
+        if( rank == 0 ) rank = nb
+        rank = n - nb + rank ! rank of selected value
+        ind  = order(rank)   ! index
+        cc   = corrs(rank)   ! value
+    end subroutine power_sampling
+
+    subroutine squared_sampling( n, corrs, order, nb, ind, rank, cc )
+        integer, intent(in)    :: n, nb
+        real,    intent(inout) :: corrs(n), cc
+        integer, intent(inout) :: order(n), ind, rank
+        call power_sampling( 2.0, n, corrs, order, nb, ind, rank, cc)
+    end subroutine squared_sampling
+
+    pure integer function neighfrac2nsmpl( neighfrac, n )
+        real,    intent(in) :: neighfrac
+        integer, intent(in) :: n
+        neighfrac2nsmpl = nint(real(n)*(neighfrac/3.))
+        neighfrac2nsmpl = max(2,min(neighfrac2nsmpl, n))
+    end function neighfrac2nsmpl
+
     !>   Kolmogorov-Smirnov test to deduce equivalence or non-equivalence
     !>  between two distributions.
     !          The routine returns the K-S statistic d, and the significance

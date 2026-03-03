@@ -18,12 +18,11 @@ type(commander_make_pickrefs)           :: xmake_pickrefs
 
 ! CLUSTER2D PROGRAMS
 type(commander_make_cavgs)              :: xmake_cavgs
-type(commander_cluster2D)               :: xcluster2D
+type(commander_cluster2D_distr_worker)  :: xcluster2D_distr_worker
 type(commander_cluster2D_distr)         :: xcluster2D_distr
 type(commander_cavgassemble)            :: xcavgassemble
 type(commander_rank_cavgs)              :: xrank_cavgs
 type(commander_export_cavgs)            :: xexport_cavgs
-type(commander_prob_tab2D)              :: xprob_tab2D
 
 ! REFINE3D PROGRAMS
 type(commander_refine3D)                :: xrefine3D
@@ -136,7 +135,7 @@ select case(prg)
     case( 'make_cavgs' )
         call xmake_cavgs%execute(cline)
     case( 'cluster2D' )
-        call xcluster2D%execute(cline)
+        call xcluster2D_distr_worker%execute(cline)
     case( 'cluster2D_distr' )
         call xcluster2D_distr%execute(cline)
     case( 'cavgassemble' )
@@ -145,8 +144,6 @@ select case(prg)
         call xrank_cavgs%execute(cline)
     case( 'export_cavgs' )
         call xexport_cavgs%execute(cline)
-    case( 'prob_tab2D' )
-        call xprob_tab2D%execute(cline)
 
     ! REFINE3D PROGRAMS
     case( 'refine3D' )

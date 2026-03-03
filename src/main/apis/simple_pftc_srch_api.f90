@@ -13,4 +13,5 @@ use simple_sigma2_binfile,  only: sigma2_binfile
 use simple_sp_project,      only: sp_project
 use simple_stack_io,        only: stack_io
 use simple_starproject,     only: starproject
+use simple_stat,            only: power_sampling, neighfrac2nsmpl, squared_sampling
 end module simple_pftc_srch_api

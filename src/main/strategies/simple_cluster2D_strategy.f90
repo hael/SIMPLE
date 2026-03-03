@@ -133,18 +133,13 @@ contains
         logical,                         intent(out)   :: converged
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(starproject) :: starproj
-        if( .not. params%l_worker_distr )then
-            call cline%set('startit',    which_iter)
-            call cline%set('which_iter', which_iter)
-            call cline%set('extr_iter',  params%extr_iter)
-            call cline%set('outfile', ALGN_FBODY//int2str_pad(params%part,params%numlen)//METADATA_EXT)
-        endif
+        call cline%set('startit',    which_iter)
+        call cline%set('which_iter', which_iter)
+        call cline%set('extr_iter',  params%extr_iter)
+        call cline%set('outfile', ALGN_FBODY//int2str_pad(params%part,params%numlen)//METADATA_EXT)
         ! Execute alignment (cluster2D_exec handles everything: refs prep, alignment, cavgs)
         call cluster2D_exec(params, build, cline, which_iter, converged)
-        if( params%l_worker_distr )then
-            converged = .true. ! Worker subprocesses execute one iteration and exit
-            return
-        endif
+
         ! Euclid sigma2 consolidation for next iteration
         if( params%l_needs_sigma )then
             call cline%set('which_iter', which_iter + 1)
@@ -160,7 +155,7 @@ contains
         type(parameters),                intent(in)     :: params
         type(builder),                   intent(inout)  :: build
         integer,                         intent(in)     :: which_iter
-        if( .not. params%l_worker_distr ) call gen_jpeg( which_iter ) 
+        call gen_jpeg( which_iter ) 
     end subroutine inmem_finalize_iteration
 
     subroutine inmem_cleanup(self, params)
@@ -175,7 +170,7 @@ contains
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         integer,                         intent(in)    :: last_iter
-        if( .not. params%l_worker_distr ) call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        call build%spproj%write_segment_inside(params%oritype, params%projfile)
     end subroutine inmem_finalize_run
 
     ! ========================================================================

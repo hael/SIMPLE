@@ -23,15 +23,10 @@ type, extends(commander_base) :: commander_cluster2D
     procedure :: execute      => exec_cluster2D
 end type commander_cluster2D
 
-type, extends(commander_base) :: commander_prob_tab2D
+type, extends(commander_base) :: commander_cluster2D_distr_worker
   contains
-    procedure :: execute      => exec_prob_tab2D
-end type commander_prob_tab2D
-
-type, extends(commander_base) :: commander_prob_tab2D_distr
-  contains
-    procedure :: execute      => exec_prob_tab2D_distr
-end type commander_prob_tab2D_distr
+    procedure :: execute      => exec_cluster2D_distr_worker
+end type commander_cluster2D_distr_worker
 
 type, extends(commander_base) :: commander_ppca_denoise_classes
   contains
@@ -50,24 +45,15 @@ contains
         class(cluster2D_strategy), allocatable :: strategy
         type(simple_nice_communicator)         :: nice_communicator
         type(string)                           :: finalcavgs
-        logical                                :: converged, l_stream, l_worker_distr
+        logical                                :: converged, l_stream
         integer                                :: iter
         ! Initialize
         call cline%set('prg','cluster2D')
-
-        !!!!!!!!!!!!! Replace this when this becomes the only workflow for cluster2D
         call set_cluster2D_defaults(cline)
-
-        
         l_stream       = .false.
         if( cline%defined('stream') ) l_stream = cline%get_carg('stream')=='yes'
         if( l_stream ) call cline%set('stream','no')
         call params%new(cline)
-        ! flag subprocess executed through simple_private_exec 
-        params%l_worker_distr = cline%defined('part')
-        if( str_has_substr(params%refine, 'prob') )then
-            THROW_HARD('REFINE=prob* is unsupported in cluster2D')
-        endif
         call build%build_spproj(params, cline, wthreads=.true.)
         call build%build_general_tbox(params, cline, do3d=.false.)
         call build%build_strategy2D_tbox(params)
@@ -75,14 +61,12 @@ contains
         if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
         call handle_objfun(params, cline)
         call cline%set('mkdir', 'no')
-        if( .not. params%l_worker_distr ) then
-            ! Nice communicator
-            call nice_communicator%init(params%niceprocid, params%niceserver)
-            nice_communicator%stat_root%stage = "initialising"
-            call nice_communicator%cycle()
-            if(cline%defined("niceserver")) call cline%delete('niceserver')
-            if(cline%defined("niceprocid")) call cline%delete('niceprocid')
-        endif
+        ! Nice communicator
+        call nice_communicator%init(params%niceprocid, params%niceserver)
+        nice_communicator%stat_root%stage = "initialising"
+        call nice_communicator%cycle()
+        if(cline%defined("niceserver")) call cline%delete('niceserver')
+        if(cline%defined("niceprocid")) call cline%delete('niceprocid')
         ! This needs to be before init_cluster2D_refs since it uses which_iter
         params%which_iter = max(1, params%startit)
         iter = params%which_iter - 1
@@ -104,36 +88,32 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
-            if( .not. params%l_worker_distr ) then
-                nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
-                call nice_communicator%cycle()
-            endif
+            nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
+            call nice_communicator%cycle()
             ! Strategy handles everything: alignment + cavgs + convergence
             call strategy%execute_iteration(params, build, cline, iter, converged)
             call strategy%finalize_iteration(params, build, iter)
             if( converged .or. iter >= params%maxits ) exit
         end do
-        if( .not. params%l_worker_distr )then
-            ! Cleanup
-            nice_communicator%stat_root%stage = "terminating"
-            call nice_communicator%cycle()
-            call strategy%finalize_run(params, build, cline, iter)
-            ! At the end:
-            if( trim(params%restore_cavgs).eq.'yes' )then
-                if( file_exists(FRCS_FILE) )then
-                    call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
-                endif
-                call build%spproj%write_segment_inside('out', params%projfile)
-                if( .not. params%l_polar )then
-                    finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//MRC_EXT
-                    call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
-                endif
+        ! Cleanup
+        nice_communicator%stat_root%stage = "terminating"
+        call nice_communicator%cycle()
+        call strategy%finalize_run(params, build, cline, iter)
+        ! At the end:
+        if( trim(params%restore_cavgs).eq.'yes' )then
+            if( file_exists(FRCS_FILE) )then
+                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
             endif
-            call strategy%cleanup(params)
-            call cline%set('endit', iter)
-            call nice_communicator%terminate()
-            call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
+            call build%spproj%write_segment_inside('out', params%projfile)
+            if( .not. params%l_polar )then
+                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//MRC_EXT
+                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+            endif
         endif
+        call strategy%cleanup(params)
+        call cline%set('endit', iter)
+        call nice_communicator%terminate()
+        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         if (allocated(strategy)) deallocate(strategy)
         call build%kill_general_tbox()
         call build%kill_strategy2D_tbox()
@@ -143,8 +123,8 @@ contains
     subroutine exec_cluster2D_distr_worker(self, cline)
         use simple_cluster2D_common,   only: handle_objfun
         use simple_strategy2D_matcher, only: cluster2D_exec
-        class(commander_base),   intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
+        class(commander_cluster2D_distr_worker), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         logical          :: converged
@@ -153,8 +133,6 @@ contains
         ! flag subprocess executed through simple_private_exec 
         if( .not. cline%defined('part')    ) THROW_HARD('PART must be defined for distributed worker execution')
         if( .not. cline%defined('outfile') ) THROW_HARD('OUTFILE must be defined for distributed worker execution')
-        ! this is the distributed worker, set the flag accordingly
-        params%l_worker_distr = .true.
         call build%build_spproj(params, cline, wthreads=.true.)
         call build%build_general_tbox(params, cline, do3d=.false.)
         call build%build_strategy2D_tbox(params)
@@ -178,7 +156,7 @@ contains
     !     call exec_cluster2D_unified(self, cline)
     ! end subroutine exec_cluster2D
 
-    ! Replace exec_cluster2D_distr
+    ! ! Replace exec_cluster2D_distr
     ! subroutine exec_cluster2D_distr(self, cline)
     !     class(commander_cluster2D_distr), intent(inout) :: self
     !     class(cmdline),                   intent(inout) :: cline
@@ -193,15 +171,13 @@ contains
         type(commander_scale)             :: xscale
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_cavgassemble)      :: xcavgassemble
-        type(commander_prob_tab2D_distr)  :: xprob_tab2D_distr
-         type(simple_nice_communicator)   :: nice_communicator
+        type(simple_nice_communicator)   :: nice_communicator
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
         type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_calc_sigma
         type(cmdline) :: cline_scalerefs
-        type(cmdline) :: cline_prob_tab2D_distr
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
         type(string)              :: benchfname
@@ -393,15 +369,6 @@ contains
             params%extr_iter = params%extr_iter + 1
             call job_descr%set('extr_iter', int2str(params%extr_iter))
             call cline%set('extr_iter', params%extr_iter)
-            ! build probability table
-            if( str_has_substr(params%refine, 'prob') )then
-                cline_prob_tab2D_distr = cline
-                call cline_prob_tab2D_distr%set('refs',      refs)
-                call cline_prob_tab2D_distr%set('frcs',      FRCS_FILE)
-                call cline_prob_tab2D_distr%set('startit',   iter)
-                call cline_prob_tab2D_distr%set('extr_iter', params%extr_iter)
-                call xprob_tab2D_distr%execute(cline_prob_tab2D_distr)
-            endif
             ! updates
             call job_descr%set('refs', refs)
             call job_descr%set('startit', int2str(iter))
@@ -516,9 +483,8 @@ contains
         type(commander_make_cavgs)        :: xmake_cavgs
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_scale)             :: xscale
-        type(commander_prob_tab2D_distr)  :: xprob_tab2D_distr
         type(simple_nice_communicator)    :: nice_communicator
-        type(cmdline)             :: cline_make_cavgs, cline_scalerefs, cline_prob_tab2D
+        type(cmdline)             :: cline_make_cavgs, cline_scalerefs
         type(parameters)          :: params
         type(builder),     target :: build
         type(starproject)         :: starproj
@@ -670,19 +636,6 @@ contains
                 nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
                 call nice_communicator%cycle()
                 call cline%set('which_iter', params%which_iter)
-                ! refine=prob
-                if( str_has_substr(params%refine, 'prob') )then
-                    cline_prob_tab2D = cline
-                    call cline_prob_tab2D%set('prg',        'prob_tab2D')
-                    call cline_prob_tab2D%set('which_iter', params%which_iter)
-                    call cline_prob_tab2D%set('startit',    params%which_iter)
-                    call cline_prob_tab2D%set('refs',       params%refs)
-                    call cline_prob_tab2D%set('frcs',       FRCS_FILE)
-                    call cline_prob_tab2D%set('extr_iter',  params%extr_iter)
-                    call xprob_tab2D_distr%execute( cline_prob_tab2D )
-                    ! read back sampling
-                    call build%spproj%read_segment(params%oritype, params%projfile)
-                endif
                 ! stochastic search
                 call cluster2D_exec( params, build, cline, params%startit, converged )
                 ! objective functions
@@ -787,190 +740,6 @@ contains
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         endif
     end subroutine exec_cluster2D
-
-    subroutine exec_prob_tab2D_distr( self, cline )
-        use simple_eul_prob_tab2D,     only: eul_prob_tab2D
-        class(commander_prob_tab2D_distr), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        integer,       allocatable :: pinds(:)
-        type(builder)              :: build
-        type(parameters)           :: params
-        type(commander_prob_tab2D) :: xprob_tab2D
-        type(eul_prob_tab2D)       :: eulprob
-        type(cmdline)              :: cline_prob_tab2D
-        type(qsys_env)             :: qenv
-        type(chash)                :: job_descr
-        integer :: nptcls
-        logical :: l_maxpop, l_stream
-        l_stream = .false.
-        if(cline%defined('stream')) l_stream = cline%get_carg('stream').eq.'yes'
-        call cline%set('mkdir',   'no')
-        call cline%set('stream',  'no')
-        call cline%set('oritype', 'ptcl2D')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        if( l_stream ) call cline%set('stream', 'yes')
-        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        ! Whether to weight based-on the top maxpop particles
-        l_maxpop = cline%defined('maxpop') .and. (params%maxpop > 0)
-        ! sample particles
-        if( params%l_update_frac )then
-            call build%spproj_field%sample4update_rnd([1,params%nptcls], params%update_frac, nptcls, pinds, .true.)
-        else
-            call build%spproj_field%sample4update_all([1,params%nptcls], nptcls, pinds, .true.)
-        endif
-        ! communicate to project file
-        call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        ! more prep
-        call eulprob%new(params, build, pinds)
-        ! generating all scores
-        cline_prob_tab2D = cline
-        call cline_prob_tab2D%set('prg', 'prob_tab2D' )
-        ! execution
-        if( .not.cline_prob_tab2D%defined('nparts') )then
-            ! shared memory
-            call xprob_tab2D%execute(cline_prob_tab2D)
-        else
-            ! setup the environment for distributed execution
-            call qenv%new(params, params%nparts, nptcls=params%nptcls)
-            call cline_prob_tab2D%gen_job_descr(job_descr)
-            ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        endif
-        ! reading scores from all parts
-        call eulprob%read_table_parts_to_glob
-        ! perform assignment
-        if( l_stream )then
-            select case(trim(params%refine))
-                case('prob_smpl')
-                    call eulprob%assign_smpl(build%spproj_field, l_maxpop)
-                case DEFAULT
-                    THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
-            end select
-        else
-            if( params%which_iter == 1 )then
-                ! Always greedy assignement with first iteration
-                call eulprob%assign_greedy(l_maxpop)
-            else
-                select case(trim(params%refine))
-                case('prob')
-                    if( params%extr_iter <= params%extr_lim )then
-                        call eulprob%normalize_table
-                        call eulprob%assign_prob(build%spproj_field, l_maxpop)
-                    else
-                        call eulprob%assign_smpl(build%spproj_field, l_maxpop)
-                    endif
-                case('prob_smpl')
-                    call eulprob%assign_smpl(build%spproj_field, l_maxpop)
-                case('prob_greedy')
-                    call eulprob%assign_greedy(l_maxpop)
-                case DEFAULT
-                    THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
-                end select
-            endif
-        endif
-        ! write
-        call eulprob%write_assignment(string(ASSIGNMENT_FBODY)//'.dat')
-        ! cleanup
-        call eulprob%kill
-        call cline_prob_tab2D%kill
-        call qenv%kill
-        call job_descr%kill
-        call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_prob_tab2D_distr'))
-        call qsys_cleanup(params)
-        call simple_end('**** SIMPLE_PROB_TAB2D_DISTR NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prob_tab2D_distr
-
-    subroutine exec_prob_tab2D( self, cline )
-        use simple_strategy2D_matcher
-        use simple_strategy2D3D_common, only: set_bp_range2D
-        use simple_eul_prob_tab2D,      only: eul_prob_tab2D
-        class(commander_prob_tab2D), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        integer,          allocatable :: pinds(:)
-        type(string)                  :: fname
-        type(polarft_calc)            :: pftc
-        type(builder)                 :: build
-        type(parameters)              :: params
-        type(eul_prob_tab2D)          :: eulprob
-        real    :: frac_srch_space
-        integer :: nptcls
-        logical :: l_ctf, l_stream, l_alloc_read_cavgs
-        l_stream = .false.
-        if(cline%defined('stream')) l_stream = cline%get_carg('stream') .eq.'yes'
-        call cline%set('mkdir', 'no')
-        call cline%set('stream','no')
-        call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        ! Nothing is done with regards to sampling other than reproducing
-        ! what was generated in the driver (prob_tab2D_distr, above)
-        if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
-        else
-            THROW_HARD('exec_prob_tab2D requires prior particle sampling')
-        endif
-        ! Resolution range
-        frac_srch_space = build%spproj_field%get_avg('frac')
-        if( file_exists(params%frcs) ) call build%clsfrcs%read(params%frcs)
-        call set_bp_range2D( params, build, cline, params%which_iter, frac_srch_space )
-        ! Read references
-        l_alloc_read_cavgs = .true.
-        if( .not.l_distr_exec_glob )then
-            l_alloc_read_cavgs = params%which_iter==1
-        endif
-        if( l_alloc_read_cavgs )then
-            if( .not. cline%defined('refs') )then
-                THROW_HARD('need refs to be part of command line for cluster2D execution')
-            endif
-            call cavger_new(params, build, pinds, alloccavgs=.true.)
-            call cavger_read_all
-        else
-            call cavger_new(params, build, pinds, alloccavgs=.false.)
-        endif
-        ! init scorer & prep references
-        call preppftc4align2D(nptcls, params%which_iter, l_stream)
-        ! minor cleanup
-        call cavger_kill(dealloccavgs=l_distr_exec_glob)
-        ! prep particles
-        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=params%fromp).ne.'no'
-        call prep_batch_particles2D(nptcls)
-        call build_batch_particles2D(nptcls, pinds)
-        ! init prob table
-        call eulprob%new(params, build, pinds)
-        fname = DIST_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-        ! Fill probability table
-        if( l_stream )then
-            select case(trim(params%refine))
-                case('prob_smpl')
-                    call eulprob%fill_table_smpl_stream(build%spproj_field)
-                case DEFAULT
-                    THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
-            end select
-        else
-            if( params%which_iter == 1 )then
-                ! always greedy in-plane in first iteration
-                call eulprob%fill_table_greedy
-            else
-                select case(trim(params%refine))
-                    case('prob','prob_smpl')
-                        call eulprob%fill_table_smpl
-                    case('prob_greedy')
-                        call eulprob%fill_table_greedy
-                    case DEFAULT
-                        THROW_HARD('Unsupported REFINE flag: '//trim(params%refine))
-                end select
-            endif
-        endif
-        call pftc%kill
-        ! call build%esig%kill
-        call clean_batch_particles2D
-        ! write
-        call eulprob%write_table(fname)
-        ! clean & end
-        call eulprob%kill
-        call build%kill_general_tbox
-        call build%kill_strategy2D_tbox
-        call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_prob_tab'))
-        call simple_end('**** SIMPLE_PROB_TAB2D NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prob_tab2D
 
     subroutine exec_ppca_denoise_classes( self, cline )
         use simple_imgproc,       only: make_pcavecs

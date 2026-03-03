@@ -2,7 +2,6 @@
 module simple_strategy2D_srch
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
-use simple_eul_prob_tab2D,   only: eul_prob_tab2D
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_builder,          only: builder
 implicit none

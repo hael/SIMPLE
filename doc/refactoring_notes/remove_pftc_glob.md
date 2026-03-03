@@ -40,7 +40,6 @@ This refactoring eliminates the global `pftc_glob` variable from the SIMPLE code
 - `simple_strategy2D_greedy_smpl.f90`
 - `simple_strategy2D_inpl.f90`
 - `simple_strategy2D_inpl_smpl.f90`
-- `simple_strategy2D_prob.f90`
 - `simple_strategy2D_snhc.f90`
 - `simple_strategy2D_snhc_smpl.f90`
 - `simple_strategy2D_tseries.f90`
@@ -296,14 +295,12 @@ When adding new strategy implementations:
 - simple_strategy2D_greedy_smpl.f90
 - simple_strategy2D_inpl.f90
 - simple_strategy2D_inpl_smpl.f90
-- simple_strategy2D_prob.f90
 - simple_strategy2D_snhc.f90
 - simple_strategy2D_snhc_smpl.f90
 - simple_strategy2D_tseries.f90
 - simple_strategy2D_matcher.f90
 - simple_strategy2D_alloc.f90
 - simple_strategy2D_utils.f90
-- simple_eul_prob_tab2D.f90
 
 **Strategy3D Implementations (9 files):**
 - simple_strategy3D_greedy.f90
