@@ -329,7 +329,11 @@ contains
                 if( l_distr_exec_glob )then
                     call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
                 else
-                    call polar_restoration
+                    p_ptr%refs = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//MRC_EXT
+                    call b_ptr%pftc%polar_cavger_merge_eos_and_norm(b_ptr%eulspace,&
+                    &b_ptr%pgrpsyms, cline, b_ptr%spproj_field%get_update_frac())
+                    call b_ptr%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+                    call b_ptr%pftc%polar_cavger_kill
                 endif
                 call b_ptr%pftc%kill
             else
@@ -386,17 +390,6 @@ contains
                 call fclose(fnr)
             endif
         endif
-
-      contains
-
-        subroutine polar_restoration()
-            p_ptr%refs = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//MRC_EXT
-            call b_ptr%pftc%polar_cavger_merge_eos_and_norm(reforis=b_ptr%eulspace, symop=b_ptr%pgrpsyms)
-            call b_ptr%pftc%polar_cavger_calc_and_write_frcs_and_eoavg(b_ptr%clsfrcs, b_ptr%spproj_field%get_update_frac(), string(FRCS_FILE), cline)
-            call b_ptr%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call b_ptr%pftc%polar_cavger_kill
-        end subroutine polar_restoration
-
     end subroutine refine3D_exec
     
 end module simple_strategy3D_matcher

@@ -442,6 +442,22 @@ contains
     end subroutine write_ctf2_array
 
     ! private method
+    module subroutine get_pft_array_dims( self, fname, pftsz, kfromto, nrefs )
+        class(polarft_calc), intent(in)  :: self
+        class(string),       intent(in)  :: fname
+        integer,             intent(out) :: pftsz, kfromto(2), nrefs
+        integer :: io_stat, dims(4), funit
+        if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
+        call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('read_pft_array; fopen failed: '//fname%to_char(), io_stat)
+        read(unit=funit,pos=1) dims
+        call fclose(funit)
+        pftsz   = dims(1)
+        kfromto = dims(2:3)
+        nrefs   = dims(4)
+    end subroutine get_pft_array_dims
+
+    ! private method
     module subroutine open_pft_array_for_read( self, fname, array, funit, dims, buffer )
         class(polarft_calc),      intent(in)    :: self
         class(string),            intent(in)    :: fname
