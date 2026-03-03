@@ -122,7 +122,6 @@
       - `simple_convergence.f90` — for checking convergence of 2D and 3D search
       - `simple_euclid_sigma2.f90` — the abstract data type for sigma2 used when objfun=euclid
       - `simple_eul_prob_tab.f90` — the core probability table routines used for probabilistic 3D search
-      - `simple_eul_prob_tab2D.f90` — the core probability table routines used for probabilistic 2D search
       - `simple_micrograph_generator.f90` — used for generating dose fractionated micrographs from movies
       - `simple_ori.f90` — an orientation (abstract data type for per-particle data)
       - `simple_ori_tester.f90` — unit test routines for the ori class
@@ -302,7 +301,6 @@
         - `simple_strategy2D_inpl.f90` — 2D strategy for in-plane refinement
         - `simple_strategy2D_inpl_smpl.f90` — 2D strategy for in-plane refinement with probabilistic sampling
         - `simple_strategy2D_matcher.f90` — high-level search routines for the cluster2D and abinitio2D applications
-        - `simple_strategy2D_prob.f90` — 2D strategy for probabilistic projection matching
         - `simple_strategy2D_snhc.f90` — 2D strategy for stochastic neighborhood hill climbing
         - `simple_strategy2D_snhc_smpl.f90` — 2D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
         - `simple_strategy2D_srch.f90` — common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class

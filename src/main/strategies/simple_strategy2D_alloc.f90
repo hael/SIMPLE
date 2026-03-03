@@ -1,7 +1,6 @@
 !@descr: array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
 module simple_strategy2D_alloc
 use simple_pftc_srch_api
-use simple_eul_prob_tab2D, only: eul_prob_tab2D, neighfrac2nsmpl
 implicit none
 
 public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob
@@ -16,7 +15,6 @@ type strategy2D_alloc
     integer              :: snhc_smpl_ninpl  = 0        !       =snhc_smpl
     integer              :: smpl_ninpl       = 0        !       =greedy_smpl
     integer              :: smpl_ncls        = 0        !       =greedy_smpl
-    class(eul_prob_tab2D), pointer :: probtab => null() ! pointer to probabibility table (refine=prob*)
     ! per class
     integer, allocatable :: cls_pops(:)
     ! per particle
@@ -29,7 +27,6 @@ type(strategy2D_alloc) :: s2D
 contains
 
     subroutine clean_strategy2D
-        if( associated(s2D%probtab)   ) nullify(s2D%probtab)
         ! per class
         if( allocated(s2D%cls_pops)   ) deallocate(s2D%cls_pops)
         ! per particle

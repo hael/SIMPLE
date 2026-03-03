@@ -2,7 +2,6 @@
 module simple_strategy2D_inpl_smpl
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
-use simple_eul_prob_tab2D,   only: power_sampling
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: builder

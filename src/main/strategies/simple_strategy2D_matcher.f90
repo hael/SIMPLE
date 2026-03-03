@@ -13,7 +13,6 @@ use simple_strategy2D_greedy,      only: strategy2D_greedy
 use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
 use simple_strategy2D_inpl,        only: strategy2D_inpl
 use simple_strategy2D_inpl_smpl,   only: strategy2D_inpl_smpl
-use simple_strategy2D_prob,        only: strategy2D_prob
 use simple_strategy2D_snhc,        only: strategy2D_snhc
 use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
 use simple_strategy2D_srch,        only: strategy2D_spec
@@ -38,7 +37,6 @@ contains
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( params, build, cline, which_iter, converged )
         use simple_convergence,    only: convergence
-        use simple_eul_prob_tab2D, only: eul_prob_tab2D
         use simple_decay_funs,     only: inv_cos_decay, extremal_decay2D
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
@@ -49,14 +47,13 @@ contains
         character(len=STDLEN)                    :: refine_flag
         real,                      allocatable   :: states(:), incr_shifts(:,:)
         integer,                   allocatable   :: pinds(:), batches(:,:)
-        type(eul_prob_tab2D),           target   :: probtab
         type(ori)             :: orientation
         type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
-        logical :: l_partial_sums, l_update_frac, l_ctf, l_prob, l_snhc, l_polar
+        logical :: l_partial_sums, l_update_frac, l_ctf, l_snhc, l_polar
         logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs
 
         ! assign parameters pointer
@@ -76,7 +73,6 @@ contains
         refine_flag    = trim(p_ptr%refine)
         l_snhc         = str_has_substr(refine_flag, 'snhc')
         l_greedy       = str_has_substr(refine_flag, 'greedy')
-        l_prob         = str_has_substr(refine_flag, 'prob')
         l_stream       = trim(p_ptr%stream).eq.'yes'
         l_update_frac  = p_ptr%l_update_frac  ! refers to particles sampling
         l_partial_sums = l_update_frac              ! to apply fractional momentum to class averages
@@ -92,31 +88,18 @@ contains
             l_update_frac = .false.
             if( (which_iter>1) .and. (p_ptr%update_frac<0.99) )then
                 p_ptr%l_update_frac = .true.
-                l_partial_sums            = .true.
+                l_partial_sums      = .true.
             else
                 p_ptr%update_frac   = 1.
                 p_ptr%l_update_frac = .false.
-                l_partial_sums            = .false.
+                l_partial_sums      = .false.
             endif
-        endif
-        if( l_prob )then
-            ! all search decisions are made beforehand in prob_tab2D
-            l_snhc         = .false.
-            l_greedy       = .false.
-            l_update_frac  = p_ptr%l_update_frac
-            l_partial_sums = l_update_frac .and. (p_ptr%extr_iter>1)
         endif
         l_polar = trim(p_ptr%polar).eq.'yes'
 
         ! PARTICLE SAMPLING
         if( allocated(pinds) ) deallocate(pinds)
-        if( l_prob )then
-            ! generation of random sample and incr of updatecnts delegated to prob_tab2D_distr
-            call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top],&
-            &nptcls2update, pinds )
-        else
-            call sample_ptcls4update2D([p_ptr%fromp,p_ptr%top], l_update_frac, nptcls2update, pinds)
-        endif
+        call sample_ptcls4update2D([p_ptr%fromp,p_ptr%top], l_update_frac, nptcls2update, pinds)
 
         ! SNHC LOGICS
         neigh_frac = 0.
@@ -196,13 +179,6 @@ contains
         allocate(strategy2Dsrch(batchsz_max))
         if( L_BENCH_GLOB ) rt_prep_pftc = toc(t_prep_pftc)
 
-        ! READ THE ASSIGNMENT FOR PROB MODE
-        if( l_prob )then
-            call probtab%new(p_ptr, b_ptr, pinds)
-            call probtab%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
-            s2D%probtab => probtab ! table accessible to strategies
-        endif
-
         ! STOCHASTIC IMAGE ALIGNMENT
         rt_align         = 0.
         l_ctf            = b_ptr%spproj%get_ctfflag('ptcl2D',iptcl=p_ptr%fromp).ne.'no'
@@ -248,42 +224,37 @@ contains
                                 allocate(strategy2D_snhc          :: strategy2Dsrch(iptcl_batch)%ptr)
                         end select
                     endif
-                else
-                    ! offline mode, based on iteration
-                    if( l_prob )then
-                        allocate(strategy2D_prob                    :: strategy2Dsrch(iptcl_batch)%ptr)
-                    else
-                        if( str_has_substr(refine_flag,'inpl') )then
-                            if( refine_flag.eq.'inpl' )then
-                                allocate(strategy2D_inpl            :: strategy2Dsrch(iptcl_batch)%ptr)
-                            else if( refine_flag.eq.'inpl_smpl' )then
-                                allocate(strategy2D_inpl_smpl       :: strategy2Dsrch(iptcl_batch)%ptr)
-                            endif
-                        else if( l_greedy .or. (updatecnt==1 .or. (.not.b_ptr%spproj_field%has_been_searched(iptcl))) )then
-                            ! first iteration | refine=*greedy*
-                            if( trim(p_ptr%tseries).eq.'yes' )then
-                                if( l_np_cls_defined )then
-                                    allocate(strategy2D_tseries     :: strategy2Dsrch(iptcl_batch)%ptr)
-                                else
-                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
-                                endif
+                else      
+                    if( str_has_substr(refine_flag,'inpl') )then
+                        if( refine_flag.eq.'inpl' )then
+                            allocate(strategy2D_inpl            :: strategy2Dsrch(iptcl_batch)%ptr)
+                        else if( refine_flag.eq.'inpl_smpl' )then
+                            allocate(strategy2D_inpl_smpl       :: strategy2Dsrch(iptcl_batch)%ptr)
+                        endif
+                    else if( l_greedy .or. (updatecnt==1 .or. (.not.b_ptr%spproj_field%has_been_searched(iptcl))) )then
+                        ! first iteration | refine=*greedy*
+                        if( trim(p_ptr%tseries).eq.'yes' )then
+                            if( l_np_cls_defined )then
+                                allocate(strategy2D_tseries     :: strategy2Dsrch(iptcl_batch)%ptr)
                             else
-                                select case(trim(refine_flag))
-                                case('greedy_smpl')
-                                    allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
-                                case DEFAULT ! is refine=greedy
-                                    allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
-                                end select
+                                allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
                             endif
                         else
-                            ! iteration>1 & refine/=*greedy*
                             select case(trim(refine_flag))
-                                case('snhc_smpl')
-                                    allocate(strategy2D_snhc_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
-                                case DEFAULT ! is refine=snhc
-                                    allocate(strategy2D_snhc        :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case('greedy_smpl')
+                                allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case DEFAULT ! is refine=greedy
+                                allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
                             end select
                         endif
+                    else
+                        ! iteration>1 & refine/=*greedy*
+                        select case(trim(refine_flag))
+                            case('snhc_smpl')
+                                allocate(strategy2D_snhc_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case DEFAULT ! is refine=snhc
+                                allocate(strategy2D_snhc        :: strategy2Dsrch(iptcl_batch)%ptr)
+                        end select
                     endif
                 endif
                 ! Search specification & object
@@ -313,26 +284,21 @@ contains
         enddo ! Batch loop
 
         ! BALANCING OF NUMBER OF PARTICLES PER CLASS
-        if( l_prob )then
-            ! done before, when assigning class from table
+        if( l_stream )then
+            if( p_ptr%l_update_frac .and. p_ptr%maxpop>0 )then
+                call b_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
+                    &p_ptr%maxpop, p_ptr%nparts)
+            endif
         else
-            if( l_stream )then
-                if( p_ptr%l_update_frac .and. p_ptr%maxpop>0 )then
-                    call b_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
-                        &p_ptr%maxpop, p_ptr%nparts)
-                endif
-            else
-                if( p_ptr%maxpop>0 )then
-                    call b_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
-                        &p_ptr%maxpop, p_ptr%nparts)
-                endif
+            if( p_ptr%maxpop>0 )then
+                call b_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
+                    &p_ptr%maxpop, p_ptr%nparts)
             endif
         endif
 
         ! CLEAN-UP
         call clean_strategy2D
         call orientation%kill
-        call probtab%kill
         do iptcl_batch = 1,batchsz_max
             nullify(strategy2Dsrch(iptcl_batch)%ptr)
         end do
