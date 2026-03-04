@@ -28,13 +28,11 @@ type :: reconstructor_eo
     real                :: mag_correction=1.  !< scaling factor to correct for slice insertion, cropping & padding
     integer             :: ldim(3), box=0, boxpd=0
     integer             :: nstates=1, numlen=2, filtsz=0
-    logical             :: automsk    = .false.
     logical             :: exists     = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
     ! SETTERS
-    procedure          :: set_automsk
     procedure          :: reset_all
     procedure          :: reset_eos
     procedure, private :: reset_eoexp
@@ -97,14 +95,13 @@ contains
         self%numlen  = self%p_ptr %numlen
         self%filtsz  = fdim(self%box) - 1
         self%msk     = real(self%box / 2) - COSMSKHALFWIDTH - 1.
-        self%automsk = self%p_ptr %l_filemsk .and. self%p_ptr %l_envfsc
         ! oversampled Fourier interpolation, so construct this at native size
         self%mag_correction = real(self%p_ptr %box) ! consistent with the current scheme
         self%ldim           = [self%box,self%box,self%box]
         ! create composites
-        if( self%automsk )then
-            call self%envmask%new([self%box,self%box,self%box],self%smpd)
-            call self%envmask%read(self%p_ptr %mskfile)
+        call self%envmask%new([self%box,self%box,self%box],self%smpd)
+        if( self%p_ptr%l_filemsk )then
+            call self%envmask%read(self%p_ptr%mskfile)
         endif
         call self%even%new(self%ldim, self%p_ptr %smpd)
         call self%even%alloc_rho(self%p_ptr, spproj, expand=l_expand)
@@ -119,12 +116,6 @@ contains
     end subroutine new
 
     ! SETTERS
-
-    subroutine set_automsk( self, l_which )
-        class(reconstructor_eo), intent(inout) :: self
-        logical,                 intent(in)    :: l_which
-        self%automsk = l_which
-    end subroutine set_automsk
 
     !>  \brief  resets all
     subroutine reset_all( self )
@@ -470,16 +461,20 @@ contains
             call odd%write(add2fbody(fname_odd,MRC_EXT,'_unfil'))
             if( .not. l_have_fsc )then
                 ! masking
-                if( self%automsk )then
-                    call even%mul(self%envmask)
-                    call odd%mul(self%envmask)
-                else if( trim(self%p_ptr %automsk).eq.'yes' )then
-                    call self%envmask%automask3D(self%p_ptr , even, odd, trim(self%p_ptr %automsk).eq.'tight')
+                if( self%p_ptr%l_filemsk .and. self%p_ptr%l_envfsc )then
                     call even%zero_env_background(self%envmask)
                     call odd%zero_env_background(self%envmask)
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
+                else if( trim(self%p_ptr%automsk).ne.'no' )then
+                    call self%envmask%automask3D(self%p_ptr , even, odd, trim(self%p_ptr%automsk).eq.'tight')
                     call self%envmask%write(string(MSKVOL_FILE))
+                    if( self%p_ptr%l_envfsc )then
+                        call even%zero_env_background(self%envmask)
+                        call odd%zero_env_background(self%envmask)
+                        call even%mul(self%envmask) 
+                        call odd%mul(self%envmask)
+                    endif
                 else
                     call even%mask3D_soft(self%msk, backgr=0.)
                     call odd%mask3D_soft(self%msk, backgr=0.)
@@ -534,17 +529,20 @@ contains
             call even%write(fname_even, del_if_exists=.true.)
             call odd%write(fname_odd,   del_if_exists=.true.)
             if( .not. l_have_fsc )then
-                ! masking
-                if( self%automsk )then
-                    call even%mul(self%envmask)
-                    call odd%mul(self%envmask)
-                else if( trim(self%p_ptr %automsk).eq.'yes' )then
-                    call self%envmask%automask3D(self%p_ptr , even, odd, trim(self%p_ptr %automsk).eq.'tight')
+                if( self%p_ptr%l_filemsk .and. self%p_ptr%l_envfsc )then
                     call even%zero_env_background(self%envmask)
                     call odd%zero_env_background(self%envmask)
                     call even%mul(self%envmask)
                     call odd%mul(self%envmask)
+                else if( trim(self%p_ptr%automsk).ne.'no' )then
+                    call self%envmask%automask3D(self%p_ptr , even, odd, trim(self%p_ptr%automsk).eq.'tight')
                     call self%envmask%write(string(MSKVOL_FILE))
+                    if( self%p_ptr%l_envfsc )then
+                        call even%zero_env_background(self%envmask)
+                        call odd%zero_env_background(self%envmask)
+                        call even%mul(self%envmask) 
+                        call odd%mul(self%envmask)
+                    endif
                 else
                     call even%mask3D_soft(self%msk, backgr=0.)
                     call odd%mask3D_soft(self%msk, backgr=0.)
@@ -580,7 +578,9 @@ contains
         call even_tmp%copy(even)
         call odd_tmp%copy(odd)
         ! masking
-        if( self%automsk )then
+        if( self%p_ptr%l_filemsk .and. self%p_ptr%l_envfsc )then
+            call even_tmp%zero_env_background(self%envmask)
+            call odd_tmp%zero_env_background(self%envmask)
             call even_tmp%mul(self%envmask)
             call odd_tmp%mul(self%envmask)
         else

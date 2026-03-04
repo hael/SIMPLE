@@ -894,9 +894,6 @@ contains
                 ! global volume name update
                 recname = VOL_FBODY//int2str_pad(s,2)
                 volname = recname//MRC_EXT
-                if( params%l_filemsk .and. params%l_envfsc )then
-                    call build%eorecvols(s)%set_automsk(.true.)
-                endif
                 eonames(1) = recname//'_even'//MRC_EXT
                 eonames(2) = recname//'_odd'//MRC_EXT
                 if( params%l_ml_reg )then
