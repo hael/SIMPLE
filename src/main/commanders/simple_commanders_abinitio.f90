@@ -494,7 +494,6 @@ contains
         type(sp_project)                :: spproj
         type(simple_nice_communicator)  :: nice_communicator
         integer :: istage, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
-        logical :: l_stream
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -525,9 +524,6 @@ contains
             endif
         endif
         ! make master parameters
-        l_stream = .false.
-        if( cline%defined('stream') ) l_stream = cline%get_carg('stream').eq.'yes'
-        call cline%delete('stream')
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call cline%delete('algorithm')
@@ -824,7 +820,6 @@ contains
         call nice_communicator%terminate(export_project=spproj)
         call spproj%kill
         call qsys_cleanup(params)
-        if( l_stream ) call simple_touch(ABINITIO3D_FINISHED)
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
 
     contains

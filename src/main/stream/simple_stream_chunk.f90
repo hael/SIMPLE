@@ -8,7 +8,6 @@ use simple_parameters,   only: parameters
 use simple_qsys_env,     only: qsys_env
 use simple_sp_project,   only: sp_project
 use simple_rec_list,     only: rec_list
-use simple_stream_utils, only: class_rejection
 use simple_qsys_funs,    only: qsys_cleanup
 implicit none
 

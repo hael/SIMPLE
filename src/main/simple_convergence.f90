@@ -141,7 +141,7 @@ contains
             if( ncls > 1 )then
                 converged = .false.
                 ! set limits for convergence
-                if( (params%l_update_frac) .or. (params%stream.eq.'yes') )then
+                if( (params%l_update_frac) .or. (params%stream2d.eq.'yes') )then
                     overlap_lim  = OVERLAP_2D_FRAC
                     fracsrch_lim = FRACSRCHSPACE_FRAC
                 else if( trim(params%tseries) .eq. 'yes' )then
@@ -156,7 +156,7 @@ contains
                 ! test for convergence
                 if( trim(params%refine).eq.'inpl' )then
                     converged = self%dist_inpl%avg < 0.5
-                else if( (params%l_update_frac) .or. (params%stream.eq.'yes') )then
+                else if( (params%l_update_frac) .or. (params%stream2d.eq.'yes') )then
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
                     self%progress = progress_estimate_2D(real(params%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
                 else if( trim(params%tseries) .eq. 'yes' )then

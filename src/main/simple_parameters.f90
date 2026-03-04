@@ -114,6 +114,7 @@ type :: parameters
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: srch_oris='yes'      !< whether to search orientations in multivolume assignment(yes|no){yes} 
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
+    character(len=3)          :: stream2d='no'        !< indicates streaming 2D clustering(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
@@ -483,11 +484,6 @@ type :: parameters
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization
     real    :: stoch_rate=100.     !< percentage of stoch in polar cavgs
-    real    :: stream_mean_threshold=MEAN_THRESHOLD         !< stream class rejection based on image mean (relative)
-    real    :: stream_rel_var_threshold=REL_VAR_THRESHOLD   !< stream class rejection based on image variance (relative)
-    real    :: stream_abs_var_threshold=ABS_VAR_THRESHOLD   !< stream class rejection based on image variance (absolute)
-    real    :: stream_tvd_theshold=TVD_THRESHOLD            !< stream class rejection based on total variation distance
-    real    :: stream_minmax_threshold=MINMAX_THRESHOLD     !< stream class rejection based on min.max absolute values
     real    :: tau=TAU_DEFAULT     !< for empirical scaling of cc-based particle weights
     real    :: tilt_thres=0.05
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
@@ -814,6 +810,7 @@ contains
         call check_carg('srch_oris',      self%srch_oris)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
+        call check_carg('stream2d',       self%stream2d)
         call check_carg('subprojname',    self%subprojname)
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
@@ -1074,11 +1071,6 @@ contains
         call check_rarg('snr',            self%snr)
         call check_rarg('snr_noise_reg',  self%snr_noise_reg)
         call check_rarg('stoch_rate',     self%stoch_rate)
-        call check_rarg('stream_mean_threshold',    self%stream_mean_threshold)
-        call check_rarg('stream_rel_var_threshold', self%stream_rel_var_threshold)
-        call check_rarg('stream_abs_var_threshold', self%stream_abs_var_threshold)
-        call check_rarg('stream_tvd_theshold',      self%stream_tvd_theshold)
-        call check_rarg('stream_minmax_threshold',  self%stream_minmax_threshold)
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)

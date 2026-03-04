@@ -73,15 +73,15 @@ contains
         refine_flag    = trim(p_ptr%refine)
         l_snhc         = str_has_substr(refine_flag, 'snhc')
         l_greedy       = str_has_substr(refine_flag, 'greedy')
-        l_stream       = trim(p_ptr%stream).eq.'yes'
-        l_update_frac  = p_ptr%l_update_frac  ! refers to particles sampling
+        l_stream       = trim(p_ptr%stream2d).eq.'yes'
+        l_update_frac  = p_ptr%l_update_frac        ! refers to particles sampling
         l_partial_sums = l_update_frac              ! to apply fractional momentum to class averages
         if( p_ptr%extr_iter == 1 )then
             l_greedy       = .true.     ! greedy start
             l_snhc         = .false.
             l_partial_sums = .false.
         else if( p_ptr%extr_iter > p_ptr%extr_lim )then
-            ! snhc_smpl turns to snhc after extremal phase
+            ! offline: snhc_smpl turns to snhc after extremal phase
             if( trim(refine_flag)=='snhc_smpl' ) refine_flag = 'snhc'
         endif
         if( l_stream )then
@@ -94,9 +94,10 @@ contains
                 p_ptr%l_update_frac = .false.
                 l_partial_sums      = .false.
             endif
+            ! alway snhc_smpl
+            if( trim(refine_flag)=='snhc' ) refine_flag = 'snhc_smpl'
         endif
         l_polar = trim(p_ptr%polar).eq.'yes'
-
         ! PARTICLE SAMPLING
         if( allocated(pinds) ) deallocate(pinds)
         call sample_ptcls4update2D([p_ptr%fromp,p_ptr%top], l_update_frac, nptcls2update, pinds)

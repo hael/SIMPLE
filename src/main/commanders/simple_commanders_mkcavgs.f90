@@ -226,15 +226,8 @@ contains
         real               :: clw
         integer            :: iterstr_start, iterstr_end, iter, io_stat, icls
         integer            :: pftsz, kfromto(2), ncls
-        logical            :: l_stream
         if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        l_stream = .false.
-        if( cline%defined('stream') )then
-            l_stream = cline%get_carg('stream')=='yes'
-            call cline%set('stream','no')
-        endif
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        if( l_stream ) params%stream = 'yes'
         if( cline%defined('which_iter') )then
             params%refs      = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//params%ext%to_char()
             params%refs_even = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//'_even'//params%ext%to_char()

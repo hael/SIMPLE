@@ -85,7 +85,7 @@ contains
             s2D%smpl_ncls  = max(1,min(s2D%smpl_ncls, ceiling(params%prob_athres/180.*real(params%ncls))))
         end select
         ! Sampling function power parameter
-        if( (trim(params%stream)=='yes') )then
+        if( (trim(params%stream2d)=='yes') )then
             s2D%power = EXTR_POWER
         else
             if( (trim(params%refine)=='snhc_smpl') .and. (params%extr_iter>params%extr_lim) )then
