@@ -301,8 +301,8 @@ subroutine set_ui_params
                                    'atom composition e.g. Pt', .true., '  ')
 
     call envfsc%set_param(         'envfsc',          'binary', 'Envelope mask e/o maps for FSC', &
-                                   'Envelope mask even/odd pairs prior to FSC calculation(yes|no){yes}', &
-                                   '(yes|no){yes}', .false., 'yes')
+                                   'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}', &
+                                   '(yes|no){no}', .false., 'no')
 
     call eo%set_param(             'eo',              'binary', 'Gold-standard FSC for filtering and resolution estimation', &
                                    'Gold-standard FSC for filtering and resolution estimation(yes|no){no}', &
