@@ -264,7 +264,7 @@ contains
             lplim = params%lp
             params%kfromto(2) = calc_fourier_index(lplim, params%box_crop, params%smpd_crop)
         else
-            if( trim(params%stream).eq.'yes' )then
+            if( trim(params%stream2d).eq.'yes' )then
                 if( file_exists(params%frcs) )then
                     lplim = build%clsfrcs%estimate_lp_for_align()
                 else
@@ -464,15 +464,10 @@ contains
         if( params%l_ml_reg )then
             ! no filtering
         else
-            if( params%l_lpset.and.(params%l_icm.or.params%l_gauref) )then
-                ! ICM/Gaussian filter only applied when lp is set, FRC filtering turned off
-                if( params%l_icm )then
-                    call img%ifft
-                    call img%ICM2D( params%lambda, verbose=.false. )
-                else if( params%l_gauref )then
-                    call img%fft
-                    call img%bpgau2d(0., params%gaufreq)
-                endif
+            if( params%l_lpset.and.params%l_gauref )then
+                ! Gaussian filter only applied when lp is set, FRC filtering turned off
+                call img%fft
+                call img%bpgau2d(0., params%gaufreq)
             else
                 ! FRC-based filtering
                 call build%clsfrcs%frc_getter(icls, frc)

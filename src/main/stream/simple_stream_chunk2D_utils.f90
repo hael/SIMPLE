@@ -75,7 +75,6 @@ contains
         call cline_cluster2D_chunk%set('center',    'no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
-        call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%set('mskdiam',   params%mskdiam)
         call cline_cluster2D_chunk%set('ncls',      params%ncls_start)
         call cline_cluster2D_chunk%set('sigma_est', params%sigma_est)

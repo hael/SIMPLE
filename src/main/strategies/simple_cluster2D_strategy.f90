@@ -203,7 +203,6 @@ contains
         type(cmdline)                     :: cline_cavgassemble, cline_calc_sigma
         type(string)                      :: str_iter, refs, refs_even, refs_odd
         real                              :: frac_srch_space
-        logical                           :: l_stream
         ! Update job description
         call cline%set('nparts',     params%nparts)
         call cline%set('startit',    which_iter)
@@ -252,8 +251,7 @@ contains
         ! Check convergence
         converged = self%conv%check_conv2D(params, cline, build%spproj_field, &
                                            build%spproj_field%get_n('class'), params%msk)
-        l_stream = trim(params%stream) .eq. 'yes'
-        if( .not. l_stream ) call progressfile_update(self%conv%get('progress'))
+        if( trim(params%stream2d).eq.'no' ) call progressfile_update(self%conv%get('progress'))
         frac_srch_space = 0.
         if( which_iter > 1 ) frac_srch_space = self%conv%get('frac_srch')
         ! Activate shift search if needed

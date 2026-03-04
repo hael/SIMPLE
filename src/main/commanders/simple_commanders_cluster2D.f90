@@ -45,19 +45,15 @@ contains
         class(cluster2D_strategy), allocatable :: strategy
         type(simple_nice_communicator)         :: nice_communicator
         type(string)                           :: finalcavgs
-        logical                                :: converged, l_stream
+        logical                                :: converged
         integer                                :: iter
         ! Initialize
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults(cline)
-        l_stream       = .false.
-        if( cline%defined('stream') ) l_stream = cline%get_carg('stream')=='yes'
-        if( l_stream ) call cline%set('stream','no')
         call params%new(cline)
         call build%build_spproj(params, cline, wthreads=.true.)
         call build%build_general_tbox(params, cline, do3d=.false.)
         call build%build_strategy2D_tbox(params)
-        if( l_stream ) call cline%set('stream','yes')
         if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
         call cline%set('mkdir', 'no')
         ! Nice communicator
@@ -77,7 +73,7 @@ contains
         ! Create strategy
         strategy = create_cluster2D_strategy(params, cline)
         call strategy%initialize(params, build, cline)
-        if(.not. l_stream) call progressfile_init()
+        if( trim(params%stream2d).eq.'no' ) call progressfile_init()
         ! Main loop
         do
             iter = iter + 1
@@ -143,7 +139,7 @@ contains
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
         call build%kill_general_tbox()
         call build%kill_strategy2D_tbox()
-        call simple_touch(CLUSTER2D_FINISHED)
+        ! call simple_touch(CLUSTER2D_FINISHED)
     end subroutine exec_cluster2D_distr_worker
 
     ! Replace exec_cluster2D
@@ -186,15 +182,9 @@ contains
         type(string)              :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
         real                      :: frac_srch_space
         integer                   :: nthr_here, iter, cnt, iptcl, ptclind, fnr
-        logical                   :: l_stream, l_converged, l_scale_inirefs
+        logical                   :: l_converged, l_scale_inirefs
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
-        ! streaming
-        l_stream = .false.
-        if( cline%defined('stream') )then
-            l_stream = cline%get_carg('stream')=='yes'
-        endif
-        call cline%set('stream','no') ! for parameters determination
         ! deal with # threads for the master process
         call set_master_num_threads(nthr_here, string('CLUSTER2D'))
         ! nice communicator init
@@ -205,7 +195,6 @@ contains
         if(cline%defined("niceprocid")) call cline%delete('niceprocid')
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
-        if( l_stream ) call cline%set('stream','yes')
         ! sanity check
         if( build%spproj%get_nptcls() == 0 )then
             THROW_HARD('no particles found! exec_cluster2D_distr')
@@ -331,7 +320,7 @@ contains
             call build%spproj%write_segment_inside(params%oritype,params%projfile)
         endif
         ! initialise progress monitor
-        if(.not. l_stream) call progressfile_init()
+        if( trim(params%stream2d).eq.'no') call progressfile_init()
         ! main loop
         iter = params%startit - 1
         do
@@ -365,7 +354,6 @@ contains
                 t_scheduled = tic()
             endif
             call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
-            call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 1')
             ! assemble alignment docs
             if( L_BENCH_GLOB )then
                 rt_scheduled = toc(t_scheduled)
@@ -383,7 +371,6 @@ contains
                 refs_odd  = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // params%ext%to_char()
                 call cline_cavgassemble%set('refs', refs)
                 call cline_cavgassemble%set('nthr', nthr_here)
-                call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
                 call xcavgassemble%execute(cline_cavgassemble)
                 if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
             endif
@@ -478,15 +465,10 @@ contains
         integer,      allocatable :: order(:), class_cnt(:), class_all(:)
         integer :: startit, i, cnt, iptcl, ptclind
         integer :: j, io_stat, funit, class_ind, class_max
-        logical :: converged, l_stream, l_ml_reg, l_scale_inirefs
+        logical :: converged, l_ml_reg, l_scale_inirefs
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        ! Streaming flag
-        l_stream = .false.
-        if( cline%defined('stream') )then
-            l_stream = cline%get_carg('stream')=='yes'
-        endif
         ! nice communicator init
         call nice_communicator%init(params%niceprocid, params%niceserver)
         nice_communicator%stat_root%stage = "initialising"
@@ -604,7 +586,7 @@ contains
                 endif
             endif
             ! initialise progress monitor
-            if(.not. l_stream) call progressfile_init()
+            if(trim(params%stream2d).eq.'no') call progressfile_init()
             ! Main loop
             do i = 1, params%maxits
                 params%which_iter = params%startit
@@ -1000,17 +982,13 @@ contains
         class(oris),    intent(inout) :: os
         type(parameters)  :: params
         type(convergence) :: conv
-        logical :: converged, l_stream
+        logical :: converged
         call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
-        l_stream = .false.
-        if( cline%defined('stream') )then
-            l_stream = cline%get_carg('stream') == 'yes'
-        endif
         ! convergence check
         converged = conv%check_conv2D(params, cline, os, os%get_n('class'), params%msk)
         ! Update progress file
-        if(.not. l_stream) call progressfile_update(conv%get('progress'))
+        if( trim(params%stream2d).eq.'no' ) call progressfile_update(conv%get('progress'))
         call cline%set('frac_srch', conv%get('frac_srch'))
         ! activates shift search
         if( params%l_doshift ) call cline%set('trs', params%trs)

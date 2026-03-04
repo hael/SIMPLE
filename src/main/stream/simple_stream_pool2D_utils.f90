@@ -207,7 +207,7 @@ contains
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('mskdiam',   params%mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
-        call cline_cluster2D_pool%set('stream',    'yes')
+        call cline_cluster2D_pool%set('stream2d',  'yes') ! the only place this flag should be turned on
         call cline_cluster2D_pool%set('nparts',    params%nparts)
         call cline_cluster2D_pool%delete('autoscale')
         ! when the 2D analysis is started from raw particles
@@ -747,9 +747,8 @@ contains
     end subroutine update_pool
 
     ! This controls the evolution of the pool alignement parameters:
-    ! lp, ICM, trs, extr_iter
+    ! lp, Gaussian filter, trs, extr_iter
     subroutine update_pool_aln_params
-        real,    parameter :: ICM_LAMBDA = 2.0
         integer, parameter :: ITERLIM    = 20
         integer, parameter :: ITERSHIFT  = 5
         real :: lp, lambda, gamma
@@ -769,15 +768,14 @@ contains
             ! Extremal iteration
             call cline_cluster2D_pool%set('extr_iter', pool_iter+1)
             call cline_cluster2D_pool%set('extr_lim',  ITERLIM)
-            ! ICM
-            lambda = ICM_LAMBDA * gamma
-            call cline_cluster2D_pool%set('icm',    'yes')
-            call cline_cluster2D_pool%set('lambda', lambda)
+            ! Gaussian filter
+            call cline_cluster2D_pool%set('gauref',  'yes')
+            call cline_cluster2D_pool%set('gaufreq', lp)
         else
             call cline_cluster2D_pool%set('trs', MINSHIFT)
-            call cline_cluster2D_pool%set('icm', 'no')
+            call cline_cluster2D_pool%set('gauref', 'no')
             call cline_cluster2D_pool%delete('extr_iter')
-            call cline_cluster2D_pool%delete('lambda')
+            call cline_cluster2D_pool%delete('gaufreq')
             call cline_cluster2D_pool%delete('lp')
         endif
     end subroutine update_pool_aln_params
