@@ -7,7 +7,7 @@ use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_
 use simple_commanders_imgops,  only: commander_scale
 implicit none
 
-public :: init_cluster2D_refs, handle_objfun
+public :: init_cluster2D_refs
 private
 #include "simple_local_flags.inc"
 
@@ -149,24 +149,5 @@ contains
             call xmake_cavgs%execute(cline_make_cavgs)
         endif
     end subroutine execute_make_cavgs
-
-    subroutine handle_objfun(params, cline)
-        type(parameters), intent(inout) :: params
-        class(cmdline),   intent(inout) :: cline
-        select case( params%cc_objfun )
-            case( OBJFUN_CC )
-                ! Making sure euclid options are turned off
-                params%l_needs_sigma = .false.
-                params%needs_sigma   = 'no'
-                call cline%set('ml_reg','no')
-                params%ml_reg        = 'no'
-                params%l_ml_reg      = .false.
-            case( OBJFUN_EUCLID )
-                ! Euclidean distance objective - sigma needed
-                ! All set by parameter initialization
-            case DEFAULT
-                THROW_HARD('Unknown objective function')
-        end select
-    end subroutine handle_objfun
 
 end module simple_cluster2D_common

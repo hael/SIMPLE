@@ -387,7 +387,6 @@ contains
                 trs       = stage_parms(1)%trslim
                 sh_first  = trim(params%sh_first)
                 center    = trim(params%center)
-                ! cc_iters  = 0
                 objfun    = 'euclid'
                 ! Filters deactivated
                 gauref    = 'no'
@@ -546,7 +545,6 @@ contains
             call cline_cluster2D%set('maxits',    minits)
             call cline_cluster2D%set('refine',    'greedy_smpl')
             call cline_cluster2D%set('objfun',    'euclid')
-            call cline_cluster2D%set('cc_iters',  0)
             call cline_cluster2D%set('trs',       stage_parms(NSTAGES)%trslim)
             call cline_cluster2D%set('sh_first',  params%sh_first)
             call cline_cluster2D%set('center',    'no')

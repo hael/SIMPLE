@@ -139,9 +139,8 @@ contains
         call cline%set('outfile', ALGN_FBODY//int2str_pad(params%part,params%numlen)//METADATA_EXT)
         ! Execute alignment (cluster2D_exec handles everything: refs prep, alignment, cavgs)
         call cluster2D_exec(params, build, cline, which_iter, converged)
-
         ! Euclid sigma2 consolidation for next iteration
-        if( params%l_needs_sigma )then
+        if( params%cc_objfun==OBJFUN_EUCLID )then
             call cline%set('which_iter', which_iter + 1)
             call xcalc_group_sigmas%execute(cline)
             call cline%set('which_iter', which_iter)
@@ -243,7 +242,7 @@ contains
             call cline%set('refs', refs)
         endif
         ! Sigma2 consolidation
-        if( params%l_needs_sigma )then
+        if( params%cc_objfun==OBJFUN_EUCLID )then
             cline_calc_sigma = cline
             call cline_calc_sigma%set('prg',        'calc_group_sigmas')
             call cline_calc_sigma%set('which_iter', which_iter + 1)

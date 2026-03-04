@@ -59,7 +59,6 @@ contains
         call build%build_strategy2D_tbox(params)
         if( l_stream ) call cline%set('stream','yes')
         if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
-        call handle_objfun(params, cline)
         call cline%set('mkdir', 'no')
         ! Nice communicator
         call nice_communicator%init(params%niceprocid, params%niceserver)
@@ -121,7 +120,6 @@ contains
     end subroutine exec_cluster2D_unified
 
     subroutine exec_cluster2D_distr_worker(self, cline)
-        use simple_cluster2D_common,   only: handle_objfun
         use simple_strategy2D_matcher, only: cluster2D_exec
         class(commander_cluster2D_distr_worker), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
@@ -136,7 +134,6 @@ contains
         call build%build_spproj(params, cline, wthreads=.true.)
         call build%build_general_tbox(params, cline, do3d=.false.)
         call build%build_strategy2D_tbox(params)
-        call handle_objfun(params, cline)
         params%which_iter = max(1, params%startit)
         params%extr_iter  = params%which_iter
         call cline%set('which_iter', int2str(params%which_iter))
@@ -209,18 +206,6 @@ contains
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
         if( l_stream ) call cline%set('stream','yes')
-        ! objective functions
-        select case( params%cc_objfun )
-        case( OBJFUN_CC )
-            ! making sure euclid options are turned off
-            params%l_needs_sigma = .false.
-            params%needs_sigma   = 'no'
-            call cline%set('ml_reg','no')
-            params%ml_reg        = 'no'
-            params%l_ml_reg      = .false.
-        case( OBJFUN_EUCLID )
-            ! all set
-        end select
         ! sanity check
         if( build%spproj%get_nptcls() == 0 )then
             THROW_HARD('no particles found! exec_cluster2D_distr')
@@ -402,8 +387,8 @@ contains
                 call xcavgassemble%execute(cline_cavgassemble)
                 if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
             endif
-            ! objfun=euclid, part 4: sigma2 consolidation
-            if( params%l_needs_sigma )then
+            ! objfun=euclid, sigma2 consolidation
+            if( params%cc_objfun==OBJFUN_EUCLID )then
                 call cline_calc_sigma%set('which_iter', params%which_iter+1)
                 call cline_calc_sigma%set('nthr',       nthr_here)
                 call xcalc_group_sigmas%execute(cline_calc_sigma)
@@ -492,8 +477,8 @@ contains
         real,         allocatable :: corrs(:), corrs_all(:)
         integer,      allocatable :: order(:), class_cnt(:), class_all(:)
         integer :: startit, i, cnt, iptcl, ptclind
-        integer :: iter_switch2euclid, j, io_stat, funit, class_ind, class_max
-        logical :: converged, l_stream, l_switch2euclid, l_ml_reg, l_scale_inirefs
+        integer :: j, io_stat, funit, class_ind, class_max
+        logical :: converged, l_stream, l_ml_reg, l_scale_inirefs
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
@@ -611,20 +596,13 @@ contains
             else
                 params%extr_iter = params%startit
             endif
-            ! objective functions
-            select case( params%cc_objfun )
-            case( OBJFUN_CC )
-                params%l_needs_sigma = .false.
-                params%needs_sigma   = 'no'
-                call cline%set('ml_reg','no')
-                params%ml_reg        = 'no'
-                params%l_ml_reg      = .false.
-            case( OBJFUN_EUCLID )
+            ! objective function specifics
+            if( params%cc_objfun==OBJFUN_EUCLID )then
                 fname_sigma = sigma2_star_from_iter(params%startit)
                 if( .not.file_exists(fname_sigma) )then
                     THROW_HARD('Sigma2 file does not exists: '//fname_sigma%to_char())
                 endif
-            end select
+            endif
             ! initialise progress monitor
             if(.not. l_stream) call progressfile_init()
             ! Main loop
@@ -638,8 +616,8 @@ contains
                 call cline%set('which_iter', params%which_iter)
                 ! stochastic search
                 call cluster2D_exec( params, build, cline, params%startit, converged )
-                ! objective functions
-                if( params%l_needs_sigma )then
+                ! objective function specifics
+                if( params%cc_objfun==OBJFUN_EUCLID )then
                     params%which_iter = params%which_iter + 1
                     call cline%set('which_iter', params%which_iter)
                     call xcalc_group_sigmas%execute(cline)

@@ -56,7 +56,6 @@ contains
         call cline_reconstruct3D%set('projfile',            projfile)
         call cline_reconstruct3D%set('pgrp',             params%pgrp)
         call cline_reconstruct3D%set('ml_reg',                  'no')
-        call cline_reconstruct3D%set('needs_sigma',             'no')
         call cline_reconstruct3D%set('objfun',                  'cc')
         call cline_reconstruct3D%delete('polar')
         ! no fractional update
@@ -494,7 +493,6 @@ contains
                 call cline_asymrec%set('pgrp',       params%pgrp_start)
                 call cline_asymrec%set('ml_reg',     'no') ! no ml reg for now
                 call cline_asymrec%set('objfun',     'cc')
-                call cline_asymrec%set('needs_sigma','no')
                 call cline_asymrec%delete('which_iter')
                 call cline_asymrec%delete('endit')
                 call xreconstruct3D%execute(cline_asymrec)
@@ -565,7 +563,6 @@ contains
         if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
         call cline_rec%delete('update_frac')
         call cline_rec%delete('endit')
-        call cline_rec%delete('needs_sigma')
         call cline_rec%delete('automsk')
         call cline_rec%delete('mskfile')
         call xreconstruct3D%execute(cline_rec)

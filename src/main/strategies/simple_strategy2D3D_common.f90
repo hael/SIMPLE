@@ -1045,7 +1045,7 @@ contains
             call prepare_polar_references(params, build, cline, batchsz)
         endif
         ! PREPARATION OF SIGMAS
-        if( params%l_needs_sigma )then
+        if( params%cc_objfun == OBJFUN_EUCLID )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call build%esig%new(params, build%pftc, fname, params%box)
             call build%esig%read_part(  build%spproj_field)
