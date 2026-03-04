@@ -99,7 +99,6 @@ contains
         call cline_cluster2D_chunk%delete('maxits')
         call cline_cluster2D_chunk%delete('extr_iter')
         call cline_cluster2D_chunk%delete('extr_lim')
-        ! call cline_cluster2D_chunk%delete('cc_iters')
         call cline_cluster2D_chunk%set('rank_cavgs', params%rank_cavgs)
         ! re-init with updated command-lines
         do ichunk = 1,params%nchunks

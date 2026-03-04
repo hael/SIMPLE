@@ -44,7 +44,7 @@ contains
         params%ncls_start = params%ncls ! backwards compatibility
         nptcls_per_chunk = params%nptcls_per_cls*params%ncls_start
         ncls_glob        = 0
-        l_update_sigmas  = params%l_needs_sigma
+        l_update_sigmas  = params%cc_objfun == OBJFUN_EUCLID ! only update sigmas for euclid-based clustering
         numlen           = len(int2str(params%nparts))
         l_no_chunks      = .false. ! will be using chunk indeed
         params%nparts_chunk = params%nparts ! required by chunk object, to remove

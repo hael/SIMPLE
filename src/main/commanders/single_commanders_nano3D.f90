@@ -117,13 +117,13 @@ contains
             call simple_copy_file(string(BINARY),   iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_BIN.mrc')
             call simple_copy_file(string(CCS),      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_CC.mrc')
             call simple_copy_file(string(SPLITTED), iter_dir//fbody_split//'_iter'//int2str_pad(i,3)//'.mrc')
-            if( params%l_needs_sigma )then
+            if( params%cc_objfun==OBJFUN_EUCLID )then
                 call simple_copy_file(string(SIGMA2_GROUP_FBODY)//int2str(endit)//STAR_EXT,&
                     &iter_dir//SIGMA2_GROUP_FBODY//int2str_pad(i,3)//STAR_EXT)
             endif
             ! clean
             call exec_cmdline('rm -f recvol_state01_iter*')
-            if( params%l_needs_sigma ) call exec_cmdline('rm -f '//SIGMA2_GROUP_FBODY//'*'//STAR_EXT)
+            if( params%cc_objfun==OBJFUN_EUCLID ) call exec_cmdline('rm -f '//SIGMA2_GROUP_FBODY//'*'//STAR_EXT)
             call del_file(ATOMS)
             call del_file(BINARY)
             call del_file(CCS)

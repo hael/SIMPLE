@@ -152,7 +152,6 @@ contains
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D') ! required for distributed call
         call cline_reconstruct3D_distr%delete('trail_rec')
         call cline_reconstruct3D_distr%delete('objfun')
-        call cline_reconstruct3D_distr%delete('needs_sigma')
         call cline_reconstruct3D_distr%delete('sigma_est')
         call cline_reconstruct3D_distr%delete('update_frac')
         call cline_reconstruct3D_distr%set('objfun', 'cc') ! ugly, but this is how it works in parameters
@@ -304,7 +303,6 @@ contains
             call cline_check_3Dconv%delete(vol%to_char())
             call cline_postprocess%delete(vol%to_char())
         enddo
-        if( trim(params%objfun).eq.'euclid' ) call cline%set('needs_sigma','yes')
         ! E/O PARTITIONING
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
@@ -347,9 +345,7 @@ contains
                     if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
                     deallocate(list)
                 endif
-                if( trim(params%objfun).eq.'euclid' )then
-                    call cline%set('needs_sigma','yes')
-                    call cline_reconstruct3D_distr%set('needs_sigma','yes')
+                if( params%cc_objfun==OBJFUN_EUCLID )then
                     call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -364,9 +360,7 @@ contains
                     call simple_copy_file(prev_refine_path//fsc_file, fsc_file)
                 end do
                 ! if we are doing objfun=euclid the sigma estimates need to be carried over
-                if( trim(params%objfun).eq.'euclid' )then
-                    call cline%set('needs_sigma','yes')
-                    call cline_reconstruct3D_distr%set('needs_sigma','yes')
+                if( params%cc_objfun==OBJFUN_EUCLID )then
                     call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -409,7 +403,6 @@ contains
                 cline_tmp = cline_reconstruct3D_distr
                 call cline_tmp%delete('trail_rec')
                 call cline_tmp%delete('objfun')
-                call cline_tmp%delete('needs_sigma')
                 call cline_tmp%delete('sigma_est')
                 call cline_tmp%set('objfun', 'cc') ! ugly, but this is how it works in parameters 
                 call xreconstruct3D_distr%execute( cline_tmp )
@@ -437,7 +430,7 @@ contains
                 vol_defined = .true.
             endif
             ! at this stage, we have both volume and 3D orientations (either random or previously estimated)
-            if( trim(params%objfun).eq.'euclid' )then
+            if( params%cc_objfun==OBJFUN_EUCLID )then
                 call cline_calc_group_sigmas%set('nthr', nthr_here)
                 if( (trim(params%first_sigmas).eq.'yes') )then
                     ! initial estimates have been calculated above with calc_pspec (that also generated a .star)
@@ -446,9 +439,6 @@ contains
                     if( .not.cline%defined('athres') ) call cline%set('athres', real(params%athres))
                     call xfirst_sigmas_distr%execute(cline)
                 endif
-                ! update command lines
-                call cline%set('needs_sigma','yes')
-                call cline_reconstruct3D_distr%set('needs_sigma','yes')
             endif
         endif
         ! prepare job description
@@ -752,10 +742,8 @@ contains
             endif
             ! objfun=euclid
             l_sigma = .false.
-            if( trim(params%objfun) == 'euclid' )then
+            if( params%cc_objfun == OBJFUN_EUCLID )then
                 l_sigma = .true.
-                call cline%set('needs_sigma','yes')
-                params%l_needs_sigma    = .true.
                 cline_calc_group_sigmas = cline
                 if( file_exists(SIGMA2_GROUP_FBODY//int2str(params%which_iter)//STAR_EXT) )then
                     ! it is assumed that we already have precalculated sigmas2 and all corresponding flags have been set

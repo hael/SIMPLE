@@ -34,7 +34,6 @@ character(16)           :: last_iteration_time = ""         ! string with last i
 integer                 :: current_jpeg_ntiles              ! number of used tiles in current JPEG
 integer                 :: current_jpeg_ntilesx             ! number of tiles in x
 integer                 :: current_jpeg_ntilesy             ! number of tiles in y
-integer                 :: iterswitch2euclid = -1           ! iteration index where pool switches to euclid objfun
 integer                 :: lim_ufrac_nptcls  = 0            ! threshold for fractional updates
 integer                 :: ncls_max                         ! maximum allowed classes
 integer                 :: ncls_rejected_glob               ! number of rejected classes
@@ -160,7 +159,7 @@ contains
         ncls_rejected_glob = 0
         orig_projfile      = params%projfile
         projfile4gui       = projfilegui
-        l_update_sigmas    = params%l_needs_sigma
+        l_update_sigmas    = params%cc_objfun == OBJFUN_EUCLID ! only update sigmas for euclid-based clustering
         params%nparts_pool = params%nparts ! backwards compatibility
         ! bookkeeping & directory structure
         numlen             = len(int2str(params%nparts))
@@ -180,12 +179,7 @@ contains
         ! commit to disk
         call pool_proj%write(string(POOL_DIR)//POOL_PROJFILE)
         ! reference generation
-        if( l_no_chunks )then
-            iterswitch2euclid = 0
-            ncls_glob         = params%ncls
-        else
-            iterswitch2euclid = -1 ! because objfun=euclid always
-        endif
+        if( l_no_chunks ) ncls_glob = params%ncls
         ! Pool command line
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
         call cline_cluster2D_pool%set('oritype',   'ptcl2D')

@@ -365,7 +365,6 @@ contains
         call cmd_dict%push('ndev',          '# deviations in one-cluster clustering{2.0}')
         call cmd_dict%push('ndev2D',        '# deviations for 2D classes selection/rejection{2.0}')
         call cmd_dict%push('ndocs',         '# documents')
-        call cmd_dict%push('needs_sigma',   'whether to calculate sigma2 during 3Drefinement')
         call cmd_dict%push('neg',           'invert contrast of images(yes|no)')
         call cmd_dict%push('newbox',        'new box for scaling (by Fourier padding/clipping')
         call cmd_dict%push('nframes',       '# frames{30}')

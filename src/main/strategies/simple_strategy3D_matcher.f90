@@ -246,7 +246,7 @@ contains
                     call strategy3Dsrch(iptcl_batch)%ptr%kill
                 endif
                 ! calculate sigma2 for ML-based refinement
-                if ( p_ptr%l_needs_sigma ) then
+                if ( p_ptr%cc_objfun == OBJFUN_EUCLID ) then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
                     call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')
@@ -277,7 +277,7 @@ contains
         call deallocate_class_samples(clssmp)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
-        if( p_ptr%l_needs_sigma ) call b_ptr%esig%write_sigma2
+        if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
 
         ! CALCULATE PARTICLE WEIGHTS
         if( trim(p_ptr%ptclw).eq.'yes' )then

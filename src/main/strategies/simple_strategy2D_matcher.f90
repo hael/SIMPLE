@@ -267,7 +267,7 @@ contains
                 ! keep track of incremental shift
                 incr_shifts(:,iptcl_batch) = strategy2Dsrch(iptcl_batch)%ptr%s%best_shvec
                 ! calculate sigma2 for ML-based refinement
-                if ( p_ptr%l_needs_sigma ) then
+                if ( p_ptr%cc_objfun==OBJFUN_EUCLID ) then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch)) ! incremental shift
                     call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'class')
@@ -306,7 +306,7 @@ contains
         deallocate(strategy2Dsrch,pinds,batches)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
-        if( p_ptr%l_needs_sigma ) call b_ptr%esig%write_sigma2
+        if( p_ptr%cc_objfun==OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
 
         ! OUTPUT ORIENTATIONS
         if( L_BENCH_GLOB ) t_projio = tic()
@@ -530,7 +530,7 @@ contains
         ! create the polarft_calc object
         call b_ptr%pftc%new(p_ptr, p_ptr%ncls, [1,batchsz_max], p_ptr%kfromto)
         ! objective functions & sigma
-        if( p_ptr%l_needs_sigma )then
+        if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
             fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
             call b_ptr%esig%new(p_ptr, b_ptr%pftc, fname, p_ptr%box)
             if( l_stream )then
@@ -633,7 +633,7 @@ contains
         ! pftc instantiation
         call b_ptr%pftc%new(p_ptr, p_ptr%ncls, [1,batchsz_max], p_ptr%kfromto)
         ! Sigma2
-        if( p_ptr%l_needs_sigma )then
+        if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
             fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
             call b_ptr%esig%new(p_ptr, b_ptr%pftc, fname, p_ptr%box)
             if( l_stream )then

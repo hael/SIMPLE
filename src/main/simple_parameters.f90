@@ -74,7 +74,6 @@ type :: parameters
     character(len=3)          :: ml_reg='yes'         !< apply ML regularization to class averages or volume
     character(len=3)          :: ml_reg_chunk='no'    !< apply ML regularization to class averages or volume in chunks
     character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool
-    character(len=3)          :: needs_sigma='no'     !<
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)          :: neigs_per='no'       !< using neigs as percentage of the total dimension(yes|no){no}
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
@@ -528,7 +527,6 @@ type :: parameters
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
     logical :: l_noise_reg    = .false.
-    logical :: l_needs_sigma  = .false.
     logical :: l_neigh        = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_polar        = .false. 
@@ -741,7 +739,6 @@ contains
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('multi_moldiams', self%multi_moldiams)
         call check_carg('multivol_mode',  self%multivol_mode)
-        call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
         call check_carg('neigs_per',      self%neigs_per)
         call check_carg('niceserver',     self%niceserver)
@@ -1729,13 +1726,6 @@ contains
                 THROW_HARD('Unsupported centering scheme: '//trim(self%center_type))
         end select
         ! FILTERS
-        ! sigma needs flags etc.
-        select case(self%cc_objfun)
-            case(OBJFUN_EUCLID)
-                self%l_needs_sigma = .true.
-            case(OBJFUN_CC)
-                self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
-        end select
         ! type of sigma estimation (group or global)
         select case(trim(self%sigma_est))
             case('group')
@@ -1770,7 +1760,7 @@ contains
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
-            self%l_ml_reg = self%l_needs_sigma .or. self%cc_objfun==OBJFUN_EUCLID
+            self%l_ml_reg = self%cc_objfun==OBJFUN_EUCLID
         endif
         ! resolution limit
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
