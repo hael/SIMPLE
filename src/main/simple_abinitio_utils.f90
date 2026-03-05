@@ -349,32 +349,6 @@ contains
         if( cline_refine3D%defined('nspace_max') )then
             inspace = min(inspace, params%nspace_max)
         endif
-        ! Development
-        if( trim(params%algorithm).eq.'mimic2D' )then
-            imaxits  = params%maxits_between   ! # of iterations
-            inspace  = min(inspace, 2000)           ! nspace
-            refine   = 'snhc_smpl'                  ! refinement
-            sh_first = 'no'                         ! not implemented
-            prob_sh  = 'no'
-            lp_auto  = 'no'
-            icm      = 'no'                         ! icm filter off
-            if( istage <= params%gauref_last_stage )then
-             gaufreq = lpinfo(istage)%lp            ! gaussian on, ML off
-             ml_reg  = 'no'
-            else
-             gaufreq = -1.0                         ! gaussian off, ML on
-             ml_reg  = 'yes'
-            endif
-            call cline_refine3D%set('extr_lim', (NSTAGES-1)*imaxits)
-            if( istage <= 1 )then
-                call cline_refine3D%set('extr_iter', 1)
-            elseif( istage < NSTAGES )then
-                call cline_refine3D%set('extr_iter', (istage-1)*imaxits+1)
-            else
-                call cline_refine3D%delete('extr_iter')
-                call cline_refine3D%delete('extr_lim')
-            endif
-        endif
         ! command line update
         call cline_refine3D%set('prg',                     'refine3D')
         ! class global control parameters
@@ -544,12 +518,11 @@ contains
         class(commander_base),   intent(inout) :: xreconstruct3D
         integer,                 intent(in)    :: istage
         type(commander_automask)       :: xautomask
-        type(string)  :: str_state, vol, str, vol_even, vol_odd
-        real, allocatable :: fsc(:)
+        type(string)      :: vol,vol_even,vol_odd, str, tmpl, src, dest, sstate, sstage, pgrp
         type(cmdline)     :: cline_rec, cline_automask
         type(class_frcs)  :: frcs
-        type(string)      :: src, dest, sstate, sstage, pgrp
-        integer :: i, inspace, state
+        real, allocatable :: fsc(:)
+        integer           :: i, inspace, state
         ! Reconstruction
         pgrp = trim(params%pgrp)
         if( istage <= SYMSRCH_STAGE ) pgrp = trim(params%pgrp_start)
@@ -589,28 +562,33 @@ contains
             ! Cartesian branch
             do state = 1,params%nstates
                 ! rename volumes and update cline
-                str_state = int2str_pad(state,2)
-                vol       = string(VOL_FBODY)//str_state//MRC_EXT
-                str       = string(STARTVOL_FBODY)//str_state//MRC_EXT
-                call      simple_rename(vol, str)
+                sstate = int2str_pad(state,2)
+                if( istage == 1 )then
+                    tmpl = string(STARTVOL_FBODY)//sstate
+                else
+                    tmpl = string(VOL_FBODY)//sstate//'_stage_'//int2str_pad(istage-1,2)
+                endif
+                vol      = string(VOL_FBODY)//sstate//MRC_EXT
+                str      = tmpl//MRC_EXT
+                call     simple_rename(vol, str)
                 params%vols(state) = str
-                vol       = 'vol'//int2str(state)
-                call      cline_refine3D%set(vol, str)
-                vol_even  = string(VOL_FBODY)//str_state//'_even'//MRC_EXT
-                str       = string(STARTVOL_FBODY)//str_state//'_even_unfil'//MRC_EXT
-                call      simple_copy_file(vol_even, str)
-                str       = string(STARTVOL_FBODY)//str_state//'_even'//MRC_EXT
-                call      simple_rename(vol_even, str)
-                vol_odd   = string(VOL_FBODY)//str_state//'_odd' //MRC_EXT
-                str       = string(STARTVOL_FBODY)//str_state//'_odd_unfil'//MRC_EXT
-                call      simple_copy_file(vol_odd, str)
-                str       = string(STARTVOL_FBODY)//str_state//'_odd'//MRC_EXT
-                call      simple_rename(vol_odd, str)
+                vol      = 'vol'//int2str(state)
+                call     cline_refine3D%set(vol, str)
+                vol_even = string(VOL_FBODY)//sstate//'_even'//MRC_EXT
+                str      = tmpl//'_even_unfil'//MRC_EXT
+                call     simple_copy_file(vol_even, str)
+                str      = tmpl//'_even'//MRC_EXT
+                call     simple_rename(vol_even, str)
+                vol_odd  = string(VOL_FBODY)//sstate//'_odd' //MRC_EXT
+                str      = tmpl//'_odd_unfil'//MRC_EXT
+                call     simple_copy_file(vol_odd, str)
+                str      = tmpl//'_odd'//MRC_EXT
+                call     simple_rename(vol_odd, str)
             enddo
             if( istage >= AUTOMSK_STAGE .and. l_automsk )then
-                str_state = int2str_pad(1,2)
-                vol_even  = string(STARTVOL_FBODY)//str_state//'_even'//MRC_EXT
-                vol_odd   = string(STARTVOL_FBODY)//str_state//'_odd'//MRC_EXT
+                sstate   = int2str_pad(1,2)
+                vol_even = string(STARTVOL_FBODY)//sstate//'_even'//MRC_EXT
+                vol_odd  = string(STARTVOL_FBODY)//sstate//'_odd'//MRC_EXT
                 call cline_automask%set('vol1', vol_odd)
                 call cline_automask%set('vol2', vol_even)
                 call cline_automask%set('smpd', lpinfo(istage)%smpd_crop)
