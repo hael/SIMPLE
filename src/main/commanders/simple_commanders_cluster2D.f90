@@ -46,7 +46,6 @@ contains
         type(simple_nice_communicator)         :: nice_communicator
         type(string)                           :: finalcavgs
         logical                                :: converged
-        integer                                :: iter
         ! Initialize
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults(cline)
@@ -64,7 +63,7 @@ contains
         if(cline%defined("niceprocid")) call cline%delete('niceprocid')
         ! This needs to be before init_cluster2D_refs since it uses which_iter
         params%which_iter = max(1, params%startit)
-        iter = params%which_iter - 1
+        
         call init_cluster2D_refs(cline, params, build)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
@@ -75,38 +74,30 @@ contains
         call strategy%initialize(params, build, cline)
         if( trim(params%stream2d).eq.'no' ) call progressfile_init()
         ! Main loop
+        params%which_iter = params%which_iter   - 1
+        if( cline%defined('extr_iter') )then
+            params%extr_iter = params%extr_iter - 1
+        else
+            params%extr_iter = params%startit   - 1
+        endif
         do
-            iter = iter + 1
-            params%which_iter = iter
-            params%extr_iter  = params%which_iter
-            call cline%set('which_iter', int2str(params%which_iter))
+            params%which_iter = params%which_iter + 1
+            params%extr_iter  = params%extr_iter  + 1
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
             nice_communicator%stat_root%stage = "iteration " // int2str(params%which_iter)
             call nice_communicator%cycle()
             ! Strategy handles everything: alignment + cavgs + convergence
-            call strategy%execute_iteration(params, build, cline, iter, converged)
-            call strategy%finalize_iteration(params, build, iter)
-            if( converged .or. iter >= params%maxits ) exit
+            call strategy%execute_iteration(params, build, cline, converged)
+            call strategy%finalize_iteration(params, build)
+            if( converged .or. params%which_iter >= params%maxits ) exit
         end do
         ! Cleanup
         nice_communicator%stat_root%stage = "terminating"
         call nice_communicator%cycle()
-        call strategy%finalize_run(params, build, cline, iter)
-        ! At the end:
-        if( trim(params%restore_cavgs).eq.'yes' )then
-            if( file_exists(FRCS_FILE) )then
-                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
-            endif
-            call build%spproj%write_segment_inside('out', params%projfile)
-            if( .not. params%l_polar )then
-                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//MRC_EXT
-                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
-            endif
-        endif
+        call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params)
-        call cline%set('endit', iter)
         call nice_communicator%terminate()
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         if (allocated(strategy)) deallocate(strategy)
@@ -164,25 +155,25 @@ contains
         type(commander_scale)             :: xscale
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_cavgassemble)      :: xcavgassemble
-        type(simple_nice_communicator)   :: nice_communicator
+        type(simple_nice_communicator)    :: nice_communicator
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
         type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_calc_sigma
         type(cmdline) :: cline_scalerefs
-        integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
-        real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
-        type(string)              :: benchfname
+        integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
+        real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
+        type(string)            :: benchfname
         ! other variables
-        type(parameters)          :: params
-        type(builder)             :: build
-        type(qsys_env)            :: qenv
-        type(chash)               :: job_descr
-        type(string)              :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
-        real                      :: frac_srch_space
-        integer                   :: nthr_here, iter, cnt, iptcl, ptclind, fnr
-        logical                   :: l_converged, l_scale_inirefs
+        type(parameters)        :: params
+        type(builder)           :: build
+        type(qsys_env)          :: qenv
+        type(chash)             :: job_descr
+        type(string)            :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
+        real                    :: frac_srch_space
+        integer                 :: nthr_here, iter, cnt, iptcl, ptclind, fnr
+        logical                 :: l_converged, l_scale_inirefs
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
         ! deal with # threads for the master process
