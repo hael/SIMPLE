@@ -601,7 +601,7 @@ contains
         ! set class global automasking flag
         l_automsk = .false.
         if( cline%defined('automsk') )then
-            if( trim(params%automsk).eq.'yes' )then
+            if( trim(params%automsk).ne.'no' )then
                 if( trim(params%multivol_mode).eq.'single' )then
                     l_automsk = .true.
                 else
