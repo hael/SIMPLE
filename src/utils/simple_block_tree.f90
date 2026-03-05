@@ -153,6 +153,7 @@ contains
         allocate(distmat(nspace, nspace))
         distmat = calc_inpl_invariant_cc_nomirr(params, params%hp, params%lp, params%trs, refimgs)
         call normalize_minmax(distmat)
+        ! normalize 
         call affprop%new(nspace, distmat)
         call affprop%propagate(centers, labels, simsum)
         nspace_sub  = size(centers) 
