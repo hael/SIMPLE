@@ -207,7 +207,7 @@ contains
         type(commander_cavgassemble)      :: xcavgassemble
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(cmdline)                     :: cline_cavgassemble, cline_calc_sigma
-        type(string)                      :: str_iter, refs, refs_even, refs_odd
+        type(string)                      :: str_iter
         real                              :: frac_srch_space
         ! Update job description
         call cline%set('nparts',     params%nparts)
@@ -238,7 +238,7 @@ contains
             cline_cavgassemble = cline
             call cline_cavgassemble%set('prg',  'cavgassemble')
             call cline_cavgassemble%delete('which_iter')
-            call cline_cavgassemble%set('refs', refs)
+            call cline_cavgassemble%set('refs', params%refs)
             call cline_cavgassemble%set('nthr', self%nthr_master)
             call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
             call xcavgassemble%execute(cline_cavgassemble)

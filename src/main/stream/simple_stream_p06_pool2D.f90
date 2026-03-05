@@ -21,7 +21,7 @@ contains
         class(stream_p06_pool2D), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters)                      :: params
-        type(simple_nice_communicator)        :: nice_communicator
+        type(simple_nice_comm)                :: nice_comm
         type(stream_http_communicator)        :: http_communicator
         type(json_value), pointer             :: latest_cls2D
         type(json_core)                       :: json
@@ -68,8 +68,8 @@ contains
         call params%new(cline)
         call cline%set('mkdir', 'no')
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid,'')
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid,'')
+        call nice_comm%cycle()
         ! http communicator init
         call http_communicator%create(params%niceprocid, params%niceserver%to_char(), "classification_2D")
         call communicator_init()
@@ -155,7 +155,7 @@ contains
             endif
             l_imported = setslist%get_included_flags()
             nsets_imported = count(l_imported)
-            call update_user_params2D(params, cline, l_params_updated, nice_communicator%update_arguments)
+            call update_user_params2D(params, cline, l_params_updated, nice_comm%update_arguments)
             if( l_params_updated ) call unpause_pool
             ! pause?
             if( (pool_iter >= iter_last_import+PAUSE_NITERS+extra_pause_iters) .or.&
@@ -176,7 +176,7 @@ contains
                 pool_iter = get_pool_iter()
                 call iterate_pool(params)
                 if( get_pool_iter() > pool_iter )then
-                    nice_communicator%stat_root%user_input = .true.
+                    nice_comm%stat_root%user_input = .true.
                     time_last_iter = time8()
                 endif
             endif

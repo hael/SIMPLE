@@ -176,21 +176,21 @@ contains
     subroutine exec_export_starproject( self, cline )
         class(commander_export_starproject), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        type(simple_nice_communicator) :: nice_communicator
-        type(parameters)               :: params
-        type(sp_project)               :: spproj
+        type(simple_nice_comm) :: nice_comm
+        type(parameters)       :: params
+        type(sp_project)       :: spproj
         if(.not. cline%defined("mkdir")) then
             call cline%set('mkdir', 'yes')
         end if
         call params%new(cline)
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
         call spproj%read(params%projfile)
         call spproj%write_mics_star()
         call spproj%write_ptcl2D_star()
         call spproj%kill
-        call nice_communicator%terminate()
+        call nice_comm%terminate()
         call simple_end('**** EXPORT_STARPROJECT NORMAL STOP ****')
     end subroutine exec_export_starproject
 

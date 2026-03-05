@@ -12,7 +12,7 @@ use simple_euclid_sigma2,          only: average_sigma2_groups, sigma2_star_from
 use simple_gui_utils,              only: mic2thumb, mrc2jpeg_tiled
 use simple_guistats,               only: guistats
 use simple_image,                  only: image
-use simple_nice,                   only: simple_nice_communicator
+use simple_nice,                   only: simple_nice_comm
 use simple_parameters,             only: parameters
 use simple_progress,               only: progressfile_init, progressfile_update, progress_estimate_preprocess_stream
 use simple_projfile_utils,         only: merge_chunk_projfiles

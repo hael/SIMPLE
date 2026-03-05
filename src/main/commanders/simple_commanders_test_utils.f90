@@ -194,21 +194,21 @@ subroutine exec_test_nice( self, cline )
     use simple_nice
     class(commander_test_nice),    intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
-    type(simple_nice_communicator) :: nice_communicator
-    call nice_communicator%init(1, "testserver")
-    call nice_communicator%cycle()
+    type(simple_nice_comm) :: nice_comm
+    call nice_comm%init(1, "testserver")
+    call nice_comm%cycle()
     call sleep(5)
-    nice_communicator%view_micrographs%active         = .true.
-    nice_communicator%view_micrographs%thumbnail%path = "/tmp/cls2D_thumbnail.jpeg"
-    nice_communicator%view_micrographs%thumbnail%id   = 10 ! should be random
-    call nice_communicator%cycle()
+    nice_comm%view_micrographs%active         = .true.
+    nice_comm%view_micrographs%thumbnail%path = "/tmp/cls2D_thumbnail.jpeg"
+    nice_comm%view_micrographs%thumbnail%id   = 10 ! should be random
+    call nice_comm%cycle()
     call sleep(5)
-    nice_communicator%view_micrographs%active         = .true.
-    nice_communicator%view_micrographs%thumbnail%path = "/tmp/cls2D_thumnail.jpeg"
-    nice_communicator%view_micrographs%thumbnail%id   = 11! should be random
-    call nice_communicator%cycle()
+    nice_comm%view_micrographs%active         = .true.
+    nice_comm%view_micrographs%thumbnail%path = "/tmp/cls2D_thumnail.jpeg"
+    nice_comm%view_micrographs%thumbnail%id   = 11! should be random
+    call nice_comm%cycle()
     call sleep(10)
-    call nice_communicator%terminate
+    call nice_comm%terminate
     call simple_end('**** SIMPLE_TEST_NICE_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_nice
 

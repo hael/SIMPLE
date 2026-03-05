@@ -144,13 +144,13 @@ contains
         type(commander_estimate_diam)  :: xest_diam
         type(commander_simulate_atoms) :: xsim_atms
         ! other variables
-        type(simple_nice_communicator) :: nice_communicator
-        type(parameters)               :: params
-        type(sp_project)               :: spproj
-        type(cmdline)                  :: cline_est_diam, cline_sim_atms, cline_copy
-        type(string)                   :: stkname
-        character(len=*), parameter    :: STARTVOL    = 'startvol.mrc'
-        real,             parameter    :: LP_EST_DIAM = 3.
+        type(simple_nice_comm)      :: nice_comm
+        type(parameters)            :: params
+        type(sp_project)            :: spproj
+        type(cmdline)               :: cline_est_diam, cline_sim_atms, cline_copy
+        type(string)                :: stkname
+        character(len=*), parameter :: STARTVOL    = 'startvol.mrc'
+        real,             parameter :: LP_EST_DIAM = 3.
         integer :: ncls, nptcls, ldim(3)
         real    :: smpd, diam_min, diam_max, mskdiam
         call cline%set('dir_exec', 'analysis2D_nano')
@@ -158,8 +158,8 @@ contains
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms 
         call params%new(cline)
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         cline_copy = cline
@@ -201,7 +201,7 @@ contains
         call cline%set('center', 'no')
         call xcluster2D%execute(cline)
         ! end gracefully
-        call nice_communicator%terminate()
+        call nice_comm%terminate()
         call simple_end('**** SIMPLE_ANALYSIS2D_NANO NORMAL STOP ****')
     end subroutine exec_analysis2D_nano
 

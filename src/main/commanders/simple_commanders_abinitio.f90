@@ -492,7 +492,7 @@ contains
         type(class_sample), allocatable :: clssmp(:)
         type(parameters)                :: params
         type(sp_project)                :: spproj
-        type(simple_nice_communicator)  :: nice_communicator
+        type(simple_nice_comm)          :: nice_comm
         integer :: istage, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -557,8 +557,8 @@ contains
             call cline%delete('ref_type')
         endif
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
         ! read project
         call spproj%read(params%projfile)
         ! provide initialization of 3D alignment using class averages?
@@ -567,8 +567,8 @@ contains
         if( trim(params%cavg_ini).eq.'yes' )then
             if( str_has_substr(params%multivol_mode,'input_oris') ) THROW_HARD('Ini3D on cavgs not allowed for multivol_mode=input_oris*')
             ! nice
-            nice_communicator%stat_root%stage = "initialising 3D volume from class averages"
-            call nice_communicator%cycle()
+            nice_comm%stat_root%stage = "initialising 3D volume from class averages"
+            call nice_comm%cycle()
             ! execution
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
@@ -584,8 +584,8 @@ contains
             endif
         endif
         ! nice
-        nice_communicator%stat_root%stage = "preparing workflow"
-        call nice_communicator%cycle()
+        nice_comm%stat_root%stage = "preparing workflow"
+        call nice_comm%cycle()
         ! initialization on class averages done outside this workflow (externally)?
         if( trim(params%cavg_ini_ext).eq.'yes' )then
             ! check that ptcl3D field is not virgin
@@ -756,22 +756,22 @@ contains
             maxits_dyn = sum(MAXITS(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
         endif
         ! nice
-        nice_communicator%stat_root%stage = "starting workflow"
-        call nice_communicator%cycle()
+        nice_comm%stat_root%stage = "starting workflow"
+        call nice_comm%cycle()
         do istage = start_stage, NSTAGES
             ! nice
-             if( nice_communicator%stop )then
+             if( nice_comm%stop )then
                 ! termination
                 write(logfhandle,'(A)')'>>> USER COMMANDED STOP'
                 call spproj%kill
                 call qsys_cleanup(params)
-                call nice_communicator%terminate(stop=.true.)
+                call nice_comm%terminate(stop=.true.)
                 call simple_end('**** SIMPLE_ABINITIO3D USER STOP ****')
                 call EXIT(0)
             endif
-            nice_communicator%stat_root%stage = "running workflow"
-            call nice_communicator%update_ini3D(stage=istage, number_states=nstates_glob, lp=lpinfo(istage)%lp) 
-            call nice_communicator%cycle()
+            nice_comm%stat_root%stage = "running workflow"
+            call nice_comm%update_ini3D(stage=istage, number_states=nstates_glob, lp=lpinfo(istage)%lp) 
+            call nice_comm%cycle()
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! At the splitting stage of docked mode: reset the nstates in params
@@ -804,8 +804,8 @@ contains
                 call symmetrize(params, istage, spproj, params%projfile, xreconstruct3D_distr)
             endif
             ! nice
-            call nice_communicator%update_ini3D(last_stage_completed=.true.) 
-            call nice_communicator%cycle()
+            call nice_comm%update_ini3D(last_stage_completed=.true.) 
+            call nice_comm%cycle()
         enddo
         ! calculate 3D reconstruction at original sampling
         call calc_final_rec(params, spproj, params%projfile, xreconstruct3D_distr)
@@ -814,10 +814,10 @@ contains
         ! postprocess final 3D reconstruction
         call postprocess_final_rec(params, spproj)
         ! termination
-        nice_communicator%stat_root%stage = "terminating"
-        call nice_communicator%cycle()
+        nice_comm%stat_root%stage = "terminating"
+        call nice_comm%cycle()
         ! cleanup
-        call nice_communicator%terminate(export_project=spproj)
+        call nice_comm%terminate(export_project=spproj)
         call spproj%kill
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')

@@ -362,7 +362,7 @@ contains
         class(pca),        pointer     :: pca_ptr  => null()
         type(image),       allocatable :: imgs(:)
         real,              allocatable :: avg(:), gen(:), pcavecs(:,:), tmpvec(:)
-        type(simple_nice_communicator) :: nice_communicator
+        type(simple_nice_comm)         :: nice_comm
         type(parameters)               :: params
         type(builder)                  :: build
         integer                        :: npix, iptcl, j
@@ -374,8 +374,8 @@ contains
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
         allocate(imgs(params%nptcls))
         do iptcl = 1, params%nptcls
             call imgs(iptcl)%new([params%box,params%box,1], params%smpd)
@@ -423,7 +423,7 @@ contains
         deallocate(imgs)
         call build%kill_general_tbox
         ! end gracefully
-        call nice_communicator%terminate()
+        call nice_comm%terminate()
         call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
     end subroutine exec_ppca_denoise
 

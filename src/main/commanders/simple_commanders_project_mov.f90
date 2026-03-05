@@ -20,14 +20,14 @@ contains
     subroutine exec_import_movies( self, cline )
         class(commander_import_movies), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(simple_nice_communicator) :: nice_communicator
-        type(parameters)               :: params
-        type(sp_project)               :: spproj
-        type(oris)                     :: deftab
-        type(ctfparams)                :: ctfvars, prev_ctfvars
-        type(stream_watcher)           :: movie_buff
-        type(string)                   :: phaseplate, boxfname
-        type(string), allocatable      :: boxfnames(:), movfnames(:) 
+        type(simple_nice_comm)    :: nice_comm
+        type(parameters)          :: params
+        type(sp_project)          :: spproj
+        type(oris)                :: deftab
+        type(ctfparams)           :: ctfvars, prev_ctfvars
+        type(stream_watcher)      :: movie_buff
+        type(string)              :: phaseplate, boxfname
+        type(string), allocatable :: boxfnames(:), movfnames(:) 
         logical :: inputted_boxtab, inputted_deftab, inputted_dir_movies, inputted_filetab, first_import
         integer :: nmovf, nboxf, i, nprev_movies, nprev_intgs
         ! set defaults
@@ -47,8 +47,8 @@ contains
             THROW_HARD('project file: '//params%projfile%to_char()//' does not exists! exec_import_movies')
         endif
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
         call spproj%read(params%projfile)
         nprev_intgs  = spproj%get_nintgs()
         nprev_movies = spproj%get_nmovies()
@@ -149,7 +149,7 @@ contains
         endif 
         ! write project file
         call spproj%write ! full write since projinfo is updated and this is guaranteed to be the first import
-        call nice_communicator%terminate()
+        call nice_comm%terminate()
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
     end subroutine exec_import_movies
 
