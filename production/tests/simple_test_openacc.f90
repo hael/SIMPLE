@@ -25,7 +25,7 @@ end subroutine acc_saxpy
 
 program simple_test_openacc 
 implicit none
-integer           :: i, n
+integer           :: n
 real, allocatable :: x(:), y(:)
 real              :: start, finish
 n = 1000000000

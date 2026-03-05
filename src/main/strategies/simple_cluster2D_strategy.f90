@@ -269,7 +269,6 @@ contains
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
         integer,                         intent(in)    :: which_iter
-        type(string) :: str_iter, fbody
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call gen_jpeg(which_iter)
     end subroutine distr_finalize_iteration

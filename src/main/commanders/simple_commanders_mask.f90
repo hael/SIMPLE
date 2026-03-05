@@ -35,9 +35,6 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(image)      :: mskvol
-        type(atoms)      :: pdb
-        type(image_msk)  :: msker
-        type(string)     :: pdbout_fname
         integer          :: ldim(3)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')

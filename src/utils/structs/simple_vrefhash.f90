@@ -402,7 +402,6 @@ contains
         use simple_string_utils, only: lex_sort
         class(vrefhash), intent(in) :: self
         type(string), allocatable   :: karr(:)
-        integer :: i
         karr = self%keys()
         if (size(karr) > 1) then
             call lex_sort(karr)

@@ -492,7 +492,7 @@ contains
         complex(dp),         intent(inout) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         integer,             intent(in)    :: funit, dims(4)
         complex(sp),         intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
-        integer :: k, klo, khi
+        integer :: klo, khi
         ! Read stored (single-precision) array payload
         read(unit=funit, pos=(sizeof(dims)+1)) buffer
         ! Default to zero padding everywhere
@@ -548,7 +548,7 @@ contains
         real(dp), intent(inout) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         integer,  intent(in)    :: funit, dims(4)
         real(sp), intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
-        integer :: k, klo, khi
+        integer :: klo, khi
         ! Read stored (single-precision) array payload
         read(unit=funit, pos=(sizeof(dims)+1)) buffer
         ! Default to zero padding everywhere

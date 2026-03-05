@@ -62,8 +62,8 @@ contains
         real,          intent(out)           :: height(:)
         integer,       intent(out), optional :: labels(:)
         integer,       intent(in),  optional :: n_clusters
-        integer :: i, j, k, x, y, nn, na, nb, nc, clen
-        real    :: dmin, dnew, val
+        integer :: i, k, x, y, nn, na, nb, nc, clen
+        real    :: dmin, dnew
         logical :: l_msk(self%N)
         if (.not. self%exists) THROW_HARD("hclust not initialized")
         do while (count(self%active == 1) > 1)

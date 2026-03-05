@@ -465,7 +465,7 @@ contains
         integer,      allocatable :: order(:), class_cnt(:), class_all(:)
         integer :: startit, i, cnt, iptcl, ptclind
         integer :: j, io_stat, funit, class_ind, class_max
-        logical :: converged, l_ml_reg, l_scale_inirefs
+        logical :: converged, l_scale_inirefs
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)

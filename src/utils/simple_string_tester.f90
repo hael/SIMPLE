@@ -133,7 +133,6 @@ contains
 
     subroutine test_to_fnv1a_hash64()
         type(string) :: s, s_hash
-        character(:), allocatable :: sub
         write(*,'(A)') 'test_to_fnv1a_hash64'
         s      = string('abcdef')
         s_hash = s%to_fnv1a_hash64()

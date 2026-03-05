@@ -511,7 +511,6 @@ contains
         integer,                  allocatable :: prune_selection(:) ! selection for pruning classes on the fly, JSON-carried selection object / string
         type(oris)            :: os
         type(json_core)       :: json
-        type(string)          :: val
         real                  :: lpthres, ndev
         integer               :: lpthres_int, mskdiam_int
         logical               :: found
@@ -644,7 +643,7 @@ contains
         type(sp_project)   :: snapshot_proj
         type(json_core)    :: json
         type(string)       :: projfile, projfname, cavgsfname, frcsfname, mapfileprefix
-        type(string)       :: pool_refs, src, l_frcsname, l_stkname
+        type(string)       :: pool_refs, l_frcsname, l_stkname
         real               :: l_smpd
         integer            :: lastmap, l_ncls
         logical            :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found

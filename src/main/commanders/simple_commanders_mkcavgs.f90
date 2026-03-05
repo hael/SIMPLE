@@ -223,7 +223,6 @@ contains
         type(polarft_calc) :: pftc
         type(string)       :: fname
         real, allocatable  :: states(:)
-        real               :: clw
         integer            :: iterstr_start, iterstr_end, iter, io_stat, icls
         integer            :: pftsz, kfromto(2), ncls
         if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')

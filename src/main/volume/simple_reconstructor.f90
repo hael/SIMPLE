@@ -219,8 +219,8 @@ contains
         type(ori) :: o_sym
         complex   :: comp
         real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim), loc(3), ctfval
-        integer   :: win(2,3), i, h, k, l, nsym, isym, iwinsz, sh, stride, fpllims_pd(3,2)
-        integer   :: fpllims(3,2), fplnyq, hp, kp, pf
+        integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, sh, stride, fpllims_pd(3, 2)
+        integer   :: fpllims(3, 2), hp, kp, pf
         real      :: pf2
         if( pwght < TINY ) return
         ! window size

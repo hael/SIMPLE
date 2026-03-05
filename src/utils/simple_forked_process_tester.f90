@@ -80,7 +80,7 @@ contains
   subroutine test_logfile_redirection()
     type(forked_process) :: fork_proc
     type(string)         :: log_contents, log_hash, log_fname
-    integer              :: rc, ios, unit
+    integer              :: ios, unit
     write(*,'(A)') 'test_logfile_redirection'
     log_fname = 'test_logfile_redirection.log'
     call fork_proc%start(name=string('TEST_LOGFILE_REDIRECTION'), logfile=log_fname)

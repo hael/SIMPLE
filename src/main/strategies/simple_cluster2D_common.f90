@@ -23,7 +23,6 @@ contains
         type(cmdline)         :: cline_make_cavgs, cline_scalerefs
         type(string)          :: refs_sc
         logical               :: l_scale_inirefs
-        integer               :: cnt, iptcl, ptclind
         if( cline%defined('refs') ) return  ! References already provided
         cline_make_cavgs = cline
         params%refs      = 'start2Drefs'     //MRC_EXT

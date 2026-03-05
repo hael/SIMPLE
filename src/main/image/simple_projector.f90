@@ -275,7 +275,7 @@ contains
         real,             intent(in) :: loc(3)
         complex :: comp
         real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
-        integer :: i, win(2,3) ! window boundary array in fortran contiguous format
+        integer :: win(2, 3) ! window boundary array in fortran contiguous format
         ! interpolation kernel window
         win(1,:) = nint(loc)
         win(2,:) = win(1,:) + self%iwinsz

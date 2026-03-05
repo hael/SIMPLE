@@ -155,7 +155,6 @@ contains
         type(oris)                :: o_here, os_ran
         type(ori)                 :: o, o2
         integer,      allocatable :: pinds(:)
-        complex(sp),  pointer     :: ptre(:,:,:), ptro(:,:,:)
         type(string)              :: fname
         type(polarft_calc)        :: pftc
         type(image)               :: img

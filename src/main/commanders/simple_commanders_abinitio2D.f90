@@ -210,8 +210,7 @@ contains
             use simple_commanders_imgops, only: commander_scale
             use simple_commanders_volops, only: commander_noisevol
             type(commander_scale)    :: xscale
-            type(commander_noisevol) :: xnoisevol
-            type(cmdline)            :: cline_scalerefs, cline_noisevol
+            type(cmdline)            :: cline_scalerefs
             type(string) :: refs, refs_even, refs_odd
             real         :: smpd
             integer      :: ldim(3), ncls

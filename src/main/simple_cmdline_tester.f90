@@ -177,7 +177,6 @@ contains
     !-----------------------------------------
     subroutine test_read_parsing()
         type(cmdline) :: cl
-        real          :: r
         integer       :: i
         type(string)  :: sval
         write(*,'(A)') 'test_read_parsing'

@@ -31,7 +31,6 @@ contains
     ! public class methods
 
     subroutine make_ui
-        integer :: i
         call set_ui_params
         ! SIMPLE PROGRAMS
         call add_simple_programs(prgtab)
@@ -43,7 +42,6 @@ contains
     end subroutine make_ui
 
     subroutine make_test_ui
-        integer :: i
         call set_ui_params
         ! SIMPLE TEST PROGRAMS
         call add_test_programs(tsttab)

@@ -147,7 +147,7 @@ contains
         type(ftiter) :: fiterator
         ! CTF kernel scalars (precomputed)
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
-        integer :: physh, physk, h, k, shell, hmin, hmax, kmin, kmax,  frlims_crop(3,2), sigma_nyq
+        integer :: physh, physk, h, k, shell, hmin, hmax, kmin, kmax,  sigma_nyq
         integer :: box_croppd, box_crop
         logical :: l_ctf, l_flip
         ! Shell LUT: shell = nint(sqrt(r2)) via lookup table

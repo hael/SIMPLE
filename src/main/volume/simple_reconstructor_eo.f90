@@ -238,8 +238,8 @@ contains
         type(image)       :: prev_vol_e, prev_vol_o
         type(imgfile)     :: ioimg_e, ioimg_o
         real, allocatable :: rho_e(:,:,:), rho_o(:,:,:)
-        integer :: lims(3,2), cshape(3), prev_ldim(3), phys_out(3),phys_in(3)
-        integer :: h,k,l, fhandle_rho_e, fhandle_rho_o, i, ierr, dummy
+        integer :: cshape(3), prev_ldim(3)
+        integer :: fhandle_rho_e, fhandle_rho_o, i, ierr, dummy
         real    :: prev_smpd
         logical :: here(4), l_pad_with_zeros
         even_vol = fbody//'_even'//self%ext%to_char()
