@@ -371,16 +371,68 @@ contains
         endif
     end subroutine stats_2
 
+    ! returns the real space variance, regardless of the inputted domain
     module function variance( self ) result( var )
         class(image), intent(in) :: self
-        real    :: ave, var, ep, rmat_subtr_avg(self%ldim(1),self%ldim(2),self%ldim(3))
-        integer :: npix
-        npix           = product(self%ldim)
-        ave            = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
-        rmat_subtr_avg = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ave
-        ep             = sum(rmat_subtr_avg)
-        var            = sum(rmat_subtr_avg**2.0)
-        var            = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+        real(dp)    :: sumv, sumvsq, v, dvar,var0,varnyq
+        real        :: var, dc
+        integer     :: lims(3,2), phys(3), npix, h,i,j,k,l
+        complex(dp) :: c
+        if( self%ft )then
+            lims = self%loop_lims(2)
+            ! Magnitude in h=0 unique slice
+            var0 = 0.d0
+            h    = 0
+            do k = lims(2,1),lims(2,2)
+                do l = lims(3,1),lims(3,2)
+                    phys = self%comp_addr_phys(h, k, l)
+                    c    = cmplx(self%cmat(phys(1),phys(2),phys(3)),kind=dp)
+                    var0 = var0 + real(c*conjg(c),dp)
+                enddo
+            enddo
+            ! Magnitude in h = [1;nyq-1] slices, to be doubled
+            dvar = 0.d0
+            do h = 1,lims(1,2)
+                do k = lims(2,1),lims(2,2)
+                    do l = lims(3,1),lims(3,2)
+                        phys = self%comp_addr_phys(h, k, l)
+                        c    = cmplx(self%cmat(phys(1),phys(2),phys(3)),kind=dp)
+                        dvar = dvar + real(c*conjg(c),dp)
+                    enddo
+                enddo
+            enddo
+            ! Magnitude in h=nyq unique slice
+            varnyq = 0.d0
+            h      = lims(1,2)-1
+            do k = lims(2,1),lims(2,2)
+                do l = lims(3,1),lims(3,2)
+                    phys   = self%comp_addr_phys(h, k, l)
+                    c      = cmplx(self%cmat(phys(1),phys(2),phys(3)),kind=dp)
+                    varnyq = varnyq + real(c*conjg(c),dp)
+                enddo
+            enddo
+            ! average of real space values
+            phys = self%comp_addr_phys(0,0,0)
+            dc   = real(self%cmat(phys(1),phys(2),phys(3)))
+            ! Full Fourier representation calculation that is equal
+            ! to the mean subtracted real space variance
+            var  = real(2.d0*dvar + var0 + varnyq) - dc**2
+            var  = max(0., var)
+        else
+            sumv   = 0.d0
+            sumvsq = 0.d0
+            do k = 1,self%ldim(3)
+                do j = 1,self%ldim(2)
+                    do i = 1,self%ldim(1)
+                        v      = real(self%rmat(i,j,k),dp)
+                        sumv   = sumv   + v
+                        sumvsq = sumvsq + v*v
+                    enddo
+                enddo
+            enddo
+            npix = product(self%ldim)
+            var  = real( sumvsq / real(npix,dp) - (sumv / real(npix,dp))**2 )
+        endif
     end function variance
 
     module real function skew( self, mask )
