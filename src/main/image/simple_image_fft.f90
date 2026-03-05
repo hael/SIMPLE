@@ -306,9 +306,8 @@ contains
         logical       :: do_norm
         ! --- taper vars (square, 2D, n3=1) ---
         integer       :: n, wtap, wavg, wbg, j1, j2, border_count
-        real(dp)      :: alpha_dp, inv_wtap_dp, inv_n_dp
         real(dp)      :: bg_fill_dp, border_sum_dp, edge_mean_dp
-        real(c_float) :: alpha_sp, inv_wtap_sp, inv_n_sp, border_sum_sp
+        real(c_float) :: alpha_sp, inv_wtap_sp, inv_n_sp
         ! Edge profiles remain single precision (cheap+stable)
         real(c_float) :: x_start(self%ldim(2)), x_stop(self%ldim(2))
         real(c_float) :: x_smooth_start(self%ldim(2)), x_smooth_stop(self%ldim(2))
@@ -1133,7 +1132,7 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
         integer       :: n1, n2, h1, h2, i, j, ii, jj, minlen
-        real(c_float) :: temp(self%ldim(1),self%ldim(2)), r2, scale_cmat, cis2, cjs2
+        real(c_float) :: temp(self%ldim(1), self%ldim(2)), r2, scale_cmat, cjs2
         real(c_float) :: v_val
         real(c_float), parameter :: EPS_E = 1.e-4_c_float
         real(c_float), parameter :: ONE   = 1.0_c_float
@@ -1179,7 +1178,7 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
         class(image), intent(inout) :: self_out
-        integer       :: n1, n2, h1, h2, n1o, n2o, h1o, h2o, i, j, ii, jj, x0, y0, minlen, np, starts(3)
+        integer       :: n1, n2, h1, h2, n1o, n2o, h1o, h2o, i, j, x0, y0, minlen, np, starts(3)
         ! Edge-mean (border-band) vars
         integer       :: wbg, wbg1, wbg2, i1, i2, j1, j2, border_count
         real(dp)      :: sv, border_sum_dp, edge_mean_dp

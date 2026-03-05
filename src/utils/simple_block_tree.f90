@@ -89,7 +89,7 @@ contains
         class(image), intent(in)       :: refimgs(:)
         class(parameters), intent(in)  :: params
         class(sym),  intent(inout)     :: pgrpsym
-        type(ori)                  :: o, o_sub, oi, oj, osym
+        type(ori)                  :: o, o_sub, osym
         type(srchspace_map)        :: mapper
         type(multi_dendro)         :: block_tree
         type(image), allocatable   :: sub_imgs(:)     
@@ -144,7 +144,6 @@ contains
         class(parameters), intent(in)  :: params
         type(multi_dendro)         :: block_tree
         type(aff_prop)             :: affprop
-        type(srchspace_map)        :: mapper  
         real,    allocatable       :: distmat(:,:), sub_distmat(:,:)
         integer, allocatable       :: labels(:), centers(:), refs(:)
         integer                    :: nspace, nspace_sub, ntrees, itree, nrefs, i, j 
@@ -266,8 +265,8 @@ contains
         real,               intent(out)   :: dist_min
         logical,            intent(in)    :: l_greedy
         type(ori)     :: o, osym
-        integer       :: inode, level, local_k, j, max_levs, endit
-        real          :: dist_left, dist_right, inplrotdist, dist, dist_subspace
+        integer       :: inode, level, max_levs, endit
+        real          :: dist_left, dist_right, inplrotdist, dist_subspace
         type(bt_node) :: node_L, node_R, node_cur, node_root
         dist_subspace = dist_min ! true on input
         node_root = block_tree%get_root_node(itree)
@@ -328,8 +327,8 @@ contains
         integer,            intent(out)   :: best_ref
         real,               intent(out)   :: dist_min
         type(ori)     :: o, osym
-        integer       :: inode, level, local_k, j
-        real          :: dist_left, dist_right, inplrotdist, dist, p_left, p_right, dist_subspace
+        integer       :: inode
+        real          :: dist_left, dist_right, inplrotdist, p_left, p_right, dist_subspace
         type(bt_node) :: node_L, node_R, node_cur, node_root
         dist_subspace = dist_min ! true on input
         node_root = block_tree%get_root_node(itree)

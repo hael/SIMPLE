@@ -112,7 +112,6 @@ contains
   subroutine execute_test( self, cline )
     class(forked_process), intent(inout) :: self
     class(cmdline),        intent(inout) :: cline
-    type(string)                         :: mq_msg
     integer                              :: rc
     call signal(SIGTERM, sigterm_handler)
     ! note: changing this output will require updating the log hash comparison in test_logfile_redirection

@@ -58,7 +58,7 @@ contains
         integer,           intent(in)    :: ldim(2), nslices
         logical, optional, intent(in)    :: alloc_ctfsq
         real             :: center(2),e, r
-        integer          :: phys(2), h,i,j,k,sh,nyq,minlen
+        integer          :: phys(2), h, i, j, k, sh, nyq
         logical          :: l_alloc_ctfsq
         call self%kill_stack
         l_alloc_ctfsq = .true.
@@ -170,7 +170,7 @@ contains
         class(string), intent(in)    :: fname
         type(imgfile) :: ioimg
         real          :: stats(4)
-        integer       :: funit, ierr, i
+        integer       :: i
         do i =1,self%nslices
             call self%ifft(i)  
         enddo
@@ -190,8 +190,6 @@ contains
         class(stack),  intent(inout) :: self
         class(string), intent(in)    :: fname
         type(imgfile) :: ioimg
-        real          :: stats(4)
-        integer       :: funit, ierr, i
         ! used for proper cavgs output, header updated with stats
         call ioimg%open(fname, [self%cshape(1),self%cshape(2),1], smpd_crop, formatchar='M', readhead=.false., rwaction='write')
         call ioimg%wmrcSlices(1, self%nslices, self%ctfsq(:self%cshape(1),:self%cshape(2),:), [self%cshape(1),self%cshape(2),1], .false.)

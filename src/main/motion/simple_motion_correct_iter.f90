@@ -43,11 +43,9 @@ contains
         class(string),              intent(in)    :: moviename, fbody, dir_out
         class(string),    optional, intent(in)    :: gainref_fname
         character(len=*), optional, intent(in)    :: tseries
-        type(nrtxtfile)               :: boxfile
-        real,             allocatable :: boxdata(:,:)
         type(string) :: fbody_here, ext, star_fname, poly_fname
         real         :: goodnessoffit(2), scale, bfac_here, bid
-        integer      :: ldim(3), ldim_thumb(3), iptcl, nxpatch, nypatch
+        integer      :: ldim(3), ldim_thumb(3), nxpatch, nypatch
         logical      :: patch_success, l_tseries
         patch_success = .false.
         l_tseries     = .false.

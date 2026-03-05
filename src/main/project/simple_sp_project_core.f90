@@ -326,9 +326,8 @@ contains
     module subroutine append_job_descr2jobproc( self, job_descr )
         class(sp_project), intent(inout) :: self
         class(chash),      intent(inout) :: job_descr
-        type(string)  :: edir
         type(ori)     :: o
-        integer       :: njobs, ijob, ind
+        integer       :: njobs, ind
         character(8)  :: date
         character(10) :: time
         njobs = self%jobproc%get_noris()

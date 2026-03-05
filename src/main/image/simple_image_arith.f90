@@ -546,7 +546,6 @@ contains
 
     module subroutine conjugate( self )
         class(image), intent(inout) :: self
-        type(image) :: self_out
         if( self%ft )then
             self%cmat = conjg(self%cmat)
         else

@@ -192,7 +192,7 @@ contains
         type(parameters)               :: p
         type(cmdline)                  :: cline_sim_atoms
         integer :: npdbs, ipdb, Natoms, cnt, i, j, nclus
-        real    :: min_dist, dist, prob, d, moldiam, a(3)
+        real    :: min_dist, dist, prob, d, moldiam
         call p%new(cline)
         call read_filetable(p%fname, pdbfnames)
         npdbs = size(pdbfnames)

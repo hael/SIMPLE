@@ -1553,7 +1553,7 @@ contains
     subroutine test_atoms()
         use simple_image, only: image
         type(atoms)        :: a, b, c, one
-        logical            :: do_io, do_img, chatty
+        logical            :: chatty
         real               :: v3(3), cen1(3), cen2(3), mcen(3), mat(3,3), cc
         real, allocatable  :: aniso(:,:,:)
         integer            :: i

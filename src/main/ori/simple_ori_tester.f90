@@ -118,7 +118,7 @@ contains
 
     subroutine test_2Dshift_set_get_and_rounding()
         type(ori) :: o
-        real :: v(2), off(2), euls(3)
+        real :: v(2), off(2)
         write(*,'(A)') 'test_2Dshift_set_get_and_rounding'
         call o%new_ori(.true.)
         call o%set_shift([1.2, -3.4])

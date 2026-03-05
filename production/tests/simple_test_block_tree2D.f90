@@ -13,13 +13,10 @@ use simple_binary_tree,             only: bt_node
 use simple_timer
 use simple_block_tree
 implicit none 
-type(parameters)                :: p1
 type(oris)                      :: eulspace, eulspace_sub
 type(ori)                       :: osmp, o, osym
 type(cmdline)                   :: cline
 type(image)                     :: vol
-character(len=:), allocatable   :: cmd  
-real, allocatable               :: cc_mat(:,:)
 type(image), allocatable        :: proj_arr(:)
 character(len=*), parameter     :: PGRP       = 'c1'
 type(string)                    :: pdb_file, vol_file
@@ -29,14 +26,13 @@ type(parameters)                :: params
 type(sym)                       :: pgrpsym
 type(multi_dendro)              :: block_tree
 type(bt_node)                   :: bt_n 
-integer(timer_int_kind)         :: build_time, search_time, full_cc, cc_exhaust
-real(timer_int_kind)            :: build_time_rt, search_time_rt, full_cc_rt, cc_exhaust_rt
+integer(timer_int_kind)         :: build_time
+real(timer_int_kind)            :: build_time_rt
 integer,          parameter     :: NSPACE     = 500
 integer,          parameter     :: NSPACE_SUB = 30
 integer,          parameter     :: NSAMPLE    = 100
-integer     :: i, j, best_ref, itree, ind_min, irnd
+integer     :: i, best_ref, itree, ind_min, irnd
 real        :: inplrotdist, dist, dist_min, dist_subspace, dists(NSAMPLE)
-real        :: dist_min_tot, dist_subspace_tot, speedup, dist_min_exhaustive_tot
 ! SPIRAL REPROJECTIONS
 params%smpd   = 3.
 params%lp     = 3.

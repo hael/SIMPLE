@@ -17,7 +17,6 @@ contains
         logical, optional, intent(in)    :: apply_ctf
         type(ctfparams) :: ctfparms
         logical         :: aapply_ctf
-        real            :: dfx, dfy, angast
         aapply_ctf = .true.
         if( present(apply_ctf) ) aapply_ctf = apply_ctf
         ! back FT (to make sure)

@@ -751,7 +751,7 @@ contains
     subroutine update_pool_aln_params
         integer, parameter :: ITERLIM    = 20
         integer, parameter :: ITERSHIFT  = 5
-        real :: lp, lambda, gamma
+        real :: lp, gamma
         if( .not. l_stream2D_active ) return
         if( .not. l_pool_available  ) return
         if( pool_iter < ITERLIM )then
@@ -879,7 +879,6 @@ contains
         class(parameters), intent(in) :: params
         type(oris)        :: os_backup
         type(starproject) :: starproj
-        type(string)      :: src
         os_backup = pool_proj%os_cls2D
         call pool_proj%add_cavgs2os_out(string(POOL_DIR)//refs_glob, pool_dims%smpd, 'cavg')
         pool_proj%os_cls2D = os_backup

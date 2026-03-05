@@ -234,21 +234,17 @@ function receive_1( self, msg ) result( received )
   subroutine send_1( self, msg )
     class(ipc_mq), intent(inout) :: self
     class(string), intent( in )  :: msg
-    integer                      :: stat
   end subroutine send_1
 
   subroutine send_2( self, buffer )
     class(ipc_mq),                 intent(inout) :: self
     character(len=:), allocatable, intent(inout) :: buffer
-    integer                                      :: stat
   end subroutine send_2
 
   function receive_1( self, msg ) result( received )
     class(ipc_mq), intent(inout) :: self
     class(string), intent(inout) :: msg
-    character( len=XLONGSTRLEN ) :: buf 
     logical                      :: received
-    integer                      :: sz, prio
     received = .false.
     call msg%kill()
   end function receive_1
@@ -256,9 +252,7 @@ function receive_1( self, msg ) result( received )
   function receive_2( self, buffer ) result( received )
     class(ipc_mq),                 intent(inout) :: self
     character(len=:), allocatable, intent(inout) :: buffer
-    character(len=XLONGSTRLEN)                   :: buf
     logical                                      :: received
-    integer                                      :: sz, prio
     received = .false.
     if( allocated(buffer) ) deallocate(buffer)
   end function receive_2

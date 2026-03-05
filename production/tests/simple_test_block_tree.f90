@@ -55,7 +55,7 @@ integer,          parameter :: NSAMPLE    = 1000
 type(sym)          :: pgrpsym
 type(multi_dendro) :: block_tree
 type(oris)         :: eulspace, eulspace_sub
-integer            :: i, j, ind_min, irnd, exhaustive_cnt
+integer            :: i, j, ind_min, irnd
 integer            :: itree, best_ref
 type(ori)          :: osmp, o, osym
 real               :: inplrotdist, dist, dist_min, dist_subspace, dists(NSAMPLE)

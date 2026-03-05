@@ -1009,13 +1009,13 @@ contains
         type(image), allocatable        :: stk(:), reproj_stk(:)
         type(parameters)    :: params
         type(cmdline)       :: cline
-        type(image)         :: img, vol
+        type(image)         :: vol
         type(string)        :: pdb_file, vol_file
         type(oris)          :: spiral
         type(atoms)         :: molecule
         type(molecule_data) :: mol
         integer             :: i, nimgs
-        real                :: mskdiam, smpd, hp, lp, trs, cen(3)
+        real                :: hp, lp, trs, cen(3)
         integer, parameter  :: NPROJ = 5
         params%smpd   = 3.
         params%lp     = 3.

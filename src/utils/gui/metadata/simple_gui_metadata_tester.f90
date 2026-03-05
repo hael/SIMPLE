@@ -54,7 +54,6 @@ contains
   !---------------- micrograph ----------------
 
   subroutine test_set_get_micrograph()
-    character(len=:),             allocatable :: buffer
     type(gui_metadata_micrograph)             :: meta
     type(string)                              :: path
     real                                      :: dfx, dfy, ctfres
@@ -148,7 +147,6 @@ contains
   subroutine test_serialise_histogram()
     character(len=:),             allocatable :: buffer
     type(gui_metadata_histogram)              :: meta
-    type(string)                              :: name
     real,                         allocatable :: labels(:)
     integer,                      allocatable :: data(:)
     integer                                   :: i

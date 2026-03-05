@@ -140,7 +140,7 @@ contains
         type(builder)               :: build
         real,         allocatable   :: ccmat(:,:)
         complex,      allocatable   :: pft(:,:)
-        integer :: ldim(3), box, kfromto(2), ithr, i, j, k, loc, nrots, irot, nimgs
+        integer :: ldim(3), box, kfromto(2), ithr, i, j, loc, nrots, irot, nimgs
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
         nimgs      = size(imgs)
         ldim       = imgs(1)%get_ldim()

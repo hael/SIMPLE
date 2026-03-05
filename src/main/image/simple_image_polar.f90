@@ -11,8 +11,8 @@ contains
         integer,                intent(in)    :: pdim(3) !< pftsz,kfrom,kto
         type(kbinterpol)  :: kbwin                       !< KB kernel  object
         real, allocatable :: w(:,:)
-        real              :: x, y, d1, d2, dang, ang
-        integer           :: win(2,2), lims(2,3), i, k, l, cnt, f1, f2
+        real              :: x, y, dang, ang
+        integer           :: win(2, 2), lims(2, 3), i, k, l, cnt
         if( allocated(mem_polweights_mat) ) deallocate(mem_polweights_mat)
         if( allocated(mem_polcyc1_mat)    ) deallocate(mem_polcyc1_mat)
         if( allocated(mem_polcyc2_mat)    ) deallocate(mem_polcyc2_mat)
@@ -113,7 +113,7 @@ contains
         logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
         complex(kind=c_float_complex) :: acc, fcomp
         logical :: h_negative
-        integer :: i, k, l, m, ind, h_val, k_val, phys1, phys2, ithr
+        integer :: i, k, l, m, ind, h_val, k_val, phys1, phys2
         ! interpolate
         !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,m,l,h_val,k_val,phys1,phys2,h_negative,fcomp)
         do k=mem_poldim(2),mem_poldim(3)

@@ -257,8 +257,8 @@ contains
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
-        real     :: wwidth, rad_sq, ave,  r2, e, cjs2
-        integer  :: minlen, npix,  i, j, ir, jr, n1, n2, n3, h1, h2
+        real     :: wwidth,  r2, e, cjs2
+        integer  :: minlen,  i, j, ir, jr, n1, n2, n3, h1, h2
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
         if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
         ! width
@@ -304,7 +304,6 @@ contains
         real     :: wwidth, rad_sq, ave, r2, e, cjs2
         integer  :: minlen, npix, i, j, np, n1l, n2l
         integer  :: n1, n2, n3
-        logical  :: soft, avg_backgr
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
         if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
         ! width
@@ -384,9 +383,8 @@ contains
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         real, optional,   intent(in)    :: width, backgr
-        real(dp) :: sumv
-        real     :: wwidth, rad_sq, ave, r2, e, cjs2, cks2
-        integer  :: minlen, npix, n1, n2, n3, i, j, k, ir, jr, kr, h1, h2, h3
+        real     :: wwidth, r2, e, cjs2, cks2
+        integer  :: minlen, n1, n2, n3, i, j, k, ir, jr, kr, h1, h2, h3
         if( self%ldim(3) == 1 ) THROW_HARD('not for 2D')
         if( self%ldim(1) /= mem_msk_box  )then
             if( OMP_IN_PARALLEL() )then

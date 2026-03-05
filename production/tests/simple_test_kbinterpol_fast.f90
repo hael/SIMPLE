@@ -16,7 +16,7 @@ real,       parameter :: ALPHA = 2.0_sp    !< oversampling factor
 integer,    parameter :: BOX   = 256
 real,    allocatable  :: kbw(:,:), kbw_fast(:,:), kbw3D(:,:,:), kbw3D_fast(:,:,:)
 integer :: h, k, iwinsz, wdim, i, win(2,2), cnt, win3D(2,3)
-real    :: loc(2), d(2), kbw_diff, kbw_corr, rmat(2,2), rmat3D(3,3), dists(3), loc3D(3), w(2)
+real    :: loc(2), d(2), kbw_diff, kbw_corr, rmat(2, 2), rmat3D(3, 3), dists(3), loc3D(3)
 real(timer_int_kind)    :: rt_kb, rt_kb_fast
 integer(timer_int_kind) :: t_kb, t_kb_fast
 

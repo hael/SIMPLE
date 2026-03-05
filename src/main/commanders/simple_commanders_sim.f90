@@ -71,7 +71,7 @@ contains
         type(ctf)        :: tfun
         type(projector)  :: vol_pad
         real             :: bfac, bfacerr, euls(3), euls_mirr(3)
-        integer          :: i, j, cnt, ntot
+        integer          :: i, cnt, ntot
         logical          :: apply_ctf
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',   'no')
         if( .not. cline%defined('ctf')      ) call cline%set('ctf',    'yes')
