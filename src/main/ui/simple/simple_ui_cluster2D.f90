@@ -7,6 +7,7 @@ type(ui_program), target :: abinitio2D
 type(ui_program), target :: cleanup2D
 type(ui_program), target :: cluster2D
 type(ui_program), target :: cluster2D_subsets
+type(ui_program), target :: cluster2D_subsets_refine
 type(ui_program), target :: make_cavgs
 type(ui_program), target :: map_cavgs_selection
 type(ui_program), target :: sample_classes
@@ -19,6 +20,7 @@ contains
         call new_abinitio2D(prgtab)
         call new_cleanup2D(prgtab)
         call new_cluster2D_subsets(prgtab)
+        call new_cluster2D_subsets_refine(prgtab)
         call new_make_cavgs(prgtab)
         call new_map_cavgs_selection(prgtab)
         call new_sample_classes(prgtab)
@@ -157,6 +159,49 @@ contains
         ! add to ui_hash
         call add_ui_program('cluster2D_subsets', cluster2D_subsets, prgtab)
     end subroutine new_cluster2D_subsets
+
+    subroutine new_cluster2D_subsets_refine( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call cluster2D_subsets_refine%new(&
+        &'cluster2D_subsets_refine',&                                                                    ! name
+        &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
+        &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
+        &'simple_exec',&                                                                          ! executable
+        &.true.,&                                                                                 ! requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                           ! GUI           
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cluster2D_subsets_refine%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{200}', gui_submenu="cluster 2D", gui_advanced=.false.)
+        call cluster2D_subsets_refine%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+            &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
+        call cluster2D_subsets_refine%add_input(UI_SRCH, 'maxnptcls', 'num', 'Maximum # of particles clustered', 'Max # of particles clustered{100000}',&
+        &'max # of particles{100000}', .false., 100000., gui_submenu="search", gui_advanced=.true.)
+        call cluster2D_subsets_refine%add_input(UI_SRCH, 'nmics', 'num', 'Maximum # of micrographs sampled', 'Max # of micrographs sampled{100}',&
+        &'max # of micrographs{100}', .false., 100., gui_submenu="search", gui_advanced=.true.)
+        ! filter controls
+        call cluster2D_subsets_refine%add_input(UI_FILT, hp, gui_submenu="cluster 2D")
+        call cluster2D_subsets_refine%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
+        call cluster2D_subsets_refine%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
+        &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.,&
+        &gui_submenu="filter", gui_advanced=.true.)
+        ! mask controls
+        call cluster2D_subsets_refine%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
+        ! computer controls
+        call cluster2D_subsets_refine%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call cluster2D_subsets_refine%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
+        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('cluster2D_subsets_refine', cluster2D_subsets_refine, prgtab)
+    end subroutine new_cluster2D_subsets_refine
 
     subroutine new_make_cavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab

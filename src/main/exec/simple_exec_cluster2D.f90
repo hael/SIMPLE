@@ -1,15 +1,16 @@
 !@descr: execution of cluster2D commanders
 module simple_exec_cluster2D
-use simple_cmdline,                  only: cmdline
-use simple_string,                   only: string
-use simple_exec_helpers,             only: restarted_exec
-use simple_commanders_project_cls,   only: commander_sample_classes
-use simple_commanders_cluster2D,     only: commander_ppca_denoise_classes
-use simple_commanders_mkcavgs,       only: commander_make_cavgs_distr,  commander_write_classes
-use simple_commanders_abinitio2D,    only: commander_abinitio2D
-use simple_commanders_cleanup2D,     only: commander_cleanup2D
-use simple_stream_cluster2D_subsets, only: stream_cluster2D_subsets
-use simple_commanders_cavgs,         only: commander_map_cavgs_selection
+use simple_cmdline,                         only: cmdline
+use simple_string,                          only: string
+use simple_exec_helpers,                    only: restarted_exec
+use simple_commanders_project_cls,          only: commander_sample_classes
+use simple_commanders_cluster2D,            only: commander_ppca_denoise_classes
+use simple_commanders_mkcavgs,              only: commander_make_cavgs_distr,  commander_write_classes
+use simple_commanders_abinitio2D,           only: commander_abinitio2D
+use simple_commanders_cleanup2D,            only: commander_cleanup2D
+use simple_stream_cluster2D_subsets,        only: stream_cluster2D_subsets
+use simple_commanders_cavgs,                only: commander_map_cavgs_selection
+use simple_stream_cluster2D_subsets_refine, only: stream_cluster2D_subsets_refine
 implicit none
 
 public :: exec_cluster2D_commander
@@ -18,6 +19,7 @@ private
 type(commander_abinitio2D)                  :: xabinitio2D
 type(commander_cleanup2D)                   :: xcleanup2D 
 type(stream_cluster2D_subsets)              :: xcluster2D_subsets
+type(stream_cluster2D_subsets_refine)       :: xcluster2D_subsets_refine
 type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
 type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
 type(commander_sample_classes)              :: xsample_classes
@@ -44,6 +46,8 @@ contains
                 call xcleanup2D%execute(cline)
             case( 'cluster2D_subsets' )
                 call xcluster2D_subsets%execute(cline)
+            case( 'cluster2D_subsets_refine' )
+                call xcluster2D_subsets_refine%execute(cline)    
             case( 'make_cavgs' )
                 call xmake_cavgs_distr%execute(cline)
             case( 'map_cavgs_selection' )
