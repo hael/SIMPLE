@@ -291,6 +291,11 @@ contains
         write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS OFF'
         endif
         endif
+        if( trim(params%polar).eq.'yes' )then
+        write(logfhandle,609) '>>> POLAR REPRESENTATION IS ON'
+        else
+        write(logfhandle,609) '>>> CARTESIAN REPRESENTATION IS ON'
+        endif
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
