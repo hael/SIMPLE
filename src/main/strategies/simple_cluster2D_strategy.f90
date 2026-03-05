@@ -55,31 +55,28 @@ abstract interface
         type(cmdline),             intent(inout) :: cline
     end subroutine init_interface
 
-    subroutine exec_iter_interface(self, params, build, cline, which_iter, converged)
+    subroutine exec_iter_interface(self, params, build, cline, converged)
         import :: cluster2D_strategy, parameters, builder, cmdline
         class(cluster2D_strategy), intent(inout) :: self
         type(parameters),          intent(inout) :: params
         type(builder),             intent(inout) :: build
         type(cmdline),             intent(inout) :: cline
-        integer,                   intent(in)    :: which_iter
         logical,                   intent(out)   :: converged
     end subroutine exec_iter_interface
 
-    subroutine finalize_iter_interface(self, params, build, which_iter)
+    subroutine finalize_iter_interface(self, params, build)
         import :: cluster2D_strategy, parameters, builder
         class(cluster2D_strategy), intent(inout) :: self
         type(parameters),          intent(in)    :: params
         type(builder),             intent(inout) :: build
-        integer,                   intent(in)    :: which_iter
     end subroutine finalize_iter_interface
 
-    subroutine finalize_run_interface(self, params, build, cline, last_iter)
+    subroutine finalize_run_interface(self, params, build, cline)
         import :: cluster2D_strategy, parameters, builder, cmdline
         class(cluster2D_strategy), intent(inout) :: self
         type(parameters),          intent(in)    :: params
         type(builder),             intent(inout) :: build
         type(cmdline),             intent(inout) :: cline
-        integer,                   intent(in)    :: last_iter
     end subroutine finalize_run_interface
 
     subroutine cleanup_interface(self, params)
@@ -121,7 +118,7 @@ contains
         endif
     end subroutine inmem_initialize
 
-    subroutine inmem_execute_iteration(self, params, build, cline, which_iter, converged)
+    subroutine inmem_execute_iteration(self, params, build, cline, converged)
         use simple_strategy2D_matcher, only: cluster2D_exec
         use simple_starproject,        only: starproject
         use simple_commanders_euclid,  only: commander_calc_group_sigmas
@@ -129,32 +126,30 @@ contains
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
-        integer,                         intent(in)    :: which_iter
         logical,                         intent(out)   :: converged
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(starproject) :: starproj
-        call cline%set('startit',    which_iter)
-        call cline%set('which_iter', which_iter)
+        call cline%set('startit',    params%which_iter)
+        call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
         call cline%set('outfile', ALGN_FBODY//int2str_pad(params%part,params%numlen)//METADATA_EXT)
         ! Execute alignment (cluster2D_exec handles everything: refs prep, alignment, cavgs)
-        call cluster2D_exec(params, build, cline, which_iter, converged)
+        call cluster2D_exec(params, build, cline, params%which_iter, converged)
         ! Euclid sigma2 consolidation for next iteration
         if( params%cc_objfun==OBJFUN_EUCLID )then
-            call cline%set('which_iter', which_iter + 1)
+            call cline%set('which_iter', params%which_iter + 1)
             call xcalc_group_sigmas%execute(cline)
-            call cline%set('which_iter', which_iter)
+            call cline%set('which_iter', params%which_iter)
         endif
         ! Write starfile
-        call starproj%export_cls2D(build%spproj, which_iter)
+        call starproj%export_cls2D(build%spproj, params%which_iter)
     end subroutine inmem_execute_iteration
 
-    subroutine inmem_finalize_iteration(self, params, build, which_iter)
+    subroutine inmem_finalize_iteration(self, params, build)
         class(cluster2D_inmem_strategy), intent(inout)  :: self
         type(parameters),                intent(in)     :: params
         type(builder),                   intent(inout)  :: build
-        integer,                         intent(in)     :: which_iter
-        call gen_jpeg( which_iter ) 
+        call gen_jpeg(params%which_iter) 
     end subroutine inmem_finalize_iteration
 
     subroutine inmem_cleanup(self, params)
@@ -163,13 +158,25 @@ contains
         ! No cleanup needed for in-memory strategy, but could add here if needed in the future
     end subroutine inmem_cleanup
 
-    subroutine inmem_finalize_run(self, params, build, cline, last_iter)
+    subroutine inmem_finalize_run(self, params, build, cline)
         class(cluster2D_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
-        integer,                         intent(in)    :: last_iter
+        type(string) :: finalcavgs
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        if( trim(params%restore_cavgs).eq.'yes' )then
+            if( file_exists(FRCS_FILE) )then
+                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+            endif
+            if( .not. params%l_polar )then
+                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
+                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+                call finalcavgs%kill
+            endif
+            call build%spproj%write_segment_inside('out', params%projfile)
+        endif
+        call cline%set('endit', params%which_iter)
     end subroutine inmem_finalize_run
 
     ! ========================================================================
@@ -188,7 +195,7 @@ contains
         call build%spproj%split_stk(params%nparts)
     end subroutine distr_initialize
 
-    subroutine distr_execute_iteration(self, params, build, cline, which_iter, converged)
+    subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_stream_utils,         only: terminate_stream
         use simple_commanders_mkcavgs,   only: commander_cavgassemble
         use simple_commanders_euclid,    only: commander_calc_group_sigmas
@@ -196,7 +203,6 @@ contains
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
-        integer,                         intent(in)    :: which_iter
         logical,                         intent(out)   :: converged
         type(commander_cavgassemble)      :: xcavgassemble
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
@@ -205,13 +211,13 @@ contains
         real                              :: frac_srch_space
         ! Update job description
         call cline%set('nparts',     params%nparts)
-        call cline%set('startit',    which_iter)
-        call cline%set('which_iter', which_iter)
+        call cline%set('startit',    params%which_iter)
+        call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
         call self%job_descr%set('refs',       params%refs)
         call self%job_descr%set('nparts',     int2str(params%nparts))
-        call self%job_descr%set('startit',    int2str(which_iter))
-        call self%job_descr%set('which_iter', int2str(which_iter))
+        call self%job_descr%set('startit',    int2str(params%which_iter))
+        call self%job_descr%set('which_iter', int2str(params%which_iter))
         call self%job_descr%set('extr_iter',  int2str(params%extr_iter))
         call self%job_descr%set('frcs',       FRCS_FILE)
         ! Schedule distributed jobs
@@ -224,10 +230,11 @@ contains
         call build%spproj%merge_algndocs(params%nptcls, params%nparts, 'ptcl2D', ALGN_FBODY)
         ! Assemble class averages
         if( trim(params%restore_cavgs) .eq. 'yes' )then
-            str_iter   = int2str_pad(which_iter, 3)
-            refs       = CAVGS_ITER_FBODY // str_iter%to_char()            // MRC_EXT
-            refs_even  = CAVGS_ITER_FBODY // str_iter%to_char() // '_even' // MRC_EXT
-            refs_odd   = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // MRC_EXT
+            str_iter   = int2str_pad(params%which_iter, 3)
+            params%refs       = CAVGS_ITER_FBODY // str_iter%to_char()            // MRC_EXT
+            params%refs_even  = CAVGS_ITER_FBODY // str_iter%to_char() // '_even' // MRC_EXT
+            params%refs_odd   = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // MRC_EXT
+            call cline%set('refs', params%refs)
             cline_cavgassemble = cline
             call cline_cavgassemble%set('prg',  'cavgassemble')
             call cline_cavgassemble%delete('which_iter')
@@ -235,16 +242,12 @@ contains
             call cline_cavgassemble%set('nthr', self%nthr_master)
             call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
             call xcavgassemble%execute(cline_cavgassemble)
-            params%refs      = refs
-            params%refs_even = refs_even
-            params%refs_odd  = refs_odd
-            call cline%set('refs', refs)
         endif
         ! Sigma2 consolidation
         if( params%cc_objfun==OBJFUN_EUCLID )then
             cline_calc_sigma = cline
             call cline_calc_sigma%set('prg',        'calc_group_sigmas')
-            call cline_calc_sigma%set('which_iter', which_iter + 1)
+            call cline_calc_sigma%set('which_iter', params%which_iter + 1)
             call cline_calc_sigma%set('nthr',       self%nthr_master)
             call xcalc_group_sigmas%execute(cline_calc_sigma)
         endif
@@ -253,24 +256,23 @@ contains
                                            build%spproj_field%get_n('class'), params%msk)
         if( trim(params%stream2d).eq.'no' ) call progressfile_update(self%conv%get('progress'))
         frac_srch_space = 0.
-        if( which_iter > 1 ) frac_srch_space = self%conv%get('frac_srch')
+        if( params%which_iter > 1 ) frac_srch_space = self%conv%get('frac_srch')
         ! Activate shift search if needed
-        if( which_iter > 3 .and. (frac_srch_space >= FRAC_SH_LIM .or. params%l_doshift) )then
+        if( params%which_iter > 3 .and. (frac_srch_space >= FRAC_SH_LIM .or. params%l_doshift) )then
             if( .not. self%job_descr%isthere('trs') )then
                 call self%job_descr%set('trs', real2str(params%trs))
             endif
         endif
-        converged = (which_iter >= params%minits) .and. converged
-        converged = converged .or. (which_iter >= params%maxits)
+        converged = (params%which_iter >= params%minits) .and. converged
+        converged = converged .or. (params%which_iter >= params%maxits)
     end subroutine distr_execute_iteration
 
-    subroutine distr_finalize_iteration(self, params, build, which_iter)
+    subroutine distr_finalize_iteration(self, params, build)
         class(cluster2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
-        integer,                         intent(in)    :: which_iter
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        call gen_jpeg(which_iter)
+        call gen_jpeg(params%which_iter)
     end subroutine distr_finalize_iteration
 
     subroutine distr_cleanup(self, params)
@@ -281,12 +283,24 @@ contains
         call self%job_descr%kill
     end subroutine distr_cleanup
 
-    subroutine distr_finalize_run(self, params, build, cline, last_iter)
+    subroutine distr_finalize_run(self, params, build, cline)
         class(cluster2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
-        integer,                         intent(in)    :: last_iter
+        type(string) :: finalcavgs
+        if( trim(params%restore_cavgs).eq.'yes' )then
+            if( file_exists(FRCS_FILE) )then
+                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+            endif
+            if( .not. params%l_polar )then
+                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
+                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+                call finalcavgs%kill
+            endif
+            call build%spproj%write_segment_inside('out', params%projfile)
+        endif
+        call cline%set('endit', params%which_iter)
     end subroutine distr_finalize_run
 
     ! private helpers

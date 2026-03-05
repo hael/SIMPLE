@@ -55,6 +55,10 @@ contains
         call copy_imgfile(params%refs, params%refs_even, params%smpd_crop, [1,params%ncls])
         call copy_imgfile(params%refs, params%refs_odd,  params%smpd_crop, [1,params%ncls])
         call cline%set('refs', params%refs)
+        ! destruct
+        call cline_make_cavgs%kill
+        call cline_scalerefs%kill
+        call refs_sc%kill
     end subroutine init_cluster2D_refs
 
     subroutine init_tseries_refs(cline, params, build, cline_make_cavgs, l_scale_inirefs)
