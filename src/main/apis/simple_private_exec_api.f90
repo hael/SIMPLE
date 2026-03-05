@@ -29,7 +29,7 @@ use simple_commanders_preprocess, only: commander_preprocess, commander_motion_c
 commander_gen_pspecs_and_thumbs, commander_ctf_estimate
 
 ! cluster2D commanders, for simultanous 2D alignment and clustering of single-particle images
-use simple_commanders_cluster2D, only: commander_make_cavgs, commander_cluster2D_distr_worker, commander_cluster2D_distr,&
+use simple_commanders_cluster2D, only: commander_make_cavgs, commander_cluster2D_distr_worker, commander_cluster2D,&
 commander_cavgassemble
 
 ! cavgs commanders, for operations on class averages

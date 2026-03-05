@@ -163,7 +163,7 @@ type, private :: nice_view_vols
     type(ori) :: plot_ori
 end type nice_view_vols
 
-type, public :: simple_nice_communicator
+type, public :: simple_nice_comm
     integer,                        public  :: pid, current_checksum
     logical,                        private :: remote_active
     integer,                        private :: port
@@ -210,17 +210,17 @@ type, public :: simple_nice_communicator
         procedure, public  :: get_real_keys_json
         procedure, public  :: get_stat_json
 
-end type simple_nice_communicator
+end type simple_nice_comm
 
     contains
 
     subroutine init_1(this, procid, serveraddr)
-        class(simple_nice_communicator), intent(inout) :: this
-        character(*),                    intent(in)    :: serveraddr
-        integer,                         intent(in)    :: procid
-        real,                            allocatable   :: histogram_rvec(:)
-        character(len=STDLEN)                          :: ip, port_str
-        integer                                        :: io_stat
+        class(simple_nice_comm), intent(inout) :: this
+        character(*),            intent(in)    :: serveraddr
+        integer,                 intent(in)    :: procid
+        real, allocatable     :: histogram_rvec(:)
+        character(len=STDLEN) :: ip, port_str
+        integer               :: io_stat
         if(procid > 0 .and. serveraddr .ne. "") then
             this%remote_active = .true.
             port_str(:) = serveraddr(:)
@@ -266,16 +266,16 @@ end type simple_nice_communicator
     end subroutine init_1
 
     subroutine init_2(this, procid, serveraddr)
-        class(simple_nice_communicator), intent(inout) :: this
-        class(string),                   intent(in)    :: serveraddr
-        integer,                         intent(in)    :: procid
+        class(simple_nice_comm), intent(inout) :: this
+        class(string),           intent(in)    :: serveraddr
+        integer,                 intent(in)    :: procid
         call this%init_1(procid, serveraddr%to_char())
     end subroutine init_2
 
     subroutine terminate(this, stop, failed, export_project)
-        class(simple_nice_communicator), intent(inout) :: this
-        logical,               optional, intent(in)    :: stop, failed
-        type(sp_project),      optional, intent(inout) :: export_project
+        class(simple_nice_comm),    intent(inout) :: this
+        logical,          optional, intent(in)    :: stop, failed
+        type(sp_project), optional, intent(inout) :: export_project
         if(present(stop)) then
             if(stop) then
                 this%stat_root%status = "stopped"
@@ -301,10 +301,10 @@ end type simple_nice_communicator
     end subroutine terminate
 
     subroutine cycle(this)
-        class(simple_nice_communicator), intent(inout) :: this
-        character(kind=CK,len=:), allocatable          :: json_str
-        integer                                        :: rc, checksum, trial_count
-        type(json_value),                pointer       :: update_arguments
+        class(simple_nice_comm), intent(inout) :: this
+        character(kind=CK,len=:), allocatable  :: json_str
+        integer                                :: rc, checksum, trial_count
+        type(json_value), pointer              :: update_arguments
         logical :: found, exit_argument, trial_exit, found_arguments_1, found_arguments_2, found_arguments_3
         call this%generate_stat_json()
         call this%stat_json%print_to_string(this%stat_json_root, json_str)
@@ -366,8 +366,8 @@ end type simple_nice_communicator
     end subroutine cycle
 
     subroutine start_comm_thread(this)
-        class(simple_nice_communicator), intent(inout) :: this
-        integer                                        :: rc
+        class(simple_nice_comm), intent(inout) :: this
+        integer :: rc
         nice_thread_comm%terminate = .false.
         nice_thread_comm%procid    = this%stat_root%procid
         nice_thread_comm%ip        = this%ip
@@ -387,9 +387,9 @@ end type simple_nice_communicator
     end subroutine start_comm_thread
 
     subroutine terminate_comm_thread(this)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(c_ptr)                                    :: ptr
-        integer                                        :: rc
+        class(simple_nice_comm), intent(inout) :: this
+        type(c_ptr) :: ptr
+        integer     :: rc
         rc = c_pthread_mutex_lock(nice_thread_comm%lock)
         nice_thread_comm%terminate = .true.
         rc = c_pthread_mutex_unlock(nice_thread_comm%lock)
@@ -475,8 +475,8 @@ end type simple_nice_communicator
     end subroutine remote_heartbeat
 
     subroutine generate_stat_json(this)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(json_value),                pointer       :: views, headlinestats, histograms, plots
+        class(simple_nice_comm), intent(inout) :: this
+        type(json_value), pointer :: views, headlinestats, histograms, plots
         call this%stat_json%initialize(no_whitespace=.true.)
         call this%stat_json%create_object(this%stat_json_root,'')
         call this%stat_json%add(this%stat_json_root, "status",            this%stat_root%status)
@@ -1129,17 +1129,17 @@ end type simple_nice_communicator
     end subroutine generate_stat_json
 
     subroutine fsc_object( this, iori_l, fsc_json, vol_oris, fsc_oris, fsc05, fsc0143)
-        class(simple_nice_communicator), intent(inout) :: this
-        integer,                         intent(in)    :: iori_l
-        type(json_value), pointer,       intent(inout) :: fsc_json
-        type(oris),                      intent(in)    :: vol_oris, fsc_oris
-        real,                            intent(out)   :: fsc05, fsc0143
-        type(json_value), pointer     :: datasets, dataset, data, labels !fsc_json
-        type(string)                  :: fscfile
-        real,             allocatable :: fsc(:), res(:)
-        real                          :: smpd_l, box_l
-        integer                       :: ifsc
-        logical                       :: fsc05_crossed, fsc0143_crossed
+        class(simple_nice_comm),   intent(inout) :: this
+        integer,                   intent(in)    :: iori_l
+        type(json_value), pointer, intent(inout) :: fsc_json
+        type(oris),                intent(in)    :: vol_oris, fsc_oris
+        real,                      intent(out)   :: fsc05, fsc0143
+        type(json_value), pointer :: datasets, dataset, data, labels !fsc_json
+        type(string)              :: fscfile
+        real,         allocatable :: fsc(:), res(:)
+        real                      :: smpd_l, box_l
+        integer                   :: ifsc
+        logical                   :: fsc05_crossed, fsc0143_crossed
         if(.not. vol_oris%get_noris() .eq. fsc_oris%get_noris()) return
         if(.not. vol_oris%isthere(iori_l, "smpd")) return
         if(.not. fsc_oris%isthere(iori_l, "fsc")) return
@@ -1189,12 +1189,12 @@ end type simple_nice_communicator
 
     subroutine update_micrographs(this, movies_imported, movies_processed, last_movie_imported, micrographs, micrographs_rejected, compute_in_use,&
         avg_ctf_resolution, avg_ice_score, avg_astigmatism, thumbnail, thumbnail_id, thumbnail_static_id, carousel, clear_carousel)
-        class(simple_nice_communicator), intent(inout) :: this
-        integer,               optional, intent(in)    :: movies_imported, movies_processed, micrographs, micrographs_rejected, compute_in_use, thumbnail_id, thumbnail_static_id
-        real,                  optional, intent(in)    :: avg_ctf_resolution, avg_ice_score, avg_astigmatism
-        logical,               optional, intent(in)    :: last_movie_imported, carousel, clear_carousel
-        character(len=*),      optional, intent(in)    :: thumbnail
-        type(nice_stat_thumb_image)                    :: new_thumbnail
+        class(simple_nice_comm),    intent(inout) :: this
+        integer,          optional, intent(in)    :: movies_imported, movies_processed, micrographs, micrographs_rejected, compute_in_use, thumbnail_id, thumbnail_static_id
+        real,             optional, intent(in)    :: avg_ctf_resolution, avg_ice_score, avg_astigmatism
+        logical,          optional, intent(in)    :: last_movie_imported, carousel, clear_carousel
+        character(len=*), optional, intent(in)    :: thumbnail
+        type(nice_stat_thumb_image) :: new_thumbnail
         integer :: uid, i
         real    :: rnd
         logical :: new
@@ -1248,9 +1248,9 @@ end type simple_nice_communicator
     end subroutine update_micrographs
 
     subroutine update_optics(this, micrographs, assigned, last_micrograph_imported)
-        class(simple_nice_communicator), intent(inout) :: this
-        integer,               optional, intent(in)    :: micrographs, assigned
-        logical,               optional, intent(in)    :: last_micrograph_imported
+        class(simple_nice_comm), intent(inout) :: this
+        integer,       optional, intent(in)    :: micrographs, assigned
+        logical,       optional, intent(in)    :: last_micrograph_imported
         this%view_optics%active = .true.
         if(present(micrographs)) this%view_optics%micrographs  = micrographs
         if(present(assigned))    this%view_optics%opticsgroups = assigned
@@ -1262,13 +1262,13 @@ end type simple_nice_communicator
     subroutine update_pick(this, micrographs_imported, micrographs_rejected, micrographs_picked, last_micrograph_imported, thumbnail, thumbnail_id, &
     thumbnail_static_id, carousel, clear_carousel, boxfile, scale, gaussian_diameter, suggested_diameter, pickrefs_thumbnail, pickrefs_thumbnail_id, &
     pickrefs_thumbnail_n_tiles, pickrefs_thumbnail_static_id, pickrefs_thumbnail_scale)
-        class(simple_nice_communicator), intent(inout) :: this
-        integer,               optional, intent(in)    :: micrographs_imported, micrographs_rejected, micrographs_picked, thumbnail_id, thumbnail_static_id, gaussian_diameter, suggested_diameter
-        integer,               optional, intent(in)    :: pickrefs_thumbnail_id, pickrefs_thumbnail_static_id, pickrefs_thumbnail_n_tiles
-        logical,               optional, intent(in)    :: last_micrograph_imported, carousel, clear_carousel
-        character(len=*),      optional, intent(in)    :: thumbnail, pickrefs_thumbnail, boxfile
-        real,                  optional, intent(in)    :: scale, pickrefs_thumbnail_scale
-        type(nice_stat_thumb_image)                    :: new_thumbnail
+        class(simple_nice_comm),    intent(inout) :: this
+        integer,          optional, intent(in)    :: micrographs_imported, micrographs_rejected, micrographs_picked, thumbnail_id, thumbnail_static_id, gaussian_diameter, suggested_diameter
+        integer,          optional, intent(in)    :: pickrefs_thumbnail_id, pickrefs_thumbnail_static_id, pickrefs_thumbnail_n_tiles
+        logical,          optional, intent(in)    :: last_micrograph_imported, carousel, clear_carousel
+        character(len=*), optional, intent(in)    :: thumbnail, pickrefs_thumbnail, boxfile
+        real,             optional, intent(in)    :: scale, pickrefs_thumbnail_scale
+        type(nice_stat_thumb_image) :: new_thumbnail
         integer :: uid, i
         real    :: rnd
         logical :: new
@@ -1346,17 +1346,17 @@ end type simple_nice_communicator
     thumbnail_n_tiles, stats_mask, stats_resolution, stats_population, scale, pool_rejected_thumbnail, pool_rejected_thumbnail_id, pool_rejected_thumbnail_static_id, &
     pool_rejected_thumbnail_n_tiles, pool_rejected_scale, chunk_rejected_thumbnail, chunk_rejected_thumbnail_id, chunk_rejected_thumbnail_static_id, &
     chunk_rejected_thumbnail_n_tiles, chunk_rejected_scale, snapshot_id, snapshot_time, rejection_params, snapshot_json, snapshot_json_clear)
-        class(simple_nice_communicator), intent(inout) :: this
-        integer,               optional, intent(in)    :: particles_extracted, particles_imported, iteration, number_classes, number_classes_rejected, thumbnail_n_tiles
-        integer,               optional, intent(in)    :: number_particles_assigned, number_particles_rejected, thumbnail_id, thumbnail_static_id, pool_rejected_thumbnail_id
-        integer,               optional, intent(in)    :: pool_rejected_thumbnail_static_id, pool_rejected_thumbnail_n_tiles, chunk_rejected_thumbnail_id
-        integer,               optional, intent(in)    :: chunk_rejected_thumbnail_static_id, chunk_rejected_thumbnail_n_tiles, snapshot_id
-        character(len=*),      optional, intent(in)    :: thumbnail, last_iteration, pool_rejected_thumbnail, chunk_rejected_thumbnail, snapshot_time
-        logical,               optional, intent(in)    :: last_particles_imported, snapshot_json_clear
-        real,                  optional, intent(in)    :: maximum_resolution
-        real,                  optional, intent(in)    :: stats_mask(:), stats_population(:), stats_resolution(:)
-        real,                  optional, intent(in)    :: scale, pool_rejected_scale, chunk_rejected_scale
-        real,                  optional, intent(in)    :: rejection_params(3)
+        class(simple_nice_comm), intent(inout) :: this
+        integer,          optional, intent(in)    :: particles_extracted, particles_imported, iteration, number_classes, number_classes_rejected, thumbnail_n_tiles
+        integer,          optional, intent(in)    :: number_particles_assigned, number_particles_rejected, thumbnail_id, thumbnail_static_id, pool_rejected_thumbnail_id
+        integer,          optional, intent(in)    :: pool_rejected_thumbnail_static_id, pool_rejected_thumbnail_n_tiles, chunk_rejected_thumbnail_id
+        integer,          optional, intent(in)    :: chunk_rejected_thumbnail_static_id, chunk_rejected_thumbnail_n_tiles, snapshot_id
+        character(len=*), optional, intent(in)    :: thumbnail, last_iteration, pool_rejected_thumbnail, chunk_rejected_thumbnail, snapshot_time
+        logical,          optional, intent(in)    :: last_particles_imported, snapshot_json_clear
+        real,             optional, intent(in)    :: maximum_resolution
+        real,             optional, intent(in)    :: stats_mask(:), stats_population(:), stats_resolution(:)
+        real,             optional, intent(in)    :: scale, pool_rejected_scale, chunk_rejected_scale
+        real,             optional, intent(in)    :: rejection_params(3)
         type(json_value), pointer, optional, intent(in) :: snapshot_json
         logical, allocatable                           :: msk(:)
         integer, allocatable                           :: id(:)
@@ -1486,11 +1486,11 @@ end type simple_nice_communicator
     end subroutine update_cls2D
 
     subroutine update_ini3D(this, stage, number_states, last_stage_completed, lp, vol_oris, fsc_oris)
-        class(simple_nice_communicator),           intent(inout) :: this
-        type(oris),                      optional, intent(in)    :: vol_oris, fsc_oris
-        integer,                         optional, intent(in)    :: stage, number_states
-        logical,                         optional, intent(in)    :: last_stage_completed
-        real,                            optional, intent(in)    :: lp
+        class(simple_nice_comm), intent(inout) :: this
+        type(oris), optional,    intent(in)    :: vol_oris, fsc_oris
+        integer,    optional,    intent(in)    :: stage, number_states
+        logical,    optional,    intent(in)    :: last_stage_completed
+        real,       optional,    intent(in)    :: lp
         this%view_ini3D%active = .true.
         if(present(stage))         this%view_ini3D%stage         = stage
         if(present(number_states)) this%view_ini3D%number_states = number_states
@@ -1509,28 +1509,28 @@ end type simple_nice_communicator
     end subroutine update_ini3D
 
     subroutine update_vols(this, number_vols)
-        class(simple_nice_communicator),           intent(inout) :: this
-        integer,                         optional, intent(in)    :: number_vols
+        class(simple_nice_comm), intent(inout) :: this
+        integer,       optional, intent(in)    :: number_vols
         this%view_vols%active = .true.
         if(present(number_vols)) this%view_vols%number_vols = number_vols
     end subroutine update_vols
 
     subroutine text_data_object_1(this, ptr, key, val)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(json_value), pointer,       intent(inout) :: ptr
-        character(*),                    intent(in)    :: key
-        integer,                         intent(in)    :: val
+        class(simple_nice_comm),   intent(inout) :: this
+        type(json_value), pointer, intent(inout) :: ptr
+        character(*),              intent(in)    :: key
+        integer,                   intent(in)    :: val
         call this%stat_json%create_object(ptr, key)
         call this%stat_json%add(ptr, "value",  val)
         call this%stat_json%add(ptr, "type",  "integer")
     end subroutine text_data_object_1
 
     subroutine text_data_object_2(this, ptr, key, val, dp)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(json_value), pointer,       intent(inout) :: ptr
-        character(*),                    intent(in)    :: key
-        real,                            intent(in)    :: val
-        integer, optional,               intent(in)    :: dp
+        class(simple_nice_comm),   intent(inout) :: this
+        type(json_value), pointer, intent(inout) :: ptr
+        character(*),              intent(in)    :: key
+        real,                      intent(in)    :: val
+        integer, optional,         intent(in)    :: dp
         call this%stat_json%create_object(ptr, key)
         call this%stat_json%add(ptr, "value",  dble(val))
         call this%stat_json%add(ptr, "type",  "float")
@@ -1538,22 +1538,22 @@ end type simple_nice_communicator
     end subroutine text_data_object_2
 
     subroutine text_data_object_3(this, ptr, key, val)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(json_value), pointer,       intent(inout) :: ptr
-        character(*),                    intent(in)    :: key
-        character(*),                    intent(in)    :: val
+        class(simple_nice_comm),   intent(inout) :: this
+        type(json_value), pointer, intent(inout) :: ptr
+        character(*),              intent(in)    :: key
+        character(*),              intent(in)    :: val
         call this%stat_json%create_object(ptr, key)
         call this%stat_json%add(ptr, "value",  val)
         call this%stat_json%add(ptr, "type",  "string")
     end subroutine text_data_object_3
 
     subroutine image_thumbnail_object(this, ptr, thumb_image, name)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(json_value), pointer,       intent(inout) :: ptr
-        type(nice_stat_thumb_image),     intent(in)    :: thumb_image
-        character(*),     optional,      intent(in)    :: name
-        type(json_value), pointer                      :: metadata, metadata_obj
-        integer                                        :: i
+        class(simple_nice_comm),     intent(inout) :: this
+        type(json_value), pointer,   intent(inout) :: ptr
+        type(nice_stat_thumb_image), intent(in)    :: thumb_image
+        character(*),     optional,  intent(in)    :: name
+        type(json_value), pointer :: metadata, metadata_obj
+        integer                   :: i
         if(present(name)) then
             call this%stat_json%create_object(ptr, name)
         else
@@ -1593,12 +1593,12 @@ end type simple_nice_communicator
     end subroutine image_thumbnail_object
 
     subroutine doughnut_plot_object(this, ptr, plot, name, value)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(json_value), pointer,       intent(inout) :: ptr
-        type(nice_plot_doughnut),        intent(in)    :: plot
-        character(*),     optional,      intent(in)    :: name, value
-        type(json_value),                pointer       :: data, colours, labels, datasets, dataset
-        integer                                        :: i
+        class(simple_nice_comm),   intent(inout) :: this
+        type(json_value), pointer, intent(inout) :: ptr
+        type(nice_plot_doughnut),  intent(in)    :: plot
+        character(*), optional,    intent(in)    :: name, value
+        type(json_value), pointer :: data, colours, labels, datasets, dataset
+        integer :: i
         if(present(name)) then
             call this%stat_json%create_object(ptr, name)
         else
@@ -1623,12 +1623,12 @@ end type simple_nice_communicator
     end subroutine doughnut_plot_object
 
     subroutine bar_plot_object(this, ptr, plot, name, value, extra_1)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(json_value), pointer,       intent(inout) :: ptr
-        type(nice_plot_bar),             intent(in)    :: plot
-        character(*),     optional,      intent(in)    :: name, value, extra_1
-        type(json_value),                pointer       :: data, labels, datasets, dataset
-        integer                                        :: i
+        class(simple_nice_comm),   intent(inout) :: this
+        type(json_value), pointer, intent(inout) :: ptr
+        type(nice_plot_bar),       intent(in)    :: plot
+        character(*), optional,    intent(in)    :: name, value, extra_1
+        type(json_value), pointer :: data, labels, datasets, dataset
+        integer                   :: i
         if(present(name)) then
             call this%stat_json%create_object(ptr, name)
         else
@@ -1653,8 +1653,8 @@ end type simple_nice_communicator
     end subroutine bar_plot_object
 
     function calculate_checksum(this, str)
-        class(simple_nice_communicator), intent(inout)   :: this
-        character(kind=CK,len=:),allocatable, intent(in) :: str
+        class(simple_nice_comm),               intent(inout) :: this
+        character(kind=CK,len=:), allocatable, intent(in)    :: str
         integer       :: calculate_checksum, i
         calculate_checksum = 0
         do i = 1, len(str)
@@ -1677,11 +1677,11 @@ end type simple_nice_communicator
     end function datestr
 
     subroutine update_from_project(this, spproj)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(sp_project),                intent(inout) :: spproj
+        class(simple_nice_comm), intent(inout) :: this
+        type(sp_project),        intent(inout) :: spproj
         type(oris)                                     :: vol_oris
-        logical,            allocatable                :: state_mask(:)
-        integer,            allocatable                :: pinds(:)
+        logical, allocatable :: state_mask(:)
+        integer, allocatable :: pinds(:)
         if(spproj%os_mic%get_noris() .gt. 0) then
             if(allocated(state_mask)) deallocate(state_mask)
             if(allocated(pinds))      deallocate(pinds)
@@ -1710,9 +1710,9 @@ end type simple_nice_communicator
     end subroutine update_from_project
 
     subroutine get_real_keys_json(this, ptr, seg_ori)
-        class(simple_nice_communicator), intent(inout) :: this
-        type(json_value), pointer,       intent(inout) :: ptr
-        type(ori),                       intent(in)    :: seg_ori
+        class(simple_nice_comm),   intent(inout) :: this
+        type(json_value), pointer, intent(inout) :: ptr
+        type(ori),                 intent(in)    :: seg_ori
         type(string), allocatable :: keys(:)
         integer :: j
         call this%stat_json%create_array(ptr, 'keys')
@@ -1726,8 +1726,8 @@ end type simple_nice_communicator
     end subroutine get_real_keys_json
 
     subroutine get_stat_json(this, json)
-        class(simple_nice_communicator),       intent(inout) :: this
-        type(json_value),             pointer, intent(inout) :: json
+        class(simple_nice_comm),   intent(inout) :: this
+        type(json_value), pointer, intent(inout) :: json
         call this%generate_stat_json()
         call this%stat_json%clone(this%stat_json_root, json)
     end subroutine get_stat_json

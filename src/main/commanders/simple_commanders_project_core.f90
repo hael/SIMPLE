@@ -246,13 +246,13 @@ contains
     subroutine exec_update_project( self, cline )
         class(commander_update_project), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(simple_nice_communicator) :: nice_communicator
-        type(parameters)               :: params
-        type(sp_project)               :: spproj
+        type(simple_nice_comm) :: nice_comm
+        type(parameters)       :: params
+        type(sp_project)       :: spproj
         call params%new(cline)
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
         ! read relevant segments
         call spproj%read_non_data_segments(params%projfile)
         ! update project info
@@ -262,7 +262,7 @@ contains
         ! write the last bit of the project file
         call spproj%write_non_data_segments(params%projfile)
         ! no printing for this program
-        call nice_communicator%terminate()
+        call nice_comm%terminate()
     end subroutine exec_update_project
 
     subroutine exec_merge_projects( self, cline )

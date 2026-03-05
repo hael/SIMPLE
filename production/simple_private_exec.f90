@@ -19,7 +19,7 @@ type(commander_make_pickrefs)           :: xmake_pickrefs
 ! CLUSTER2D PROGRAMS
 type(commander_make_cavgs)              :: xmake_cavgs
 type(commander_cluster2D_distr_worker)  :: xcluster2D_distr_worker
-type(commander_cluster2D_distr)         :: xcluster2D_distr
+type(commander_cluster2D)               :: xcluster2D_distr
 type(commander_cavgassemble)            :: xcavgassemble
 type(commander_rank_cavgs)              :: xrank_cavgs
 type(commander_export_cavgs)            :: xexport_cavgs

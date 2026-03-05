@@ -42,7 +42,6 @@ contains
         class(commander_abinitio2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
-        type(commander_cluster2D_distr)  :: xcluster2D_distr
         type(commander_cluster2D)        :: xcluster2D
         type(commander_calc_pspec_distr) :: xcalc_pspec_distr
         ! command lines
@@ -516,11 +515,7 @@ contains
                 call xcalc_pspec_distr%execute(cline_calc_pspec)
             endif
             ! clustering
-            if( l_shmem )then
-                call xcluster2D%execute(cline_cluster2D)
-            else
-                call xcluster2D_distr%execute(cline_cluster2D)
-            endif
+            call xcluster2D%execute(cline_cluster2D)
         end subroutine execute_cluster2D
 
         subroutine output_stats( prefix )

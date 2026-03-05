@@ -45,18 +45,18 @@ contains
     subroutine exec_import_particles( self, cline )
         class(commander_import_particles), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(string), allocatable      :: stkfnames(:)
-        real,         allocatable      :: line(:)
-        type(simple_nice_communicator) :: nice_communicator
-        type(string)                   :: phaseplate, ctfstr
-        type(parameters)               :: params
-        type(sp_project)               :: spproj
-        type(oris)                     :: os
-        type(nrtxtfile)                :: paramfile
-        type(ctfparams)                :: ctfvars
-        integer                        :: ldim1(3), i, ndatlines, nrecs, n_ori_inputs, nstks
-        logical                        :: inputted_oritab, inputted_plaintexttab, inputted_deftab, inputted_stk_den
-        logical                        :: l_stktab_per_stk_parms, is_ptcl
+        type(string), allocatable :: stkfnames(:)
+        real,         allocatable :: line(:)
+        type(simple_nice_comm)    :: nice_comm
+        type(string)              :: phaseplate, ctfstr
+        type(parameters)          :: params
+        type(sp_project)          :: spproj
+        type(oris)                :: os
+        type(nrtxtfile)           :: paramfile
+        type(ctfparams)           :: ctfvars
+        integer                   :: ldim1(3), i, ndatlines, nrecs, n_ori_inputs, nstks
+        logical                   :: inputted_oritab, inputted_plaintexttab, inputted_deftab, inputted_stk_den
+        logical                   :: l_stktab_per_stk_parms, is_ptcl
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
         l_stktab_per_stk_parms = .true.
@@ -86,8 +86,8 @@ contains
             THROW_HARD('either stk or stktab needed on command line; exec_import_particles')
         endif
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
         ! set is particle flag for correct field parsing
         is_ptcl = .false.
         if( cline%defined('stk') ) is_ptcl = .true.
@@ -291,19 +291,19 @@ contains
         endif
         ! WRITE PROJECT FILE
         call spproj%write ! full write since this is guaranteed to be the first import
-        call nice_communicator%terminate()
+        call nice_comm%terminate()
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_import_particles
 
     subroutine exec_import_boxes( self, cline )
         class(commander_import_boxes), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(simple_nice_communicator) :: nice_communicator
-        type(parameters)               :: params
-        type(sp_project)               :: spproj
-        integer                        :: nos_mic, nboxf, i
-        type(string), allocatable      :: boxfnames(:)
-        type(string)                   :: boxfname, intg, cwd, boxname
+        type(simple_nice_comm)    :: nice_comm
+        type(parameters)          :: params
+        type(sp_project)          :: spproj
+        integer                   :: nos_mic, nboxf, i
+        type(string), allocatable :: boxfnames(:)
+        type(string)              :: boxfname, intg, cwd, boxname
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call simple_getcwd(cwd)
@@ -312,8 +312,8 @@ contains
             THROW_HARD('project file: '//params%projfile%to_char()//' does not exist! exec_import_boxes')
         endif
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
         if(params%reset_boxfiles .eq. 'yes') then
             call spproj%read(params%projfile)
             do i=1,spproj%os_mic%get_noris()
@@ -351,27 +351,27 @@ contains
             ! write project file
             call spproj%write_segment_inside('mic') ! all that's needed here
         end if
-        call nice_communicator%terminate()
+        call nice_comm%terminate()
         call simple_end('**** IMPORT_BOXES NORMAL STOP ****')
     end subroutine exec_import_boxes
 
     subroutine exec_zero_project_shifts( self, cline )
         class(commander_zero_project_shifts), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(simple_nice_communicator) :: nice_communicator
-        type(parameters)               :: params
-        type(sp_project)               :: spproj
+        type(simple_nice_comm) :: nice_comm
+        type(parameters)       :: params
+        type(sp_project)       :: spproj
         call cline%set('mkdir', 'yes')
         call params%new(cline, silent=.true.)
         ! nice communicator init
-        call nice_communicator%init(params%niceprocid, params%niceserver)
-        call nice_communicator%cycle()
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
         call spproj%read(params%projfile)
         call spproj%os_ptcl2D%zero_shifts
         call spproj%os_ptcl3D%zero_shifts
         call spproj%write(params%projfile)
         call spproj%kill
-        call nice_communicator%terminate()
+        call nice_comm%terminate()
     end subroutine exec_zero_project_shifts
 
     subroutine exec_prune_project_distr( self, cline )
