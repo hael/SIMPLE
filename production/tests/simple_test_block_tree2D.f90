@@ -62,6 +62,7 @@ build_time = tic()
 ! block_tree = gen_eulspace_block_tree_corr(eulspace, eulspace_sub, pgrpsym, proj_arr, params)
 ! block_tree = gen_eulspace_block_tree(eulspace, eulspace_sub, pgrpsym)
 block_tree = gen_corr_block_tree_aff_prop(proj_arr, params)
+print *, block_tree%get_n_trees()
 build_time_rt = toc(build_time)
 print *, 'build_time', build_time_rt
 ! ! SEARCHING
@@ -98,33 +99,30 @@ print *, 'build_time', build_time_rt
 ! print *, 'AVG SEARCH TIME', search_time_rt / NSAMPLE
 
 
-! ! Searching AP clustered hierarchical tree
-do i = 1, NSAMPLE 
-    irnd = irnd_uni(NSPACE)
-    call eulspace%get_ori(irnd, osmp)
-    dist_min = huge(1.0)
-    ind_min = 1
-    ! no coarse node in this case, so calculate distances to all roots
-    do itree = 1, block_tree%get_n_trees()
-        bt_n = block_tree%get_root_node(itree)
-        call eulspace%get_ori(bt_n%ref_idx, o)
-        call pgrpsym%sym_dists(osmp, o, osym, dist, inplrotdist)
-        if (dist < dist_min) then 
-            dist_min = dist 
-            ind_min = bt_n%ref_idx
-        end if 
-    end do  
-    dist_subspace = dist_min
-    itree = ind_min
-    call srch_eul_bl_tree(osmp, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min, l_greedy=.true.)
-    dists(i) = dist_min
-end do 
+! Searching AP clustered hierarchical tree, based on euldist from random projection
+! do i = 1, NSAMPLE 
+!     irnd = irnd_uni(NSPACE)
+!     call eulspace%get_ori(irnd, osmp)
+!     dist_min = huge(1.0)
+!     ind_min = 1
+!     ! no coarse node in this case, so first find best root
+!     do itree = 1, block_tree%get_n_trees()
+!         bt_n = block_tree%get_root_node(itree)
+!         call eulspace%get_ori(bt_n%ref_idx, o)
+!         call pgrpsym%sym_dists(osmp, o, osym, dist, inplrotdist)
+!         if (dist < dist_min) then 
+!             dist_min = dist 
+!             ind_min = itree
+!         end if 
+!     end do  
+!     dist_subspace = dist_min
+!     itree = ind_min
+!     call srch_eul_bl_tree(osmp, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min, l_greedy=.true.)
+!     dists(i)      = dist_min
+!     dist_min_tot = dist_min_tot + dist_min
+!     print *, 'SAMPLE ', irnd, ': itree=', itree, ' dist=', dist_min, ' dist_subspace=', dist_subspace
+! end do 
 
-print *, 'ntrees', block_tree%get_n_trees()
-
-do itree = 1, block_tree%get_n_trees()
-    print *, block_tree%get_tree_pop(itree)
-end do 
 
 end program simple_test_block_tree2D
     

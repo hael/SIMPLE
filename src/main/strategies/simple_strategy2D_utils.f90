@@ -1014,42 +1014,62 @@ contains
         type(oris)          :: spiral
         type(atoms)         :: molecule
         type(molecule_data) :: mol
-        integer             :: i, nimgs
-        real                :: hp, lp, trs, cen(3)
+        integer             :: i, j, nimgs
+        real                :: hp, lp, cen(3)
         integer, parameter  :: NPROJ = 5
-        params%smpd   = 3.
-        params%lp     = 3.
-        params%trs    = 5.
-        params%ctf    = 'no'
-        params%objfun = 'cc'
+        params%smpd    = 3.
+        params%lp      = 6.
+        params%hp      = 20.
+        params%nthr    = 8
+        params%trs     = 15.
+        params%ctf     = 'no'
+        params%objfun  = 'cc'
         mol = sars_cov2_spkgp_6vxx()
         pdb_file = '6VXX.pdb'
         vol_file = '6VXX.mrc'
         call molecule%pdb2mrc( pdb_file, vol_file, params%smpd, mol=mol)
         call find_ldim_nptcls(vol_file, params%ldim, params%nptcls)
         params%box = params%ldim(1)
-        params%mskdiam = params%smpd * params%ldim(1) / 2.
+        params%mskdiam = params%smpd * params%ldim(1) *.85
         call params%new(cline)
         call vol%new(params%ldim, params%smpd)
         call vol%read(vol_file)
         call spiral%new(NPROJ, is_ptcl=.false.)
         call spiral%spiral()
         reproj_stk = reproject(vol, spiral)
-        nimgs = 10
+        nimgs = 5
         allocate(stk(nimgs))
         call stk(1)%copy(reproj_stk(2))
         call stk(1)%masscen(cen)
         call stk(1)%shift(cen)
-        call stk(1)%vis()
         do i = 2, nimgs  
             call stk(i)%copy(stk(1))
-            call stk(i)%rtsq(real(i)*10., 0., 0.) 
+            call stk(i)%rtsq(real(i)*30., 0., 0.) 
+            call stk(i)%masscen(cen)
+            call stk(i)%shift(cen)
         end do 
         ! match_imgs2ref searches shifts
-        alg_info1 = match_imgs2ref(params, hp, lp, trs, stk(1), stk)
-        ! match_imgs does not search shifts
-        alg_info2 = match_imgs(params, hp, lp, trs, stk, stk)
-        print *, alg_info2(1,2)%corr
-        print *, alg_info2(3,1)%corr
+         alg_info2 = match_imgs(params, params%hp, params%lp, 0., stk, stk)
+        do i = 1, nimgs 
+            do j = 1, nimgs 
+                print *, alg_info2(i,j)%corr 
+                if(alg_info2(i,j)%corr < 0.98) then 
+                    print *, 'MATCH_IMGS FAILED'
+                    return 
+                end if
+            end do 
+        end do 
+        do i = 2, nimgs  
+            call stk(i)%copy(stk(1))
+            call stk(i)%rtsq(real(i)*30., real(i)*1., real(i)*1.) 
+        end do 
+        alg_info1 = match_imgs2ref(params, params%hp, params%lp, params%trs, stk(1), stk)
+         do i = 1, nimgs 
+            print *, alg_info1(i)%corr
+            if(alg_info1(i)%corr < 0.98) then
+                print *, 'MATCH_IMGS2REF FAILED'
+                return 
+            end if 
+        end do         
     end subroutine test_strat2D_utils
 end module simple_strategy2D_utils
