@@ -636,7 +636,7 @@ contains
                 &atms_common(i)%common2, atms_common(i)%common1, frac_diam=params%frac_diam)
             atms_common(i)%ncommon = size(atms_common(i)%common1, dim=2)
             ! write PDB file
-            allocate(beta_core(atms_common(i)%ncommon), source=1.)
+            allocate(beta_core(size(atms_common(i)%common1,dim=2)), source=1.)
             call write_matrix2pdb(el, atms_common(i)%common1, pdbfnames_core(i), betas=beta_core)
             deallocate(beta_core)
         end do
