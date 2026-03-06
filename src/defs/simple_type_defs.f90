@@ -1,5 +1,7 @@
 !@descr: type and enumerator definitions
 module simple_type_defs
+use simple_string, only: string
+implicit none
 
 ! CTF flag type
 enum, bind(c)
@@ -132,6 +134,11 @@ type class_sample
     integer, allocatable :: pinds(:)
     real,    allocatable :: ccs(:)
 end type class_sample
+
+type :: sigma_array
+    type(string)      :: fname
+    real, allocatable :: sigma2(:,:)
+end type sigma_array
 
 contains
 
