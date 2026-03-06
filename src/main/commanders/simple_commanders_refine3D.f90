@@ -25,30 +25,20 @@ type, extends(commander_base) :: commander_refine3D_distr
     procedure :: execute      => exec_refine3D_distr
 end type commander_refine3D_distr
 
+type, extends(commander_base) :: commander_refine3D_distr_worker
+  contains
+    procedure :: execute      => exec_refine3D_distr_worker
+end type commander_refine3D_distr_worker
+
 type, extends(commander_base) :: commander_refine3D
   contains
     procedure :: execute      => exec_refine3D
 end type commander_refine3D
 
-type, extends(commander_base) :: estimate_first_sigmas_commander
-  contains
-    procedure :: execute      => exec_estimate_first_sigmas
-end type estimate_first_sigmas_commander
-
 type, extends(commander_base) :: commander_check_3Dconv
   contains
     procedure :: execute      => exec_check_3Dconv
 end type commander_check_3Dconv
-
-type, extends(commander_base) :: commander_prob_tab
-  contains
-    procedure :: execute      => exec_prob_tab
-end type commander_prob_tab
-
-type, extends(commander_base) :: commander_prob_align
-  contains
-    procedure :: execute      => exec_prob_align
-end type commander_prob_align
 
 contains
 
@@ -193,9 +183,104 @@ contains
         call xpostprocess%execute(cline)        
     end subroutine exec_refine3D_auto
 
+    !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.
+    subroutine exec_refine3D_unified( self, cline )
+        use simple_core_module_api
+        use simple_refine3D_strategy
+        class(commander_base), intent(inout) :: self
+        class(cmdline),        intent(inout) :: cline
+        class(refine3D_strategy), allocatable :: strategy
+        type(parameters) :: params
+        type(builder)    :: build
+        logical          :: converged
+        integer          :: niters
+        ! local defaults (kept consistent with previous distributed master)
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call cline%set('prg', 'refine3D')
+        ! Select execution strategy (shared-memory vs distributed master)
+        strategy = create_refine3D_strategy(cline)
+        call strategy%initialize(params, build, cline)
+        ! Main loop counter semantics:
+        !   - params%maxits is the *number of iterations to run* in this invocation.
+        !   - params%which_iter starts at params%startit.
+        niters            = 0
+        params%which_iter = params%startit - 1
+        if( cline%defined('extr_iter') )then
+            params%extr_iter = params%extr_iter - 1
+        else
+            params%extr_iter = params%startit - 1
+        endif
+        do
+            niters            = niters + 1
+            params%which_iter = params%which_iter + 1
+            params%extr_iter  = params%extr_iter  + 1
+            write(logfhandle,'(A)')   '>>>'
+            write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
+            write(logfhandle,'(A)')   '>>>'
+            call strategy%execute_iteration(params, build, cline, converged)
+            call strategy%finalize_iteration(params, build)
+            if( converged .or. niters >= params%maxits ) exit
+        end do
+        call strategy%finalize_run(params, build, cline)
+        call strategy%cleanup(params)
+        if( allocated(strategy) ) deallocate(strategy)
+        ! Global teardown (strategies may have built different toolboxes)
+        call build%kill_strategy3D_tbox
+        call build%kill_general_tbox
+        call build%pftc%kill
+        call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
+    end subroutine exec_refine3D_unified
+
+    !> Distributed worker (single-iteration execution). This should be the command
+    !> invoked by the scheduler for each partition.
+    subroutine exec_refine3D_distr_worker( self, cline )
+        use simple_core_module_api
+        use simple_strategy3D_matcher, only: refine3D_exec
+        class(commander_refine3D_distr_worker), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        logical          :: converged
+        ! Flags required for worker execution
+        if( .not. cline%defined('part')    ) THROW_HARD('PART must be defined for distributed worker execution')
+        if( .not. cline%defined('outfile') ) THROW_HARD('OUTFILE must be defined for distributed worker execution')
+        ! Worker needs the alignment toolboxes
+        call build%init_params_and_build_strategy3D_tbox(cline, params)
+        params%which_iter = max(1, params%startit)
+        if( .not. cline%defined('extr_iter') ) params%extr_iter = params%which_iter
+        call cline%set('which_iter', int2str(params%which_iter))
+        write(logfhandle,'(A)')   '>>>'
+        write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
+        write(logfhandle,'(A)')   '>>>'
+        call refine3D_exec(params, build, cline, params%which_iter, converged)
+        call build%kill_strategy3D_tbox
+        call build%kill_general_tbox
+    end subroutine exec_refine3D_distr_worker
+
+    !> Backwards-compatible wrapper: the old distributed master commander delegates
+    !> to the unified entrypoint above.
+    ! subroutine exec_refine3D_distr( self, cline )
+    !     class(commander_refine3D_distr), intent(inout) :: self
+    !     class(cmdline),                  intent(inout) :: cline
+    !     type(commander_refine3D_unified) :: xrefine3D
+    !     call xrefine3D%execute(cline)
+    ! end subroutine exec_refine3D_distr
+
+    !> Backwards-compatible wrapper: the old shared-memory master commander delegates
+    !> to the unified entrypoint above.
+    ! subroutine exec_refine3D( self, cline )
+    !     class(commander_refine3D), intent(inout) :: self
+    !     class(cmdline),            intent(inout) :: cline
+    !     type(commander_refine3D_unified) :: xrefine3D
+    !     call xrefine3D%execute(cline)
+    ! end subroutine exec_refine3D
+
     subroutine exec_refine3D_distr( self, cline )
-        use simple_commanders_rec, only: commander_reconstruct3D_distr, commander_volassemble
-        use simple_fsc,            only: plot_fsc
+        use simple_commanders_rec,  only: commander_reconstruct3D_distr, commander_volassemble
+        use simple_commanders_prob, only: commander_prob_align
+        use simple_fsc,             only: plot_fsc
         class(commander_refine3D_distr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
@@ -690,7 +775,9 @@ contains
 
     ! this routine should be kept minimal and clean of all automasking, postprocessing, etc. for performance
     subroutine exec_refine3D( self, cline )
-        use simple_strategy3D_matcher, only: refine3D_exec
+        use simple_strategy3D_matcher,      only: refine3D_exec
+        use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
+        use simple_commanders_prob,         only: commander_prob_align
         class(commander_refine3D), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
@@ -868,81 +955,6 @@ contains
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D
 
-    subroutine exec_estimate_first_sigmas( self, cline )
-        use simple_strategy3D_matcher, only: refine3D_exec
-        class(estimate_first_sigmas_commander), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        ! command lines
-        type(cmdline)    :: cline_first_sigmas, cline_calc_group_sigmas
-        ! other variables
-        type(parameters) :: params
-        type(builder)    :: build
-        type(qsys_env)   :: qenv
-        type(chash)      :: job_descr
-        logical          :: l_shmem, converged
-        if( .not. cline%defined('pgrp')     ) THROW_HARD('point-group symmetry (pgrp) is needed for first sigma estimation')
-        if( .not. cline%defined('mskdiam')  ) THROW_HARD('mask diameter (mskdiam) is needed for first sigma estimation')
-        if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
-        if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; exec_estimate_first_sigmas')
-        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
-        if( .not.cline%defined('vol1') )then
-            if( cline%defined('polar') )then
-                if( cline%get_carg('polar').eq.'yes' )then
-                    if( .not.file_exists(POLAR_REFS_FBODY//BIN_EXT) )then
-                        THROW_HARD('starting polar references are needed for first sigma estimation')
-                    endif
-                else
-                    THROW_HARD('starting volume is needed for first sigma estimation')
-                endif
-            else
-                THROW_HARD('starting volume is needed for first sigma estimation')
-            endif
-        endif
-        l_shmem = .not.cline%defined('nparts')
-        cline_first_sigmas = cline
-        call cline_first_sigmas%set('prg', 'refine3D')
-        call cline_first_sigmas%set('center',    'no')
-        call cline_first_sigmas%set('continue',  'no')
-        call cline_first_sigmas%set('maxits',       1)
-        call cline_first_sigmas%set('which_iter',   1)
-        call cline_first_sigmas%set('objfun','euclid')
-        call cline_first_sigmas%set('refine', 'sigma')
-        call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute
-        call cline_first_sigmas%delete('hp')
-        call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
-        cline_calc_group_sigmas = cline_first_sigmas
-        if( cline%defined('startit') )then
-            call cline_calc_group_sigmas%set('which_iter', params%startit)
-        else
-            call cline_calc_group_sigmas%set('which_iter', params%which_iter)
-        endif
-        ! init
-        if( l_shmem )then
-            call build%init_params_and_build_strategy3D_tbox(cline_first_sigmas, params )
-            call refine3D_exec(params, build, cline_first_sigmas, params%which_iter, converged)
-            call build%kill_strategy3D_tbox
-        else
-            call build%init_params_and_build_spproj(cline_first_sigmas, params)
-            ! setup the environment for distributed execution
-            call qenv%new(params, params%nparts)
-            ! prepare job description
-            call cline_first_sigmas%gen_job_descr(job_descr)
-            ! schedule
-            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
-            ! assemble
-            call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
-            ! end gracefully
-            call qsys_cleanup(params)
-        endif
-        call qenv%kill
-        call job_descr%kill
-        call build%kill_general_tbox
-        call cline_first_sigmas%kill
-        call cline_calc_group_sigmas%kill
-        call simple_end('**** SIMPLE_ESTIMATE_FIRST_SIGMAS NORMAL STOP ****')
-    end subroutine exec_estimate_first_sigmas
-
     subroutine exec_check_3Dconv( self, cline )
         use simple_convergence, only: convergence
         class(commander_check_3Dconv), intent(inout) :: self
@@ -970,126 +982,5 @@ contains
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_CHECK_3DCONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_3Dconv
-
-    subroutine exec_prob_tab( self, cline )
-        use simple_strategy2D3D_common
-        use simple_eul_prob_tab, only: eul_prob_tab
-        use simple_imgarr_utils, only: dealloc_imgarr
-        class(commander_prob_tab), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        integer,          allocatable :: pinds(:)
-        type(image),      allocatable :: tmp_imgs(:), tmp_imgs_pad(:)
-        type(string)                  :: fname
-        type(builder)                 :: build
-        type(parameters)              :: params
-        type(eul_prob_tab)            :: eulprob_obj_part
-        integer :: nptcls
-        call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range( params, build, cline )
-        ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
-        ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
-        ! and merely reproduced here
-        if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
-        else
-            THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
-        endif
-        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
-                                        do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
-                                        
-        ! Build polar particle images
-        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
-        ! Filling prob table in eul_prob_tab
-        call eulprob_obj_part%new(params, build, pinds)
-        fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
-        if( str_has_substr(params%refine, 'prob_state') )then
-            call eulprob_obj_part%fill_tab_state_only
-            call eulprob_obj_part%write_state_tab(fname)
-        else
-            call eulprob_obj_part%fill_tab
-            call eulprob_obj_part%write_tab(fname)
-        endif
-        call eulprob_obj_part%kill
-        call killimgbatch(build)
-        call build%pftc%kill
-        call build%kill_general_tbox
-        call dealloc_imgarr(tmp_imgs)
-        call dealloc_imgarr(tmp_imgs_pad)
-        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
-        call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prob_tab
-
-    subroutine exec_prob_align( self, cline )
-        use simple_eul_prob_tab,        only: eul_prob_tab
-        use simple_strategy2D3D_common, only: sample_ptcls4fillin, sample_ptcls4update
-        use simple_builder,             only: builder
-        class(commander_prob_align), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        integer,            allocatable :: pinds(:)
-        type(string)                    :: fname
-        type(builder)                   :: build
-        type(parameters)                :: params
-        type(commander_prob_tab)        :: xprob_tab
-        type(eul_prob_tab)              :: eulprob_obj_glob
-        type(cmdline)                   :: cline_prob_tab
-        type(qsys_env)                  :: qenv
-        type(chash)                     :: job_descr
-        integer :: nptcls, ipart
-        call cline%set('mkdir',  'no')
-        call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        ! sampled incremented
-        if( params%l_fillin .and. mod(params%startit,5) == 0 )then
-            call sample_ptcls4fillin(build, [1,params%nptcls], .true., nptcls, pinds)
-        else
-            call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
-        endif
-        ! communicate to project file
-        call build%spproj%write_segment_inside(params%oritype)
-        ! more prep
-        call eulprob_obj_glob%new(params, build, pinds)
-        ! generating all corrs on all parts
-        cline_prob_tab = cline
-        call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
-        ! execution
-        if( .not.cline_prob_tab%defined('nparts') )then
-            call xprob_tab%execute(cline_prob_tab)
-        else
-            ! setup the environment for distributed execution
-            call qenv%new(params, params%nparts, nptcls=params%nptcls)
-            call cline_prob_tab%gen_job_descr(job_descr)
-            ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        endif
-        ! reading corrs from all parts
-        if( str_has_substr(params%refine, 'prob_state') )then
-            do ipart = 1, params%nparts
-                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-                call eulprob_obj_glob%read_state_tab(fname)
-            enddo
-            call eulprob_obj_glob%state_assign
-        else
-            do ipart = 1, params%nparts
-                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-                call eulprob_obj_glob%read_tab_to_glob(fname)
-            enddo
-            call eulprob_obj_glob%ref_assign
-        endif
-        ! write the iptcl->(iref,istate) assignment
-        fname = string(ASSIGNMENT_FBODY)//'.dat'
-        call eulprob_obj_glob%write_assignment(fname)
-        ! cleanup
-        call eulprob_obj_glob%kill
-        call cline_prob_tab%kill
-        call qenv%kill
-        call job_descr%kill
-        call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_align'))
-        call qsys_cleanup(params)
-        call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prob_align
 
 end module simple_commanders_refine3D

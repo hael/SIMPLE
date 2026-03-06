@@ -41,12 +41,12 @@ use simple_commanders_project_cls,  only: commander_export_cavgs
 use simple_commanders_project_ptcl, only: commander_prune_project, commander_scale_project_distr
 
 ! refine3D commanders, low-level methods for refine3D for ab initio 3D reconstruction and 3D refinement
-use simple_commanders_refine3D, only: commander_refine3D, commander_check_3Dconv, commander_prob_tab,&
-commander_prob_align
+use simple_commanders_refine3D, only: commander_refine3D, commander_check_3Dconv
+use simple_commanders_prob,     only: commander_prob_tab, commander_prob_align
 
 ! euclid commanders, for obtaining signal statistics for noise normalized Euclidean distance functiuon evalutaion
-use simple_commanders_euclid, only: commander_calc_pspec_distr, commander_calc_pspec, commander_calc_pspec_assemble,&
-commander_calc_group_sigmas
+use simple_commanders_euclid,       only: commander_calc_pspec_distr, commander_calc_pspec,commander_calc_group_sigmas
+use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble, commander_calc_pspec_distr_worker
 
 ! rec commanders, 3D reconstrunction from aligned particles with Fourier griddding
 use simple_commanders_rec, only: commander_volassemble, commander_reconstruct3D

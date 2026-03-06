@@ -15,24 +15,78 @@ type, extends(commander_base) :: commander_calc_pspec
     procedure :: execute      => exec_calc_pspec
 end type commander_calc_pspec
 
-type, extends(commander_base) :: commander_calc_pspec_assemble
-  contains
-    procedure :: execute      => exec_calc_pspec_assemble
-end type commander_calc_pspec_assemble
-
 type, extends(commander_base) :: commander_calc_group_sigmas
   contains
     procedure :: execute      => exec_calc_group_sigmas
 end type commander_calc_group_sigmas
 
-type :: sigma_array
-    type(string)      :: fname
-    real, allocatable :: sigma2(:,:)
-end type sigma_array
+type, extends(commander_base) :: estimate_first_sigmas_commander
+  contains
+    procedure :: execute      => exec_estimate_first_sigmas
+end type estimate_first_sigmas_commander
 
 contains
 
+    !> Main entry point for pspec calculation.
+    !> Determines execution strategy (in-memory or distributed) and delegates the task.
+    subroutine exec_calc_pspec_unified( self, cline )
+        use simple_calc_pspec_strategy, only: calc_pspec_strategy, create_calc_pspec_strategy
+        class(commander_base), intent(inout) :: self
+        class(cmdline),        intent(inout) :: cline
+        ! commanders
+        class(calc_pspec_strategy), allocatable :: strategy
+        ! other variables
+        class(oris), pointer :: spproj_field => NULL()
+        type(parameters)     :: params
+        type(sp_project)     :: spproj
+        logical              :: fall_over
+        ! Initialize
+        call cline%set('stream','no')
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'no')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        ! Sanity check
+        fall_over = .false.
+        select case(trim(params%oritype))
+            case('ptcl2D','ptcl3D','cls3D')
+                fall_over = spproj%get_nptcls() == 0
+            case DEFAULT
+                write(logfhandle,*)'Unsupported ORITYPE; simple_commanders_pspec :: exec_calc_pspec'
+        end select
+        call spproj%ptr2oritype(params%oritype, spproj_field)
+        if( fall_over )then
+            THROW_HARD('no particles found! :exec_calc_pspec')
+        endif
+        ! Partition if necessary
+        if( spproj_field%get_nevenodd() == 0 )then
+            call spproj_field%partition_eo
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
+        ! Create and execute the appropriate strategy
+        strategy = create_calc_pspec_strategy(params, cline)
+        call strategy%execute(params, spproj, cline)
+        ! Cleanup
+        call spproj%kill
+        call simple_touch(CALCPSPEC_FINISHED)
+        call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****')
+        if (allocated(strategy)) deallocate(strategy)
+    end subroutine exec_calc_pspec_unified
+
+    ! subroutine exec_calc_pspec_distr( self, cline )
+    !     class(commander_calc_pspec_distr), intent(inout) :: self
+    !     class(cmdline),                    intent(inout) :: cline
+    !     call self% exec_calc_pspec_unified(self, cline)
+    ! end subroutine exec_calc_pspec_distr
+
+    ! subroutine exec_calc_pspec( self, cline )
+    !     class(commander_calc_pspec_distr), intent(inout) :: self
+    !     class(cmdline),                    intent(inout) :: cline
+    !     call self% exec_calc_pspec_unified(self, cline)
+    ! end subroutine exec_calc_pspec
+
     subroutine exec_calc_pspec_distr( self, cline )
+        use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(commander_calc_pspec_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! commanders
@@ -180,172 +234,6 @@ contains
         call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_pspec
 
-    subroutine exec_calc_pspec_assemble( self, cline )
-        class(commander_calc_pspec_assemble), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        type(parameters)                 :: params
-        type(image)                      :: avg_img
-        type(builder)                    :: build
-        type(sigma2_binfile)             :: binfile
-        type(sigma_array), allocatable   :: sigma2_arrays(:)
-        type(string)                     :: part_fname,starfile_fname,outbin_fname
-        integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nyq,pspec_l,pspec_u
-        real(dp),          allocatable   :: group_pspecs(:,:,:)
-        real,              allocatable   :: pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
-        integer,           allocatable   :: group_weights(:,:)
-        call cline%set('mkdir', 'no')
-        call cline%set('stream','no')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        ! set Fourier index range
-        params%kfromto(1) = 1
-        params%kfromto(2) = calc_fourier_index(2.*params%smpd, params%box, params%smpd)
-        ! generate average power spectrum
-        nptcls     = build%spproj_field%get_noris(consider_state=.false.)
-        nptcls_sel = build%spproj_field%get_noris(consider_state=.true.)
-        call avg_img%new([params%box,params%box,1], params%smpd)
-        call avg_img%zero_and_flag_ft
-        do ipart = 1,params%nparts
-            call build%img%zero_and_flag_ft
-            part_fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
-            call build%img%read(part_fname)
-            call avg_img%add(build%img)
-            call del_file(part_fname)
-        enddo
-        call avg_img%div(real(nptcls_sel))
-        ! calculate power spectrum
-        call avg_img%spectrum('power',pspec_ave,norm=.true.)
-        pspec_ave = pspec_ave / 2.0
-        nyq = avg_img%get_nyq()
-        call avg_img%kill
-        ! read power spectra of particles
-        allocate(pspecs(nyq,params%nptcls),sigma2_arrays(params%nparts))
-        do ipart = 1,params%nparts
-            sigma2_arrays(ipart)%fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
-            call binfile%new_from_file(sigma2_arrays(ipart)%fname)
-            call binfile%read(sigma2_arrays(ipart)%sigma2)
-            pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
-            pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
-            if( (pspec_l<1).or.(pspec_u>params%nptcls) )then
-                THROW_HARD('commander_euclid; exec_calc_pspec_assemble; file ' // sigma2_arrays(ipart)%fname%to_char()// ' has ptcl range ' // int2str(pspec_l) // '-' // int2str(pspec_u))
-            end if
-            pspecs(:,pspec_l:pspec_u) = sigma2_arrays(ipart)%sigma2(:,:)
-        end do
-        ! generate group averages & write
-        if( params%l_sigma_glob )then
-            ngroups = 1
-        else
-            ngroups = 0
-            !$omp parallel do default(shared) private(iptcl,igroup)&
-            !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
-            do iptcl = 1,nptcls
-                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-                igroup  = build%spproj_field%get_int(iptcl,'stkind')
-                ngroups = max(igroup,ngroups)
-            enddo
-            !$omp end parallel do
-        endif
-        allocate(group_pspecs(2,ngroups,nyq),source=0.d0)
-        allocate(group_weights(2,ngroups),source=0)
-        do iptcl = 1,nptcls
-            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-            eo = build%spproj_field%get_eo(iptcl) ! 0/1
-            if( params%l_sigma_glob )then
-                igroup = 1
-            else
-                igroup = build%spproj_field%get_int(iptcl, 'stkind')
-            endif
-            group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + real(pspecs(:, iptcl),dp)
-            group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)  + 1
-        enddo
-        do eo = 1,2
-            do igroup = 1,ngroups
-                if( group_weights(eo,igroup) < 1 ) cycle
-                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / real(group_weights(eo,igroup),dp)
-                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) - real(pspec_ave(:),dp)
-                call remove_negative_sigmas(eo, igroup)
-            end do
-        end do
-        ! write group sigmas to starfile
-        if( cline%defined('which_iter') )then
-            starfile_fname = SIGMA2_GROUP_FBODY//int2str(params%which_iter)//STAR_EXT
-        else
-            starfile_fname = SIGMA2_GROUP_FBODY//'1'//STAR_EXT
-        endif
-        call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
-        ! update sigmas in binfiles to match averages
-        do iptcl = 1,nptcls
-            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-            eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
-            if( params%l_sigma_glob )then
-                igroup = 1
-            else
-                igroup = nint(build%spproj_field%get(iptcl,'stkind'))
-            endif
-            pspecs(:,iptcl) = real(group_pspecs(eo+1,igroup,:))
-        enddo
-        ! write updated sigmas to disc
-        do ipart = 1,params%nparts
-            pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
-            pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
-            if( allocated(sigma2_output) ) deallocate(sigma2_output)
-            allocate(sigma2_output(params%kfromto(1):params%kfromto(2),pspec_l:pspec_u))
-            do iptcl = pspec_l, pspec_u
-                sigma2_output(params%kfromto(1):params%kfromto(2),iptcl) = pspecs(params%kfromto(1):params%kfromto(2),iptcl)
-            end do
-            outbin_fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
-            call binfile%new(outbin_fname, fromp=pspec_l, top=pspec_u, kfromto=[params%kfromto(1), params%kfromto(2)])
-            call binfile%write(sigma2_output)
-        end do
-        ! end gracefully
-        do ipart = 1,params%nparts
-            call sigma2_arrays(ipart)%fname%kill
-            deallocate(sigma2_arrays(ipart)%sigma2)
-        end do
-        deallocate(sigma2_arrays,group_pspecs,pspec_ave,pspecs,group_weights)
-        call binfile%kill
-        call build%kill_general_tbox
-        call simple_touch('CALC_PSPEC_FINISHED')
-        call simple_end('**** SIMPLE_CALC_PSPEC_ASSEMBLE NORMAL STOP ****', print_simple=.false.)
-
-    contains
-
-        subroutine remove_negative_sigmas(eo, igroup)
-            integer, intent(in) :: eo, igroup
-            logical :: is_positive
-            logical :: fixed_from_prev
-            integer :: nn, idx
-            ! remove any negative sigma2 noise values: replace by positive neighboring value
-            do idx = 1, size(group_pspecs, 3)
-                if( group_pspecs(eo,igroup,idx) < 0.d0 )then
-                    ! first try the previous value
-                    fixed_from_prev = .false.
-                    if( idx - 1 >= 1 )then
-                        if( group_pspecs(eo,igroup,idx-1) > 0.d0 )then
-                            group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,idx-1)
-                            fixed_from_prev = .true.
-                        end if
-                    end if
-                    if( .not. fixed_from_prev )then
-                        is_positive = .false.
-                        nn          = idx
-                        do while (.not. is_positive)
-                            nn = nn + 1
-                            if( nn > size(group_pspecs,3) )then
-                                THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // int2str(eo) // ', igroup=' // int2str(igroup))
-                            end if
-                            if( group_pspecs(eo,igroup,nn) > 0.d0 )then
-                                is_positive = .true.
-                                group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,nn)
-                            end if
-                        end do
-                    end if
-                end if
-            end do
-        end subroutine remove_negative_sigmas
-
-    end subroutine exec_calc_pspec_assemble
-
     subroutine exec_calc_group_sigmas( self, cline )
         class(commander_calc_group_sigmas), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
@@ -429,5 +317,80 @@ contains
         call simple_touch('CALC_GROUP_SIGMAS_FINISHED')
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_group_sigmas
+
+    subroutine exec_estimate_first_sigmas( self, cline )
+        use simple_strategy3D_matcher, only: refine3D_exec
+        class(estimate_first_sigmas_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        ! command lines
+        type(cmdline)    :: cline_first_sigmas, cline_calc_group_sigmas
+        ! other variables
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        logical          :: l_shmem, converged
+        if( .not. cline%defined('pgrp')     ) THROW_HARD('point-group symmetry (pgrp) is needed for first sigma estimation')
+        if( .not. cline%defined('mskdiam')  ) THROW_HARD('mask diameter (mskdiam) is needed for first sigma estimation')
+        if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
+        if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; exec_estimate_first_sigmas')
+        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
+        if( .not.cline%defined('vol1') )then
+            if( cline%defined('polar') )then
+                if( cline%get_carg('polar').eq.'yes' )then
+                    if( .not.file_exists(POLAR_REFS_FBODY//BIN_EXT) )then
+                        THROW_HARD('starting polar references are needed for first sigma estimation')
+                    endif
+                else
+                    THROW_HARD('starting volume is needed for first sigma estimation')
+                endif
+            else
+                THROW_HARD('starting volume is needed for first sigma estimation')
+            endif
+        endif
+        l_shmem = .not.cline%defined('nparts')
+        cline_first_sigmas = cline
+        call cline_first_sigmas%set('prg', 'refine3D')
+        call cline_first_sigmas%set('center',    'no')
+        call cline_first_sigmas%set('continue',  'no')
+        call cline_first_sigmas%set('maxits',       1)
+        call cline_first_sigmas%set('which_iter',   1)
+        call cline_first_sigmas%set('objfun','euclid')
+        call cline_first_sigmas%set('refine', 'sigma')
+        call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute
+        call cline_first_sigmas%delete('hp')
+        call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
+        cline_calc_group_sigmas = cline_first_sigmas
+        if( cline%defined('startit') )then
+            call cline_calc_group_sigmas%set('which_iter', params%startit)
+        else
+            call cline_calc_group_sigmas%set('which_iter', params%which_iter)
+        endif
+        ! init
+        if( l_shmem )then
+            call build%init_params_and_build_strategy3D_tbox(cline_first_sigmas, params )
+            call refine3D_exec(params, build, cline_first_sigmas, params%which_iter, converged)
+            call build%kill_strategy3D_tbox
+        else
+            call build%init_params_and_build_spproj(cline_first_sigmas, params)
+            ! setup the environment for distributed execution
+            call qenv%new(params, params%nparts)
+            ! prepare job description
+            call cline_first_sigmas%gen_job_descr(job_descr)
+            ! schedule
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
+            ! assemble
+            call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
+            ! end gracefully
+            call qsys_cleanup(params)
+        endif
+        call qenv%kill
+        call job_descr%kill
+        call build%kill_general_tbox
+        call cline_first_sigmas%kill
+        call cline_calc_group_sigmas%kill
+        call simple_end('**** SIMPLE_ESTIMATE_FIRST_SIGMAS NORMAL STOP ****')
+    end subroutine exec_estimate_first_sigmas
 
 end module simple_commanders_euclid
