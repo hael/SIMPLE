@@ -118,9 +118,6 @@ contains
         params%which_iter = max(1, params%startit)
         params%extr_iter  = params%which_iter
         call cline%set('which_iter', int2str(params%which_iter))
-        write(logfhandle,'(A)')   '>>>'
-        write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
-        write(logfhandle,'(A)')   '>>>'
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
         call build%kill_general_tbox()
         call build%kill_strategy2D_tbox()
