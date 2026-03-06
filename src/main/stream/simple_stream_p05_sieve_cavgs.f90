@@ -57,7 +57,6 @@ contains
         call cline%set('objfun',       'euclid')
         call cline%set('sigma_est',    'global')
         if( .not.cline%defined('walltime')     ) call cline%set('walltime',     29*60) ! 29 minutes
-        if( .not.cline%defined('dynreslim')    ) call cline%set('dynreslim',    'no')
         if( .not.cline%defined('nchunksperset')) call cline%set('nchunksperset', 2)
         if( .not.cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         if( .not.cline%defined('center')       ) call cline%set('center',       'yes')

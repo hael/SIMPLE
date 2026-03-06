@@ -432,10 +432,10 @@ contains
         call memoize_ft_maps(ldim_crop(1:2), smpd_crop)
         gridcorr_img = prep2D_inv_instrfun4mul(ldim_crop, ldim_croppd, smpd_crop)
         ! Making sure that the public images are allocated with make_cavgs & shared memory
-        if( (.not.l_distr_exec_glob).and.(.not.allocated(cavgs_merged_new)) )then
-            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_even_new)
-            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_odd_new)
-            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_merged_new)
+        if( (.not.l_distr_exec_glob).and.(.not.allocated(cavgs_merged)) )then
+            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_even)
+            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_odd)
+            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_merged)
         endif
         ! Main loop
         !$omp parallel do default(shared) private(icls,ithr,eo_pop,pop,frc)&
@@ -513,9 +513,9 @@ contains
             ! Transfer cavg from stack object to image object used in alignment
             ! only in shared memory execution
             if( .not.l_distr_exec_glob )then
-                call cavgs_even_new(icls)%set_rmat(  cavgs%even%rmat(:,:,icls:icls), .false.)
-                call cavgs_odd_new(icls)%set_rmat(   cavgs%odd%rmat(:,:,icls:icls), .false.)
-                call cavgs_merged_new(icls)%set_rmat(cavgs%merged%rmat(:,:,icls:icls), .false.)
+                call cavgs_even(icls)%set_rmat(  cavgs%even%rmat(:,:,icls:icls), .false.)
+                call cavgs_odd(icls)%set_rmat(   cavgs%odd%rmat(:,:,icls:icls), .false.)
+                call cavgs_merged(icls)%set_rmat(cavgs%merged%rmat(:,:,icls:icls), .false.)
             endif
         end do
         !$omp end parallel do
@@ -574,14 +574,14 @@ contains
         ! read
         select case(trim(which))
             case('even')
-                cavgs_even_new = read_stk_into_imgarr(fname)
-                cavgs => cavgs_even_new
+                cavgs_even = read_stk_into_imgarr(fname)
+                cavgs => cavgs_even
             case('odd')
-                cavgs_odd_new = read_stk_into_imgarr(fname)
-                cavgs => cavgs_odd_new
+                cavgs_odd = read_stk_into_imgarr(fname)
+                cavgs => cavgs_odd
             case('merged')
-                cavgs_merged_new = read_stk_into_imgarr(fname)
-                cavgs => cavgs_merged_new
+                cavgs_merged = read_stk_into_imgarr(fname)
+                cavgs => cavgs_merged
             case DEFAULT
                 THROW_HARD('unsupported which flag')
         end select
@@ -736,9 +736,9 @@ contains
 
     !>  \brief submodule private destructor utility
     subroutine dealloc_cavgs
-        call dealloc_imgarr(cavgs_even_new)
-        call dealloc_imgarr(cavgs_odd_new)
-        call dealloc_imgarr(cavgs_merged_new)
+        call dealloc_imgarr(cavgs_even)
+        call dealloc_imgarr(cavgs_odd)
+        call dealloc_imgarr(cavgs_merged)
         call cavgs%kill_set
         istart  = 0; iend = 0
         partsz  = 0

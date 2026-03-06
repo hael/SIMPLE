@@ -86,9 +86,6 @@ contains
             case('snhc','snhc_smpl')
                 ! usual suspects
                 nstages = NSTAGES_CLS
-            case('prob','prob_smpl','prob_smpl_shc','prob_greedy')
-                ! prob family of algorithms
-                nstages = NSTAGES_CLS
             case DEFAULT
                 THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
         end select

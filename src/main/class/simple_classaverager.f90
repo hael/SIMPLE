@@ -23,7 +23,7 @@ public :: cavger_assemble_sums, cavger_restore_cavgs
 public :: cavger_write_eo, cavger_write_all, cavger_write_merged, cavger_read_all
 public :: cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts
 ! Stacks used for alignment
-public :: cavgs_even_new, cavgs_odd_new, cavgs_merged_new
+public :: cavgs_even, cavgs_odd, cavgs_merged
 ! Separate public utility to rotate particles
 public :: transform_ptcls
 private
@@ -103,12 +103,12 @@ end type ptcl_record
 
 ! Main module variables
 type(ptcl_record),   allocatable :: precs(:)                  !< Particle records
-type(image), target, allocatable :: cavgs_even_new(:)         !< Even class averages for reading
-type(image), target, allocatable :: cavgs_odd_new(:)          !< Odd class averages for reading
-type(image), target, allocatable :: cavgs_merged_new(:)       !< Merged class averages for reading
+type(image), target, allocatable :: cavgs_even(:)             !< Even class averages for reading
+type(image), target, allocatable :: cavgs_odd(:)              !< Odd class averages for reading
+type(image), target, allocatable :: cavgs_merged(:)           !< Merged class averages for reading
 type(cavgs_set)                  :: cavgs                     !< Class averages
 type(builder),        pointer    :: b_ptr  => null()          !< active builder instance
-class(parameters),    pointer    :: p_ptr => null()          !< active parameters instance
+class(parameters),    pointer    :: p_ptr => null()           !< active parameters instance
 logical,             allocatable :: pptcl_mask(:)             !< selected particles
 integer                          :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
 integer                          :: istart      = 0, iend = 0 !< particle index range in partition
