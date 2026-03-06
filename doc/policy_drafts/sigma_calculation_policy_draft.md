@@ -5,8 +5,6 @@
 **Scope**: 2D clustering / 3D refinement with `objfun='euclid'` and optionally with `ml_reg='yes'`  
 **Audience**: Developers, refinement strategy architects, QA/test authors
 
----
-
 ## 1. Executive Summary
 
 Sigma calculations in SIMPLE embody a **noise-weighted reconstruction philosophy** where particle/group-specific noise estimates guide Fourier-space weighting during 2D/3D image restoration. This policy defines:
@@ -17,8 +15,6 @@ Sigma calculations in SIMPLE embody a **noise-weighted reconstruction philosophy
 - **Who** owns them (builder object, single source of truth)
 
 **Key Rule**: Sigmas are **calculated unconditionally** when Euclidean distance is the objective function, but **used for restoration only when both `ml_reg='yes'` AND `objfun='euclid'`**.
-
----
 
 ## 2. Definitions
 
@@ -74,11 +70,9 @@ Type `euclid_sigma2` (`simple_euclid_sigma2.f90:18–44`):
 - **Starfile**: `SIGMA2_GROUP_FBODY//int2str(iter)//STAR_EXT` = `'sigma2_group_iter_N.star'`
   - Content: Group-averaged sigmas per even/odd, with EMDL metadata
 
----
-
 ## 3. Sigma Calculation Lifecycle
 
-### 3.1 Phase 1: Initial Moise Power Estimation (Pre-Refinement)
+### 3.1 Phase 1: Initial Noise Power Estimation (Pre-Refinement)
 
 **When triggered** (`simple_commanders_refine3D.f90:783`):
 ```fortran
@@ -129,7 +123,7 @@ After each particle search (alignment), sigma recalculated for that particle.
 **Calculation** (`simple_euclid_sigma2.f90:calc_sigma2`, line 212):
 ```
 For each particle after alignment:
-  1. Get best reference (even or odd, based on particle's eo flag)
+  1. Get reference (even or odd, based on particle's eo flag)
   2. Apply particle's shift & rotation
   3. Apply CTF correction
   4. Subtract particle FFT
@@ -195,8 +189,6 @@ Iteration 2
 │
 ...continuation...
 ```
-
----
 
 ## 4. ML Regularization: Sigma Application in Reconstruction
 
@@ -265,8 +257,6 @@ endif
 **Usage during class averaging**:
 - Padded image weighing use the same interpolation and formula as 3D (`simple_classaverager_restore.f90:324-338`)
 
----
-
 ## 5. Workflow-Specific Behaviors & Constraints
 
 ### 5.1 Sigma Estimation Methods
@@ -282,7 +272,6 @@ endif
 - One global sigma spectrum per even/odd
 - May underestimate noise if data quality varies significantly by group
 - **Used in**:
-  - Nano3D multi-body pipeline (`single_commanders_nano3D.f90:260`)
   - Restricted data scenarios (single micrograph set, uniform quality)
   - Is the default strategy for all 2D clustering/3D abinitio
 
@@ -332,8 +321,6 @@ if( params%cc_objfun==OBJFUN_EUCLID )then
 endif
 ```
 All `sigma2_part_k.dat` files from previous run carried over to maintain continuity.
-
----
 
 ## 6. Builder Ownership Model
 
@@ -469,8 +456,6 @@ Sequence:
   Result: No sigma files generated; ml_reg setting ignored
 ```
 
----
-
 ## 11. Summary Table
 
 | Aspect | Detail |
@@ -486,16 +471,12 @@ Sequence:
 | **Special cases** | Disabled at ICM stage; nano3D uses global only; continuation carries over all partitions |
 | **Known issue** | FSC helper missing automasking branch (low priority) |
 
----
-
 ## 12. References & Related Policies
 
 - **Automasking Policy**: [automasking_policy_draft.md](automasking_policy_draft.md) — complementary mask-based refinement control
 - **Builder Refactoring**: [euclid_build_new_policy.md](euclid_build_new_policy.md) — sigma ownership model
 - **Objective Function Semantics**: `simple_type_defs.f90` (ENUM_OBJFUN), `simple_eul_prob_tab.f90` (distance conversions)
 - **ML Regularization Variants**: `simple_convergence.f90` (logging), `simple_abinitio_utils.f90` (ab initio gating)
-
----
 
 **Document History**:
 - 2026-03-05: Initial draft (comprehensive analysis from codebase archaeology)
