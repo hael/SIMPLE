@@ -545,9 +545,9 @@ contains
         ! prepare the polarizer images
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(b_ptr%pftc%get_pdim())
         allocate(match_imgs(p_ptr%ncls))
-        cavgs_m => cavgs_merged_new
-        cavgs_e => cavgs_even_new
-        cavgs_o => cavgs_odd_new
+        cavgs_m => cavgs_merged
+        cavgs_e => cavgs_even
+        cavgs_o => cavgs_odd
         call cavgs_m(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! mask memoization
         call cavgs_m(1)%memoize_mask_coords

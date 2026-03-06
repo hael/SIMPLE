@@ -288,7 +288,8 @@ contains
             ! to avoid pathological cases, fall-back on lpstart
             lpstart_find = calc_fourier_index(params%lpstart, params%box_crop, params%smpd_crop)
             if( lpstart_find > params%kfromto(2) ) params%kfromto(2) = lpstart_find
-            lplim = calc_lowpass_lim(params%kfromto(2), params%box_crop, params%smpd_crop)
+            lplim     = calc_lowpass_lim(params%kfromto(2), params%box_crop, params%smpd_crop)
+            params%lp = lplim
         endif
         ! update low-pas limit in project
         call build%spproj_field%set_all2single('lp',lplim)

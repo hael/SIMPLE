@@ -253,7 +253,7 @@ contains
         call cline_cluster2D_pool%set('tau',    params%tau)
         ! refinement
         select case(trim(params%refine))
-            case('snhc','snhc_smpl','prob','prob_smpl')
+            case('snhc','snhc_smpl')
                 call cline_cluster2D_pool%set( 'refine', params%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
@@ -845,19 +845,19 @@ contains
         call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
         call simple_rename(str_tmp_mrc,str)
         ! upsample cavgs matrices
-        ldim = [pool_dims%boxpd,pool_dims%boxpd,1]
         do p = 1,params%nparts_pool
             str = POOL_DIR//'cavgs_even_part'//int2str_pad(p,numlen)//MRC_EXT
-            call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
+            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
             str = POOL_DIR//'cavgs_odd_part'//int2str_pad(p,numlen)//MRC_EXT
-            call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
+            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
+            ! TO FIX
             str = POOL_DIR//'ctfsqsums_even_part'//int2str_pad(p,numlen)//MRC_EXT
-            call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
+            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
             str = POOL_DIR//'ctfsqsums_odd_part'//int2str_pad(p,numlen)//MRC_EXT
-            call pad_imgfile(str, str_tmp_mrc, ldim, pool_dims%smpd)
+            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
             call simple_rename(str_tmp_mrc,str)
         enddo
         ! update cls2D field

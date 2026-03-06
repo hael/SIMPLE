@@ -56,15 +56,11 @@ real,             parameter :: ABS_VAR_THRESHOLD          = 1.5                 
 real,             parameter :: CLS_REJECT_STD             = 2.5                       !< class rejection: # deviations for 2D class selection/rejection
 real,             parameter :: FRAC_SKIP_REJECTION        = 0.7                       !< 2D analysis: When the number of classes to reject is too high rejection is skipped
 real,             parameter :: LOWRES_REJECT_THRESHOLD    = 199.                      !< class rejection: Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
-real,             parameter :: MEAN_THRESHOLD             = -8.0                      !< class rejection: image mean     threshold (Mahalabonis distance)
-real,             parameter :: MINMAX_THRESHOLD           = 2.0                       !< class rejection: image min & max threshold (absolute value)
 real,             parameter :: POOL_SMPD_HARD_LIMIT       = 1.5                       ! Pixel size hard limit -> max resolution=3Angs
-real,             parameter :: REL_VAR_THRESHOLD          = 6.0                       !< class rejection: image variance threshold (Mahalabonis distance)
 real,             parameter :: STREAM_ASTIG_THRESHOLD     = 10.0                      !< preprocessing: Stream astigmatism rejection threshold
 real,             parameter :: STREAM_CTFRES_THRESHOLD    = 10.0                      !< preprocessing: Stream ctfres rejection threshold (Angstroms)
 real,             parameter :: STREAM_ICEFRAC_THRESHOLD   = 1.0                       !< preprocessing: Stream icefrac rejection threshold
 real,             parameter :: STREAM_RES_THRESHOLD       = 35.0                      !< class rejection: Default streaming best resolution rejection threshold
-real,             parameter :: TVD_THRESHOLD              = 0.55                      !< class rejection: Total Variation Distance of image distributions
 
 real, parameter, dimension(21)  :: ASTIG_BINS    = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
 real, parameter, dimension(19)  :: CTFRES_BINS   = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
