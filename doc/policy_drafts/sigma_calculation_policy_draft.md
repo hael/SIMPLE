@@ -2,21 +2,21 @@
 
 **Document Status**: Draft  
 **Last Updated**: 2026-03-05  
-**Scope**: 3D refinement with `objfun='euclid'`; 2D clustering with `ml_reg='yes'`  
+**Scope**: 2D clustering / 3D refinement with `objfun='euclid'` and optionally with `ml_reg='yes'`  
 **Audience**: Developers, refinement strategy architects, QA/test authors
 
 ---
 
 ## 1. Executive Summary
 
-Sigma calculations in SIMPLE embody a **noise-weighted reconstruction philosophy** where particle/group-specific noise estimates guide Fourier-space weighting during 3D map reconstruction. This policy defines:
+Sigma calculations in SIMPLE embody a **noise-weighted reconstruction philosophy** where particle/group-specific noise estimates guide Fourier-space weighting during 2D/3D image restoration. This policy defines:
 
 - **When** sigmas are calculated (always with `objfun='euclid'`)
 - **How** they accumulate across iterations (per-group averaging)
 - **Where** they are applied (ML regularization, gated by `ml_reg='yes'`)
 - **Who** owns them (builder object, single source of truth)
 
-**Key Rule**: Sigmas are **calculated unconditionally** when Euclidean distance is the objective function, but **applied only when both `ml_reg='yes'` AND `objfun='euclid'`**.
+**Key Rule**: Sigmas are **calculated unconditionally** when Euclidean distance is the objective function, but **used for restoration only when both `ml_reg='yes'` AND `objfun='euclid'`**.
 
 ---
 
@@ -24,7 +24,7 @@ Sigma calculations in SIMPLE embody a **noise-weighted reconstruction philosophy
 
 ### 2.1 Core Flags & Parameters
 
-#### `objfun` (string: 'cc' | 'euclid' | 'prob')
+#### `objfun` (string: 'cc' | 'euclid' )
 - **Purpose**: Selects the alignment/reconstruction metric
 - **Enum conversion** (`simple_parameters.f90:268`):
   - `'cc'` → `OBJFUN_CC = 0`
@@ -33,7 +33,8 @@ Sigma calculations in SIMPLE embody a **noise-weighted reconstruction philosophy
 
 #### `ml_reg` (string: 'yes' | 'no')
 - **Purpose**: Enable/disable ML-regularization (Wiener-filter-style weighting)
-- **Default in refine3D** (`simple_commanders_refine3D.f90:112`): **'yes'**
+- **Default in all offline 2D clustering** (`simple_default_clines.f90:39`): **'yes'**
+- **Default in refine3D_auto** (`simple_commanders_refine3D.f90:113`): **'yes'**
 - **Derived boolean** (`simple_parameters.f90:1752–1756`):
   ```fortran
   self%l_ml_reg = trim(self%ml_reg).eq.'yes'
@@ -44,8 +45,8 @@ Sigma calculations in SIMPLE embody a **noise-weighted reconstruction philosophy
   **Result**: `l_ml_reg=.true.` **only if BOTH `ml_reg='yes'` AND `objfun='euclid'`**
 
 #### `sigma_est` (string: 'group' | 'global')
-- **'group'** (default): Group-based averaging (particles binned by stack/class ID)
-- **'global'**: Single global average across all selected particles (per even/odd)
+- **'group'** (default): Group-based averaging (particles binned by stack/class ID, per even/odd)
+- **'global'**: Single global average across all selected particles (single 'group' per even/odd)
 - **Field**: `l_sigma_glob = (sigma_est == 'global')`
 
 #### `l_filemsk`, `l_envfsc` (boolean)
@@ -77,7 +78,7 @@ Type `euclid_sigma2` (`simple_euclid_sigma2.f90:18–44`):
 
 ## 3. Sigma Calculation Lifecycle
 
-### 3.1 Phase 1: Initial Power Spectrum Estimation (Pre-Refinement)
+### 3.1 Phase 1: Initial Moise Power Estimation (Pre-Refinement)
 
 **When triggered** (`simple_commanders_refine3D.f90:783`):
 ```fortran
@@ -97,6 +98,7 @@ When no sigma `.star` file exists for starting iteration → distributed `calc_p
   Else:
       sigma2(:,iptcl) = pspec / 2.0
   ```
+  - Calculated for all frequencies of the input 2D particle (params%box x params%box) 
   - Particles are uniformly selected (no refinement information yet)
   - If sampling is active (`l_update_frac`), scale by reciprocal of sampling fraction (bias correction)
 
@@ -131,7 +133,8 @@ For each particle after alignment:
   2. Apply particle's shift & rotation
   3. Apply CTF correction
   4. Subtract particle FFT
-  5. Compute per-shell residual: sigma2(k) = sum_over_FFT_box(|residual|^2) / (2 * pftsz)
+  5. Compute per-shell residual: sigma2(k) = sum_over_FFT_box(|residual|^2) / (2 * pftsz),
+     shell k in the [kfromto(1);kfromto(2)] range.
 ```
 
 **Core formula** (`simple_polarft_corr.f90:gen_sigma_contrib`, line 547):
@@ -171,7 +174,7 @@ After all particles have been searched in current iteration.
 ```
 Iteration 0 (before refinement)
 ├── calc_pspec_distr (if no prior sigma.star)
-│   ├── Per-partition: compute initial power spectra from noise-masked FFT
+│   ├── Per-partition: compute initial noise power spectra from noise-masked FFT
 │   └── Assemble: group average → sigma2_group_iter_1.star
 │
 Iteration 1 (first refinement iteration)
@@ -220,13 +223,13 @@ end if
 ```
 
 **Interpretation**:
-- **High sigma** (poor fit) → small weight → Fourier component contributes less
-- **Low sigma** (good fit) → large weight → Fourier component contributes more
+- **High sigma** (poor fit, large residual) → small weight → Fourier component contributes less
+- **Low sigma** (good fit, small residual) → large weight → Fourier component contributes more
 - **Effect**: Down-weights particles with high noise; up-weights particles with strong signal
 
 ### 4.3 Sigma Upsampling for Padded Reconstruction
 
-Since reconstruction uses **padded images** but sigmas computed at **cropped resolution**, interpolation required.
+Since reconstruction uses **padded images** but sigmas computed at **original size**, interpolation is required.
 
 **Implementation** (`simple_math_ft.f90:upsample_sigma2`, line 271):
 ```fortran
@@ -259,7 +262,8 @@ endif
 - Allocates thread-local `sigma2(1:nyq_crop, nthr_glob)` and upsampled variants
 - Bounds: `sigma2_kfromto(1:2)` extracted from `b_ptr%esig%sigma2_noise`
 
-**Usage during class averaging**: Sigma array passed to `gen_fplane4rec` as optional argument; reconstructor applies weighting (same formula as 3D).
+**Usage during class averaging**:
+- Padded image weighing use the same interpolation and formula as 3D (`simple_classaverager_restore.f90:324-338`)
 
 ---
 
@@ -280,6 +284,7 @@ endif
 - **Used in**:
   - Nano3D multi-body pipeline (`single_commanders_nano3D.f90:260`)
   - Restricted data scenarios (single micrograph set, uniform quality)
+  - Is the default strategy for all 2D clustering/3D abinitio
 
 ### 5.2 Update Fraction Scaling
 
@@ -288,19 +293,19 @@ When `l_update_frac=true` (partial particle sampling in early iterations):
 sigma2(:,iptcl) = pspec / (2.0 * params%update_frac)  ! ← scaled by reciprocal
 ```
 
-**Reason**: Corrects bias from incomplete sampling
+**Reason**: Corrects bias from incomplete particle sampling
 - Ensures group averages remain unbiased when only subset of particles included
 - Only applied in initial Phase 1 (`calc_pspec`), not in per-iteration calculations
 
 ### 5.3 Special Cases: ML-reg Disabled or Modified
 
-#### Case 1: ICM Stage (Ab Initio Pipeline)
+#### Case 1: ICM Filtering Stage (Ab Initio Pipeline)
 - **Location** (`simple_abinitio_config.f90:28`):
   ```fortran
   integer, parameter :: ICM_STAGE = PROBREFINE_STAGE
-  ! Comment: "we switch FROM ML regularization when prob is switched on"
+  ! Comment: "we switch FROM ML regularization when refine=prob is switched on"
   ```
-- **Reason**: ICM (Implicit Charge Model) regularization incompatible with ML-style Wiener weighting
+- **Reason**: ICM (Iterated Conditional Modes) regularization incompatible with ML-style Wiener weighting
 - **Action**: At `ICM_STAGE`, transition to ICM; ML-reg disabled
 
 #### Case 2: Nano3D Multi-Body Pipeline
@@ -313,11 +318,10 @@ sigma2(:,iptcl) = pspec / (2.0 * params%update_frac)  ! ← scaled by reciprocal
 
 #### Case 3: Objfun Mismatch
 - If `objfun='cc'`: Sigmas not calculated; `l_ml_reg` forced false regardless of `ml_reg` setting
-- If `objfun='prob'`: Sigmas not calculated; probabilistic sampling used instead
 
 ### 5.4 Continuation & Carryover
 
-When `params%continue='yes'` (resuming from previous refinement round):
+When `params%continue='yes'` (resuming from previous 3D refinement round):
 ```fortran
 if( params%cc_objfun==OBJFUN_EUCLID )then
     call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
@@ -409,6 +413,7 @@ Per refactoring policy (`doc/refactoring_notes/euclid_build_new_policy.md`):
 | Per-iteration integration | `simple_strategy3D_matcher.f90` | 250–255 | Refinement loop call |
 | Iteration-end grouping | `simple_commanders_refine3D.f90` | 790–800 | Main loop trigger |
 | Class averaging integration | `simple_classaverager_restore.f90` | 93–97 | 2D read phase |
+| Class averaging ML weighing | `simple_classaverager_restore.f90` | 324–338 | Wiener filter |
 | ICM transition | `simple_abinitio_config.f90` | 28 | Disable marker |
 | Nano3D defaults | `single_commanders_nano3D.f90` | 259–260 | ML-reg explicit disable |
 
@@ -494,4 +499,5 @@ Sequence:
 
 **Document History**:
 - 2026-03-05: Initial draft (comprehensive analysis from codebase archaeology)
+- 2026-03-06: Document review and minor additions
 - (Future: Field test results, user feedback, deviations discovered)
