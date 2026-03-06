@@ -589,7 +589,7 @@ contains
         class(cmdline),                       intent(inout) :: cline !< command line input
         type(string),       allocatable :: pdbfnames(:), pdbfnames_core(:), pdbfnames_bfac(:), pdbfnames_fringe(:)
         type(common_atoms), allocatable :: atms_common(:)
-        real,               allocatable :: betas(:), pdbmat(:,:)
+        real,               allocatable :: betas(:), pdbmat(:,:), beta_core(:)
         logical,            allocatable :: mask_core(:)
         type(parameters)   :: params
         integer            :: npdbs, i, ipdb, natoms
@@ -626,7 +626,8 @@ contains
             allocate(atms_common(i)%coords2(3,atms_common(i)%ncommon), source=(atms_common(i)%common1 + atms_common(i-1)%common1)/2.)
         end do
         ! write PDB file
-        call write_matrix2pdb(el, atms_common(npdbs)%coords2, string('core.pdb'))
+        allocate(beta_core(atms_common(npdbs)%ncommon), source=1.)
+        call write_matrix2pdb(el, atms_common(npdbs)%coords2, string('core.pdb'), betas=beta_core)
         ! identify common atoms
         do i = 1, npdbs
             ! identify couples
