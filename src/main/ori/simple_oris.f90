@@ -1259,9 +1259,10 @@ interface
         logical,              intent(in)    :: incr_sampled
     end subroutine sample4update_updated
 
-    module subroutine sample4update_fillin( self, fromto, nsamples, inds, incr_sampled )
+    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
+        real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled

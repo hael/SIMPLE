@@ -106,7 +106,7 @@ contains
         else
             ! sampled incremented
             if( p_ptr%l_fillin .and. mod(which_iter,5) == 0 )then
-                call sample_ptcls4fillin(b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
+                call sample_ptcls4fillin(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
             else
                 call sample_ptcls4update(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
             endif

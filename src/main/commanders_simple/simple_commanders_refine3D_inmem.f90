@@ -32,7 +32,7 @@ contains
         integer :: nptcls, ipart
         if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
-            call sample_ptcls4fillin(build, [1,params%nptcls], .true., nptcls, pinds)
+            call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
         else
             call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif

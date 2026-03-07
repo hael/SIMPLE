@@ -416,8 +416,7 @@ contains
         integer, allocatable, intent(inout) :: pinds(:)
         if( l_updatefrac )then
             ! fractional sampling
-            call b_ptr%spproj_field%sample4update_rnd(pfromto, p_ptr%update_frac,&
-                &nptcls, pinds, .true.)
+            call b_ptr%spproj_field%sample4update_rnd(pfromto, p_ptr%update_frac, nptcls, pinds, .true.)
         else
             ! we sample all state > 0
             call b_ptr%spproj_field%sample4update_all(pfromto, nptcls, pinds, .true.)
