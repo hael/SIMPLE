@@ -98,8 +98,9 @@ contains
             inds(cnt)   = i
             if( states(cnt) > 0 ) nptcls = nptcls + 1
         end do
-        inds     = pack(inds,       mask=states > 0)
-        nsamples = min(nptcls, nint(update_frac * real(nptcls)))
+        if( nptcls == 0 ) THROW_HARD('no active particles to sample')
+        inds     = pack(inds, mask=states > 0)
+        nsamples = min(nptcls, max(1, nint(update_frac * real(nptcls))))
         rt       = ran_tabu(nptcls)
         call rt%shuffle(inds)
         call rt%kill
@@ -130,11 +131,12 @@ contains
             inds(cnt)       = i
             if( states(cnt) > 0 ) nptcls = nptcls + 1
         end do
+        if( nptcls == 0 ) THROW_HARD('no active particles to sample')
         inds        = pack(inds,       mask=states > 0)
         updatecnts  = pack(updatecnts, mask=states > 0)
         ucnt_min    = minval(updatecnts)
         ucnt_max    = maxval(updatecnts)
-        nsamples    = min(nptcls, nint(update_frac * real(nptcls)))
+        nsamples    = min(nptcls, max(1, nint(update_frac * real(nptcls))))
         ucnt_lim    = 0
         if( ucnt_max > ucnt_min )then
             do ucnt = ucnt_min,ucnt_max
@@ -145,7 +147,7 @@ contains
             end do
         endif
         if( ucnt_lim > 0 )then
-            inds   = pack(inds, mask=updatecnts < ucnt)
+            inds   = pack(inds, mask=updatecnts < ucnt_lim)
             nptcls = size(inds)
         endif
         rt = ran_tabu(nptcls)
@@ -186,6 +188,7 @@ contains
             inds(cnt)    = i
         end do
         nsamples = count(states > 0)
+        if( nsamples == 0 ) THROW_HARD('no active particles to sample')
         inds     = pack(inds, mask=states > 0)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_class
@@ -202,13 +205,14 @@ contains
         allocate(inds(nptcls), sampled(nptcls), source=0)
         cnt        = 0
         sample_ind = self%get_sample_ind(.false.)
+        if( sample_ind == 0 ) THROW_HARD('requires previous sampling')
         do i = fromto(1), fromto(2)
             cnt          = cnt + 1
             inds(cnt)    = i
             sampled(cnt) = self%o(i)%get_sampled()
         end do
-        if( sample_ind == 0 ) THROW_HARD('requires previous sampling')
         nsamples = count(sampled == sample_ind)
+        if( nsamples == 0 ) THROW_HARD('no particles sampled in previous sampling')
         inds     = pack(inds, mask=sampled == sample_ind)
     end subroutine sample4update_reprod
 
@@ -231,6 +235,7 @@ contains
         end do
         if( .not. any(updatecnts > 0) ) THROW_HARD('requires previous update')
         nsamples = count(updatecnts > 0)
+        if( nsamples == 0 ) THROW_HARD('no particles updated in previous update')
         inds     = pack(inds, mask=updatecnts > 0)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_updated
@@ -257,8 +262,7 @@ contains
         end do
         nptcls_active = count(states > 0)
         if( nptcls_active == 0 ) THROW_HARD('no active particles to sample for fill-in')
-        nsamples = min(nptcls_active, nint(update_frac * real(nptcls_active)))
-        if( nsamples      == 0 ) THROW_HARD('fill-in nsamples 0')
+        nsamples          = min(nptcls_active, max(1, nint(update_frac * real(nptcls_active))))
         updatecnts_active = pack(updatecnts, mask=states > 0)
         minucnt           = minval(updatecnts_active)
         maxucnt           = maxval(updatecnts_active)
