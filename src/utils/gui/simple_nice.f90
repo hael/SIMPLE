@@ -1207,7 +1207,9 @@ end type simple_nice_comm
         if(present(avg_ctf_resolution))   this%view_micrographs%avg_ctf_resolution   = avg_ctf_resolution
         if(present(avg_ice_score))        this%view_micrographs%avg_ice_score        = avg_ice_score
         if(present(avg_astigmatism))      this%view_micrographs%avg_astigmatism      = avg_astigmatism
-        if(present(last_movie_imported) .and. last_movie_imported)  this%view_micrographs%last_movie_imported  = datestr()
+        if(present(last_movie_imported))then
+            if( last_movie_imported ) this%view_micrographs%last_movie_imported  = datestr()
+        endif
         if(present(thumbnail) .and. present(thumbnail_id) .and. present(thumbnail_static_id)) then
             call seed_rnd()
             call random_number(rnd)
