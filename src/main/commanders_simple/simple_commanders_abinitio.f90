@@ -777,7 +777,7 @@ contains
             ! At the splitting stage of docked mode: reset the nstates in params
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 params%nstates = nstates_glob
-                update_frac         = min(update_frac * nstates_glob, UPDATE_FRAC_MAX)
+                update_frac    = min(update_frac * nstates_glob, UPDATE_FRAC_MAX)
             endif
             ! Preparation of command line for refinement
             call set_cline_refine3D(params, istage, l_cavgs=.false.)

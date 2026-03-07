@@ -332,13 +332,14 @@ contains
         call fname%kill
     end subroutine sample_ptcls4update
 
-    subroutine sample_ptcls4fillin( build, pfromto, l_incr_sampl, nptcls2update, pinds )
+    subroutine sample_ptcls4fillin( params, build, pfromto, l_incr_sampl, nptcls2update, pinds )
+        class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
         integer,              intent(in)    :: pfromto(2)
         logical,              intent(in)    :: l_incr_sampl
         integer,              intent(inout) :: nptcls2update
         integer, allocatable, intent(inout) :: pinds(:)
-        call build%spproj_field%sample4update_fillin(pfromto, nptcls2update, pinds, l_incr_sampl)
+        call build%spproj_field%sample4update_fillin(pfromto, params%update_frac, nptcls2update, pinds, l_incr_sampl)
     end subroutine sample_ptcls4fillin
 
     !>  \ brief  prepares one particle image for alignment
