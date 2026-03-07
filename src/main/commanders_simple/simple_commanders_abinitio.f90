@@ -202,7 +202,7 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
             ! Reconstruction for polar representation
-            if( l_polar .and. istage>1 )then
+            if( l_polar .and. (istage>1) .and. (istage/=SYMSRCH_STAGE+1) )then
                 call calc_rec(params, work_projfile, xreconstruct3D, istage)
             endif
             ! Probabilistic search
