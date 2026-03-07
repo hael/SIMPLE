@@ -1471,16 +1471,17 @@ contains
         call set_ldim_box_from_stk
         ! fractional search and volume update
         if( self%update_frac <= .99)then
+            ! set update_frac flag
             self%l_update_frac = .true.
+            ! set trail rec flag
             self%l_trail_rec   = trim(self%trail_rec).eq.'yes'
+            ! set fillin sampling flag
+            self%l_fillin      = trim(self%fillin).eq. 'yes'
         else
             self%update_frac   = 1.0
             self%l_update_frac = .false.
-            if( trim(self%trail_rec).eq.'yes' )then
-                self%l_trail_rec = .true.
-            else
-                self%l_trail_rec = .false.
-            endif
+            self%l_trail_rec   = .false.
+            self%l_fillin      = .false.
         endif
         ! set frac_best flag
         self%l_frac_best  = self%frac_best  <= 0.99
@@ -1488,8 +1489,6 @@ contains
         self%l_frac_worst = self%frac_worst <= 0.99
         ! set greedy sampling flag
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
-        ! set fillin sampling flag
-        self%l_fillin = trim(self%fillin).eq. 'yes'
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
