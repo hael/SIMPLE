@@ -249,7 +249,7 @@ contains
         logical,              intent(in)    :: incr_sampled
         type(ran_tabu)       :: rt
         integer, allocatable :: updatecnts(:), states(:), updatecnts_active(:), inds_pool(:), inds_fill(:)
-        integer :: i, cnt, nptcls, nptcls_active, minucnt, maxucnt, npool, nfill, ucnt
+        integer :: i, cnt, nptcls, nptcls_active, maxucnt, nfill, ucnt
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), states(nptcls), updatecnts(nptcls), source=0)
@@ -264,25 +264,20 @@ contains
         if( nptcls_active == 0 ) THROW_HARD('no active particles to sample for fill-in')
         nsamples          = min(nptcls_active, max(1, nint(update_frac * real(nptcls_active))))
         updatecnts_active = pack(updatecnts, mask=states > 0)
-        minucnt           = minval(updatecnts_active)
         maxucnt           = maxval(updatecnts_active)
-        inds_pool         = pack(inds, mask=states > 0 .and. updatecnts == minucnt)
-        npool             = size(inds_pool)
-        if( npool < nsamples )then
-            ! Top up pool by increasing updatecnt; randomize only within each tier.
-            do ucnt = minucnt + 1, maxucnt
-                if( npool >= nsamples ) exit
-                inds_fill = pack(inds, mask=states > 0 .and. updatecnts == ucnt)
-                if( size(inds_fill) == 0 ) cycle
-                rt = ran_tabu(size(inds_fill))
-                call rt%shuffle(inds_fill) ! to prevent overshoot bias in the last contributing tier
-                call rt%kill
-                nfill = min(nsamples - npool, size(inds_fill))
-                inds_pool = [inds_pool, inds_fill(1:nfill)]
-                npool = size(inds_pool)
-            enddo
-        endif
-        if( npool < nsamples )then
+        allocate(inds_pool(0), source=0)
+        ! Prefer never-updated particles first (updatecnt==0), then 1, 2, ...
+        do ucnt = 0, maxucnt
+            if( size(inds_pool) >= nsamples ) exit
+            inds_fill = pack(inds, mask=states > 0 .and. updatecnts == ucnt)
+            if( size(inds_fill) == 0 ) cycle
+            rt = ran_tabu(size(inds_fill))
+            call rt%shuffle(inds_fill) ! random tie-break within this updatecnt tier
+            call rt%kill
+            nfill = min(nsamples - size(inds_pool), size(inds_fill))
+            inds_pool = [inds_pool, inds_fill(1:nfill)]
+        enddo
+        if( size(inds_pool) < nsamples )then
             THROW_HARD('insufficient active fill-in candidates')
         endif
         inds = inds_pool(1:nsamples)
