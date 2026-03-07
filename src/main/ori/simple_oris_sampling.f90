@@ -243,8 +243,8 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
         type(ran_tabu)       :: rt
-        integer, allocatable :: updatecnts(:), states(:), updatecnts_active(:), inds_pool(:)
-        integer :: i, cnt, nptcls, nptcls_active, minucnt, npool
+        integer, allocatable :: updatecnts(:), states(:), updatecnts_active(:), inds_pool(:), inds_fill(:)
+        integer :: i, cnt, nptcls, nptcls_active, minucnt, maxucnt, npool, nfill, ucnt
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), states(nptcls), updatecnts(nptcls), source=0)
@@ -261,14 +261,26 @@ contains
         if( nsamples      == 0 ) THROW_HARD('fill-in nsamples 0')
         updatecnts_active = pack(updatecnts, mask=states > 0)
         minucnt           = minval(updatecnts_active)
+        maxucnt           = maxval(updatecnts_active)
         inds_pool         = pack(inds, mask=states > 0 .and. updatecnts == minucnt)
         npool             = size(inds_pool)
         if( npool < nsamples )then
-            THROW_HARD('insufficient fill-in candidates with minimum updatecnt')
+            ! Top up pool by increasing updatecnt; randomize only within each tier.
+            do ucnt = minucnt + 1, maxucnt
+                if( npool >= nsamples ) exit
+                inds_fill = pack(inds, mask=states > 0 .and. updatecnts == ucnt)
+                if( size(inds_fill) == 0 ) cycle
+                rt = ran_tabu(size(inds_fill))
+                call rt%shuffle(inds_fill) ! to prevent overshoot bias in the last contributing tier
+                call rt%kill
+                nfill = min(nsamples - npool, size(inds_fill))
+                inds_pool = [inds_pool, inds_fill(1:nfill)]
+                npool = size(inds_pool)
+            enddo
         endif
-        rt = ran_tabu(npool)
-        call rt%shuffle(inds_pool)
-        call rt%kill
+        if( npool < nsamples )then
+            THROW_HARD('insufficient active fill-in candidates')
+        endif
         inds = inds_pool(1:nsamples)
         call hpsort(inds)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
