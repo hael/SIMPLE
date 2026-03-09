@@ -6,7 +6,7 @@ use simple_builder,            only: builder
 use simple_butterworth,        only: butterworth_filter
 use simple_discrete_stack_io,  only: dstack_io
 use simple_nanoparticle_utils, only: phasecorr_one_atom
-use simple_opt_filter,         only: estimate_lplim
+use simple_opt_filter,         only: estimate_lplim3D, estimate_lplim
 use simple_projector,          only: projector
 use simple_strategy2D_utils,   only: calc_cavg_offset
 implicit none
@@ -602,7 +602,7 @@ contains
         call build%vol%read_and_crop(    vol_even, params%smpd, params%box_crop, params%smpd_crop)
         call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
         ! estimate low-pass limit
-        call estimate_lplim(build%vol_odd, build%vol, mskvol, llpfromto, lpopt)
+        call estimate_lplim3D(build%vol_odd, build%vol, mskvol, llpfromto, lpopt)
         ! generate output
         call get_resolution_at_fsc(build%fsc(loc,:), res, 0.50,  res_fsc05)
         call get_resolution_at_fsc(build%fsc(loc,:), res, 0.143, res_fsc0143)
@@ -630,7 +630,7 @@ contains
     subroutine read_mask_and_filter_refvols( params, build, s )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
-        integer,       intent(in)    :: s
+        integer,           intent(in)    :: s
         type(string)         :: vol_even, vol_odd, vol_avg
         logical, allocatable :: l_msk(:,:,:)
         real    :: cur_fil(params%box_crop)
@@ -673,8 +673,11 @@ contains
             if( params%l_lpset .or. trim(params%combine_eo).eq.'yes' )then ! no independent volume registration, so average eo pairs
                 call build%vol%add(build%vol_odd)
                 call build%vol%mul(0.5)
-                call build%vol_odd%copy(build%vol)
+                call build%vol_odd%copy_fast(build%vol)
             endif
+            ! FT
+            call build%vol%fft
+            call build%vol_odd%fft
         else if( params%l_lpset )then
             ! read average volume that will occupy both even and odd
             call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
@@ -691,11 +694,14 @@ contains
                 ! circular masking
                 call build%vol%mask3D_soft(params%msk_crop, backgr=0.0)
             endif
-            ! odd <- even
-            call build%vol_odd%copy(build%vol)
+            ! FT & odd <- even
+            call build%vol%fft
+            call build%vol_odd%copy_fast(build%vol)
+        else
+            ! FT
+            call build%vol%fft
+            call build%vol_odd%fft
         endif
-        call build%vol%fft
-        call build%vol_odd%fft
         if( params%l_ml_reg )then
             ! filtering done when volumes are assembled
         else if( params%l_icm )then

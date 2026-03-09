@@ -6,7 +6,7 @@ use simple_butterworth
 implicit none
 #include "simple_local_flags.inc"
 
-public :: estimate_lplim, estimate_lplims2D
+public :: estimate_lplim, estimate_lplims2D, estimate_lplim3D
 private
 
 interface estimate_lplim
@@ -85,6 +85,70 @@ contains
         call estimate_lplim_1( odd, even, mskimg, kfromto, best_ind, odd_filt_out )
         lpopt = calc_lowpass_lim(best_ind, box, smpd)
     end subroutine estimate_lplim_2
+
+    subroutine estimate_lplim3D( odd, even, mskvol, lprange, lpopt, odd_filt_out )
+        class(image),           intent(in)  :: odd, even, mskvol
+        real,                   intent(in)  :: lprange(2)
+        real,                   intent(out) :: lpopt
+        class(image), optional, intent(out) :: odd_filt_out
+        type(image)       :: odd_filt, even_cp, odd_cp
+        real, allocatable :: cur_fil(:)
+        integer     :: ldim(3), box, kfromto(2), best_ind, cutoff_find
+        real        :: smpd, best_cost, curr_cost
+        ldim       = odd%get_ldim()
+        box        = ldim(1)
+        smpd       = odd%get_smpd()
+        kfromto(1) = calc_fourier_index(lprange(1), box, smpd)
+        kfromto(2) = calc_fourier_index(lprange(2), box, smpd)
+        if( kfromto(1) == kfromto(2) )then
+            lpopt = calc_lowpass_lim(kfromto(1), box, smpd)
+            return
+        endif
+        ! Allocations & copies
+        call odd_filt%new(ldim, smpd)
+        call odd_filt%set_ft(.true.)
+        call even_cp%copy(even)
+        call odd_cp%copy(odd)
+        call odd_filt%set_wthreads(.true.)
+        call even_cp%set_wthreads(.true.)
+        call odd_cp%set_wthreads(.true.)
+        allocate(cur_fil(box), source=0.)
+        best_ind  = kfromto(1)
+        best_cost = huge(best_cost)
+        ! Mask
+        call even_cp%ifft
+        call odd_cp%ifft
+        call even_cp%mul(mskvol)
+        call odd_cp%mul(mskvol)
+        call even_cp%fft
+        call odd_cp%fft
+        ! Loop over resolution range
+        do cutoff_find = kfromto(1), kfromto(2)
+            ! BW filter to odd
+            call odd_filt%copy_fast(odd_cp)
+            call butterworth_filter(odd_filt, cutoff_find, cur_fil)
+            ! calculate difference volume
+            call odd_filt%subtr(even_cp)
+            ! Calculate real space variance based on Fourier magnitudes
+            curr_cost = odd_filt%variance() * real(product(ldim))
+            ! book-keeping
+            if( curr_cost <= best_cost )then
+                best_cost = curr_cost
+                best_ind  = cutoff_find
+            endif
+        enddo
+        lpopt = calc_lowpass_lim(best_ind, box, smpd)
+        if( present(odd_filt_out) )then
+            call odd_filt_out%copy(odd)
+            call odd_filt_out%fft
+            call butterworth_filter(odd_filt_out, best_ind, cur_fil)
+            call odd_filt_out%ifft
+        endif
+        ! cleanup
+        call odd_filt%kill
+        call even_cp%kill
+        call odd_cp%kill
+    end subroutine estimate_lplim3D
 
     subroutine estimate_lplims2D( odd, even, mskrad_px, lprange, lpsopt, odd_filt_out )
         class(image),                       intent(inout) :: odd(:), even(:)
