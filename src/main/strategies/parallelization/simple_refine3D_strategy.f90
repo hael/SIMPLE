@@ -834,18 +834,18 @@ contains
             benchfname = 'DISTR_REFINE3D_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation         : ', rt_init
-            write(fnr,'(a,1x,f9.2)') 'probability table      : ', rt_prob
-            write(fnr,'(a,1x,f9.2)') 'distributed scheduling : ', rt_sched
-            write(fnr,'(a,1x,f9.2)') 'assemble               : ', rt_assemble
-            write(fnr,'(a,1x,f9.2)') 'total time             : ', rt_tot
+            write(fnr,'(a,1x,f9.2)') 'initialisation              : ', rt_init
+            write(fnr,'(a,1x,f9.2)') 'prob tab, distributed       : ', rt_prob
+            write(fnr,'(a,1x,f9.2)') '3D align & rec, distributed : ', rt_sched
+            write(fnr,'(a,1x,f9.2)') 'assemble parts              : ', rt_assemble
+            write(fnr,'(a,1x,f9.2)') 'total time                  : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation         : ', (rt_init/rt_tot)     * 100.
-            write(fnr,'(a,1x,f9.2)') 'probability table      : ', (rt_prob/rt_tot)     * 100.
-            write(fnr,'(a,1x,f9.2)') 'distributed scheduling : ', (rt_sched/rt_tot)    * 100.
-            write(fnr,'(a,1x,f9.2)') 'assemble               : ', (rt_assemble/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') '% accounted for        : ',&
+            write(fnr,'(a,1x,f9.2)') 'initialisation              : ', (rt_init/rt_tot)     * 100.
+            write(fnr,'(a,1x,f9.2)') 'prob tab, distributed       : ', (rt_prob/rt_tot)     * 100.
+            write(fnr,'(a,1x,f9.2)') '3D align & rec, distributed : ', (rt_sched/rt_tot)    * 100.
+            write(fnr,'(a,1x,f9.2)') 'assemble parts           : ', (rt_assemble/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') '% accounted for             : ',&
                 &((rt_init+rt_prob+rt_sched+rt_assemble)/rt_tot) * 100.
             call fclose(fnr)
         endif
