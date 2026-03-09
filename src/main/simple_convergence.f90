@@ -67,13 +67,15 @@ contains
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
         type(oris)           :: ostats
+        type(string) :: s_ratio
         real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
-        integer :: n, nptcls
+        integer :: n, nptcls, nsampled, nactive
         real    :: overlap_lim, fracsrch_lim
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged, chk4conv
         601 format(A,1X,F12.3)
+        602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states         = os%get_all('state')
         scores         = os%get_all('corr')
@@ -82,8 +84,10 @@ contains
         n              = size(states)
         nptcls         = count(states > 0.5)
         sampled_lb     = maxval(sampled) - 0.5
-        percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
-        percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
+        nactive        = count(states > 0.5)
+        nsampled       = count(sampled > sampled_lb .and. states > 0.5)
+        percen_sampled = (real(nsampled) / real(nptcls)) * 100.
+        percen_updated = (real(count(updatecnts > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
         percen_avg     = percen_sampled
         if( params%l_update_frac )then
             allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
@@ -99,8 +103,9 @@ contains
         call os%stats('res',       self%res,       mask=mask)
         self%mi_class = os%get_avg('mi_class',     mask=mask)
         ! overlaps and particle updates
+        s_ratio = '('//int2str(nsampled)//'/'//int2str(nactive)//')'
         write(logfhandle,601) '>>> CLASS OVERLAP:                            ', self%mi_class
-        write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled
+        write(logfhandle,602) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled, s_ratio%to_char()
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING            ', percen_avg
         ! dists and % search space
@@ -205,13 +210,15 @@ contains
         class(oris),        intent(inout) :: os
         real,               intent(in)    :: msk
         type(oris)           :: ostats
+        type(string) :: s_ratio
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged
-        integer :: iptcl, istate, n, nptcls, ucnt
+        integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         601 format(A,1X,F12.3)
+        602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         607 format(A,1X,F4.2)
         609 format(A)
@@ -220,13 +227,15 @@ contains
         updatecnts     = os%get_all('updatecnt')
         sampled        = os%get_all('sampled')
         n              = size(states)
-        nptcls         = count(states > 0.5)
+        nactive        = count(states > 0.5)
+        nptcls         = nactive
         sampled_lb     = maxval(sampled) - 0.5
-        percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
-        percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
+        nsampled       = count(sampled > sampled_lb .and. states > 0.5)
+        percen_sampled = (real(nsampled) / real(nptcls)) * 100.
+        percen_updated = (real(count(updatecnts > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
         percen_avg     = percen_sampled
         if( params%l_update_frac )then
-            allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
+            allocate(mask(n), source=sampled > sampled_lb .and. states > 0.5)
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
         endif
@@ -243,11 +252,12 @@ contains
         self%mi_state    = os%get_avg('mi_state',    mask=mask)
         self%frac_greedy = os%get_avg('frac_greedy', mask=mask)
         ! overlaps and particle updates
+        s_ratio = '('//int2str(nsampled)//'/'//int2str(nactive)//')'
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
         if( params%nstates > 1 )then
         write(logfhandle,601) '>>> STATE OVERLAP:                            ', self%mi_state
         endif
-        write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled
+        write(logfhandle,602) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled, s_ratio%to_char()
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         write(logfhandle,601) '>>> % PARTICLES USED FOR UPDATING THE MODEL   ', percen_avg
         write(logfhandle,601) '>>> % GREEDY SEARCHES                         ', self%frac_greedy * 100.
