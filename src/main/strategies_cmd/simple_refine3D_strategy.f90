@@ -109,6 +109,17 @@ abstract interface
     end subroutine cleanup_interface
 end interface
 
+! BENCHMARKING VARIABLES
+! initialization
+integer(timer_int_kind) ::  t_init
+real(timer_int_kind)    :: rt_init
+! prob, scheduled jobs assemble
+integer(timer_int_kind) ::  t_prob,   t_sched,  t_assemble
+real(timer_int_kind)    :: rt_prob,  rt_sched, rt_assemble
+! total
+integer(timer_int_kind) ::  t_tot
+real(timer_int_kind)    :: rt_tot
+
 contains
 
     !> Strategy selection based on command-line shape.
@@ -580,6 +591,10 @@ contains
         real    :: smpd
         integer :: state, iter, box
         logical :: do_automsk
+        if( L_BENCH_GLOB )then
+            t_init = tic()
+            t_tot  = tic()
+        endif
         601 format(A,1X,F12.3)
         iter     = params%which_iter
         str_iter = int2str_pad(iter,3)
@@ -602,6 +617,10 @@ contains
             call build%spproj%read(params%projfile)
         endif
         ! prob refinement
+        if( L_BENCH_GLOB )then
+            rt_init = toc(t_init)
+            t_prob = tic()
+        endif
         if( str_has_substr(params%refine, 'prob') )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align')
@@ -609,6 +628,10 @@ contains
             call cline_prob_align%set('startit',    iter)
             call build%spproj%write_segment_inside(params%oritype)
             call xprob_align_distr%execute( cline_prob_align )
+        endif
+        if( L_BENCH_GLOB )then
+            rt_prob = toc(t_prob)
+            t_sched = tic()
         endif
         ! update job description
         call self%job_descr%set( 'which_iter', int2str(iter))
@@ -633,6 +656,10 @@ contains
         ! Force termination at requested number of iterations (maxits is run-length)
         if( (iter - params%startit + 1) >= params%maxits ) converged = .true.
         ! assemble volumes, postprocess, automask
+        if( L_BENCH_GLOB )then
+            rt_sched   = toc(t_sched)
+            t_assemble = tic()
+        endif
         if( (trim(params%volrec).eq.'yes') )then
             select case(trim(params%refine))
                 case('eval')
@@ -735,6 +762,7 @@ contains
                         endif
                     enddo
             end select
+            if( L_BENCH_GLOB ) rt_assemble = toc(t_assemble)
         endif
         ! polar references assembly
         if( params%l_polar )then
@@ -750,6 +778,7 @@ contains
             if( iter > 1 .and. params%keepvol.eq.'no' )then
                 call del_file(string(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext%to_char())
             endif
+            if( L_BENCH_GLOB ) rt_assemble = toc(t_assemble)
         endif
         ! combine even/odd final iteration
         if ( self%l_combine_eo .and. converged )then
@@ -792,14 +821,34 @@ contains
         if( allocated(res) ) deallocate(res)
         if( allocated(fsc) ) deallocate(fsc)
         if( allocated(state_pops) ) deallocate(state_pops)
+        if( L_BENCH_GLOB ) rt_tot = toc(t_tot)
     end subroutine distr_execute_iteration
 
     subroutine distr_finalize_iteration(self, params, build)
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(in)    :: params
         type(builder),                  intent(inout) :: build
-        ! In distributed mode, merge_algndocs updates the project; we keep finalize_iter as a no-op
-        ! to avoid redundant I/O. Hook remains for symmetry.
+        type(string) :: benchfname
+        integer :: fnr
+        if( L_BENCH_GLOB )then
+            benchfname = 'DISTR_REFINE3D_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
+            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f9.2)') 'initialisation         : ', rt_init
+            write(fnr,'(a,1x,f9.2)') 'probability table      : ', rt_prob
+            write(fnr,'(a,1x,f9.2)') 'distributed scheduling : ', rt_sched
+            write(fnr,'(a,1x,f9.2)') 'assemble               : ', rt_assemble
+            write(fnr,'(a,1x,f9.2)') 'total time             : ', rt_tot
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+            write(fnr,'(a,1x,f9.2)') 'initialisation         : ', (rt_init/rt_tot)     * 100.
+            write(fnr,'(a,1x,f9.2)') 'probability table      : ', (rt_prob/rt_tot)     * 100.
+            write(fnr,'(a,1x,f9.2)') 'distributed scheduling : ', (rt_sched/rt_tot)    * 100.
+            write(fnr,'(a,1x,f9.2)') 'assemble               : ', (rt_assemble/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') '% accounted for        : ',&
+                &((rt_init+rt_prob+rt_sched+rt_assemble)/rt_tot) * 100.
+            call fclose(fnr)
+        endif
     end subroutine distr_finalize_iteration
 
     subroutine distr_finalize_run(self, params, build, cline)
@@ -809,6 +858,7 @@ contains
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+       
         ! assemble sigma2 for next run
         if( trim(params%objfun).eq.'euclid' )then
             call self%cline_calc_group_sigmas%set('which_iter', params%which_iter + 1)

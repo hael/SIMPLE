@@ -25,11 +25,10 @@ type(commander_rank_cavgs)              :: xrank_cavgs
 type(commander_export_cavgs)            :: xexport_cavgs
 
 ! REFINE3D PROGRAMS
-type(commander_refine3D)                :: xrefine3D
+type(commander_refine3D_distr_worker)   :: xrefine3D_distr_worker
 type(commander_calc_pspec_distr)        :: xcalc_pspec_distr
 type(commander_calc_pspec)              :: xcalc_pspec
 type(commander_calc_pspec_assemble)     :: xcalc_pspec_assemble
-type(commander_check_3Dconv)            :: xcheck_3Dconv
 type(commander_calc_group_sigmas)       :: xcalc_group_sigmas
 type(commander_prob_tab)                :: xprob_tab
 type(commander_prob_align)              :: xprob_align
@@ -146,16 +145,14 @@ select case(prg)
         call xexport_cavgs%execute(cline)
 
     ! REFINE3D PROGRAMS
-    case( 'refine3D' )
-        call xrefine3D%execute(cline)
+    case( 'refine3D_distr_worker' )
+        call xrefine3D_distr_worker%execute(cline)
     case( 'calc_pspec_distr' )
         call xcalc_pspec_distr%execute(cline)
     case( 'calc_pspec' )
         call xcalc_pspec%execute(cline)
     case( 'calc_pspec_assemble' )
         call xcalc_pspec_assemble%execute(cline)
-    case( 'check_3Dconv' )
-        call xcheck_3Dconv%execute(cline)
     case( 'calc_group_sigmas' )
         call xcalc_group_sigmas%execute(cline)
     case( 'prob_tab' )
