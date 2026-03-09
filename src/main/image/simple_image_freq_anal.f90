@@ -245,8 +245,8 @@ contains
     end function guinier
 
     module subroutine fsc( self1, self2, corrs )
-        class(image), intent(inout) :: self1, self2
-        real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
+        class(image), intent(in)  :: self1, self2
+        real,         intent(out) :: corrs(fdim(self1%ldim(1))-1)
         real(dp)    :: corrs_8(fdim(self1%ldim(1))-1)
         real(dp)    :: sumasq(fdim(self1%ldim(1))-1), sumbsq(fdim(self1%ldim(1))-1)
         complex(dp) :: comp1, comp2
@@ -288,50 +288,38 @@ contains
         corrs = real(corrs_8)
     end subroutine fsc
 
-    module subroutine fsc_scaled( self1, self2, sz, corrs )
-        class(image), intent(inout) :: self1, self2
-        integer,      intent(in)    :: sz
-        real,         intent(out)   :: corrs(sz)
-        real(dp)    :: corrs_8(sz), sumasq(sz), sumbsq(sz)
-        real        :: scale, rsh
-        complex(dp) :: comp1, comp2
-        integer     :: lims(3,2), phys(3), sh, sh_sc, h, k, l, n
-        scale   = real(2*sz) / real(self1%ldim(1))
-        corrs_8 = 0.d0
-        sumasq  = 0.d0
-        sumbsq  = 0.d0
-        lims    = self1%fit%loop_lims(2)
-        n       = self1%get_filtsz()
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh,sh_sc,rsh,comp1,comp2)&
-        !$omp schedule(static) reduction(+:corrs_8,sumasq,sumbsq) proc_bind(close)
-        do k=lims(2,1),lims(2,2)
-            do h=lims(1,1),lims(1,2)
-                do l=lims(3,1),lims(3,2)
-                    ! shell
-                    rsh = sqrt(real(h*h) + real(k*k) + real(l*l))
-                    sh  = nint(rsh)
-                    if( sh == 0 .or. sh > n ) cycle
-                    sh_sc = nint(scale*rsh)
-                    if( sh_sc == 0 .or. sh_sc > sz ) cycle
-                    ! compute physical address
-                    phys = self1%fit%comp_addr_phys(h,k,l)
-                    ! real part of the complex mult btw self1 and targ*
-                    comp1          = self1%cmat(phys(1),phys(2),phys(3))
-                    comp2          = self2%cmat(phys(1),phys(2),phys(3))
-                    corrs_8(sh_sc) = corrs_8(sh_sc)+ real(comp1 * conjg(comp2), kind=dp)
-                    sumasq(sh_sc)  = sumasq(sh_sc) + csq_fast(comp1)
-                    sumbsq(sh_sc)  = sumbsq(sh_sc) + csq_fast(comp2)
+    ! Calculates the un-normalized Fourier shell variance
+    module subroutine fsvar( self, sz, vars )
+        class(image), intent(in)  :: self
+        integer,      intent(in)  :: sz
+        real,         intent(out) :: vars(sz)
+        complex(dp) :: comp
+        real(dp)    :: specvars(sz), mag
+        integer     :: lims(3,2), phys(3), sh, h,k,l, flim, nyq
+        logical     :: dbl
+        specvars = 0.d0
+        lims     = self%fit%loop_lims(2)
+        nyq      = lims(1,2)
+        flim     = min(nyq, sz)
+        !$omp parallel do collapse(2) default(shared) private(h,k,l,phys,sh,comp,dbl,mag)&
+        !$omp schedule(static) reduction(+:specvars) proc_bind(close)
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
+                dbl = h>0 .and. h<nyq
+                do l = lims(3,1),lims(3,2)
+                    sh = nint(hyp(h,k,l))
+                    if( sh == 0 )   cycle
+                    if( sh > flim ) cycle
+                    phys = self%fit%comp_addr_phys(h,k,l)
+                    comp = cmplx(self%cmat(phys(1),phys(2),phys(3)), kind=dp)
+                    mag  = real(comp*conjg(comp),dp)
+                    specvars(sh) = specvars(sh) + merge(2.d0*mag, mag, dbl)
                 end do
             end do
         end do
         !$omp end parallel do
-        ! normalize correlations and compute resolutions
-        where( sumasq>DTINY.and. sumbsq>DTINY )
-            corrs = real(corrs_8/dsqrt(sumasq * sumbsq))
-        else where
-            corrs = 0.
-        end where
-    end subroutine fsc_scaled
+        vars = real(specvars)
+    end subroutine fsvar
 
     module function get_res( self ) result( res )
         class(image), intent(in) :: self

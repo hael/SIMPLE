@@ -202,6 +202,7 @@ contains
     procedure, private :: apply_filter_1, apply_filter_2
     generic            :: apply_filter => apply_filter_1, apply_filter_2
     procedure          :: apply_filter_serial
+    procedure          :: apply_filter_test
     procedure          :: NLmean2D, NLmean2D_eo, NLmean3D, NLmean3D_eo
     procedure          :: ICM2D, ICM2D_eo, ICM3D, ICM3D_eo
     procedure          :: GLCM
@@ -213,7 +214,8 @@ contains
     procedure          :: power_spectrum
     procedure          :: guinier_bfac
     procedure          :: guinier
-    procedure          :: fsc, fsc_scaled
+    procedure          :: fsc
+    procedure          :: fsvar
     procedure          :: get_res
     procedure          :: frc_pspec
     procedure          :: fcomps_below_noise_power_stats
@@ -271,8 +273,6 @@ contains
     procedure          :: weighted_subtr_sqsum, masked_subtr_sqsum
     procedure          :: weighted_subtr_corr, masked_subtr_corr
     ! cost / shift
-    procedure          :: opt_filter_costfun
-    procedure          :: opt_filter_costfun_workshare
     procedure, private :: oshift_1, oshift_2
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
@@ -1329,6 +1329,11 @@ interface
         real,         intent(in)    :: filter(:)
     end subroutine apply_filter_serial
 
+    module subroutine apply_filter_test( self, filter )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: filter(:)
+    end subroutine apply_filter_test
+
     module subroutine NLmean2D( self, msk, sdev_noise )
         class(image),   intent(inout) :: self
         real, optional, intent(in)    :: msk
@@ -1420,15 +1425,15 @@ interface
     end function guinier
 
     module subroutine fsc( self1, self2, corrs )
-        class(image), intent(inout) :: self1, self2
-        real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
+        class(image), intent(in)  :: self1, self2
+        real,         intent(out) :: corrs(fdim(self1%ldim(1))-1)
     end subroutine fsc
 
-    module subroutine fsc_scaled( self1, self2, sz, corrs )
-        class(image), intent(inout) :: self1, self2
-        integer,      intent(in)    :: sz
-        real,         intent(out)   :: corrs(sz)
-    end subroutine fsc_scaled
+    module subroutine fsvar( self, sz, vars )
+        class(image), intent(in)  :: self
+        integer,      intent(in)  :: sz
+        real,         intent(out) :: vars(sz)
+    end subroutine fsvar
 
     module function get_res( self ) result( res )
         class(image), intent(in) :: self
@@ -1790,16 +1795,6 @@ interface
     end subroutine masked_subtr_corr
 
     !--- cost / shift ---!
-
-    module subroutine opt_filter_costfun( even_filt, odd_raw, odd_filt, even_raw, sqdiff_img )
-        class(image), intent(in)    :: even_filt, odd_raw, odd_filt, even_raw
-        class(image), intent(inout) :: sqdiff_img
-    end subroutine opt_filter_costfun
-
-    module subroutine opt_filter_costfun_workshare( even_filt, odd_raw, odd_filt, even_raw, sqdiff_img )
-        class(image), intent(in)    :: even_filt, odd_raw, odd_filt, even_raw
-        class(image), intent(inout) :: sqdiff_img
-    end subroutine opt_filter_costfun_workshare
 
     module pure function oshift_1( self, logi, shvec ) result( comp )
         class(image), intent(in) :: self

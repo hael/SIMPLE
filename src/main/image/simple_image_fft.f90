@@ -16,7 +16,13 @@ contains
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
         ! now scale the values so that a ifft() of the output yields the
         ! original image back following FFTW
-        self%cmat = self%cmat/real(product(self%ldim))
+        if( self%wthreads )then
+            !$omp parallel workshare proc_bind(close)
+            self%cmat = self%cmat/real(product(self%ldim))
+            !$omp end parallel workshare
+        else
+            self%cmat = self%cmat/real(product(self%ldim))
+        endif
         self%ft = .true.
     end subroutine fwd_ft
 

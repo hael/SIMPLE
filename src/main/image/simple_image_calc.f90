@@ -371,7 +371,8 @@ contains
         endif
     end subroutine stats_2
 
-    ! returns the real space variance, regardless of the inputted domain
+    ! returns the real space variance
+    ! Based on Parseval's theorem when in the Fourier domain
     module function variance( self ) result( var )
         class(image), intent(in) :: self
         real(dp)    :: sumv, sumvsq, v, dvar,var0,varnyq
@@ -392,7 +393,9 @@ contains
             enddo
             ! Magnitude in h = [1;nyq-1] slices, to be doubled
             dvar = 0.d0
-            do h = 1,lims(1,2)
+            !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,c)&
+            !$omp schedule(static) reduction(+:dvar) proc_bind(close)
+            do h = 1,lims(1,2)-1
                 do k = lims(2,1),lims(2,2)
                     do l = lims(3,1),lims(3,2)
                         phys = self%comp_addr_phys(h, k, l)
@@ -401,9 +404,10 @@ contains
                     enddo
                 enddo
             enddo
+            !$omp end parallel do
             ! Magnitude in h=nyq unique slice
             varnyq = 0.d0
-            h      = lims(1,2)-1
+            h      = lims(1,2)
             do k = lims(2,1),lims(2,2)
                 do l = lims(3,1),lims(3,2)
                     phys   = self%comp_addr_phys(h, k, l)
@@ -1493,20 +1497,6 @@ contains
     !===========================
     ! cost / shift
     !===========================
-
-    module subroutine opt_filter_costfun( even_filt, odd_raw, odd_filt, even_raw, sqdiff_img )
-        class(image), intent(in)    :: even_filt, odd_raw, odd_filt, even_raw
-        class(image), intent(inout) :: sqdiff_img
-        sqdiff_img%rmat = abs(even_filt%rmat - odd_raw%rmat + odd_filt%rmat - even_raw%rmat)
-    end subroutine opt_filter_costfun
-
-    module subroutine opt_filter_costfun_workshare( even_filt, odd_raw, odd_filt, even_raw, sqdiff_img )
-        class(image), intent(in)    :: even_filt, odd_raw, odd_filt, even_raw
-        class(image), intent(inout) :: sqdiff_img
-        !$omp parallel workshare
-        sqdiff_img%rmat = abs(even_filt%rmat - odd_raw%rmat + odd_filt%rmat - even_raw%rmat)
-        !$omp end parallel workshare
-    end subroutine opt_filter_costfun_workshare
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
