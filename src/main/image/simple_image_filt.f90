@@ -719,6 +719,47 @@ contains
         end do
     end subroutine apply_filter_serial
 
+    module subroutine apply_filter_test( self, filter )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: filter(:)
+        integer :: nyq, sh, logi(3), a,b,c
+        logical :: didft
+        real    :: fwght, wzero
+        nyq = size(filter)
+        didft = .false.
+        if( .not. self%ft )then
+            call self%fft()
+            didft = .true.
+        endif
+        wzero = maxval(filter)
+        ! The filter is apply following this sequence:
+        ! 1. cycle through the indices of physical complex array
+        !$omp parallel do collapse(3) default(shared) private(logi,a,b,c,sh,fwght)&
+        !$omp schedule(static) proc_bind(close)
+        do c = 1,self%array_shape(3)
+            do b = 1,self%array_shape(2)
+                do a = 1,self%array_shape(1)
+        ! 2. map each pixel/voxel to the corresponding Fourier address indices
+                    logi = self%fit%comp_addr_logi(a,b,c)
+        ! 3. calculate the shell from these h,k,l
+                    sh   = nint(sqrt(real(dot_product(logi,logi))))
+        ! 4. derive filter value from this shell
+                    if( sh > nyq )then
+                        fwght = 0.
+                    else if( sh == 0 )then
+                        fwght = wzero
+                    else
+                        fwght = filter(sh)
+                    endif
+        ! 5. multiply pixel/voxel by the corresponding filter shell value
+                    self%cmat(a,b,c) = fwght * self%cmat(a,b,c)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        if( didft ) call self%ifft()
+    end subroutine apply_filter_test
+
     ! don't touch default parameters here. This routine is being actively used
     module subroutine NLmean2D( self, msk, sdev_noise )
         class(image),   intent(inout) :: self
