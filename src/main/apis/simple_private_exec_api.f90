@@ -49,7 +49,7 @@ use simple_commanders_euclid,       only: commander_calc_pspec_distr, commander_
 use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
 
 ! rec commanders, 3D reconstrunction from aligned particles with Fourier griddding
-use simple_commanders_rec,       only: commander_rec3D
+use simple_commanders_rec,       only: commander_rec3D_worker
 use simple_commanders_rec_distr, only: commander_volassemble
 
 ! check commanders, check number of and dimensions of images

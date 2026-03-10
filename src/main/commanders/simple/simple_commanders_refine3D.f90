@@ -20,25 +20,15 @@ type, extends(commander_base) :: commander_refine3D_auto
     procedure :: execute      => exec_refine3D_auto
 end type commander_refine3D_auto
 
-type, extends(commander_base) :: commander_refine3D_unified
+type, extends(commander_base) :: commander_refine3D
   contains
-    procedure :: execute      => exec_refine3D_unified
-end type commander_refine3D_unified
-
-type, extends(commander_base) :: commander_refine3D_distr
-  contains
-    procedure :: execute      => exec_refine3D_distr
-end type commander_refine3D_distr
+    procedure :: execute      => exec_refine3D
+end type commander_refine3D
 
 type, extends(commander_base) :: commander_refine3D_distr_worker
   contains
     procedure :: execute      => exec_refine3D_distr_worker
 end type commander_refine3D_distr_worker
-
-type, extends(commander_base) :: commander_refine3D
-  contains
-    procedure :: execute      => exec_refine3D
-end type commander_refine3D
 
 contains
 
@@ -60,7 +50,7 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_auto( self, cline )
-        use simple_commanders_rec, only: commander_rec3D_distr
+        use simple_commanders_rec, only: commander_rec3D
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_reconstruct3D_distr
@@ -76,8 +66,8 @@ contains
         integer      :: box_crop, maxits_phase1, maxits_phase2, iter
         logical      :: l_autoscale
         ! commanders
-        type(commander_rec3D_distr) :: xreconstruct3D_distr
-        type(commander_refine3D_distr)      :: xrefine3D_distr
+        type(commander_rec3D)    :: xrec3D
+        type(commander_refine3D) :: xrefine3D
         ! hard defaults
         call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution
         call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
@@ -145,7 +135,7 @@ contains
         call cline_reconstruct3D_distr%delete('sigma_est')
         call cline_reconstruct3D_distr%delete('update_frac')
         call cline_reconstruct3D_distr%set('objfun', 'cc') ! ugly, but this is how it works in parameters
-        call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
+        call xrec3D%execute(cline_reconstruct3D_distr)
         ! 3D refinement, phase1
         str_state = int2str_pad(1,2)
         call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
@@ -155,7 +145,7 @@ contains
         call cline%set('ufrac_trec', params%update_frac)
         call cline%set('maxits',          maxits_phase1)
         call cline%set('lp_auto',                 'yes')
-        call xrefine3D_distr%execute(cline)
+        call xrefine3D%execute(cline)
         ! iteration number bookkeeping
         iter = 0
         if( cline%defined('endit') )then
@@ -165,7 +155,7 @@ contains
         iter = iter + 1
         ! re-reconstruct from all particle images
         call cline_reconstruct3D_distr%set('mskfile', MSKVOL_FILE)
-        call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
+        call xrec3D%execute(cline_reconstruct3D_distr)
         ! 3D refinement, phase2
         call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
         params%mskfile = MSKVOL_FILE
@@ -174,9 +164,9 @@ contains
         call cline%set('lp_auto', params%lp_auto)
         call cline%set('startit',           iter)
         call cline%set('which_iter',        iter)
-        call xrefine3D_distr%execute(cline)
+        call xrefine3D%execute(cline)
         ! re-reconstruct from all particle images
-        call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
+        call xrec3D%execute(cline_reconstruct3D_distr)
         ! postprocess
         call cline%set('prg', 'postprocess')
         call cline%set('mkdir', 'yes')
@@ -184,11 +174,11 @@ contains
     end subroutine exec_refine3D_auto
 
     !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.
-    subroutine exec_refine3D_unified( self, cline )
+    subroutine exec_refine3D( self, cline )
         use simple_core_module_api
         use simple_refine3D_strategy
-        class(commander_refine3D_unified), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
+        class(commander_refine3D), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
         class(refine3D_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
@@ -228,7 +218,7 @@ contains
         call build%kill_general_tbox
         call build%pftc%kill
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
-    end subroutine exec_refine3D_unified
+    end subroutine exec_refine3D
 
     !> Distributed worker (single-iteration execution). This should be the command
     !> invoked by the scheduler for each partition.
@@ -236,7 +226,7 @@ contains
         use simple_core_module_api
         use simple_strategy3D_matcher, only: refine3D_exec
         class(commander_refine3D_distr_worker), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
+        class(cmdline),                         intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         logical          :: converged
@@ -252,23 +242,5 @@ contains
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
     end subroutine exec_refine3D_distr_worker
-
-    !> Backwards-compatible wrapper: the old distributed master commander delegates
-    !> to the unified entrypoint above.
-    subroutine exec_refine3D_distr( self, cline )
-        class(commander_refine3D_distr), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(commander_refine3D_unified) :: xrefine3D
-        call xrefine3D%execute(cline)
-    end subroutine exec_refine3D_distr
-
-    !> Backwards-compatible wrapper: the old shared-memory master commander delegates
-    !> to the unified entrypoint above.
-    subroutine exec_refine3D( self, cline )
-        class(commander_refine3D), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        type(commander_refine3D_unified) :: xrefine3D
-        call xrefine3D%execute(cline)
-    end subroutine exec_refine3D
 
 end module simple_commanders_refine3D

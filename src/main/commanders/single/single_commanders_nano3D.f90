@@ -235,11 +235,11 @@ contains
     end subroutine exec_autorefine3D_nano
 
     subroutine exec_refine3D_nano( self, cline )
-        use simple_commanders_refine3D, only: commander_refine3D_distr
+        use simple_commanders_refine3D, only: commander_refine3D
         class(commander_refine3D_nano), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commander
-        type(commander_refine3D_distr) :: xrefine3D_distr
+        type(commander_refine3D) :: xrefine3D
         ! static parameters
         call cline%set('prg',           'refine3D')
         call cline%set('dir_exec', 'refine3D_nano')
@@ -260,7 +260,7 @@ contains
         if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global') ! only sensible option for this kind of data
         if( .not. cline%defined('icm')            ) call cline%set('icm',           'yes') ! ICM regualrization works 
         if( .not. cline%defined('lambda')         ) call cline%set('lambda',          0.1) ! this is an empirically determined regularization parameter
-        call xrefine3D_distr%execute(cline)
+        call xrefine3D%execute(cline)
     end subroutine exec_refine3D_nano
 
     subroutine exec_commander_trajectory_reconstruct3D_distr( self, cline )
@@ -272,13 +272,13 @@ contains
         type(string),          allocatable :: vol_fnames(:)
         real,                  allocatable :: ccs(:,:,:), fsc(:), rstates(:), rad_cc(:), rad_dists(:)
         integer,               allocatable :: parts(:,:)
-        type(string)                  :: recname, fname, str_state, recname_even, res_fname
-        type(string)                  :: recname_odd, vol_fname_even, vol_fname_odd
-        type(commander_rec3D) :: xrec3D_shmem
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        type(cmdline)                 :: cline_rec
-        type(image)                   :: vol1, vol2
+        type(string)          :: recname, fname, str_state, recname_even, res_fname
+        type(string)          :: recname_odd, vol_fname_even, vol_fname_odd
+        type(commander_rec3D) :: xrec3D
+        type(parameters)      :: params
+        type(sp_project)      :: spproj
+        type(cmdline)         :: cline_rec
+        type(image)           :: vol1, vol2
         integer :: state, ipart, istate, nptcls, frame_start, frame_end
         integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, lifetime
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
@@ -293,7 +293,7 @@ contains
         if( cline%defined('fromp') .and. cline%defined('top') )then
             call cline%delete('nparts')   ! shared-memory implementation
             call cline%set('mkdir', 'no') ! to avoid nested directory structure
-            call xrec3D_shmem%execute(cline)
+            call xrec3D%execute(cline)
             return
         endif
         ! state exception
@@ -331,7 +331,7 @@ contains
             write(funit,'(I6,I6,I6,I6)') ipart, frame_start, frame_end, lifetime
             call cline_rec%set('mkdir', 'no')
             ! rec
-            call xrec3D_shmem%execute(cline_rec)
+            call xrec3D%execute(cline_rec)
             ! rename volumes and resolution files
             call simple_rename(recname,      vol_fnames(ipart))
             call simple_rename(recname_even, vol_fname_even)

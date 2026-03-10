@@ -5,18 +5,18 @@ use simple_string,              only: string
 use simple_exec_helpers,        only: restarted_exec
 use simple_commanders_mask,     only: commander_automask
 use simple_commanders_volops,   only: commander_postprocess
-use simple_commanders_rec,      only: commander_rec3D_distr
-use simple_commanders_refine3D, only: commander_refine3D_distr, commander_refine3D_auto
+use simple_commanders_rec,      only: commander_rec3D
+use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D_auto
 implicit none
 
 public :: exec_refine3D_commander
 private
 
-type(commander_automask)            :: xautomask
-type(commander_postprocess)         :: xpostprocess
-type(commander_rec3D_distr) :: xreconstruct3D
-type(commander_refine3D_auto)       :: xrefine3D_auto
-type(commander_refine3D_distr)      :: xrefine3D_distr
+type(commander_automask)      :: xautomask
+type(commander_postprocess)   :: xpostprocess
+type(commander_rec3D)         :: xrec3D
+type(commander_refine3D_auto) :: xrefine3D_auto
+type(commander_refine3D)      :: xrefine3D
 
 contains
 
@@ -34,12 +34,12 @@ contains
             case( 'postprocess' )
                 call xpostprocess%execute(cline)
             case( 'reconstruct3D' )
-                call xreconstruct3D%execute(cline)
+                call xrec3D%execute(cline)
             case( 'refine3D' )
                 if( cline%defined('nrestarts') )then
                 call restarted_exec(cline, string('refine3D'), string('simple_exec'))
                 else
-                    call xrefine3D_distr%execute(cline)
+                    call xrefine3D%execute(cline)
                 endif
             case( 'refine3D_auto' )
                 if( cline%defined('nrestarts') )then

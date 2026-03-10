@@ -5,8 +5,8 @@ use simple_abinitio_config
 use simple_abinitio_utils
 use simple_procimgstk,          only: shift_imgfile
 use simple_commanders_volops,   only: commander_reproject
-use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D_distr
-use simple_commanders_rec,      only: commander_rec3D, commander_rec3D_distr
+use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D
+use simple_commanders_rec,      only: commander_rec3D, commander_rec3D
 use simple_cluster_seed,        only: gen_labelling
 use simple_decay_funs,          only: calc_update_frac_dyn, calc_update_frac
 implicit none
@@ -44,7 +44,7 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! shared-mem commanders
         type(commander_refine3D)      :: xrefine3D
-        type(commander_rec3D) :: xreconstruct3D
+        type(commander_rec3D)         :: xrec3D
         type(commander_reproject)     :: xreproject
         ! other
         type(string)                  :: stk, orig_stk, shifted_stk, stk_even, stk_odd, ext
@@ -203,13 +203,13 @@ contains
             endif
             ! Reconstruction for polar representation
             if( l_polar .and. (istage>1) .and. (istage/=SYMSRCH_STAGE+1) )then
-                call calc_rec(params, work_projfile, xreconstruct3D, istage)
+                call calc_rec(params, work_projfile, xrec3D, istage)
             endif
             ! Probabilistic search
             call exec_refine3D(params, istage, xrefine3D)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
-                call symmetrize(params, istage, work_proj, work_projfile, xreconstruct3D)
+                call symmetrize(params, istage, work_proj, work_projfile, xrec3D)
             endif
         end do
         ! update original cls3D segment
@@ -246,7 +246,7 @@ contains
             if( params%nstates > 1 ) call conv_eo_states(work_proj%os_ptcl3D)
             call conv_eo(work_proj%os_ptcl3D)
             ! calculate 3D reconstruction at original sampling
-            call calc_final_rec(params, work_proj, work_projfile, xreconstruct3D)
+            call calc_final_rec(params, work_proj, work_projfile, xrec3D)
             ! postprocess final 3D reconstruction
             call postprocess_final_rec(params, work_proj)
             ! add rec_final to os_out
@@ -321,7 +321,7 @@ contains
                 call work_proj%write_segment_inside('ptcl3D', work_projfile)
                 call cline%set('mkdir', 'no') ! to avoid nested dirs
                 call cline%set('objfun', 'cc')
-                call xreconstruct3D%execute(cline)
+                call xrec3D%execute(cline)
                 call cline%set('objfun', trim(params%objfun))
                 do s = 1,params%nstates
                     state = int2str_pad(s,2)
@@ -484,8 +484,8 @@ contains
         class(commander_abinitio3D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
-        type(commander_refine3D_distr)         :: xrefine3D
-        type(commander_rec3D_distr)    :: xreconstruct3D_distr
+        type(commander_refine3D)        :: xrefine3D
+        type(commander_rec3D)           :: xrec3D
         ! other
         real,               allocatable :: rstates(:)
         integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:)
@@ -497,22 +497,22 @@ contains
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        if( .not. cline%defined('mkdir')               ) call cline%set('mkdir',                              'yes')
-        if( .not. cline%defined('overlap')             ) call cline%set('overlap',                             0.95)
-        if( .not. cline%defined('prob_athres')         ) call cline%set('prob_athres',                          10.)
-        if( .not. cline%defined('center')              ) call cline%set('center',                              'no')
-        if( .not. cline%defined('cenlp')               ) call cline%set('cenlp',                      CENLP_DEFAULT)
-        if( .not. cline%defined('oritype')             ) call cline%set('oritype',                         'ptcl3D')
-        if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                                'c1')
-        if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                          'c1')
-        if( .not. cline%defined('ptclw')               ) call cline%set('ptclw',                               'no')
-        if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                            'yes')
-        if( .not. cline%defined('first_sigmas')        ) call cline%set('first_sigmas',                        'no')
-        if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                 'comlin_noself')
-        if( .not. cline%defined('inivol')              ) call cline%set('inivol',                          'sphere')
-        if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',            MAXITS_BETWEEN)
-        if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage',      GAUREF_LAST_STAGE)
-        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                             'yes')
+        if( .not. cline%defined('mkdir')               ) call cline%set('mkdir',                         'yes')
+        if( .not. cline%defined('overlap')             ) call cline%set('overlap',                        0.95)
+        if( .not. cline%defined('prob_athres')         ) call cline%set('prob_athres',                     10.)
+        if( .not. cline%defined('center')              ) call cline%set('center',                         'no')
+        if( .not. cline%defined('cenlp')               ) call cline%set('cenlp',                 CENLP_DEFAULT)
+        if( .not. cline%defined('oritype')             ) call cline%set('oritype',                    'ptcl3D')
+        if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
+        if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
+        if( .not. cline%defined('ptclw')               ) call cline%set('ptclw',                          'no')
+        if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                       'yes')
+        if( .not. cline%defined('first_sigmas')        ) call cline%set('first_sigmas',                   'no')
+        if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',            'comlin_noself')
+        if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
+        if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
+        if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage', GAUREF_LAST_STAGE)
+        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                        'yes')
         ! splitting stage
         split_stage = HET_DOCKED_STAGE
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
@@ -711,7 +711,7 @@ contains
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! calc recs
-            call calc_rec(params, params%projfile, xreconstruct3D_distr, start_stage)
+            call calc_rec(params, params%projfile, xrec3D, start_stage)
         else if( .not. l_ini3D )then
             ! the ptcl3D field should be clean of updates at this stage
             call spproj%os_ptcl3D%clean_entry('updatecnt')
@@ -748,7 +748,7 @@ contains
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! create starting volume(s)
-            call calc_rec(params, params%projfile, xreconstruct3D_distr, start_stage)
+            call calc_rec(params, params%projfile, xrec3D, start_stage)
         endif
         ! Frequency marching
         maxits_dyn = 0
@@ -783,7 +783,7 @@ contains
             call set_cline_refine3D(params, istage, l_cavgs=.false.)
             ! Need to be here since rec cline depends on refine3D cline
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
-                call randomize_states(params, spproj, params%projfile, xreconstruct3D_distr, istage=split_stage)
+                call randomize_states(params, spproj, params%projfile, xrec3D, istage=split_stage)
             endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
@@ -794,21 +794,21 @@ contains
                 &.or. (istage > TRAILREC_STAGE_SINGLE) )then
                     ! exceptions: first stage, after symmetry search, trail_rec is on
                 else
-                    call calc_rec( params, params%projfile, xreconstruct3D_distr, istage )
+                    call calc_rec( params, params%projfile, xrec3D, istage )
                 endif
             endif
             ! Executing the refinement with the above settings
             call exec_refine3D(params, istage, xrefine3D)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
-                call symmetrize(params, istage, spproj, params%projfile, xreconstruct3D_distr)
+                call symmetrize(params, istage, spproj, params%projfile, xrec3D)
             endif
             ! nice
             call nice_comm%update_ini3D(last_stage_completed=.true.) 
             call nice_comm%cycle()
         enddo
         ! calculate 3D reconstruction at original sampling
-        call calc_final_rec(params, spproj, params%projfile, xreconstruct3D_distr)
+        call calc_final_rec(params, spproj, params%projfile, xrec3D)
         ! for visualization
         call gen_ortho_reprojs4viz(params, spproj)
         ! postprocess final 3D reconstruction

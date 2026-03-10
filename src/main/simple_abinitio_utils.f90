@@ -440,12 +440,12 @@ contains
         endif
     end subroutine exec_refine3D
 
-    subroutine symmetrize( params, istage, spproj, projfile, xreconstruct3D )
+    subroutine symmetrize( params, istage, spproj, projfile, xrec3D )
         class(parameters),               intent(inout) :: params
         integer,                         intent(in)    :: istage
         class(sp_project),               intent(inout) :: spproj
         class(string),                   intent(in)    :: projfile
-        class(commander_base), optional, intent(inout) :: xreconstruct3D
+        class(commander_base), optional, intent(inout) :: xrec3D
         type(commander_symmetrize_map) :: xsymmap
         type(cmdline)                  :: cline_asymrec, cline_symrec
         type(string) :: vol_iter, vol_sym
@@ -457,7 +457,7 @@ contains
         if( l_srch4symaxis )then
             ! asymmetric/low symmetry reconstruction
             if( l_polar )then
-                if( .not.present(xreconstruct3D) )then
+                if( .not.present(xrec3D) )then
                     THROW_HARD('Reconstructor required with polar=yes')
                 endif
                 cline_asymrec = cline_refine3D
@@ -469,7 +469,7 @@ contains
                 call cline_asymrec%set('objfun',     'cc')
                 call cline_asymrec%delete('which_iter')
                 call cline_asymrec%delete('endit')
-                call xreconstruct3D%execute(cline_asymrec)
+                call xrec3D%execute(cline_asymrec)
                 vol_iter = 'asymmetric_map'//MRC_EXT
                 call simple_copy_file(string(VOL_FBODY)//int2str_pad(1,2)//MRC_EXT, vol_iter)
                 call cline_asymrec%kill
@@ -492,7 +492,7 @@ contains
             write(logfhandle,'(A)') '>>>'
             call xsymmap%execute(cline_symmap)
             call del_file('SYMAXIS_SEARCH_FINISHED')
-            if( present(xreconstruct3D) )then
+            if( present(xrec3D) )then
                 ! symmetric reconstruction
                 cline_symrec = cline_refine3D
                 call cline_symrec%set('prg',        'reconstruct3D')
@@ -501,7 +501,7 @@ contains
                 call cline_symrec%set('pgrp',       params%pgrp)
                 call cline_symrec%set('which_iter', cline_refine3D%get_iarg('endit'))
                 call cline_symrec%delete('endit')
-                call xreconstruct3D%execute(cline_symrec)
+                call xrec3D%execute(cline_symrec)
                 vol_sym = VOL_FBODY//int2str_pad(1,2)//MRC_EXT
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
                 call cline_symrec%kill
@@ -511,11 +511,11 @@ contains
     end subroutine symmetrize
 
     ! Performs reconstruction at some set stages when polar=yes
-    subroutine calc_rec( params, projfile, xreconstruct3D, istage )
+    subroutine calc_rec( params, projfile, xrec3D, istage )
         use simple_class_frcs, only: class_frcs
         class(parameters),       intent(inout) :: params
         class(string),           intent(in)    :: projfile
-        class(commander_base),   intent(inout) :: xreconstruct3D
+        class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
         type(commander_automask)       :: xautomask
         type(string)      :: vol,vol_even,vol_odd, str, tmpl, src, dest, sstate, sstage, pgrp
@@ -538,7 +538,7 @@ contains
         call cline_rec%delete('endit')
         call cline_rec%delete('automsk')
         call cline_rec%delete('mskfile')
-        call xreconstruct3D%execute(cline_rec)
+        call xrec3D%execute(cline_rec)
         if( trim(params%polar) == 'yes' )then
             ! Polar=yes branch
             sstate = int2str_pad(1,2)
@@ -604,11 +604,11 @@ contains
         call cline_rec%kill
     end subroutine calc_rec
 
-    subroutine randomize_states( params, spproj, projfile, xreconstruct3D, istage )
+    subroutine randomize_states( params, spproj, projfile, xrec3D, istage )
         class(parameters),     intent(inout) :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
-        class(commander_base), intent(inout) :: xreconstruct3D
+        class(commander_base), intent(inout) :: xrec3D
         integer,               intent(in)    :: istage
         call spproj%read_segment('ptcl3D', projfile)
         call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
@@ -617,7 +617,7 @@ contains
         call cline_reconstruct3D%set('nstates', params%nstates)
         call cline_postprocess%set(  'nstates', params%nstates)
         call cline_reproject%set(    'nstates', params%nstates)
-        call calc_rec(params, projfile, xreconstruct3D, istage)
+        call calc_rec(params, projfile, xrec3D, istage)
     end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz( params, spproj )
@@ -652,17 +652,17 @@ contains
         call final_vol%kill
     end subroutine gen_ortho_reprojs4viz
 
-    subroutine calc_final_rec( params, spproj, projfile, xreconstruct3D )
+    subroutine calc_final_rec( params, spproj, projfile, xrec3D )
         class(parameters),     intent(in)    :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
-        class(commander_base), intent(inout) :: xreconstruct3D
+        class(commander_base), intent(inout) :: xrec3D
         type(string) :: str_state, vol_name
         integer      :: state, pop
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'
-        call xreconstruct3D%execute(cline_reconstruct3D)
+        call xrec3D%execute(cline_reconstruct3D)
         call spproj%read_segment('out', projfile)
         call spproj%read_segment('ptcl3D', projfile)
         do state = 1, params%nstates

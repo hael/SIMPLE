@@ -353,13 +353,13 @@ contains
 
     subroutine distr_initialize(self, params, build, cline)
         use simple_exec_helpers,      only: set_master_num_threads
-        use simple_commanders_rec,    only: commander_rec3D_distr
+        use simple_commanders_rec,    only: commander_rec3D
         use simple_commanders_euclid, only: commander_calc_pspec_distr, estimate_first_sigmas_commander
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(commander_rec3D_distr) :: xreconstruct3D_distr
+        type(commander_rec3D) :: xrec3D
         type(commander_calc_pspec_distr)    :: xcalc_pspec_distr
         type(estimate_first_sigmas_commander) :: xfirst_sigmas_distr
         type(cmdline) :: cline_tmp
@@ -524,7 +524,7 @@ contains
                 call cline_tmp%delete('objfun')
                 call cline_tmp%delete('sigma_est')
                 call cline_tmp%set('objfun', 'cc')
-                call xreconstruct3D_distr%execute( cline_tmp )
+                call xrec3D%execute( cline_tmp )
                 do state = 1,params%nstates
                     str_state = int2str_pad(state,2)
                     ! rename volumes and update cline/params
