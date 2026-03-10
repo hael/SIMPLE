@@ -396,31 +396,4 @@ contains
         call simple_end('**** SIMPLE_PPCA_DENOISE_CLASSES NORMAL STOP ****')
     end subroutine exec_ppca_denoise_classes
 
-    ! UTILITIES
-
-    subroutine check_2Dconv( cline, os )
-        use simple_convergence, only: convergence
-        class(cmdline), intent(inout) :: cline
-        class(oris),    intent(inout) :: os
-        type(parameters)  :: params
-        type(convergence) :: conv
-        logical :: converged
-        call cline%set('oritype', 'ptcl2D')
-        call params%new(cline)
-        ! convergence check
-        converged = conv%check_conv2D(params, cline, os, os%get_n('class'), params%msk)
-        ! Update progress file
-        if( trim(params%stream2d).eq.'no' ) call progressfile_update(conv%get('progress'))
-        call cline%set('frac_srch', conv%get('frac_srch'))
-        ! activates shift search
-        if( params%l_doshift ) call cline%set('trs', params%trs)
-        if( converged )then
-            call cline%set('converged', 'yes')
-        else
-            call cline%set('converged', 'no')
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_CHECK_2DCONV NORMAL STOP ****', print_simple=.false.)
-    end subroutine check_2Dconv
-
 end module simple_commanders_cluster2D

@@ -25,7 +25,7 @@ type(commander_rank_cavgs)              :: xrank_cavgs
 type(commander_export_cavgs)            :: xexport_cavgs
 
 ! REFINE3D PROGRAMS
-type(commander_refine3D_distr_worker)   :: xrefine3D_distr_worker
+type(commander_refine3D_distr_worker)   :: xrefine3D_worker
 type(commander_calc_pspec_distr)        :: xcalc_pspec_distr
 type(commander_calc_pspec)              :: xcalc_pspec
 type(commander_calc_pspec_assemble)     :: xcalc_pspec_assemble
@@ -35,7 +35,7 @@ type(commander_prob_align)              :: xprob_align
 
 ! RECONSTRUCTION PROGRAMS
 type(commander_volassemble)             :: xvolassemble
-type(commander_rec3D)                   :: xreconstruct3D
+type(commander_rec3D_worker)            :: xrec3D
 
 ! CHECKER PROGRAMS
 type(commander_check_box)               :: xcheck_box
@@ -146,7 +146,7 @@ select case(prg)
 
     ! REFINE3D PROGRAMS
     case( 'refine3D_distr_worker' )
-        call xrefine3D_distr_worker%execute(cline)
+        call xrefine3D_worker%execute(cline)
     case( 'calc_pspec_distr' )
         call xcalc_pspec_distr%execute(cline)
     case( 'calc_pspec' )
@@ -162,7 +162,7 @@ select case(prg)
 
     ! RECONSTRUCTION PROGRAMS
     case( 'reconstruct3D' )
-        call xreconstruct3D%execute(cline)
+        call xrec3D%execute(cline)
     case( 'volassemble' )
         call xvolassemble%execute(cline)
 

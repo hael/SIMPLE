@@ -109,6 +109,22 @@ contains
         class(cmdline),                     intent(inout) :: cline
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
+        ! Even/odd partitioning
+        if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
+        ! Weights
+        if( trim(params%ptclw).eq.'yes' )then
+            ! not implemented
+        else
+            if( trim(params%cavgw).eq.'yes' )then
+                ! class averages
+                call build%spproj_field%calc_cavg_soft_weights(params%frac)
+            else
+                ! particles
+                call build%spproj_field%calc_hard_weights(params%frac)
+            endif
+        endif
+        ! Update eo flags and weights in project
+        call build%spproj%write_segment_inside(params%oritype)
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, build, cline)
@@ -188,12 +204,24 @@ contains
         if( trim(params%oritype).eq.'ptcl3D' )then
             call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         endif
-        ! even/odd + weights + write-back
         ! Even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params%oritype)
         endif
+        ! Weights
+        if( trim(params%ptclw).eq.'yes' )then
+            ! not implemented
+        else
+            if( trim(params%cavgw).eq.'yes' )then
+                ! class averages
+                call build%spproj_field%calc_cavg_soft_weights(params%frac)
+            else
+                ! particles
+                call build%spproj_field%calc_hard_weights(params%frac)
+            endif
+        endif
+        ! Update eo flags and weights in project
+        call build%spproj%write_segment_inside(params%oritype)
         ! setup distributed execution
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)
