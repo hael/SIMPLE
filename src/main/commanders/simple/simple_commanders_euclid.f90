@@ -15,11 +15,6 @@ type, extends(commander_base) :: commander_calc_group_sigmas
     procedure :: execute      => exec_calc_group_sigmas
 end type commander_calc_group_sigmas
 
-type, extends(commander_base) :: estimate_first_sigmas_commander
-  contains
-    procedure :: execute      => exec_estimate_first_sigmas
-end type estimate_first_sigmas_commander
-
 contains
 
     subroutine exec_calc_pspec( self,cline )
@@ -126,60 +121,5 @@ contains
         call simple_touch('CALC_GROUP_SIGMAS_FINISHED')
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_group_sigmas
-
-    subroutine exec_estimate_first_sigmas( self, cline )
-        use simple_commanders_refine3D, only: commander_refine3D
-        class(estimate_first_sigmas_commander), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(commander_refine3D)          :: xrefine3D
-        ! command lines
-        type(cmdline) :: cline_first_sigmas, cline_calc_group_sigmas
-        if( .not. cline%defined('pgrp')     ) THROW_HARD('point-group symmetry (pgrp) is needed for first sigma estimation')
-        if( .not. cline%defined('mskdiam')  ) THROW_HARD('mask diameter (mskdiam) is needed for first sigma estimation')
-        if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
-        if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; exec_estimate_first_sigmas')
-        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
-        if( .not.cline%defined('vol1') )then
-            if( cline%defined('polar') )then
-                if( cline%get_carg('polar').eq.'yes' )then
-                    if( .not.file_exists(POLAR_REFS_FBODY//BIN_EXT) )then
-                        THROW_HARD('starting polar references are needed for first sigma estimation')
-                    endif
-                else
-                    THROW_HARD('starting volume is needed for first sigma estimation')
-                endif
-            else
-                THROW_HARD('starting volume is needed for first sigma estimation')
-            endif
-        endif
-        cline_first_sigmas = cline
-        call cline_first_sigmas%set('prg', 'refine3D')
-        call cline_first_sigmas%set('center',    'no')
-        call cline_first_sigmas%set('continue',  'no')
-        call cline_first_sigmas%set('maxits',       1)
-        call cline_first_sigmas%set('which_iter',   1)
-        call cline_first_sigmas%set('objfun','euclid')
-        call cline_first_sigmas%set('refine', 'sigma')
-        call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute
-        call cline_first_sigmas%delete('hp')
-        call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
-        cline_calc_group_sigmas = cline_first_sigmas
-        if( cline%defined('startit') )then
-            call cline_calc_group_sigmas%set('which_iter', cline%get_iarg('startit'))
-        else if( cline%defined('which_iter') )then
-            call cline_calc_group_sigmas%set('which_iter', cline%get_iarg('which_iter'))
-        else
-            call cline_calc_group_sigmas%set('which_iter', 1)
-        endif
-        ! Execute refine3D using unified commander (handles both shared/distributed internally)
-        call xrefine3D%execute(cline_first_sigmas)
-        ! Execute group sigma calculation
-        call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
-        ! Cleanup
-        call cline_first_sigmas%kill
-        call cline_calc_group_sigmas%kill
-        call simple_end('**** SIMPLE_ESTIMATE_FIRST_SIGMAS NORMAL STOP ****')
-    end subroutine exec_estimate_first_sigmas
 
 end module simple_commanders_euclid
