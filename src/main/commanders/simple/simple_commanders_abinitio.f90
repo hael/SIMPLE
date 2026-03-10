@@ -6,7 +6,7 @@ use simple_abinitio_utils
 use simple_procimgstk,          only: shift_imgfile
 use simple_commanders_volops,   only: commander_reproject
 use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D_distr
-use simple_commanders_rec,      only: commander_reconstruct3D, commander_reconstruct3D_distr
+use simple_commanders_rec,      only: commander_rec3D, commander_rec3D_distr
 use simple_cluster_seed,        only: gen_labelling
 use simple_decay_funs,          only: calc_update_frac_dyn, calc_update_frac
 implicit none
@@ -44,7 +44,7 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! shared-mem commanders
         type(commander_refine3D)      :: xrefine3D
-        type(commander_reconstruct3D) :: xreconstruct3D
+        type(commander_rec3D) :: xreconstruct3D
         type(commander_reproject)     :: xreproject
         ! other
         type(string)                  :: stk, orig_stk, shifted_stk, stk_even, stk_odd, ext
@@ -485,7 +485,7 @@ contains
         class(cmdline),              intent(inout) :: cline
         ! commanders
         type(commander_refine3D_distr)         :: xrefine3D
-        type(commander_reconstruct3D_distr)    :: xreconstruct3D_distr
+        type(commander_rec3D_distr)    :: xreconstruct3D_distr
         ! other
         real,               allocatable :: rstates(:)
         integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:)

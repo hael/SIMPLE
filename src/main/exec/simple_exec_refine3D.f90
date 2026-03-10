@@ -5,7 +5,7 @@ use simple_string,              only: string
 use simple_exec_helpers,        only: restarted_exec
 use simple_commanders_mask,     only: commander_automask
 use simple_commanders_volops,   only: commander_postprocess
-use simple_commanders_rec,      only: commander_reconstruct3D_distr
+use simple_commanders_rec,      only: commander_rec3D_distr
 use simple_commanders_refine3D, only: commander_refine3D_distr, commander_refine3D_auto
 implicit none
 
@@ -14,7 +14,7 @@ private
 
 type(commander_automask)            :: xautomask
 type(commander_postprocess)         :: xpostprocess
-type(commander_reconstruct3D_distr) :: xreconstruct3D
+type(commander_rec3D_distr) :: xreconstruct3D
 type(commander_refine3D_auto)       :: xrefine3D_auto
 type(commander_refine3D_distr)      :: xrefine3D_distr
 

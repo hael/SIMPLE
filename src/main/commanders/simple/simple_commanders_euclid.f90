@@ -27,64 +27,6 @@ end type estimate_first_sigmas_commander
 
 contains
 
-    !> Main entry point for pspec calculation.
-    !> Determines execution strategy (in-memory or distributed) and delegates the task.
-    subroutine exec_calc_pspec_unified( self, cline )
-        use simple_calc_pspec_strategy, only: calc_pspec_strategy, create_calc_pspec_strategy
-        class(commander_base), intent(inout) :: self
-        class(cmdline),        intent(inout) :: cline
-        ! commanders
-        class(calc_pspec_strategy), allocatable :: strategy
-        ! other variables
-        class(oris), pointer :: spproj_field => NULL()
-        type(parameters)     :: params
-        type(sp_project)     :: spproj
-        logical              :: fall_over
-        ! Initialize
-        call cline%set('stream','no')
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'no')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        call params%new(cline)
-        call spproj%read(params%projfile)
-        ! Sanity check
-        fall_over = .false.
-        select case(trim(params%oritype))
-            case('ptcl2D','ptcl3D','cls3D')
-                fall_over = spproj%get_nptcls() == 0
-            case DEFAULT
-                write(logfhandle,*)'Unsupported ORITYPE; simple_commanders_pspec :: exec_calc_pspec'
-        end select
-        call spproj%ptr2oritype(params%oritype, spproj_field)
-        if( fall_over )then
-            THROW_HARD('no particles found! :exec_calc_pspec')
-        endif
-        ! Partition if necessary
-        if( spproj_field%get_nevenodd() == 0 )then
-            call spproj_field%partition_eo
-            call spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
-        ! Create and execute the appropriate strategy
-        strategy = create_calc_pspec_strategy(params, cline)
-        call strategy%execute(params, spproj, cline)
-        ! Cleanup
-        call spproj%kill
-        call simple_touch(CALCPSPEC_FINISHED)
-        call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****')
-        if (allocated(strategy)) deallocate(strategy)
-    end subroutine exec_calc_pspec_unified
-
-    ! subroutine exec_calc_pspec_distr( self, cline )
-    !     class(commander_calc_pspec_distr), intent(inout) :: self
-    !     class(cmdline),                    intent(inout) :: cline
-    !     call self% exec_calc_pspec_unified(self, cline)
-    ! end subroutine exec_calc_pspec_distr
-
-    ! subroutine exec_calc_pspec( self, cline )
-    !     class(commander_calc_pspec_distr), intent(inout) :: self
-    !     class(cmdline),                    intent(inout) :: cline
-    !     call self% exec_calc_pspec_unified(self, cline)
-    ! end subroutine exec_calc_pspec
-
     subroutine exec_calc_pspec_distr( self, cline )
         use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(commander_calc_pspec_distr), intent(inout) :: self
