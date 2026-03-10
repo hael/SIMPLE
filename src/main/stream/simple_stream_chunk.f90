@@ -263,7 +263,7 @@ contains
         self%projfile_out = CHUNK_PROJNAME//METADATA_EXT
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
-        call cline_pspec%set('prg',      'calc_pspec_distr')
+        call cline_pspec%set('prg',      'calc_pspec')
         call cline_pspec%set('oritype',  'ptcl2D')
         call cline_pspec%set('nthr',     cline_analyze2D%get_iarg('nthr'))
         call cline_pspec%set('mkdir',    'yes')
