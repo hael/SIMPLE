@@ -578,7 +578,7 @@ contains
         logical,                        intent(out)   :: converged
         type(commander_postprocess)       :: xpostprocess
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(commander_prob_align)        :: xprob_align_distr
+        type(commander_prob_align)        :: xprob_align
         type(commander_volassemble)       :: xvolassemble
         type(image_msk) :: mskvol
         type(image)     :: vol_e, vol_o
@@ -627,7 +627,7 @@ contains
             call cline_prob_align%set('which_iter', iter)
             call cline_prob_align%set('startit',    iter)
             call build%spproj%write_segment_inside(params%oritype)
-            call xprob_align_distr%execute( cline_prob_align )
+            call xprob_align%execute(cline_prob_align)
         endif
         if( L_BENCH_GLOB )then
             rt_prob = toc(t_prob)
