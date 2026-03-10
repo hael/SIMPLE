@@ -60,7 +60,7 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_auto( self, cline )
-        use simple_commanders_rec, only: commander_reconstruct3D_distr
+        use simple_commanders_rec, only: commander_rec3D_distr
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_reconstruct3D_distr
@@ -76,7 +76,7 @@ contains
         integer      :: box_crop, maxits_phase1, maxits_phase2, iter
         logical      :: l_autoscale
         ! commanders
-        type(commander_reconstruct3D_distr) :: xreconstruct3D_distr
+        type(commander_rec3D_distr) :: xreconstruct3D_distr
         type(commander_refine3D_distr)      :: xrefine3D_distr
         ! hard defaults
         call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution

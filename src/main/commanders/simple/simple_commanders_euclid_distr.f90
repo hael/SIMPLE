@@ -5,39 +5,12 @@ use simple_sigma2_binfile, only: sigma2_binfile
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_calc_pspec_distr_worker
-  contains
-    procedure :: execute      => exec_calc_pspec_distr_worker
-end type commander_calc_pspec_distr_worker
-
 type, extends(commander_base) :: commander_calc_pspec_assemble
   contains
     procedure :: execute      => exec_calc_pspec_assemble
 end type commander_calc_pspec_assemble
 
 contains
-
-    !> Worker subroutine for distributed execution.
-    !> This is the task executed by each worker node.
-    subroutine exec_calc_pspec_distr_worker( self, cline )
-        use simple_calc_pspec_common, only: calc_pspec_exec
-        class(commander_calc_pspec_distr_worker), intent(inout) :: self
-        class(cmdline),                           intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        ! Initialize
-        call cline%set('stream','no')
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'no')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        ! The worker builds its own environment based on the command line arguments
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        ! Execute the core calculation
-        call calc_pspec_exec(params, build)
-        ! Cleanup
-        call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_commanders_pspec :: exec_calc_pspec_distr_worker'))
-        call simple_end('**** SIMPLE_CALC_PSPEC WORKER NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_calc_pspec_distr_worker
 
     subroutine exec_calc_pspec_assemble( self, cline )
         class(commander_calc_pspec_assemble), intent(inout) :: self

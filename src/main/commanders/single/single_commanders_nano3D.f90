@@ -2,7 +2,7 @@
 module single_commanders_nano3D
 use simple_commanders_api
 use simple_commanders_ori,   only: commander_vizoris
-use simple_commanders_rec,    only: commander_reconstruct3D
+use simple_commanders_rec,    only: commander_rec3D
 use simple_commanders_volops, only: commander_reproject
 use simple_commanders_cluster2D
 use simple_nanoparticle
@@ -264,7 +264,7 @@ contains
     end subroutine exec_refine3D_nano
 
     subroutine exec_commander_trajectory_reconstruct3D_distr( self, cline )
-        use simple_commanders_rec, only: commander_volassemble
+        use simple_commanders_rec_distr, only: commander_volassemble
         real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
         real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
         class(commander_trajectory_reconstruct3D_distr), intent(inout) :: self
@@ -274,7 +274,7 @@ contains
         integer,               allocatable :: parts(:,:)
         type(string)                  :: recname, fname, str_state, recname_even, res_fname
         type(string)                  :: recname_odd, vol_fname_even, vol_fname_odd
-        type(commander_reconstruct3D) :: xrec3D_shmem
+        type(commander_rec3D) :: xrec3D_shmem
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(cmdline)                 :: cline_rec

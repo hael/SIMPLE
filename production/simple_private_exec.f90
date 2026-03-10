@@ -35,7 +35,7 @@ type(commander_prob_align)              :: xprob_align
 
 ! RECONSTRUCTION PROGRAMS
 type(commander_volassemble)             :: xvolassemble
-type(commander_reconstruct3D)           :: xreconstruct3D
+type(commander_rec3D)                   :: xreconstruct3D
 
 ! CHECKER PROGRAMS
 type(commander_check_box)               :: xcheck_box

@@ -353,13 +353,13 @@ contains
 
     subroutine distr_initialize(self, params, build, cline)
         use simple_exec_helpers,      only: set_master_num_threads
-        use simple_commanders_rec,    only: commander_reconstruct3D_distr
+        use simple_commanders_rec,    only: commander_rec3D_distr
         use simple_commanders_euclid, only: commander_calc_pspec_distr, estimate_first_sigmas_commander
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(commander_reconstruct3D_distr) :: xreconstruct3D_distr
+        type(commander_rec3D_distr) :: xreconstruct3D_distr
         type(commander_calc_pspec_distr)    :: xcalc_pspec_distr
         type(estimate_first_sigmas_commander) :: xfirst_sigmas_distr
         type(cmdline) :: cline_tmp
@@ -564,13 +564,13 @@ contains
     end subroutine distr_initialize
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
-        use simple_commanders_rec,    only: commander_volassemble
-        use simple_commanders_volops, only: commander_postprocess
-        use simple_commanders_euclid, only: commander_calc_group_sigmas, estimate_first_sigmas_commander
-        use simple_commanders_prob,   only: commander_prob_align
-        use simple_fsc,               only: plot_fsc
-        use simple_image,             only: image
-        use simple_image_msk,         only: image_msk
+        use simple_commanders_rec_distr, only: commander_volassemble
+        use simple_commanders_volops,    only: commander_postprocess
+        use simple_commanders_euclid,    only: commander_calc_group_sigmas, estimate_first_sigmas_commander
+        use simple_commanders_prob,      only: commander_prob_align
+        use simple_fsc,                  only: plot_fsc
+        use simple_image,                only: image
+        use simple_image_msk,            only: image_msk
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
