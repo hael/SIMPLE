@@ -261,11 +261,11 @@ contains
         do k=lims(2,1),lims(2,2)
             do h=lims(1,1),lims(1,2)
                 do l=lims(3,1),lims(3,2)
-                    ! compute physical address
-                    phys = self1%fit%comp_addr_phys(h,k,l)
                     ! find shell
                     sh = nint(hyp(h,k,l))
                     if( sh == 0 .or. sh > n ) cycle
+                    ! compute physical address
+                    phys = self1%fit%comp_addr_phys(h,k,l)
                     ! real part of the complex mult btw self1 and targ*
                     comp1 = self1%cmat(phys(1),phys(2),phys(3))
                     comp2 = self2%cmat(phys(1),phys(2),phys(3))

@@ -17,7 +17,7 @@ interface is_gt_zero
 end interface is_gt_zero
 
 interface is_equal
-    module procedure is_equal_1, is_equal_2 
+    module procedure is_equal_1, is_equal_2, is_equal_3
 end interface is_equal
 
 interface is_even
@@ -147,6 +147,12 @@ contains
         real(8), intent(in) :: val1, val2  !< query val
         is_equal_2 = abs(val1-val2) < DTINY
     end function is_equal_2
+
+    !>   to check if magnitude of difference is zero
+    elemental logical function is_equal_3( val1, val2 )
+        complex(4), intent(in) :: val1, val2  !< query val
+        is_equal_3 = abs(val1-val2) < TINY
+    end function is_equal_3
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans3D_1( arr )

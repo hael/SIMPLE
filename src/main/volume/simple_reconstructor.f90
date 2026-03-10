@@ -351,9 +351,9 @@ contains
         call self%reset_exp
         ! Fourier components & rho matrices expansion
         !$omp parallel do collapse(3) private(h,k,m,phys,logi) schedule(static) default(shared) proc_bind(close)
-        do h = self%lims(1,1),self%lims(1,2)
+        do m = self%lims(3,1),self%lims(3,2)
             do k = self%lims(2,1),self%lims(2,2)
-                do m = self%lims(3,1),self%lims(3,2)
+                do h = self%lims(1,1),self%lims(1,2)
                     logi = [h,k,m]
                     phys = self%comp_addr_phys(h,k,m)
                     ! this should be safe even if there isn't a 1-to-1 correspondence
