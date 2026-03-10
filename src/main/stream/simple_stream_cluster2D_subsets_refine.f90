@@ -45,9 +45,10 @@ contains
         class(cmdline),                         intent(inout) :: cline
         character(len=*),                           parameter :: DIR_PROJS = trim(PATH_HERE)//'spprojs/'
         integer,                                    parameter :: WAITTIME    = 5
-        integer,                                    parameter :: NCLS_MULT   = 2
-        integer,                                    parameter :: MIN_NCLS    = 10
+        real,                                       parameter :: NCLS_MULT   = 1.2
+        integer,                                    parameter :: MIN_NCLS    = 5
         integer,                                    parameter :: NCLS_SET    = 200
+        integer,                                  allocatable :: global_ptcl_state_map(:)
         integer,                                  allocatable :: nptcls_per_chunk_vec(:), cluster_assignments(:)
         type(rec_list)   :: project_list
         type(string)     :: fname
@@ -56,7 +57,7 @@ contains
         type(rec_list)   :: chunkslist
         type(oris)       :: cls2d_merged
         type(class_frcs) :: frcs
-        integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, n_non_junk, ic, id, nc, icls, box4frc
+        integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, n_non_junk, ic, id, nc, icls, box4frc, iter, subproc_fhandle, ios
         logical          :: all_chunks_submitted
         call cline%set('oritype',      'ptcl2D')
         call cline%set('wiener',       'full')
@@ -84,6 +85,8 @@ contains
         call spproj_glob%read_segment('mic',   params%projfile)
         call spproj_glob%read_segment('stk',   params%projfile)
         call spproj_glob%read_segment('ptcl2D',params%projfile)
+        ! clear previous clustering
+        call clear_previous()
         ! sanity checks
         nstks  = spproj_glob%os_stk%get_noris()
         nptcls = spproj_glob%get_nptcls()
@@ -99,7 +102,7 @@ contains
         call generate_chunk_projects
         ! Update to global parameters prior to 2D inititalization
         nptcls_per_chunk = nint(real(sum(nptcls_per_chunk_vec)) / real(ntot_chunks))    ! average value
-        params%ncls = floor(real(nptcls_per_chunk) / real(params%nptcls_per_cls))
+        params%ncls      = floor(real(nptcls_per_chunk) / real(params%nptcls_per_cls))
         ! General streaming initialization
         call init_chunk_clustering( params, cline, spproj_glob )
         ! Updates folllowing streaming init
@@ -121,6 +124,7 @@ contains
         ! Main loop
         ichunk     = 0  ! # of chunks that have been submitted
         n_non_junk = 0  ! # cumulative number of non junk classes
+        iter       = 0
         all_chunks_submitted = .false.
         do
             ! sequential chunk prep & submission
@@ -161,23 +165,51 @@ contains
         end do
         ! merge processed chunks
         call merge_processed_chunks()
+        ! allocate global_ptcl_state_map
+        global_ptcl_state_map = spproj_glob%os_ptcl2D%get_all_asint('state')
         ! cluster merged cavgs
         call cluster_merged_cavgs()
-        ! run abinitio2D on particles within each cluster separately
-        icls = 1
-        cluster_assignments = spproj_glob%os_cls2D%get_all_asint('cluster')
-        do ic=1, maxval(cluster_assignments)
-            call abinitio2D_cluster(ic)
-        enddo
-        do ic=1, maxval(cluster_assignments)
-            call merge_cluster_cavgs(ic)
-        enddo
-        do ic=1, maxval(cluster_assignments)
-            call merge_cluster_frcs(ic)
-        enddo
-        ! write project
-        call spproj_glob%write()
+        call print_stats()
+        ! open subproc_fhandle
+        open(UNIT=subproc_fhandle, FILE=SIMPLE_SUBPROC_OUT, IOSTAT=ios, ACTION='WRITE', STATUS='NEW', POSITION='APPEND')
+        do while(iter<2)
+            iter = iter + 1
+            ! run abinitio2D on particles within each cluster separately
+            icls = 1
+            cluster_assignments = spproj_glob%os_cls2D%get_all_asint('cluster')
+            ! remove existing class assignments
+            call spproj_glob%os_ptcl2D%set_all2single('class', 0)
+            call spproj_glob%os_ptcl3D%set_all2single('class', 0)
+            call spproj_glob%write()
+            !------------------------------------------------------------------
+            ! will combine, optimise and move these to external subroutine once methodology converges
+            do ic=1, maxval(cluster_assignments)
+                write(logfhandle, '(A,I8)')'>>> RUNNING ABINITIO2D ON PARTICLES IN CLUSTER ', ic
+                logfhandle = subproc_fhandle
+                call abinitio2D_cluster(ic)
+                logfhandle = OUTPUT_UNIT
+            enddo
+            do ic=1, maxval(cluster_assignments)
+                call merge_cluster_cavgs(ic)
+            enddo
+            do ic=1, maxval(cluster_assignments)
+                call merge_cluster_frcs(ic)
+            enddo
+            !------------------------------------------------------------------
+            ! write project
+            call spproj_glob%write()
+            ! recluster merged cavgs
+            call cluster_merged_cavgs()
+            ! write iteration project
+            call spproj_glob%write()
+            ! print some stats
+            call print_stats()
+            ! cleanup
+            call cls2d_merged%kill()
+        end do
         ! cleanup
+        call flush(subproc_fhandle)
+        close(subproc_fhandle)
         call spproj_glob%kill
         call chunkslist%kill
         call simple_rmdir(STDERROUT_DIR)
@@ -363,8 +395,13 @@ contains
             type(commander_cluster_cavgs) :: xcluster_cavgs
             type(cmdline)                 :: cline_cluster_cavgs
             type(string)                  :: dir, cwd, path
+            integer,          allocatable :: clusters(:), states(:)
             ! updates directory structure
-            dir  = "cluster_cavgs"
+            if( iter == 0 ) then
+                dir  = "cluster_cavgs"
+            else
+                dir = "cluster_cavgs_" // int2str(iter)
+            endif
             path = string('../') // basename(params%projfile)
             call simple_mkdir(dir)
             ! execute
@@ -383,7 +420,20 @@ contains
             ! reread master project
             call spproj_glob%kill()
             call spproj_glob%read(basename(params%projfile))
+            ! update global_ptcl_state_map
+            clusters = spproj_glob%os_ptcl2D%get_all_asint('cluster')
+            where( clusters == 0 ) global_ptcl_state_map = 0
+            ! reapply global_ptcl_state_map
+            call spproj_glob%os_ptcl2D%set_all('state', global_ptcl_state_map)
+            call spproj_glob%os_ptcl3D%set_all('state', global_ptcl_state_map)
+            deallocate(clusters)
+            clusters = spproj_glob%os_cls2D%get_all_asint('cluster')
+            allocate(states(size(clusters)))
+            states = 1
+            where( clusters == 0 ) states = 0
+            call spproj_glob%os_cls2D%set_all('state', states)
             ! cleanup
+            deallocate(clusters, states)
             call cline_cluster_cavgs%kill
         end subroutine cluster_merged_cavgs
 
@@ -446,20 +496,54 @@ contains
             type(sp_project)                      :: spproj_cluster
             type(cmdline)                         :: cline_abinitio2D
             type(string)                          :: projfile, dir, cwd, path
-            integer,                  allocatable :: states(:)
+            integer,                  allocatable :: states(:), clusters(:)
             write(logfhandle,'(A,I8)')'>>> RUNNING ABINITIO_2D ON PARTICLES FROM CLUSTER ', ic
             ! set dir and projfile
-            dir      = 'cluster_'//int2str(ic)
+            if(iter == 0) then
+                dir = 'cluster_'//int2str(ic)
+            else
+                dir = 'cluster_'//int2str(ic)//'_iter'//int2str(iter)
+            endif
             projfile = 'cluster_'//int2str(ic)//'.simple'
             path     = string('../') // projfile
-            ! copy global project file and map selection
+            ! copy global project file
             call spproj_cluster%copy(spproj_glob)
-            allocate(states(size(cluster_assignments)))
+            ! retrieve clusters field for particles
+            clusters = spproj_cluster%os_ptcl2D%get_all_asint('cluster')
+            ! allocate states
+            allocate(states(size(clusters)))
             states = 0
-            where(cluster_assignments == ic ) states = 1
-            call spproj_cluster%os_ptcl2D%set_all2single('state', 1.0)
-            call spproj_cluster%os_ptcl3D%set_all2single('state', 1.0)
-            call spproj_cluster%map_cavgs_selection(states)
+            ! update states to match ic
+            where( clusters == ic ) states = 1
+            ! apply global states
+            where( global_ptcl_state_map == 0 ) states = 0
+            ! update ptcl2D and 3D
+            call spproj_cluster%os_ptcl2D%set_all('state',  states)
+            call spproj_cluster%os_ptcl3D%set_all('state',  states)
+            ! cleanup
+            deallocate(clusters, states)
+            ! retrieve clusters and states fields for classes
+            clusters = spproj_cluster%os_cls2D%get_all_asint('cluster')
+            allocate(states(size(clusters)))
+            states = 1
+            ! update states to match 
+            where( clusters /= ic ) states = 0
+            ! destroy existing cls2D
+            call spproj_cluster%os_cls2D%kill()
+            call spproj_cluster%os_cls3D%kill()
+            call spproj_cluster%os_ptcl2D%set_all2single('class',  0)
+            call spproj_cluster%os_ptcl3D%set_all2single('class',  0)
+            call spproj_cluster%os_ptcl2D%set_all2single('e1', 0)
+            call spproj_cluster%os_ptcl2D%set_all2single('e2', 0)
+            call spproj_cluster%os_ptcl2D%set_all2single('e3', 0)
+            call spproj_cluster%os_ptcl2D%set_all2single('x',  0)
+            call spproj_cluster%os_ptcl2D%set_all2single('y',  0)
+            call spproj_cluster%os_ptcl3D%set_all2single('e1', 0)
+            call spproj_cluster%os_ptcl3D%set_all2single('e2', 0)
+            call spproj_cluster%os_ptcl3D%set_all2single('e3', 0)
+            call spproj_cluster%os_ptcl3D%set_all2single('x',  0)
+            call spproj_cluster%os_ptcl3D%set_all2single('y',  0)
+            ! write cluster projfile
             call spproj_cluster%write(projfile)
             ! set abinitio2D parameters
             call cline_abinitio2D%set('prg',                                       'abinitio2D')
@@ -468,7 +552,8 @@ contains
             call cline_abinitio2D%set('mskdiam',                                 params%mskdiam)
             call cline_abinitio2D%set('nthr',                                       params%nthr)
             call cline_abinitio2D%set('nparts',                                   params%nparts)
-            call cline_abinitio2D%set('ncls',     max(count(states == 1) * NCLS_MULT, MIN_NCLS))
+            call cline_abinitio2D%set('ncls',     max(ceiling(count(states == 1) * NCLS_MULT), MIN_NCLS))
+            call cline_abinitio2D%printline()
             ! run abinitio2D
             call simple_mkdir(dir)
             ! execute
@@ -480,9 +565,9 @@ contains
             call simple_getcwd(cwd)
             CWD_GLOB = cwd%to_char()
             ! cleanup
+            deallocate(clusters, states)
             call spproj_cluster%kill()
             call cline_abinitio2D%kill()
-            deallocate(states)
         end subroutine abinitio2D_cluster
 
         subroutine merge_cluster_cavgs(ic)
@@ -493,12 +578,17 @@ contains
             type(string)                          :: projfile
             type(string)                          :: stkname, evenname, oddname, cavgs
             integer,                  allocatable :: classes_glob(:), classes(:)
+            real,                     allocatable :: e3s_glob(:), e3s(:), xs_glob(:), xs(:), ys_glob(:), ys(:)
             integer                               :: ldim(3), ncls, i
             real                                  :: smpd
             write(logfhandle,'(A,I8)')'>>> MERGING CLS2D FROM CLUSTER ', ic
             ! projfile
             projfile = 'cluster_'//int2str(ic)//'.simple'
-            cavgs    = 'merged_cluster_cavgs'//MRC_EXT
+            if(iter == 0) then
+                cavgs = 'merged_cluster_cavgs'//MRC_EXT
+            else
+                cavgs = 'merged_cluster_cavgs_iter'//int2str(iter)//MRC_EXT
+            endif
             call spproj_cluster%read(projfile)
             call spproj_cluster%get_cavgs_stk(stkname, ncls, smpd, imgkind='cavg')
             call find_ldim_nptcls(stkname, ldim, ncls)
@@ -513,6 +603,14 @@ contains
             do i=1, cls2d_backup%get_noris()
                 call cls2d_merged%transfer_ori(i, cls2d_backup, i)
             enddo
+            classes      = spproj_cluster%os_ptcl2D%get_all_asint('class')
+            classes_glob = spproj_glob%os_ptcl2D%get_all_asint('class')
+            e3s          = spproj_cluster%os_ptcl2D%get_all('e3')
+            e3s_glob     = spproj_glob%os_ptcl2D%get_all('e3')
+            xs           = spproj_cluster%os_ptcl2D%get_all('x')
+            xs_glob      = spproj_glob%os_ptcl2D%get_all('x')
+            ys           = spproj_cluster%os_ptcl2D%get_all('y')
+            ys_glob      = spproj_glob%os_ptcl2D%get_all('y')
             do i=1, ncls
                 call img%read(stkname,i)
                 call img%write(cavgs,icls)
@@ -520,20 +618,30 @@ contains
                 call img%write(get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//MRC_EXT, icls)
                 call img%read(oddname,i)
                 call img%write(get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//MRC_EXT, icls)
-                classes      = spproj_cluster%os_ptcl2D%get_all_asint('class')
-                classes_glob = spproj_glob%os_ptcl2D%get_all_asint('class')
-                where(classes == i) classes_glob = icls
-                call spproj_glob%os_ptcl2D%set_all('class', classes_glob)
-                call spproj_glob%os_ptcl3D%set_all('class', classes_glob)
+                where(classes == i) 
+                    classes_glob = icls
+                    e3s_glob     = e3s
+                    xs_glob      = xs
+                    ys_glob      = ys
+                end where
                 call cls2d_merged%transfer_ori(icls, spproj_cluster%os_cls2D, i)
                 call cls2d_merged%set_class(icls, icls)
-                icls = icls+1
+                icls = icls+1   
             enddo
+            call spproj_glob%os_ptcl2D%set_all('class',          classes_glob)
+            call spproj_glob%os_ptcl3D%set_all('class',          classes_glob)
+            call spproj_glob%os_ptcl2D%set_all('e3',                 e3s_glob)
+            call spproj_glob%os_ptcl3D%set_all('e3',                 e3s_glob)
+            call spproj_glob%os_ptcl2D%set_all('x',                   xs_glob)
+            call spproj_glob%os_ptcl3D%set_all('x',                   xs_glob)
+            call spproj_glob%os_ptcl2D%set_all('y',                   ys_glob)
+            call spproj_glob%os_ptcl3D%set_all('y',                   ys_glob)
+            call spproj_glob%os_ptcl2D%set_all('state', global_ptcl_state_map)
+            call spproj_glob%os_ptcl3D%set_all('state', global_ptcl_state_map)
             call spproj_glob%add_cavgs2os_out(cavgs, smpd, imgkind='cavg')
             call spproj_glob%os_cls2D%copy(cls2d_merged)
             ! cleanup
             call cls2d_backup%kill()
-            
         end subroutine merge_cluster_cavgs
 
         subroutine merge_cluster_frcs(ic)
@@ -566,6 +674,31 @@ contains
             call frcs_cluster%kill()
             call spproj_cluster%kill()
         end subroutine merge_cluster_frcs
+
+        subroutine print_stats()
+            integer, allocatable :: classes_glob(:), clusters_glob(:)
+            integer              :: icls2d
+            clusters_glob = spproj_glob%os_cls2D%get_all_asint('cluster')
+            classes_glob  = spproj_glob%os_ptcl2D%get_all_asint('class')
+            write(logfhandle, '(A,I6,A,I6)')'NPTCL:', spproj_glob%os_ptcl2D%get_noris(), ' NPTCL REJECTED:', count(global_ptcl_state_map == 0)
+            do icls2d=1, spproj_glob%os_cls2D%get_noris()
+                write(logfhandle, '(A,I6,A,I6,A,I6)')'CLS:', icls2d, ' POP:', count(classes_glob == icls2d), ' CLUSTER:', clusters_glob(icls2d)
+            end do
+        end subroutine print_stats
+
+        subroutine clear_previous()
+            ! nuke previous alignments
+            call spproj_glob%os_ptcl2D%set_all2single('e1', 0)
+            call spproj_glob%os_ptcl2D%set_all2single('e2', 0)
+            call spproj_glob%os_ptcl2D%set_all2single('e3', 0)
+            call spproj_glob%os_ptcl2D%set_all2single('x',  0)
+            call spproj_glob%os_ptcl2D%set_all2single('y',  0)
+            call spproj_glob%os_ptcl3D%set_all2single('e1', 0)
+            call spproj_glob%os_ptcl3D%set_all2single('e2', 0)
+            call spproj_glob%os_ptcl3D%set_all2single('e3', 0)
+            call spproj_glob%os_ptcl3D%set_all2single('x',  0)
+            call spproj_glob%os_ptcl3D%set_all2single('y',  0)
+        end subroutine clear_previous
 
     end subroutine exec_stream_cluster2D_subsets_refine
 

@@ -36,7 +36,7 @@ contains
         logical,     allocatable, intent(inout) :: l_non_junk(:)
         real,        allocatable, intent(inout) :: mm(:,:)
         real,              parameter  :: LP_BIN = 20.
-        logical,           parameter  :: DEBUG = .false.
+        logical,           parameter  :: DEBUG = .true.
         real,    allocatable :: frcs(:,:), filter(:)
         logical, allocatable :: l_msk(:,:,:)
         type(string)         :: frcs_fname
