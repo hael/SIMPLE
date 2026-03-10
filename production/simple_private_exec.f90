@@ -26,7 +26,6 @@ type(commander_export_cavgs)            :: xexport_cavgs
 
 ! REFINE3D PROGRAMS
 type(commander_refine3D_distr_worker)   :: xrefine3D_worker
-type(commander_calc_pspec_distr)        :: xcalc_pspec_distr
 type(commander_calc_pspec)              :: xcalc_pspec
 type(commander_calc_pspec_assemble)     :: xcalc_pspec_assemble
 type(commander_calc_group_sigmas)       :: xcalc_group_sigmas
@@ -147,8 +146,6 @@ select case(prg)
     ! REFINE3D PROGRAMS
     case( 'refine3D_distr_worker' )
         call xrefine3D_worker%execute(cline)
-    case( 'calc_pspec_distr' )
-        call xcalc_pspec_distr%execute(cline)
     case( 'calc_pspec' )
         call xcalc_pspec%execute(cline)
     case( 'calc_pspec_assemble' )

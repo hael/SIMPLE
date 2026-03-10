@@ -55,7 +55,7 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     logical        :: l_combine_eo
     ! Prototypes / persistent command lines
     type(cmdline) :: cline_reconstruct3D_distr
-    type(cmdline) :: cline_calc_pspec_distr
+    type(cmdline) :: cline_calc_pspec
     type(cmdline) :: cline_prob_align_distr
     type(cmdline) :: cline_calc_group_sigmas
     type(cmdline) :: cline_volassemble
@@ -354,13 +354,13 @@ contains
     subroutine distr_initialize(self, params, build, cline)
         use simple_exec_helpers,      only: set_master_num_threads
         use simple_commanders_rec,    only: commander_rec3D
-        use simple_commanders_euclid, only: commander_calc_pspec_distr, estimate_first_sigmas_commander
+        use simple_commanders_euclid, only: commander_calc_pspec, estimate_first_sigmas_commander
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(commander_rec3D) :: xrec3D
-        type(commander_calc_pspec_distr)    :: xcalc_pspec_distr
+        type(commander_rec3D)      :: xrec3D
+        type(commander_calc_pspec) :: xcalc_pspec
         type(estimate_first_sigmas_commander) :: xfirst_sigmas_distr
         type(cmdline) :: cline_tmp
         type(string)  :: prev_refine_path, target_name, fname_vol, vol, str_state, fsc_file
@@ -412,12 +412,12 @@ contains
         if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         ! prepare prototype command lines
         self%cline_reconstruct3D_distr = cline
-        self%cline_calc_pspec_distr    = cline
+        self%cline_calc_pspec          = cline
         self%cline_prob_align_distr    = cline
         self%cline_postprocess         = cline
         self%cline_calc_group_sigmas   = cline
         call self%cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )
-        call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
+        call self%cline_calc_pspec%set(          'prg', 'calc_pspec' )
         call self%cline_prob_align_distr%set(    'prg', 'prob_align' )
         call self%cline_postprocess%set(         'prg', 'postprocess' )
         call self%cline_calc_group_sigmas%set(   'prg', 'calc_group_sigmas' )
@@ -499,7 +499,7 @@ contains
             if( .not.file_exists(sigma2_star_from_iter(params%startit)) )then
                 call build%spproj_field%set_all2single('w', 1.0)
                 call build%spproj%write_segment_inside(params%oritype)
-                call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
+                call xcalc_pspec%execute(self%cline_calc_pspec)
             endif
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .false.

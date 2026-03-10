@@ -5,7 +5,7 @@ use simple_pftc_srch_api
 use simple_classaverager
 use simple_commanders_cavgs,   only: commander_rank_cavgs
 use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr, commander_cavgassemble
-use simple_commanders_euclid,  only: commander_calc_pspec_distr, commander_calc_group_sigmas
+use simple_commanders_euclid,  only: commander_calc_pspec, commander_calc_group_sigmas
 use simple_gui_utils,          only: mrc2jpeg_tiled
 use simple_procimgstk,         only: selection_from_tseries_imgfile, random_selection_from_imgfile, copy_imgfile, noise_imgfile
 use simple_progress,           only: progressfile_init, progressfile_update

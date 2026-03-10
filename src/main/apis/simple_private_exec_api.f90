@@ -45,7 +45,7 @@ use simple_commanders_refine3D, only: commander_refine3D_distr_worker
 use simple_commanders_prob,     only: commander_prob_tab, commander_prob_align
 
 ! euclid commanders, for obtaining signal statistics for noise normalized Euclidean distance functiuon evalutaion
-use simple_commanders_euclid,       only: commander_calc_pspec_distr, commander_calc_pspec,commander_calc_group_sigmas
+use simple_commanders_euclid,       only: commander_calc_pspec,commander_calc_group_sigmas
 use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
 
 ! rec commanders, 3D reconstrunction from aligned particles with Fourier griddding

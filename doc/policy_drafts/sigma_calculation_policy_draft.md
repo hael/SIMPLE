@@ -77,7 +77,7 @@ Type `euclid_sigma2` (`simple_euclid_sigma2.f90:18–44`):
 **When triggered** (`simple_commanders_refine3D.f90:783`):
 ```fortran
 if( .not.file_exists(sigma2_star_from_iter(params%startit)) )then
-    call xcalc_pspec_distr%execute(cline_calc_pspec_distr)
+    call xcalc_pspec%execute(cline_calc_pspec)
 endif
 ```
 When no sigma `.star` file exists for starting iteration → distributed `calc_pspec` is invoked.
@@ -167,7 +167,7 @@ After all particles have been searched in current iteration.
 
 ```
 Iteration 0 (before refinement)
-├── calc_pspec_distr (if no prior sigma.star)
+├── calc_pspec (if no prior sigma.star)
 │   ├── Per-partition: compute initial noise power spectra from noise-masked FFT
 │   └── Assemble: group average → sigma2_group_iter_1.star
 │
@@ -416,7 +416,7 @@ User command:
 
 Sequence:
   1. params%new() → l_ml_reg = true (both conditions met)
-  2. No prior sigma.star → calc_pspec_distr invoked
+  2. No prior sigma.star → calc_pspec invoked
      - Computes initial power spectra from noise-masked FFT
      - Groups by stkind (default)
      - Outputs: sigma2_group_iter_1.star
@@ -450,7 +450,7 @@ User command:
 
 Sequence:
   1. params%new() → objfun='cc' → l_ml_reg = false (gate fails)
-  2. calc_pspec_distr NOT called (no sigma calculation)
+  2. calc_pspec NOT called (no sigma calculation)
   3. Per-particle: cc_objfun != OBJFUN_EUCLID → calc_sigma2() skipped
   4. Reconstruction: uniform Fourier weights (l_ml_reg=false)
   Result: No sigma files generated; ml_reg setting ignored

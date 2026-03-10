@@ -3,7 +3,7 @@ module simple_commanders_resolest
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_fsc
-use simple_commanders_euclid, only: commander_calc_pspec_distr
+use simple_commanders_euclid, only: commander_calc_pspec
 implicit none
 #include "simple_local_flags.inc"
 

@@ -43,7 +43,7 @@ contains
         class(cmdline),              intent(inout) :: cline
         ! commanders
         type(commander_cluster2D)        :: xcluster2D
-        type(commander_calc_pspec_distr) :: xcalc_pspec_distr
+        type(commander_calc_pspec)       :: xcalc_pspec
         ! command lines
         type(cmdline)                    :: cline_cluster2D, cline_calc_pspec
         ! other
@@ -509,7 +509,7 @@ contains
             call del_file(CLUSTER2D_FINISHED)
             ! Initial sigma2
             if( istage == 1 )then
-                call xcalc_pspec_distr%execute(cline_calc_pspec)
+                call xcalc_pspec%execute(cline_calc_pspec)
             endif
             ! clustering
             call xcluster2D%execute(cline_cluster2D)
