@@ -38,7 +38,7 @@ use simple_commanders_cavgs, only: commander_rank_cavgs, commander_shape_rank_ca
 ! project commanders, operations on projects (sp_project) and associated files
 use simple_commanders_project_core, only: commander_print_project_vals
 use simple_commanders_project_cls,  only: commander_export_cavgs
-use simple_commanders_project_ptcl, only: commander_prune_project, commander_scale_project_distr
+use simple_commanders_project_ptcl, only: commander_prune_project, commander_scale_project
 
 ! refine3D commanders, low-level methods for refine3D for ab initio 3D reconstruction and 3D refinement
 use simple_commanders_refine3D, only: commander_refine3D_distr_worker

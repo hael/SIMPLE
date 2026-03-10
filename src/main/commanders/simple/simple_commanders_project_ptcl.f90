@@ -30,10 +30,10 @@ type, extends(commander_base) :: commander_prune_project
     procedure :: execute      => exec_prune_project
 end type commander_prune_project
 
-type, extends(commander_base) :: commander_scale_project_distr
+type, extends(commander_base) :: commander_scale_project
   contains
-    procedure :: execute      => exec_scale_project_distr
-end type commander_scale_project_distr
+    procedure :: execute      => exec_scale_project
+end type commander_scale_project
 
 type, extends(commander_base) :: commander_split_stack
   contains
@@ -680,8 +680,8 @@ contains
         call qsys_job_finished(params, string('simple_commanders_project_ptcl :: exec_prune_project'))
     end subroutine exec_prune_project
 
-    subroutine exec_scale_project_distr( self, cline )
-        class(commander_scale_project_distr), intent(inout) :: self
+    subroutine exec_scale_project( self, cline )
+        class(commander_scale_project), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(chash),      allocatable :: part_params(:)
         integer,          allocatable :: parts(:,:)
@@ -731,7 +731,7 @@ contains
             newbox = cline_scale%get_iarg('newbox')
             if( newbox == box )then
                 write(logfhandle,*)'Inconsistent input dimensions: from ',box,' to ',newbox
-                THROW_HARD('inconsistent input dimensions; exec_scale_project_distr')
+                THROW_HARD('inconsistent input dimensions; exec_scale_project')
             endif
         else
             newbox = params%newbox
@@ -773,8 +773,8 @@ contains
         params%ncunits = ncunits_orig
         params%nthr    = nthr_orig
         call build%spproj%kill
-        call simple_end('**** SIMPLE_SCALE_PROJECT_DISTR NORMAL STOP ****')
-    end subroutine exec_scale_project_distr
+        call simple_end('**** SIMPLE_scale_project NORMAL STOP ****')
+    end subroutine exec_scale_project
 
     subroutine exec_split_stack( self, cline )
         class(commander_split_stack), intent(inout) :: self

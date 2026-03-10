@@ -18,8 +18,8 @@ type(commander_make_pickrefs)           :: xmake_pickrefs
 
 ! CLUSTER2D PROGRAMS
 type(commander_make_cavgs)              :: xmake_cavgs
-type(commander_cluster2D_distr_worker)  :: xcluster2D_distr_worker
-type(commander_cluster2D)               :: xcluster2D_distr
+type(commander_cluster2D_distr_worker)  :: xcluster2D_worker
+type(commander_cluster2D)               :: xcluster2D
 type(commander_cavgassemble)            :: xcavgassemble
 type(commander_rank_cavgs)              :: xrank_cavgs
 type(commander_export_cavgs)            :: xexport_cavgs
@@ -61,7 +61,7 @@ type(commander_print_project_vals)      :: xprint_project_vals
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(commander_prune_project)           :: xprune_project
-type(commander_scale_project_distr)     :: xscale_project_distr
+type(commander_scale_project)     :: xscale_project
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(commander_track_particles)         :: xtrack_particles
@@ -133,9 +133,9 @@ select case(prg)
     case( 'make_cavgs' )
         call xmake_cavgs%execute(cline)
     case( 'cluster2D' )
-        call xcluster2D_distr_worker%execute(cline)
+        call xcluster2D_worker%execute(cline)
     case( 'cluster2D_distr' )
-        call xcluster2D_distr%execute(cline)
+        call xcluster2D%execute(cline)
     case( 'cavgassemble' )
         call xcavgassemble%execute(cline)
     case( 'rank_cavgs' )
@@ -203,9 +203,9 @@ select case(prg)
     ! DATA MANAGEMENT PROGRAMS
     case( 'prune_project' )
         call xprune_project%execute(cline)
-    case( 'scale_project_distr' )
+    case( 'scale_project' )
         ! for convenience
-        call xscale_project_distr%execute(cline)
+        call xscale_project%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
     case( 'tseries_motion_correct' )
