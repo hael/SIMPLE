@@ -6,7 +6,7 @@ use simple_builder,            only: builder
 use simple_butterworth,        only: butterworth_filter
 use simple_discrete_stack_io,  only: dstack_io
 use simple_nanoparticle_utils, only: phasecorr_one_atom
-use simple_opt_filter,         only: estimate_lplim3D, estimate_lplim
+use simple_opt_filter,         only: estimate_lplim3D
 use simple_projector,          only: projector
 use simple_strategy2D_utils,   only: calc_cavg_offset
 implicit none

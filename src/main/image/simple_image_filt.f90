@@ -85,35 +85,6 @@ contains
         if( didft ) call self%ifft()
     end subroutine bp
 
-    module subroutine lp( self, find, width )
-        class(image),   intent(inout) :: self
-        integer,        intent(in)    :: find
-        real, optional, intent(in)    :: width
-        integer :: h, k, l, lims(3,2), phys(3)
-        real    :: freq, wwidth, w
-        wwidth =10.
-        if( present(width) ) wwidth = width
-        lims = self%fit%loop_lims(2)
-        !$omp parallel do private(h,k,l,freq,phys,w) default(shared)&
-        !$omp collapse(3) proc_bind(close)
-        do l=lims(3,1),lims(3,2)
-            do k=lims(2,1),lims(2,2)
-                do h=lims(1,1),lims(1,2)
-                    freq = hyp(h,k,l)
-                    phys = self%comp_addr_phys(h,k,l)
-                    if(freq .gt. find)then
-                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                    else if(freq .ge. find - wwidth)then
-                        w = (cos(((freq-(find-wwidth))/wwidth)*pi)+1.)/2.
-                        self%cmat(phys(1),phys(2),phys(3)) = &
-                            &self%cmat(phys(1),phys(2),phys(3)) * w
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine lp
-
     module subroutine lp_background( self, mskvol, lp )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: mskvol
@@ -614,112 +585,7 @@ contains
         if( didft ) call self%ifft()
     end subroutine apply_bfac
 
-    module subroutine apply_filter_1( self, filter )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: filter(:)
-        integer :: nyq, sh, h, k, l, lims(3,2)
-        logical :: didft
-        real    :: fwght, wzero
-        nyq = size(filter)
-        didft = .false.
-        if( .not. self%ft )then
-            call self%fft()
-            didft = .true.
-        endif
-        wzero = maxval(filter)
-        lims = self%fit%loop_lims(2)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,fwght)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    ! find shell
-                    sh = nint(hyp(h,k,l))
-                    ! set filter weight
-                    if( sh > nyq )then
-                        fwght = 0.
-                    else if( sh == 0 )then
-                        fwght = wzero
-                    else
-                        fwght = filter(sh)
-                    endif
-                    ! multiply with the weight
-                    call self%mul([h,k,l], fwght)
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        if( didft ) call self%ifft()
-    end subroutine apply_filter_1
-
-    module subroutine apply_filter_2( self, filter )
-        class(image), intent(inout) :: self
-        complex,      intent(in)    :: filter(:)
-        integer :: nyq, sh, h, k, l, lims(3,2)
-        logical :: didft
-        complex :: fwght, wzero, wnyq
-        nyq = size(filter)
-        didft = .false.
-        if( .not. self%ft )then
-            call self%fft()
-            didft = .true.
-        endif
-        wzero = filter(1)
-        wnyq  = cmplx(0.,0.)
-        lims = self%fit%loop_lims(2)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,fwght)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    ! find shell
-                    sh = nint(hyp(h,k,l))
-                    ! set filter weight
-                    if( sh > nyq )then
-                        fwght = wnyq
-                    else if( sh == 0 )then
-                        fwght = wzero
-                    else
-                        fwght = filter(sh)
-                    endif
-                    ! multiply with the weight
-                    call self%mul([h,k,l], fwght)
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        if( didft ) call self%ifft()
-    end subroutine apply_filter_2
-
-    module subroutine apply_filter_serial( self, filter )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: filter(:)
-        integer :: nyq, sh, h, k, l, lims(3,2)
-        real    :: fwght, wzero
-        nyq   = size(filter)
-        wzero = maxval(filter)
-        lims  = self%fit%loop_lims(2)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    ! find shell
-                    sh = nint(hyp(h,k,l))
-                    ! set filter weight
-                    if( sh > nyq )then
-                        fwght = 0.
-                    else if( sh == 0 )then
-                        fwght = wzero
-                    else
-                        fwght = filter(sh)
-                    endif
-                    ! multiply with the weight
-                    call self%mul([h,k,l], fwght)
-                end do
-            end do
-        end do
-    end subroutine apply_filter_serial
-
-    module subroutine apply_filter_test( self, filter )
+    module subroutine apply_filter( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
         integer :: nyq, sh, logi(3), a,b,c
@@ -758,7 +624,32 @@ contains
         end do
         !$omp end parallel do
         if( didft ) call self%ifft()
-    end subroutine apply_filter_test
+    end subroutine apply_filter
+
+    module subroutine apply_filter_serial( self, filter )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: filter(:)
+        integer :: nyq, sh, logi(3), a,b,c
+        real    :: fwght, wzero
+        nyq   = size(filter)
+        wzero = maxval(filter)
+        do c = 1,self%array_shape(3)
+            do b = 1,self%array_shape(2)
+                do a = 1,self%array_shape(1)
+                    logi = self%fit%comp_addr_logi(a,b,c)
+                    sh   = nint(sqrt(real(dot_product(logi,logi))))
+                    if( sh > nyq )then
+                        fwght = 0.
+                    else if( sh == 0 )then
+                        fwght = wzero
+                    else
+                        fwght = filter(sh)
+                    endif
+                    self%cmat(a,b,c) = fwght * self%cmat(a,b,c)
+                end do
+            end do
+        end do
+    end subroutine apply_filter_serial
 
     ! don't touch default parameters here. This routine is being actively used
     module subroutine NLmean2D( self, msk, sdev_noise )

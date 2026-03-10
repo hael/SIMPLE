@@ -130,7 +130,7 @@ contains
             ! calculate difference volume
             call odd_filt%subtr(even_cp)
             ! Calculate real space variance based on Fourier magnitudes
-            curr_cost = odd_filt%variance() * real(product(ldim))
+            curr_cost = odd_filt%variance() !* real(product(ldim)) ! uncommenting restore real domain scale
             ! book-keeping
             if( curr_cost <= best_cost )then
                 best_cost = curr_cost

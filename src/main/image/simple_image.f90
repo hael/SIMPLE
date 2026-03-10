@@ -189,7 +189,7 @@ contains
     procedure          :: is_ft
     procedure          :: is_empty
     ! FILTERS/DENOISE, file: simple_image_filt.f90
-    procedure          :: bp, lp
+    procedure          :: bp
     procedure          :: lp_background
     procedure          :: bpgau2D, bpgau3D
     procedure          :: tophat
@@ -199,10 +199,7 @@ contains
     procedure          :: real_space_filter
     procedure          :: hannw
     procedure          :: apply_bfac
-    procedure, private :: apply_filter_1, apply_filter_2
-    generic            :: apply_filter => apply_filter_1, apply_filter_2
-    procedure          :: apply_filter_serial
-    procedure          :: apply_filter_test
+    procedure          :: apply_filter, apply_filter_serial
     procedure          :: NLmean2D, NLmean2D_eo, NLmean3D, NLmean3D_eo
     procedure          :: ICM2D, ICM2D_eo, ICM3D, ICM3D_eo
     procedure          :: GLCM
@@ -315,7 +312,6 @@ contains
     procedure          :: gen_fplane4rec
     procedure          :: calc_ice_frac
     procedure          :: ctf_dens_correct
-    procedure          :: ctf_dens_correct_wiener
     ! OPERATIONS, file: simple_image_ops.f90
     ! insertions
     procedure          :: insert
@@ -1255,12 +1251,6 @@ interface
         real, intent(in), optional  :: width
     end subroutine bp
 
-    module subroutine lp( self, find, width )
-        class(image),   intent(inout) :: self
-        integer,        intent(in)    :: find
-        real, optional, intent(in)    :: width
-    end subroutine lp
-
     module subroutine lp_background( self, mskvol, lp )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: mskvol
@@ -1314,25 +1304,15 @@ interface
         real,         intent(in)    :: b
     end subroutine apply_bfac
 
-    module subroutine apply_filter_1( self, filter )
+    module subroutine apply_filter( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
-    end subroutine apply_filter_1
-
-    module subroutine apply_filter_2( self, filter )
-        class(image), intent(inout) :: self
-        complex,      intent(in)    :: filter(:)
-    end subroutine apply_filter_2
+    end subroutine apply_filter
 
     module subroutine apply_filter_serial( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
     end subroutine apply_filter_serial
-
-    module subroutine apply_filter_test( self, filter )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: filter(:)
-    end subroutine apply_filter_test
 
     module subroutine NLmean2D( self, msk, sdev_noise )
         class(image),   intent(inout) :: self
@@ -2033,12 +2013,6 @@ interface
         class(image), intent(inout) :: self_rho
     end subroutine ctf_dens_correct
 
-    module subroutine ctf_dens_correct_wiener( self_sum, self_rho, ssnr )
-        class(image), intent(inout) :: self_sum
-        class(image), intent(in)    :: self_rho
-        real,         intent(in)    :: ssnr(:)
-    end subroutine ctf_dens_correct_wiener
-
     ! ===== image operations procedure interfaces =====
 
     !--- Insertions ---!
@@ -2597,15 +2571,16 @@ contains
     contains
 
         subroutine test_image_local( ld1, ld2, ld3, doplot )
-            integer, intent(in)  :: ld1, ld2, ld3
-            logical, intent(in)  :: doplot
-            type(image)          :: img, img_2, img_3, img_4, img3d
-            type(image)          :: imgs(20)
-            integer              :: i, j, k, cnt, ldim(3)
-            real                 :: input, ave, sdev, med
-            real                 :: corr, corr_lp, maxv, minv
-            real                 :: smpd=2.
-            logical              :: passed, test(6)
+            integer, intent(in) :: ld1, ld2, ld3
+            logical, intent(in) :: doplot
+            type(image)         :: img, img_2, img_3, img_4, img3d
+            type(image)         :: imgs(20)
+            integer             :: h,i,j,k,l, sz, sh, cnt, ldim(3), lims(3,2), phys(3)
+            real, allocatable   :: filter(:)
+            real                :: input, ave, sdev, med
+            real                :: corr, corr_lp, maxv, minv
+            real                :: smpd=2.
+            logical             :: passed, test(6)
 
             write(logfhandle,'(a)') '**info(simple_image_unit_test, part 1): testing basal constructors'
             call img%new([ld1,ld2,1], 1.)
@@ -2823,7 +2798,39 @@ contains
                 end do
             end do
 
-            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 21): testing destructor'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 21): testing apply_filter routine'
+            ! the complex matrix is set to (1 + 0i) such that after filtering by 1/shell
+            ! the matrix should be equal to (1/shell + 0i) with DC=(1 + 0i) and beyond
+            ! Nyquist (0 + 0i), which can be verified independently by using comp_addr_phys
+            ! where apply_filter employs comp_addr_logi
+            call img%new([64,64,64],1.0)
+            img = cmplx(1.0,0.0)
+            sz  = img%get_filtsz()
+            allocate(filter(sz),source=0.0)
+            do i = 1,sz
+                filter(i) = 1./real(i)
+            enddo
+            call img%apply_filter(filter)
+            lims = img%loop_lims(2)
+            do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+            do l = lims(3,1),lims(3,2)
+                sh   = nint(hyp(h,k,l))
+                phys = img%comp_addr_phys(h,k,l)
+                if( sh == 0 )then
+                    passed = is_equal(img%cmat(phys(1),phys(2),phys(3)), cmplx(1.,0.))
+                else if( sh > sz )then
+                    passed = is_equal(img%cmat(phys(1),phys(2),phys(3)), cmplx(0.,0.))
+                else
+                    passed = is_equal(img%cmat(phys(1),phys(2),phys(3)), cmplx(filter(sh),0.))
+                endif
+                if( .not.passed ) exit
+            enddo
+            enddo
+            enddo
+            if( .not.passed ) THROW_HARD('apply_filter test failed')
+
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 22): testing destructor'
             passed = .false.
             call img%kill()
             call img3d%kill()
