@@ -273,8 +273,6 @@ contains
                 call cline_calc_pspec%set('prg', 'calc_pspec')
                 cline_first_sigmas = cline
                 call xcalc_pspec%execute( cline_calc_pspec )
-                call self%cline_calc_group_sigmas%set('which_iter', startit)
-                call xcalc_pspec_assemble%execute(self%cline_calc_group_sigmas)
                 if( (trim(params%first_sigmas).eq.'yes') )then
                     if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', params%nspace)
                     if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', params%athres)

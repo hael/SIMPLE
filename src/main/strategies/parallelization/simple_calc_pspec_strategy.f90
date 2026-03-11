@@ -28,6 +28,7 @@ contains
 end type calc_pspec_strategy
 
 type, extends(calc_pspec_strategy) :: calc_pspec_inmem_strategy
+    type(cmdline) :: cline_calc_pspec_assemble
 contains
     procedure :: initialize   => inmem_initialize
     procedure :: execute      => inmem_execute
@@ -103,7 +104,6 @@ contains
         endif
     end function create_calc_pspec_strategy
 
-
     ! =====================================================================
     ! SHARED-MEMORY / DISTRIBUTED WORKER IMPLEMENTATION
     ! =====================================================================
@@ -121,17 +121,21 @@ contains
         call params%new(cline)
         call build%build_spproj(params, cline, wthreads=.true.)
         call build%build_general_tbox(params, cline, do3d=.false.)
+        self%cline_calc_pspec_assemble = cline
+        call self%cline_calc_pspec_assemble%set('prg', 'calc_pspec_assemble')
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, build, cline)
-        use simple_strategy2D3D_common, only: prepimgbatch, discrete_read_imgbatch
+        use simple_strategy2D3D_common,     only: prepimgbatch, discrete_read_imgbatch
+        use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(calc_pspec_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
         type(builder),                    intent(inout) :: build
         class(cmdline),                   intent(inout) :: cline
-        type(image)              :: sum_img
-        type(sigma2_binfile)     :: binfile
-        type(string)             :: binfname
+        type(commander_calc_pspec_assemble) :: xcalc_pspec_assemble
+        type(image)                         :: sum_img
+        type(sigma2_binfile)                :: binfile
+        type(string)                        :: binfname
         complex(dp), allocatable :: cmat_thr_sum(:,:,:)
         complex,     allocatable :: cmat_sum(:,:,:)
         integer,     allocatable :: pinds(:)
@@ -194,6 +198,10 @@ contains
         ! destruct local objects
         call binfile%kill
         call sum_img%kill
+        ! Group averaging in non-distributed execution
+        if( .not.cline%defined('nparts') .and. params%part==1 )then
+            call xcalc_pspec_assemble%execute(self%cline_calc_pspec_assemble)
+        endif
     end subroutine inmem_execute
 
     subroutine inmem_finalize_run(self, params, build, cline)
@@ -210,6 +218,7 @@ contains
         type(parameters),                 intent(in)    :: params
         type(builder),                    intent(inout) :: build
         class(cmdline),                   intent(inout) :: cline
+        call self%cline_calc_pspec_assemble%kill
         call build%kill_general_tbox
         call killimgbatch(build)
     end subroutine inmem_cleanup
