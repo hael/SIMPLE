@@ -465,9 +465,9 @@ interface
         complex(dp), pointer, intent(inout) :: shmat_8(:,:)
     end subroutine gen_shmat_8
 
-    module subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
+    module pure subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
         class(polarft_calc), intent(in)    :: self
-        real,                intent(in)    :: psi
+        real(dp),            intent(in)    :: psi
         integer,             intent(inout) :: lrot
         integer,             intent(inout) :: rrot
         real(dp),            intent(out)   :: lw(self%kfromto(1):self%kfromto(2))

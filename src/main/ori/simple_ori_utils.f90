@@ -6,8 +6,8 @@ use simple_math,   only: rotmat2d
 use simple_rnd,    only: ran3
 implicit none
 
-public :: euler2m, m2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror, make_transfmat
-public :: rnd_romat, geodesic_frobdev, rotmat2d
+public :: euler2m, m2euler, dm2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror
+public :: make_transfmat, rnd_romat, geodesic_frobdev, rotmat2d
 private
 
 real, parameter :: zvec(3) = [0.,0.,1.]
@@ -67,6 +67,28 @@ contains
             e(3) = e(3) + 360.
         end do
     end function m2euler
+
+    ! Double precision version of m2euler above
+    pure function dm2euler( R ) result( e )
+        real(dp), intent(in)  :: R(3,3)
+        real(dp) :: c, e(3)
+        c = max(-1.d0, min(1.d0, R(3,3)))
+        if( c < 0.9999999d0 )then
+            if( c > -0.9999999d0 )then
+                e = rad2deg([atan2(R(3,2),R(3,1)), acos(c), atan2(R(2,3),-R(1,3))])
+            else
+                e = [rad2deg(-atan2(R(1,2),R(2,2))), 180.d0, 0.d0]
+            endif
+        else
+            e = [rad2deg(atan2(R(1,2),R(2,2))), 0.d0, 0.d0]
+        endif
+        do while( e(1) < 0.d0 )
+            e(1) = e(1) + 360.d0
+        end do
+        do while( e(3) < 0.d0 )
+            e(3) = e(3) + 360.d0
+        end do
+    end function dm2euler
 
     !>  in-plane parameters to 3x3 transformation matrix
     function make_transfmat( psi, tx, ty ) result( R )

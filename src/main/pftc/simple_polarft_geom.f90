@@ -39,34 +39,36 @@ contains
         ! shmat   =  cmplx(cos(argmat),sin(argmat),dp)
     end subroutine gen_shmat_8
 
-    module subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
+    module pure subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
         class(polarft_calc), intent(in)    :: self
-        real,                intent(in)    :: psi
+        real(dp),            intent(in)    :: psi
         integer,             intent(inout) :: lrot
         integer,             intent(inout) :: rrot
         real(dp),            intent(out)   :: lw(self%kfromto(1):self%kfromto(2))
         real(dp),            intent(out)   :: rw(self%kfromto(1):self%kfromto(2))
+        real(dp) :: sinpsi, cospsi, max_dist, lh,lk,rh,rk,sh,sk, d
         integer :: k
-        real    :: d, drot, max_dist
-        drot = self%get_dang()
-        lrot = self%get_roind_fast(psi)
-        d    = psi - self%get_rot(lrot)
-        if( d > drot ) d = d - 360.0
-        if( d < 0. )then
+        lrot = self%get_roind_fast(real(psi))
+        d    = psi - real(self%angtab(lrot),dp)
+        if( d > real(self%get_dang(),dp) ) d = d - 360.d0
+        if( d < 0.d0 )then
             lrot = lrot - 1
             if( lrot < 1 ) lrot = lrot + self%get_nrots()
         endif
         rrot = lrot + 1
         if( rrot > self%get_nrots() ) rrot = rrot - self%get_nrots()
+        sinpsi = sin(deg2rad(psi))
+        cospsi = cos(deg2rad(psi))
         do k=self%kfromto(1),self%kfromto(2)
-            max_dist = real(sqrt(sum(([self%polar(lrot,k), self%polar(lrot+self%nrots,k)] -&
-                                     &[self%polar(rrot,k), self%polar(rrot+self%nrots,k)])**2)),dp)
-            lw(k)    = real(sqrt(sum(([self%polar(lrot,k), self%polar(lrot+self%nrots,k)] -&
-                                     &[sin(psi)*real(k),  -cos(psi)*real(k)])**2)),dp)
-            rw(k)    = real(sqrt(sum(([self%polar(rrot,k), self%polar(rrot+self%nrots,k)] -&
-                                     &[sin(psi)*real(k),  -cos(psi)*real(k)])**2)),dp)
-            lw(k)    = max_dist - lw(k)
-            rw(k)    = max_dist - rw(k)
+            lh = real(self%polar(lrot,k),dp)
+            rh = real(self%polar(rrot,k),dp)
+            lk = real(self%polar(lrot+self%nrots,k),dp)
+            rk = real(self%polar(rrot+self%nrots,k),dp)
+            sh =  sinpsi * real(k,dp)
+            sk = -cospsi * real(k,dp)
+            max_dist = sqrt((lh-rh)**2 + (lk-rk)**2)
+            lw(k)    = max_dist - sqrt((lh-sh)**2 + (lk-sk)**2)
+            rw(k)    = max_dist - sqrt((rh-sh)**2 + (rk-sk)**2)
         end do
     end subroutine gen_clin_weights
 
