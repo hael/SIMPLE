@@ -307,6 +307,41 @@ contains
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess
 
+    ! Unified motion_correct workflow (worker/shared-memory + distributed master)
+    ! driven by runtime polymorphism (strategy pattern).
+
+    ! subroutine exec_motion_correct_distr( self, cline )
+    !     class(commander_motion_correct_distr), intent(inout) :: self
+    !     class(cmdline),                        intent(inout) :: cline
+    !     call run_motion_correct_workflow(cline)
+    ! end subroutine exec_motion_correct_distr
+
+    ! subroutine exec_motion_correct( self, cline )
+    !     class(commander_motion_correct), intent(inout) :: self
+    !     class(cmdline),                  intent(inout) :: cline
+    !     call run_motion_correct_workflow(cline)
+    ! end subroutine exec_motion_correct
+
+    ! subroutine run_motion_correct_workflow( cline )
+    !     use simple_core_module_api,         only: simple_end
+    !     use simple_motion_correct_strategy, only: motion_correct_strategy, create_motion_correct_strategy
+    !     use simple_cmdline,                only: cmdline
+    !     use simple_parameters,             only: parameters
+    !     class(cmdline), intent(inout) :: cline
+    !     class(motion_correct_strategy), allocatable :: strategy
+    !     type(parameters) :: params
+    !     ! Helps distributed job script generation if it relies on 'prg'
+    !     call cline%set('prg', 'motion_correct')
+    !     strategy = create_motion_correct_strategy(cline)
+    !     call strategy%apply_defaults(cline)
+    !     call strategy%initialize(params, cline)
+    !     call strategy%execute(params, cline)
+    !     call strategy%finalize_run(params, cline)
+    !     call strategy%cleanup(params, cline)
+    !     call simple_end(strategy%end_message())
+    !     if( allocated(strategy) ) deallocate(strategy)
+    ! end subroutine run_motion_correct_workflow
+
     subroutine exec_motion_correct_distr( self, cline )
         class(commander_motion_correct_distr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
@@ -419,6 +454,41 @@ contains
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
 
+    ! Unified gen_pspecs_and_thumbs workflow (worker/shared-memory + distributed master)
+    ! driven by runtime polymorphism (strategy pattern).
+
+    ! subroutine exec_gen_pspecs_and_thumbs_distr( self, cline )
+    !     class(commander_gen_pspecs_and_thumbs_distr), intent(inout) :: self
+    !     class(cmdline),                               intent(inout) :: cline
+    !     call run_gen_pspecs_and_thumbs_workflow(cline)
+    ! end subroutine exec_gen_pspecs_and_thumbs_distr
+
+    ! subroutine exec_gen_pspecs_and_thumbs( self, cline )
+    !     class(commander_gen_pspecs_and_thumbs), intent(inout) :: self
+    !     class(cmdline),                         intent(inout) :: cline
+    !     call run_gen_pspecs_and_thumbs_workflow(cline)
+    ! end subroutine exec_gen_pspecs_and_thumbs
+
+    ! subroutine run_gen_pspecs_and_thumbs_workflow( cline )
+    !     use simple_core_module_api,                only: simple_end
+    !     use simple_gen_pspecs_and_thumbs_strategy, only: gen_pspecs_and_thumbs_strategy, create_gen_pspecs_and_thumbs_strategy
+    !     use simple_cmdline,                        only: cmdline
+    !     use simple_parameters,                     only: parameters
+    !     class(cmdline), intent(inout) :: cline
+    !     class(gen_pspecs_and_thumbs_strategy), allocatable :: strategy
+    !     type(parameters) :: params
+    !     ! Helps distributed job script generation if it relies on 'prg'
+    !     call cline%set('prg', 'gen_pspecs_and_thumbs')
+    !     strategy = create_gen_pspecs_and_thumbs_strategy(cline)
+    !     call strategy%apply_defaults(cline)
+    !     call strategy%initialize(params, cline)
+    !     call strategy%execute(params, cline)
+    !     call strategy%finalize_run(params, cline)
+    !     call strategy%cleanup(params, cline)
+    !     call simple_end(strategy%end_message())
+    !     if( allocated(strategy) ) deallocate(strategy)
+    ! end subroutine run_gen_pspecs_and_thumbs_workflow
+
     subroutine exec_gen_pspecs_and_thumbs_distr( self, cline )
         class(commander_gen_pspecs_and_thumbs_distr), intent(inout) :: self
         class(cmdline),                               intent(inout) :: cline
@@ -511,6 +581,41 @@ contains
         call qsys_job_finished(params, string('simple_commanders_preprocess :: exec_gen_pspecs_and_thumbs'))
         call simple_end('**** SIMPLE_GEN_PSPECS_AND_THUMBS NORMAL STOP ****')
     end subroutine exec_gen_pspecs_and_thumbs
+
+    ! Unified ctf_estimate workflow (worker/shared-memory + distributed master)
+    ! driven by runtime polymorphism (strategy pattern).
+
+    ! subroutine exec_ctf_estimate_distr( self, cline )
+    !     class(commander_ctf_estimate_distr), intent(inout) :: self
+    !     class(cmdline),                      intent(inout) :: cline
+    !     call run_ctf_estimate_workflow(cline)
+    ! end subroutine exec_ctf_estimate_distr
+
+    ! subroutine exec_ctf_estimate( self, cline )
+    !     class(commander_ctf_estimate), intent(inout) :: self
+    !     class(cmdline),                intent(inout) :: cline
+    !     call run_ctf_estimate_workflow(cline)
+    ! end subroutine exec_ctf_estimate
+
+    ! subroutine run_ctf_estimate_workflow( cline )
+    !     use simple_core_module_api,      only: simple_end
+    !     use simple_ctf_estimate_strategy, only: ctf_estimate_strategy, create_ctf_estimate_strategy
+    !     use simple_cmdline,              only: cmdline
+    !     use simple_parameters,           only: parameters
+    !     class(cmdline), intent(inout) :: cline
+    !     class(ctf_estimate_strategy), allocatable :: strategy
+    !     type(parameters) :: params
+    !     ! Helps distributed job script generation if it relies on 'prg'
+    !     call cline%set('prg', 'ctf_estimate')
+    !     strategy = create_ctf_estimate_strategy(cline)
+    !     call strategy%apply_defaults(cline)
+    !     call strategy%initialize(params, cline)
+    !     call strategy%execute(params, cline)
+    !     call strategy%finalize_run(params, cline)
+    !     call strategy%cleanup(params, cline)
+    !     call simple_end(strategy%end_message())
+    !     if( allocated(strategy) ) deallocate(strategy)
+    ! end subroutine run_ctf_estimate_workflow
 
     subroutine exec_ctf_estimate_distr( self, cline )
         class(commander_ctf_estimate_distr), intent(inout) :: self
