@@ -48,6 +48,41 @@ end type commander_ctf_estimate
 
 contains
 
+    ! Unified preprocess workflow (shared-memory/worker + distributed master)
+    ! driven by runtime polymorphism (strategy pattern).
+
+    ! subroutine exec_preprocess_distr( self, cline )
+    !     class(commander_preprocess_distr), intent(inout) :: self
+    !     class(cmdline),                    intent(inout) :: cline
+    !     call run_preprocess_workflow(cline)
+    ! end subroutine exec_preprocess_distr
+
+    ! subroutine exec_preprocess( self, cline )
+    !     class(commander_preprocess), intent(inout) :: self
+    !     class(cmdline),              intent(inout) :: cline
+    !     call run_preprocess_workflow(cline)
+    ! end subroutine exec_preprocess
+
+    ! subroutine run_preprocess_workflow( cline )
+    !     use simple_core_module_api,     only: simple_end
+    !     use simple_preprocess_strategy, only: preprocess_strategy, create_preprocess_strategy
+    !     use simple_cmdline,             only: cmdline
+    !     use simple_parameters,          only: parameters
+    !     class(cmdline), intent(inout) :: cline
+    !     class(preprocess_strategy), allocatable :: strategy
+    !     type(parameters) :: params
+    !     ! Ensure the distributed scripts see the correct program name.
+    !     call cline%set('prg', 'preprocess')
+    !     strategy = create_preprocess_strategy(cline)
+    !     call strategy%apply_defaults(cline)
+    !     call strategy%initialize(params, cline)
+    !     call strategy%execute(params, cline)
+    !     call strategy%finalize_run(params, cline)
+    !     call strategy%cleanup(params, cline)
+    !     call simple_end(strategy%end_message())
+    !     if( allocated(strategy) ) deallocate(strategy)
+    ! end subroutine run_preprocess_workflow
+
     subroutine exec_preprocess_distr( self, cline )
         class(commander_preprocess_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
