@@ -49,9 +49,8 @@ contains
         call cline%set('sigma_est',    'global')
         call cline%set('cls_init',     'rand')
         call cline%set('numlen',       5)
-        call cline%set('dynreslim',    'no')    ! deactivated for now
         ! if( .not. cline%defined('walltime')  ) call cline%set('walltime',  29*60) ! 29 minutes
-        ! if( .not. cline%defined('dynreslim') ) call cline%set('dynreslim', 'yes')
+        if( .not. cline%defined('dynreslim') ) call cline%set('dynreslim', 'yes')
         if( .not.cline%defined('center')     ) call cline%set('center',    'yes')
         if( .not.cline%defined('ncls')       ) call cline%set('ncls',       200)
         ! restart

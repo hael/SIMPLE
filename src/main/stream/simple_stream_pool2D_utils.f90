@@ -53,87 +53,6 @@ real                    :: conv_score    = 0.0
 
 contains
 
-    ! LIFECYCLE
-
-    ! Appends new data for processing
-    subroutine import_records_into_pool( project_list )
-        class(rec_list), intent(inout) :: project_list
-        type(sp_project)     :: spproj
-        type(string)         :: projname
-        type(project_rec)    :: prec
-        type(rec_iterator)   :: it
-        logical, allocatable :: incl_mask(:)
-        integer :: nptcls2import, nmics2import, imic, nrecords
-        integer :: fromp, i, nmics_imported, nptcls_imported, iptcl, irec
-        if( .not. l_stream2D_active ) return
-        if( .not. l_pool_available  ) return
-        nrecords = project_list%size()
-        if( nrecords == 0         ) return
-        incl_mask = project_list%get_included_flags()
-        if( all(incl_mask)        ) return
-        nmics_imported  = pool_proj%os_mic%get_noris()
-        nptcls_imported = pool_proj%os_ptcl2D%get_noris()
-        nmics2import    = count(.not.incl_mask)
-        nptcls2import   = project_list%get_nptcls_tot(l_not_included=.true.)
-        ! reallocations
-        nmics_imported  = pool_proj%os_mic%get_noris()
-        nptcls_imported = pool_proj%os_ptcl2D%get_noris()
-        if( nmics_imported == 0 )then
-            call pool_proj%os_mic%new(nmics2import,     is_ptcl=.false.)
-            call pool_proj%os_stk%new(nmics2import,     is_ptcl=.false.)
-            call pool_proj%os_ptcl2D%new(nptcls2import, is_ptcl=.true. )
-            fromp = 1
-        else
-            call pool_proj%os_mic%reallocate(nmics_imported+nmics2import)
-            call pool_proj%os_stk%reallocate(nmics_imported+nmics2import)
-            call pool_proj%os_ptcl2D%reallocate(nptcls_imported+nptcls2import)
-            fromp = pool_proj%os_stk%get_top(nmics_imported)+1
-        endif
-        imic     = nmics_imported
-        projname = ''
-        it       = project_list%begin()
-        do irec = 1,nrecords
-            ! retrieve one record from the list with the iterator
-            call it%get(prec)
-            if( prec%included )then
-                ! move the iterator
-                call it%next()
-                cycle
-            endif
-            if( projname /= prec%projname )then
-                call spproj%read_mic_stk_ptcl2D_segments(prec%projname)
-                projname = prec%projname
-            endif
-            ! mic & stack
-            imic = imic + 1
-            call pool_proj%os_mic%transfer_ori(imic, spproj%os_mic, prec%micind)
-            call pool_proj%os_stk%transfer_ori(imic, spproj%os_stk, prec%micind)
-            call pool_proj%os_stk%set(imic, 'fromp', fromp)
-            call pool_proj%os_stk%set(imic, 'top',   fromp+prec%nptcls-1)
-            ! particles
-            !$omp parallel do private(i,iptcl) proc_bind(close) default(shared)
-            do i = 1,prec%nptcls
-                iptcl = fromp + i - 1
-                call pool_proj%os_ptcl2D%transfer_ori(iptcl, spproj%os_ptcl2D, i)
-                call pool_proj%os_ptcl2D%set_stkind(iptcl, imic)
-                call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0)
-                call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.0)
-                call pool_proj%os_ptcl2D%set(iptcl, 'eo',        merge(0, 1, is_even(iptcl)))
-                call pool_proj%os_ptcl2D%set(iptcl, 'w',         1.0)
-                call pool_proj%os_ptcl2D%set_class(iptcl, irnd_uni(ncls_glob))
-            enddo
-            !$omp end parallel do
-            fromp = fromp + prec%nptcls
-            ! flag inclusion
-            prec%included = .true.
-            ! replace the node
-            call project_list%replace_iterator(it, prec)
-            ! move the iterator
-            call it%next()
-        enddo
-        call spproj%kill
-    end subroutine import_records_into_pool
-
     ! CALCULATORS
 
     subroutine init_pool_clustering( params, cline, spproj, projfilegui, reference_generation )
@@ -782,14 +701,15 @@ contains
 
     ! Deals with pool dimensions & resolution update
     subroutine update_pool_dims( params )
-        use simple_procimgstk, only: pad_imgfile, scale_imgfile
+        use simple_procimgstk,    only: scale_imgfile
+        use simple_classaverager, only: cavger_pad_partial_sums
         class(parameters), intent(inout) :: params
         type(scaled_dims) :: new_dims, prev_dims
         type(oris)        :: os
         type(class_frcs)  :: frcs
         type(string)      :: str, str_tmp_mrc
         real              :: scale_factor
-        integer           :: ldim(3), p
+        integer           :: ldim(3)
         ! resolution book-keeping
         resolutions(1:POOL_NPREV_RES-1) = resolutions(2:POOL_NPREV_RES)
         resolutions(POOL_NPREV_RES)     = current_resolution
@@ -845,21 +765,7 @@ contains
         call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
         call simple_rename(str_tmp_mrc,str)
         ! upsample cavgs matrices
-        do p = 1,params%nparts_pool
-            str = POOL_DIR//'cavgs_even_part'//int2str_pad(p,numlen)//MRC_EXT
-            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
-            call simple_rename(str_tmp_mrc,str)
-            str = POOL_DIR//'cavgs_odd_part'//int2str_pad(p,numlen)//MRC_EXT
-            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
-            call simple_rename(str_tmp_mrc,str)
-            ! TO FIX
-            str = POOL_DIR//'ctfsqsums_even_part'//int2str_pad(p,numlen)//MRC_EXT
-            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
-            call simple_rename(str_tmp_mrc,str)
-            str = POOL_DIR//'ctfsqsums_odd_part'//int2str_pad(p,numlen)//MRC_EXT
-            call scale_imgfile(str, str_tmp_mrc, prev_dims%smpd, ldim, pool_dims%smpd)
-            call simple_rename(str_tmp_mrc,str)
-        enddo
+        call cavger_pad_partial_sums(prev_dims%box, pool_dims%box, ncls_glob, params%nparts_pool, numlen)
         ! update cls2D field
         os = pool_proj%os_cls2D
         call pool_proj%os_out%kill

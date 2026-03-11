@@ -202,6 +202,7 @@ contains
         complex(kind=c_float_complex)              :: fcomp
         real,                          allocatable :: tvals(:,:,:), kbw(:,:,:), interp_rhos(:,:,:)
         real,                          allocatable :: sigma2(:,:), sigma2pd(:,:), sqrt_sigma2pd(:,:)
+        integer,                       allocatable :: phys_addrh_crop(:,:), phys_addrk_crop(:,:)
         real    :: loc(2), mat(2,2), tvalsq, croppd_scale, w
         integer :: batch_iprecs(READBUFFSZ), fdims_croppd(3), win(2,2), flims_crop(3,2), phys(2)
         integer :: cyc_lims_croppdR(2,2),cyc_lims_croppd(3,2), sigma2_kfromto(2), cshape_crop(2)
@@ -243,7 +244,11 @@ contains
         ! Work images
         call prepimgbatch(p_ptr, b_ptr, READBUFFSZ)
         call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
-        ! Memoization for padded image
+        ! Memoization for cropped image (is overwritten just below)
+        call memoize_ft_maps(ldim_crop(1:2), p_ptr%smpd_crop)
+        phys_addrh_crop = ft_map_phys_addrh
+        phys_addrk_crop = ft_map_phys_addrk
+        ! Memoization for cropped padded image
         call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
         ! Dimensions & limits
         croppd_scale          = real(ldim_croppd(1)) / real(ldim_pd(1))
@@ -370,10 +375,11 @@ contains
                                 l_conjg = hh<0
                                 hh      = cyci_1d(cyc_lims_cropR(:,1), hh)
                                 do m = 1, wdim
-                                    kk   = win(1,2) + m-1
-                                    kk   = cyci_1d(cyc_lims_cropR(:,2), kk)
-                                    phys = cavgs%even%fit%comp_addr_phys(hh,kk)
-                                    w    = kbw(l,m,ithr)
+                                    kk      = win(1,2) + m-1
+                                    kk      = cyci_1d(cyc_lims_cropR(:,2), kk)
+                                    phys(1) = phys_addrh_crop(hh,kk)
+                                    phys(2) = phys_addrk_crop(hh,kk)
+                                    w       = kbw(l,m,ithr)
                                     interp_cmats(phys(1),phys(2),i) = interp_cmats(phys(1),phys(2),i) + w * merge(conjg(fcomp), fcomp, l_conjg)
                                     interp_rhos( phys(1),phys(2),i) = interp_rhos( phys(1),phys(2),i) + w * tvalsq
                                 enddo
@@ -409,7 +415,7 @@ contains
         call dstkio_r%kill
         call forget_ft_maps
         call dealloc_imgarr(tmp_pad_imgs)
-        deallocate(cmats,interp_cmats,tvals,kbw,interp_rhos)
+        deallocate(cmats,interp_cmats,tvals,kbw,interp_rhos,phys_addrh_crop,phys_addrk_crop)
     end subroutine cavger_assemble_sums
 
     !>  \brief  merges the even/odd pairs and normalises the sums, merge low resolution
@@ -633,6 +639,36 @@ contains
         call cto%kill
     end subroutine cavger_readwrite_partial_sums
 
+    !>  \brief  pad partial & ctf squared arrays
+    module subroutine cavger_pad_partial_sums( old_box, new_box, n, nparts, numlen )
+        integer, intent(in) :: old_box, new_box, n, nparts, numlen
+        type(string)        :: ca, ct, str
+        type(stack)         :: old, new
+        integer :: ipart
+        call old%new_stack([old_box, old_box], n, .true.)
+        call new%new_stack([new_box, new_box], n, .true.)
+        do ipart = 1,nparts
+            str = int2str_pad(ipart, numlen)
+            ca = string('cavgs_even_part')//str//MRC_EXT
+            ct = string('ctfsqsums_even_part')//str//MRC_EXT
+            call old%read_cmat(ca)
+            call old%read_ctfsq(ct)
+            call old%pad(new)
+            call new%write(ca,.true.)
+            call new%write_ctfsq(ct)
+            ca = string('cavgs_odd_part')//str//MRC_EXT
+            ct = string('ctfsqsums_odd_part')//str//MRC_EXT
+            call old%read_cmat(ca)
+            call old%read_ctfsq(ct)
+            call old%pad(new)
+            call new%write(ca,.true.)
+            call new%write_ctfsq(ct)
+        enddo
+        call old%kill_stack
+        call new%kill_stack
+        call ca%kill; call ct%kill
+    end subroutine cavger_pad_partial_sums
+
     module subroutine apply_weights2cavgs( w )
         real, intent(in) :: w
         !$omp parallel workshare proc_bind(close)
@@ -749,7 +785,7 @@ contains
         l_alloc_read_cavgs = .true.
     end subroutine dealloc_cavgs
 
-    ! PUBLIC UTILITIES (private for now)
+    ! PUBLIC UTILITIES
 
     module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project

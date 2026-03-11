@@ -101,24 +101,26 @@ contains
                 self%nyq_mask(phys(1),phys(2)) = .true.
             end do
         end do
-        ! real space soft mask, squared image assumed
-        allocate(self%soft_mask(self%ldim(1),self%ldim(2)),source=1.0)
-        center = self%ldim/2 + 1
-        do j = 1,self%ldim(2)
-            do i = 1,self%ldim(1)
-                r = sqrt((i-center(1))**2 + (j-center(2))**2)
-                if( r < (p_ptr%msk_crop-COSMSKHALFWIDTH) )then
-                    cycle
-                else if( r > (p_ptr%msk_crop+COSMSKHALFWIDTH) )then
-                    e = 0.
-                else
-                    r = (r-(p_ptr%msk_crop-COSMSKHALFWIDTH)) / (2.*COSMSKHALFWIDTH)
-                    r = min(1.0, max(0.0, r))
-                    e = min(1.0, max(0.0, cos(r * pio2)))
-                endif
-                self%soft_mask(i, j) = e
+        if( associated(p_ptr) )then
+            ! real space soft mask, squared image assumed
+            allocate(self%soft_mask(self%ldim(1),self%ldim(2)),source=1.0)
+            center = self%ldim/2 + 1
+            do j = 1,self%ldim(2)
+                do i = 1,self%ldim(1)
+                    r = sqrt((i-center(1))**2 + (j-center(2))**2)
+                    if( r < (p_ptr%msk_crop-COSMSKHALFWIDTH) )then
+                        cycle
+                    else if( r > (p_ptr%msk_crop+COSMSKHALFWIDTH) )then
+                        e = 0.
+                    else
+                        r = (r-(p_ptr%msk_crop-COSMSKHALFWIDTH)) / (2.*COSMSKHALFWIDTH)
+                        r = min(1.0, max(0.0, r))
+                        e = min(1.0, max(0.0, cos(r * pio2)))
+                    endif
+                    self%soft_mask(i, j) = e
+                end do
             end do
-        end do
+        endif
     end subroutine new_stack
 
     module subroutine zero( self, ft )
@@ -300,6 +302,32 @@ contains
         endif
     end subroutine ifft
 
+    module subroutine pad( self, self_pd )
+        class(stack), intent(in)    :: self
+        class(stack), intent(inout) :: self_pd
+        integer :: phys_pd(2),phys(2),h,k
+        if( self_pd%ldim(1) == self%ldim(1) )then
+            self_pd%cmat         = self%cmat
+            self_pd%ctfsq        = self%ctfsq
+            self_pd%slices(:)%ft = self%slices(:)%ft
+        elseif( self_pd%ldim(1) > self%ldim(1) )then
+            call self_pd%zero(.true.)
+            !$omp parallel do collapse(2) schedule(static) default(shared)&
+            !$omp private(h,k,phys_pd,phys) proc_bind(close)
+            do h = self%flims(1,1), self%flims(1,2)
+                do k = self%flims(2,1), self%flims(2,2)
+                    phys_pd = self_pd%fit%comp_addr_phys(h,k)
+                    phys    = self%fit%comp_addr_phys(h,k)
+                    self_pd%cmat( phys_pd(1),phys_pd(2),:) = self%cmat( phys(1),phys(2),:)
+                    self_pd%ctfsq(phys_pd(1),phys_pd(2),:) = self%ctfsq(phys(1),phys(2),:)
+                end do
+            end do
+            !$omp end parallel do
+        else
+            THROW_HARD('Fourier cropping not implemented!; pad')
+        endif
+    end subroutine pad
+
     ! To calculate FRC between the e/o slices
     module subroutine frc( self1, self2, is, corrs )
         class(stack), intent(in)  :: self1, self2
@@ -443,7 +471,8 @@ contains
             do i = 1,self%nslices
                 nullify(self%slices(i)%r, self%slices(i)%c)
             enddo
-            deallocate(self%slices,self%ctfsq,self%nyq_mask,self%soft_mask)
+            deallocate(self%slices,self%ctfsq,self%nyq_mask)
+            if( allocated(self%soft_mask) ) deallocate(self%soft_mask)
         endif
         if( c_associated(self%p) )then
             call fftwf_free(self%p)
