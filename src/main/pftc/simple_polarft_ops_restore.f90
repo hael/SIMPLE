@@ -563,37 +563,42 @@ contains
         complex(kind=dp),    intent(inout) :: pfts_cl_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         real(kind=dp),       intent(inout) :: ctf2_cl_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         real(kind=dp),       intent(inout) :: ctf2_cl_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        real, allocatable :: Rsym(:,:,:)
-        complex(dp) :: cl_l(self%kfromto(1):self%kfromto(2)), cl_r(self%kfromto(1):self%kfromto(2)), cl_e(self%kfromto(1):self%kfromto(2))
-        complex(dp) :: cl_o(self%kfromto(1):self%kfromto(2)), pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: rl_l(self%kfromto(1):self%kfromto(2)), rl_r(self%kfromto(1):self%kfromto(2)), rl_e(self%kfromto(1):self%kfromto(2))
-        real(dp)    :: rl_o(self%kfromto(1):self%kfromto(2)), ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: w(self%kfromto(1):self%kfromto(2)), wl(self%kfromto(1):self%kfromto(2)), wr(self%kfromto(1):self%kfromto(2)), sumw(self%kfromto(1):self%kfromto(2))
-        real        :: eulers(3),R(3,3,self%ncls),Rj(3,3),tRi(3,3),psi,drot,d
-        integer     :: rotl, rotr, iref, jref, m, self_irot, targ_irot, isym, nsym
+        real(dp), allocatable :: Rsym(:,:,:)
+        complex(dp) :: cl_l(self%kfromto(1):self%kfromto(2)), cl_r(self%kfromto(1):self%kfromto(2))
+        complex(dp) :: cl_e(self%kfromto(1):self%kfromto(2)), cl_o(self%kfromto(1):self%kfromto(2))
+        real(dp)    :: rl_l(self%kfromto(1):self%kfromto(2)), rl_r(self%kfromto(1):self%kfromto(2))
+        real(dp)    :: rl_e(self%kfromto(1):self%kfromto(2)), rl_o(self%kfromto(1):self%kfromto(2))
+        real(dp)    :: wl(self%kfromto(1):self%kfromto(2)), wr(self%kfromto(1):self%kfromto(2))
+        real(dp)    :: R(3,3,self%ncls), Rj(3,3), tRi(3,3), eulers(3), psi
+        real        :: Rtmp(3,3)
+        integer     :: rotl, rotr, iref, jref, m, isym, nsym
         logical     :: l_rotm
         if( .not.ref_space%isthere('mirr') )then
             THROW_HARD('Mirror index missing in reference search space')
         endif
-        drot         = self%get_dang()
-        pfts_cl_even = DCMPLX_ZERO; pfts_cl_odd = DCMPLX_ZERO
-        ctf2_cl_even = 0.d0; ctf2_cl_odd  = 0.d0
         ! Symmetry rotation matrices
         nsym = symop%get_nsym()
-        allocate(Rsym(3,3,nsym),source=0.)
+        allocate(Rsym(3,3,nsym),source=0.d0)
         !$omp parallel default(shared) proc_bind(close)&
-        !$omp private(iref,jref,m,tRi,Rj,eulers,targ_irot,self_irot)&
-        !$omp& private(d,w,wl,wr,sumw,psi,l_rotm,cl_l,cl_r,cl_e,cl_o)&
-        !$omp& private(rl_l,rl_r,rl_e,rl_o,pft,ctf2,rotl,rotr,isym)
+        !$omp private(iref,jref,m,isym,tRi,Rj,Rtmp,eulers,wl,wr,psi,l_rotm)&
+        !$omp& private(cl_l,cl_r,cl_e,cl_o,rl_l,rl_r,rl_e,rl_o,rotl,rotr)
+        ! Init
+        !$omp workshare
+        pfts_cl_even = DCMPLX_ZERO
+        pfts_cl_odd  = DCMPLX_ZERO
+        ctf2_cl_even = 0.d0
+        ctf2_cl_odd  = 0.d0
+        !$omp end workshare
         ! Caching rotation matrices
         !$omp do schedule(static)
         do iref = 1,self%ncls
-            R(:,:,iref) = ref_space%get_mat(iref)
+            R(:,:,iref) = real(ref_space%get_mat(iref),dp)
         enddo
         !$omp end do nowait
         !$omp do schedule(static)
         do isym = 1,nsym
-            call symop%get_sym_rmat(isym, Rsym(:,:,isym))
+            call symop%get_sym_rmat(isym, Rtmp)
+            Rsym(:,:,isym) = real(Rtmp,dp)
         end do
         !$omp end do
         ! Common lines contribution
@@ -615,10 +620,10 @@ contains
                         Rj = matmul(Rj, tRi)
                     endif
                     ! Euler angles identification
-                    eulers = m2euler(Rj)
+                    eulers = dm2euler(Rj)
                     ! in plane rotation angle of jref slice intersecting iref
-                    psi = 360.0 - eulers(3)
-                    ! get the weights, rotation indeces and compute the interpolated common line
+                    psi = 360.d0 - eulers(3)
+                    ! get the weights, rotation indices and compute the interpolated common line
                     call self%gen_clin_weights(psi, rotl, rotr, wl, wr)
                     ! even
                     call self%get_line(jref, rotl, .true., cl_l, rl_l)
@@ -632,7 +637,7 @@ contains
                     rl_o = wl*rl_l + wr*rl_r
                     ! in plane rotation angle of iref slice
                     psi = eulers(1)
-                    ! get the weights, rotation indeces and extrapolate the common line
+                    ! get the weights, rotation indices and extrapolate the common line
                     call self%gen_clin_weights(psi, rotl, rotr, wl, wr)
                     ! leftmost line
                     call extrapolate_line(iref, rotl, wl, cl_e, cl_o, rl_e, rl_o)
@@ -648,12 +653,11 @@ contains
             m      = ref_space%get_int(iref,'mirr')
             psi    = abs(ref_space%get(m, 'psi'))
             l_rotm = (psi>0.1) .and. (psi<359.9)
+            call self%mirror_pft(pfts_cl_even(:,:,iref), pfts_cl_even(:,:,m))
+            call self%mirror_pft(pfts_cl_odd(:,:,iref),  pfts_cl_odd(:,:,m))
             if( l_rotm )then
-                call self%mirror_pft(conjg(pfts_cl_even(:,:,iref)), pfts_cl_even(:,:,m))
-                call self%mirror_pft(conjg(pfts_cl_odd(:,:,iref)),  pfts_cl_odd(:,:,m))
-            else
-                call self%mirror_pft(pfts_cl_even(:,:,iref), pfts_cl_even(:,:,m))
-                call self%mirror_pft(pfts_cl_odd(:,:,iref),  pfts_cl_odd(:,:,m))
+                pfts_cl_even(:,:,m) = conjg(pfts_cl_even(:,:,m))
+                pfts_cl_odd(:,:,m) = conjg(pfts_cl_odd(:,:,m))
             endif
             call self%mirror_ctf2(ctf2_cl_even(:,:,iref), ctf2_cl_even(:,:,m))
             call self%mirror_ctf2(ctf2_cl_odd(:,:,iref),  ctf2_cl_odd(:,:,m))
@@ -729,10 +733,12 @@ contains
         complex(dp),         intent(inout) :: Mout(self%pftsz,self%kfromto(1):self%kfromto(2))
         logical  :: msk(self%pftsz)
         real(dp) :: avg, t
-        integer  :: k
+        integer  :: k, n
         do k = self%kfromto(1),self%kfromto(2)
             msk = Mdenom(:,k) > DSMALL
-            avg = sum(Mdenom(:,k),mask=msk) / real(count(msk),dp)
+            n   = count(msk)
+            if( n == 0 ) cycle
+            avg = sum(Mdenom(:,k),mask=msk) / real(n,dp)
             t   = avg/50.d0
             where((Mdenom(:,k) < t).and.msk) Mdenom(:,k) = Mdenom(:,k) + t
         enddo

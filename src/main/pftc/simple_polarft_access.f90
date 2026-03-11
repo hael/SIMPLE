@@ -55,9 +55,7 @@ contains
     module pure integer function get_roind_fast(self, psi)
         class(polarft_calc), intent(in) :: self
         real,                intent(in) :: psi
-        get_roind_fast = nint(psi / self%dang) + 1
-        if( get_roind_fast <=         0 ) get_roind_fast = get_roind_fast + self%nrots
-        if( get_roind_fast > self%nrots ) get_roind_fast = get_roind_fast - self%nrots
+        get_roind_fast = modulo(nint(psi / self%dang), self%nrots) + 1
     end function get_roind_fast
 
     module pure real function get_dang(self)

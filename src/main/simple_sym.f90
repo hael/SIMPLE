@@ -449,7 +449,7 @@ contains
     end subroutine get_symori
 
     !>  \brief  returns rotation matrix associated with symmetry operation
-    subroutine get_sym_rmat( self, nsym, R )
+    pure subroutine get_sym_rmat( self, nsym, R )
         class(sym), intent(in)  :: self
         integer,    intent(in)  :: nsym
         real,       intent(out) :: R(3,3)
