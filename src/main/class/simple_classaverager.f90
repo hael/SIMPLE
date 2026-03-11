@@ -22,6 +22,7 @@ public :: cavger_assemble_sums, cavger_restore_cavgs
 ! I/O & handling of distributed sums
 public :: cavger_write_eo, cavger_write_all, cavger_write_merged, cavger_read_all
 public :: cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts
+public :: cavger_pad_partial_sums
 ! Stacks used for alignment
 public :: cavgs_even, cavgs_odd, cavgs_merged
 ! Separate public utility to rotate particles
@@ -64,6 +65,7 @@ type :: stack
     procedure, private :: calc_cavgs_stats
     procedure, private :: quadrant_swap
     procedure          :: fft, ifft
+    procedure          :: pad
     procedure          :: frc
     procedure          :: ctf_dens_correct
     procedure          :: softmask
@@ -221,6 +223,11 @@ interface
         integer,      intent(in)    :: i
     end subroutine ifft
 
+    module subroutine pad( self, self_pd )
+        class(stack), intent(in)    :: self
+        class(stack), intent(inout) :: self_pd
+    end subroutine pad
+
     module subroutine frc( self1, self2, is, corrs )
         class(stack), intent(in)  :: self1, self2
         integer,      intent(in)  :: is
@@ -313,6 +320,11 @@ interface
 
     module subroutine cavger_assemble_sums_from_parts
     end subroutine cavger_assemble_sums_from_parts
+
+    module subroutine cavger_pad_partial_sums( old_box, new_box, n, nparts, numlen )
+        integer, intent(in) :: old_box, new_box, n, nparts, numlen
+    end subroutine cavger_pad_partial_sums
+
 
     ! Destructors
 
