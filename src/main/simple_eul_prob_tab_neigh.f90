@@ -610,8 +610,8 @@ contains
             if (n_active_refs <= 0) then
                 THROW_HARD('neighborhood too restrictive: no active references but particles remain unassigned')
             endif
-            sampled_active_pos = angle_sampling(active_best_dist(1:n_active_refs), sorted_dist_scratch(1:n_active_refs), sorted_idx_scratch(1:n_active_refs), &
-                                   projs_athres, self%p_ptr%prob_athres)
+            sampled_active_pos = angle_sampling(active_best_dist(1:n_active_refs), sorted_dist_scratch(1:n_active_refs),&
+                                &sorted_idx_scratch(1:n_active_refs), projs_athres, self%p_ptr%prob_athres)
             ref_idx  = active_refs(sampled_active_pos)
             edge_idx = self%ref_edge_indices(ref_frontier_edge(ref_idx))
             ptcl_local_idx = self%edge_ptcl(edge_idx)
@@ -633,7 +633,7 @@ contains
         subroutine update_ref_frontier(ref_idx)
             integer, intent(in) :: ref_idx
             integer :: edge_ptr, last_edge_ptr, edge_idx, ptcl_local_idx, active_pos, last_active_pos, swapped_ref_idx
-            edge_ptr      = ref_frontier_edge(ref_idx)
+            edge_ptr = ref_frontier_edge(ref_idx)
             last_edge_ptr = self%ref_edge_offsets(ref_idx+1) - 1
             do while (edge_ptr <= last_edge_ptr)
                 edge_idx = self%ref_edge_indices(edge_ptr)
@@ -717,27 +717,27 @@ contains
     !===========================================================
     subroutine kill(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        if (allocated(self%pinds))        deallocate(self%pinds)
-        if (allocated(self%assgn_map))    deallocate(self%assgn_map)
-        if (allocated(self%proj_exists))  deallocate(self%proj_exists)
-        if (allocated(self%state_exists)) deallocate(self%state_exists)
-        if (allocated(self%active_state_indices))       deallocate(self%active_state_indices)
-        if (allocated(self%ref_proj_indices))        deallocate(self%ref_proj_indices)
-        if (allocated(self%ref_state_indices))        deallocate(self%ref_state_indices)
-        if (allocated(self%ref_index_map))       deallocate(self%ref_index_map)
-        if (allocated(self%ptcl_off))     deallocate(self%ptcl_off)
-        if (allocated(self%edge_ref_index))      deallocate(self%edge_ref_index)
-        if (allocated(self%edge_ptcl))    deallocate(self%edge_ptcl)
-        if (allocated(self%edge_val))     deallocate(self%edge_val)
-        if (allocated(self%ref_edge_offsets))      deallocate(self%ref_edge_offsets)
+        if (allocated(self%pinds))                deallocate(self%pinds)
+        if (allocated(self%assgn_map))            deallocate(self%assgn_map)
+        if (allocated(self%proj_exists))          deallocate(self%proj_exists)
+        if (allocated(self%state_exists))         deallocate(self%state_exists)
+        if (allocated(self%active_state_indices)) deallocate(self%active_state_indices)
+        if (allocated(self%ref_proj_indices))     deallocate(self%ref_proj_indices)
+        if (allocated(self%ref_state_indices))    deallocate(self%ref_state_indices)
+        if (allocated(self%ref_index_map))        deallocate(self%ref_index_map)
+        if (allocated(self%ptcl_off))             deallocate(self%ptcl_off)
+        if (allocated(self%edge_ref_index))       deallocate(self%edge_ref_index)
+        if (allocated(self%edge_ptcl))            deallocate(self%edge_ptcl)
+        if (allocated(self%edge_val))             deallocate(self%edge_val)
+        if (allocated(self%ref_edge_offsets))     deallocate(self%ref_edge_offsets)
         if (allocated(self%ref_edge_indices))     deallocate(self%ref_edge_indices)
-        self%nptcls = 0
-        self%nstates = 0
-        self%nrefs   = 0
-        self%nedges  = 0
+        self%nptcls      = 0
+        self%nstates     = 0
+        self%nrefs       = 0
+        self%nedges      = 0
         self%maxdeg_ptcl = 0
-        self%b_ptr => null()
-        self%p_ptr => null()
+        self%b_ptr       => null()
+        self%p_ptr       => null()
     end subroutine kill
 
 end module simple_eul_prob_tab_neigh

@@ -19,6 +19,7 @@ public :: pick_strategy
 public :: pick_inmem_strategy
 public :: pick_distr_strategy
 public :: create_pick_strategy
+public :: make_pickrefs_impl
 private
 #include "simple_local_flags.inc"
 

@@ -53,7 +53,7 @@ contains
         use simple_commanders_rec, only: commander_rec3D
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)               :: cline_reconstruct3D_distr
+        type(cmdline)               :: cline_rec3D
         type(commander_postprocess) :: xpostprocess
         type(parameters)            :: params
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
@@ -128,14 +128,14 @@ contains
             call cline%set('smpd_crop', smpd_crop)
         endif
         ! generate an initial 3D reconstruction
-        cline_reconstruct3D_distr = cline
-        call cline_reconstruct3D_distr%set('prg', 'reconstruct3D') ! required for distributed call
-        call cline_reconstruct3D_distr%delete('trail_rec')
-        call cline_reconstruct3D_distr%delete('objfun')
-        call cline_reconstruct3D_distr%delete('sigma_est')
-        call cline_reconstruct3D_distr%delete('update_frac')
-        call cline_reconstruct3D_distr%set('objfun', 'cc') ! ugly, but this is how it works in parameters
-        call xrec3D%execute(cline_reconstruct3D_distr)
+        cline_rec3D = cline
+        call cline_rec3D%set('prg', 'reconstruct3D') ! required for distributed call
+        call cline_rec3D%delete('trail_rec')
+        call cline_rec3D%delete('objfun')
+        call cline_rec3D%delete('sigma_est')
+        call cline_rec3D%delete('update_frac')
+        call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
+        call xrec3D%execute(cline_rec3D)
         ! 3D refinement, phase1
         str_state = int2str_pad(1,2)
         call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
@@ -154,8 +154,8 @@ contains
         endif
         iter = iter + 1
         ! re-reconstruct from all particle images
-        call cline_reconstruct3D_distr%set('mskfile', MSKVOL_FILE)
-        call xrec3D%execute(cline_reconstruct3D_distr)
+        call cline_rec3D%set('mskfile', MSKVOL_FILE)
+        call xrec3D%execute(cline_rec3D)
         ! 3D refinement, phase2
         call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
         params%mskfile = MSKVOL_FILE
@@ -166,7 +166,7 @@ contains
         call cline%set('which_iter',        iter)
         call xrefine3D%execute(cline)
         ! re-reconstruct from all particle images
-        call xrec3D%execute(cline_reconstruct3D_distr)
+        call xrec3D%execute(cline_rec3D)
         ! postprocess
         call cline%set('prg', 'postprocess')
         call cline%set('mkdir', 'yes')
