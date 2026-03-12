@@ -55,7 +55,7 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     logical        :: l_automsk
     logical        :: l_combine_eo
     ! Prototypes / persistent command lines
-    type(cmdline) :: cline_reconstruct3D_distr
+    type(cmdline) :: cline_rec3D
     type(cmdline) :: cline_calc_pspec_distr
     type(cmdline) :: cline_prob_align_distr
     type(cmdline) :: cline_calc_group_sigmas
@@ -349,7 +349,7 @@ contains
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(commander_rec3D)      :: xreconstruct3D_distr
+        type(commander_rec3D)      :: xrec3D
         type(commander_calc_pspec) :: xcalc_pspec_distr
         type(cmdline) :: cline_tmp
         type(string)  :: prev_refine_path, target_name, fname_vol, vol, str_state, fsc_file
@@ -400,12 +400,12 @@ contains
         ! splitting
         if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         ! prepare prototype command lines
-        self%cline_reconstruct3D_distr = cline
+        self%cline_rec3D = cline
         self%cline_calc_pspec_distr    = cline
         self%cline_prob_align_distr    = cline
         self%cline_postprocess         = cline
         self%cline_calc_group_sigmas   = cline
-        call self%cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )
+        call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         call self%cline_prob_align_distr%set(    'prg', 'prob_align' )
         call self%cline_postprocess%set(         'prg', 'postprocess' )
@@ -508,12 +508,12 @@ contains
             endif
             if( .not. vol_defined )then
                 ! reconstructions needed
-                cline_tmp = self%cline_reconstruct3D_distr
+                cline_tmp = self%cline_rec3D
                 call cline_tmp%delete('trail_rec')
                 call cline_tmp%delete('objfun')
                 call cline_tmp%delete('sigma_est')
                 call cline_tmp%set('objfun', 'cc')
-                call xreconstruct3D_distr%execute( cline_tmp )
+                call xrec3D%execute( cline_tmp )
                 do state = 1,params%nstates
                     str_state = int2str_pad(state,2)
                     ! rename volumes and update cline/params

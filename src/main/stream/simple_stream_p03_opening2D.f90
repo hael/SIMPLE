@@ -1,7 +1,7 @@
 !@descr: task 3 in the stream pipeline: the first 2D analyis from segmentation picked particles used for initial screening and generation of picking references
 module simple_stream_p03_opening2D
 use simple_stream_api
-use simple_commanders_pick,       only: commander_extract_distr
+use simple_commanders_pick,       only: commander_extract
 use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
 use simple_mini_stream_utils,     only: segdiampick_mics
@@ -27,7 +27,7 @@ contains
         type(stream_watcher)             :: project_buff
         type(sp_project)                 :: spproj, spproj_part
         type(cmdline)                    :: cline_extract, cline_abinitio2D, cline_shape_rank
-        type(commander_extract_distr)    :: xextract
+        type(commander_extract)          :: xextract
         type(commander_abinitio2D)       :: xabinitio2D
         type(commander_shape_rank_cavgs) :: xshape_rank
         type(oris)                       :: nmics_ori

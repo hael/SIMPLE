@@ -266,12 +266,12 @@ contains
     end subroutine exec_update_project
 
     subroutine exec_merge_projects( self, cline )
-        use simple_commanders_pick, only: commander_extract_distr
+        use simple_commanders_pick, only: commander_extract
         class(commander_merge_projects), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)                :: params
         type(cmdline)                   :: cline_reextract
-        type(commander_extract_distr) :: xreextract_distr
+        type(commander_extract) :: xreextract
         type(sp_project),   allocatable :: spprojs(:)
         integer,            allocatable :: boxes(:), nmics(:)
         real,               allocatable :: smpds(:)
@@ -348,7 +348,7 @@ contains
             ! reextract
             write(logfhandle,'(A,F6.3)')'>>> NEW PIXEL    SIZE: ',smpd
             write(logfhandle,'(A,I6)')  '>>> NEW PARTICLE SIZE: ',box
-            call xreextract_distr%execute(cline_reextract)
+            call xreextract%execute(cline_reextract)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_PROJECTS NORMAL STOP ****')

@@ -6,7 +6,7 @@ use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_preprocess,   only: commander_ctf_estimate
 use simple_commanders_project_core, only: commander_new_project
 use simple_commanders_project_mov,  only: commander_import_movies
-use simple_commanders_pick,         only: commander_extract_distr, commander_make_pickrefs, commander_pick_extract
+use simple_commanders_pick,         only: commander_extract, commander_make_pickrefs, commander_pick_extract
 use simple_commanders_cavgs,        only: commander_shape_rank_cavgs
 use simple_mini_stream_utils,       only: segdiampick_mics
 implicit none
@@ -39,7 +39,7 @@ contains
         type(commander_new_project)        :: xnew_project
         type(commander_import_movies)      :: ximport_movies
         type(commander_ctf_estimate)       :: xctf_estimate
-        type(commander_extract_distr)      :: xextract
+        type(commander_extract)            :: xextract
         type(commander_abinitio2D)         :: xabinitio2D
         type(commander_shape_rank_cavgs)   :: xshape_rank
         integer :: ncls, nmics, nptcls, box_in_pix
