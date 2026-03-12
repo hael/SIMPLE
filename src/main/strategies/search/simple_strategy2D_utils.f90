@@ -14,7 +14,7 @@ use simple_builder,           only: builder
 implicit none
 
 public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, id_junk, flag_non_junk_cavgs, calc_cluster_cavgs_dmat
-public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset, test_strat2D_utils
+public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset, test_strategy2D_utils
 private
 #include "simple_local_flags.inc"
 
@@ -1001,12 +1001,12 @@ contains
         if( allocated(ccsz) ) deallocate(ccsz)
     end subroutine calc_cavg_offset
 
-    subroutine test_strat2D_utils
-        use simple_molecule_data,           only: molecule_data,  sars_cov2_spkgp_6vxx
-        use simple_atoms,                   only: atoms
-        use simple_simple_volinterp,        only: reproject
-        type(inpl_struct), allocatable  :: alg_info1(:), alg_info2(:,:)
-        type(image), allocatable        :: stk(:), reproj_stk(:)
+    subroutine test_strategy2D_utils
+        use simple_molecule_data,    only: molecule_data, sars_cov2_spkgp_6vxx
+        use simple_atoms,            only: atoms
+        use simple_simple_volinterp, only: reproject
+        type(inpl_struct), allocatable :: alg_info1(:), alg_info2(:,:)
+        type(image),       allocatable :: stk(:), reproj_stk(:)
         type(parameters)    :: params
         type(cmdline)       :: cline
         type(image)         :: vol
@@ -1017,19 +1017,19 @@ contains
         integer             :: i, j, nimgs
         real                :: hp, lp, cen(3)
         integer, parameter  :: NPROJ = 5
-        params%smpd    = 3.
-        params%lp      = 6.
-        params%hp      = 20.
-        params%nthr    = 8
-        params%trs     = 15.
-        params%ctf     = 'no'
-        params%objfun  = 'cc'
-        mol = sars_cov2_spkgp_6vxx()
-        pdb_file = '6VXX.pdb'
-        vol_file = '6VXX.mrc'
-        call molecule%pdb2mrc( pdb_file, vol_file, params%smpd, mol=mol)
+        params%smpd   = 3.
+        params%lp     = 6.
+        params%hp     = 20.
+        params%nthr   = 8
+        params%trs    = 15.
+        params%ctf    = 'no'
+        params%objfun = 'cc'
+        mol           = sars_cov2_spkgp_6vxx()
+        pdb_file      = '6VXX.pdb'
+        vol_file      = '6VXX.mrc'
+        call molecule%pdb2mrc(pdb_file, vol_file, params%smpd, mol=mol)
         call find_ldim_nptcls(vol_file, params%ldim, params%nptcls)
-        params%box = params%ldim(1)
+        params%box     = params%ldim(1)
         params%mskdiam = params%smpd * params%ldim(1) *.85
         call params%new(cline)
         call vol%new(params%ldim, params%smpd)
@@ -1037,7 +1037,7 @@ contains
         call spiral%new(NPROJ, is_ptcl=.false.)
         call spiral%spiral()
         reproj_stk = reproject(vol, spiral)
-        nimgs = 5
+        nimgs      = 5
         allocate(stk(nimgs))
         call stk(1)%copy(reproj_stk(2))
         call stk(1)%masscen(cen)
@@ -1053,23 +1053,24 @@ contains
         do i = 1, nimgs 
             do j = 1, nimgs 
                 print *, alg_info2(i,j)%corr 
-                if(alg_info2(i,j)%corr < 0.98) then 
+                if( alg_info2(i,j)%corr < 0.98 )then 
                     print *, 'MATCH_IMGS FAILED'
                     return 
-                end if
-            end do 
-        end do 
+                endif
+            enddo 
+        enddo 
         do i = 2, nimgs  
             call stk(i)%copy(stk(1))
             call stk(i)%rtsq(real(i)*30., real(i)*1., real(i)*1.) 
-        end do 
+        enddo 
         alg_info1 = match_imgs2ref(params, params%hp, params%lp, params%trs, stk(1), stk)
-         do i = 1, nimgs 
+        do i = 1, nimgs 
             print *, alg_info1(i)%corr
-            if(alg_info1(i)%corr < 0.98) then
+            if( alg_info1(i)%corr < 0.98 )then
                 print *, 'MATCH_IMGS2REF FAILED'
                 return 
-            end if 
-        end do         
-    end subroutine test_strat2D_utils
+            endif
+        enddo         
+    end subroutine test_strategy2D_utils
+    
 end module simple_strategy2D_utils
