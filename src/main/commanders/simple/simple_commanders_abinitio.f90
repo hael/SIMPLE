@@ -506,7 +506,6 @@ contains
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
         if( .not. cline%defined('ptclw')               ) call cline%set('ptclw',                          'no')
         if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                       'yes')
-        if( .not. cline%defined('first_sigmas')        ) call cline%set('first_sigmas',                   'no')
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',            'comlin_noself')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)

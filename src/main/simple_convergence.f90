@@ -29,6 +29,7 @@ type convergence
     procedure :: read
     procedure :: check_conv2D
     procedure :: check_conv3D
+    procedure :: print_iteration
     procedure :: append_stats
     procedure :: plot_projdirs
     procedure :: get
@@ -57,6 +58,15 @@ contains
         endif
         call ostats%kill
     end subroutine read
+
+    subroutine print_iteration( self, which_iter )
+        class(convergence), intent(inout) :: self
+        integer,            intent(in)    :: which_iter
+        self%iteration = which_iter
+        write(logfhandle,'(A)')   '>>>'
+        write(logfhandle,'(A,I6)')'>>> ITERATION ', which_iter
+        write(logfhandle,'(A)')   '>>>'
+    end subroutine print_iteration
 
     function check_conv2D( self, params, cline, os, ncls, msk ) result( converged )
         use simple_parameters, only: parameters

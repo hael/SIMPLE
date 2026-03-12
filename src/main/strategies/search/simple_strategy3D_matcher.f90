@@ -169,7 +169,7 @@ contains
         endif
 
         ! BATCH LOOP
-        write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
+        ! write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
         allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0)
         allocate(incr_shifts(2,batchsz_max),source=0.)
         do ibatch=1,nbatches
@@ -305,6 +305,9 @@ contains
                 ! nothing to do
             case DEFAULT
                 if( L_BENCH_GLOB ) t_projio = tic()
+                if( p_ptr%top < p_ptr%fromp )then
+                    THROW_HARD('invalid output write range in refine3D_exec: TOP < FROMP')
+                endif
                 select case(trim(p_ptr%oritype))
                     case('ptcl3D')
                         call binwrite_oritab(p_ptr%outfile, b_ptr%spproj, &

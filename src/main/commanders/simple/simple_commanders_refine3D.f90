@@ -226,7 +226,7 @@ contains
         use simple_core_module_api
         use simple_strategy3D_matcher, only: refine3D_exec
         class(commander_refine3D_distr_worker), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline
+        class(cmdline),                          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         logical          :: converged
