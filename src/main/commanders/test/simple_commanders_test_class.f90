@@ -10,6 +10,11 @@ type, extends(commander_base) :: commander_test_units
     procedure :: execute      => exec_test_units
 end type commander_test_units
 
+type, extends(commander_base) :: commander_test_strategy2D
+  contains
+    procedure :: execute      => exec_test_strategy2D
+end type commander_test_strategy2D
+
 contains
 
 subroutine exec_test_units( self, cline )
@@ -169,7 +174,14 @@ subroutine exec_test_units( self, cline )
             write(logfhandle,'(a)') 'FIT_STRAIGHT_LINE UNIT TEST COMPLETED ;-)'
         end subroutine
 
-
 end subroutine exec_test_units
+
+subroutine exec_test_strategy2D( self, cline )
+    use simple_strategy2D_utils, only: test_strategy2D_utils
+    class(commander_test_strategy2D),  intent(inout) :: self
+    class(cmdline),                    intent(inout) :: cline
+    call test_strategy2D_utils
+    call simple_end('**** SIMPLE_TEST_STRATEGY2D NORMAL STOP ****')
+end subroutine exec_test_strategy2D
 
 end module simple_commanders_test_class

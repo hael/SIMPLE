@@ -44,11 +44,6 @@ type, extends(commander_base) :: commander_test_stringmatch
     procedure :: execute      => exec_test_stringmatch
 end type commander_test_stringmatch
 
-type, extends(commander_base) :: commander_test_units
-  contains
-    procedure :: execute      => exec_test_units
-end type commander_test_units
-
 contains
 
 subroutine exec_test_ansi_colors( self, cline )
@@ -249,11 +244,5 @@ subroutine exec_test_stringmatch( self, cline )
     end do
     call simple_end('**** SIMPLE_TEST_STRINGMATCH_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_stringmatch
-
-subroutine exec_test_units( self, cline )
-    class(commander_test_units),    intent(inout) :: self
-    class(cmdline),                 intent(inout) :: cline
-    call simple_end('**** SIMPLE_TEST_UNITS_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_units
 
 end module simple_commanders_test_utils

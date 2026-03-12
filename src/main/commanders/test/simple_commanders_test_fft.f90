@@ -51,30 +51,30 @@ end type commander_test_rotate_ref
 
 contains
 
-    subroutine exec_test_corrs2weights_test( self, cline )
-        use simple_core_module_api
-        class(commander_test_corrs2weights_test), intent(inout) :: self
-        class(cmdline),                           intent(inout) :: cline
-        real    :: corrs(12), weights(12)
-        integer :: i
-        corrs(1)  = -1.
-        corrs(2)  = 0.0
-        corrs(3)  = 0.005
-        corrs(4)  = 0.1
-        corrs(5)  = 0.2
-        corrs(6)  = 0.3
-        corrs(7)  = 0.4
-        corrs(8)  = 0.5
-        corrs(9)  = 0.51
-        corrs(10) = 0.52
-        corrs(11) = 0.53
-        corrs(12) = 0.6
-        weights = corrs2weights(corrs, CORRW_CRIT)
-        do i=1,size(corrs)
-            print *, 'corr/weight: ', corrs(i), weights(i)
-        end do
-        call simple_end('**** SIMPLE_TEST_CORRS2WEIGHTS_TEST_WORKFLOW NORMAL STOP ****')
-    end subroutine exec_test_corrs2weights_test
+subroutine exec_test_corrs2weights_test( self, cline )
+    use simple_core_module_api
+    class(commander_test_corrs2weights_test), intent(inout) :: self
+    class(cmdline),                           intent(inout) :: cline
+    real    :: corrs(12), weights(12)
+    integer :: i
+    corrs(1)  = -1.
+    corrs(2)  = 0.0
+    corrs(3)  = 0.005
+    corrs(4)  = 0.1
+    corrs(5)  = 0.2
+    corrs(6)  = 0.3
+    corrs(7)  = 0.4
+    corrs(8)  = 0.5
+    corrs(9)  = 0.51
+    corrs(10) = 0.52
+    corrs(11) = 0.53
+    corrs(12) = 0.6
+    weights = corrs2weights(corrs, CORRW_CRIT)
+    do i=1,size(corrs)
+        print *, 'corr/weight: ', corrs(i), weights(i)
+    end do
+    call simple_end('**** SIMPLE_TEST_CORRS2WEIGHTS_TEST_WORKFLOW NORMAL STOP ****')
+end subroutine exec_test_corrs2weights_test
 
 subroutine exec_test_eval_polarftcc( self, cline )
     use simple_pftc_srch_api
