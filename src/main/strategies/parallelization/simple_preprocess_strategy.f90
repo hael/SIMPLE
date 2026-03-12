@@ -25,18 +25,16 @@ private
 
 type, abstract :: preprocess_strategy
 contains
-    procedure(apply_defaults_interface), deferred :: apply_defaults
-    procedure(init_interface),           deferred :: initialize
-    procedure(exec_interface),           deferred :: execute
-    procedure(finalize_interface),       deferred :: finalize_run
-    procedure(cleanup_interface),        deferred :: cleanup
-    procedure(endmsg_interface),         deferred :: end_message
+    procedure(init_interface),     deferred :: initialize
+    procedure(exec_interface),     deferred :: execute
+    procedure(finalize_interface), deferred :: finalize_run
+    procedure(cleanup_interface),  deferred :: cleanup
+    procedure(endmsg_interface),   deferred :: end_message
 end type preprocess_strategy
 
 ! Shared-memory + distributed-worker implementation
 type, extends(preprocess_strategy) :: preprocess_inmem_strategy
 contains
-    procedure :: apply_defaults => inmem_apply_defaults
     procedure :: initialize     => inmem_initialize
     procedure :: execute        => inmem_execute
     procedure :: finalize_run   => inmem_finalize_run
@@ -50,7 +48,6 @@ type, extends(preprocess_strategy) :: preprocess_distr_strategy
     type(chash)      :: job_descr
     type(sp_project) :: spproj
 contains
-    procedure :: apply_defaults => distr_apply_defaults
     procedure :: initialize     => distr_initialize
     procedure :: execute        => distr_execute
     procedure :: finalize_run   => distr_finalize_run
@@ -59,12 +56,6 @@ contains
 end type preprocess_distr_strategy
 
 abstract interface
-    subroutine apply_defaults_interface(self, cline)
-        import :: preprocess_strategy, cmdline
-        class(preprocess_strategy), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
-    end subroutine apply_defaults_interface
-
     subroutine init_interface(self, params, cline)
         import :: preprocess_strategy, parameters, cmdline
         class(preprocess_strategy), intent(inout) :: self
@@ -129,19 +120,19 @@ contains
     subroutine set_preprocess_defaults(cline)
         class(cmdline), intent(inout) :: cline
         ! General
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
+        call cline%set('oritype', 'mic')
         if( .not. cline%defined('stream')  ) call cline%set('stream',  'no')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'yes')
         ! Motion correction
-        if( .not. cline%defined('trs')            ) call cline%set('trs',              20.)
-        if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',           8.)
-        if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',            5.)
-        if( .not. cline%defined('bfac')           ) call cline%set('bfac',             50.)
+        if( .not. cline%defined('trs')            ) call cline%set('trs',               20.)
+        if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',            8.)
+        if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',             5.)
+        if( .not. cline%defined('bfac')           ) call cline%set('bfac',              50.)
         if( .not. cline%defined('mcconvention')   ) call cline%set('mcconvention', 'simple')
-        if( .not. cline%defined('eer_upsampling') ) call cline%set('eer_upsampling',     1)
-        if( .not. cline%defined('mcpatch')        ) call cline%set('mcpatch',        'yes')
-        if( .not. cline%defined('mcpatch_thres')  ) call cline%set('mcpatch_thres',  'yes')
-        if( .not. cline%defined('algorithm')      ) call cline%set('algorithm',    'patch')
+        if( .not. cline%defined('eer_upsampling') ) call cline%set('eer_upsampling',      1)
+        if( .not. cline%defined('mcpatch')        ) call cline%set('mcpatch',         'yes')
+        if( .not. cline%defined('mcpatch_thres')  ) call cline%set('mcpatch_thres',   'yes')
+        if( .not. cline%defined('algorithm')      ) call cline%set('algorithm',     'patch')
         ! CTF estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',          512)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
@@ -157,22 +148,12 @@ contains
     ! PREPROCESS (SHARED-MEMORY / WORKER)
     ! ====================================================================
 
-    subroutine inmem_apply_defaults(self, cline)
-        class(preprocess_inmem_strategy), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        call set_preprocess_defaults(cline)
-        ! In the original worker implementation, oritype is forced to mic.
-        call cline%set('oritype', 'mic')
-    end subroutine inmem_apply_defaults
-
     subroutine inmem_initialize(self, params, cline)
         class(preprocess_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
         class(cmdline),                   intent(inout) :: cline
-
-        ! Parse parameters
+        call set_preprocess_defaults(cline)
         call params%new(cline)
-
         if( params%scale_movies > 1.01 )then
             THROW_HARD('scale_movies cannot be > 1; exec_preprocess')
         endif
@@ -360,30 +341,26 @@ contains
     ! DISTRIBUTED PREPROCESS (MASTER)
     ! ====================================================================
 
-    subroutine distr_apply_defaults(self, cline)
-        class(preprocess_distr_strategy), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        call set_preprocess_defaults(cline)
-        call cline%set('oritype', 'mic')
-    end subroutine distr_apply_defaults
-
     subroutine distr_initialize(self, params, cline)
         use simple_motion_correct_utils, only: flip_gain
         class(preprocess_distr_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
         class(cmdline),                   intent(inout) :: cline
+        integer :: nmovies
+        call set_preprocess_defaults(cline)
         ! Parse parameters
         call params%new(cline)
         ! Set mkdir to no (avoid nested directory structure for workers)
         call cline%set('mkdir', 'no')
-        ! Read in movies
-        call self%spproj%read(params%projfile)
-        ! Distributed execution
-        params%nptcls = self%spproj%get_nmovies()
-        if( params%nptcls == 0 )then
+        ! Read movie segment only (consistent with other strategies; full re-read in distr_execute)
+        call self%spproj%read_segment(params%oritype, params%projfile)
+        nmovies = self%spproj%get_nmovies()
+        if( nmovies == 0 )then
             THROW_HARD('no movie to process! exec_preprocess_distr')
         endif
+        params%nptcls = nmovies
         if( params%nparts > params%nptcls ) THROW_HARD('# partitions (nparts) must be < number of entries in filetable')
+        call self%spproj%kill
         ! Deal with numlen so that length matches JOB_FINISHED indicator files
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', params%numlen)

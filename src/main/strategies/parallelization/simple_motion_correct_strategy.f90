@@ -28,19 +28,17 @@ private
 
 type, abstract :: motion_correct_strategy
 contains
-    procedure(apply_defaults_interface), deferred :: apply_defaults
-    procedure(init_interface),           deferred :: initialize
-    procedure(exec_interface),           deferred :: execute
-    procedure(finalize_interface),       deferred :: finalize_run
-    procedure(cleanup_interface),        deferred :: cleanup
-    procedure(endmsg_interface),         deferred :: end_message
+    procedure(init_interface),     deferred :: initialize
+    procedure(exec_interface),     deferred :: execute
+    procedure(finalize_interface), deferred :: finalize_run
+    procedure(cleanup_interface),  deferred :: cleanup
+    procedure(endmsg_interface),   deferred :: end_message
 end type motion_correct_strategy
 
 
 ! Worker/shared-memory implementation
 type, extends(motion_correct_strategy) :: motion_correct_inmem_strategy
 contains
-    procedure :: apply_defaults => inmem_apply_defaults
     procedure :: initialize     => inmem_initialize
     procedure :: execute        => inmem_execute
     procedure :: finalize_run   => inmem_finalize_run
@@ -55,7 +53,6 @@ type, extends(motion_correct_strategy) :: motion_correct_distr_strategy
     type(qsys_env)   :: qenv
     type(chash)      :: job_descr
 contains
-    procedure :: apply_defaults => distr_apply_defaults
     procedure :: initialize     => distr_initialize
     procedure :: execute        => distr_execute
     procedure :: finalize_run   => distr_finalize_run
@@ -65,12 +62,6 @@ end type motion_correct_distr_strategy
 
 
 abstract interface
-    subroutine apply_defaults_interface(self, cline)
-        import :: motion_correct_strategy, cmdline
-        class(motion_correct_strategy), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
-    end subroutine apply_defaults_interface
-
     subroutine init_interface(self, params, cline)
         import :: motion_correct_strategy, parameters, cmdline
         class(motion_correct_strategy), intent(inout) :: self
@@ -153,16 +144,11 @@ contains
     ! MOTION_CORRECT (SHARED-MEMORY / WORKER)
     ! ====================================================================
 
-    subroutine inmem_apply_defaults(self, cline)
-        class(motion_correct_inmem_strategy), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        call set_motion_correct_defaults(cline)
-    end subroutine inmem_apply_defaults
-
     subroutine inmem_initialize(self, params, cline)
         class(motion_correct_inmem_strategy), intent(inout) :: self
         type(parameters),                     intent(inout) :: params
         class(cmdline),                       intent(inout) :: cline
+        call set_motion_correct_defaults(cline)
         call params%new(cline)
     end subroutine inmem_initialize
 
@@ -258,18 +244,13 @@ contains
     ! DISTRIBUTED MOTION_CORRECT (MASTER)
     ! ====================================================================
 
-    subroutine distr_apply_defaults(self, cline)
-        class(motion_correct_distr_strategy), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        call set_motion_correct_defaults(cline)
-    end subroutine distr_apply_defaults
-
     subroutine distr_initialize(self, params, cline)
         use simple_motion_correct_utils, only: flip_gain
         class(motion_correct_distr_strategy), intent(inout) :: self
         type(parameters),                     intent(inout) :: params
         class(cmdline),                       intent(inout) :: cline
         integer :: nmovies
+        call set_motion_correct_defaults(cline)
         call params%new(cline)
         ! Preserve original behavior: set numlen from params as parsed/derived
         call cline%set('numlen', params%numlen)

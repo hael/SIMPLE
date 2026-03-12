@@ -28,7 +28,6 @@ private
 
 type, abstract :: gen_pspecs_and_thumbs_strategy
 contains
-    procedure(apply_defaults_interface), deferred :: apply_defaults
     procedure(init_interface),           deferred :: initialize
     procedure(exec_interface),           deferred :: execute
     procedure(finalize_interface),       deferred :: finalize_run
@@ -40,7 +39,6 @@ end type gen_pspecs_and_thumbs_strategy
 ! Worker/shared-memory implementation
 type, extends(gen_pspecs_and_thumbs_strategy) :: gen_pspecs_and_thumbs_inmem_strategy
 contains
-    procedure :: apply_defaults => inmem_apply_defaults
     procedure :: initialize     => inmem_initialize
     procedure :: execute        => inmem_execute
     procedure :: finalize_run   => inmem_finalize_run
@@ -55,7 +53,6 @@ type, extends(gen_pspecs_and_thumbs_strategy) :: gen_pspecs_and_thumbs_distr_str
     type(qsys_env)   :: qenv
     type(chash)      :: job_descr
 contains
-    procedure :: apply_defaults => distr_apply_defaults
     procedure :: initialize     => distr_initialize
     procedure :: execute        => distr_execute
     procedure :: finalize_run   => distr_finalize_run
@@ -64,11 +61,6 @@ contains
 end type gen_pspecs_and_thumbs_distr_strategy
 
 abstract interface
-    subroutine apply_defaults_interface(self, cline)
-        import :: gen_pspecs_and_thumbs_strategy, cmdline
-        class(gen_pspecs_and_thumbs_strategy), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
-    end subroutine apply_defaults_interface
 
     subroutine init_interface(self, params, cline)
         import :: gen_pspecs_and_thumbs_strategy, parameters, cmdline
@@ -141,16 +133,11 @@ contains
     ! GEN_PSPECS_AND_THUMBS (SHARED-MEMORY / WORKER)
     ! ====================================================================
 
-    subroutine inmem_apply_defaults(self, cline)
-        class(gen_pspecs_and_thumbs_inmem_strategy), intent(inout) :: self
-        class(cmdline),                              intent(inout) :: cline
-        call set_gen_pspecs_and_thumbs_defaults(cline)
-    end subroutine inmem_apply_defaults
-
     subroutine inmem_initialize(self, params, cline)
         class(gen_pspecs_and_thumbs_inmem_strategy), intent(inout) :: self
         type(parameters),                            intent(inout) :: params
         class(cmdline),                              intent(inout) :: cline
+        call set_gen_pspecs_and_thumbs_defaults(cline)
         call params%new(cline)
     end subroutine inmem_initialize
 
@@ -206,15 +193,15 @@ contains
 
     subroutine inmem_finalize_run(self, params, cline)
         class(gen_pspecs_and_thumbs_inmem_strategy), intent(inout) :: self
-        type(parameters),                             intent(in)    :: params
-        class(cmdline),                               intent(inout) :: cline
+        type(parameters),                            intent(in)    :: params
+        class(cmdline),                              intent(inout) :: cline
         call qsys_job_finished(params, string('simple_commanders_preprocess :: exec_gen_pspecs_and_thumbs'))
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, cline)
         class(gen_pspecs_and_thumbs_inmem_strategy), intent(inout) :: self
-        type(parameters),                             intent(in)    :: params
-        class(cmdline),                               intent(inout) :: cline
+        type(parameters),                            intent(in)    :: params
+        class(cmdline),                              intent(inout) :: cline
         ! No-op
     end subroutine inmem_cleanup
 
@@ -228,17 +215,12 @@ contains
     ! DISTRIBUTED GEN_PSPECS_AND_THUMBS (MASTER)
     ! ====================================================================
 
-    subroutine distr_apply_defaults(self, cline)
-        class(gen_pspecs_and_thumbs_distr_strategy), intent(inout) :: self
-        class(cmdline),                              intent(inout) :: cline
-        call set_gen_pspecs_and_thumbs_defaults(cline)
-    end subroutine distr_apply_defaults
-
     subroutine distr_initialize(self, params, cline)
         class(gen_pspecs_and_thumbs_distr_strategy), intent(inout) :: self
         type(parameters),                             intent(inout) :: params
         class(cmdline),                               intent(inout) :: cline
         integer :: nintgs
+        call set_gen_pspecs_and_thumbs_defaults(cline)
         call params%new(cline)
         ! numlen must match number of partitions (JOB_FINISHED naming)
         params%numlen = len(int2str(params%nparts))

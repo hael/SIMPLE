@@ -4,7 +4,7 @@ use simple_stream_api
 use simple_commanders_project_core, only: commander_new_project, commander_selection
 use simple_commanders_project_mov,  only: commander_import_movies
 use simple_commanders_validate,     only: commander_mini_stream
-use simple_commanders_preprocess,   only: commander_preprocess_distr
+use simple_commanders_preprocess,   only: commander_preprocess
 use simple_micproc,                 only: sample_filetab
 implicit none
 real,         parameter          :: CTFRES_THRES = 8.0, ICE_THRES = 1.0, OVERSHOOT = 1.2
@@ -16,7 +16,7 @@ type(cmdline)                    :: cline, cline_dataset, cline_new_project, cli
 type(cmdline)                    :: cline_select, cline_mini_stream
 type(parameters)                 :: params
 type(commander_new_project)      :: xnew_project
-type(commander_preprocess_distr) :: xpreprocess
+type(commander_preprocess)       :: xpreprocess
 type(commander_import_movies)    :: ximport_movies
 type(commander_mini_stream)      :: xmini_stream
 type(commander_selection)        :: xsel
