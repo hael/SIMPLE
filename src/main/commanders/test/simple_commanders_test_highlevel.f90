@@ -8,7 +8,7 @@ use simple_commanders_atoms,        only: commander_pdb2mrc
 use simple_commanders_volops,       only: commander_reproject
 use simple_commanders_pick,         only: commander_make_pickrefs, commander_pick
 use simple_commanders_sim,          only: commander_simulate_particles, commander_simulate_movie
-use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct, commander_preprocess_distr
+use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct, commander_preprocess
 use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_cluster2D,    only: commander_cluster2D
 use simple_micproc,                 only: sample_filetab
@@ -31,24 +31,24 @@ contains
 subroutine exec_test_mini_stream( self, cline )
     class(commander_test_mini_stream),  intent(inout) :: self
     class(cmdline),                     intent(inout) :: cline
-    real,         parameter          :: CTFRES_THRES = 8.0, ICE_THRES = 1.0, OVERSHOOT = 1.2
-    type(string), allocatable        :: dataset_cmds(:)
-    type(string), allocatable        :: micstab(:), filetab(:), movfnames(:)
-    type(string)                     :: output_dir, imgkind
-    integer,      allocatable        :: orimap(:)
-    type(cmdline)                    :: cline_dataset, cline_new_project, cline_import_movies, cline_preprocess
-    type(cmdline)                    :: cline_select, cline_mini_stream
-    type(parameters)                 :: params
-    type(commander_new_project)      :: xnew_project
-    type(commander_preprocess_distr) :: xpreprocess
-    type(commander_import_movies)    :: ximport_movies
-    type(commander_mini_stream)      :: xmini_stream
-    type(commander_selection)        :: xsel
-    type(sp_project)                 :: spproj
-    type(stream_watcher)             :: movie_buff
-    integer                          :: i, ndata_sets, n_nonzero, nmovf
-    type(string)                     :: abspath, projfile
-    character(len=*), parameter      :: filetab_file='filetab.txt'
+    real,         parameter       :: CTFRES_THRES = 8.0, ICE_THRES = 1.0, OVERSHOOT = 1.2
+    type(string), allocatable     :: dataset_cmds(:)
+    type(string), allocatable     :: micstab(:), filetab(:), movfnames(:)
+    type(string)                  :: output_dir, imgkind
+    integer,      allocatable     :: orimap(:)
+    type(cmdline)                 :: cline_dataset, cline_new_project, cline_import_movies, cline_preprocess
+    type(cmdline)                 :: cline_select, cline_mini_stream
+    type(parameters)              :: params
+    type(commander_new_project)   :: xnew_project
+    type(commander_preprocess)    :: xpreprocess
+    type(commander_import_movies) :: ximport_movies
+    type(commander_mini_stream)   :: xmini_stream
+    type(commander_selection)     :: xsel
+    type(sp_project)              :: spproj
+    type(stream_watcher)          :: movie_buff
+    integer                       :: i, ndata_sets, n_nonzero, nmovf
+    type(string)                  :: abspath, projfile
+    character(len=*), parameter   :: filetab_file='filetab.txt'
     ! Parsing
     if( command_argument_count() < 1 )then
         write(logfhandle,'(a)') 'ERROR! Usage: simple_test_mini_stream fname=filetab.txt'
