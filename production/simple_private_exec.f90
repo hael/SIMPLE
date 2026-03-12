@@ -144,7 +144,7 @@ select case(prg)
         call xexport_cavgs%execute(cline)
 
     ! REFINE3D PROGRAMS
-    case( 'refine3D_distr_worker' )
+    case( 'refine3D' )
         call xrefine3D_worker%execute(cline)
     case( 'calc_pspec' )
         call xcalc_pspec%execute(cline)

@@ -50,7 +50,7 @@ abstract interface
     subroutine init_interface(self, params, build, cline)
         import :: cluster2D_strategy, parameters, builder, cmdline
         class(cluster2D_strategy), intent(inout) :: self
-        type(parameters),          intent(in)    :: params
+        type(parameters),          intent(inout) :: params
         type(builder),             intent(inout) :: build
         type(cmdline),             intent(inout) :: cline
     end subroutine init_interface
@@ -88,11 +88,11 @@ end interface
 
 contains
 
-    function create_cluster2D_strategy(params, cline) result(strategy)
-        type(parameters), intent(in) :: params
+    !> Strategy selection based on command-line shape.
+    function create_cluster2D_strategy(cline) result(strategy)
         class(cmdline),   intent(in) :: cline
         class(cluster2D_strategy), allocatable :: strategy
-        if( (params%nparts > 1) .and. (.not.cline%defined('part')) )then
+        if( cline%defined('nparts') .and. (.not.cline%defined('part')) )then
             allocate(cluster2D_distr_strategy :: strategy)
             if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED EXECUTION'
         else
@@ -101,16 +101,29 @@ contains
         endif
     end function create_cluster2D_strategy
 
-    ! ========================================================================
-    ! SHARED-MEMORY IMPLEMENTATION
-    ! ========================================================================
+    ! ======================================================================
+    ! SHARED-MEMORY STRATEGY METHODS
+    ! ======================================================================
 
     subroutine inmem_initialize(self, params, build, cline)
+        use simple_cluster2D_common, only: init_cluster2D_refs
         class(cluster2D_inmem_strategy), intent(inout) :: self
-        type(parameters),                intent(in)    :: params
+        type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         integer :: startit
+        call params%new(cline)
+        call build%build_spproj(params, cline, wthreads=.true.)
+        call build%build_general_tbox(params, cline, do3d=.false.)
+        call build%build_strategy2D_tbox(params)
+        if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
+        call cline%set('mkdir', 'no')
+        params%which_iter = max(1, params%startit)
+        call init_cluster2D_refs(cline, params, build)
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            call build%spproj_field%partition_eo
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
         startit = 1
         if( cline%defined('startit') )startit = params%startit
         if( startit == 1 )then
@@ -129,11 +142,12 @@ contains
         logical,                         intent(out)   :: converged
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(starproject) :: starproj
+        call self%conv%print_iteration(params%which_iter)
         call cline%set('startit',    params%which_iter)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
         call cline%set('outfile', ALGN_FBODY//int2str_pad(params%part,params%numlen)//METADATA_EXT)
-        ! Execute alignment (cluster2D_exec handles everything: refs prep, alignment, cavgs)
+        ! main clustering/alignment step
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
         ! Euclid sigma2 consolidation for next iteration
         if( params%cc_objfun==OBJFUN_EUCLID )then
@@ -179,16 +193,29 @@ contains
         call cline%set('endit', params%which_iter)
     end subroutine inmem_finalize_run
 
-    ! ========================================================================
-    ! DISTRIBUTED IMPLEMENTATION
-    ! ========================================================================
+    ! ======================================================================
+    ! DISTRIBUTED STRATEGY METHODS
+    ! ======================================================================
 
     subroutine distr_initialize(self, params, build, cline)
         use simple_exec_helpers, only: set_master_num_threads
+        use simple_cluster2D_common, only: init_cluster2D_refs
         class(cluster2D_distr_strategy), intent(inout) :: self
-        type(parameters),                intent(in)    :: params
+        type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
+        call params%new(cline)
+        call build%build_spproj(params, cline, wthreads=.true.)
+        call build%build_general_tbox(params, cline, do3d=.false.)
+        call build%build_strategy2D_tbox(params)
+        if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
+        call cline%set('mkdir', 'no')
+        params%which_iter = max(1, params%startit)
+        call init_cluster2D_refs(cline, params, build)
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            call build%spproj_field%partition_eo
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
         call set_master_num_threads(self%nthr_master, string('CLUSTER2D'))
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)
@@ -209,6 +236,7 @@ contains
         type(cmdline)                     :: cline_cavgassemble, cline_calc_sigma
         type(string)                      :: str_iter
         real                              :: frac_srch_space
+        call self%conv%print_iteration(params%which_iter)
         ! Update job description
         call cline%set('nparts',     params%nparts)
         call cline%set('startit',    params%which_iter)

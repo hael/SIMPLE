@@ -50,7 +50,6 @@ type :: parameters
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: fillin='no'          !< fillin particle sampling
-    character(len=3)          :: first_sigmas='yes'   !< Whether to estimate sigma2 from provided volume
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
@@ -704,7 +703,6 @@ contains
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('fillin',         self%fillin)
         call check_carg('filter',         self%filter)
-        call check_carg('first_sigmas',   self%first_sigmas)
         call check_carg('flag',           self%flag)
         call check_carg('flipgain',       self%flipgain)
         call check_carg('gauref',         self%gauref)

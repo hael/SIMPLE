@@ -30,62 +30,50 @@ end type commander_ppca_denoise_classes
 
 contains
 
-    subroutine exec_cluster2D(self, cline)
+    !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.
+    subroutine exec_cluster2D( self, cline )
         use simple_cluster2D_strategy
-        use simple_cluster2D_common
         class(commander_cluster2D), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-         class(cluster2D_strategy), allocatable   :: strategy
+        class(cluster2D_strategy), allocatable    :: strategy
         type(parameters)       :: params
         type(builder)          :: build
         type(simple_nice_comm) :: nice_comm
-        type(string)           :: finalcavgs
         logical                :: converged
-        ! Initialize
-        call cline%set('prg','cluster2D')
+        integer                :: niters
+        ! local defaults (kept consistent with previous distributed master)
+        call cline%set('prg', 'cluster2D')
         call set_cluster2D_defaults(cline)
-        call params%new(cline)
-        call build%build_spproj(params, cline, wthreads=.true.)
-        call build%build_general_tbox(params, cline, do3d=.false.)
-        call build%build_strategy2D_tbox(params)
-        if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
-        call cline%set('mkdir', 'no')
+        ! Select execution strategy (shared-memory vs distributed master)
+        strategy = create_cluster2D_strategy(cline)
+        call strategy%initialize(params, build, cline)
         ! Nice communicator
         call nice_comm%init(params%niceprocid, params%niceserver)
         nice_comm%stat_root%stage = "initialising"
         call nice_comm%cycle()
-        if(cline%defined("niceserver")) call cline%delete('niceserver')
-        if(cline%defined("niceprocid")) call cline%delete('niceprocid')
-        ! This needs to be before init_cluster2D_refs since it uses which_iter
-        params%which_iter = max(1, params%startit)
-        call init_cluster2D_refs(cline, params, build)
-        if( build%spproj_field%get_nevenodd() == 0 )then
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
-        ! Create strategy
-        strategy = create_cluster2D_strategy(params, cline)
-        call strategy%initialize(params, build, cline)
+        if( cline%defined("niceserver") ) call cline%delete('niceserver')
+        if( cline%defined("niceprocid") ) call cline%delete('niceprocid')
         if( trim(params%stream2d).eq.'no' ) call progressfile_init()
-        ! Main loop
-        params%which_iter = params%which_iter   - 1
+        ! Main loop counter semantics:
+        !   - params%maxits is the *number of iterations to run* in this invocation.
+        !   - params%which_iter starts at params%startit.
+        niters            = 0
+        params%which_iter = params%startit - 1
         if( cline%defined('extr_iter') )then
             params%extr_iter = params%extr_iter - 1
         else
             params%extr_iter = params%startit   - 1
         endif
         do
+            niters            = niters + 1
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
-            write(logfhandle,'(A)')   '>>>'
-            write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
-            write(logfhandle,'(A)')   '>>>'
             nice_comm%stat_root%stage = "iteration " // int2str(params%which_iter)
             call nice_comm%cycle()
             ! Strategy handles everything: alignment + cavgs + convergence
             call strategy%execute_iteration(params, build, cline, converged)
             call strategy%finalize_iteration(params, build)
-            if( converged .or. params%which_iter >= params%maxits ) exit
+            if( converged .or. niters >= params%maxits ) exit
         end do
         ! Cleanup
         nice_comm%stat_root%stage = "terminating"
@@ -93,14 +81,17 @@ contains
         call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params)
         call nice_comm%terminate()
-        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
-        if (allocated(strategy)) deallocate(strategy)
+        if( allocated(strategy) ) deallocate(strategy)
+        ! Global teardown (strategies may have built different toolboxes)
         call build%kill_general_tbox()
         call build%kill_strategy2D_tbox()
         call simple_touch(CLUSTER2D_FINISHED)
+        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
     end subroutine exec_cluster2D
 
-    subroutine exec_cluster2D_distr_worker(self, cline)
+    !> Distributed worker (single-iteration execution). This should be the command
+    !> invoked by the scheduler for each partition.
+    subroutine exec_cluster2D_distr_worker( self, cline )
         use simple_strategy2D_matcher, only: cluster2D_exec
         class(commander_cluster2D_distr_worker), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
@@ -108,19 +99,17 @@ contains
         type(builder)    :: build
         logical          :: converged
         call set_cluster2D_defaults(cline)
-        call params%new(cline)
-        ! flag subprocess executed through simple_private_exec 
+        ! Flags required for worker execution
         if( .not. cline%defined('part')    ) THROW_HARD('PART must be defined for distributed worker execution')
         if( .not. cline%defined('outfile') ) THROW_HARD('OUTFILE must be defined for distributed worker execution')
-        call build%build_spproj(params, cline, wthreads=.true.)
-        call build%build_general_tbox(params, cline, do3d=.false.)
-        call build%build_strategy2D_tbox(params)
+        ! Worker needs the alignment toolboxes
+        call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         params%which_iter = max(1, params%startit)
-        params%extr_iter  = params%which_iter
+        if( .not. cline%defined('extr_iter') ) params%extr_iter = params%which_iter
         call cline%set('which_iter', int2str(params%which_iter))
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
-        call build%kill_general_tbox()
-        call build%kill_strategy2D_tbox()
+        call build%kill_strategy2D_tbox
+        call build%kill_general_tbox
     end subroutine exec_cluster2D_distr_worker
 
     subroutine exec_ppca_denoise_classes( self, cline )

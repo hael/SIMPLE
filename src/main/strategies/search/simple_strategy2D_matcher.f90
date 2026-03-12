@@ -184,7 +184,7 @@ contains
         rt_align         = 0.
         l_ctf            = b_ptr%spproj%get_ctfflag('ptcl2D',iptcl=p_ptr%fromp).ne.'no'
         l_np_cls_defined = cline%defined('nptcls_per_cls')
-        write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+        ! write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
 
         ! Batch loop
         do ibatch=1,nbatches
@@ -310,6 +310,9 @@ contains
         if( p_ptr%cc_objfun==OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
 
         ! OUTPUT ORIENTATIONS
+        if( p_ptr%top < p_ptr%fromp )then
+            THROW_HARD('invalid output write range in cluster2D_exec: TOP < FROMP')
+        endif
         if( L_BENCH_GLOB ) t_projio = tic()
         call binwrite_oritab(p_ptr%outfile, b_ptr%spproj, b_ptr%spproj_field, &
             &[p_ptr%fromp,p_ptr%top], isegment=PTCL2D_SEG)

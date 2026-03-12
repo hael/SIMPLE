@@ -33,6 +33,7 @@ end type refine3D_strategy
 type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     logical :: l_sigma
     type(cmdline) :: cline_calc_group_sigmas
+    type(convergence) :: conv
 contains
     procedure :: initialize         => inmem_initialize
     procedure :: execute_iteration  => inmem_execute_iteration
@@ -55,7 +56,7 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     logical        :: l_combine_eo
     ! Prototypes / persistent command lines
     type(cmdline) :: cline_reconstruct3D_distr
-    type(cmdline) :: cline_calc_pspec
+    type(cmdline) :: cline_calc_pspec_distr
     type(cmdline) :: cline_prob_align_distr
     type(cmdline) :: cline_calc_group_sigmas
     type(cmdline) :: cline_volassemble
@@ -135,86 +136,18 @@ contains
         endif
     end function create_refine3D_strategy
 
-    !> First-sigma bootstrap used by refine3D initialization paths.
-    !> Runs a single sigma refinement pass (with first_sigmas disabled to avoid recursion),
-    !> then aggregates group sigmas for the requested iteration index.
-    subroutine estimate_first_sigmas_inline(cline)
-        use simple_commanders_euclid, only: commander_calc_group_sigmas
-        class(cmdline), intent(inout) :: cline
-        type(parameters) :: params_first
-        type(builder)    :: build_first
-        class(refine3D_strategy), allocatable :: strategy_first
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(cmdline) :: cline_first_sigmas, cline_calc_group_sigmas
-        logical :: converged
-        if( .not. cline%defined('pgrp')     ) THROW_HARD('point-group symmetry (pgrp) is needed for first sigma estimation')
-        if( .not. cline%defined('mskdiam')  ) THROW_HARD('mask diameter (mskdiam) is needed for first sigma estimation')
-        if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
-        if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; estimate_first_sigmas_inline')
-        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
-        if( .not.cline%defined('vol1') )then
-            if( cline%defined('polar') )then
-                if( cline%get_carg('polar').eq.'yes' )then
-                    if( .not.file_exists(POLAR_REFS_FBODY//BIN_EXT) )then
-                        THROW_HARD('starting polar references are needed for first sigma estimation')
-                    endif
-                else
-                    THROW_HARD('starting volume is needed for first sigma estimation')
-                endif
-            else
-                THROW_HARD('starting volume is needed for first sigma estimation')
-            endif
-        endif
-        cline_first_sigmas = cline
-        call cline_first_sigmas%set('prg',        'refine3D')
-        call cline_first_sigmas%set('center',           'no')
-        call cline_first_sigmas%set('continue',         'no')
-        call cline_first_sigmas%set('maxits',              1)
-        call cline_first_sigmas%set('which_iter',          1)
-        call cline_first_sigmas%set('objfun',       'euclid')
-        call cline_first_sigmas%set('refine',        'sigma')
-        call cline_first_sigmas%set('first_sigmas',     'no')
-        call cline_first_sigmas%delete('update_frac') ! all particles need to contribute
-        call cline_first_sigmas%delete('hp')
-        call cline_first_sigmas%set('mkdir',            'no') ! create sigma files in root refine3D dir
-        cline_calc_group_sigmas = cline_first_sigmas
-        if( cline%defined('startit') )then
-            call cline_calc_group_sigmas%set('which_iter', cline%get_iarg('startit'))
-        else if( cline%defined('which_iter') )then
-            call cline_calc_group_sigmas%set('which_iter', cline%get_iarg('which_iter'))
-        else
-            call cline_calc_group_sigmas%set('which_iter', 1)
-        endif
-        strategy_first = create_refine3D_strategy(cline_first_sigmas)
-        call strategy_first%initialize(params_first, build_first, cline_first_sigmas)
-        call strategy_first%execute_iteration(params_first, build_first, cline_first_sigmas, converged)
-        call strategy_first%finalize_iteration(params_first, build_first)
-        call strategy_first%finalize_run(params_first, build_first, cline_first_sigmas)
-        call strategy_first%cleanup(params_first)
-        if( allocated(strategy_first) ) deallocate(strategy_first)
-        call build_first%kill_strategy3D_tbox
-        call build_first%kill_general_tbox
-        call build_first%pftc%kill
-        call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
-        call cline_first_sigmas%kill
-        call cline_calc_group_sigmas%kill
-    end subroutine estimate_first_sigmas_inline
-
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
     ! ======================================================================
 
     subroutine inmem_initialize(self, params, build, cline)
         use simple_commanders_euclid,       only: commander_calc_group_sigmas, commander_calc_pspec
-        use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(commander_calc_group_sigmas)     :: xcalc_group_sigmas
-        type(commander_calc_pspec_assemble)   :: xcalc_pspec_assemble
         type(commander_calc_pspec)            :: xcalc_pspec
-        type(cmdline)                         :: cline_calc_pspec, cline_first_sigmas
+        type(cmdline)                         :: cline_calc_pspec
         integer                               :: startit
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
@@ -265,19 +198,13 @@ contains
                     call build%spproj%write_segment_inside(params%oritype)
                 endif
                 if( startit == 1 )then
-                    ! make sure we have weights for first_sigmas
+                    ! make sure we have weights for the initial noise power estimation
                     call build%spproj_field%set_all2single('w', 1.0)
                     call build%spproj%write_segment_inside(params%oritype)
                 endif
                 cline_calc_pspec   = cline
                 call cline_calc_pspec%set('prg', 'calc_pspec')
-                cline_first_sigmas = cline
                 call xcalc_pspec%execute( cline_calc_pspec )
-                if( (trim(params%first_sigmas).eq.'yes') )then
-                    if( .not.cline_first_sigmas%defined('nspace') ) call cline_first_sigmas%set('nspace', params%nspace)
-                    if( .not.cline_first_sigmas%defined('athres') ) call cline_first_sigmas%set('athres', params%athres)
-                    call estimate_first_sigmas_inline(cline_first_sigmas)
-                endif
             endif
         endif
         ! Keep run-time counters consistent with the new high-level loop
@@ -301,6 +228,7 @@ contains
         type(cmdline)                     :: cline_prob_align
         integer                           :: state
         601 format(A,1X,F12.3)
+        call self%conv%print_iteration(params%which_iter)
         ! communicate iteration counters
         call cline%set('startit',    params%which_iter)
         call cline%set('which_iter', params%which_iter)
@@ -421,8 +349,8 @@ contains
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(commander_rec3D)      :: xrec3D
-        type(commander_calc_pspec) :: xcalc_pspec
+        type(commander_rec3D)      :: xreconstruct3D_distr
+        type(commander_calc_pspec) :: xcalc_pspec_distr
         type(cmdline) :: cline_tmp
         type(string)  :: prev_refine_path, target_name, fname_vol, vol, str_state, fsc_file
         type(string), allocatable :: list(:)
@@ -473,12 +401,12 @@ contains
         if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         ! prepare prototype command lines
         self%cline_reconstruct3D_distr = cline
-        self%cline_calc_pspec          = cline
+        self%cline_calc_pspec_distr    = cline
         self%cline_prob_align_distr    = cline
         self%cline_postprocess         = cline
         self%cline_calc_group_sigmas   = cline
         call self%cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )
-        call self%cline_calc_pspec%set(          'prg', 'calc_pspec' )
+        call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         call self%cline_prob_align_distr%set(    'prg', 'prob_align' )
         call self%cline_postprocess%set(         'prg', 'postprocess' )
         call self%cline_calc_group_sigmas%set(   'prg', 'calc_group_sigmas' )
@@ -560,7 +488,7 @@ contains
             if( .not.file_exists(sigma2_star_from_iter(params%startit)) )then
                 call build%spproj_field%set_all2single('w', 1.0)
                 call build%spproj%write_segment_inside(params%oritype)
-                call xcalc_pspec%execute(self%cline_calc_pspec)
+                call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
             endif
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .false.
@@ -585,7 +513,7 @@ contains
                 call cline_tmp%delete('objfun')
                 call cline_tmp%delete('sigma_est')
                 call cline_tmp%set('objfun', 'cc')
-                call xrec3D%execute( cline_tmp )
+                call xreconstruct3D_distr%execute( cline_tmp )
                 do state = 1,params%nstates
                     str_state = int2str_pad(state,2)
                     ! rename volumes and update cline/params
@@ -604,16 +532,11 @@ contains
             ! euclid first-sigmas
             if( params%cc_objfun==OBJFUN_EUCLID )then
                 call self%cline_calc_group_sigmas%set('nthr', self%nthr_master)
-                if( (trim(params%first_sigmas).eq.'yes') )then
-                    if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
-                    if( .not.cline%defined('athres') ) call cline%set('athres', real(params%athres))
-                    call estimate_first_sigmas_inline(cline)
-                endif
             endif
         endif
         ! prepare job description
         call cline%gen_job_descr(self%job_descr)
-        call self%job_descr%set('prg', 'refine3D_distr_worker')
+        call self%job_descr%set('prg', 'refine3D')
         ! Keep consistent iteration counters
         if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
         call prev_refine_path%kill
@@ -626,12 +549,12 @@ contains
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_commanders_rec_distr, only: commander_volassemble
-        use simple_commanders_volops,    only: commander_postprocess
-        use simple_commanders_euclid,    only: commander_calc_group_sigmas
-        use simple_commanders_prob,      only: commander_prob_align
-        use simple_fsc,                  only: plot_fsc
-        use simple_image,                only: image
-        use simple_image_msk,            only: image_msk
+        use simple_commanders_volops, only: commander_postprocess
+        use simple_commanders_euclid, only: commander_calc_group_sigmas
+        use simple_commanders_prob,   only: commander_prob_align
+        use simple_fsc,               only: plot_fsc
+        use simple_image,             only: image
+        use simple_image_msk,         only: image_msk
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -639,7 +562,7 @@ contains
         logical,                        intent(out)   :: converged
         type(commander_postprocess)       :: xpostprocess
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(commander_prob_align)        :: xprob_align
+        type(commander_prob_align)        :: xprob_align_distr
         type(commander_volassemble)       :: xvolassemble
         type(image_msk) :: mskvol
         type(image)     :: vol_e, vol_o
@@ -658,6 +581,7 @@ contains
         endif
         601 format(A,1X,F12.3)
         iter     = params%which_iter
+        call self%conv%print_iteration(iter)
         str_iter = int2str_pad(iter,3)
         ! annealing
         if( params%l_noise_reg )then
@@ -688,7 +612,7 @@ contains
             call cline_prob_align%set('which_iter', iter)
             call cline_prob_align%set('startit',    iter)
             call build%spproj%write_segment_inside(params%oritype)
-            call xprob_align%execute(cline_prob_align)
+            call xprob_align_distr%execute( cline_prob_align )
         endif
         if( L_BENCH_GLOB )then
             rt_prob = toc(t_prob)
@@ -919,7 +843,6 @@ contains
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-       
         ! assemble sigma2 for next run
         if( trim(params%objfun).eq.'euclid' )then
             call self%cline_calc_group_sigmas%set('which_iter', params%which_iter + 1)
