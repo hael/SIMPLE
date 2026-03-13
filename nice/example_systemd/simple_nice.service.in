@@ -7,13 +7,16 @@ After=network.target remote-fs.target nss-lookup.target
 Type=notify
 NotifyAccess=main
 # the specific user that our service will run as
-User=@USER@
-Group=@USER@
+User=ncifelmlucryosparc
+Group=ncif-cryoem-elmlund-grp
+#User=@USER@
+#Group=@USER@
 UMask=0007
 # this user can be transiently created by systemd
 # DynamicUser=true
 RuntimeDirectory=gunicorn
 WorkingDirectory=@SIMPLE_PATH@/nice
+Environment=@LD_LIBRARY_PATH@
 ExecStart=@SIMPLE_PATH@/nice/venv/bin/gunicorn -w 8 -b localhost:8095 nice_project.wsgi
 ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=mixed
