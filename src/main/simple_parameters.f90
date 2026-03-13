@@ -252,7 +252,7 @@ type :: parameters
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
-    character(len=STDLEN)     :: ref_type='comlin_noself' !< polar reference type(polar_cavg|comlin_noself|comlin|comlin_hybrid|{comlin_noself}
+    character(len=STDLEN)     :: ref_type='comlin'    !< polar reference type(polar_cavg|comlin){comlin}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
@@ -1585,7 +1585,7 @@ contains
         self%l_polar = trim(self%polar).eq.'yes'
         if( self%l_polar )then
             select case(trim(self%ref_type))
-                case('comlin_noself', 'comlin', 'polar_cavg')
+                case('comlin', 'polar_cavg')
                     ! supported
                 case DEFAULT
                     THROW_HARD('Unsupported REF_TYPE argument: '//trim(self%ref_type))

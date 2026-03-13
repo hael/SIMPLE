@@ -19,10 +19,10 @@ contains
         real        :: frc(fdim(self%p_ptr%box_crop)-1)
         integer     :: icls, eo_pop(2), pop, find, filtsz
         select case(trim(self%p_ptr%ref_type))
-        case('polar_cavg')
-            ! all good
-        case DEFAULT
-            THROW_HARD('polar_cavger_merge_eos_and_norm2D only for 2D cavgs restoration')
+            case('polar_cavg')
+                ! all good
+            case DEFAULT
+                THROW_HARD('polar_cavger_merge_eos_and_norm2D only for 2D cavgs restoration')
         end select
         ! In case nspace/self%ncls has changed OR volume/frcs were downsampled
         filtsz = fdim(self%p_ptr%box_crop)-1
@@ -159,7 +159,7 @@ contains
         integer     :: tmp_pftsz, tmp_kfromto(2), tmp_nrefs, k
         integer     :: find4eoavg, i
         select case(trim(self%p_ptr%ref_type))
-        case('comlin_noself','comlin')
+        case('comlin')
         case DEFAULT
             THROW_HARD('Invalid REF_TYPE='//trim(self%p_ptr%ref_type)//' in polar_cavger_merge_eos_and_norm')
         end select
@@ -167,26 +167,6 @@ contains
         call mirror_slices( reforis )
         ! Common-lines conribution
         call self%calc_comlin_contrib(reforis, symop, pfts_even, pfts_odd, ctf2_even, ctf2_odd)
-        ! Sum in-plane & common line contributions
-        select case(trim(self%p_ptr%ref_type))
-        case('comlin')
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(k,l_h_polar,l_k_polar,r_h_polar,r_k_polar,max_dist)
-            do k=self%kfromto(1),self%kfromto(2)
-                l_h_polar = real(self%polar(1,k),dp)
-                r_h_polar = real(self%polar(2,k),dp)
-                l_k_polar = real(self%polar(1+self%nrots,k),dp)
-                r_k_polar = real(self%polar(2+self%nrots,k),dp)
-                max_dist  = (l_h_polar-r_h_polar)**2 + (l_k_polar-r_k_polar)**2
-                pfts_even(:,k,:) = self%pfts_even(:,k,:) * max_dist + pfts_even(:,k,:)
-                pfts_odd(:,k,:)  = self%pfts_odd(:,k,:)  * max_dist + pfts_odd(:,k,:)
-                ctf2_even(:,k,:) = self%ctf2_even(:,k,:) * max_dist + ctf2_even(:,k,:)
-                ctf2_odd(:,k,:)  = self%ctf2_odd(:,k,:)  * max_dist + ctf2_odd(:,k,:)
-            end do
-            !$omp end parallel do
-        case DEFAULT
-            ! no addition for other modes
-        end select
         ! e/o trailing reconstruction part 1
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)

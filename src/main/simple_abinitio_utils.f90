@@ -182,7 +182,7 @@ contains
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage
         logical,           intent(in) :: l_cavgs
-        type(string) :: sh_first, prob_sh, ml_reg, fillin, cavgw, ref_type
+        type(string) :: sh_first, prob_sh, ml_reg, fillin, cavgw
         type(string) :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
         integer :: iphase, iter, inspace, imaxits, nsample_dyn, ipftsz
         real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop, snr_noise_reg, gaufreq
@@ -356,7 +356,6 @@ contains
             if( trim(params%gauref).eq.'no' ) gaufreq = -1.
             if( ml_reg.eq.'yes' )             gaufreq = -1.
             ! CL-based approach
-            ref_type = trim(params%ref_type)
             if( trail_rec=='yes') then
                 ! the pftsz/# of rotations in pftc must be set to the value
                 ! of the last stage of trail_rec=yes
@@ -435,7 +434,6 @@ contains
         call cline_refine3D%delete('ipftsz')
         if( l_polar )then
             call cline_refine3D%set('center_type',           'params')
-            call cline_refine3D%set('ref_type',              ref_type)
             if( ipftsz > 0 )then
             call cline_refine3D%set('pftsz',                   ipftsz)
             endif
