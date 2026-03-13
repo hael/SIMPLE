@@ -86,7 +86,7 @@ contains
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( b_ptr%spproj_field%get_nevenodd() == 0 )then
-            if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; refine3D_exec')
+            if( l_distr_worker_glob ) THROW_HARD('no eo partitioning available; refine3D_exec')
             call b_ptr%spproj_field%partition_eo
             call b_ptr%spproj%write_segment_inside(p_ptr%oritype)
         endif
@@ -329,7 +329,7 @@ contains
                 ! Polar representation
                 call killimgbatch(b_ptr)
                 call b_ptr%esig%kill
-                if( l_distr_exec_glob )then
+                if( l_distr_worker_glob )then
                     call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
                 else
                     p_ptr%refs = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//MRC_EXT
@@ -358,7 +358,7 @@ contains
 
         ! REPORT CONVERGENCE
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
-        if( .not. p_ptr%l_distr_exec .and. trim(p_ptr%refine).ne.'sigma' )then
+        if( .not. p_ptr%l_distr_worker .and. trim(p_ptr%refine).ne.'sigma' )then
             converged = conv%check_conv3D(p_ptr, cline, b_ptr%spproj_field, p_ptr%msk)
         endif
         if( L_BENCH_GLOB )then

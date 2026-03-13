@@ -24,7 +24,7 @@ contains
         endif
         ncls          = p_ptr%ncls
         ! work out range and partsz
-        if( p_ptr%l_distr_exec )then
+        if( p_ptr%l_distr_worker )then
             istart    = p_ptr%fromp
             iend      = p_ptr%top
         else
@@ -212,7 +212,7 @@ contains
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
         logical :: l_conjg
-        if( .not. p_ptr%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        if( .not. p_ptr%l_distr_worker ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! Init cavgs
         if( l_alloc_read_cavgs )then
             call cavgs%zero_set(.true.)
@@ -438,7 +438,7 @@ contains
         call memoize_ft_maps(ldim_crop(1:2), smpd_crop)
         gridcorr_img = prep2D_inv_instrfun4mul(ldim_crop, ldim_croppd, smpd_crop)
         ! Making sure that the public images are allocated with make_cavgs & shared memory
-        if( (.not.l_distr_exec_glob).and.(.not.allocated(cavgs_merged)) )then
+        if( (.not.l_distr_worker_glob).and.(.not.allocated(cavgs_merged)) )then
             call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_even)
             call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_odd)
             call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_merged)
@@ -518,7 +518,7 @@ contains
             call b_ptr%clsfrcs%set_frc(icls, frc, 1)
             ! Transfer cavg from stack object to image object used in alignment
             ! only in shared memory execution
-            if( .not.l_distr_exec_glob )then
+            if( .not.l_distr_worker_glob )then
                 call cavgs_even(icls)%set_rmat(  cavgs%even%rmat(:,:,icls:icls), .false.)
                 call cavgs_odd(icls)%set_rmat(   cavgs%odd%rmat(:,:,icls:icls), .false.)
                 call cavgs_merged(icls)%set_rmat(cavgs%merged%rmat(:,:,icls:icls), .false.)

@@ -502,7 +502,7 @@ type :: parameters
     logical :: l_autoscale    = .false.
     logical :: l_bfac         = .false.
     logical :: l_corrw        = .false.
-    logical :: l_distr_exec   = .false.
+    logical :: l_distr_worker = .false.
     logical :: l_dose_weight  = .false.
     logical :: l_doshift      = .false.
     logical :: l_eer_fraction = .false.
@@ -1095,14 +1095,14 @@ contains
         self%executable = trim(adjustl(str_static))
         if(self%executable%strlen_trim() == 0) THROW_HARD('get_command_argument failed; new')
         ! set execution mode (shmem or distr)
-        if( cline%defined('part') .and. cline%defined('nparts') )then
-            self%l_distr_exec = .true.
+        if( cline%defined('part') )then
+            self%l_distr_worker = .true.
             part_glob = self%part
         else
-            self%l_distr_exec = .false.
+            self%l_distr_worker = .false.
             part_glob = 1
         endif
-        l_distr_exec_glob = self%l_distr_exec
+        l_distr_worker_glob = self%l_distr_worker
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! controls KB alpha (oversampling) factor usage in reconstruction and 2D averaging

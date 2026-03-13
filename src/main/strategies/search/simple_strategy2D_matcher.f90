@@ -118,7 +118,7 @@ contains
 
         ! PREP REFERENCES
         if( b_ptr%spproj_field%get_nevenodd() == 0 )then
-            if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
+            if( l_distr_worker_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
             call b_ptr%spproj_field%partition_eo
             call b_ptr%spproj%write_segment_inside(p_ptr%oritype)
         endif
@@ -127,7 +127,7 @@ contains
             ! On first iteration the references are taken from the input images
         else
             l_alloc_read_cavgs = .true.
-            if( .not.l_distr_exec_glob )then
+            if( .not.l_distr_worker_glob )then
                 l_alloc_read_cavgs = which_iter==1
             endif
             call cavger_new(p_ptr, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
@@ -321,7 +321,7 @@ contains
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH_GLOB ) t_cavg = tic()
-        if( l_distr_exec_glob )then
+        if( l_distr_worker_glob )then
             if( trim(p_ptr%restore_cavgs).eq.'yes' )then
                 if( l_polar )then
                     call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')

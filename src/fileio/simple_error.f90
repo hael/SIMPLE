@@ -18,7 +18,7 @@ contains
         else
             write(logfhandle,'(A)', advance='no') 'WARNING! '//trim(msg)
         endif
-        if( l_distr_exec_glob )then
+        if( l_distr_worker_glob )then
             write(logfhandle,'(A,I5)') '; '//trim(file)//'; line: ', line, '; part: ', part_glob, ' of distributed execution'
         else
             write(logfhandle,'(A,I5)') '; '//trim(file)//'; line: ', line
