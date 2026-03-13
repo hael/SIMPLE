@@ -103,7 +103,6 @@ contains
         class(cmdline), intent(in) :: cline
         class(reextract_strategy), allocatable :: strategy
         logical :: is_master
-        ! Same heuristic as your other refactors:
         ! master if nparts defined but no explicit worker range/part.
         is_master = cline%defined('nparts') .and. (.not.cline%defined('part')) &
                    .and. (.not.cline%defined('fromp')) .and. (.not.cline%defined('top'))

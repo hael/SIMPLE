@@ -50,7 +50,7 @@ integer                       :: logfhandle = OUTPUT_UNIT      !< log file handl
 logical, parameter            :: STDOUT2LOG = .false.
 ! other global variables
 integer                       :: nthr_glob = 1                 !< number of threads global variable
-logical                       :: l_distr_exec_glob             !< global distributed execution flag
+logical                       :: l_distr_worker_glob           !< global distributed worker mode execution flag
 integer                       :: part_glob                     !< global part index
 character(len=:), allocatable :: cmdline_glob                  !< global command line string
 integer,          parameter   :: NTHR_SHMEM_MAX     = 20       !< maximum number of shared-memory threads used by master process

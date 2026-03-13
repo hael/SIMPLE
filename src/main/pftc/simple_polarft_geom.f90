@@ -39,36 +39,136 @@ contains
         ! shmat   =  cmplx(cos(argmat),sin(argmat),dp)
     end subroutine gen_shmat_8
 
+    ! module pure subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
+    !     class(polarft_calc), intent(in)    :: self
+    !     real(dp),            intent(in)    :: psi
+    !     integer,             intent(inout) :: lrot
+    !     integer,             intent(inout) :: rrot
+    !     real(dp),            intent(out)   :: lw(self%kfromto(1):self%kfromto(2))
+    !     real(dp),            intent(out)   :: rw(self%kfromto(1):self%kfromto(2))
+    !     real(dp) :: sinpsi, cospsi, d
+    !     real(dp) :: l_h, l_k, r_h, r_k
+    !     real(dp) :: h_line, k_line
+    !     real(dp) :: dx, dy, px, py, den, t
+    !     integer  :: k
+    !     ! --- same bracketing logic as before ---
+    !     lrot = self%get_roind_fast(real(psi))
+    !     d    = psi - real(self%angtab(lrot),dp)
+    !     if( d > real(self%get_dang(),dp) ) d = d - 360.d0
+    !     if( d < 0.d0 )then
+    !         lrot = lrot - 1
+    !         if( lrot < 1 ) lrot = lrot + self%get_nrots()
+    !     endif
+    !     rrot = lrot + 1
+    !     if( rrot > self%get_nrots() ) rrot = rrot - self%get_nrots()
+    !     sinpsi = sin(deg2rad(psi))
+    !     cospsi = cos(deg2rad(psi))
+    !     do k = self%kfromto(1), self%kfromto(2)
+    !         ! L and R: sample points from the polar table
+    !         l_h = real(self%polar(lrot,             k), dp)
+    !         r_h = real(self%polar(rrot,             k), dp)
+    !         l_k = real(self%polar(lrot + self%nrots,k), dp)
+    !         r_k = real(self%polar(rrot + self%nrots,k), dp)
+    !         ! P: desired common-line point at angle psi and radius k
+    !         h_line =  sinpsi * real(k,dp)
+    !         k_line = -cospsi * real(k,dp)
+    !         ! Segment direction and squared length
+    !         dx  = r_h - l_h
+    !         dy  = r_k - l_k
+    !         den = dx*dx + dy*dy   ! = ||R-L||^2
+    !         if( den <= tiny(den) )then
+    !             ! Degenerate case: L and R coincide -> equal split
+    !             t = 0.5_dp
+    !         else
+    !             ! Projection of (P-L) onto (R-L)
+    !             px = h_line - l_h
+    !             py = k_line - l_k
+    !             t  = (px*dx + py*dy) / den
+    !             ! Recommended: clamp to avoid extrapolation / negative weights
+    !             if( t < 0._dp ) t = 0._dp
+    !             if( t > 1._dp ) t = 1._dp
+    !         endif
+    !         ! Linear interpolation weights (convex; lw+rw = 1)
+    !         lw(k) = 1._dp - t
+    !         rw(k) = t
+    !     end do
+    ! end subroutine gen_clin_weights
+
+    ! Calculates weights for two neighboring projections based on linear Euclidean
+    ! distance in the 2D Fourier plane. Aaccounts for increasing distance at higher resolutions (larger k).
     module pure subroutine gen_clin_weights( self, psi, lrot, rrot, lw, rw )
         class(polarft_calc), intent(in)    :: self
         real(dp),            intent(in)    :: psi
-        integer,             intent(inout) :: lrot
-        integer,             intent(inout) :: rrot
+        integer,             intent(inout) :: lrot, rrot
         real(dp),            intent(out)   :: lw(self%kfromto(1):self%kfromto(2))
         real(dp),            intent(out)   :: rw(self%kfromto(1):self%kfromto(2))
-        real(dp) :: sinpsi, cospsi, max_dist, h_line, k_line, l_h_polar, l_k_polar, r_h_polar, r_k_polar, d
-        integer :: k
+        ! Local variables
+        real(dp) :: sinpsi, cospsi       ! sin and cos of the target angle
+        real(dp) :: h_line, k_line       ! Cartesian coords of the point on the target common line
+        real(dp) :: l_h_polar, l_k_polar ! Cartesian coords of the point on the left reference line
+        real(dp) :: r_h_polar, r_k_polar ! Cartesian coords of the point on the right reference line
+        real(dp) :: dist_l, dist_r       ! Euclidean distance from target point to left/right points
+        real(dp) :: total_dist           ! Sum of the two distances
+        real(dp) :: ang_l, d
+        integer  :: k
+        ! --- 1. Find the neighboring reference angles ---
         lrot = self%get_roind_fast(real(psi))
-        d    = psi - real(self%angtab(lrot),dp)
-        if( d > real(self%get_dang(),dp) ) d = d - 360.d0
-        if( d < 0.d0 )then
+        ang_l = real(self%angtab(lrot), dp)
+        ! Simple difference check to find the correct neighbors
+        d = psi - ang_l
+        if (d > 180.0d0) d = d - 360.0d0
+        if (d < -180.0d0) d = d + 360.0d0
+        if (d < 0.0d0) then
+            ! psi is to the "left" of the closest angle, so the closest is the right neighbor
+            rrot = lrot
             lrot = lrot - 1
-            if( lrot < 1 ) lrot = lrot + self%get_nrots()
-        endif
-        rrot = lrot + 1
-        if( rrot > self%get_nrots() ) rrot = rrot - self%get_nrots()
+            if (lrot < 1) lrot = lrot + self%get_nrots()
+        else
+            ! psi is to the "right", so the closest is the left neighbor
+            rrot = lrot + 1
+            if (rrot > self%get_nrots()) rrot = rrot - self%get_nrots()
+        end if
+        ! Pre-calculate sin and cos for the main loop
         sinpsi = sin(deg2rad(psi))
         cospsi = cos(deg2rad(psi))
-        do k=self%kfromto(1),self%kfromto(2)
-            l_h_polar = real(self%polar(lrot,k),dp)
-            r_h_polar = real(self%polar(rrot,k),dp)
-            l_k_polar = real(self%polar(lrot+self%nrots,k),dp)
-            r_k_polar = real(self%polar(rrot+self%nrots,k),dp)
-            h_line =  sinpsi * real(k,dp)
-            k_line = -cospsi * real(k,dp)
-            max_dist = (l_h_polar-r_h_polar)**2 + (l_k_polar-r_k_polar)**2
-            lw(k)    = max_dist - (l_h_polar-h_line)**2 - (l_k_polar-k_line)**2
-            rw(k)    = max_dist - (r_h_polar-h_line)**2 - (r_k_polar-k_line)**2
+        ! --- 2. Loop over all radial points (k) to calculate weights ---
+        do k = self%kfromto(1), self%kfromto(2)
+            ! If radius is zero, weights are equal and the point is the same
+            if (abs(k) < 1.0d-6) then
+                lw(k) = 0.5d0
+                rw(k) = 0.5d0
+                cycle
+            end if
+            ! Get Cartesian coordinates (h,k) for the point on the LEFT reference line
+            l_h_polar = real(self%polar(lrot, k), dp)
+            l_k_polar = real(self%polar(lrot + self%nrots, k), dp)
+            ! Get Cartesian coordinates (h,k) for the point on the RIGHT reference line
+            r_h_polar = real(self%polar(rrot, k), dp)
+            r_k_polar = real(self%polar(rrot + self%nrots, k), dp)
+            ! Calculate Cartesian coordinates for the point on the TARGET common line
+            h_line = sinpsi * real(k, dp)
+            k_line = -cospsi * real(k, dp)
+            ! Calculate the linear Euclidean distance from the target point to the left and right points
+            dist_l = sqrt((l_h_polar - h_line)**2 + (l_k_polar - k_line)**2)
+            dist_r = sqrt((r_h_polar - h_line)**2 + (r_k_polar - k_line)**2)
+            ! --- 3. Calculate and assign the normalized, inverse weights ---
+            total_dist = dist_l + dist_r
+            ! Avoid division by zero if the point lies exactly on a reference line
+            if (total_dist < 1.0d-6) then
+                if (dist_l < dist_r) then
+                    lw(k) = 1.0d0
+                    rw(k) = 0.0d0
+                else
+                    lw(k) = 0.0d0
+                    rw(k) = 1.0d0
+                end if
+            else
+                ! The weight is inversely proportional to the distance.
+                ! lw = dist_r / total_dist
+                ! rw = dist_l / total_dist
+                lw(k) = 1.0d0 - (dist_l / total_dist)
+                rw(k) = 1.0d0 - (dist_r / total_dist)
+            end if
         end do
     end subroutine gen_clin_weights
 

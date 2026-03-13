@@ -16,7 +16,7 @@ contains
 
     subroutine progress( i, n )
         integer, intent(in) :: i, n
-        if( .not. l_distr_exec_glob .and. L_VERBOSE_GLOB )then
+        if( .not. l_distr_worker_glob .and. L_VERBOSE_GLOB )then
             write(logfhandle,'(a1,a,t21,i3,a)',advance="no") achar(13),&
                 &"Percent Complete: ", nint((real(i)/real(n))*100.0), "%"
             flush (OUTPUT_UNIT)
@@ -29,7 +29,7 @@ contains
         integer, intent(in) :: i, imax
         integer :: k, curr, prev
         character(len=1) :: back
-        if( .not. l_distr_exec_glob )then
+        if( .not. l_distr_worker_glob )then
             back = char(8)
             if( i >= imax )then
                 ! delete the bar and the percentage

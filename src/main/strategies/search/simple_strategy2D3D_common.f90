@@ -879,7 +879,7 @@ contains
         res05s   = 0.
         ! read in previous reconstruction when trail_rec==yes
         update_frac_trail_rec = 1.0
-        if( .not. params%l_distr_exec .and. params%l_trail_rec )then
+        if( .not. params%l_distr_worker .and. params%l_trail_rec )then
             if( cline%defined('ufrac_trec') )then
                 update_frac_trail_rec = params%ufrac_trec
             else
@@ -896,7 +896,7 @@ contains
                 cycle
             endif
             call build%eorecvols(s)%compress_exp
-            if( params%l_distr_exec )then
+            if( params%l_distr_worker )then
                 call build%eorecvols(s)%write_eos(string(VOL_FBODY)//int2str_pad(s,2)//'_part'//int2str_pad(params%part,params%numlen))
             else
                 ! global volume name update
@@ -1087,7 +1087,7 @@ contains
         do s=1,params%nstates
             if( str_has_substr(params%refine, 'prob') )then
                 ! already mapping shifts in prob_tab with shared-memory execution
-                call calcrefvolshift_and_mapshifts2ptcls(params, build, cline, s, params%vols(s), do_center, xyz, map_shift=l_distr_exec_glob)
+                call calcrefvolshift_and_mapshifts2ptcls(params, build, cline, s, params%vols(s), do_center, xyz, map_shift=l_distr_worker_glob)
             else
                 call calcrefvolshift_and_mapshifts2ptcls(params, build, cline, s, params%vols(s), do_center, xyz, map_shift=.true.)
             endif

@@ -161,7 +161,7 @@ contains
         ! output directory
         output_dir = PATH_HERE
         ! determine loop range
-        if( params%l_distr_exec )then
+        if( params%l_distr_worker )then
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto = [params%fromp, params%top]
             else
