@@ -154,8 +154,9 @@ contains
         real(dp)    :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         real(dp)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
         real(dp)    :: fsc(self%kfromto(1):self%kfromto(2)), ufrac_trec
+        real(dp)    :: max_dist, l_h_polar, l_k_polar, r_h_polar, r_k_polar
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
-        integer     :: tmp_pftsz, tmp_kfromto(2), tmp_nrefs
+        integer     :: tmp_pftsz, tmp_kfromto(2), tmp_nrefs, k
         integer     :: find4eoavg, i
         select case(trim(self%p_ptr%ref_type))
         case('comlin_noself','comlin')
@@ -169,12 +170,20 @@ contains
         ! Sum in-plane & common line contributions
         select case(trim(self%p_ptr%ref_type))
         case('comlin')
-            !$omp parallel workshare proc_bind(close)
-            pfts_even = self%pfts_even + pfts_even
-            pfts_odd  = self%pfts_odd  + pfts_odd
-            ctf2_even = self%ctf2_even + ctf2_even
-            ctf2_odd  = self%ctf2_odd  + ctf2_odd
-            !$omp end parallel workshare
+            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+            !$omp private(k,l_h_polar,l_k_polar,r_h_polar,r_k_polar,max_dist)
+            do k=self%kfromto(1),self%kfromto(2)
+                l_h_polar = real(self%polar(1,k),dp)
+                r_h_polar = real(self%polar(2,k),dp)
+                l_k_polar = real(self%polar(1+self%nrots,k),dp)
+                r_k_polar = real(self%polar(2+self%nrots,k),dp)
+                max_dist  = (l_h_polar-r_h_polar)**2 + (l_k_polar-r_k_polar)**2
+                pfts_even(:,k,:) = self%pfts_even(:,k,:) * max_dist + pfts_even(:,k,:)
+                pfts_odd(:,k,:)  = self%pfts_odd(:,k,:)  * max_dist + pfts_odd(:,k,:)
+                ctf2_even(:,k,:) = self%ctf2_even(:,k,:) * max_dist + ctf2_even(:,k,:)
+                ctf2_odd(:,k,:)  = self%ctf2_odd(:,k,:)  * max_dist + ctf2_odd(:,k,:)
+            end do
+            !$omp end parallel do
         case DEFAULT
             ! no addition for other modes
         end select
