@@ -8,6 +8,7 @@ type(ui_program), target :: cleanup2D
 type(ui_program), target :: cluster2D
 type(ui_program), target :: cluster2D_subsets
 type(ui_program), target :: cluster2D_subsets_refine
+type(ui_program), target :: cluster2D_micro
 type(ui_program), target :: make_cavgs
 type(ui_program), target :: map_cavgs_selection
 type(ui_program), target :: sample_classes
@@ -21,6 +22,7 @@ contains
         call new_cleanup2D(prgtab)
         call new_cluster2D_subsets(prgtab)
         call new_cluster2D_subsets_refine(prgtab)
+        call new_cluster2D_micro(prgtab)
         call new_make_cavgs(prgtab)
         call new_map_cavgs_selection(prgtab)
         call new_sample_classes(prgtab)
@@ -202,6 +204,37 @@ contains
         ! add to ui_hash
         call add_ui_program('cluster2D_subsets_refine', cluster2D_subsets_refine, prgtab)
     end subroutine new_cluster2D_subsets_refine
+
+    subroutine new_cluster2D_micro( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call cluster2D_micro%new(&
+        &'cluster2D_micro',&                                                                                         ! name
+        &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode using micro chunks',& ! descr_short
+        &'is a distributed workflow implementing cluster2D in streaming mode',&                                      ! descr_long
+        &'simple_exec',&                                                                                             ! executable
+        &.true.,&                                                                                                    ! requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                                              ! GUI           
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cluster2D_micro%add_input(UI_SRCH, 'maxnptcls', 'num', 'Maximum # of particles clustered', 'Max # of particles clustered{5000}',&
+        &'max # of particles{5000}', .false., 5000., gui_submenu="search", gui_advanced=.true.)
+        ! filter controls
+        ! mask controls
+        call cluster2D_micro%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
+        ! computer controls
+        call cluster2D_micro%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call cluster2D_micro%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
+        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('cluster2D_micro', cluster2D_micro, prgtab)
+    end subroutine new_cluster2D_micro
 
     subroutine new_make_cavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
