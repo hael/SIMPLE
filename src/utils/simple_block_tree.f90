@@ -1,12 +1,12 @@
 module simple_block_tree
 use simple_core_module_api
 use simple_eulspace_neigh_map, only: eulspace_neigh_map
-use simple_multi_dendro,     only: multi_dendro
-use simple_binary_tree,      only: bt_node
-use simple_corrmat,          only: calc_inpl_invariant_cc_nomirr
-use simple_aff_prop,         only: aff_prop 
-use simple_image,            only: image
-use simple_parameters,       only: parameters
+use simple_multi_dendro,       only: multi_dendro
+use simple_binary_tree,        only: bt_node
+use simple_corrmat,            only: calc_inpl_invariant_cc_nomirr
+use simple_aff_prop,           only: aff_prop 
+use simple_image,              only: image
+use simple_parameters,         only: parameters
 implicit none
 
 public :: gen_eulspace_block_tree
