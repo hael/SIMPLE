@@ -46,7 +46,7 @@ contains
         integer,             intent(inout) :: rrot
         real(dp),            intent(out)   :: lw(self%kfromto(1):self%kfromto(2))
         real(dp),            intent(out)   :: rw(self%kfromto(1):self%kfromto(2))
-        real(dp) :: sinpsi, cospsi, max_dist, lh,lk,rh,rk,sh,sk, d
+        real(dp) :: sinpsi, cospsi, max_dist, h_line, k_line, l_h_polar, l_k_polar, r_h_polar, r_k_polar, d
         integer :: k
         lrot = self%get_roind_fast(real(psi))
         d    = psi - real(self%angtab(lrot),dp)
@@ -60,15 +60,15 @@ contains
         sinpsi = sin(deg2rad(psi))
         cospsi = cos(deg2rad(psi))
         do k=self%kfromto(1),self%kfromto(2)
-            lh = real(self%polar(lrot,k),dp)
-            rh = real(self%polar(rrot,k),dp)
-            lk = real(self%polar(lrot+self%nrots,k),dp)
-            rk = real(self%polar(rrot+self%nrots,k),dp)
-            sh =  sinpsi * real(k,dp)
-            sk = -cospsi * real(k,dp)
-            max_dist = sqrt((lh-rh)**2 + (lk-rk)**2)
-            lw(k)    = max_dist - sqrt((lh-sh)**2 + (lk-sk)**2)
-            rw(k)    = max_dist - sqrt((rh-sh)**2 + (rk-sk)**2)
+            l_h_polar = real(self%polar(lrot,k),dp)
+            r_h_polar = real(self%polar(rrot,k),dp)
+            l_k_polar = real(self%polar(lrot+self%nrots,k),dp)
+            r_k_polar = real(self%polar(rrot+self%nrots,k),dp)
+            h_line =  sinpsi * real(k,dp)
+            k_line = -cospsi * real(k,dp)
+            max_dist = (l_h_polar-r_h_polar)**2 + (l_k_polar-r_k_polar)**2
+            lw(k)    = max_dist - (l_h_polar-h_line)**2 - (l_k_polar-k_line)**2
+            rw(k)    = max_dist - (r_h_polar-h_line)**2 - (r_k_polar-k_line)**2
         end do
     end subroutine gen_clin_weights
 
