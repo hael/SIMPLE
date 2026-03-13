@@ -11,6 +11,8 @@ use simple_commanders_cleanup2D,            only: commander_cleanup2D
 use simple_stream_cluster2D_subsets,        only: stream_cluster2D_subsets
 use simple_commanders_cavgs,                only: commander_map_cavgs_selection
 use simple_stream_cluster2D_subsets_refine, only: stream_cluster2D_subsets_refine
+use simple_stream_cluster2D_micro,          only: stream_cluster2D_micro
+
 implicit none
 
 public :: exec_cluster2D_commander
@@ -20,6 +22,7 @@ type(commander_abinitio2D)                  :: xabinitio2D
 type(commander_cleanup2D)                   :: xcleanup2D 
 type(stream_cluster2D_subsets)              :: xcluster2D_subsets
 type(stream_cluster2D_subsets_refine)       :: xcluster2D_subsets_refine
+type(stream_cluster2D_micro)                :: xcluster2D_micro
 type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
 type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
 type(commander_sample_classes)              :: xsample_classes
@@ -48,6 +51,8 @@ contains
                 call xcluster2D_subsets%execute(cline)
             case( 'cluster2D_subsets_refine' )
                 call xcluster2D_subsets_refine%execute(cline)    
+            case( 'cluster2D_micro' )
+                call xcluster2D_micro%execute(cline)        
             case( 'make_cavgs' )
                 call xmake_cavgs_distr%execute(cline)
             case( 'map_cavgs_selection' )
