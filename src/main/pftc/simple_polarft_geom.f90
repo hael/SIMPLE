@@ -67,8 +67,8 @@ contains
             sh =  sinpsi * real(k,dp)
             sk = -cospsi * real(k,dp)
             max_dist = sqrt((lh-rh)**2 + (lk-rk)**2)
-            lw(k)    = (max_dist - sqrt((lh-sh)**2 + (lk-sk)**2))/max_dist
-            rw(k)    = (max_dist - sqrt((rh-sh)**2 + (rk-sk)**2))/max_dist
+            lw(k)    = max_dist - sqrt((lh-sh)**2 + (lk-sk)**2)
+            rw(k)    = max_dist - sqrt((rh-sh)**2 + (rk-sk)**2)
         end do
     end subroutine gen_clin_weights
 
