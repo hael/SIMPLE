@@ -3,8 +3,7 @@ module simple_binary_tree
 use simple_error, only: simple_exception
 implicit none
 private
-public :: bt_node, binary_tree
-
+public :: bt_node, binary_tree, serialize_tree, deserialize_tree
 #include "simple_local_flags.inc"
 
 type :: bt_node
@@ -35,7 +34,6 @@ contains
 end type binary_tree
 
 contains
-
     subroutine kill(self)
         class(binary_tree), intent(inout) :: self
         integer :: k
@@ -219,5 +217,80 @@ contains
         deallocate(members)
         self%exists = .true.
     end subroutine build_from_hclust
+    ! -------------------------------------------------------------------
+    ! Serialize / Deserialize routines for binary_tree
+    ! -------------------------------------------------------------------
+    subroutine serialize_tree(self, mat, meta)
+        class(binary_tree), intent(in)  :: self
+        integer,           allocatable, intent(out) :: mat(:,:)  ! (n_nodes,6)
+        integer,           intent(out) :: meta(3)               ! root_idx, nrefs, exists_flag
+        integer :: n, k
+        ! default meta
+        meta = 0
+        if (.not. allocated(self%nodes)) then
+            ! empty matrix (0 rows, 6 cols)
+            allocate(mat(0,6))
+            meta(1) = self%root_idx
+            meta(2) = self%nrefs
+            meta(3) = merge(1,0,self%exists)
+            return
+        end if
+        n = size(self%nodes)
+        allocate(mat(n,6))
+        do k = 1, n
+            mat(k,1) = self%nodes(k)%left_idx
+            mat(k,2) = self%nodes(k)%right_idx
+            mat(k,3) = self%nodes(k)%parent_idx
+            mat(k,4) = self%nodes(k)%level
+            mat(k,5) = self%nodes(k)%ref_idx
+            mat(k,6) = self%nodes(k)%node_idx
+        end do
+        meta(1) = self%root_idx
+        meta(2) = self%nrefs
+        meta(3) = merge(1,0,self%exists)  ! 1 if exists true else 0
+    end subroutine serialize_tree
+
+    subroutine deserialize_tree(self, mat, meta)
+        class(binary_tree), intent(inout) :: self
+        integer,           intent(in) :: mat(:,:)   ! (n_nodes,6) OR (0,6)
+        integer,           intent(in) :: meta(3)
+        integer :: n, k
+        integer :: root_in, nrefs_in, exists_flag
+        ! Clear existing
+        call self%kill()
+        ! meta unpack
+        root_in = meta(1)
+        nrefs_in = meta(2)
+        exists_flag = meta(3)
+        ! if mat has zero rows -> empty tree
+        if (size(mat,1) == 0) then
+            self%root_idx = root_in
+            self%nrefs    = nrefs_in
+            self%exists   = (exists_flag /= 0)
+            return
+        end if
+        ! Validate shape: expect 6 columns
+        if (size(mat,2) /= 6) then
+            THROW_HARD("deserialize_tree: mat must have 6 columns (left,right,parent,level,ref,node_idx)")
+        end if
+        n = size(mat,1)
+        allocate(self%nodes(n))
+        do k = 1, n
+            self%nodes(k)%left_idx   = mat(k,1)
+            self%nodes(k)%right_idx  = mat(k,2)
+            self%nodes(k)%parent_idx = mat(k,3)
+            self%nodes(k)%level      = mat(k,4)
+            self%nodes(k)%ref_idx    = mat(k,5)
+            self%nodes(k)%node_idx   = mat(k,6)
+        end do
+        ! simple sanity checks (non-exhaustive)
+        if (root_in < 0 .or. root_in > n) then
+            ! allow 0 to mean "no root"
+            THROW_HARD("deserialize_tree: root_idx out of range")
+        end if
+        self%root_idx = root_in
+        self%nrefs    = nrefs_in
+        self%exists   = (exists_flag /= 0)
+    end subroutine deserialize_tree
 
 end module simple_binary_tree

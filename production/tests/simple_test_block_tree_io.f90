@@ -1,0 +1,5 @@
+program simple_test_block_tree_io
+use simple_core_module_api
+use simple_block_tree_io, only: test_io
+call test_io
+end program simple_test_block_tree_io

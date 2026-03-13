@@ -30,9 +30,9 @@ integer(timer_int_kind)         :: build_time
 real(timer_int_kind)            :: build_time_rt
 integer,          parameter     :: NSPACE     = 500
 integer,          parameter     :: NSPACE_SUB = 30
-integer,          parameter     :: NSAMPLE    = 100
+integer,          parameter     :: NSAMPLE    = 1000
 integer     :: i, best_ref, itree, ind_min, irnd
-real        :: inplrotdist, dist, dist_min, dist_subspace, dists(NSAMPLE)
+real        :: inplrotdist, dist, dist_min, dist_subspace, dists(NSAMPLE), dist_min_tot, dist_subspace_tot 
 ! SPIRAL REPROJECTIONS
 params%smpd   = 3.
 params%lp     = 3.
@@ -66,8 +66,8 @@ print *, block_tree%get_n_trees()
 build_time_rt = toc(build_time)
 print *, 'build_time', build_time_rt
 ! ! SEARCHING
-! dist_min_tot = 0.0
-! dist_subspace_tot = 0.0
+dist_min_tot = 0.0
+dist_subspace_tot = 0.0
 ! search_time = tic()
 ! do i = 1, NSAMPLE
 !     irnd = irnd_uni(NSPACE)
@@ -100,29 +100,29 @@ print *, 'build_time', build_time_rt
 
 
 ! Searching AP clustered hierarchical tree, based on euldist from random projection
-! do i = 1, NSAMPLE 
-!     irnd = irnd_uni(NSPACE)
-!     call eulspace%get_ori(irnd, osmp)
-!     dist_min = huge(1.0)
-!     ind_min = 1
-!     ! no coarse node in this case, so first find best root
-!     do itree = 1, block_tree%get_n_trees()
-!         bt_n = block_tree%get_root_node(itree)
-!         call eulspace%get_ori(bt_n%ref_idx, o)
-!         call pgrpsym%sym_dists(osmp, o, osym, dist, inplrotdist)
-!         if (dist < dist_min) then 
-!             dist_min = dist 
-!             ind_min = itree
-!         end if 
-!     end do  
-!     dist_subspace = dist_min
-!     itree = ind_min
-!     call srch_eul_bl_tree(osmp, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min, l_greedy=.true.)
-!     dists(i)      = dist_min
-!     dist_min_tot = dist_min_tot + dist_min
-!     print *, 'SAMPLE ', irnd, ': itree=', itree, ' dist=', dist_min, ' dist_subspace=', dist_subspace
-! end do 
-
+do i = 1, NSAMPLE 
+    irnd = irnd_uni(NSPACE)
+    call eulspace%get_ori(irnd, osmp)
+    dist_min = huge(1.0)
+    ind_min = 1
+    ! no coarse node in this case, so first find best root
+    do itree = 1, block_tree%get_n_trees()
+        bt_n = block_tree%get_root_node(itree)
+        call eulspace%get_ori(bt_n%ref_idx, o)
+        call pgrpsym%sym_dists(osmp, o, osym, dist, inplrotdist)
+        if (dist < dist_min) then 
+            dist_min = dist 
+            ind_min = itree
+        end if 
+    end do  
+    dist_subspace = dist_min
+    itree = ind_min
+    call srch_eul_bl_tree(osmp, eulspace, pgrpsym, block_tree, itree, best_ref, dist_min, l_greedy=.true.)
+    dists(i)      = dist_min
+    dist_min_tot = dist_min_tot + dist_min
+    print *, 'SAMPLE ', irnd, ': itree=', itree, ' dist=', dist_min, ' dist_subspace=', dist_subspace
+end do 
+print *, 'AVG DISTANCE', dist_min_tot / NSAMPLE 
 
 end program simple_test_block_tree2D
     

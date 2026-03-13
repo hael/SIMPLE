@@ -3,10 +3,10 @@ module simple_multi_dendro
 use simple_core_module_api
 use simple_srch_sort_loc, only: mask2inds
 use simple_hclust,        only: hclust
-use simple_binary_tree,   only: binary_tree, bt_node
+use simple_binary_tree,   only: binary_tree, bt_node, serialize_tree, deserialize_tree
 implicit none
 
-public :: multi_dendro
+public :: multi_dendro, serialize_multi_dendro, deserialize_multi_dendro
 private
 #include "simple_local_flags.inc"
 
@@ -195,5 +195,158 @@ contains
       self%n_trees = 0
       self%n_refs  = 0
    end subroutine kill
+
+   ! -------------------------------------------------------------------
+   ! Serialize / Deserialize routines for multi_dendro
+   ! -------------------------------------------------------------------
+   subroutine serialize_multi_dendro(self, mat, trees_meta, offsets, lengths, map_int, tree_pops_out)
+      class(multi_dendro), intent(in)  :: self
+      integer,           allocatable, intent(out) :: mat(:,:)        ! (total_nodes,6)
+      integer,           allocatable, intent(out) :: trees_meta(:,:) ! (n_trees,3): root,nrefs,exists_flag
+      integer,           allocatable, intent(out) :: offsets(:)     ! 1-based start idx in mat, 0 if length=0
+      integer,           allocatable, intent(out) :: lengths(:)     ! number rows per tree (can be 0)
+      integer,           allocatable, intent(out) :: map_int(:,:)   ! (n_trees, n_refs) 0/1
+      integer,           allocatable, intent(out) :: tree_pops_out(:)
+      integer :: i, n_trees_loc, n_refs_loc, total_nodes, pos, n_nodes, tmeta(3), tmpmeta(3)
+      integer, allocatable :: tmat(:,:), tmpmat(:,:)
+      ! initialize outputs
+      if (.not. allocated(self%trees) .and. self%n_trees > 0) then
+         ! tree array not allocated but n_trees set: treat as empty trees
+      end if
+      n_trees_loc = self%n_trees
+      n_refs_loc  = self%n_refs
+      if (n_trees_loc < 0 .or. n_refs_loc < 0) then
+         THROW_HARD("serialize_multi_dendro: invalid n_trees/n_refs")
+      end if
+      allocate(trees_meta(max(0,n_trees_loc),3))
+      allocate(offsets(max(0,n_trees_loc)))
+      allocate(lengths(max(0,n_trees_loc)))
+      allocate(map_int(max(0,n_trees_loc), max(0,n_refs_loc)))
+      allocate(tree_pops_out(max(0,n_trees_loc)))
+      if (n_trees_loc == 0) then
+         ! empty multi-dendro
+         allocate(mat(0,6))
+         return
+      end if
+      ! First pass: gather per-tree sizes (do not serialize full trees yet)
+      total_nodes = 0
+      do i = 1, n_trees_loc
+         if (allocated(self%trees)) then
+               n_nodes = self%trees(i)%get_n_nodes()
+         else
+               n_nodes = 0
+         end if
+         lengths(i) = n_nodes
+         total_nodes = total_nodes + n_nodes
+         tree_pops_out(i) = 0
+         if (allocated(self%tree_pops)) tree_pops_out(i) = self%tree_pops(i)
+         ! tree_map
+         if (allocated(self%tree_map)) then
+               do pos = 1, n_refs_loc
+                  map_int(i,pos) = merge(1,0, self%tree_map(i,pos))
+               end do
+         else
+               if (n_refs_loc > 0) map_int(i,1:n_refs_loc) = 0
+         end if
+      end do
+      ! allocate big mat and fill by serializing each tree
+      if (total_nodes == 0) then
+         allocate(mat(0,6))
+      else
+         allocate(mat(total_nodes,6))
+      end if
+      pos = 1
+      do i = 1, n_trees_loc
+         offsets(i) = 0
+         if (lengths(i) > 0) then
+              
+               call serialize_tree(self%trees(i), tmat, tmeta)
+               ! sanity: tmat rows must equal lengths(i)
+               if (size(tmat,1) /= lengths(i)) then
+                  ! fallback: adjust length to actual serialized rows
+                  lengths(i) = size(tmat,1)
+               end if
+               offsets(i) = pos
+               if (lengths(i) > 0) then
+                  mat(pos:pos+lengths(i)-1, :) = tmat(:, :)
+                  pos = pos + lengths(i)
+               end if
+               trees_meta(i,1) = tmeta(1)
+               trees_meta(i,2) = tmeta(2)
+               trees_meta(i,3) = tmeta(3)
+               if (allocated(tmat)) deallocate(tmat)
+         else
+               ! empty tree: metadata still set (from object's saved values if any)
+               if (allocated(self%trees)) then
+                  call serialize_tree(self%trees(i), tmpmat, tmpmeta)
+                  trees_meta(i,1) = tmpmeta(1)
+                  trees_meta(i,2) = tmpmeta(2)
+                  trees_meta(i,3) = tmpmeta(3)
+                  if (allocated(tmpmat)) deallocate(tmpmat)
+               else
+                  trees_meta(i,1:3) = 0
+               end if
+               offsets(i) = 0
+         end if
+      end do
+   end subroutine serialize_multi_dendro
+
+   subroutine deserialize_multi_dendro(self, mat, trees_meta, offsets, lengths, map_int, tree_pops_in)
+      class(multi_dendro), intent(inout) :: self
+      integer,           intent(in) :: mat(:,:)         ! (total_nodes,6) or (0,6)
+      integer,           intent(in) :: trees_meta(:,:)  ! (n_trees,3)
+      integer,           intent(in) :: offsets(:)       ! start idx per tree (1-based) or 0
+      integer,           intent(in) :: lengths(:)       ! rows per tree
+      integer,           intent(in) :: map_int(:,:)     ! (n_trees, n_refs) 0/1
+      integer,           intent(in) :: tree_pops_in(:)
+      integer :: i, n_trees_in, n_refs_in, start, len, total_nodes, tmpmeta(3)
+      integer, allocatable :: submat(:,:)
+      ! validate dims
+      n_trees_in = size(map_int,1)
+      n_refs_in  = size(map_int,2)
+      if (size(trees_meta,1) /= n_trees_in .or. size(offsets) /= n_trees_in .or. size(lengths) /= n_trees_in .or. size(tree_pops_in) /= n_trees_in) then
+         THROW_HARD("deserialize_multi_dendro: inconsistent input dimensions")
+      end if
+      ! clear existing
+      call self%kill()
+      ! set counts and allocate
+      self%n_trees = n_trees_in
+      self%n_refs  = n_refs_in
+      if (n_trees_in > 0) then
+         allocate(self%trees(n_trees_in))
+         allocate(self%tree_map(n_trees_in, n_refs_in))
+         allocate(self%tree_pops(n_trees_in))
+      end if
+      ! set tree_map and tree_pops
+      do i = 1, n_trees_in
+         self%tree_pops(i) = tree_pops_in(i)
+         do start = 1, n_refs_in
+               self%tree_map(i,start) = merge(.true., .false., map_int(i,start) /= 0)
+         end do
+      end do
+      total_nodes = size(mat,1)
+      ! reconstruct each tree from its slice
+      do i = 1, n_trees_in
+         start = offsets(i)
+         len   = lengths(i)
+         if (len < 0) then
+               THROW_HARD("deserialize_multi_dendro: negative length")
+         end if
+         if (len == 0) then
+               ! leave tree empty (already killed by kill())
+               cycle
+         end if
+         if (start < 1 .or. start+len-1 > total_nodes) then
+               THROW_HARD("deserialize_multi_dendro: offsets/lengths out of range")
+         end if
+         ! extract submatrix (Fortran creates a view)
+         
+         allocate(submat(len, size(mat,2)))
+         submat(:, :) = mat(start:start+len-1, :)
+         tmpmeta(:) = trees_meta(i, 1:3)
+         call deserialize_tree(self%trees(i), submat, tmpmeta)
+         deallocate(submat)
+      end do
+   end subroutine deserialize_multi_dendro
 
 end module simple_multi_dendro
