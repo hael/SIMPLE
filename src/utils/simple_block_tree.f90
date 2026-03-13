@@ -1,6 +1,6 @@
 module simple_block_tree
 use simple_core_module_api
-use simple_srchspace_map,    only: srchspace_map
+use simple_eulspace_neigh_map, only: eulspace_neigh_map
 use simple_multi_dendro,     only: multi_dendro
 use simple_binary_tree,      only: bt_node
 use simple_corrmat,          only: calc_inpl_invariant_cc_nomirr
@@ -28,29 +28,15 @@ contains
     function gen_eulspace_block_tree(eulspace, eulspace_sub, pgrpsym) result(block_tree)
         class(oris), intent(in)    :: eulspace, eulspace_sub
         class(sym),  intent(inout) :: pgrpsym
-        type(ori)                  :: o, o_sub, oi, oj, osym
-        type(srchspace_map)        :: mapper
+        type(ori)                  :: oi, oj, osym
+        type(eulspace_neigh_map)   :: neigh_map
         type(multi_dendro)         :: block_tree
         integer, allocatable       :: labels(:), refs(:)
-        real,    allocatable       :: distmat(:,:), sub_distmat(:,:)
-        integer                    :: i, j, ntrees, itree, nrefs, nspace, nspace_sub
+        real,    allocatable       :: sub_distmat(:,:)
+        integer                    :: i, j, ntrees, itree, nrefs
         real                       :: inplrotdist, dtmp
-        nspace     = eulspace%get_noris()
-        nspace_sub = eulspace_sub%get_noris()
-        allocate(distmat(nspace_sub, nspace))
-        !$omp parallel do default(shared) proc_bind(close) private(i,j,o,o_sub,osym,dtmp,inplrotdist) schedule(static)
-        do i = 1, nspace_sub
-            call eulspace_sub%get_ori(i, o_sub)
-            do j = 1, nspace
-                call eulspace%get_ori(j, o)
-                call pgrpsym%sym_dists(o_sub, o, osym, dtmp, inplrotdist)
-                distmat(i,j) = dtmp
-            end do
-        end do
-        !$omp end parallel do
-        call normalize_minmax(distmat)
-        call mapper%new(nspace, nspace_sub, distmat)
-        labels = mapper%get_full2sub_map()
+        call neigh_map%new(eulspace, eulspace_sub, pgrpsym)
+        labels = neigh_map%get_full2sub_map()
         call block_tree%new(labels)
         ntrees = block_tree%get_n_trees()
         write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
@@ -79,7 +65,7 @@ contains
             deallocate(refs)
         end do
         !$omp end parallel do
-        deallocate(distmat)
+        call neigh_map%kill
         if (allocated(labels)) deallocate(labels)
         if( DEBUG) print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree
@@ -89,30 +75,14 @@ contains
         class(image), intent(in)       :: refimgs(:)
         class(parameters), intent(in)  :: params
         class(sym),  intent(inout)     :: pgrpsym
-        type(ori)                  :: o, o_sub, osym
-        type(srchspace_map)        :: mapper
+        type(eulspace_neigh_map)   :: neigh_map
         type(multi_dendro)         :: block_tree
         type(image), allocatable   :: sub_imgs(:)     
         integer, allocatable       :: labels(:), refs(:)
-        real,    allocatable       :: distmat(:,:), sub_distmat(:,:)
-        integer                    :: i, j, ntrees, itree, nrefs, nspace, nspace_sub
-        real                       :: inplrotdist, dtmp
-        nspace     = eulspace%get_noris()
-        nspace_sub = eulspace_sub%get_noris()
-        allocate(distmat(nspace_sub, nspace))
-        !$omp parallel do default(shared) proc_bind(close) private(i,j,o,o_sub,osym,dtmp,inplrotdist) schedule(static)
-        do i = 1, nspace_sub
-            call eulspace_sub%get_ori(i, o_sub)
-            do j = 1, nspace
-                call eulspace%get_ori(j, o)
-                call pgrpsym%sym_dists(o_sub, o, osym, dtmp, inplrotdist)
-                distmat(i,j) = dtmp
-            end do
-        end do
-        !$omp end parallel do
-        call normalize_minmax(distmat)
-        call mapper%new(nspace, nspace_sub, distmat)
-        labels = mapper%get_full2sub_map()
+        real,    allocatable       :: sub_distmat(:,:)
+        integer                    :: ntrees, itree, nrefs
+        call neigh_map%new(eulspace, eulspace_sub, pgrpsym)
+        labels = neigh_map%get_full2sub_map()
         call block_tree%new(labels)
         ntrees = block_tree%get_n_trees()
         write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
@@ -134,7 +104,7 @@ contains
             call block_tree%build_tree_from_subdistmat(itree, refs, sub_distmat, LINK_AVERAGE)
             deallocate(sub_distmat, refs, sub_imgs)
         end do
-        deallocate(distmat)
+        call neigh_map%kill
         if (allocated(labels)) deallocate(labels)
         if( DEBUG) print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree_corr

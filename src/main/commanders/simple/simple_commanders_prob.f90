@@ -9,6 +9,11 @@ type, extends(commander_base) :: commander_prob_tab
     procedure :: execute      => exec_prob_tab
 end type commander_prob_tab
 
+type, extends(commander_base) :: commander_prob_tab_neigh
+    contains
+        procedure :: execute      => exec_prob_tab_neigh
+end type commander_prob_tab_neigh
+
 type, extends(commander_base) :: commander_prob_align
   contains
     procedure :: execute      => exec_prob_align
@@ -64,6 +69,71 @@ contains
         call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab
+
+    subroutine exec_prob_tab_neigh( self, cline )
+        use simple_strategy2D3D_common
+        use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
+        use simple_imgarr_utils,       only: dealloc_imgarr
+        class(commander_prob_tab_neigh), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        integer,            allocatable :: pinds(:)
+        integer,            allocatable :: ptcl_state(:)
+        logical,            allocatable :: neigh_mask(:,:)
+        type(image),        allocatable :: tmp_imgs(:), tmp_imgs_pad(:)
+        type(string)                    :: fname
+        type(builder)                   :: build
+        type(parameters)                :: params
+        type(eul_prob_tab_neigh)        :: eulprob_obj_part_neigh
+        integer :: nptcls
+        logical :: l_have_ptcl_state
+        call cline%set('mkdir', 'no')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        call set_bp_range( params, build, cline )
+        ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
+        if( build%spproj_field%has_been_sampled() )then
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
+        else
+            THROW_HARD('exec_prob_tab_neigh requires prior particle sampling (in exec_prob_align)')
+        endif
+        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
+        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+                                        do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
+        ! Build polar particle images
+        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+
+        ! TODO(neigh): replace full mask with neighborhood candidates from the chosen policy
+        !              (e.g. nearest projections around previous orientation / state).
+        allocate(neigh_mask(params%nspace, nptcls), source=.true.)
+
+        ! TODO(neigh): set particle states explicitly when available.
+        ! If not provided, eul_prob_tab_neigh falls back to state from previous orientation.
+        l_have_ptcl_state = .false.
+        if( l_have_ptcl_state )then
+            allocate(ptcl_state(nptcls), source=0)
+            ! TODO(neigh): fill ptcl_state(:) with valid state ids in [1, params%nstates]
+            call eulprob_obj_part_neigh%new(params, build, pinds, neigh_mask, ptcl_state)
+        else
+            call eulprob_obj_part_neigh%new(params, build, pinds, neigh_mask)
+        endif
+
+        call eulprob_obj_part_neigh%fill_tab
+        call eulprob_obj_part_neigh%ref_assign
+
+        ! Write local assignment map for this part.
+        fname = string(ASSIGNMENT_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
+        call eulprob_obj_part_neigh%write_assignment(fname)
+
+        call eulprob_obj_part_neigh%kill
+        if( allocated(neigh_mask) ) deallocate(neigh_mask)
+        if( allocated(ptcl_state) ) deallocate(ptcl_state)
+        call killimgbatch(build)
+        call build%pftc%kill
+        call build%kill_general_tbox
+        call dealloc_imgarr(tmp_imgs)
+        call dealloc_imgarr(tmp_imgs_pad)
+        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab_neigh'))
+        call simple_end('**** SIMPLE_PROB_TAB_NEIGH NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prob_tab_neigh
 
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,        only: eul_prob_tab
