@@ -10,13 +10,13 @@ use POSIX qw(floor);
 #   perl abinitio_stats.pl file1 file2 ...
 
 my @files = @ARGV;
-die "Usage: $0 <files...>\\n" if !@files;
+die "Usage: $0 <files...>\n" if !@files;
 
 my (@times_sec, @max_iters, @missing_time, @missing_iter, @missing_files);
 
 for my $f (@files) {
     if (!-e $f) { push @missing_files, $f; next; }
-    open my $fh, '<', $f or do { warn "Could not open $f: $!\\n"; push @missing_files, $f; next; };
+    open my $fh, '<', $f or do { warn "Could not open $f: $!\n"; push @missing_files, $f; next; };
 
     my $last_time;
     my $max_iter;
@@ -29,7 +29,7 @@ for my $f (@files) {
 
         # Iteration: track maximum ITERATION value seen
         # MODIFIED: The regex is updated to match the format in the provided file.
-        if ($line =~ /^>>>\s+ITERATION\s+(\d+)/) {
+        if ($line =~ /^>>>\s+(?:REFINE3D\s+SEARCH,\s*)?ITERATION[:\s]+(\d+)/i) {
             my $it = $1 + 0;
             $max_iter = $it if !defined($max_iter) || $it > $max_iter;
         }
@@ -37,31 +37,31 @@ for my $f (@files) {
     close $fh;
 
     if (defined $last_time) { push @times_sec, $last_time; }
-    else { warn "No execution time found in $f\\n"; push @missing_time, $f; }
+    else { warn "No execution time found in $f\n"; push @missing_time, $f; }
 
     if (defined $max_iter) { push @max_iters, $max_iter; }
-    else { warn "No REFINE3D ITERATION found in $f\\n"; push @missing_iter, $f; }
+    else { warn "No REFINE3D ITERATION found in $f\n"; push @missing_iter, $f; }
 }
 
 # ---- Print stats ----
 print_stats_time(\@times_sec) if @times_sec;
-print "\\n";
+print "\n";
 print_stats_iters(\@max_iters) if @max_iters;
 
 # ---- Report missing ----
 my @any_missing = (@missing_files, @missing_time, @missing_iter);
 if (@any_missing) {
-    print "\\nIssues encountered:\\n";
+    print "\nIssues encountered:\n";
     if (@missing_files) {
-        print "  Missing/unreadable files:\\n";
+        print "  Missing/unreadable files:\n";
         print "    $_\n" for @missing_files;
     }
     if (@missing_time) {
-        print "  Files with no execution time found:\\n";
+        print "  Files with no execution time found:\n";
         print "    $_\n" for @missing_time;
     }
     if (@missing_iter) {
-        print "  Files with no iteration lines found:\\n";
+        print "  Files with no iteration lines found:\n";
         print "    $_\n" for @missing_iter;
     }
 }
@@ -73,7 +73,7 @@ exit 0;
 sub mean_and_pop_stdev {
     my ($arr) = @_;
     my $n = scalar @$arr;
-    die "No values.\\n" if $n == 0;
+    die "No values.\n" if $n == 0;
     my $sum = 0.0;
     $sum += $_ for @$arr;
     my $mean = $sum / $n;
@@ -115,21 +115,29 @@ sub fmt_split_time {
 sub print_stats_time {
     my ($arr) = @_;
     my ($n, $mean, $stdev) = mean_and_pop_stdev($arr);
-    print "Execution time stats (N=$n):\\n";
-    print "  Mean:\\n";
-    print "    seconds: $mean\\n";
-    print "    h:m:s : ", fmt_hms($mean), "\\n";
-    print "    split : ", fmt_split_time($mean), "\\n";
-    print "  Population stdev:\\n";
-    print "    seconds: $stdev\\n";
-    print "    h:m:s : ", fmt_hms($stdev), "\\n";
-    print "    split : ", fmt_split_time($stdev), "\\n";
+
+    print "\nExecution time statistics\n";
+    print "-------------------------\n";
+    printf "Files analyzed : %d\n\n", $n;
+
+    print "Mean execution time\n";
+    printf "  seconds      : %.3f\n", $mean;
+    printf "  h:m:s        : %s\n", fmt_hms($mean);
+    printf "  split        : %s\n\n", fmt_split_time($mean);
+
+    print "Population standard deviation\n";
+    printf "  seconds      : %.3f\n", $stdev;
+    printf "  h:m:s        : %s\n", fmt_hms($stdev);
+    printf "  split        : %s\n", fmt_split_time($stdev);
 }
 
 sub print_stats_iters {
     my ($arr) = @_;
     my ($n, $mean, $stdev) = mean_and_pop_stdev($arr);
-    print "Convergence iteration stats (max ITERATION per file, N=$n):\\n";
-    print "  Mean max-iteration: $mean\\n";
-    print "  Population stdev  : $stdev\\n";
+
+    print "\nConvergence iteration statistics\n";
+    print "--------------------------------\n";
+    printf "Files analyzed           : %d\n", $n;
+    printf "Mean max iteration       : %.2f\n", $mean;
+    printf "Population std deviation : %.2f\n", $stdev;
 }
