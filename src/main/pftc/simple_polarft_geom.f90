@@ -55,6 +55,7 @@ contains
         real(dp) :: dist_l, dist_r       ! Euclidean distance from target point to left/right points
         real(dp) :: dist_tot             ! Sum of the two distances
         real(dp) :: ang_l, d, eps        ! Temporary variables for angle calculations and numerical stability
+        real(dp) :: kw                   ! Jacobian weight to account for the increasing density of points in Fourier space with increasing radius
         integer  :: k                    ! Resolution index
         ! --- 1. Find the neighboring reference angles ---
         lrot = self%get_roind_fast(real(psi))
@@ -103,8 +104,9 @@ contains
                 lw(k) = 0.0_dp
                 rw(k) = 1.0_dp
             else
-                lw(k) = dist_r / dist_tot
-                rw(k) = dist_l / dist_tot
+                kw = real(k, dp)
+                lw(k) = (dist_r / dist_tot) * kw
+                rw(k) = (dist_l / dist_tot) * kw
             end if
         end do
     end subroutine gen_clin_weights
