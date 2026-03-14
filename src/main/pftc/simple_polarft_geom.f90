@@ -104,10 +104,12 @@ contains
                 lw(k) = 0.0_dp
                 rw(k) = 1.0_dp
             else
-                kw = real(k, dp)
-                lw(k) = (dist_r / dist_tot) * kw
-                rw(k) = (dist_l / dist_tot) * kw
+                lw(k) = dist_r / dist_tot
+                rw(k) = dist_l / dist_tot
             end if
+            kw = real(k, dp)
+            lw(k) = lw(k) * kw
+            rw(k) = rw(k) * kw
         end do
     end subroutine gen_clin_weights
 
