@@ -2,9 +2,10 @@
 !> Separate module (does not modify simple_eul_prob_tab).
 module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
-use simple_builder,          only: builder
-use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
-use simple_eul_prob_tab,     only: angle_sampling, calc_num2sample, calc_athres, eulprob_dist_switch
+use simple_builder,            only: builder
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
+use simple_eul_prob_tab,       only: angle_sampling, calc_num2sample, calc_athres, eulprob_dist_switch
+use simple_eulspace_neigh_map, only: eulspace_neigh_map
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -45,6 +46,7 @@ contains
     procedure          :: write_assignment
     procedure          :: read_assignment
     procedure          :: kill
+    procedure, private :: build_neigh_mask_from_subspace_peaks
     procedure, private :: build_ref_lists_and_map
     procedure, private :: build_sparse_from_mask
     procedure, private :: build_ref_adjacency
@@ -57,37 +59,133 @@ end type eul_prob_tab_neigh
 contains
 
     !===========================================================
+    ! Build per-particle neighborhood mask from subspace peaks.
+    ! Evaluates each subspace projection for every particle,
+    ! picks the top npeak_use peaks, and unions their neighbor
+    ! masks (plus the previous-orientation neighbor mask) to
+    ! produce the logical mask(:,i) passed to new_from_mask.
+    !===========================================================
+    subroutine build_neigh_mask_from_subspace_peaks(self)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        logical, allocatable :: mask(:,:)
+        integer, allocatable :: state_out(:)
+        type(eulspace_neigh_map) :: neigh_map
+        type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
+        type(ori) :: o_prev
+        integer, allocatable :: peak_sub_idxs(:,:), full2sub(:)
+        real,    allocatable :: inpl_dists(:,:), coarse_best_corr(:,:)
+        real    :: lims(2,2), lims_init(2,2)
+        real    :: cxy(3), cxy_shift(2)
+        logical :: do_shift_first
+        integer :: nrots, nspace_sub, npeak_use, i, isub, ithr, iptcl, istate, iproj_full, irot, iref_start, iref_prev
+        logical :: prev_mask(self%p_ptr%nspace)
+        nspace_sub     = self%p_ptr%nspace_sub
+        npeak_use      = max(1, min(self%p_ptr%npeaks, nspace_sub))
+        nrots          = self%b_ptr%pftc%get_nrots()
+        do_shift_first = self%p_ptr%l_sh_first .and. self%p_ptr%l_doshift
+        if( .not. allocated(self%b_ptr%subspace_inds) )then
+            THROW_HARD('build_neigh_mask_from_subspace_peaks requires neighborhood subspace indices; enable l_neigh and set nspace_sub')
+        endif
+        if( size(self%b_ptr%subspace_inds) /= self%p_ptr%nspace_sub )then
+            THROW_HARD('build_neigh_mask_from_subspace_peaks: size(subspace_inds) must equal nspace_sub')
+        endif
+        call neigh_map%new(self%b_ptr%subspace_inds, self%p_ptr%nspace_sub)
+        allocate(mask(self%p_ptr%nspace, self%nptcls), source=.false.)
+        allocate(state_out(self%nptcls), source=0)
+        allocate(inpl_dists(nrots, nthr_glob), coarse_best_corr(nspace_sub, nthr_glob),&
+        &peak_sub_idxs(npeak_use, nthr_glob))
+        full2sub = neigh_map%get_full2sub_map()
+        if( do_shift_first )then
+            lims(:,1)      = -self%p_ptr%trs
+            lims(:,2)      =  self%p_ptr%trs
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            do ithr = 1, nthr_glob
+                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier, &
+                                               maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+            enddo
+        endif
+        !$omp parallel do default(shared) private(i,ithr,iptcl,o_prev,istate,isub,iproj_full,irot,iref_start,iref_prev,cxy,cxy_shift,prev_mask) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            iptcl = self%pinds(i)
+            ithr  = omp_get_thread_num() + 1
+            call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
+            istate = o_prev%get_state()
+            if( istate < 1 .or. istate > self%p_ptr%nstates )then
+                THROW_HARD('build_neigh_mask_from_subspace_peaks: particle state out of range in previous orientation')
+            endif
+            state_out(i) = istate
+            cxy_shift    = [0.,0.]
+            iproj_full = self%b_ptr%eulspace%find_closest_proj(o_prev)
+            if( do_shift_first .and. iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
+                iref_start = (istate-1)*self%p_ptr%nspace
+                iref_prev  = iref_start + iproj_full
+                irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
+                call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
+                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                if( irot /= 0 ) cxy_shift = cxy(2:3)
+            endif
+            if( istate >= 1 .and. istate <= self%p_ptr%nstates )then
+                do isub = 1, nspace_sub
+                    iproj_full = self%b_ptr%subspace_inds(isub)
+                    call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_dists(:,ithr))
+                    irot = maxloc(inpl_dists(:,ithr), dim=1)
+                    coarse_best_corr(isub,ithr) = inpl_dists(irot,ithr)
+                enddo
+                peak_sub_idxs(:,ithr) = maxnloc(coarse_best_corr(:,ithr), npeak_use)
+                iproj_full = self%b_ptr%eulspace%find_closest_proj(o_prev)
+                call neigh_map%get_neighbors_mask_pooled(peak_sub_idxs(:,ithr), mask(:,i))
+                if( iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
+                    call neigh_map%get_neighbors_mask(full2sub(iproj_full), prev_mask)
+                    mask(:,i) = mask(:,i) .or. prev_mask
+                endif
+            else
+                iproj_full = self%b_ptr%eulspace%find_closest_proj(o_prev)
+                if( iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
+                    call neigh_map%get_neighbors_mask(full2sub(iproj_full), mask(:,i))
+                else
+                    mask(:,i) = .true.
+                endif
+            endif
+            call o_prev%kill
+        enddo
+        !$omp end parallel do
+        if( do_shift_first )then
+            do ithr = 1, nthr_glob
+                call grad_shsrch_obj(ithr)%kill
+            enddo
+        endif
+        call neigh_map%kill
+        ! Build sparse edge lists from internally generated neighborhood masks
+        call self%build_sparse_from_mask(mask, state_out)
+        if( allocated(mask)             ) deallocate(mask)
+        if( allocated(state_out)        ) deallocate(state_out)
+        if( allocated(full2sub)         ) deallocate(full2sub)
+        if( allocated(inpl_dists)       ) deallocate(inpl_dists)
+        if( allocated(coarse_best_corr) ) deallocate(coarse_best_corr)
+        if( allocated(peak_sub_idxs)    ) deallocate(peak_sub_idxs)
+    end subroutine build_neigh_mask_from_subspace_peaks
+
+    !===========================================================
     ! Constructor: build sparse edges from per-particle neigh_mask(nspace,nptcls)
     ! neigh_mask(:,i) flags which projections (iproj) to evaluate for particle pinds(i).
     ! Those projections are interpreted in state = ptcl_state(i) (if provided),
     ! otherwise state is taken from previous orientation in spproj_field.
     !===========================================================
-    subroutine new_from_mask(self, params, build, pinds, neigh_mask, ptcl_state, empty_okay)
+    subroutine new_from_mask(self, params, build, pinds, empty_okay)
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
-        logical,                   intent(in)    :: neigh_mask(:,:) ! (nspace, nptcls)
-        integer, optional,         intent(in)    :: ptcl_state(:)   ! (nptcls)
         logical, optional,         intent(in)    :: empty_okay
         integer, parameter :: MIN_POP = 5
         logical :: l_empty
-        integer :: nspace
         call self%kill
         self%p_ptr => params
         self%b_ptr => build
         self%nptcls = size(pinds)
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%assgn_map(self%nptcls))
-        nspace = self%p_ptr%nspace
-        if (size(neigh_mask,1) /= nspace .or. size(neigh_mask,2) /= self%nptcls) then
-            THROW_HARD('neigh_mask must have shape (nspace, nptcls) matching params%nspace and size(pinds)')
-        endif
-        if( present(ptcl_state) )then
-            if (size(ptcl_state) /= self%nptcls) then
-                THROW_HARD('ptcl_state must have size nptcls')
-            endif
-        endif
         ! initialize assignment map
         call init_assgn_map(self)
         ! existence filtering (mirrors dense new_1)
@@ -105,8 +203,8 @@ contains
             THROW_HARD('No valid references available after state/projection existence filtering')
         endif
         call self%build_ref_lists_and_map()
-        ! Build sparse edge lists from neigh_mask + state per particle
-        call self%build_sparse_from_mask(neigh_mask, ptcl_state)
+        ! Build sparse edge lists from internally generated neighborhood masks
+        call self%build_neigh_mask_from_subspace_peaks()
         ! Build reference-major adjacency once
         call self%build_ref_adjacency()
     end subroutine new_from_mask
