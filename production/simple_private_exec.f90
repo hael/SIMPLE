@@ -30,7 +30,9 @@ type(commander_calc_pspec)              :: xcalc_pspec
 type(commander_calc_pspec_assemble)     :: xcalc_pspec_assemble
 type(commander_calc_group_sigmas)       :: xcalc_group_sigmas
 type(commander_prob_tab)                :: xprob_tab
+type(commander_prob_tab_neigh)          :: xprob_tab_neigh
 type(commander_prob_align)              :: xprob_align
+type(commander_prob_align_neigh)        :: xprob_align_neigh
 
 ! RECONSTRUCTION PROGRAMS
 type(commander_volassemble)             :: xvolassemble
@@ -154,8 +156,12 @@ select case(prg)
         call xcalc_group_sigmas%execute(cline)
     case( 'prob_tab' )
         call xprob_tab%execute(cline)
+    case( 'prob_tab_neigh' )
+        call xprob_tab_neigh%execute(cline)
     case( 'prob_align' )
         call xprob_align%execute(cline)
+    case( 'prob_align_neigh' )
+        call xprob_align_neigh%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
     case( 'reconstruct3D' )

@@ -217,7 +217,7 @@ contains
     subroutine inmem_execute_iteration(self, params, build, cline, converged)
         use simple_strategy3D_matcher, only: refine3D_exec
         use simple_commanders_euclid,  only: commander_calc_group_sigmas
-        use simple_commanders_prob,    only: commander_prob_align
+        use simple_commanders_prob,    only: commander_prob_align, commander_prob_align_neigh
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -225,6 +225,7 @@ contains
         logical,                        intent(out)   :: converged
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_prob_align)        :: xprob_align
+        type(commander_prob_align_neigh)  :: xprob_align_neigh
         type(cmdline)                     :: cline_prob_align
         integer                           :: state
         601 format(A,1X,F12.3)
@@ -250,17 +251,25 @@ contains
         ! refine=prob* pre-step
         if( str_has_substr(params%refine, 'prob') )then
             cline_prob_align = cline
-            call cline_prob_align%set('prg',       'prob_align')
+            if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+                call cline_prob_align%set('prg', 'prob_align_neigh')
+            else
+                call cline_prob_align%set('prg', 'prob_align')
+            endif
             call cline_prob_align%set('which_iter', params%which_iter)
             if( trim(params%polar).ne.'yes' )then
                 do state = 1, params%nstates
                     call cline_prob_align%set('vol'//int2str(state), params%vols(state))
                 enddo
             endif
-            ! communicate changes to prob_align
+            ! communicate changes to probabilistic alignment
             call build%spproj%write_segment_inside(params%oritype)
-            call xprob_align%execute( cline_prob_align )
-            ! communicate back changes made by prob_align including sampling
+            if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+                call xprob_align_neigh%execute( cline_prob_align )
+            else
+                call xprob_align%execute( cline_prob_align )
+            endif
+            ! communicate back changes made by probabilistic alignment including sampling
             call build%spproj%read_segment(params%oritype, params%projfile)
         endif
         ! main refinement step
@@ -407,7 +416,11 @@ contains
         self%cline_calc_group_sigmas   = cline
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
-        call self%cline_prob_align_distr%set(    'prg', 'prob_align' )
+        if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+            call self%cline_prob_align_distr%set( 'prg', 'prob_align_neigh' )
+        else
+            call self%cline_prob_align_distr%set( 'prg', 'prob_align' )
+        endif
         call self%cline_postprocess%set(         'prg', 'postprocess' )
         call self%cline_calc_group_sigmas%set(   'prg', 'calc_group_sigmas' )
         call self%cline_postprocess%set('mirr',    'no')
@@ -551,7 +564,7 @@ contains
         use simple_commanders_rec_distr, only: commander_volassemble
         use simple_commanders_volops, only: commander_postprocess
         use simple_commanders_euclid, only: commander_calc_group_sigmas
-        use simple_commanders_prob,   only: commander_prob_align
+        use simple_commanders_prob,   only: commander_prob_align, commander_prob_align_neigh
         use simple_fsc,               only: plot_fsc
         use simple_image,             only: image
         use simple_image_msk,         only: image_msk
@@ -563,6 +576,7 @@ contains
         type(commander_postprocess)       :: xpostprocess
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_prob_align)        :: xprob_align_distr
+        type(commander_prob_align_neigh)  :: xprob_align_neigh_distr
         type(commander_volassemble)       :: xvolassemble
         type(image_msk) :: mskvol
         type(image)     :: vol_e, vol_o
@@ -608,11 +622,19 @@ contains
         endif
         if( str_has_substr(params%refine, 'prob') )then
             cline_prob_align = cline
-            call cline_prob_align%set('prg', 'prob_align')
+            if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+                call cline_prob_align%set('prg', 'prob_align_neigh')
+            else
+                call cline_prob_align%set('prg', 'prob_align')
+            endif
             call cline_prob_align%set('which_iter', iter)
             call cline_prob_align%set('startit',    iter)
             call build%spproj%write_segment_inside(params%oritype)
-            call xprob_align_distr%execute( cline_prob_align )
+            if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+                call xprob_align_neigh_distr%execute( cline_prob_align )
+            else
+                call xprob_align_distr%execute( cline_prob_align )
+            endif
         endif
         if( L_BENCH_GLOB )then
             rt_prob = toc(t_prob)

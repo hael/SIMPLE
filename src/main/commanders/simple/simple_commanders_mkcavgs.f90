@@ -31,188 +31,59 @@ contains
     subroutine exec_make_cavgs_distr( self, cline )
         class(commander_make_cavgs_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(parameters)             :: params
-        type(builder)                :: build
-        type(cmdline)                :: cline_cavgassemble
-        type(qsys_env)               :: qenv
-        type(chash)                  :: job_descr
-        type(commander_make_cavgs)   :: xmk_cavgs_shmem
-        type(commander_cavgassemble) :: xcavgassemble
-        integer :: ncls_here, nthr_here
-        logical :: l_shmem
-        call cline%set('wiener', 'full')
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no')
-        if( (cline%defined('ncls')).and. cline%defined('nspace') )then
-            THROW_HARD('NCLS and NSPACE cannot be both defined!')
-        endif
-        if( cline%defined('nspace') )then
-            if( cline%get_carg('oritype').eq.'ptcl2D' )then
-                THROW_HARD('NSPACE & PTCL2D are incompatible!')
-            endif
-            call cline%set('oritype', 'ptcl3D')
-        else
-            call cline%set('oritype', 'ptcl2D')
-        endif
-        if( cline%defined('nparts') )then
-            l_shmem = cline%get_iarg('nparts') == 1
-        else
-            l_shmem = .true.
-        endif
-        ! deal with # threads for the master process
-        if( .not.l_shmem ) call set_master_num_threads(nthr_here, string('CLUSTER2D'))
-        ! parse parameters & project
-        call build%init_params_and_build_spproj(cline, params)
-        if( cline%defined('nspace') )then
-            ! handled in exec_make_cavgs
-        else
-            ncls_here = build%spproj_field%get_n('class')
-            if( .not. cline%defined('ncls') )then
-                call cline%set('ncls', ncls_here)
-                params%ncls = ncls_here
-            endif
-        endif
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
-        if( l_shmem  )then
-            call xmk_cavgs_shmem%execute(cline)
-            if(trim(params%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
-            return
-        endif
-        ! setup the environment for distributed execution
-        call qenv%new(params, params%nparts)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! prepare command lines from prototype master
-        cline_cavgassemble = cline
-        call cline_cavgassemble%set('prg',  'cavgassemble')
-        call cline_cavgassemble%set('nthr',  nthr_here)
-        if( trim(params%oritype).eq.'ptcl3D' )then
-            call cline_cavgassemble%set('ncls', params%nspace)
-        endif
-        ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        ! assemble class averages
-        call xcavgassemble%execute(cline_cavgassemble)
-        ! end
-        call qsys_cleanup(params)
-        call simple_end('**** SIMPLE_DISTR_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
-        if(trim(params%async).eq.'yes') call simple_touch(MAKECAVGS_FINISHED)
+        call run_make_cavgs_workflow(cline, from_distr_cmd=.true.)
     end subroutine exec_make_cavgs_distr
 
     subroutine exec_make_cavgs( self, cline )
         class(commander_make_cavgs), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        integer :: ncls_here, icls
-        logical :: l_shmem
-        if( (cline%defined('ncls')).and. cline%defined('nspace') )then
-            THROW_HARD('NCLS and NSPACE cannot be both defined!')
-        endif
-        if( cline%defined('nspace') )then
-            if( cline%get_carg('oritype').eq.'ptcl2D' )then
-                THROW_HARD('NSPACE & PTCL2D are incompatible!')
-            endif
-            call cline%set('oritype', 'ptcl3D')
-            call cline%set('ncls',    cline%get_iarg('nspace'))
-        else
-            call cline%set('oritype', 'ptcl2D')
-        endif
-        ! set shared-memory flag
-        l_shmem = set_shmem_flag( cline )
-        if( l_shmem .and. .not. cline%defined('refs') ) THROW_HARD('need input refs (filename) for shared-memory execution')
-        call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
-        ! deal with the orientations
-        if( trim(params%oritype).eq.'ptcl3D' )then
-            ! 3D class averages
-            call build%eulspace%new(params%nspace, is_ptcl=.false.)
-            call build%pgrpsyms%build_refspiral(build%eulspace)
-            call build%spproj%os_ptcl3D%set_projs(build%eulspace)
-            call build%spproj%os_ptcl3D%proj2class
-        else
-            ! 2D
-            ncls_here = build%spproj_field%get_n('class')
-            if( .not. cline%defined('ncls') ) params%ncls = build%spproj_field%get_n('class')
-            if( params%l_remap_cls )then
-                call build%spproj_field%remap_cls()
-                if( cline%defined('ncls') )then
-                    if( params%ncls < ncls_here ) THROW_HARD('inputted ncls < ncls_in_oritab not allowed!')
-                    if( params%ncls > ncls_here )then
-                        call build%spproj_field%expand_classes(params%ncls)
-                    endif
-                endif
-            else if( params%tseries .eq. 'yes' )then
-                if( .not. cline%defined('ncls') )then
-                    THROW_HARD('# class averages (ncls) need to be part of command line when tseries=yes')
-                endif
-                call build%spproj_field%ini_tseries(params%ncls, 'class')
-                call build%spproj_field%partition_eo
-            else if( params%proj_is_class.eq.'yes' )then
-                call build%spproj_field%proj2class
-            endif
-        endif
-        ! setup weights
-        call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
-        ! even/odd partitioning
-        if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
-        ! write
-        if( l_shmem )then
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        else
-            if( params%part .eq. 1 ) call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
-        ! choice of algorithm
-        if( l_shmem )then
-            call cavger_new(params, build)
-            call cavger_transf_oridat( build%spproj )
-            call cavger_read_euclid_sigma2
-            call cavger_assemble_sums( .false. )
-            call cavger_restore_cavgs( params%frcs )
-            call cavger_gen2Dclassdoc( build%spproj )
-            call cavger_write_all(params%refs, params%refs_even, params%refs_odd)
-            call cavger_kill
-        else
-            ! distributed: write partial sums only
-            call cavger_new(params, build)
-            call cavger_transf_oridat(build%spproj)
-            call cavger_read_euclid_sigma2
-            call cavger_assemble_sums( .false. )
-            call cavger_readwrite_partial_sums('write')
-            call cavger_kill
-            call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_make_cavgs'))
-        endif
-        ! book-keeping
-        if( l_shmem )then
-            select case(trim(params%oritype))
-                case('ptcl2D')
-                    call build%spproj%write_segment_inside('cls2D', params%projfile)
-                    call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
-                    call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
-                    call build%spproj%write_segment_inside('out', params%projfile)
-                case('ptcl3D')
-                    do icls = 1,params%nspace
-                        call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
-                    enddo
-                    if( cline%defined('outfile') )then
-                        call build%spproj%os_cls3D%write(params%outfile)
-                    else
-                        call build%spproj%os_cls3D%write(string('cls3D_oris.txt'))
-                    endif
-                    call build%spproj%write_segment_inside('cls3D', params%projfile)
-                    call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc3D')
-                    call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg3D')
-                    call build%spproj%write_segment_inside('out', params%projfile)
-                case DEFAULT
-                    THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
-            end select
-        endif
-        ! end gracefully
-        call build%kill_strategy2D_tbox
-        call build%kill_general_tbox
-        call simple_end('**** SIMPLE_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
+        call run_make_cavgs_workflow(cline, from_distr_cmd=.false.)
     end subroutine exec_make_cavgs
+
+    ! ------------------------------------------------------------------
+    ! Unified runtime-polymorphic workflow
+    ! ------------------------------------------------------------------
+
+    subroutine run_make_cavgs_workflow( cline, from_distr_cmd )
+        use simple_make_cavgs_strategy, only: make_cavgs_strategy, make_cavgs_hooks, create_make_cavgs_strategy
+        use simple_cmdline,             only: cmdline
+        use simple_parameters,          only: parameters
+        class(cmdline), intent(inout) :: cline
+        logical,        intent(in)    :: from_distr_cmd
+        class(make_cavgs_strategy), allocatable :: strategy
+        type(make_cavgs_hooks) :: hooks
+        type(parameters) :: params
+        ! Ensure distributed scripts see the correct program name.
+        call cline%set('prg', 'make_cavgs')
+        ! Provide master-side hook for cavgassemble (avoids strategy importing commander modules).
+        hooks%run_cavgassemble => make_cavgs_exec_cavgassemble
+        strategy = create_make_cavgs_strategy(cline, hooks, from_distr_cmd=from_distr_cmd)
+        call strategy%apply_defaults(cline)
+        call strategy%initialize(params, cline)
+        call strategy%execute(params, cline)
+        call strategy%finalize_run(params, cline)
+        call strategy%cleanup(params, cline)
+        call simple_end(strategy%end_message(), print_simple=.false.)
+        ! exec_make_cavgs_distr behavior: async touch marker
+        call strategy%after_end(params, cline)
+        if( allocated(strategy) ) deallocate(strategy)
+    end subroutine run_make_cavgs_workflow
+
+    ! ----------------------------------------------------------------------
+    ! Hook implementation: run cavgassemble using the existing commander
+    ! ----------------------------------------------------------------------
+
+    subroutine make_cavgs_exec_cavgassemble( cline, nthr )
+        class(cmdline), intent(inout) :: cline
+        integer,        intent(in)    :: nthr
+        type(commander_cavgassemble) :: xcavgassemble
+        type(cmdline)               :: cline_cavgassemble
+        cline_cavgassemble = cline
+        call cline_cavgassemble%set('prg',  'cavgassemble')
+        call cline_cavgassemble%set('nthr', nthr)
+        call xcavgassemble%execute(cline_cavgassemble)
+        call cline_cavgassemble%kill
+    end subroutine make_cavgs_exec_cavgassemble
 
     subroutine exec_cavgassemble( self, cline )
         class(commander_cavgassemble), intent(inout) :: self
