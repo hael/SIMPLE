@@ -11,6 +11,7 @@ use simple_class_frcs,       only: class_frcs
 use simple_parameters,       only: parameters
 use simple_euclid_sigma2,    only: euclid_sigma2
 use simple_polarft_calc,     only: polarft_calc
+use simple_srchspace_map,    only: srchspace_map
 implicit none
 
 public :: builder
@@ -35,6 +36,7 @@ type :: builder
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     type(image),            allocatable :: img_pad_heap(:)        !< heap of padded images for use in norm_noise_taper_edge_pad_fft_gen_fplane4rec
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
+    integer,                allocatable :: subspace_full2sub_map(:)!< labels of eulspace in eulspace_sub
 
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
@@ -232,11 +234,14 @@ contains
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
         logical, optional,      intent(in)    :: do3d
+        type(srchspace_map) :: sub_mapper
         type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
-        type(ori)   :: o
-        integer     :: lfny, i
+        type(ori)   :: o, o_sub, osym
+        integer     :: lfny, i, j
         logical     :: ddo3d
+        real, allocatable :: sub_distmat(:,:)
+        real :: dtmp, inplrotdist
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -259,15 +264,26 @@ contains
             if( params%l_neigh )then
                 call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
                 call self%pgrpsyms%build_refspiral(eulspace_sub)
-                allocate(self%subspace_inds(params%nspace_sub), source=0)
-                !$omp parallel do default(shared) proc_bind(close) private(i,o)
+                allocate(sub_distmat(params%nspace_sub, params%nspace))
+                !$omp parallel do default(shared) proc_bind(close) private(i,j,o,o_sub,osym,dtmp,inplrotdist) schedule(static)
                 do i = 1, params%nspace_sub
-                    call eulspace_sub%get_ori(i, o)
-                    self%subspace_inds(i) = self%pgrpsyms%find_closest_proj(self%eulspace, o)
-                end do
+                    call eulspace_sub%get_ori(i, o_sub)
+                    do j = 1, params%nspace
+                        call self%eulspace%get_ori(j, o)
+                        call self%pgrpsyms%sym_dists(o_sub, o, osym, dtmp, inplrotdist)
+                        sub_distmat(i,j) = dtmp
+                    enddo
+                enddo
                 !$omp end parallel do
+                call sub_mapper%new(params%nspace, params%nspace_sub, sub_distmat)
+                self%subspace_inds         = sub_mapper%get_sub2full_map()
+                self%subspace_full2sub_map = sub_mapper%get_full2sub_map()
+                if( allocated(sub_distmat) ) deallocate(sub_distmat)
+                call sub_mapper%kill
                 call eulspace_sub%kill
                 call o%kill
+                call o_sub%kill
+                call osym%kill
             endif
         endif
         if( params%box > 0 )then
@@ -329,11 +345,12 @@ contains
             call self%vol_odd%kill_expanded
             call self%vol_odd_pad%kill_expanded
             call self%vol2%kill
-            if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
-            if( allocated(self%fsc)           ) deallocate(self%fsc)
-            if( allocated(self%lmsk)          ) deallocate(self%lmsk)
-            if( allocated(self%lmsk_crop)     ) deallocate(self%lmsk_crop)
-            if( allocated(self%l_resmsk)      ) deallocate(self%l_resmsk)
+            if( allocated(self%subspace_inds)         ) deallocate(self%subspace_inds)
+            if( allocated(self%subspace_full2sub_map) ) deallocate(self%subspace_full2sub_map)
+            if( allocated(self%fsc)                   ) deallocate(self%fsc)
+            if( allocated(self%lmsk)                  ) deallocate(self%lmsk)
+            if( allocated(self%lmsk_crop)             ) deallocate(self%lmsk_crop)
+            if( allocated(self%l_resmsk)              ) deallocate(self%l_resmsk)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox

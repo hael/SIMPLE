@@ -223,7 +223,7 @@ contains
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy')
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('prob','prob_state')
+                    case('prob','prob_state','prob_neigh')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)

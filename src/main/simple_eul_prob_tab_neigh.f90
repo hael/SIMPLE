@@ -1,5 +1,4 @@
 !> Neighborhood sparse probabilistic ref table + globally coupled assignment
-!> Separate module (does not modify simple_eul_prob_tab).
 module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
 use simple_builder,            only: builder
@@ -29,6 +28,7 @@ type :: eul_prob_tab_neigh
     integer,        allocatable :: ref_state_indices(:)     ! (nrefs) state index for each compressed reference
     ! map from (projection,state) -> compressed reference index in 1..nrefs, 0 if missing
     integer,        allocatable :: ref_index_map(:,:)       ! (nspace, nstates_total)
+    integer,        allocatable :: proj_active_state_count(:) ! (nspace), number of active states available for each projection
     ! sparse candidate graph: particle-major CSR edges (CSR=Compressed Sparse Row)
     integer                     :: nedges      = 0
     integer                     :: maxdeg_ptcl = 0
@@ -40,12 +40,16 @@ type :: eul_prob_tab_neigh
     integer,        allocatable :: ref_edge_offsets(:)      ! (nrefs+1)
     integer,        allocatable :: ref_edge_indices(:)      ! (nedges), edge indices sorted by reference for fast access to all particles assigned to a given reference
 contains
-    procedure          :: new        => new_from_mask
-    procedure          :: fill_tab   => fill_tab_sparse
-    procedure          :: ref_assign => ref_assign_sparse
+    procedure          :: new            => new_from_mask
+    procedure          :: new_global
+    procedure          :: fill_tab       => fill_tab_sparse
+    procedure          :: ref_assign     => ref_assign_sparse
+    procedure          :: write_tab
+    procedure          :: read_tabs_to_glob
     procedure          :: write_assignment
     procedure          :: read_assignment
     procedure          :: kill
+    procedure, private :: init_common
     procedure, private :: build_neigh_mask_from_subspace_peaks
     procedure, private :: build_ref_lists_and_map
     procedure, private :: build_sparse_from_mask
@@ -67,34 +71,37 @@ contains
     !===========================================================
     subroutine build_neigh_mask_from_subspace_peaks(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        logical, allocatable :: mask(:,:)
-        integer, allocatable :: state_out(:)
         type(eulspace_neigh_map) :: neigh_map
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(ori) :: o_prev
-        integer, allocatable :: peak_sub_idxs(:,:), full2sub(:)
-        real,    allocatable :: inpl_dists(:,:), coarse_best_corr(:,:)
-        real    :: lims(2,2), lims_init(2,2)
-        real    :: cxy(3), cxy_shift(2)
-        logical :: do_shift_first
+        logical, allocatable :: mask(:,:)
+        integer, allocatable :: peak_sub_idxs(:,:), all_sub_idxs(:)
+        real,    allocatable :: inpl_dists(:,:), coarse_best_dist(:,:)
+        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_shift(2), huge_dist
+        logical :: do_shift_first, prev_mask(self%p_ptr%nspace), have_prev_mask
         integer :: nrots, nspace_sub, npeak_use, i, isub, ithr, iptcl, istate, iproj_full, irot, iref_start, iref_prev
-        logical :: prev_mask(self%p_ptr%nspace)
+        integer :: state_i, nvalid_sub, prev_sub
         nspace_sub     = self%p_ptr%nspace_sub
         npeak_use      = max(1, min(self%p_ptr%npeaks, nspace_sub))
         nrots          = self%b_ptr%pftc%get_nrots()
+        huge_dist      = huge(1.)
         do_shift_first = self%p_ptr%l_sh_first .and. self%p_ptr%l_doshift
         if( .not. allocated(self%b_ptr%subspace_inds) )then
-            THROW_HARD('build_neigh_mask_from_subspace_peaks requires neighborhood subspace indices; enable l_neigh and set nspace_sub')
+            THROW_HARD('build_neigh_mask_from_subspace_peaks requires neighborhood representative projections; enable l_neigh and set nspace_sub')
         endif
         if( size(self%b_ptr%subspace_inds) /= self%p_ptr%nspace_sub )then
             THROW_HARD('build_neigh_mask_from_subspace_peaks: size(subspace_inds) must equal nspace_sub')
         endif
-        call neigh_map%new(self%b_ptr%subspace_inds, self%p_ptr%nspace_sub)
+        if( .not. allocated(self%b_ptr%subspace_full2sub_map) )then
+            THROW_HARD('build_neigh_mask_from_subspace_peaks requires full-space subspace labels (subspace_full2sub_map)')
+        endif
+        if( size(self%b_ptr%subspace_full2sub_map) /= self%p_ptr%nspace )then
+            THROW_HARD('build_neigh_mask_from_subspace_peaks: size(subspace_full2sub_map) must equal nspace')
+        endif
+        call neigh_map%new(self%b_ptr%subspace_full2sub_map, self%p_ptr%nspace_sub)
         allocate(mask(self%p_ptr%nspace, self%nptcls), source=.false.)
-        allocate(state_out(self%nptcls), source=0)
-        allocate(inpl_dists(nrots, nthr_glob), coarse_best_corr(nspace_sub, nthr_glob),&
-        &peak_sub_idxs(npeak_use, nthr_glob))
-        full2sub = neigh_map%get_full2sub_map()
+        allocate(inpl_dists(nrots, nthr_glob), coarse_best_dist(nspace_sub, nthr_glob), peak_sub_idxs(npeak_use, nthr_glob), all_sub_idxs(nspace_sub))
+        all_sub_idxs = (/(isub, isub=1, nspace_sub)/)
         if( do_shift_first )then
             lims(:,1)      = -self%p_ptr%trs
             lims(:,2)      =  self%p_ptr%trs
@@ -105,46 +112,71 @@ contains
                                                maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             enddo
         endif
-        !$omp parallel do default(shared) private(i,ithr,iptcl,o_prev,istate,isub,iproj_full,irot,iref_start,iref_prev,cxy,cxy_shift,prev_mask) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(i,ithr,iptcl,o_prev,istate,isub,iproj_full,irot,iref_start,iref_prev,cxy,cxy_shift,prev_mask,have_prev_mask,state_i,nvalid_sub,prev_sub) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             iptcl = self%pinds(i)
             ithr  = omp_get_thread_num() + 1
             call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
-            istate = o_prev%get_state()
-            if( istate < 1 .or. istate > self%p_ptr%nstates )then
-                THROW_HARD('build_neigh_mask_from_subspace_peaks: particle state out of range in previous orientation')
-            endif
-            state_out(i) = istate
-            cxy_shift    = [0.,0.]
-            iproj_full = self%b_ptr%eulspace%find_closest_proj(o_prev)
-            if( do_shift_first .and. iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
-                iref_start = (istate-1)*self%p_ptr%nspace
-                iref_prev  = iref_start + iproj_full
-                irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
-                call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
-                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                if( irot /= 0 ) cxy_shift = cxy(2:3)
-            endif
-            if( istate >= 1 .and. istate <= self%p_ptr%nstates )then
-                do isub = 1, nspace_sub
-                    iproj_full = self%b_ptr%subspace_inds(isub)
-                    call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_dists(:,ithr))
-                    irot = maxloc(inpl_dists(:,ithr), dim=1)
-                    coarse_best_corr(isub,ithr) = inpl_dists(irot,ithr)
-                enddo
-                peak_sub_idxs(:,ithr) = maxnloc(coarse_best_corr(:,ithr), npeak_use)
-                iproj_full = self%b_ptr%eulspace%find_closest_proj(o_prev)
-                call neigh_map%get_neighbors_mask_pooled(peak_sub_idxs(:,ithr), mask(:,i))
-                if( iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
-                    call neigh_map%get_neighbors_mask(full2sub(iproj_full), prev_mask)
-                    mask(:,i) = mask(:,i) .or. prev_mask
+            cxy_shift      = [0.,0.]
+            prev_mask      = .false.
+            have_prev_mask = .false.
+            iproj_full     = self%b_ptr%eulspace%find_closest_proj(o_prev)
+            if( iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
+                prev_sub = self%b_ptr%subspace_full2sub_map(iproj_full)
+                if( prev_sub >= 1 .and. prev_sub <= nspace_sub )then
+                    call neigh_map%get_neighbors_mask(prev_sub, prev_mask)
+                    have_prev_mask = .true.
                 endif
-            else
-                iproj_full = self%b_ptr%eulspace%find_closest_proj(o_prev)
-                if( iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
-                    call neigh_map%get_neighbors_mask(full2sub(iproj_full), mask(:,i))
+            endif
+            istate = o_prev%get_state()
+            if( do_shift_first )then
+                if( istate >= 1 .and. istate <= self%p_ptr%nstates )then
+                    if( self%state_exists(istate) )then
+                        if( iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
+                            if( self%proj_exists(iproj_full,istate) )then
+                                iref_start = (istate - 1) * self%p_ptr%nspace
+                                iref_prev  = iref_start + iproj_full
+                                irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
+                                call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
+                                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                                if( irot /= 0 ) cxy_shift = cxy(2:3)
+                            endif
+                        endif
+                    endif
+                endif
+            endif
+            coarse_best_dist(:,ithr) = huge_dist
+            do isub = 1, nspace_sub
+                iproj_full = self%b_ptr%subspace_inds(isub)
+                if( iproj_full < 1 .or. iproj_full > self%p_ptr%nspace )then
+                    THROW_HARD('build_neigh_mask_from_subspace_peaks: representative projection index out of range')
+                endif
+                do state_i = 1, self%nstates
+                    istate = self%active_state_indices(state_i)
+                    if( .not. self%proj_exists(iproj_full,istate) ) cycle
+                    call self%b_ptr%pftc%gen_objfun_vals((istate - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_dists(:,ithr))
+                    inpl_dists(:,ithr) = eulprob_dist_switch(inpl_dists(:,ithr), self%p_ptr%cc_objfun)
+                    irot = minloc(inpl_dists(:,ithr), dim=1)
+                    coarse_best_dist(isub,ithr) = min(coarse_best_dist(isub,ithr), inpl_dists(irot,ithr))
+                enddo
+            enddo
+            mask(:,i) = .false.
+            nvalid_sub = count(coarse_best_dist(:,ithr) < huge_dist / 2.)
+            if( nvalid_sub > 0 )then
+                if( nvalid_sub <= npeak_use )then
+                    peak_sub_idxs(1:nvalid_sub,ithr) = pack(all_sub_idxs, mask=coarse_best_dist(:,ithr) < huge_dist / 2.)
+                    call neigh_map%get_neighbors_mask_pooled(peak_sub_idxs(1:nvalid_sub,ithr), mask(:,i))
                 else
-                    mask(:,i) = .true.
+                    peak_sub_idxs(:,ithr) = minnloc(coarse_best_dist(:,ithr), npeak_use)
+                    call neigh_map%get_neighbors_mask_pooled(peak_sub_idxs(:,ithr), mask(:,i))
+                endif
+            endif
+            if( have_prev_mask ) mask(:,i) = mask(:,i) .or. prev_mask
+            if( .not. any(mask(:,i) .and. (self%proj_active_state_count > 0)) )then
+                if( have_prev_mask .and. any(prev_mask .and. (self%proj_active_state_count > 0)) )then
+                    mask(:,i) = prev_mask
+                else
+                    mask(:,i) = (self%proj_active_state_count > 0)
                 endif
             endif
             call o_prev%kill
@@ -156,23 +188,20 @@ contains
             enddo
         endif
         call neigh_map%kill
-        ! Build sparse edge lists from internally generated neighborhood masks
-        call self%build_sparse_from_mask(mask, state_out)
+        call self%build_sparse_from_mask(mask)
         if( allocated(mask)             ) deallocate(mask)
-        if( allocated(state_out)        ) deallocate(state_out)
-        if( allocated(full2sub)         ) deallocate(full2sub)
         if( allocated(inpl_dists)       ) deallocate(inpl_dists)
-        if( allocated(coarse_best_corr) ) deallocate(coarse_best_corr)
+        if( allocated(coarse_best_dist) ) deallocate(coarse_best_dist)
         if( allocated(peak_sub_idxs)    ) deallocate(peak_sub_idxs)
+        if( allocated(all_sub_idxs)     ) deallocate(all_sub_idxs)
     end subroutine build_neigh_mask_from_subspace_peaks
 
     !===========================================================
-    ! Constructor: build sparse edges from per-particle neigh_mask(nspace,nptcls)
-    ! neigh_mask(:,i) flags which projections (iproj) to evaluate for particle pinds(i).
-    ! Those projections are interpreted in state = ptcl_state(i) (if provided),
-    ! otherwise state is taken from previous orientation in spproj_field.
+    ! Common constructor logic for both local-part and driver
+    ! objects. Builds the global reference/state maps, but does
+    ! not yet assemble any sparse neighborhood graph.
     !===========================================================
-    subroutine new_from_mask(self, params, build, pinds, empty_okay)
+    subroutine init_common(self, params, build, pinds, empty_okay)
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
@@ -186,9 +215,7 @@ contains
         self%nptcls = size(pinds)
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%assgn_map(self%nptcls))
-        ! initialize assignment map
         call init_assgn_map(self)
-        ! existence filtering (mirrors dense new_1)
         l_empty = (trim(params%empty3Dcavgs) .eq. 'yes')
         if (present(empty_okay)) l_empty = empty_okay
         self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
@@ -203,11 +230,36 @@ contains
             THROW_HARD('No valid references available after state/projection existence filtering')
         endif
         call self%build_ref_lists_and_map()
-        ! Build sparse edge lists from internally generated neighborhood masks
+    end subroutine init_common
+
+    !===========================================================
+    ! Constructor: initialize object and build the local
+    ! neighborhood graph for each particle.
+    !===========================================================
+    subroutine new_from_mask(self, params, build, pinds, empty_okay)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        logical, optional,         intent(in)    :: empty_okay
+        call self%init_common(params, build, pinds, empty_okay)
         call self%build_neigh_mask_from_subspace_peaks()
-        ! Build reference-major adjacency once
         call self%build_ref_adjacency()
     end subroutine new_from_mask
+
+    !===========================================================
+    ! Constructor for the global driver object.
+    ! Initializes the global particle and reference maps but does
+    ! not build neighborhoods or require PFTC preparation.
+    !===========================================================
+    subroutine new_global(self, params, build, pinds, empty_okay)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        logical, optional,         intent(in)    :: empty_okay
+        call self%init_common(params, build, pinds, empty_okay)
+    end subroutine new_global
 
     subroutine init_assgn_map(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
@@ -233,6 +285,7 @@ contains
         integer :: state_list_idx, ref_idx, istate, iproj
         allocate(self%active_state_indices(self%nstates), self%ref_proj_indices(self%nrefs), self%ref_state_indices(self%nrefs))
         allocate(self%ref_index_map(self%p_ptr%nspace, self%p_ptr%nstates), source=0)
+        allocate(self%proj_active_state_count(self%p_ptr%nspace), source=0)
         state_list_idx = 0
         ref_idx = 0
         do istate = 1, self%p_ptr%nstates
@@ -245,6 +298,7 @@ contains
                 self%ref_proj_indices(ref_idx) = iproj
                 self%ref_state_indices(ref_idx) = istate
                 self%ref_index_map(iproj, istate) = ref_idx
+                self%proj_active_state_count(iproj) = self%proj_active_state_count(iproj) + 1
             enddo
         enddo
     end subroutine build_ref_lists_and_map
@@ -260,71 +314,54 @@ contains
     ! A particle must always have at least one valid neighbor.
     ! If any particle has zero valid neighbors after filtering, fail hard.
     !===========================================================
-    subroutine build_sparse_from_mask(self, neigh_mask, ptcl_state)
+    subroutine build_sparse_from_mask(self, neigh_mask)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        logical,           intent(in) :: neigh_mask(:,:)         ! (nspace,nptcls)
-        integer, optional, intent(in) :: ptcl_state(:)           ! (nptcls)
-        integer, allocatable :: ptcl_degree(:), state_for_ptcl(:)
-        integer :: i, iproj, istate, ref_idx, edge_write_pos, edge_idx, iptcl
-        type(ori) :: o_prev
+        logical, intent(in) :: neigh_mask(:,:)         ! (nspace,nptcls)
+        integer :: i, iproj, state_list_idx, istate, ref_idx, edge_write_pos, edge_idx, iptcl
         real :: x
-        allocate(ptcl_degree(self%nptcls), state_for_ptcl(self%nptcls), source=0)
-        ! Determine state per particle (either provided or from previous ori)
-        if (present(ptcl_state)) then
-            state_for_ptcl = ptcl_state
-        else
-            do i = 1, self%nptcls
-                iptcl = self%pinds(i)
-                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
-                state_for_ptcl(i) = o_prev%get_state()
-            enddo
-            call o_prev%kill
+        if( size(neigh_mask,1) /= self%p_ptr%nspace .or. size(neigh_mask,2) /= self%nptcls )then
+            THROW_HARD('build_sparse_from_mask: neighborhood mask shape mismatch')
         endif
-        ! Pass 1: count valid neighbors per particle and enforce at least 1 candidate
-        do i = 1, self%nptcls
-            istate = state_for_ptcl(i)
-            ptcl_degree(i) = 0
-            if (istate >= 1 .and. istate <= self%p_ptr%nstates .and. self%state_exists(istate)) then
-                ! count only those projections that both mask and exist in cavgs
-                ptcl_degree(i) = count(neigh_mask(:,i) .and. self%proj_exists(:,istate))
-            endif
-            if (ptcl_degree(i) == 0) then
-                THROW_HARD('Particle has zero valid neighbors in neighborhood mask')
-            endif
-        enddo
-        self%maxdeg_ptcl = maxval(ptcl_degree)
+        if( allocated(self%ptcl_off) ) deallocate(self%ptcl_off)
+        if( allocated(self%edge_ref_index) ) deallocate(self%edge_ref_index)
+        if( allocated(self%edge_ptcl) ) deallocate(self%edge_ptcl)
+        if( allocated(self%edge_val) ) deallocate(self%edge_val)
         allocate(self%ptcl_off(self%nptcls+1))
         self%ptcl_off(1) = 1
         do i = 1, self%nptcls
-            self%ptcl_off(i+1) = self%ptcl_off(i) + ptcl_degree(i)
+            self%ptcl_off(i+1) = self%ptcl_off(i) + sum(self%proj_active_state_count, mask=neigh_mask(:,i))
+            if( self%ptcl_off(i+1) == self%ptcl_off(i) )then
+                THROW_HARD('Particle has zero valid neighbors in neighborhood mask')
+            endif
         enddo
         self%nedges = self%ptcl_off(self%nptcls+1) - 1
+        self%maxdeg_ptcl = maxval(self%ptcl_off(2:self%nptcls+1) - self%ptcl_off(1:self%nptcls))
         allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
-        ! Pass 2: fill edges by scanning the mask
         do i = 1, self%nptcls
-            iptcl  = self%pinds(i)
-            istate = state_for_ptcl(i)
+            iptcl = self%pinds(i)
             edge_write_pos = self%ptcl_off(i)
             do iproj = 1, self%p_ptr%nspace
                 if (.not. neigh_mask(iproj,i)) cycle
-                if (.not. self%proj_exists(iproj,istate)) cycle
-                ref_idx = self%ref_index_map(iproj,istate)
-                if (ref_idx <= 0) cycle
-                edge_idx = edge_write_pos
-                self%edge_ref_index(edge_idx)         = ref_idx
-                self%edge_ptcl(edge_idx)       = i
-                self%edge_val(edge_idx)%pind   = iptcl
-                self%edge_val(edge_idx)%istate = istate
-                self%edge_val(edge_idx)%iproj  = iproj
-                self%edge_val(edge_idx)%inpl   = 0
-                self%edge_val(edge_idx)%dist   = huge(x)
-                self%edge_val(edge_idx)%x      = 0.
-                self%edge_val(edge_idx)%y      = 0.
-                self%edge_val(edge_idx)%has_sh = .false.
-                edge_write_pos = edge_write_pos + 1
+                do state_list_idx = 1, self%nstates
+                    istate = self%active_state_indices(state_list_idx)
+                    if (.not. self%proj_exists(iproj,istate)) cycle
+                    ref_idx = self%ref_index_map(iproj,istate)
+                    if (ref_idx <= 0) cycle
+                    edge_idx = edge_write_pos
+                    self%edge_ref_index(edge_idx) = ref_idx
+                    self%edge_ptcl(edge_idx)      = i
+                    self%edge_val(edge_idx)%pind   = iptcl
+                    self%edge_val(edge_idx)%istate = istate
+                    self%edge_val(edge_idx)%iproj  = iproj
+                    self%edge_val(edge_idx)%inpl   = 0
+                    self%edge_val(edge_idx)%dist   = huge(x)
+                    self%edge_val(edge_idx)%x      = 0.
+                    self%edge_val(edge_idx)%y      = 0.
+                    self%edge_val(edge_idx)%has_sh = .false.
+                    edge_write_pos = edge_write_pos + 1
+                enddo
             enddo
         enddo
-        deallocate(ptcl_degree, state_for_ptcl)
     end subroutine build_sparse_from_mask
 
     !===========================================================
@@ -357,6 +394,8 @@ contains
         do edge_idx = 1, self%nedges
             edge_count_by_ref(self%edge_ref_index(edge_idx)) = edge_count_by_ref(self%edge_ref_index(edge_idx)) + 1
         enddo
+        if (allocated(self%ref_edge_offsets)) deallocate(self%ref_edge_offsets)
+        if (allocated(self%ref_edge_indices)) deallocate(self%ref_edge_indices)
         allocate(self%ref_edge_offsets(self%nrefs+1), self%ref_edge_indices(self%nedges), ref_write_ptr(self%nrefs))
         self%ref_edge_offsets(1) = 1
         do ref_idx = 1, self%nrefs
@@ -417,7 +456,7 @@ contains
                 istate = o_prev%get_state()
                 iproj  = self%b_ptr%eulspace%find_closest_proj(o_prev)
                 irot   = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
-                if (istate >= 1 .and. istate <= self%p_ptr%nstates) then
+                if (istate >= 1 .and. istate <= self%p_ptr%nstates .and. iproj >= 1 .and. iproj <= self%p_ptr%nspace) then
                     if (self%ref_index_map(iproj,istate) > 0) then
                         iref_start = (istate - 1) * self%p_ptr%nspace
                         call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
@@ -452,6 +491,7 @@ contains
                     candidate_dist(candidate_i,ithr) = self%edge_val(e)%dist
                     candidate_edge(candidate_i,ithr) = e
                 enddo
+                call o_prev%kill
                 if (self%p_ptr%l_prob_sh) then
                     n_refine = min(n_refs_to_refine, n_candidates)
                     if (n_refine > 0) then
@@ -562,7 +602,6 @@ contains
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         enddo
-        call o_prev%kill
         deallocate(inpl_angle_thres, dists_inpl, dists_inpl_sorted, inds_sorted, candidate_dist, candidate_edge)
     end subroutine fill_tab_sparse
 
@@ -768,8 +807,169 @@ contains
     end subroutine ref_assign_sparse
 
     !===========================================================
+    ! Sparse table I/O.
+    ! Each partition writes its particle-major CSR rows. The driver
+    ! reads all partition files, rebuilds the global sparse graph,
+    ! and only then performs the globally coupled assignment.
+    !===========================================================
+    subroutine write_tab(self, binfname)
+        class(eul_prob_tab_neigh), intent(in) :: self
+        class(string), intent(in) :: binfname
+        integer :: funit, addr, io_stat, file_header(3)
+        file_header(1) = self%nrefs
+        file_header(2) = self%nptcls
+        file_header(3) = self%nedges
+        call fopen(funit, binfname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
+        write(unit=funit, pos=1) file_header
+        addr = size(file_header) * sizeof(file_header(1)) + 1
+        write(unit=funit, pos=addr) self%pinds
+        addr = addr + self%nptcls * sizeof(self%pinds(1))
+        write(unit=funit, pos=addr) self%ptcl_off
+        addr = addr + (self%nptcls + 1) * sizeof(self%ptcl_off(1))
+        write(unit=funit, pos=addr) self%edge_val
+        call fclose(funit)
+    end subroutine write_tab
+
+    subroutine read_tabs_to_glob(self, fbody, nparts, numlen)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(string), intent(in) :: fbody
+        integer, intent(in) :: nparts, numlen
+        type(string) :: binfname
+        type(ptcl_ref), allocatable :: edge_val_loc(:)
+        integer, allocatable :: degree_by_ptcl(:), fill_ptr(:), pind_to_local(:), pinds_loc(:), ptcl_off_loc(:)
+        integer :: funit, addr, io_stat, file_header(3), header_bytes
+        integer :: ipart, nrefs_loc, nptcls_loc, nedges_loc, local_i, global_i, local_e, global_e, ref_idx
+        if( nparts < 1 )then
+            THROW_HARD('read_tabs_to_glob: nparts must be >= 1')
+        endif
+        if( allocated(self%ptcl_off)         ) deallocate(self%ptcl_off)
+        if( allocated(self%edge_ref_index)   ) deallocate(self%edge_ref_index)
+        if( allocated(self%edge_ptcl)        ) deallocate(self%edge_ptcl)
+        if( allocated(self%edge_val)         ) deallocate(self%edge_val)
+        if( allocated(self%ref_edge_offsets) ) deallocate(self%ref_edge_offsets)
+        if( allocated(self%ref_edge_indices) ) deallocate(self%ref_edge_indices)
+        allocate(degree_by_ptcl(self%nptcls), source=0)
+        allocate(pind_to_local(self%p_ptr%nptcls), source=0)
+        do global_i = 1, self%nptcls
+            if( self%pinds(global_i) < 1 .or. self%pinds(global_i) > self%p_ptr%nptcls )then
+                THROW_HARD('read_tabs_to_glob: global particle index out of range')
+            endif
+            if( pind_to_local(self%pinds(global_i)) /= 0 )then
+                THROW_HARD('read_tabs_to_glob: duplicate particle index in global sampled set')
+            endif
+            pind_to_local(self%pinds(global_i)) = global_i
+        enddo
+        header_bytes = size(file_header) * sizeof(file_header(1))
+        do ipart = 1, nparts
+            binfname = fbody//int2str_pad(ipart, numlen)//'.dat'
+            if( .not. file_exists(binfname) )then
+                THROW_HARD('file '//binfname%to_char()//' does not exists!')
+            else
+                call fopen(funit, binfname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+            endif
+            call fileiochk('simple_eul_prob_tab_neigh; read_tabs_to_glob; file: '//binfname%to_char(), io_stat)
+            read(unit=funit, pos=1) file_header
+            nrefs_loc  = file_header(1)
+            nptcls_loc = file_header(2)
+            nedges_loc = file_header(3)
+            if( nrefs_loc /= self%nrefs )then
+                THROW_HARD('read_tabs_to_glob: nrefs mismatch between sparse partition file and global object')
+            endif
+            allocate(pinds_loc(nptcls_loc), ptcl_off_loc(nptcls_loc + 1))
+            addr = header_bytes + 1
+            read(unit=funit, pos=addr) pinds_loc
+            addr = addr + nptcls_loc * sizeof(pinds_loc(1))
+            read(unit=funit, pos=addr) ptcl_off_loc
+            call fclose(funit)
+            if( ptcl_off_loc(1) /= 1 )then
+                THROW_HARD('read_tabs_to_glob: invalid sparse partition offsets')
+            endif
+            if( ptcl_off_loc(nptcls_loc + 1) - 1 /= nedges_loc )then
+                THROW_HARD('read_tabs_to_glob: sparse partition header/offset mismatch')
+            endif
+            do local_i = 1, nptcls_loc
+                if( pinds_loc(local_i) < 1 .or. pinds_loc(local_i) > self%p_ptr%nptcls )then
+                    THROW_HARD('read_tabs_to_glob: partition file contains particle index out of range')
+                endif
+                global_i = pind_to_local(pinds_loc(local_i))
+                if( global_i <= 0 )then
+                    THROW_HARD('read_tabs_to_glob: partition file contains particle outside the sampled set')
+                endif
+                if( degree_by_ptcl(global_i) /= 0 )then
+                    THROW_HARD('read_tabs_to_glob: duplicate particle across sparse partition files')
+                endif
+                degree_by_ptcl(global_i) = ptcl_off_loc(local_i + 1) - ptcl_off_loc(local_i)
+                if( degree_by_ptcl(global_i) <= 0 )then
+                    THROW_HARD('read_tabs_to_glob: sparse partition row has no edges')
+                endif
+            enddo
+            deallocate(pinds_loc, ptcl_off_loc)
+        enddo
+        if( any(degree_by_ptcl <= 0) )then
+            THROW_HARD('read_tabs_to_glob: missing sparse neighborhood rows for one or more particles')
+        endif
+        allocate(self%ptcl_off(self%nptcls + 1))
+        self%ptcl_off(1) = 1
+        do global_i = 1, self%nptcls
+            self%ptcl_off(global_i + 1) = self%ptcl_off(global_i) + degree_by_ptcl(global_i)
+        enddo
+        self%nedges = self%ptcl_off(self%nptcls + 1) - 1
+        self%maxdeg_ptcl = maxval(degree_by_ptcl)
+        allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
+        allocate(fill_ptr(self%nptcls), source=self%ptcl_off(1:self%nptcls))
+        do ipart = 1, nparts
+            binfname = fbody//int2str_pad(ipart, numlen)//'.dat'
+            if( .not. file_exists(binfname) )then
+                THROW_HARD('file '//binfname%to_char()//' does not exists!')
+            else
+                call fopen(funit, binfname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+            endif
+            call fileiochk('simple_eul_prob_tab_neigh; read_tabs_to_glob; file: '//binfname%to_char(), io_stat)
+            read(unit=funit, pos=1) file_header
+            nptcls_loc = file_header(2)
+            nedges_loc = file_header(3)
+            allocate(pinds_loc(nptcls_loc), ptcl_off_loc(nptcls_loc + 1), edge_val_loc(nedges_loc))
+            addr = header_bytes + 1
+            read(unit=funit, pos=addr) pinds_loc
+            addr = addr + nptcls_loc * sizeof(pinds_loc(1))
+            read(unit=funit, pos=addr) ptcl_off_loc
+            addr = addr + (nptcls_loc + 1) * sizeof(ptcl_off_loc(1))
+            read(unit=funit, pos=addr) edge_val_loc
+            call fclose(funit)
+            do local_i = 1, nptcls_loc
+                global_i = pind_to_local(pinds_loc(local_i))
+                global_e = fill_ptr(global_i)
+                do local_e = ptcl_off_loc(local_i), ptcl_off_loc(local_i + 1) - 1
+                    if( edge_val_loc(local_e)%iproj < 1 .or. edge_val_loc(local_e)%iproj > self%p_ptr%nspace )then
+                        THROW_HARD('read_tabs_to_glob: sparse partition edge has iproj out of range')
+                    endif
+                    if( edge_val_loc(local_e)%istate < 1 .or. edge_val_loc(local_e)%istate > self%p_ptr%nstates )then
+                        THROW_HARD('read_tabs_to_glob: sparse partition edge has istate out of range')
+                    endif
+                    ref_idx = self%ref_index_map(edge_val_loc(local_e)%iproj, edge_val_loc(local_e)%istate)
+                    if( ref_idx <= 0 )then
+                        THROW_HARD('read_tabs_to_glob: sparse partition edge refers to an inactive reference')
+                    endif
+                    self%edge_ref_index(global_e) = ref_idx
+                    self%edge_ptcl(global_e)      = global_i
+                    self%edge_val(global_e)       = edge_val_loc(local_e)
+                    global_e = global_e + 1
+                enddo
+                fill_ptr(global_i) = global_e
+            enddo
+            deallocate(pinds_loc, ptcl_off_loc, edge_val_loc)
+        enddo
+        if( any(fill_ptr /= self%ptcl_off(2:self%nptcls + 1)) )then
+            THROW_HARD('read_tabs_to_glob: failed to reconstruct the sparse global table consistently')
+        endif
+        call self%build_ref_adjacency()
+        deallocate(degree_by_ptcl, fill_ptr, pind_to_local)
+    end subroutine read_tabs_to_glob
+
+    !===========================================================
     ! Assignment I/O (same format as dense write_assignment/read_assignment)
     !===========================================================
+
     subroutine write_assignment(self, binfname)
         class(eul_prob_tab_neigh), intent(in) :: self
         class(string), intent(in) :: binfname
@@ -785,7 +985,8 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(string), intent(in) :: binfname
         type(ptcl_ref), allocatable :: assgn_glob(:)
-        integer :: funit, io_stat, nptcls_glob, headsz, local_idx, global_idx
+        integer, allocatable :: pind_to_local(:)
+        integer :: funit, io_stat, nptcls_glob, headsz, local_idx, global_idx, pind
         headsz = sizeof(nptcls_glob)
         if (.not. file_exists(binfname)) then
             THROW_HARD('file '//binfname%to_char()//' does not exists!')
@@ -797,38 +998,42 @@ contains
         allocate(assgn_glob(nptcls_glob))
         read(unit=funit, pos=headsz + 1) assgn_glob
         call fclose(funit)
-        !$omp parallel do default(shared) private(local_idx,global_idx) proc_bind(close) schedule(static)
+        allocate(pind_to_local(self%p_ptr%nptcls), source=0)
         do local_idx = 1, self%nptcls
-            do global_idx = 1, nptcls_glob
-                if (self%assgn_map(local_idx)%pind == assgn_glob(global_idx)%pind) then
-                    self%assgn_map(local_idx) = assgn_glob(global_idx)
-                    exit
-                endif
-            enddo
+            pind = self%assgn_map(local_idx)%pind
+            if (pind < 1 .or. pind > self%p_ptr%nptcls) cycle
+            pind_to_local(pind) = local_idx
         enddo
-        !$omp end parallel do
-        deallocate(assgn_glob)
+        do global_idx = 1, nptcls_glob
+            pind = assgn_glob(global_idx)%pind
+            if (pind < 1 .or. pind > self%p_ptr%nptcls) cycle
+            local_idx = pind_to_local(pind)
+            if (local_idx > 0) self%assgn_map(local_idx) = assgn_glob(global_idx)
+        enddo
+        deallocate(pind_to_local, assgn_glob)
     end subroutine read_assignment
+
 
     !===========================================================
     ! Destructor
     !===========================================================
     subroutine kill(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        if (allocated(self%pinds))                deallocate(self%pinds)
-        if (allocated(self%assgn_map))            deallocate(self%assgn_map)
-        if (allocated(self%proj_exists))          deallocate(self%proj_exists)
-        if (allocated(self%state_exists))         deallocate(self%state_exists)
-        if (allocated(self%active_state_indices)) deallocate(self%active_state_indices)
-        if (allocated(self%ref_proj_indices))     deallocate(self%ref_proj_indices)
-        if (allocated(self%ref_state_indices))    deallocate(self%ref_state_indices)
-        if (allocated(self%ref_index_map))        deallocate(self%ref_index_map)
-        if (allocated(self%ptcl_off))             deallocate(self%ptcl_off)
-        if (allocated(self%edge_ref_index))       deallocate(self%edge_ref_index)
-        if (allocated(self%edge_ptcl))            deallocate(self%edge_ptcl)
-        if (allocated(self%edge_val))             deallocate(self%edge_val)
-        if (allocated(self%ref_edge_offsets))     deallocate(self%ref_edge_offsets)
-        if (allocated(self%ref_edge_indices))     deallocate(self%ref_edge_indices)
+        if (allocated(self%pinds))                   deallocate(self%pinds)
+        if (allocated(self%assgn_map))               deallocate(self%assgn_map)
+        if (allocated(self%proj_exists))             deallocate(self%proj_exists)
+        if (allocated(self%state_exists))            deallocate(self%state_exists)
+        if (allocated(self%active_state_indices))    deallocate(self%active_state_indices)
+        if (allocated(self%ref_proj_indices))        deallocate(self%ref_proj_indices)
+        if (allocated(self%ref_state_indices))       deallocate(self%ref_state_indices)
+        if (allocated(self%ref_index_map))           deallocate(self%ref_index_map)
+        if (allocated(self%proj_active_state_count)) deallocate(self%proj_active_state_count)
+        if (allocated(self%ptcl_off))                deallocate(self%ptcl_off)
+        if (allocated(self%edge_ref_index))          deallocate(self%edge_ref_index)
+        if (allocated(self%edge_ptcl))               deallocate(self%edge_ptcl)
+        if (allocated(self%edge_val))                deallocate(self%edge_val)
+        if (allocated(self%ref_edge_offsets))        deallocate(self%ref_edge_offsets)
+        if (allocated(self%ref_edge_indices))        deallocate(self%ref_edge_indices)
         self%nptcls      = 0
         self%nstates     = 0
         self%nrefs       = 0

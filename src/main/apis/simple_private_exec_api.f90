@@ -42,7 +42,7 @@ use simple_commanders_project_ptcl, only: commander_prune_project, commander_sca
 
 ! refine3D commanders, low-level methods for refine3D for ab initio 3D reconstruction and 3D refinement
 use simple_commanders_refine3D, only: commander_refine3D_distr_worker
-use simple_commanders_prob,     only: commander_prob_tab, commander_prob_align
+use simple_commanders_prob,     only: commander_prob_tab, commander_prob_tab_neigh, commander_prob_align, commander_prob_align_neigh
 
 ! euclid commanders, for obtaining signal statistics for noise normalized Euclidean distance functiuon evalutaion
 use simple_commanders_euclid,       only: commander_calc_pspec,commander_calc_group_sigmas

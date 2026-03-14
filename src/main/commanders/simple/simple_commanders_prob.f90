@@ -19,6 +19,11 @@ type, extends(commander_base) :: commander_prob_align
     procedure :: execute      => exec_prob_align
 end type commander_prob_align
 
+type, extends(commander_base) :: commander_prob_align_neigh
+    contains
+        procedure :: execute      => exec_prob_align_neigh
+end type commander_prob_align_neigh
+
 contains
 
     subroutine exec_prob_tab( self, cline )
@@ -27,12 +32,12 @@ contains
         use simple_imgarr_utils, only: dealloc_imgarr
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        integer,          allocatable :: pinds(:)
-        type(image),      allocatable :: tmp_imgs(:), tmp_imgs_pad(:)
-        type(string)                  :: fname
-        type(builder)                 :: build
-        type(parameters)              :: params
-        type(eul_prob_tab)            :: eulprob_obj_part
+        integer,     allocatable :: pinds(:)
+        type(image), allocatable :: tmp_imgs(:), tmp_imgs_pad(:)
+        type(string)             :: fname
+        type(builder)            :: build
+        type(parameters)         :: params
+        type(eul_prob_tab)       :: eulprob_obj_part
         integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
@@ -97,18 +102,25 @@ contains
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
         ! Build polar particle images
         call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        if( str_has_substr(params%refine, 'prob_state') )then
+            THROW_HARD('exec_prob_tab_neigh does not support refine=prob_state; use the dense probabilistic state path')
+        endif
         if( .not. allocated(build%subspace_inds) )then
-            THROW_HARD('exec_prob_tab_neigh requires neighborhood subspace indices; enable l_neigh and set nspace_sub')
+            THROW_HARD('exec_prob_tab_neigh requires neighborhood representative projections; enable l_neigh and set nspace_sub')
         endif
         if( size(build%subspace_inds) /= params%nspace_sub )then
             THROW_HARD('exec_prob_tab_neigh: size(subspace_inds) must equal nspace_sub')
         endif
+        if( .not. allocated(build%subspace_full2sub_map) )then
+            THROW_HARD('exec_prob_tab_neigh requires full-space neighborhood labels (subspace_full2sub_map)')
+        endif
+        if( size(build%subspace_full2sub_map) /= params%nspace )then
+            THROW_HARD('exec_prob_tab_neigh: size(subspace_full2sub_map) must equal nspace')
+        endif
         call eulprob_obj_part_neigh%new(params, build, pinds)
         call eulprob_obj_part_neigh%fill_tab
-        call eulprob_obj_part_neigh%ref_assign
-        ! Write local assignment map for this part.
-        fname = string(ASSIGNMENT_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
-        call eulprob_obj_part_neigh%write_assignment(fname)
+        fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
+        call eulprob_obj_part_neigh%write_tab(fname)
         call eulprob_obj_part_neigh%kill
         call killimgbatch(build)
         call build%pftc%kill
@@ -125,15 +137,15 @@ contains
         use simple_builder,             only: builder
         class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        integer,            allocatable :: pinds(:)
-        type(string)                    :: fname
-        type(builder)                   :: build
-        type(parameters)                :: params
-        type(commander_prob_tab)        :: xprob_tab
-        type(eul_prob_tab)              :: eulprob_obj_glob
-        type(cmdline)                   :: cline_prob_tab
-        type(qsys_env)                  :: qenv
-        type(chash)                     :: job_descr
+        integer,     allocatable :: pinds(:)
+        type(string)             :: fname
+        type(builder)            :: build
+        type(parameters)         :: params
+        type(commander_prob_tab) :: xprob_tab
+        type(eul_prob_tab)       :: eulprob_obj_glob
+        type(cmdline)            :: cline_prob_tab
+        type(qsys_env)           :: qenv
+        type(chash)              :: job_descr
         integer :: nptcls, ipart
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
@@ -189,5 +201,73 @@ contains
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align
+
+    subroutine exec_prob_align_neigh( self, cline )
+        use simple_eul_prob_tab_neigh,  only: eul_prob_tab_neigh
+        use simple_strategy2D3D_common, only: sample_ptcls4fillin, sample_ptcls4update
+        use simple_builder,             only: builder
+        class(commander_prob_align_neigh), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        integer,           allocatable :: pinds(:)
+        type(string)                   :: fname
+        type(builder)                  :: build
+        type(parameters)               :: params
+        type(commander_prob_tab_neigh) :: xprob_tab_neigh
+        type(eul_prob_tab_neigh)       :: eulprob_obj_glob_neigh
+        type(cmdline)                  :: cline_prob_tab
+        type(qsys_env)                 :: qenv
+        type(chash)                    :: job_descr
+        integer :: nptcls
+        call cline%set('mkdir',  'no')
+        call cline%set('stream', 'no')
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        if( .not. params%l_neigh )then
+            THROW_HARD('exec_prob_align_neigh requires l_neigh=yes')
+        endif
+        if( str_has_substr(params%refine, 'prob_state') )then
+            THROW_HARD('exec_prob_align_neigh does not support refine=prob_state; use exec_prob_align')
+        endif
+        if( .not. allocated(build%subspace_inds) )then
+            THROW_HARD('exec_prob_align_neigh requires neighborhood representative projections; enable l_neigh and set nspace_sub')
+        endif
+        if( size(build%subspace_inds) /= params%nspace_sub )then
+            THROW_HARD('exec_prob_align_neigh: size(subspace_inds) must equal nspace_sub')
+        endif
+        if( .not. allocated(build%subspace_full2sub_map) )then
+            THROW_HARD('exec_prob_align_neigh requires full-space neighborhood labels (subspace_full2sub_map)')
+        endif
+        if( size(build%subspace_full2sub_map) /= params%nspace )then
+            THROW_HARD('exec_prob_align_neigh: size(subspace_full2sub_map) must equal nspace')
+        endif
+        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        if( params%l_fillin .and. mod(params%startit,5) == 0 )then
+            call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
+        else
+            call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
+        endif
+        call build%spproj%write_segment_inside(params%oritype)
+        call eulprob_obj_glob_neigh%new_global(params, build, pinds)
+        cline_prob_tab = cline
+        call cline_prob_tab%set('prg', 'prob_tab_neigh')
+        if( .not. cline_prob_tab%defined('nparts') )then
+            call xprob_tab_neigh%execute(cline_prob_tab)
+        else
+            call qenv%new(params, params%nparts, nptcls=params%nptcls)
+            call cline_prob_tab%gen_job_descr(job_descr)
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+        endif
+        call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
+        call eulprob_obj_glob_neigh%ref_assign
+        fname = string(ASSIGNMENT_FBODY)//'.dat'
+        call eulprob_obj_glob_neigh%write_assignment(fname)
+        call eulprob_obj_glob_neigh%kill
+        call cline_prob_tab%kill
+        call qenv%kill
+        call job_descr%kill
+        call build%kill_general_tbox
+        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_align_neigh'))
+        call qsys_cleanup(params)
+        call simple_end('**** SIMPLE_PROB_ALIGN_NEIGH NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prob_align_neigh
 
 end module simple_commanders_prob
