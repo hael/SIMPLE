@@ -67,7 +67,7 @@ contains
         if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',                     90.) ! reduces # failed runs on trpv1 from 4->2/10
         if( .not. cline%defined('cenlp')            ) call cline%set('cenlp',                 CENLP_DEFAULT)
         if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',                      'cavg')
-        if( .not. cline%defined('lp_auto')          ) call cline%set('lp_auto',                        'no')
+        if( .not. cline%defined('lp_auto')          ) call cline%set('lp_auto',                       'yes')
         if( .not. cline%defined('noise_norm')       ) call cline%set('noise_norm',                     'no')
         if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',                          'no')
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',               LPSTART_INI3D)
@@ -426,7 +426,6 @@ contains
         call cline%set('lp_auto',       'no')
         call cline%set('lpstart_ini3D', lpstart)
         call cline%set('lpstop_ini3D',  lpstop)
-        call cline%set('lp_auto',       'no')
         call cline%set('nspace_max',    1500)
         call cline%set('nstages',       NSTAGES_INI3D_MAX)
         call cline%set('rank_cavgs',    'yes')
