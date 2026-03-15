@@ -40,8 +40,7 @@ type :: eul_prob_tab_neigh
     integer,        allocatable :: ref_edge_offsets(:)      ! (nrefs+1)
     integer,        allocatable :: ref_edge_indices(:)      ! (nedges), edge indices sorted by reference for fast access to all particles assigned to a given reference
 contains
-    procedure          :: new            => new_from_mask
-    procedure          :: new_global
+    procedure          :: new            => new_global
     procedure          :: fill_tab       => fill_tab_sparse
     procedure          :: ref_assign     => ref_assign_sparse
     procedure          :: write_tab
@@ -67,7 +66,7 @@ contains
     ! Evaluates each subspace projection for every particle,
     ! picks the top npeak_use peaks, and unions their neighbor
     ! masks (plus the previous-orientation neighbor mask) to
-    ! produce the logical mask(:,i) passed to new_from_mask.
+    ! produce the logical mask(:,i)
     !===========================================================
     subroutine build_neigh_mask_from_subspace_peaks(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
@@ -231,21 +230,6 @@ contains
         endif
         call self%build_ref_lists_and_map()
     end subroutine init_common
-
-    !===========================================================
-    ! Constructor: initialize object and build the local
-    ! neighborhood graph for each particle.
-    !===========================================================
-    subroutine new_from_mask(self, params, build, pinds, empty_okay)
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(builder),    target, intent(in)    :: build
-        integer,                   intent(in)    :: pinds(:)
-        logical, optional,         intent(in)    :: empty_okay
-        call self%init_common(params, build, pinds, empty_okay)
-        call self%build_neigh_mask_from_subspace_peaks()
-        call self%build_ref_adjacency()
-    end subroutine new_from_mask
 
     !===========================================================
     ! Constructor for the global driver object.

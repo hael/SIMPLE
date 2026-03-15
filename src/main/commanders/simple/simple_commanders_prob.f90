@@ -90,18 +90,7 @@ contains
         integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range( params, build, cline )
-        ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
-        if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
-        else
-            THROW_HARD('exec_prob_tab_neigh requires prior particle sampling (in exec_prob_align)')
-        endif
-        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
-                                        do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
-        ! Build polar particle images
-        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        ! exception handling for required neighborhood setup
         if( str_has_substr(params%refine, 'prob_state') )then
             THROW_HARD('exec_prob_tab_neigh does not support refine=prob_state; use the dense probabilistic state path')
         endif
@@ -117,6 +106,19 @@ contains
         if( size(build%subspace_full2sub_map) /= params%nspace )then
             THROW_HARD('exec_prob_tab_neigh: size(subspace_full2sub_map) must equal nspace')
         endif
+        call set_bp_range( params, build, cline )
+        ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
+        if( build%spproj_field%has_been_sampled() )then
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
+        else
+            THROW_HARD('exec_prob_tab_neigh requires prior particle sampling (in exec_prob_align)')
+        endif
+        ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
+        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+                                        do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
+        ! Build polar particle images
+        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        
         call eulprob_obj_part_neigh%new(params, build, pinds)
         call eulprob_obj_part_neigh%fill_tab
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
@@ -221,6 +223,7 @@ contains
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        ! exception handling for required neighborhood setup
         if( .not. params%l_neigh )then
             THROW_HARD('exec_prob_align_neigh requires l_neigh=yes')
         endif
@@ -246,7 +249,7 @@ contains
             call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         call build%spproj%write_segment_inside(params%oritype)
-        call eulprob_obj_glob_neigh%new_global(params, build, pinds)
+        call eulprob_obj_glob_neigh%new(params, build, pinds)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
         if( .not. cline_prob_tab%defined('nparts') )then
@@ -258,8 +261,10 @@ contains
         endif
         call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
         call eulprob_obj_glob_neigh%ref_assign
+        ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob_neigh%write_assignment(fname)
+        ! cleanup
         call eulprob_obj_glob_neigh%kill
         call cline_prob_tab%kill
         call qenv%kill
