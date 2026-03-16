@@ -9,6 +9,7 @@ type(ui_program), target :: binoris_io_test
 type(ui_program), target :: cmdline
 type(ui_program), target :: install
 type(ui_program), target :: nice
+type(ui_program), target :: pdb2mrc
 type(ui_program), target :: serialize
 type(ui_program), target :: stringmatch
 
@@ -22,6 +23,7 @@ contains
         call new_cmdline(tsttab)
         call new_install(tsttab)
         call new_nice(tsttab)
+        call new_pdb2mrc(tsttab)
         call new_serialize(tsttab)
         call new_stringmatch(tsttab)
     end subroutine construct_test_utils_programs
@@ -35,6 +37,7 @@ contains
         write(logfhandle,'(A)') cmdline%name%to_char()
         write(logfhandle,'(A)') install%name%to_char()
         write(logfhandle,'(A)') nice%name%to_char()
+        write(logfhandle,'(A)') pdb2mrc%name%to_char()
         write(logfhandle,'(A)') serialize%name%to_char()
         write(logfhandle,'(A)') stringmatch%name%to_char()
         write(logfhandle,'(A)') ''
@@ -186,7 +189,7 @@ contains
         call nice%new(&
         &'nice',&                         ! name
         &'nice ',&                        ! descr_short
-        &'is a test program for ',&
+        &'is a test program for NICE',&
         &'simple_test_exec',&             ! executable
         &.false.)                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -208,13 +211,41 @@ contains
         call add_ui_program('nice', nice, tsttab)
     end subroutine new_nice
 
+    subroutine new_pdb2mrc( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call pdb2mrc%new(&
+        &'pdb2mrc',&                         ! name
+        &'pdb2mrc ',&                     ! descr_short
+        &'is a test program for pdb2mrc',&
+        &'simple_test_exec',&             ! executable
+        &.false.)                         ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call pdb2mrc%add_input(UI_IO, )
+        ! parameter input/output
+        !call pdb2mrc%add_input(UI_IMG, )
+        ! alternative inputs
+        !call pdb2mrc%add_input(UI_PARM, )
+        ! search controls
+        !call pdb2mrc%add_input(UI_SRCH, )
+        ! filter controls
+        !call pdb2mrc%add_input(UI_FILT, )
+        ! mask controls
+        !call pdb2mrc%add_input(UI_MASK, )
+        ! computer controls
+        !call pdb2mrc%add_input(UI_COMP, )
+        ! add to ui_hash
+        call add_ui_program('pdb2mrc', pdb2mrc, tsttab)
+    end subroutine new_pdb2mrc
+
     subroutine new_serialize( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call serialize%new(&
         &'serialize',&                         ! name
         &'serialize ',&                        ! descr_short
-        &'is a test program for ',&
+        &'is a test program for serialize',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -242,7 +273,7 @@ contains
         call stringmatch%new(&
         &'stringmatch',&                       ! name
         &'stringmatch ',&                      ! descr_short
-        &'is a test program for ',&
+        &'is a test program for stringmatch',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

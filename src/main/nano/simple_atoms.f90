@@ -32,8 +32,8 @@ private
 !  A2    77 - 78  LString(2)    element      Element symbol, right-justified.
 !  A2    79 - 80  LString(2)    charge       Charge on the atom.
 !  =============  ============  ===========  =============================================
-!character(len=80), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,6X,A4,2A2)"
-character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
+character(len=80), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,6X,A4,2A2)"
+!character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
 character(len=78), parameter :: pdbfmt_long     = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
 character(len=74), parameter :: pdbfmt_read     = "(A11,  1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"         ! custom 3.3
 character(len=78), parameter :: pdbfmt_longread = "(A11,  1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
@@ -147,9 +147,9 @@ contains
             read(filnum,'(A11)')elevenfirst
             if( .not.is_valid_entry(elevenfirst(1:6)) )cycle
             ! support for over 100000 entries
-            num = str2int(elevenfirst(7:11))
-            if( io_stat .ne. 0 )num = str2int(elevenfirst(6:11))
-            if( io_stat .ne. 0 )num = str2int(elevenfirst(5:11))
+            num = str2int(elevenfirst(7:11), io_stat)
+            if( io_stat .ne. 0 )num = str2int(elevenfirst(6:11), io_stat)
+            if( io_stat .ne. 0 )num = str2int(elevenfirst(5:11), io_stat)
             if( io_stat .ne. 0 )cycle
             n = n + 1
         enddo
@@ -163,10 +163,13 @@ contains
         do l = 1, nl
             read(filnum,'(A)')line
             if( .not.is_valid_entry(line(1:6)) )cycle
-            num = str2int(line(7:11))
-            if( io_stat .ne. 0 )num = str2int(line(6:11))
-            if( io_stat .ne. 0 )num = str2int(line(5:11))
+            num = str2int(line(7:11), io_stat)
+            if( io_stat .ne. 0 )num = str2int(line(6:11), io_stat)
+            if( io_stat .ne. 0 )num = str2int(line(5:11), io_stat)
             if( io_stat .ne. 0 )cycle
+            if( len_trim(line) < 80 )then
+                line = line // repeat(' ', 80 - len_trim(line))
+            endif
             i = i + 1
             if( len_trim(line) < 68 )then
                 read(line,pdbfmt_read, iostat=io_stat)elevenfirst, self%name(i), self%altloc(i),&
@@ -178,6 +181,7 @@ contains
                 &self%occupancy(i), self%beta(i), self%element(i)
             endif
             self%num(i) = num
+            self%name(i) = strip_digits(self%name(i))
             call fileiochk('new_from_pdb; simple_atoms error reading line '//fname%to_char(), io_stat)
             self%het(i) = atom_field == 'HETATM'
         enddo
@@ -192,7 +196,21 @@ contains
                 is_valid_entry = .false.
                 if( str(1:6).eq.'HETATM' ) is_valid_entry = .true.
                 if( str(1:4).eq.'ATOM' )   is_valid_entry = .true.
-            end function
+            end function is_valid_entry
+
+            elemental function strip_digits( name ) result( out )
+                character(len=*), intent(in) :: name
+                character(len=2) :: out
+                integer :: i, j
+                out = '  '
+                j = 0
+                do i = 1, len_trim(name)
+                    if (name(i:i) >= 'A' .and. name(i:i) <= 'Z') then
+                        j = j + 1
+                        if (j <= 2) out(j:j) = name(i:i)
+                    end if
+                end do
+            end function strip_digits
 
     end subroutine new_from_pdb
 
@@ -509,7 +527,7 @@ contains
         class(atoms), intent(inout) :: self
         integer,      intent(in)    :: i
         if(self%het(i))then
-            write(logfhandle,'(A6)',advance='no')'HETERO-ATOM '
+            write(logfhandle,'(A6)',advance='no')'HETATM '
         else
             write(logfhandle,'(A6)',advance='no')'ATOM        '
         endif

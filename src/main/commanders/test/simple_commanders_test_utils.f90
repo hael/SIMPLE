@@ -34,6 +34,11 @@ type, extends(commander_base) :: commander_test_nice
     procedure :: execute      => exec_test_nice
 end type commander_test_nice
 
+type, extends(commander_base) :: commander_test_pdb2mrc 
+  contains
+    procedure :: execute      => exec_test_pdb2mrc
+end type commander_test_pdb2mrc
+
 type, extends(commander_base) :: commander_test_serialize
   contains
     procedure :: execute      => exec_test_serialize
@@ -206,6 +211,27 @@ subroutine exec_test_nice( self, cline )
     call nice_comm%terminate
     call simple_end('**** SIMPLE_TEST_NICE_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_nice
+
+subroutine exec_test_pdb2mrc( self, cline )
+    use simple_image,         only : image
+    use simple_atoms,         only : atoms
+    use simple_molecule_data, only : molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+    class(commander_test_pdb2mrc), intent(inout) :: self
+    class(cmdline),                intent(inout) :: cline
+    type(string)        :: pdb_file, vol_file
+    type(atoms)         :: molecule
+    type(molecule_data) :: mol
+    real, parameter     :: smpd = 1.3
+    mol = sars_cov2_spkgp_6vxx()
+    pdb_file = '6VXX.pdb'
+    vol_file = '6VXX.mrc'
+    call molecule%pdb2mrc( pdb_file, vol_file, smpd, mol=mol )
+    mol = betagal_1jyx()
+    pdb_file = '1JYX.pdb'
+    vol_file = '1JYX.mrc'
+    call molecule%pdb2mrc( pdb_file, vol_file, smpd, mol=mol )
+    call simple_end('**** SIMPLE_TEST_PDB2MRC_WORKFLOW NORMAL STOP ****')
+end subroutine exec_test_pdb2mrc
 
 subroutine exec_test_serialize( self, cline )
     use simple_image

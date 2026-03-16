@@ -3,7 +3,7 @@ module simple_test_exec_utils
 use simple_cmdline,               only: cmdline
 use simple_commanders_test_utils, only: commander_test_ansi_colors, commander_test_binoris_test, &
                                         commander_test_binoris_io_test, commander_test_cmdline, &
-                                        commander_test_install, commander_test_nice, &
+                                        commander_test_install, commander_test_nice, commander_test_pdb2mrc, &
                                         commander_test_serialize, commander_test_stringmatch
 
 implicit none
@@ -17,6 +17,7 @@ type(commander_test_binoris_io_test) :: xbinoris_io_test
 type(commander_test_cmdline)         :: xcmdline
 type(commander_test_install)         :: xinstall
 type(commander_test_nice)            :: xnice
+type(commander_test_pdb2mrc)         :: xpdb2mrc
 type(commander_test_serialize)       :: xserialize
 type(commander_test_stringmatch)     :: xstringmatch
 
@@ -43,6 +44,8 @@ contains
                 call xinstall%execute(cline)
             case( 'nice' )
                 call xnice%execute(cline)
+            case( 'pdb2mrc' )
+                call xpdb2mrc%execute(cline)
             case( 'serialize' )
                 call xserialize%execute(cline)
             case( 'stringmatch' )
