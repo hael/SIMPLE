@@ -1277,21 +1277,32 @@ contains
         cc = cc / real(cnt)
     end function cc_res
 
-    subroutine pdb2mrc( self, pdb_file, vol_file, smpd, center_pdb, pdb_out, vol_dim, mol )
+    subroutine pdb2mrc( self, pdbfile, volfile, smpd, center_pdb, pdb_out, vol_dim, mol )
         use simple_image, only: image
         class(atoms),                  intent(inout) :: self
+        type(string),        optional, intent(in)    :: pdbfile, volfile
         real,                          intent(in)    :: smpd
-        type(string),                  intent(in)    :: pdb_file, vol_file
         class(string),       optional, intent(in)    :: pdb_out
         logical,             optional, intent(in)    :: center_pdb
         integer,             optional, intent(in)    :: vol_dim(3)
         type(molecule_data), optional, intent(in)    :: mol
+        type(string)                                 :: pdb_file, vol_file
         type(string) :: pdbfile_centered
         type(image)  :: vol
         real         :: mol_dim(3), center(3), max_dist, dist
         integer      :: ldim(3), i_atom, j_atom
         logical      :: use_center = .false.
         call self%kill()
+        if( present(pdbfile) )then
+            pdb_file = pdbfile
+        else 
+            pdb_file = 'molecule.pdb'
+        endif
+        if( present(volfile) )then
+            vol_file = volfile
+        else
+            vol_file = 'molecule.mrc'
+        endif
         if( present(center_pdb) )then
             if( center_pdb ) use_center = .true.
         endif

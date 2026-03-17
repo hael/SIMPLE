@@ -19,7 +19,7 @@ type(cmdline)                   :: cline
 type(image)                     :: vol
 type(image), allocatable        :: proj_arr(:)
 character(len=*), parameter     :: PGRP       = 'c1'
-type(string)                    :: pdb_file, vol_file
+type(string)                    :: vol_file
 type(molecule_data)             :: mol
 type(atoms)                     :: molecule
 type(parameters)                :: params
@@ -40,10 +40,9 @@ params%hp     = 20.
 params%trs    = 10.
 params%ctf    = 'no'
 params%objfun = 'cc'
+vol_file      = 'molecule.mrc'
 mol = sars_cov2_spkgp_6vxx()
-pdb_file = '6VXX.pdb'
-vol_file = '6VXX.mrc'
-call molecule%pdb2mrc( pdb_file, vol_file, params%smpd, mol=mol)
+call molecule%pdb2mrc( smpd=params%smpd, mol=mol)
 call find_ldim_nptcls(vol_file, params%ldim, params%nptcls)
 params%box = params%ldim(1)
 params%mskdiam = params%smpd * params%ldim(1) / 2.

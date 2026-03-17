@@ -223,13 +223,17 @@ subroutine exec_test_pdb2mrc( self, cline )
     type(molecule_data) :: mol
     real, parameter     :: smpd = 1.3
     mol = sars_cov2_spkgp_6vxx()
+    call molecule%pdb2mrc( smpd=smpd, mol=mol )
+    mol = betagal_1jyx()
+    call molecule%pdb2mrc( smpd=smpd, mol=mol )
     pdb_file = '6VXX.pdb'
     vol_file = '6VXX.mrc'
-    call molecule%pdb2mrc( pdb_file, vol_file, smpd, mol=mol )
-    mol = betagal_1jyx()
-    pdb_file = '1JYX.pdb'
-    vol_file = '1JYX.mrc'
-    call molecule%pdb2mrc( pdb_file, vol_file, smpd, mol=mol )
+    mol = sars_cov2_spkgp_6vxx()
+    call molecule%pdb2mrc( pdbfile=pdb_file, volfile=vol_file, smpd=smpd, mol=mol )
+    pdb_file = '1JXY.pdb'
+    vol_file = '1JXY.mrc'
+    mol      = betagal_1jyx()
+    call molecule%pdb2mrc( pdbfile=pdb_file, volfile=vol_file, smpd=smpd, mol=mol )
     call simple_end('**** SIMPLE_TEST_PDB2MRC_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_pdb2mrc
 
