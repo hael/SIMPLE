@@ -111,6 +111,7 @@ contains
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         integer :: startit
+        call cline%set('outfile', ALGN_FBODY//int2str_pad(params%part,params%numlen)//METADATA_EXT)
         call params%new(cline)
         call build%build_spproj(params, cline, wthreads=.true.)
         call build%build_general_tbox(params, cline, do3d=.false.)
@@ -145,7 +146,6 @@ contains
         call cline%set('startit',    params%which_iter)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
-        call cline%set('outfile', ALGN_FBODY//int2str_pad(params%part,params%numlen)//METADATA_EXT)
         ! main clustering/alignment step
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
         ! Euclid sigma2 consolidation for next iteration
