@@ -3,7 +3,7 @@ module simple_polarft_calc
 use simple_pftc_api
 implicit none
 
-public :: polarft_calc, polaft_dims_from_file_header
+public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D
 private
 #include "simple_local_flags.inc"
 
@@ -55,7 +55,6 @@ type :: polarft_calc
     integer                  :: nk                       !< number of shells used during alignment
     real                     :: dang                     !< angular increment
     integer,     allocatable :: pinds(:)                 !< index array (to reduce memory when frac_update < 1)
-    real,        allocatable :: npix_per_shell(:)        !< number of (cartesian) pixels per shell
     real(dp),    allocatable :: sqsums_ptcls(:)          !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),    allocatable :: ksqsums_ptcls(:)         !< memoized k-weighted square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),    allocatable :: wsqsums_ptcls(:)         !< memoized square sums weighted by k and  sigmas^2 (taken from kfromto(1):kfromto(2))
@@ -66,8 +65,6 @@ type :: polarft_calc
     real(dp),    allocatable :: argtransf_shellone(:)    !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp), allocatable :: pfts_refs_even(:,:,:)    !< 3D complex matrix of polar reference sections (pftsz,nk,nrefs), even
     complex(sp), allocatable :: pfts_refs_odd(:,:,:)     !< -"-, odd
-    complex(sp), allocatable :: pfts_drefs_even(:,:,:,:) !< derivatives w.r.t. orientation angles of 3D complex matrices
-    complex(sp), allocatable :: pfts_drefs_odd(:,:,:,:)  !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp), allocatable :: pfts_ptcls(:,:,:)        !< 3D complex matrix of particle sections
     ! FFTW plans
     ! batched FFT plans for vectors of length nrots (nk transforms)
@@ -103,7 +100,6 @@ type :: polarft_calc
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
     procedure          :: set_ref_fcomp
-    procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
     procedure          :: cp_even2odd_ref
     procedure          :: cp_odd2even_ref
@@ -130,7 +126,6 @@ type :: polarft_calc
     procedure          :: ptcl_iseven
     procedure          :: get_nptcls
     procedure          :: get_pinds
-    procedure          :: get_npix
     procedure          :: is_with_ctf
     procedure          :: allocate_pft
     procedure, private :: get_work_pft_ptr
@@ -155,7 +150,6 @@ type :: polarft_calc
     generic            :: rotate_iref => rotate_iref_1, rotate_iref_2
     ! ===== MEMO: simple_polarft_memo.f90
     procedure          :: memoize_sqsum_ptcl
-    procedure, private :: setup_npix_per_shell
     procedure          :: memoize_ptcls, memoize_refs
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
@@ -175,7 +169,6 @@ type :: polarft_calc
     procedure, private :: gen_euclid_for_rot_8
     procedure, private :: gen_euclid_grad_for_rot_8
     procedure          :: gen_sigma_contrib
-
     ! ===== STATE: simple_polarft_ops_state.f90
     procedure          :: polar_cavger_new
     procedure          :: polar_cavger_zero_pft_refs
@@ -260,13 +253,6 @@ interface
         complex(sp),         intent(in)    :: comp
         logical,             intent(in)    :: iseven
     end subroutine set_ref_fcomp
-
-    module subroutine set_dref_fcomp(self, iref, irot, k, dcomp, iseven)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, irot, k
-        complex(sp),         intent(in)    :: dcomp(3)
-        logical,             intent(in)    :: iseven
-    end subroutine set_dref_fcomp
 
     module subroutine set_ptcl_fcomp(self, iptcl, irot, k, comp)
         class(polarft_calc), intent(inout) :: self
@@ -394,10 +380,6 @@ interface
         class(polarft_calc),  intent(in)  :: self
         integer, allocatable, intent(out) :: pinds(:)
     end subroutine get_pinds
-
-    module integer function get_npix(self)
-        class(polarft_calc), intent(in) :: self
-    end function get_npix
 
     module pure logical function is_with_ctf( self )
         class(polarft_calc), intent(in) :: self
@@ -534,10 +516,6 @@ interface
     end subroutine rotate_iref_2
 
     ! ===== MEMO  =====
-
-    module subroutine setup_npix_per_shell(self)
-        class(polarft_calc), intent(inout) :: self
-    end subroutine setup_npix_per_shell
 
     module subroutine memoize_sqsum_ptcl(self, iptcl)
         class(polarft_calc), intent(inout) :: self
@@ -937,7 +915,8 @@ contains
 
     ! PUBLIC UTILITIES
 
-    subroutine polaft_dims_from_file_header( fname, pftsz_here, kfromto_here, ncls_here )
+    ! To obtain dimensions of a PFT array from file
+    subroutine polarft_dims_from_file_header( fname, pftsz_here, kfromto_here, ncls_here )
         class(string), intent(in)    :: fname
         integer,       intent(inout) :: pftsz_here, kfromto_here(2), ncls_here
         integer :: dims(4), funit, io_stat
@@ -949,6 +928,73 @@ contains
         pftsz_here   = dims(1)
         kfromto_here = dims(2:3)
         ncls_here    = dims(4)
-    end subroutine polaft_dims_from_file_header
+    end subroutine polarft_dims_from_file_header
+
+    ! To estimate resolution limit
+    subroutine polarft_estimate_lplim3D( box, smpd, kfromto, lprange, lpopt )
+        integer,      intent(in)  :: box, kfromto(2)
+        real,         intent(in)  :: smpd, lprange(2)
+        real,         intent(out) :: lpopt
+        type(polarft_calc)        :: pftc ! local  & not instanciated
+        type(string)              :: str_even, str_odd
+        complex(dp),  allocatable :: even(:,:,:), odd(:,:,:), vec(:)
+        real(dp),     allocatable :: mag_e(:), mag_diff(:)
+        real(dp) :: score, best_score, wk
+        integer  :: iref, k, best_k, kstart, kend
+        ! read current references
+        str_even = POLAR_REFS_FBODY//'_even'//BIN_EXT
+        str_odd  = POLAR_REFS_FBODY//'_odd'//BIN_EXT
+        if( .not.file_exists(str_even) .or. .not.file_exists(str_odd) )then
+            ! no update to existing limit
+            lpopt = calc_lowpass_lim(kfromto(2), box, smpd)
+            return
+        endif
+        call polarft_dims_from_file_header(str_even, pftc%pftsz, pftc%kfromto, pftc%ncls)
+        call pftc%read_pft_array(str_even, even)
+        call pftc%read_pft_array(str_odd,  odd)
+        ! search range
+        kstart = max(pftc%kfromto(1), max(kfromto(1), calc_fourier_index(lprange(1), box, smpd)))
+        kend   = min(pftc%kfromto(2), min(kfromto(2), calc_fourier_index(lprange(2), box, smpd)))
+        if( kstart >= kend )then
+            lpopt = calc_lowpass_lim(kstart, box, smpd)
+            return
+        endif
+        ! precalculation of even variance & even-odd variance
+        allocate(vec(pftc%kfromto(1):pftc%kfromto(2)), mag_e(pftc%kfromto(1):pftc%kfromto(2)),&
+            &mag_diff(pftc%kfromto(1):pftc%kfromto(2)))
+        mag_e = 0.d0; mag_diff = 0.d0
+        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,iref,vec,wk)
+        do k = pftc%kfromto(1),pftc%kfromto(2)
+            ! Shell magnitudes
+            do iref = 1,pftc%ncls
+                vec      = even(:,k,iref)
+                mag_e(k) = mag_e(k) + real(sum(vec*conjg(vec)),dp)
+                vec         = vec - odd(:,k,iref)
+                mag_diff(k) = mag_diff(k) + real(sum(vec*conjg(vec)),dp)
+            enddo
+            ! Shell weights to reproduce volumetric cartesian representation
+            wk          = real(box,dp)**3 * (4.d0/3.d0)*DPI * (real(k,dp)**3 -real(k-1,dp)**3)
+            wk          = wk  / real(2*pftc%ncls*pftc%pftsz,dp)
+            mag_e(k)    = wk * mag_e(k)
+            mag_diff(k) = wk * mag_diff(k)
+        enddo
+        !$omp end parallel do
+        ! Optimization
+        best_k     = pftc%kfromto(1)
+        best_score = huge(best_score)
+        do k = kstart,kend
+            score = sum(mag_diff(pftc%kfromto(1):k))
+            if( k < kend )then
+                score = score + sum(mag_e(k+1:pftc%kfromto(2)))
+            endif
+            if( score < best_score )then
+                best_score = score
+                best_k     = k
+            endif
+        enddo
+        deallocate(even,odd,vec,mag_e,mag_diff)
+        ! Solution
+        lpopt = calc_lowpass_lim(best_k, box, smpd)
+    end subroutine polarft_estimate_lplim3D
 
 end module simple_polarft_calc

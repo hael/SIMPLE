@@ -5,22 +5,6 @@ implicit none
 
 contains
 
-    module subroutine setup_npix_per_shell(self)
-        class(polarft_calc), intent(inout) :: self
-        integer :: h,k,sh
-        if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
-        allocate(self%npix_per_shell(self%kfromto(1):self%kfromto(2)),source=0.0)
-        do h = 0,self%kfromto(2)
-            do k = -self%kfromto(2),self%kfromto(2)
-                if( (h==0) .and. (k>0) ) cycle
-                sh = nint(sqrt(real(h**2+k**2)))
-                if( sh < self%kfromto(1) ) cycle
-                if( sh > self%kfromto(2) ) cycle
-                self%npix_per_shell(sh) = self%npix_per_shell(sh) + 1.0
-            end do
-        end do
-    end subroutine setup_npix_per_shell
-
     module subroutine memoize_sqsum_ptcl(self, iptcl)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl

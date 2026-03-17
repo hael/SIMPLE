@@ -109,7 +109,7 @@ contains
         endif
         if( params%l_polar )then
             fname = 'cavgs_even_part'//int2str_pad(1,params%numlen)//BIN_EXT
-            call polaft_dims_from_file_header(fname, pftsz, kfromto, ncls)
+            call polarft_dims_from_file_header(fname, pftsz, kfromto, ncls)
             call fname%kill
             call pftc%new(params, 1, [1,1], kfromto)
             call pftc%polar_cavger_new(.false., nrefs=params%ncls)

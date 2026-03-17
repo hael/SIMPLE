@@ -100,8 +100,6 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,self%p_ptr%nthr),&
-                &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,self%p_ptr%nthr),&
                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                 &self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                 &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
@@ -132,8 +130,6 @@ contains
         self%ctfmats = 1.0
         self%with_ctf = .false.
         if( self%p_ptr%ctf .ne. 'no' ) self%with_ctf = .true.
-        ! setup npix_per_shell
-        call self%setup_npix_per_shell
         ! allocation for memoization
         call self%allocate_ptcls_memoization
         ! flag existence
@@ -154,9 +150,8 @@ contains
                     self%heap_vars(ithr)%w_weights,self%heap_vars(ithr)%sumsq_cache)
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
-            if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
-            deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
-                &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
+            deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab,&
+                &self%argtransf, self%pfts_ptcls, self%polar, self%pfts_refs_even, self%pfts_refs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
@@ -236,18 +231,6 @@ contains
             self%pfts_refs_odd(irot,k,iref)  = comp
         endif
     end subroutine set_ref_fcomp
-
-    module subroutine set_dref_fcomp(self, iref, irot, k, dcomp, iseven)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, irot, k
-        complex(sp),         intent(in)    :: dcomp(3)
-        logical,             intent(in)    :: iseven
-        if( iseven )then
-            self%pfts_drefs_even(irot,k,:,iref) = dcomp
-        else
-            self%pfts_drefs_odd(irot,k,:,iref)  = dcomp
-        endif
-    end subroutine set_dref_fcomp
 
     module subroutine set_ptcl_fcomp(self, iptcl, irot, k, comp)
         class(polarft_calc), intent(inout) :: self

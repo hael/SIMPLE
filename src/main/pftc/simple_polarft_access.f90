@@ -110,11 +110,6 @@ contains
         pinds = self%pinds
     end subroutine get_pinds
 
-    module integer function get_npix(self)
-        class(polarft_calc), intent(in) :: self
-        get_npix = sum(nint(self%npix_per_shell(self%kfromto(1):self%kfromto(2))))
-    end function get_npix
-
     module pure logical function is_with_ctf( self )
         class(polarft_calc), intent(in) :: self
         is_with_ctf = self%with_ctf
