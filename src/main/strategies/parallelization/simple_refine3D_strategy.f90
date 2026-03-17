@@ -271,6 +271,8 @@ contains
             endif
             ! communicate back changes made by probabilistic alignment including sampling
             call build%spproj%read_segment(params%oritype, params%projfile)
+            ! make sure prob_align and refine see the same information
+            if( cline%defined('lp') ) params%lp = cline%get_rarg('lp')
         endif
         ! main refinement step
         call refine3D_exec(params, build, cline, params%which_iter, converged)
