@@ -68,7 +68,7 @@ contains
     !===========================================================
     ! Constructor for the global driver object.
     ! Initializes the global particle/reference maps and builds
-    ! sparse neighborhoods from previous assignments.
+    ! sparse neighborhoods
     !===========================================================
     subroutine new(self, params, build, pinds, l_docked_states, empty_okay, state)
         class(eul_prob_tab_neigh), intent(inout) :: self
@@ -220,7 +220,8 @@ contains
             block
                 logical :: neigh_mask(self%p_ptr%nspace)
                 integer :: peak_sub_idxs(npeak_use)
-                integer :: prev_iproj
+                integer :: prev_iproj, prev_sub
+                logical :: prev_mask(self%p_ptr%nspace), have_prev_mask
                 real    :: sub_dists(nspace_sub)
                 iptcl = self%pinds(i)
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
@@ -240,11 +241,19 @@ contains
                 peak_sub_idxs = minnloc(sub_dists, npeak_use)
                 call neigh_map%get_neighbors_mask_pooled(peak_sub_idxs, neigh_mask)
                 mask(:,i) = neigh_mask
-                ! explicit previous-neighborhood OR logic: include previously assigned projection
-                prev_iproj = self%assgn_map(i)%iproj
+                ! explicit previous-neighborhood OR logic: derive previous projection from orientation,
+                ! map to subspace, and OR in full neighborhood mask for true continuity
+                prev_mask      = .false.
+                have_prev_mask = .false.
+                prev_iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)
                 if( prev_iproj >= 1 .and. prev_iproj <= self%p_ptr%nspace )then
-                    mask(prev_iproj, i) = .true.
+                    prev_sub = self%b_ptr%subspace_full2sub_map(prev_iproj)
+                    if( prev_sub >= 1 .and. prev_sub <= nspace_sub )then
+                        call neigh_map%get_neighbors_mask(prev_sub, prev_mask)
+                        have_prev_mask = .true.
+                    endif
                 endif
+                if( have_prev_mask ) mask(:,i) = mask(:,i) .or. prev_mask
                 if( .not. any(mask(:,i) .and. (self%proj_active_state_count > 0)) )then
                     mask(:,i) = (self%proj_active_state_count > 0)
                 endif
@@ -355,7 +364,7 @@ contains
                             call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
                             cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
                             cxy_shift = 0.
-                            if( irot /= 0 ) cxy_shift = cxy(2:3)
+                            if( irot /= 0 ) cxy_shift = cxy(2:3) ! minimize may reset irot to 0 on failure
                         endif
                     endif
                 endif
@@ -373,7 +382,7 @@ contains
                                     call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
                                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
                                     cxy_shift = 0.
-                                    if( irot /= 0 ) cxy_shift = cxy(2:3)
+                                    if( irot /= 0 ) cxy_shift = cxy(2:3) ! minimize may reset irot to 0 on failure
                                 endif
                             endif
                         endif
