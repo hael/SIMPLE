@@ -32,12 +32,12 @@ private
 !  A2    77 - 78  LString(2)    element      Element symbol, right-justified.
 !  A2    79 - 80  LString(2)    charge       Charge on the atom.
 !  =============  ============  ===========  =============================================
-character(len=80), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,6X,A4,2A2)"
-character(len=80), parameter :: xpdbfmt         = "(A4,I7,1X,A4,A1,A3,1X,A1,I5,3X,3F8.3,2F6.2,6X,A4,2A2)"
-!character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
-character(len=78), parameter :: pdbfmt_long     = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
-character(len=74), parameter :: pdbfmt_read     = "(A11,  1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"         ! custom 3.3
-character(len=78), parameter :: pdbfmt_longread = "(A11,  1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
+!character(len=80), parameter :: pdbfmt         = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,6X,A4,2A2)"
+!character(len=80), parameter :: xpdbfmt        = "(A4,I7,1X,A4,A1,A3,1X,A1,I5,3X,3F8.3,2F6.2,6X,A4,2A2)"
+character(len=80), parameter :: pdbfmt          = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10X,A2,A2)"
+character(len=80), parameter :: xpdbfmt         = "(A11,1X,A4,A1,A3,1X,A1,I5,3X,3F8.3,2F6.2,10X,A2,A2)"
+character(len=80), parameter :: pdbfmt_write    = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10X,A2,A2)"
+character(len=80), parameter :: xpdbfmt_write   = "(A4,I7,1X,A4,A1,A3,1X,A1,I5,3X,3F8.3,2F6.2,10X,A2,A2)"
 character(len=78), parameter :: pdbfmt_anisou   = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,1X,6I7,5X,A2)"
 
 !>  \brief type for dealing with atomic structures
@@ -47,22 +47,23 @@ type :: atoms
     integer                       :: nres = 0
     character(len=4), allocatable :: name(:)
     character(len=1), allocatable :: altloc(:)
-    character(len=1), allocatable :: chain(:)
-    character(len=1), allocatable :: icode(:)
     character(len=3), allocatable :: resname(:)
-    character(len=2), allocatable :: element(:)
-    real,             allocatable :: charge(:)
+    character(len=1), allocatable :: chain(:)
+    integer,          allocatable :: resnum(:)
+    character(len=1), allocatable :: icode(:)
     real,             allocatable :: xyz(:,:) ! dim1 -> 1:#atms, dime2 -> 1:3 Cartesian dims
-    real,             allocatable :: mw(:)
     real,             allocatable :: occupancy(:)
     real,             allocatable :: beta(:)
+    character(len=2), allocatable :: element(:)
+    character(len=2), allocatable :: charge(:)
+    real,             allocatable :: mw(:)
     real,             allocatable :: radius(:)
     real,             allocatable :: atom_corr(:)
     integer,          allocatable :: num(:)
-    integer,          allocatable :: resnum(:)
     integer,          allocatable :: Z(:)
     logical,          allocatable :: het(:)
     logical                       :: exists = .false.
+    logical                       :: is_xpdb = .false.
   contains
     ! CONSTRUCTORS
     procedure, private :: new_instance
@@ -132,7 +133,7 @@ contains
         class(atoms),  intent(inout) :: self
         class(string), intent(in)    :: fname
         character(len=STDLEN) :: line
-        character(len=11)     :: elevenfirst
+        character(len=11)     :: elevenfirst, twentyseven
         character(len=6)      :: atom_field
         integer               :: i, l, nl, filnum, io_stat, n, num
         call self%kill
@@ -145,13 +146,19 @@ contains
         ! first pass
         n = 0
         do i = 1, nl
-            read(filnum,'(A11)')elevenfirst
+            read(filnum,'(A27)')line
+            elevenfirst = line(1:11)
+            twentyseven = line(22:27)
             if( .not.is_valid_entry(elevenfirst(1:6)) )cycle
-            ! support for over 100000 entries
             num = str2int(elevenfirst(7:11), io_stat)
             if( io_stat .ne. 0 )num = str2int(elevenfirst(6:11), io_stat)
-            if( io_stat .ne. 0 )num = str2int(elevenfirst(5:11), io_stat)
+            if( io_stat .ne. 0 )then
+                num = str2int(elevenfirst(5:11), io_stat)
+                if( io_stat .eq. 0) self%is_xpdb = .true.
+            endif
             if( io_stat .ne. 0 )cycle
+            num = str2int(twentyseven, io_stat)
+            if( io_stat .eq. 0 ) self%is_xpdb = .true.
             n = n + 1
         enddo
         if( n == 0 )then
@@ -172,14 +179,16 @@ contains
                 line = line // repeat(' ', 80 - len_trim(line))
             endif
             i = i + 1
-            if( len_trim(line) < 68 )then
-                read(line,pdbfmt_read, iostat=io_stat)elevenfirst, self%name(i), self%altloc(i),&
+            if( self%is_xpdb )then
+                read(line,xpdbfmt, iostat=io_stat) elevenfirst, self%name(i), self%altloc(i),&
+                &self%resname(i), self%chain(i), self%resnum(i), self%xyz(i,:),&
+                &self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
+                self%icode(i)=' '
+            else 
+                read(line,pdbfmt, iostat=io_stat) elevenfirst, self%name(i), self%altloc(i),&
                 &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-                &self%occupancy(i), self%beta(i)
-            else
-                read(line,pdbfmt_longread, iostat=io_stat)elevenfirst, self%name(i), self%altloc(i),&
-                &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-                &self%occupancy(i), self%beta(i), self%element(i)
+                &self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
+                self%element(i)=adjustl(self%element(i))
             endif
             self%num(i) = num
             self%name(i) = strip_digits(self%name(i))
@@ -252,13 +261,14 @@ contains
         call self%kill
         allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
             self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
-            self%altloc(n), self%resnum(n), self%element(n), self%radius(n), self%atom_corr(n))
+            self%altloc(n), self%resnum(n), self%element(n), self%charge(n), self%radius(n), self%atom_corr(n))
         self%name(:)    = '    '
         self%resname(:) = '   '
         self%chain(:)   = ' '
         self%altloc(:)  = ' '
         self%icode(:)   = ' '
         self%element(:) = '  '
+        self%charge(:)  = '  '
         self%mw         = 0.
         self%xyz        = 0.
         self%beta       = 0.
@@ -283,6 +293,8 @@ contains
                 self%resnum(i)    = 1
             enddo
         endif
+        if( maxval(self%num(:)) > 9999 ) self%is_xpdb = .true.
+        if( n > 99999 )                  self%is_xpdb = .true.
         self%exists = .true.
     end subroutine new_instance
 
@@ -528,21 +540,27 @@ contains
     subroutine print_atom( self, i )
         class(atoms), intent(inout) :: self
         integer,      intent(in)    :: i
-        if(self%het(i))then
-            write(logfhandle,'(A6)',advance='no')'HETATM'
+        if( self%is_xpdb )then
+            if( self%het(i) )then
+                write(logfhandle,xpdbfmt_write) 'HETA', self%num(i), adjustl(self%name(i)), self%altloc(i), &
+                      self%resname(i), self%chain(i), self%resnum(i), self%xyz(i,:), &
+                      self%occupancy(i), self%beta(i), adjustl(self%element(i)), self%charge(i)
+            else
+                write(logfhandle,xpdbfmt_write) 'ATOM', self%num(i), adjustl(self%name(i)), self%altloc(i), &
+                      self%resname(i), self%chain(i), self%resnum(i), self%xyz(i,:), &
+                      self%occupancy(i), self%beta(i), adjustl(self%element(i)), self%charge(i)
+            endif
         else
-            write(logfhandle,'(A6)',advance='no')'ATOM  '
+            if( self%het(i) )then
+                write(logfhandle,pdbfmt_write) 'HETATM', self%num(i), adjustl(self%name(i)), self%altloc(i), &
+                      self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:), &
+                      self%occupancy(i), self%beta(i), adjustl(self%element(i)), self%charge(i)
+            else
+                write(logfhandle,pdbfmt_write) 'ATOM  ', self%num(i), adjustl(self%name(i)), self%altloc(i), &
+                      self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:), &
+                      self%occupancy(i), self%beta(i), adjustl(self%element(i)), self%charge(i)
+            endif
         endif
-        write(logfhandle,'(I6,1X)',advance='no')self%num(i)
-        write(logfhandle,'(A4,1X)',advance='no')self%name(i)
-        write(logfhandle,'(A1,1X)',advance='no')self%altloc(i)
-        write(logfhandle,'(A3,1X)',advance='no')self%resname(i)
-        write(logfhandle,'(A1,1X)',advance='no')self%chain(i)
-        write(logfhandle,'(I4,1X)',advance='no')self%resnum(i)
-        write(logfhandle,'(A1,1X)',advance='no')self%icode(i)
-        write(logfhandle,'(3F8.3,1X)',advance='no')self%xyz(i,:)
-        write(logfhandle,'(2F6.2,1X)',advance='no')self%occupancy(i), self%beta(i)
-        write(logfhandle,'(A2)',advance='yes')self%element(i)
     end subroutine print_atom
 
     ! I/O
@@ -550,6 +568,8 @@ contains
     subroutine writepdb( self, fname )
         class(atoms),  intent(in) :: self
         class(string), intent(in) :: fname
+        character(len=4) :: n
+        character(len=2) :: e
         integer      :: i, funit, io_stat
         logical      :: long
         long  = self%n >= 99999
@@ -557,19 +577,25 @@ contains
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
         call fileiochk('writepdb; simple_atoms opening '//fname%to_char(), io_stat)
         do i = 1, self%n
-            if(self%het(i))then
-                write(funit,pdbfmt)'HETATM',self%num(i),self%name(i),self%altloc(i),&
-                    self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-                    self%occupancy(i), self%beta(i),' '
-            else
-                if( long )then
-                    write(funit,pdbfmt_long)'ATOM ',self%num(i),self%name(i),self%altloc(i),&
-                        self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-                        self%occupancy(i), self%beta(i), self%element(i)
+            if( self%is_xpdb)then
+                if(self%het(i))then
+                    write(funit,xpdbfmt_write)'HETA', self%num(i), self%name(i), self%altloc(i),&
+                        self%resname(i), self%chain(i), self%resnum(i), self%xyz(i,:),&
+                        self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
                 else
-                    write(funit,pdbfmt)'ATOM  ',self%num(i),self%name(i),self%altloc(i),&
-                        self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-                        self%occupancy(i), self%beta(i), self%element(i)
+                    write(funit,xpdbfmt_write)'ATOM', self%num(i), self%name(i), self%altloc(i),&
+                        self%resname(i), self%chain(i), self%resnum(i), self%xyz(i,:),&
+                        self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
+                endif
+            else
+                if(self%het(i))then
+                    write(funit,pdbfmt_write)'HETATM', self%num(i), self%name(i), self%altloc(i),&
+                        self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+                        self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
+                else
+                    write(funit,pdbfmt_write)'ATOM  ', self%num(i), self%name(i), self%altloc(i),&
+                        self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+                        self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
                 endif
             endif
         enddo
@@ -1271,7 +1297,7 @@ contains
         endif
         if( present(mol) )then !pdb2mrc with molecule input instead of pdb file input
             call self%new(mol)
-            call self%writepdb(pdb_file) ! write the input molecule to a PDB file for record
+            !call self%writepdb(pdb_file) ! write the input molecule to a PDB file for record
         else !pdb2mrc with pdb file input
             call self%new(pdb_file)
         endif
@@ -1563,6 +1589,7 @@ contains
         if( allocated(self%Z)         )deallocate(self%Z)
         if( allocated(self%het)       )deallocate(self%het)
         if( allocated(self%element)   )deallocate(self%element)
+        if( allocated(self%charge)   )deallocate(self%charge)
         if( allocated(self%radius)    )deallocate(self%radius)
         if( allocated(self%atom_corr) )deallocate(self%atom_corr)
         self%n      = 0
