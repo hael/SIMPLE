@@ -14,6 +14,7 @@
       - `simple_test_binoris_io.f90`
       - `simple_test_block_tree.f90` — test for block-tree search space decomposition and mapping
       - `simple_test_block_tree2D.f90`
+      - `simple_test_block_tree_io.f90`
       - `simple_test_bounds_from_mask3D.f90`
       - `simple_test_class_sample.f90`
       - `simple_test_clustering.f90`
@@ -102,6 +103,7 @@
     - **fileio/** — home of modules for i/o related to project files, mrc files, eer movies, star files etc.
       - `simple_binoris.f90` — for managing orientation data using binary files
       - `simple_binoris_io.f90` — high-level binoris i/o routines
+      - `simple_block_tree_io.f90` — for storing block tree information on disk
       - `simple_class_sample_io.f90` — for storing class sampling information on disk
       - `simple_discrete_stack_io.f90` — for single-threaded non-contiguous reading of image stacks
       - `simple_eer_factory.f90` — for eer movie format i/o
@@ -119,16 +121,14 @@
       - `simple_tifflib.f90` — Fortran wrapper for libtiff, edited from Unblur
     - **inc/** — home of *.inc files containing macro definitions and enumerations
     - **main/** — main source code directory
-      - `simple_abinitio_config.f90` — singleton for common state variables used in abinitio_utils and commanders_abinitio
       - `simple_abinitio_utils.f90` — utilities for ab initio 3D reconstruction used by commanders_abinitio
       - `simple_builder.f90` — centralized builder (the main object constructor in SIMPLE)
-      - `simple_calc_pspec_common.f90`
-      - `simple_cluster2D_common.f90`
       - `simple_cmdline.f90` — the class implementing command line parsing
       - `simple_cmdline_tester.f90` — unit test routines for command line class
       - `simple_convergence.f90` — for checking convergence of 2D and 3D search
       - `simple_euclid_sigma2.f90` — the abstract data type for sigma2 used when objfun=euclid
       - `simple_eul_prob_tab.f90` — the core probability table routines used for probabilistic 3D search
+      - `simple_eul_prob_tab_neigh.f90`
       - `simple_micrograph_generator.f90` — used for generating dose fractionated micrographs from movies
       - `simple_parameters.f90` — provides global distribution of constants and derived constants
       - `simple_particle_extractor.f90` — core functionality for extracting particles from micrographs
@@ -181,6 +181,7 @@
           - `simple_commanders_project_mov.f90` — project commanders for movie-related things
           - `simple_commanders_project_ptcl.f90` — project commanders for particle-related things
           - `simple_commanders_rec.f90` — 3D reconstruction and associated things
+          - `simple_commanders_rec_distr.f90`
           - `simple_commanders_refine3D.f90` — supporting 3D orientation search
           - `simple_commanders_relion.f90` — supporting interoperability with RELION
           - `simple_commanders_resolest.f90` — for resolution estimation
@@ -378,6 +379,15 @@
         - **parallelization/** — home of strategies for different parallelization modes (distributed, shared-memory etc.)
           - `simple_calc_pspec_strategy.f90`
           - `simple_cluster2D_strategy.f90`
+          - `simple_ctf_estimate_strategy.f90`
+          - `simple_extract_strategy.f90`
+          - `simple_gen_pspecs_and_thumbs_strategy.f90`
+          - `simple_make_cavgs_strategy.f90`
+          - `simple_motion_correct_strategy.f90`
+          - `simple_pick_strategy.f90`
+          - `simple_preprocess_strategy.f90`
+          - `simple_rec3D_strategy.f90`
+          - `simple_reextract_strategy.f90`
           - `simple_refine3D_strategy.f90`
         - **search/** — home of strategies for 2D and 3D orientation search
           - `simple_strategy2D.f90` — abstract base class defining the common strategy2D interface
@@ -412,6 +422,7 @@
         - `simple_stream2D_state.f90` — singleton for common state variables across the stream modules
         - `simple_stream_chunk.f90` — abstract data type for the stream_chunk, defining a chunk of data processed in parallel
         - `simple_stream_chunk2D_utils.f90` — utilities for chunk-based 2D clustering in stream
+        - `simple_stream_cluster2D_micro.f90` — high-level batch testing of 2D refinement within clusters of 2D averages from subsets
         - `simple_stream_cluster2D_subsets.f90` — high-level batch testing of the sieving logics used in the stream
         - `simple_stream_cluster2D_subsets_refine.f90` — high-level batch testing of 2D refinement within clusters of 2D averages from subsets
         - `simple_stream_cluster2D_utils.f90` — utilities for running 2D clustering in the stream
@@ -489,6 +500,7 @@
     - **utils/** — utilities source code directory
       - `simple_block_tree.f90`
       - `simple_corrmat.f90` — for calculation of correlation matrices
+      - `simple_eulspace_neigh_map.f90`
       - `simple_exec_helpers.f90` — helpers for restarted execution, asynchronous execution, script-based execution etc.
       - `simple_forked_process.f90` — various unix forking utilities
       - `simple_forked_process_tester.f90` — unit tests for forked process module
@@ -533,6 +545,7 @@
         - `simple_estimate_ssnr.f90` — spectral signal-to-noise ratio estimation routines
         - `simple_fsc.f90` — various Fourier Shell Correlation utilities
         - `simple_opt_filter.f90` — optimization(search)-based filtering
+        - `simple_tent_smooth.f90`
         - `simple_tvfilter.f90` — filter based on total variation in real space
       - **gui/** — utilities for feeding information to the GUI
         - `simple_gui_assembler.f90` — assembles gui metadata objects into json to be sent to nice

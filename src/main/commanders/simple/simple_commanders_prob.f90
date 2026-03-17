@@ -90,7 +90,7 @@ contains
         integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        ! exception handling for required neighborhood setup
+        ! exception handling for required neighborhood data structures and incompatible refine policies
         if( str_has_substr(params%refine, 'prob_state') )then
             THROW_HARD('exec_prob_tab_neigh does not support refine=prob_state; use the dense probabilistic state path')
         endif
@@ -118,7 +118,6 @@ contains
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
         ! Build polar particle images
         call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
-        
         call eulprob_obj_part_neigh%new(params, build, pinds)
         call eulprob_obj_part_neigh%fill_tab
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'

@@ -40,7 +40,7 @@ type :: eul_prob_tab_neigh
     integer,        allocatable :: ref_edge_offsets(:)      ! (nrefs+1)
     integer,        allocatable :: ref_edge_indices(:)      ! (nedges), edge indices sorted by reference for fast access to all particles assigned to a given reference
 contains
-    procedure          :: new            => new_global
+    procedure          :: new
     procedure          :: fill_tab       => fill_tab_sparse
     procedure          :: ref_assign     => ref_assign_sparse
     procedure          :: write_tab
@@ -50,6 +50,10 @@ contains
     procedure          :: kill
     procedure, private :: init_common
     procedure, private :: build_neigh_mask_from_subspace_peaks
+    procedure, private :: build_neigh_mask_from_subspace_peaks_one_state
+    procedure, private :: build_neigh_mask_from_subspace_peaks_impl
+    procedure, private :: build_neigh_mask_from_prev_geom
+    procedure, private :: check_subspace_prereqs
     procedure, private :: build_ref_lists_and_map
     procedure, private :: build_sparse_from_mask
     procedure, private :: build_ref_adjacency
@@ -62,14 +66,237 @@ end type eul_prob_tab_neigh
 contains
 
     !===========================================================
+    ! Constructor for the global driver object.
+    ! Initializes the global particle/reference maps and builds
+    ! sparse neighborhoods from previous assignments.
+    !===========================================================
+    subroutine new(self, params, build, pinds, l_docked_states, empty_okay, state)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        logical, optional,         intent(in)    :: l_docked_states
+        logical, optional,         intent(in)    :: empty_okay
+        integer, optional,         intent(in)    :: state
+        logical :: ll_docked_states
+        ll_docked_states = .false.
+        if( present(l_docked_states) ) ll_docked_states = l_docked_states
+        call self%init_common(params, build, pinds, empty_okay)
+        call self%build_ref_lists_and_map
+        call self%check_subspace_prereqs
+        if( ll_docked_states ) then
+            ! docked states, no coarse search to define peaks --> build neighborhoods from previous assignments only
+            call self%build_neigh_mask_from_prev_geom
+        else
+            if( present(state) ) then
+                ! coarse search on one state defines the neighborhood peaks 
+                call self%build_neigh_mask_from_subspace_peaks_one_state(state)
+            else
+                ! full coarse search across states defines the neighborhood peaks
+                call self%build_neigh_mask_from_subspace_peaks
+            endif
+        endif
+        call self%build_ref_adjacency
+    end subroutine new
+
+    !===========================================================
+    ! Common constructor logic for both local-part and driver
+    ! objects. Builds the global reference/state maps, but does
+    ! not yet assemble any sparse neighborhood graph.
+    !===========================================================
+    subroutine init_common(self, params, build, pinds, empty_okay)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        logical, optional,         intent(in)    :: empty_okay
+        integer, parameter :: MIN_POP = 5
+        integer :: ptcl_local_idx, iptcl
+        logical :: l_empty
+        real    :: x
+        call self%kill
+        self%p_ptr => params
+        self%b_ptr => build
+        self%nptcls = size(pinds)
+        allocate(self%pinds(self%nptcls), source=pinds)
+        allocate(self%assgn_map(self%nptcls))
+        ! init global reference/state existence maps and compressed reference lists/maps
+        !$omp parallel do default(shared) private(ptcl_local_idx,iptcl) proc_bind(close) schedule(static)
+        do ptcl_local_idx = 1, self%nptcls
+            iptcl = self%pinds(ptcl_local_idx)
+            self%assgn_map(ptcl_local_idx)%pind   = iptcl
+            self%assgn_map(ptcl_local_idx)%istate = 0
+            self%assgn_map(ptcl_local_idx)%iproj  = 0
+            self%assgn_map(ptcl_local_idx)%inpl   = 0
+            self%assgn_map(ptcl_local_idx)%dist   = huge(x)
+            self%assgn_map(ptcl_local_idx)%x      = 0.
+            self%assgn_map(ptcl_local_idx)%y      = 0.
+            self%assgn_map(ptcl_local_idx)%has_sh = .false.
+        enddo
+        !$omp end parallel do
+        l_empty = (trim(params%empty3Dcavgs) .eq. 'yes')
+        if (present(empty_okay)) l_empty = empty_okay
+        self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
+        self%nstates      = count(self%state_exists .eqv. .true.)
+        if (l_empty) then
+            allocate(self%proj_exists(self%p_ptr%nspace, self%p_ptr%nstates), source=.true.)
+        else
+            self%proj_exists = self%b_ptr%spproj_field%projs_exist(self%p_ptr%nstates, self%p_ptr%nspace, thres=MIN_POP)
+        endif
+        self%nrefs = count(self%proj_exists .eqv. .true.)
+        if (self%nrefs == 0) then
+            THROW_HARD('No valid references available after state/projection existence filtering')
+        endif
+    end subroutine init_common
+
+    subroutine build_ref_lists_and_map(self)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer :: state_list_idx, ref_idx, istate, iproj
+        allocate(self%active_state_indices(self%nstates), self%ref_proj_indices(self%nrefs), self%ref_state_indices(self%nrefs))
+        allocate(self%ref_index_map(self%p_ptr%nspace, self%p_ptr%nstates), source=0)
+        allocate(self%proj_active_state_count(self%p_ptr%nspace), source=0)
+        state_list_idx = 0
+        ref_idx = 0
+        do istate = 1, self%p_ptr%nstates
+            if (.not. self%state_exists(istate)) cycle
+            state_list_idx = state_list_idx + 1
+            self%active_state_indices(state_list_idx) = istate
+            do iproj = 1, self%p_ptr%nspace
+                if (.not. self%proj_exists(iproj, istate)) cycle
+                ref_idx = ref_idx + 1
+                self%ref_proj_indices(ref_idx) = iproj
+                self%ref_state_indices(ref_idx) = istate
+                self%ref_index_map(iproj, istate) = ref_idx
+                self%proj_active_state_count(iproj) = self%proj_active_state_count(iproj) + 1
+            enddo
+        enddo
+    end subroutine build_ref_lists_and_map
+
+    !===========================================================
+    ! Validate that the subspace data structures required by all
+    ! build_neigh_mask_* routines are present and consistent.
+    !===========================================================
+    subroutine check_subspace_prereqs(self)
+        class(eul_prob_tab_neigh), intent(in) :: self
+        if( .not. allocated(self%b_ptr%subspace_inds) )then
+            THROW_HARD('check_subspace_prereqs: subspace_inds not allocated; enable l_neigh and set nspace_sub')
+        endif
+        if( size(self%b_ptr%subspace_inds) /= self%p_ptr%nspace_sub )then
+            THROW_HARD('check_subspace_prereqs: size(subspace_inds) must equal nspace_sub')
+        endif
+        if( .not. allocated(self%b_ptr%subspace_full2sub_map) )then
+            THROW_HARD('check_subspace_prereqs: subspace_full2sub_map not allocated')
+        endif
+        if( size(self%b_ptr%subspace_full2sub_map) /= self%p_ptr%nspace )then
+            THROW_HARD('check_subspace_prereqs: size(subspace_full2sub_map) must equal nspace')
+        endif
+    end subroutine check_subspace_prereqs
+
+    !===========================================================
+    ! Build per-particle neighborhood mask from previous
+    ! assigned orientations only (no objective evaluation,
+    ! no gradient-based shift search).
+    !
+    ! For each particle:
+    !   1) get previous assigned orientation
+    !   2) compute symmetry-aware distance to each coarse representative
+    !   3) take npeak_use nearest coarse representatives
+    !   4) pool their neighborhoods into mask(:,i)
+    !===========================================================
+    subroutine build_neigh_mask_from_prev_geom(self)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        type(eulspace_neigh_map) :: neigh_map
+        type(ori) :: o_prev
+        logical, allocatable :: mask(:,:)
+        integer :: nspace_sub, npeak_use, i, iptcl, isub, iproj_full
+        real :: dtmp, inplrotdist
+        type(ori) :: o_sub, osym
+        nspace_sub = self%p_ptr%nspace_sub
+        npeak_use  = max(1, min(self%p_ptr%npeaks, nspace_sub))
+        call neigh_map%new(self%b_ptr%subspace_full2sub_map, self%p_ptr%nspace_sub)
+        allocate(mask(self%p_ptr%nspace, self%nptcls), source=.false.)
+        !$omp parallel do default(shared) private(i,iptcl,o_prev,isub,iproj_full,dtmp,inplrotdist,o_sub,osym) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            block
+                logical :: neigh_mask(self%p_ptr%nspace)
+                integer :: peak_sub_idxs(npeak_use)
+                integer :: prev_iproj
+                real    :: sub_dists(nspace_sub)
+                iptcl = self%pinds(i)
+                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
+                mask(:,i) = .false.
+                sub_dists = huge(1.)
+                do isub = 1, nspace_sub
+                    iproj_full = self%b_ptr%subspace_inds(isub)
+                    if( iproj_full < 1 .or. iproj_full > self%p_ptr%nspace )then
+                        THROW_HARD('build_neigh_mask_from_prev_geom: representative projection index out of range')
+                    endif
+                    call self%b_ptr%eulspace%get_ori(iproj_full, o_sub)
+                    call self%b_ptr%pgrpsyms%sym_dists(o_prev, o_sub, osym, dtmp, inplrotdist)
+                    sub_dists(isub) = dtmp
+                    call o_sub%kill
+                    call osym%kill
+                enddo
+                peak_sub_idxs = minnloc(sub_dists, npeak_use)
+                call neigh_map%get_neighbors_mask_pooled(peak_sub_idxs, neigh_mask)
+                mask(:,i) = neigh_mask
+                ! explicit previous-neighborhood OR logic: include previously assigned projection
+                prev_iproj = self%assgn_map(i)%iproj
+                if( prev_iproj >= 1 .and. prev_iproj <= self%p_ptr%nspace )then
+                    mask(prev_iproj, i) = .true.
+                endif
+                if( .not. any(mask(:,i) .and. (self%proj_active_state_count > 0)) )then
+                    mask(:,i) = (self%proj_active_state_count > 0)
+                endif
+                call o_prev%kill
+            end block
+        enddo
+        !$omp end parallel do
+        call neigh_map%kill
+        call self%build_sparse_from_mask(mask)
+        if( allocated(mask) ) deallocate(mask)
+    end subroutine build_neigh_mask_from_prev_geom
+
+    !===========================================================
     ! Build per-particle neighborhood mask from subspace peaks.
     ! Evaluates each subspace projection for every particle,
     ! picks the top npeak_use peaks, and unions their neighbor
     ! masks (plus the previous-orientation neighbor mask) to
-    ! produce the logical mask(:,i)
+    ! produce the logical mask(:,i). Evaluates all active states.
     !===========================================================
     subroutine build_neigh_mask_from_subspace_peaks(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
+        call self%build_neigh_mask_from_subspace_peaks_impl()
+    end subroutine build_neigh_mask_from_subspace_peaks
+
+    !===========================================================
+    ! Single-state variant of build_neigh_mask_from_subspace_peaks.
+    ! Evaluates subspace projections for every particle using only
+    ! the supplied state, picks the top npeak_use peaks, and unions
+    ! their neighbor masks (plus the previous-orientation neighbor
+    ! mask) to produce the logical mask(:,i).
+    !===========================================================
+    subroutine build_neigh_mask_from_subspace_peaks_one_state(self, state)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer,                   intent(in)    :: state
+        ! validate state index
+        if( state < 1 .or. state > self%p_ptr%nstates )then
+            THROW_HARD('build_neigh_mask_from_subspace_peaks_one_state: state index out of range')
+        endif
+        if( .not. self%state_exists(state) )then
+            THROW_HARD('build_neigh_mask_from_subspace_peaks_one_state: requested state does not exist')
+        endif
+        call self%build_neigh_mask_from_subspace_peaks_impl(state)
+    end subroutine build_neigh_mask_from_subspace_peaks_one_state
+
+    !===========================================================
+    ! Implementation: unified routine for both multi-state and
+    ! single-state cases. If state_opt is present, evaluates only
+    ! that state; otherwise evaluates all active states.
+    !===========================================================
+    subroutine build_neigh_mask_from_subspace_peaks_impl(self, state_opt)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer, optional,         intent(in)    :: state_opt
         type(eulspace_neigh_map) :: neigh_map
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(ori) :: o_prev
@@ -80,23 +307,12 @@ contains
         logical :: do_shift_first, prev_mask(self%p_ptr%nspace), have_prev_mask
         integer :: nrots, nspace_sub, npeak_use, i, isub, ithr, iptcl, istate, iproj_full, irot, iref_start, iref_prev
         integer :: state_i, nvalid_sub, prev_sub
+        call self%check_subspace_prereqs()
         nspace_sub     = self%p_ptr%nspace_sub
         npeak_use      = max(1, min(self%p_ptr%npeaks, nspace_sub))
         nrots          = self%b_ptr%pftc%get_nrots()
         huge_dist      = huge(1.)
         do_shift_first = self%p_ptr%l_sh_first .and. self%p_ptr%l_doshift
-        if( .not. allocated(self%b_ptr%subspace_inds) )then
-            THROW_HARD('build_neigh_mask_from_subspace_peaks requires neighborhood representative projections; enable l_neigh and set nspace_sub')
-        endif
-        if( size(self%b_ptr%subspace_inds) /= self%p_ptr%nspace_sub )then
-            THROW_HARD('build_neigh_mask_from_subspace_peaks: size(subspace_inds) must equal nspace_sub')
-        endif
-        if( .not. allocated(self%b_ptr%subspace_full2sub_map) )then
-            THROW_HARD('build_neigh_mask_from_subspace_peaks requires full-space subspace labels (subspace_full2sub_map)')
-        endif
-        if( size(self%b_ptr%subspace_full2sub_map) /= self%p_ptr%nspace )then
-            THROW_HARD('build_neigh_mask_from_subspace_peaks: size(subspace_full2sub_map) must equal nspace')
-        endif
         call neigh_map%new(self%b_ptr%subspace_full2sub_map, self%p_ptr%nspace_sub)
         allocate(mask(self%p_ptr%nspace, self%nptcls), source=.false.)
         allocate(inpl_dists(nrots, nthr_glob), coarse_best_dist(nspace_sub, nthr_glob), peak_sub_idxs(npeak_use, nthr_glob), all_sub_idxs(nspace_sub))
@@ -127,38 +343,74 @@ contains
                     have_prev_mask = .true.
                 endif
             endif
-            istate = o_prev%get_state()
-            if( do_shift_first )then
-                if( istate >= 1 .and. istate <= self%p_ptr%nstates )then
-                    if( self%state_exists(istate) )then
-                        if( iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
-                            if( self%proj_exists(iproj_full,istate) )then
-                                iref_start = (istate - 1) * self%p_ptr%nspace
-                                iref_prev  = iref_start + iproj_full
-                                irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
-                                call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
-                                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                                if( irot /= 0 ) cxy_shift = cxy(2:3)
+            if( present(state_opt) ) then
+                ! single-state path: skip state validation (done at wrapper), use provided state
+                istate = state_opt
+                if( do_shift_first )then
+                    if( iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
+                        if( self%proj_exists(iproj_full, istate) )then
+                            iref_start = (istate - 1) * self%p_ptr%nspace
+                            iref_prev  = iref_start + iproj_full
+                            irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
+                            call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
+                            cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                            cxy_shift = 0.
+                            if( irot /= 0 ) cxy_shift = cxy(2:3)
+                        endif
+                    endif
+                endif
+            else
+                ! multi-state path: get state from particle, validate
+                istate = o_prev%get_state()
+                if( do_shift_first )then
+                    if( istate >= 1 .and. istate <= self%p_ptr%nstates )then
+                        if( self%state_exists(istate) )then
+                            if( iproj_full >= 1 .and. iproj_full <= self%p_ptr%nspace )then
+                                if( self%proj_exists(iproj_full,istate) )then
+                                    iref_start = (istate - 1) * self%p_ptr%nspace
+                                    iref_prev  = iref_start + iproj_full
+                                    irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
+                                    call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
+                                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                                    cxy_shift = 0.
+                                    if( irot /= 0 ) cxy_shift = cxy(2:3)
+                                endif
                             endif
                         endif
                     endif
                 endif
             endif
             coarse_best_dist(:,ithr) = huge_dist
-            do isub = 1, nspace_sub
-                iproj_full = self%b_ptr%subspace_inds(isub)
-                if( iproj_full < 1 .or. iproj_full > self%p_ptr%nspace )then
-                    THROW_HARD('build_neigh_mask_from_subspace_peaks: representative projection index out of range')
-                endif
-                do state_i = 1, self%nstates
-                    istate = self%active_state_indices(state_i)
-                    if( .not. self%proj_exists(iproj_full,istate) ) cycle
-                    call self%b_ptr%pftc%gen_objfun_vals((istate - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_dists(:,ithr))
+            if( present(state_opt) ) then
+                ! single-state: evaluate only provided state
+                do isub = 1, nspace_sub
+                    iproj_full = self%b_ptr%subspace_inds(isub)
+                    if( iproj_full < 1 .or. iproj_full > self%p_ptr%nspace )then
+                        THROW_HARD('build_neigh_mask_from_subspace_peaks_impl: representative projection index out of range')
+                    endif
+                    if( .not. self%proj_exists(iproj_full, state_opt) ) cycle
+                    call self%b_ptr%pftc%gen_objfun_vals((state_opt - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_dists(:,ithr))
                     inpl_dists(:,ithr) = eulprob_dist_switch(inpl_dists(:,ithr), self%p_ptr%cc_objfun)
                     irot = minloc(inpl_dists(:,ithr), dim=1)
-                    coarse_best_dist(isub,ithr) = min(coarse_best_dist(isub,ithr), inpl_dists(irot,ithr))
+                    coarse_best_dist(isub,ithr) = inpl_dists(irot,ithr)
                 enddo
-            enddo
+            else
+                ! multi-state: evaluate all active states
+                do isub = 1, nspace_sub
+                    iproj_full = self%b_ptr%subspace_inds(isub)
+                    if( iproj_full < 1 .or. iproj_full > self%p_ptr%nspace )then
+                        THROW_HARD('build_neigh_mask_from_subspace_peaks_impl: representative projection index out of range')
+                    endif
+                    do state_i = 1, self%nstates
+                        istate = self%active_state_indices(state_i)
+                        if( .not. self%proj_exists(iproj_full,istate) ) cycle
+                        call self%b_ptr%pftc%gen_objfun_vals((istate - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_dists(:,ithr))
+                        inpl_dists(:,ithr) = eulprob_dist_switch(inpl_dists(:,ithr), self%p_ptr%cc_objfun)
+                        irot = minloc(inpl_dists(:,ithr), dim=1)
+                        coarse_best_dist(isub,ithr) = min(coarse_best_dist(isub,ithr), inpl_dists(irot,ithr))
+                    enddo
+                enddo
+            endif
             mask(:,i) = .false.
             nvalid_sub = count(coarse_best_dist(:,ithr) < huge_dist / 2.)
             if( nvalid_sub > 0 )then
@@ -193,99 +445,7 @@ contains
         if( allocated(coarse_best_dist) ) deallocate(coarse_best_dist)
         if( allocated(peak_sub_idxs)    ) deallocate(peak_sub_idxs)
         if( allocated(all_sub_idxs)     ) deallocate(all_sub_idxs)
-    end subroutine build_neigh_mask_from_subspace_peaks
-
-    !===========================================================
-    ! Common constructor logic for both local-part and driver
-    ! objects. Builds the global reference/state maps, but does
-    ! not yet assemble any sparse neighborhood graph.
-    !===========================================================
-    subroutine init_common(self, params, build, pinds, empty_okay)
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(builder),    target, intent(in)    :: build
-        integer,                   intent(in)    :: pinds(:)
-        logical, optional,         intent(in)    :: empty_okay
-        integer, parameter :: MIN_POP = 5
-        logical :: l_empty
-        call self%kill
-        self%p_ptr => params
-        self%b_ptr => build
-        self%nptcls = size(pinds)
-        allocate(self%pinds(self%nptcls), source=pinds)
-        allocate(self%assgn_map(self%nptcls))
-        call init_assgn_map(self)
-        l_empty = (trim(params%empty3Dcavgs) .eq. 'yes')
-        if (present(empty_okay)) l_empty = empty_okay
-        self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
-        self%nstates      = count(self%state_exists .eqv. .true.)
-        if (l_empty) then
-            allocate(self%proj_exists(self%p_ptr%nspace, self%p_ptr%nstates), source=.true.)
-        else
-            self%proj_exists = self%b_ptr%spproj_field%projs_exist(self%p_ptr%nstates, self%p_ptr%nspace, thres=MIN_POP)
-        endif
-        self%nrefs = count(self%proj_exists .eqv. .true.)
-        if (self%nrefs == 0) then
-            THROW_HARD('No valid references available after state/projection existence filtering')
-        endif
-        call self%build_ref_lists_and_map()
-    end subroutine init_common
-
-    !===========================================================
-    ! Constructor for the global driver object.
-    ! Initializes the global particle and reference maps but does
-    ! not build neighborhoods or require PFTC preparation.
-    !===========================================================
-    subroutine new_global(self, params, build, pinds, empty_okay)
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(builder),    target, intent(in)    :: build
-        integer,                   intent(in)    :: pinds(:)
-        logical, optional,         intent(in)    :: empty_okay
-        call self%init_common(params, build, pinds, empty_okay)
-    end subroutine new_global
-
-    subroutine init_assgn_map(self)
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        integer :: ptcl_local_idx, iptcl
-        real :: x
-        !$omp parallel do default(shared) private(ptcl_local_idx,iptcl) proc_bind(close) schedule(static)
-        do ptcl_local_idx = 1, self%nptcls
-            iptcl = self%pinds(ptcl_local_idx)
-            self%assgn_map(ptcl_local_idx)%pind   = iptcl
-            self%assgn_map(ptcl_local_idx)%istate = 0
-            self%assgn_map(ptcl_local_idx)%iproj  = 0
-            self%assgn_map(ptcl_local_idx)%inpl   = 0
-            self%assgn_map(ptcl_local_idx)%dist   = huge(x)
-            self%assgn_map(ptcl_local_idx)%x      = 0.
-            self%assgn_map(ptcl_local_idx)%y      = 0.
-            self%assgn_map(ptcl_local_idx)%has_sh = .false.
-        enddo
-        !$omp end parallel do
-    end subroutine init_assgn_map
-
-    subroutine build_ref_lists_and_map(self)
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        integer :: state_list_idx, ref_idx, istate, iproj
-        allocate(self%active_state_indices(self%nstates), self%ref_proj_indices(self%nrefs), self%ref_state_indices(self%nrefs))
-        allocate(self%ref_index_map(self%p_ptr%nspace, self%p_ptr%nstates), source=0)
-        allocate(self%proj_active_state_count(self%p_ptr%nspace), source=0)
-        state_list_idx = 0
-        ref_idx = 0
-        do istate = 1, self%p_ptr%nstates
-            if (.not. self%state_exists(istate)) cycle
-            state_list_idx = state_list_idx + 1
-            self%active_state_indices(state_list_idx) = istate
-            do iproj = 1, self%p_ptr%nspace
-                if (.not. self%proj_exists(iproj, istate)) cycle
-                ref_idx = ref_idx + 1
-                self%ref_proj_indices(ref_idx) = iproj
-                self%ref_state_indices(ref_idx) = istate
-                self%ref_index_map(iproj, istate) = ref_idx
-                self%proj_active_state_count(iproj) = self%proj_active_state_count(iproj) + 1
-            enddo
-        enddo
-    end subroutine build_ref_lists_and_map
+    end subroutine build_neigh_mask_from_subspace_peaks_impl
 
     !===========================================================
     ! Convert neigh_mask to sparse edges.
@@ -306,10 +466,10 @@ contains
         if( size(neigh_mask,1) /= self%p_ptr%nspace .or. size(neigh_mask,2) /= self%nptcls )then
             THROW_HARD('build_sparse_from_mask: neighborhood mask shape mismatch')
         endif
-        if( allocated(self%ptcl_off) ) deallocate(self%ptcl_off)
+        if( allocated(self%ptcl_off)       ) deallocate(self%ptcl_off)
         if( allocated(self%edge_ref_index) ) deallocate(self%edge_ref_index)
-        if( allocated(self%edge_ptcl) ) deallocate(self%edge_ptcl)
-        if( allocated(self%edge_val) ) deallocate(self%edge_val)
+        if( allocated(self%edge_ptcl)      ) deallocate(self%edge_ptcl)
+        if( allocated(self%edge_val)       ) deallocate(self%edge_val)
         allocate(self%ptcl_off(self%nptcls+1))
         self%ptcl_off(1) = 1
         do i = 1, self%nptcls
@@ -332,8 +492,8 @@ contains
                     ref_idx = self%ref_index_map(iproj,istate)
                     if (ref_idx <= 0) cycle
                     edge_idx = edge_write_pos
-                    self%edge_ref_index(edge_idx) = ref_idx
-                    self%edge_ptcl(edge_idx)      = i
+                    self%edge_ref_index(edge_idx)  = ref_idx
+                    self%edge_ptcl(edge_idx)       = i
                     self%edge_val(edge_idx)%pind   = iptcl
                     self%edge_val(edge_idx)%istate = istate
                     self%edge_val(edge_idx)%iproj  = iproj
@@ -996,7 +1156,6 @@ contains
         enddo
         deallocate(pind_to_local, assgn_glob)
     end subroutine read_assignment
-
 
     !===========================================================
     ! Destructor
