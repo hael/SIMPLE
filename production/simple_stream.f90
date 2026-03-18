@@ -71,7 +71,7 @@ call update_job_descriptions_in_project(string('simple_stream'), string(trim(prg
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('f61d8c71')
+call simple_print_git_version('2bf4a083')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

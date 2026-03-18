@@ -31,7 +31,7 @@ use simple_tifflib
 implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
-public :: test_imghead, find_ldim_nptcls, has_ldim_nptcls, update_stack_nimgs
+public :: test_imghead, find_ldim_nptcls, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info
 private
 #include "simple_local_flags.inc"
 

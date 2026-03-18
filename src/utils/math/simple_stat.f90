@@ -469,6 +469,7 @@ contains
         real,              intent(in) :: data(:,:)
         logical, optional, intent(in) :: mask(:,:)
         real(dp) :: mu, k2, k3, c
+        real(qp) :: sq
         integer  :: n
         skewness_2 = 0.
         n  = size(data)
@@ -488,7 +489,8 @@ contains
             k2 = sum((real(data,dp)-mu)**2) / real(n,dp)
         endif
         if( k2 > DTINY )then
-            c = sqrt(real(n*(n-1),dp)) / real(n-2,dp) ! unbiased
+            sq = real(n, qp) * real(n-1, qp)
+            c = sqrt(sq) / real(n-2,dp) ! unbiased
             skewness_2 = real(c * k3 / k2**1.5d0)
         endif
     end function skewness_2

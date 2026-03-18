@@ -228,7 +228,11 @@ contains
     procedure          :: loc_sdev
     procedure          :: avg_loc_sdev
     procedure          :: loc_var, loc_var3D
+    procedure          :: presence
     procedure          :: rmsd
+    procedure          :: snr
+    procedure          :: center_edge_snr
+    procedure          :: contrast
     procedure, private :: stats_1, stats_2
     generic            :: stats => stats_1, stats_2
     procedure          :: variance
@@ -1538,6 +1542,23 @@ interface
         class(image),      intent(in)  :: self
         logical, optional, intent(in)  :: mask(self%ldim(1),self%ldim(2))
     end function kurt
+
+    module real function snr( self )
+        class(image), intent(in)  :: self
+    end function snr
+
+    module real function center_edge_snr( self, mskrad )
+        class(image), intent(inout) :: self
+        real, optional,  intent(in) :: mskrad
+    end function center_edge_snr
+
+    module real function presence( self )
+        class(image), intent(in)  :: self
+    end function presence
+
+    module real function contrast( self )
+        class(image), intent(in)  :: self
+    end function contrast
 
     module function noisesdev( self, msk ) result( sdev )
         use simple_online_var, only: online_var

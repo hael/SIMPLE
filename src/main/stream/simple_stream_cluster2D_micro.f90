@@ -29,7 +29,8 @@ use simple_commanders_abinitio2D, only: commander_abinitio2D
 use simple_imgarr_utils,          only: read_cavgs_into_imgarr, dealloc_imgarr
 use simple_strategy2D_utils,      only: flag_non_junk_cavgs
 use simple_projfile_utils,        only: merge_chunk_projfiles
-use simple_clustering_utils,  only: cluster_dmat
+use simple_clustering_utils,        only: cluster_dmat
+use simple_stream_microchunk_utils, only: reject_outliers, reject_auto
 implicit none
 #include "simple_local_flags.inc"
 
@@ -47,7 +48,7 @@ contains
         character(len=*),                           parameter :: DIR_PROJS = trim(PATH_HERE)//'spprojs/'
         integer,                                    parameter :: WAITTIME    = 5
         integer,                                    parameter :: NCLS_MINI   = 100
-        integer,                                    parameter :: MAX_NCHUNKS = 1
+        integer,                                    parameter :: MAX_NCHUNKS = 2
         real,                                       parameter :: CORRELATION_Z_THRESHOLD = -0.7
         real,                                       parameter :: RESOLUTION_THRESHOLD = 30.0
         real,                                       parameter :: CHUNK_LP    = 15.0
@@ -172,10 +173,11 @@ contains
         chunk_projfiles = chunkslist%get_projfiles([1, chunkslist%size()])
         chunk_projfiles = pack(chunk_projfiles, chunkslist%get_processed_flags())
         do ic = 1, size(chunk_projfiles)
-            call reject_chunk_cavgs(chunk_ids(ic), chunk_projfiles(ic), reject_frac)
-            write(*,*) 'reject_frac', reject_frac
+            call reject_chunk_cavgs(chunk_ids(ic), chunk_projfiles(ic))
         end do
         call merge_processed_chunks()
+        ! more 2D
+        ! more rejection
         ! cleanup
         call flush(subproc_fhandle)
         close(subproc_fhandle)
@@ -360,139 +362,57 @@ contains
         end subroutine generate_chunk_projects
 
         ! Sets junk classes to state=0 and updates global n_non_junk
-        subroutine reject_chunk_cavgs( id, fname, reject_frac )
+        subroutine reject_chunk_cavgs( id, fname )
             integer,          intent(in)  :: id
             type(string),     intent(in)  :: fname
-            real,             intent(out) :: reject_frac
-            type(sp_project)             :: spproj_rj
-            type(image),     allocatable :: cavg_imgs(:)
-            logical,         allocatable :: l_non_junk(:)
-            integer,         allocatable :: states(:), classes(:)
-            real,            allocatable :: correlations(:), correlation_zscores(:)
-            real,            allocatable :: resolutions(:)
-            real,              parameter :: LP_BIN = 20.
-            real                         :: smpd, mskrad, mean_corr, sdev_corr
-            integer                      :: ldim(3), box, n_junk, i, i_stk, n_rejected_start, n_rejected_end, j, nclust
-            real,          allocatable   :: dmat_corr(:,:)
-            integer,          allocatable :: labels(:), i_medoids(:)
+            type(image),      allocatable :: cavg_imgs(:)
+            logical,          allocatable :: l_rejected(:)
+            integer,          allocatable :: states(:)
+            type(string)                  :: cavgsstk, stkname
+            type(sp_project)              :: spproj_rj
+            real                          :: smpd, mskrad
+            integer                       :: ldim(3), box, istk, ncls
             ! read chunk project file
             call spproj_rj%read(fname)
-            n_rejected_start = spproj_rj%os_ptcl2D%count_state_gt_zero()
             ! load cavgs and associated parameters
+            call spproj_rj%get_cavgs_stk(cavgsstk, ncls, smpd, imgkind='cavg')
             cavg_imgs  = read_cavgs_into_imgarr(spproj_rj)
             smpd       = cavg_imgs(1)%get_smpd()
             ldim       = cavg_imgs(1)%get_ldim()
             box        = ldim(1)
             mskrad     = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam/smpd)
-            ! reject based on junk filter
-            n_junk = 0
-            call flag_non_junk_cavgs( cavg_imgs, LP_BIN, mskrad, l_non_junk )
-            if( allocated(l_non_junk) ) then
-                n_junk     = size(l_non_junk) - count(l_non_junk)
-                n_non_junk = n_non_junk + count(l_non_junk)
-                ! write rejected cavgs
-                i_stk = 1
-                do i=1, size(l_non_junk)
-                    if( .not. l_non_junk(i) ) then
-                        call cavg_imgs(i)%write(string('rejected_junk_'//int2str(id)//'.mrcs'), i_stk)
-                        i_stk = i_stk + 1
-                    endif
-                end do
-                ! retrieve states
-                states = spproj_rj%os_cls2D%get_all_asint('state')
-                if( allocated(states) ) then
-                    ! set state=0 where junk
-                    where( .not. l_non_junk ) states = 0
-                    ! map states to particles
-                    call spproj_rj%map_cavgs_selection(states)
-                    ! cleanup
-                    deallocate(states)
-                endif
-                write(logfhandle,'(A,I8,A,I8)')'>>> ', n_junk, ' JUNK CLASSES REJECTED FROM CHUNK ', id
-                deallocate(l_non_junk)
-            endif
-            ! reject based on correlations
-            correlations = spproj_rj%os_cls2D%get_all('corr')
-            states       = spproj_rj%os_cls2D%get_all_asint('state')
-            classes      = spproj_rj%os_cls2D%get_all_asint('class')
-            correlations = pack(correlations, states > 0)
-            classes      = pack(classes, states > 0)
-            allocate(dmat_corr(size(correlations),size(correlations)), source=0.)
-            do i = 1, size(correlations) - 1
-                do j = i + 1, size(correlations)
-                    dmat_corr(i,j)  = abs(correlations(i) - correlations(j))
-                    dmat_corr(j,i)  = dmat_corr(i,j)
-                end do
-            end do
-            call normalize_minmax(dmat_corr)
-            call cluster_dmat( dmat_corr, 'aprop', nclust, i_medoids, labels, nclust_max=NCLUST_MAX)
-            if( nclust < 3 )then
-                nclust = 3
-                call cluster_dmat(dmat_corr, 'kmed', nclust, i_medoids, labels)
-            endif
-            ! write rejected cavgs
-            do i=1, nclust
-                 i_stk = 0
-                do j=1, size(correlations)
-                    if( labels(j) == i ) then
-                        i_stk = i_stk + 1
-                        call cavg_imgs(classes(j))%write(string('kmed_corr_'//int2str(i)//'.mrcs'), i_stk)
-                    endif
-                end do
-            end do
-
-
-            if( .false. .and. allocated(correlations) ) then
-                states = spproj_rj%os_cls2D%get_all_asint('state')
-                if( allocated(states) ) then
-                    correlation_zscores = z_scores(correlations, states/=0)
-                    if( allocated(correlation_zscores) ) then
-                        ! write rejected cavgs
-                        i_stk = 0
-                        do i=1, size(correlation_zscores)
-                            if( correlation_zscores(i) < CORRELATION_Z_THRESHOLD .and. states(i) > 0 ) then
-                                i_stk = i_stk + 1
-                                call cavg_imgs(i)%write(string('rejected_correlation_'//int2str(id)//'.mrcs'), i_stk)
-                            endif
-                        end do
-                        ! set state=0 where correlation < threshold
-                        where( correlation_zscores < CORRELATION_Z_THRESHOLD ) states = 0
-                        ! map states to particles
-                        call spproj_rj%map_cavgs_selection(states)
-                        deallocate(correlation_zscores)
-                    endif
-                    deallocate(states)
-                endif
-                deallocate(correlations)
-                write(logfhandle,'(A,I8,A,I8)')'>>> ', i_stk, ' POORLY CORRELATING CLASSES REJECTED FROM CHUNK ', id
-            endif
-            ! reject based on resolution
-            resolutions = spproj_rj%os_cls2D%get_all('res')
-            if( .false. .and. allocated(resolutions) ) then
-                states = spproj_rj%os_cls2D%get_all_asint('state')
-                if( allocated(states) ) then
-                    ! write rejected cavgs
-                    i_stk = 0
-                    do i=1, size(resolutions)
-                        if( resolutions(i) > RESOLUTION_THRESHOLD .and. states(i) > 0 ) then
-                            i_stk = i_stk + 1
-                            call cavg_imgs(i)%write(string('rejected_resolution_'//int2str(id)//'.mrcs'), i_stk)
-                        endif
-                    end do
-                    ! set state=0 where correlation < threshold
-                    where( resolutions > RESOLUTION_THRESHOLD ) states = 0
-                    ! map states to particles
-                    call spproj_rj%map_cavgs_selection(states)
-                    deallocate(states)
-                endif
-                deallocate(resolutions)
-                write(logfhandle,'(A,I8,A,I8)')'>>> ', i_stk, ' LOW RESOLUTION CLASSES REJECTED FROM CHUNK ', id
-            endif
-            n_rejected_end = spproj_rj%os_ptcl2D%count_state_gt_zero()
-            reject_frac = real(n_rejected_start - n_rejected_end) / spproj_rj%os_ptcl2D%get_noris()
-            write(logfhandle,'(A,F8.1,A,I8)')'>>> ', 100.0 * reject_frac, ' % PARTICLES REJECTED THIS ROUND FROM CHUNK ', id
+            ! rejection
+            allocate(l_rejected(ncls))
+            l_rejected = .false.
+            call reject_outliers(cavg_imgs, mskrad, l_rejected)
+            call reject_auto(cavg_imgs, l_rejected)
+            ! propagate selection
+            states = spproj_rj%os_cls2D%get_all_asint('state')
+            where( l_rejected ) states = 0
+            call spproj_rj%os_cls2D%set_all('state', states)
+            call spproj_rj%os_cls3D%set_all('state', states)
+            call spproj_rj%map2ptcls_state()
             ! write project
             call spproj_rj%write()
+            ! write out cavgs
+            istk = 0
+            stkname = swap_suffix(cavgsstk, '_rejected.mrc', '.mrc')
+            call del_file(stkname)
+            do icls=1, ncls
+                if( l_rejected(icls) ) then 
+                    istk = istk + 1
+                    call cavg_imgs(icls)%write(stkname, istk)
+                endif
+            end do
+            istk = 0
+            stkname = swap_suffix(cavgsstk, '_selected.mrc', '.mrc')
+            call del_file(stkname)
+            do icls=1, ncls
+                if( .not.l_rejected(icls) ) then 
+                    istk = istk + 1
+                    call cavg_imgs(icls)%write(stkname, istk)
+                endif
+            end do
             ! cleanup
             call spproj_rj%kill()
             call dealloc_imgarr(cavg_imgs)
@@ -507,42 +427,6 @@ contains
             call merge_chunk_projfiles(projfiles, string('.'), spproj_glob)
             call spproj_glob%write(basename(params%projfile))
         end subroutine merge_processed_chunks
-
-    !     subroutine abinitio2D_cycle(projfile, iter, ic)
-    !         integer,                   intent(in) :: ic
-    !         type(commander_abinitio2D)            :: xabinitio2D
-    !         type(sp_project)                      :: spproj_cluster
-    !         type(cmdline)                         :: cline_abinitio2D
-    !         type(string)                          :: dir, cwd, path
-    !         integer,                  allocatable :: states(:), clusters(:)
-    !         write(logfhandle,'(A,I8)')'>>> RUNNING ABINITIO_2D ON PARTICLES FROM CLUSTER ', ic
-    !         ! set dir and projfile
-    !         dir  = 'chunk_'//int2str(ic)//'_iter'//int2str(iter)
-    !         path = string('../') // projfile
-    !         ! set abinitio2D parameters
-    !         call cline_abinitio2D%set('prg',                                       'abinitio2D')
-    !         call cline_abinitio2D%set('mkdir',                                             'no')
-    !         call cline_abinitio2D%set('projfile',                                          path)
-    !         call cline_abinitio2D%set('mskdiam',                                 params%mskdiam)
-    !         call cline_abinitio2D%set('nthr',                                       params%nthr)
-    !    !     call cline_abinitio2D%set('nparts',                                   params%nparts)
-    !         call cline_abinitio2D%set('ncls',     max(ceiling(count(states == 1) * NCLS_MULT), MIN_NCLS))
-    !         call cline_abinitio2D%printline()
-    !         ! run abinitio2D
-    !         call simple_mkdir(dir)
-    !         ! execute
-    !         call simple_chdir(dir)
-    !         call simple_getcwd(cwd)
-    !         CWD_GLOB = cwd%to_char()
-    !         call xabinitio2D%execute(cline_abinitio2D)
-    !         call simple_chdir('..')
-    !         call simple_getcwd(cwd)
-    !         CWD_GLOB = cwd%to_char()
-    !         ! cleanup
-    !         deallocate(clusters, states)
-    !         call spproj_cluster%kill()
-    !         call cline_abinitio2D%kill()
-    !     end subroutine abinitio2D_cycle
 
     end subroutine exec_stream_cluster2D_micro
 

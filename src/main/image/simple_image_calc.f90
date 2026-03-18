@@ -455,6 +455,200 @@ contains
         kurt = kurtosis(self%rmat(1:self%ldim(1),1:self%ldim(2),1), mask)
     end function kurt
 
+    module real function snr( self )
+        class(image), intent(in) :: self
+        integer :: nx, ny
+        integer :: cx, cy, r
+        integer :: i, j, ncnt
+        real    :: cvar, nvar, cmean, nmean
+        real    :: csum, csum2, nsum, nsum2
+        if( self%is_3d() ) THROW_HARD('2D only!')
+        if( self%is_ft() ) THROW_HARD('Real space only!')
+        nx = self%ldim(1)
+        ny = self%ldim(2)
+        cx = ny / 2
+        cy = nx / 2
+        r  = MIN(nx, ny) / 4
+        ! Centre variance
+        csum  = 0.0
+        csum2 = 0.0
+        ncnt  = (2*r) * (2*r)
+        do j = cy-r+1, cy+r
+            do i = cx-r+1, cx+r
+                csum  = csum  + self%rmat(i, j, 1)
+                csum2 = csum2 + self%rmat(i, j, 1)**2
+            end do
+        end do
+        cmean = csum  / real(ncnt)
+        cvar  = csum2 / real(ncnt) - cmean**2
+        ! Corner variance (all four corners concatenated)
+        nsum  = 0.0
+        nsum2 = 0.0
+        ncnt  = 4 * r * r
+        ! Top-left
+        do j = 1, r
+            do i = 1, r
+                nsum  = nsum  + self%rmat(i, j, 1)
+                nsum2 = nsum2 + self%rmat(i, j, 1)**2
+            end do
+        end do
+        ! Top-right
+        do j = nx-r+1, nx
+            do i = 1, r
+                nsum  = nsum  + self%rmat(i, j, 1)
+                nsum2 = nsum2 + self%rmat(i, j, 1)**2
+            end do
+        end do
+        ! Bottom-left
+        do j = 1, r
+            do i = ny-r+1, ny
+                nsum  = nsum  + self%rmat(i, j, 1)
+                nsum2 = nsum2 + self%rmat(i, j, 1)**2
+            end do
+        end do
+        ! Bottom-right
+        do j = nx-r+1, nx
+            do i = ny-r+1, ny
+                nsum  = nsum  + self%rmat(i, j, 1)
+                nsum2 = nsum2 + self%rmat(i, j, 1)**2
+            end do
+        end do
+        nmean = nsum  / real(ncnt)
+        nvar  = nsum2 / real(ncnt) - nmean**2
+        snr   = cvar / (nvar + 1.0E-9)
+    end function snr
+
+    module real function center_edge_snr( self, mskrad )
+        class(image), intent(inout) :: self
+        real, optional,  intent(in) :: mskrad
+        integer :: nx, ny
+        integer :: cx, cy, r
+        integer :: r1x, r1y
+        integer :: r2x, r2y
+        integer :: ix, iy
+        integer  :: n_cen, n_edge
+        real(8)  :: centre_s2, edge_s2
+        real(4)  :: mn, centre_std, edge_std
+        if( self%is_3d() ) THROW_HARD('2D only!')
+        if( self%is_ft() ) THROW_HARD('Real space only!')
+        nx = self%ldim(1)
+        ny = self%ldim(2)
+        ! centre-window radius (quarter of the smaller dimension)
+        cy = ny / 2 + 1   ! 1-indexed centre row
+        cx = nx / 2 + 1   ! 1-indexed centre column
+        mn = self%mean()
+        r  = min(nx, ny) / 4
+        if( present(mskrad) ) r = mskrad
+        r1y = max(1,  cy - r)  
+        r2y = min(ny, cy + r - 1)
+        r1x = max(1,  cx - r)
+        r2x = min(nx, cx + r - 1)
+        centre_s2 = 0.0d0
+        n_cen     = 0
+        edge_s2   = 0.0d0
+        n_edge    = 0
+        do iy=1, ny
+            do ix=1, nx
+                if (iy >= r1y .and. iy <= r2y .and. &
+                    ix >= r1x .and. ix <= r2x) then
+                centre_s2 = centre_s2 + (self%rmat(ix, iy, 1) - mn)**2
+                n_cen = n_cen + 1
+                else
+                edge_s2 = edge_s2 + (self%rmat(ix, iy, 1) - mn)**2
+                n_edge  = n_edge  + 1
+                end if
+            end do
+        end do
+        if (n_cen  > 0) then
+            centre_std = real(sqrt(centre_s2 / n_cen), 4)
+        else
+            centre_std = 0.0
+        end if
+        if (n_edge > 0) then
+            edge_std = real(sqrt(edge_s2 / n_edge), 4)
+        else
+            edge_std = 0.0
+        end if
+        center_edge_snr = centre_std / (edge_std + 1.0e-9)
+    end function center_edge_snr
+
+    module real function presence( self )
+        class(image), intent(in) :: self
+        integer,       parameter :: BORDER = 8
+        integer :: nx, ny
+        integer :: cx, cy, r, i, j
+        integer :: ncnt, nbg
+        real    :: csum, bgsum, bgsum2, bgmean, bgstd
+        if( self%is_3d() ) THROW_HARD('2D only!')
+        if( self%is_ft() ) THROW_HARD('Real space only!')
+        nx = self%ldim(1)
+        ny = self%ldim(2)
+        cx = ny / 2
+        cy = nx / 2
+        r  = MIN(nx, ny) / 5
+        ! Centre mean
+        csum = 0.0
+        ncnt = (2*r) * (2*r)
+        do j = cy-r+1, cy+r
+            do i = cx-r+1, cx+r
+                csum = csum + self%rmat(i, j, 1)
+            end do
+        end do
+        ! Background: top, bottom, left, right borders
+        bgsum  = 0.0
+        bgsum2 = 0.0
+        nbg    = 0
+        do j = 1, nx
+            do i = 1, BORDER
+                bgsum  = bgsum  + self%rmat(i, j, 1)
+                bgsum2 = bgsum2 + self%rmat(i, j, 1)**2
+                nbg    = nbg + 1
+            end do
+            do i = ny-BORDER+1, ny
+                bgsum  = bgsum  + self%rmat(i, j, 1)
+                bgsum2 = bgsum2 + self%rmat(i, j, 1)**2
+                nbg    = nbg + 1
+            end do
+        end do
+        do i = BORDER+1, ny-BORDER
+            do j = 1, BORDER
+                bgsum  = bgsum  + self%rmat(i, j, 1)
+                bgsum2 = bgsum2 + self%rmat(i, j, 1)**2
+                nbg    = nbg + 1
+            end do
+            do j = nx-BORDER+1, nx
+                bgsum  = bgsum  + self%rmat(i, j, 1)
+                bgsum2 = bgsum2 + self%rmat(i, j, 1)**2
+                nbg    = nbg + 1
+            end do
+        end do
+        bgmean   = bgsum  / real(nbg)
+        bgstd    = sqrt(max(0.0, bgsum2 / real(nbg) - bgmean**2))
+        presence = (csum / real(ncnt) - bgmean) / (bgstd + 1.0E-9)
+    end function presence
+
+    module real function contrast( self )
+        class(image), intent(in) :: self
+        integer :: nx, ny
+        real    :: s, s2, mean
+        integer :: i, j, n
+        if( self%is_3d() ) THROW_HARD('2D only!')
+        if( self%is_ft() ) THROW_HARD('Real space only!')
+        nx = self%ldim(1)
+        ny = self%ldim(2)
+        s  = 0.0
+        s2 = 0.0
+        n  = nx * ny
+        do j = 1, nx
+            do i = 1, ny
+                s  = s  + self%rmat(i, j, 1)
+                s2 = s2 + self%rmat(i, j, 1)**2
+            end do
+        end do
+        mean     = s / real(n)
+        contrast = sqrt(max(0.0, s2 / real(n) - mean**2))
+    end function contrast
+
     module function noisesdev( self, msk ) result( sdev )
         use simple_online_var, only: online_var
         class(image), intent(inout) :: self
