@@ -30,7 +30,7 @@ contains
                                     & self%argtransf_shellone(self%pftsz+1:) * shift_8(2)
         self%heap_vars(ithr)%shvec  = dcmplx(dcos(self%heap_vars(ithr)%argvec), dsin(self%heap_vars(ithr)%argvec))
         ! remaining shells, cos(kx)+isin(kx) = (cos(x)+isin(x))**k-1 * (cos(x)+isin(x))
-        do k = self%kfromto(1)+1,self%kfromto(2)
+        do k = self%kfromto(1)+1,self%interpklim
             shmat_8(:,k) = shmat_8(:,k-1) * self%heap_vars(ithr)%shvec
         enddo
         ! alternative to:
@@ -45,8 +45,8 @@ contains
         class(polarft_calc), intent(in)    :: self
         real(dp),            intent(in)    :: psi
         integer,             intent(inout) :: lrot, rrot
-        real(dp),            intent(out)   :: lw(self%kfromto(1):self%kfromto(2))
-        real(dp),            intent(out)   :: rw(self%kfromto(1):self%kfromto(2))
+        real(dp),            intent(out)   :: lw(self%kfromto(1):self%interpklim)
+        real(dp),            intent(out)   :: rw(self%kfromto(1):self%interpklim)
         ! Local variables
         real(dp) :: sinpsi, cospsi       ! sin and cos of the target angle
         real(dp) :: h_line, k_line       ! Cartesian coords of the point on the target common line
@@ -78,7 +78,7 @@ contains
         sinpsi = sin(deg2rad(psi))
         cospsi = cos(deg2rad(psi))
         ! --- 2. Loop over all radial points (k) to calculate weights ---
-        do k = self%kfromto(1), self%kfromto(2)
+        do k = self%kfromto(1), self%interpklim
             ! LEFT reference line point (h,k) in Cartesian coords
             l_h_polar = real(self%polar(lrot, k), dp)
             l_k_polar = real(self%polar(lrot + self%nrots, k), dp)
@@ -135,8 +135,8 @@ contains
         ithr = omp_get_thread_num() + 1
         shmat => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat)
-        self%pfts_refs_even(:,:,iref) = cmplx(dcmplx(self%pfts_refs_even(:,:,iref)) * shmat)
-        self%pfts_refs_odd( :,:,iref) = cmplx(dcmplx(self%pfts_refs_odd( :,:,iref)) * shmat)
+        self%pfts_refs_even(:,:,iref) = cmplx(dcmplx(self%pfts_refs_even(:,:,iref)) * shmat(:,self%kfromto(1):self%kfromto(2)))
+        self%pfts_refs_odd( :,:,iref) = cmplx(dcmplx(self%pfts_refs_odd( :,:,iref)) * shmat(:,self%kfromto(1):self%kfromto(2)))
     end subroutine shift_ref
 
     ! mirror pft about h (mirror about y of cartesian image)
@@ -165,7 +165,7 @@ contains
         endif
     end subroutine mirror_ref_pft
 
-    module subroutine rotate_pft_1(self, pft, irot, pft_rot)
+    module subroutine rotate_ref_8( self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
         complex(dp),         intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,             intent(in)  :: irot
@@ -184,107 +184,50 @@ contains
             pft_rot(irot-self%pftsz:self%pftsz       ,:) = conjg(pft(1    :mid,       :))
             pft_rot(1              :irot-self%pftsz-1,:) =       pft(mid+1:self%pftsz,:)
         endif
-    end subroutine rotate_pft_1
+    end subroutine rotate_ref_8
 
-    module subroutine rotate_pft_2(self, pft, irot, pft_rot)
+    ! private particle rotation utility
+    module subroutine rotate_ptcl(self, i, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
-        complex(sp),         intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,             intent(in)  :: i       ! internal particle index
         integer,             intent(in)  :: irot
-        complex(sp),         intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),         intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%interpklim)
         integer :: mid
         if( irot == 1 )then
-            pft_rot = pft
+            pft_rot = self%pfts_ptcls(:,:,i)
         elseif( irot >= 2 .and. irot <= self%pftsz )then
             mid = self%pftsz - irot + 1
-            pft_rot(   1:irot-1,    :) = conjg(pft(mid+1:self%pftsz,:))
-            pft_rot(irot:self%pftsz,:) =       pft(    1:mid,       :)
+            pft_rot(   1:irot-1,    :) = conjg(self%pfts_ptcls(mid+1:self%pftsz,:,i))
+            pft_rot(irot:self%pftsz,:) =       self%pfts_ptcls(    1:mid,       :,i)
         elseif( irot == self%pftsz + 1 )then
-            pft_rot = conjg(pft)
+            pft_rot = conjg(self%pfts_ptcls(:,:,i))
         else
             mid = self%nrots - irot + 1
-            pft_rot(irot-self%pftsz:self%pftsz       ,:) = conjg(pft(1    :mid,       :))
-            pft_rot(1              :irot-self%pftsz-1,:) =       pft(mid+1:self%pftsz,:)
+            pft_rot(irot-self%pftsz:self%pftsz       ,:) = conjg(self%pfts_ptcls(1    :mid,       :,i))
+            pft_rot(1              :irot-self%pftsz-1,:) =       self%pfts_ptcls(mid+1:self%pftsz,:,i)
         endif
-    end subroutine rotate_pft_2
+    end subroutine rotate_ptcl
 
-    module subroutine rotate_pft_3(self, pft, irot, pft_rot)
+    ! private |CTF| rotation utility
+    module subroutine rotate_ctf(self, i, irot, ctf_rot)
         class(polarft_calc), intent(in)  :: self
-        real(sp),            intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,             intent(in)  :: i       ! internal particle index
         integer,             intent(in)  :: irot
-        real(sp),            intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp),            intent(out) :: ctf_rot(self%pftsz,self%kfromto(1):self%interpklim)
         integer :: mid
         if( irot == 1 )then
-            pft_rot = pft
+            ctf_rot = self%ctfmats(:,:,i)
         elseif( irot >= 2 .and. irot <= self%pftsz )then
             mid = self%pftsz - irot + 1
-            pft_rot(   1:irot-1,    :) = pft(mid+1:self%pftsz,:)
-            pft_rot(irot:self%pftsz,:) = pft(    1:mid,       :)
+            ctf_rot(   1:irot-1,    :) = self%ctfmats(mid+1:self%pftsz,:,i)
+            ctf_rot(irot:self%pftsz,:) = self%ctfmats(    1:mid,       :,i)
         elseif( irot == self%pftsz + 1 )then
-            pft_rot = pft
+            ctf_rot = self%ctfmats(:,:,i)
         else
             mid = self%nrots - irot + 1
-            pft_rot(irot-self%pftsz:self%pftsz       ,:) = pft(1    :mid,       :)
-            pft_rot(1              :irot-self%pftsz-1,:) = pft(mid+1:self%pftsz,:)
+            ctf_rot(irot-self%pftsz:self%pftsz       ,:) = self%ctfmats(1    :mid,       :,i)
+            ctf_rot(1              :irot-self%pftsz-1,:) = self%ctfmats(mid+1:self%pftsz,:,i)
         endif
-    end subroutine rotate_pft_3
-
-    module subroutine rotate_pft_4(self, pft, irot, pft_rot)
-        class(polarft_calc), intent(in)  :: self
-        real(dp),            intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,             intent(in)  :: irot
-        real(dp),            intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer :: mid
-        if( irot == 1 )then
-            pft_rot = pft
-        elseif( irot >= 2 .and. irot <= self%pftsz )then
-            mid = self%pftsz - irot + 1
-            pft_rot(   1:irot-1,    :) = pft(mid+1:self%pftsz,:)
-            pft_rot(irot:self%pftsz,:) = pft(    1:mid,       :)
-        elseif( irot == self%pftsz + 1 )then
-            pft_rot = pft
-        else
-            mid = self%nrots - irot + 1
-            pft_rot(irot-self%pftsz:self%pftsz       ,:) = pft(1    :mid,       :)
-            pft_rot(1              :irot-self%pftsz-1,:) = pft(mid+1:self%pftsz,:)
-        endif
-    end subroutine rotate_pft_4
-
-    module subroutine rotate_iref_1(self, iref, irot, sh)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, irot
-        real,                intent(in)    :: sh(2)
-        complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp_8(:,:), shmat(:,:)
-        integer :: ithr
-        ithr = omp_get_thread_num() + 1
-        pft_ref       => self%heap_vars(ithr)%pft_ref_8
-        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        shmat         => self%heap_vars(ithr)%shmat_8
-        ! even
-        pft_ref_tmp_8 = dcmplx(self%pfts_refs_even(:,:,iref))
-        call self%gen_shmat_8(ithr, real(sh,dp), shmat)
-        call self%rotate_pft(pft_ref_tmp_8, irot, pft_ref)
-        pft_ref                       = pft_ref * shmat
-        self%pfts_refs_even(:,:,iref) = cmplx(pft_ref)
-        ! odd
-        pft_ref_tmp_8                 = dcmplx(self%pfts_refs_odd(:,:,iref))
-        call self%rotate_pft(pft_ref_tmp_8, irot, pft_ref)
-        pft_ref                       = pft_ref * shmat
-        self%pfts_refs_odd( :,:,iref) = cmplx(pft_ref)
-    end subroutine rotate_iref_1
-
-    module subroutine rotate_iref_2(self, pft_ref, irot, sh, pft_ref_out)
-        class(polarft_calc),  intent(inout) :: self
-        complex(dp), pointer, intent(in)    :: pft_ref(:,:)
-        integer,              intent(in)    :: irot
-        real,                 intent(in)    :: sh(2)
-        complex(dp), pointer, intent(out)   :: pft_ref_out(:,:)
-        complex(dp), pointer :: shmat(:,:)
-        integer :: ithr
-        ithr  = omp_get_thread_num() + 1
-        shmat => self%heap_vars(ithr)%shmat_8
-        call self%rotate_pft(pft_ref, irot, pft_ref_out)
-        call self%gen_shmat_8(ithr, real(sh,dp), shmat)
-        pft_ref_out = pft_ref_out * shmat
-    end subroutine rotate_iref_2
+    end subroutine rotate_ctf
 
 end submodule simple_polarft_geom

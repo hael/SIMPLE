@@ -778,7 +778,7 @@ contains
             params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
             call build%pftc%polar_cavger_new(.true., nrefs=params%nspace)
             call build%pftc%polar_cavger_calc_pops(build%spproj)
-            call build%pftc%polar_cavger_assemble_sums_from_parts(reforis=build%eulspace, symop=build%pgrpsyms)
+            call build%pftc%polar_cavger_assemble_sums_from_parts
             call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, build%spproj_field%get_update_frac())
             call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call build%pftc%polar_cavger_kill

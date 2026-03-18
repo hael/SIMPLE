@@ -12,8 +12,8 @@ contains
         integer, optional,         intent(in)    :: pfromto(2)
         type(ctfparams) :: ctfparms(nthr_glob)
         type(ctf)       :: tfuns(nthr_glob)
-        real(sp)        :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%kfromto(2)), hinv,kinv
+        real(sp)        :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%interpklim)
+        real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%interpklim), hinv,kinv
         integer         :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind
         logical         :: present_pfromto
         present_pfromto = present(pfromto)
@@ -22,7 +22,7 @@ contains
         if(.not. self%with_ctf ) return
         !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
         do irot=1,self%pftsz
-            do k=self%kfromto(1),self%kfromto(2)
+            do k=self%kfromto(1),self%interpklim
                 hinv = self%polar(irot,k) / self%ldim(1)
                 kinv = self%polar(irot+self%nrots,k) / self%ldim(2)
                 spaFreqSq_mat(irot,k) = hinv*hinv+kinv*kinv

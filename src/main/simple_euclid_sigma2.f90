@@ -168,9 +168,8 @@ contains
         call binfile%read(self%sigma2_part)
     end subroutine read_part
 
-    subroutine read_groups( self, pftc, os )
+    subroutine read_groups( self, os )
         class(euclid_sigma2), intent(inout) :: self
-        class(polarft_calc),  intent(in)    :: pftc
         class(oris),          intent(inout) :: os
         integer                             :: iptcl, igroup, ngroups, eo
         if( .not.associated(self%p_ptr) )then

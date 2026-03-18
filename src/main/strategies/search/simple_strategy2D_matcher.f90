@@ -538,11 +538,11 @@ contains
             fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
             call b_ptr%esig%new(p_ptr, b_ptr%pftc, fname, p_ptr%box)
             if( l_stream )then
-                call b_ptr%esig%read_groups(b_ptr%pftc, b_ptr%spproj_field)
+                call b_ptr%esig%read_groups(b_ptr%spproj_field)
                 call b_ptr%esig%allocate_ptcls
             else
                 call b_ptr%esig%read_part(  b_ptr%spproj_field)
-                if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%read_groups(b_ptr%pftc, b_ptr%spproj_field)
+                if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%read_groups(b_ptr%spproj_field)
             endif
         endif
         ! prepare the polarizer images
@@ -641,12 +641,12 @@ contains
             fname = SIGMA2_FBODY//int2str_pad(p_ptr%part,p_ptr%numlen)//'.dat'
             call b_ptr%esig%new(p_ptr, b_ptr%pftc, fname, p_ptr%box)
             if( l_stream )then
-                call b_ptr%esig%read_groups(b_ptr%pftc, b_ptr%spproj_field)
+                call b_ptr%esig%read_groups(b_ptr%spproj_field)
                 call b_ptr%esig%allocate_ptcls
             else
                 call b_ptr%esig%read_part(  b_ptr%spproj_field)
                 if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
-                    call b_ptr%esig%read_groups(b_ptr%pftc, b_ptr%spproj_field)
+                    call b_ptr%esig%read_groups(b_ptr%spproj_field)
                 endif
             endif
         endif

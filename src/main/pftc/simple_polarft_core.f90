@@ -7,12 +7,12 @@ contains
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-    module subroutine new(self, params, nrefs, pfromto, kfromto, eoarr)
+    module subroutine new(self, params, nrefs, pfromto, kfromto, iklim)
         class(polarft_calc), target, intent(inout) :: self
         class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
-        integer, optional,           intent(in)    :: eoarr(pfromto(1):pfromto(2))
+        integer,           optional, intent(in)    :: iklim
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
         integer               :: irot, k, ithr, i
@@ -25,6 +25,12 @@ contains
         ! set band-pass Fourier index limits
         self%kfromto = kfromto
         self%nk      = self%kfromto(2) - self%kfromto(1) + 1
+        ! set particle PFTs interpolation limit
+        if( present(iklim) )then
+            self%interpklim = iklim
+        else
+            self%interpklim = self%kfromto(2)
+        endif
         ! error check
         if( self%pfromto(2) - self%pfromto(1) + 1 < 1 )then
             write(logfhandle,*) 'pfromto: ', self%pfromto(1), self%pfromto(2)
@@ -50,13 +56,13 @@ contains
         self%pftsz  = params%pftsz                            !< size of reference (number of vectors used for matching,determined by radius of molecule)
         self%nrots  = 2 * self%pftsz                          !< number of in-plane rotations for one pft  (pftsz*2)
         ! generate polar coordinates
-        allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
-                    &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
+        allocate( self%polar(2*self%nrots,self%kfromto(1):self%interpklim),&
+                    &self%angtab(self%nrots), polar_here(2*self%nrots))
         self%dang = twopi/real(self%nrots)
         do irot=1,self%nrots
             self%angtab(irot) = real(irot-1)*self%dang
             ! cycling over non-redundant logical dimensions
-            do k=self%kfromto(1),self%kfromto(2)
+            do k=self%kfromto(1),self%interpklim
                 self%polar(irot,k)            =  sin(self%angtab(irot))*real(k) ! x-coordinate
                 self%polar(irot+self%nrots,k) = -cos(self%angtab(irot))*real(k) ! y-coordinate
             end do
@@ -68,28 +74,11 @@ contains
         end do
         self%dang = rad2deg(self%dang)
         ! index translation table
-        allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
-        self%pinds = (/(i,i=1,self%nptcls)/)
-        ! eo assignment
-        if( present(eoarr) )then
-            if( all(eoarr == - 1) )then
-                self%iseven = .true.
-            else
-                do i=self%pfromto(1),self%pfromto(2)
-                    if( self%pinds(i) > 0 )then
-                        if( eoarr(i) == 0 )then
-                            self%iseven(self%pinds(i)) = .true.
-                        else
-                            self%iseven(self%pinds(i)) = .false.
-                        endif
-                    endif
-                end do
-            endif
-        else
-            self%iseven = .true.
-        endif
+        allocate( self%pinds(self%pfromto(1):self%pfromto(2)), self%iseven(1:self%nptcls))
+        self%pinds  = (/(i,i=1,self%nptcls)/)
+        self%iseven = .true.
         ! generate the argument transfer constants for shifting reference polarfts
-        allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)), self%argtransf_shellone(self%nrots) )
+        allocate( self%argtransf(self%nrots,self%kfromto(1):self%interpklim), self%argtransf_shellone(self%nrots) )
         A = DPI / real(self%ldim(1:2)/2,dp) ! argument transfer matrix normalization constant
         ! shell = 1
         self%argtransf_shellone(:self%pftsz  ) = real(polar_here(:self%pftsz),dp)                        * A(1) ! x-part
@@ -100,8 +89,8 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                &self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
+                &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
+                &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                 &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
                 &self%heap_vars(self%p_ptr%nthr))
         do ithr=1,self%p_ptr%nthr
@@ -109,12 +98,12 @@ contains
                     &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%argvec(self%pftsz),&
                     &self%heap_vars(ithr)%shvec(self%pftsz),&
-                    &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                    &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%interpklim),&
                     &self%heap_vars(ithr)%kcorrs(self%nrots),&
                     &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_dref_8(self%pftsz,self%kfromto(1):self%kfromto(2),3),&
-                    &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                    &self%heap_vars(ithr)%pft_ref_tmp2_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                    &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%interpklim),&
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_r(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%w_weights(self%nk),&
@@ -145,11 +134,11 @@ contains
                     &self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
-                    &self%heap_vars(ithr)%pft_dref_8,self%heap_vars(ithr)%pft_r,&
+                    &self%heap_vars(ithr)%pft_ref_tmp2_8,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8,&
                     self%heap_vars(ithr)%w_weights,self%heap_vars(ithr)%sumsq_cache)
             end do
-            if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
+            if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab,&
                 &self%argtransf, self%pfts_ptcls, self%polar, self%pfts_refs_even, self%pfts_refs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
@@ -180,8 +169,8 @@ contains
             if( allocated(self%iseven) )       deallocate(self%iseven)
             if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
             if( allocated(self%ctfmats) )      deallocate(self%ctfmats)
-            allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                     &self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
+            allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
+                     &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                      &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),&
                      &self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
             call self%kill_memoized_ptcls
@@ -215,12 +204,12 @@ contains
     module subroutine set_ptcl_pft(self, iptcl, pft)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
-        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
         self%pfts_ptcls(:,:,self%pinds(iptcl)) = pft
         call self%memoize_sqsum_ptcl(iptcl)
     end subroutine set_ptcl_pft
 
-    module subroutine set_ref_fcomp(self, iref, irot, k, comp, iseven)
+    module pure subroutine set_ref_fcomp(self, iref, irot, k, comp, iseven)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, irot, k
         complex(sp),         intent(in)    :: comp
@@ -275,23 +264,6 @@ contains
         logical,             intent(in)    :: is_even
         self%iseven(self%pinds(iptcl)) = is_even
     end subroutine set_eo
-
-    module subroutine set_eos(self, eoarr)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: eoarr(self%nptcls)
-        integer :: i
-        if( all(eoarr == - 1) )then
-            self%iseven = .true.
-        else
-            do i=1,self%nptcls
-                if( eoarr(i) == 0 )then
-                    self%iseven(i) = .true.
-                else
-                    self%iseven(i) = .false.
-                endif
-            end do
-        endif
-    end subroutine set_eos
 
     module subroutine set_with_ctf(self, l_wctf)
         class(polarft_calc), intent(inout) :: self

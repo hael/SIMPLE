@@ -28,9 +28,9 @@ contains
         shmat       => self%heap_vars(ithr)%shmat_8
         pft_ref     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
         call self%gen_shmat_8(ithr, real(shvec,dp),shmat)
-        pft_ref = pft_ref * shmat
-        call self%rotate_pft(pft_ref, irot, pft_rot_ref)
-        pft_rot_ref = pft_rot_ref * self%ctfmats(:,:,i)
+        pft_ref = pft_ref * shmat(:,:self%kfromto(2))
+        call self%rotate_ref_8(pft_ref, irot, pft_rot_ref)
+        pft_rot_ref = pft_rot_ref * self%ctfmats(:,:self%kfromto(2),i)
         select case(self%p_ptr%cc_objfun)
         case(OBJFUN_CC)
             sqsumref  = 0.d0
@@ -49,7 +49,7 @@ contains
             enddo
             calc_corr_rot_shift = real(num/sqrt(sqsumref*sqsumptcl))
         case(OBJFUN_EUCLID)
-            pft_rot_ref = pft_rot_ref - self%pfts_ptcls(:,:,i)
+            pft_rot_ref = pft_rot_ref - self%pfts_ptcls(:,:self%kfromto(2),i)
             sqsumptcl = 0.d0
             num       = 0.d0
             do k = self%kfromto(1),self%kfromto(2)
@@ -80,9 +80,9 @@ contains
         shmat       => self%heap_vars(ithr)%shmat_8
         pft_ref = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat)
-        pft_ref = pft_ref * shmat
-        call self%rotate_pft(pft_ref, irot, pft_rot_ref)
-        pft_rot_ref = pft_rot_ref * real(self%ctfmats(:,:,i),dp)
+        pft_ref = pft_ref * shmat(:,:self%kfromto(2))
+        call self%rotate_ref_8(pft_ref, irot, pft_rot_ref)
+        pft_rot_ref = pft_rot_ref * real(self%ctfmats(:,:self%kfromto(2),i),dp)
         do k = self%kfromto(1),self%kfromto(2)
             num       = real(sum(pft_rot_ref(:,k)       * conjg(self%pfts_ptcls(:,k,i))),dp)
             sumsqptcl = real(sum(self%pfts_ptcls(:,k,i) * conjg(self%pfts_ptcls(:,k,i))),dp)
@@ -135,7 +135,7 @@ contains
         needs_shift = shift_mag_sq > SHERRSQ
         if (needs_shift) then
             call self%gen_shmat(ithr, shift, shmat)
-            pft_ref = shmat * pft_ref_source
+            pft_ref = shmat(:,:self%kfromto(2)) * pft_ref_source
         else
             pft_ref = pft_ref_source
         endif
@@ -216,7 +216,7 @@ contains
         needs_shift = shift_mag_sq > SHERRSQ
         if (needs_shift) then
             call self%gen_shmat(ithr, shift, shmat)
-            pft_ref = shmat * pft_ref_source
+            pft_ref = shmat(:,:self%kfromto(2)) * pft_ref_source
         else
             pft_ref = pft_ref_source
         endif
@@ -289,9 +289,9 @@ contains
             pft_ref_8 = self%pfts_refs_odd(:,:,iref)
         endif
         ! rotation
-        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
+        call self%rotate_ref_8(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
-        pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
+        pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:self%kfromto(2),i)
         gen_corr_for_rot_8_1 = 0.d0
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
@@ -320,11 +320,11 @@ contains
         endif
         ! shift
         call self%gen_shmat_8(ithr, shvec, shmat_8)
-        pft_ref_8 = pft_ref_8 * shmat_8
+        pft_ref_8 = pft_ref_8 * shmat_8(:,:self%kfromto(2))
         ! rotation
-        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
+        call self%rotate_ref_8(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
-        pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
+        pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:self%kfromto(2),i)
         gen_corr_for_rot_8_2 = 0.d0
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
@@ -360,7 +360,7 @@ contains
         real(dp) :: w, sum_term
         integer  :: i, k
         i       = self%pinds(iptcl)
-        pft_ref = pft_ref - self%pfts_ptcls(:,:,i)
+        pft_ref = pft_ref - self%pfts_ptcls(:,:self%kfromto(2),i)
         gen_euclid_for_rot_8 = 0.d0
         do k = self%kfromto(1), self%kfromto(2)
             w = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
@@ -389,7 +389,7 @@ contains
             pft_ref_8 = self%pfts_refs_odd(:,:,iref)
         endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
-        pft_ref_8 = pft_ref_8 * shmat_8
+        pft_ref_8 = pft_ref_8 * shmat_8(:,:self%kfromto(2))
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
@@ -411,7 +411,7 @@ contains
         grad       = 0.d0
         sqsum_ptcl = self%ksqsums_ptcls(i)
         ! First rotation and k-loop: compute sqsum_ref and f
-        call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
+        call self%rotate_ref_8(pft_ref, irot, pft_ref_tmp)
         do k = self%kfromto(1), self%kfromto(2)
             k_weight  = real(k, kind=dp)
             sqsum_ref = sqsum_ref + k_weight * sum(real(self%ctfmats(:,k,i) * self%ctfmats(:,k,i) * &
@@ -420,14 +420,14 @@ contains
                                                 conjg(self%pfts_ptcls(:,k,i)), dp))
         enddo
         ! Second rotation: gradient x-component
-        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+        call self%rotate_ref_8(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:self%kfromto(2))), irot, pft_ref_tmp)
         do k = self%kfromto(1), self%kfromto(2)
             k_weight = real(k, kind=dp)
             grad(1)  = grad(1) + k_weight * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * &
                                                     conjg(self%pfts_ptcls(:,k,i)), dp))
         enddo
         ! Third rotation: gradient y-component
-        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+        call self%rotate_ref_8(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:self%kfromto(2))), irot, pft_ref_tmp)
         do k = self%kfromto(1), self%kfromto(2)
             k_weight = real(k, kind=dp)
             grad(2)  = grad(2) + k_weight * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * &
@@ -452,26 +452,26 @@ contains
         f        = 0.d0
         grad     = 0.d0
         denom    = self%wsqsums_ptcls(i)
-        pft_diff => self%heap_vars(ithr)%shmat_8
+        pft_diff => self%heap_vars(ithr)%pft_ref_tmp2_8
         ! First rotation: compute difference and f
-        call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
-        pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
-        pft_diff    = pft_ref_tmp - self%pfts_ptcls(:,:,i)  ! Ref(shift + rotation + CTF) - Ptcl
+        call self%rotate_ref_8(pft_ref, irot, pft_ref_tmp)
+        pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:self%kfromto(2),i)
+        pft_diff    = pft_ref_tmp - self%pfts_ptcls(:,:self%kfromto(2),i)  ! Ref(shift + rotation + CTF) - Ptcl
         do k = self%kfromto(1), self%kfromto(2)
             w        = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
             sum_diff = sum(real(pft_diff(:,k) * conjg(pft_diff(:,k)), dp))
             f        = f + w * sum_diff
         end do
         ! Second rotation: x-gradient
-        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
-        pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
+        call self%rotate_ref_8(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:self%kfromto(2))), irot, pft_ref_tmp)
+        pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:self%kfromto(2),i)
         do k = self%kfromto(1), self%kfromto(2)
             w       = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
             grad(1) = grad(1) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))), dp)
         end do
         ! Third rotation: y-gradient
-        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
-        pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
+        call self%rotate_ref_8(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:self%kfromto(2))), irot, pft_ref_tmp)
+        pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:self%kfromto(2),i)
         do k = self%kfromto(1), self%kfromto(2)
             w       = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
             grad(2) = grad(2) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))), dp)
@@ -501,7 +501,7 @@ contains
             pft_ref_8 = self%pfts_refs_odd(:,:,iref)
         endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
-        pft_ref_8 = pft_ref_8 * shmat_8
+        pft_ref_8 = pft_ref_8 * shmat_8(:,:self%kfromto(2))
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 call self%gen_corr_cc_grad_only_for_rot_8(pft_ref_8, pft_ref_tmp_8, i, irot, grad)
@@ -521,21 +521,21 @@ contains
         grad       = 0.d0
         sqsum_ptcl = self%ksqsums_ptcls(i)
         ! First rotation: compute sqsum_ref
-        call self%rotate_pft(pft_ref, irot, pft_ref_tmp)
+        call self%rotate_ref_8(pft_ref, irot, pft_ref_tmp)
         do k = self%kfromto(1), self%kfromto(2)
             k_weight  = real(k, kind=dp)
             sqsum_ref = sqsum_ref + k_weight * sum(real(self%ctfmats(:,k,i) * self%ctfmats(:,k,i) * &
                                                         pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)), dp))
         enddo
         ! Second rotation: x-gradient
-        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+        call self%rotate_ref_8(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:self%kfromto(2))), irot, pft_ref_tmp)
         do k = self%kfromto(1), self%kfromto(2)
             k_weight = real(k, kind=dp)
             grad(1)  = grad(1) + k_weight * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * &
                                                     conjg(self%pfts_ptcls(:,k,i)), dp))
         enddo
         ! Third rotation: y-gradient
-        call self%rotate_pft(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+        call self%rotate_ref_8(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:self%kfromto(2))), irot, pft_ref_tmp)
         do k = self%kfromto(1), self%kfromto(2)
             k_weight = real(k, kind=dp)
             grad(2)  = grad(2) + k_weight * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * &
@@ -565,13 +565,13 @@ contains
         endif
         ! shift
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat_8)
-        pft_ref_8 = pft_ref_8 * shmat_8
+        pft_ref_8 = pft_ref_8 * shmat_8(:,:self%kfromto(2))
         ! rotation
-        call self%rotate_pft(pft_ref_8, irot, pft_ref_tmp_8)
+        call self%rotate_ref_8(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
-        pft_ref_tmp_8 = pft_ref_tmp_8 * real(self%ctfmats(:,:,i), dp)
+        pft_ref_tmp_8 = pft_ref_tmp_8 * real(self%ctfmats(:,:self%kfromto(2),i), dp)
         ! difference
-        pft_ref_tmp_8 = pft_ref_tmp_8 - self%pfts_ptcls(:,:,i)
+        pft_ref_tmp_8 = pft_ref_tmp_8 - self%pfts_ptcls(:,:self%kfromto(2),i)
         ! sigma2 - pre-compute normalization factor
         norm_factor = 2.d0 * real(self%pftsz, dp)
         if (present(sigma_contrib)) then

@@ -19,6 +19,12 @@ contains
         pdim = [self%pftsz,self%kfromto(1),self%kfromto(2)]
     end function get_pdim
 
+    module pure function get_ptcl_interp_dim(self) result(dims)
+        class(polarft_calc), intent(in) :: self
+        integer :: dims(3)
+        dims = [self%pftsz,self%kfromto(1),self%interpklim]
+    end function get_ptcl_interp_dim
+
     module pure function get_kfromto(self) result(kfromto)
         class(polarft_calc), intent(in) :: self
         integer :: kfromto(2)
@@ -121,28 +127,10 @@ contains
         allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)), source=CMPLX_ZERO)
     end function allocate_pft
 
-    module subroutine get_work_pft_ptr( self, ptr )
+    module function allocate_ptcl_pft( self ) result( pft )
         class(polarft_calc),  intent(in)  :: self
-        complex(sp), pointer, intent(out) :: ptr(:,:)
-        integer :: ithr
-        ithr = omp_get_thread_num()+1
-        ptr => self%heap_vars(ithr)%pft_ref_tmp
-    end subroutine get_work_pft_ptr
-
-    module subroutine get_work_rpft_ptr( self, ptr )
-        class(polarft_calc), intent(in)  :: self
-        real(sp), pointer,   intent(out) :: ptr(:,:)
-        integer :: ithr
-        ithr = omp_get_thread_num()+1
-        ptr => self%heap_vars(ithr)%pft_r
-    end subroutine get_work_rpft_ptr
-
-    module subroutine get_work_rpft8_ptr( self, ptr )
-        class(polarft_calc), intent(in)  :: self
-        real(dp), pointer,   intent(out) :: ptr(:,:)
-        integer :: ithr
-        ithr = omp_get_thread_num()+1
-        ptr => self%heap_vars(ithr)%pft_r1_8
-    end subroutine get_work_rpft8_ptr
+        complex(sp), allocatable :: pft(:,:)
+        allocate(pft(self%pftsz,self%kfromto(1):self%interpklim), source=CMPLX_ZERO)
+    end function allocate_ptcl_pft
 
 end submodule simple_polarft_access

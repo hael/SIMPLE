@@ -17,9 +17,11 @@ contains
             self%ncls = self%nrefs
         endif
         allocate(self%prev_eo_pops(2,self%ncls), self%eo_pops(2,self%ncls), source=0)
-        allocate(self%pfts_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls),self%pfts_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls),&
-                &self%ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls),self%ctf2_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls),&
-                &self%pfts_merg(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls))
+        allocate(self%pfts_even(self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
+                &self%pfts_odd( self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
+                &self%ctf2_even(self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
+                &self%ctf2_odd( self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
+                &self%pfts_merg(self%pftsz, self%kfromto(1):self%interpklim, self%ncls))
         call self%polar_cavger_zero_pft_refs
         self%pfts_merg = DCMPLX_ZERO
     end subroutine polar_cavger_new
@@ -40,11 +42,11 @@ contains
         character(len=*),    intent(in)    :: which
         select case(trim(which))
             case('merged')
-                call self%set_ref_pft(icls, cmplx(self%pfts_merg(:,:,icls),kind=sp), .true.)
+                call self%set_ref_pft(icls, cmplx(self%pfts_merg(:,self%kfromto(1):self%kfromto(2),icls),kind=sp), .true.)
             case('even')
-                call self%set_ref_pft(icls, cmplx(self%pfts_even(:,:,icls),kind=sp), .true.)
+                call self%set_ref_pft(icls, cmplx(self%pfts_even(:,self%kfromto(1):self%kfromto(2),icls),kind=sp), .true.)
             case('odd')
-                call self%set_ref_pft(icls, cmplx(self%pfts_odd(:,:,icls),kind=sp), .false.)
+                call self%set_ref_pft(icls, cmplx(self%pfts_odd(:,self%kfromto(1):self%kfromto(2),icls),kind=sp), .false.)
         end select
     end subroutine polar_cavger_set_ref_pft
 
@@ -109,13 +111,12 @@ contains
         real,              optional, intent(in)    :: incr_shifts(2,nptcls)
         logical,           optional, intent(in)    :: is3d
         class(oris), pointer :: spproj_field
-        complex(sp), pointer :: rptcl(:,:)
-        real(sp),    pointer :: rctf(:,:)
-        real(dp),    pointer :: rctf2(:,:)
-        real(dp) :: w
-        real     :: sigma2(self%kfromto(1):self%kfromto(2)), incr_shift(2)
-        integer  :: eopops(2,self%ncls), i, icls, iptcl, irot, k
-        logical  :: l_ctf, l_even, l_3D, l_shift
+        complex(sp) :: rptcl(self%pftsz,self%kfromto(1):self%interpklim)
+        real(dp)    :: rctf2(self%pftsz,self%kfromto(1):self%interpklim), w
+        real(sp)    :: rctf(self%pftsz,self%kfromto(1):self%interpklim)
+        real        :: sigma2(self%kfromto(1):self%interpklim), incr_shift(2)
+        integer     :: eopops(2,self%ncls), i, icls, iptcl, irot, k, ithr
+        logical     :: l_ctf, l_even, l_3D, l_shift
         l_3D = .false.
         if( present(is3D) ) l_3D = is3D
         l_shift = .false.
@@ -126,13 +127,14 @@ contains
         ! update classes
         eopops = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static) reduction(+:eopops)&
-        !$omp private(i,iptcl,w,l_even,icls,irot,incr_shift,rptcl,rctf,rctf2,k,sigma2)
+        !$omp private(i,iptcl,ithr,w,l_even,icls,irot,incr_shift,rptcl,rctf,rctf2,k,sigma2)
         do i = 1,nptcls
             ! particles parameters
             iptcl = pinds(i)
             if( spproj_field%get_state(iptcl) == 0  ) cycle
             w = real(spproj_field%get(iptcl,'w'),dp)
             if( w < DSMALL ) cycle
+            ithr   = omp_get_thread_num()+1
             l_even = spproj_field%get_eo(iptcl)==0
             if( l_3D )then
                 icls = spproj_field%get_proj(iptcl)
@@ -145,29 +147,26 @@ contains
                 ! weighted restoration
                 if( any(abs(incr_shift) > 1.e-6) ) call self%shift_ptcl(iptcl, -incr_shift)
             endif
-            call self%get_work_pft_ptr(rptcl)
             ! Particle rotation
-            call self%rotate_pft(self%pfts_ptcls(:,:,i), irot, rptcl)
+            call self%rotate_ptcl(i, irot, rptcl)
             ! Particle weight
             rptcl = real(w) * rptcl
             ! Particle ML regularization
             if( self%p_ptr%l_ml_reg )then
-                sigma2 = self%sigma2_noise(self%kfromto(1):self%kfromto(2),iptcl)
-                do k = self%kfromto(1),self%kfromto(2)
+                sigma2 = self%sigma2_noise(self%kfromto(1):self%interpklim,iptcl)
+                do k = self%kfromto(1),self%interpklim
                     rptcl(:,k) = rptcl(:,k) / sigma2(k)
                 enddo
             endif
             ! Array updates
             if( l_ctf )then
-                call self%get_work_rpft_ptr(rctf)
-                call self%get_work_rpft8_ptr(rctf2)
                 ! weighted CTF2
-                call self%rotate_pft(self%ctfmats(:,:,i), irot, rctf)
+                call self%rotate_ctf(i, irot, rctf)
                 rctf2 = w * real(rctf,kind=dp)**2
                 rptcl = rptcl * rctf    ! PhFlip(X).|CTF|
                 ! CTF2 ML regularization
                 if( self%p_ptr%l_ml_reg )then
-                    do k = self%kfromto(1),self%kfromto(2)
+                    do k = self%kfromto(1),self%interpklim
                         rctf2(:,k) = rctf2(:,k) / real(sigma2(k),dp)
                     enddo
                 endif
@@ -185,8 +184,7 @@ contains
             else
                 if( self%p_ptr%l_ml_reg )then
                     ! CTF2=1 & ML regularization
-                    call self%get_work_rpft8_ptr(rctf2)
-                    do k = self%kfromto(1),self%kfromto(2)
+                    do k = self%kfromto(1),self%interpklim
                         rctf2(:,k) = w / real(sigma2(k),dp)
                     enddo
                     if( l_even )then
@@ -224,7 +222,7 @@ contains
         !$omp end parallel do
         self%eo_pops = self%eo_pops + eopops
         ! cleanup
-        nullify(spproj_field,rptcl,rctf,rctf2)
+        nullify(spproj_field)
     end subroutine polar_cavger_update_sums
 
     module subroutine polar_cavger_kill( self )

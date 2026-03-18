@@ -12,10 +12,10 @@ contains
         class(polarft_calc), intent(inout) :: self
         class(class_frcs),   intent(inout) :: clsfrcs
         class(string),       intent(in)    :: fname
-        complex(dp) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp) :: even(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp) :: odd(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
+        complex(dp) :: even(self%pftsz,self%kfromto(1):self%interpklim)
+        complex(dp) :: odd(self%pftsz,self%kfromto(1):self%interpklim)
+        real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%interpklim)
         real        :: frc(fdim(self%p_ptr%box_crop)-1)
         integer     :: icls, eo_pop(2), pop, find, filtsz
         select case(trim(self%p_ptr%ref_type))
@@ -51,7 +51,7 @@ contains
                 ! Regularization
                 if( self%p_ptr%l_ml_reg )then                    
                     if( pop > 1 )then
-                        call add_invtausq2rho(frc(self%kfromto(1):self%kfromto(2)), self%ctf2_even(:,:,icls), self%ctf2_odd(:,:,icls))
+                        call add_invtausq2rho(frc(self%kfromto(1):self%interpklim), self%ctf2_even(:,:,icls), self%ctf2_odd(:,:,icls))
                     endif
                     ! e/o re-normalization
                     if( eo_pop(1) > 1) call self%safe_norm(self%pfts_even(:,:,icls), self%ctf2_even(:,:,icls), even)
@@ -64,7 +64,7 @@ contains
                     call self%safe_norm(pft, ctf2, self%pfts_merg(:,:,icls))
                 endif
                 ! average low-resolution info between eo pairs to keep things in register
-                find = min(self%kfromto(2), clsfrcs%estimate_find_for_eoavg(icls, 1))
+                find = min(self%interpklim, clsfrcs%estimate_find_for_eoavg(icls, 1))
                 if( find >= self%kfromto(1) )then
                     even(:,self%kfromto(1):find) = self%pfts_merg(:,self%kfromto(1):find,icls)
                     odd(:,self%kfromto(1):find)  = self%pfts_merg(:,self%kfromto(1):find,icls)
@@ -82,23 +82,23 @@ contains
         contains
 
             subroutine add_invtausq2rho( frc, ctf2e, ctf2o )
-                real,     intent(in)    :: frc(self%kfromto(1):self%kfromto(2))
-                real(dp), intent(inout) :: ctf2e(self%pftsz,self%kfromto(1):self%kfromto(2))
-                real(dp), intent(inout) :: ctf2o(self%pftsz,self%kfromto(1):self%kfromto(2))
-                real(dp) :: sig2e(self%kfromto(1):self%kfromto(2)), sig2o(self%kfromto(1):self%kfromto(2))
-                real(dp) :: ssnr(self%kfromto(1):self%kfromto(2)), tau2e(self%kfromto(1):self%kfromto(2))
-                real(dp) :: tau2o(self%kfromto(1):self%kfromto(2))
+                real,     intent(in)    :: frc(self%kfromto(1):self%interpklim)
+                real(dp), intent(inout) :: ctf2e(self%pftsz,self%kfromto(1):self%interpklim)
+                real(dp), intent(inout) :: ctf2o(self%pftsz,self%kfromto(1):self%interpklim)
+                real(dp) :: sig2e(self%kfromto(1):self%interpklim), sig2o(self%kfromto(1):self%interpklim)
+                real(dp) :: ssnr(self%kfromto(1):self%interpklim), tau2e(self%kfromto(1):self%interpklim)
+                real(dp) :: tau2o(self%kfromto(1):self%interpklim)
                 real(dp) :: cc, fudge
                 integer  :: k, kstart, p
                 sig2e = 0.d0
                 sig2o = 0.d0
-                do k = self%kfromto(1),self%kfromto(2)
+                do k = self%kfromto(1),self%interpklim
                     sig2e(k) = sig2e(k) + sum(ctf2e(:,k))
                     sig2o(k) = sig2o(k) + sum(ctf2o(:,k))
                 enddo
                 ! SSNR
                 fudge = real(self%p_ptr%tau,dp)
-                do k = self%kfromto(1),self%kfromto(2)
+                do k = self%kfromto(1),self%interpklim
                     cc      = max(0.001d0, min(0.999d0, frc(k)))
                     ssnr(k) = fudge * cc / (1.d0 - cc)
                 enddo
@@ -117,7 +117,7 @@ contains
                 ! Add Tau2 inverse to denominators
                 ! because signal assumed infinite at very low resolution there is no addition
                 kstart = max(6, calc_fourier_index(self%p_ptr%hp, self%p_ptr%box_crop, self%p_ptr%smpd_crop))
-                do k = kstart,self%kfromto(2)
+                do k = kstart,self%interpklim
                     if( tau2e(k) > DTINY )then
                         ! CTF2 <- CTF2 + avgCTF2/(tau*SSNR)
                         ctf2e(:,k) = ctf2e(:,k) + 1.d0 / (fudge * tau2e(k))
@@ -149,14 +149,13 @@ contains
         type(class_frcs)         :: frcs
         type(string)             :: fname
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
-        complex(dp) :: pfts_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        complex(dp) :: pfts_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        real(dp)    :: ctf2_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        real(dp)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        real(dp)    :: fsc(self%kfromto(1):self%kfromto(2)), ufrac_trec
-        real(dp)    :: max_dist, l_h_polar, l_k_polar, r_h_polar, r_k_polar
+        complex(dp) :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp) :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp)    :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp)    :: fsc(self%kfromto(1):self%interpklim), ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
-        integer     :: tmp_pftsz, tmp_kfromto(2), tmp_nrefs, k
+        integer     :: tmp_pftsz, tmp_kfromto(2), tmp_nrefs
         integer     :: find4eoavg, i
         select case(trim(self%p_ptr%ref_type))
         case('comlin')
@@ -176,9 +175,11 @@ contains
         endif
         ! Calculate and write global FSC, FRCs
         call calc_fsc
-        fsc_boxcrop(               :self%kfromto(1)) = 1.0
-        fsc_boxcrop(self%kfromto(1):self%kfromto(2)) = real(fsc(self%kfromto(1):self%kfromto(2)))
-        fsc_boxcrop(self%kfromto(2):               ) = 0.0
+        fsc_boxcrop(                 :self%kfromto(1)) = 1.0
+        fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc(self%kfromto(1):self%interpklim))
+        if( self%interpklim < size(fsc_boxcrop) )then
+            fsc_boxcrop(self%interpklim+1:)            = 0.0
+        endif
         call arr2file(fsc_boxcrop, string(FSC_FBODY//int2str_pad(1,2)//BIN_EXT))
         call frcs%new(self%ncls, self%p_ptr%box_crop, self%p_ptr%smpd_crop, 1)
         do i = 1,self%ncls
@@ -226,14 +227,14 @@ contains
         endif
     contains
 
-        ! Calculate global FSC within [self%kfromto(1);self%kfromto(2)]
+        ! Calculate global FSC within [self%kfromto(1);self%interpklim]
         subroutine calc_fsc
-            complex(dp) :: even(self%pftsz,self%kfromto(1):self%kfromto(2))
-            complex(dp) :: odd(self%pftsz,self%kfromto(1):self%kfromto(2))
-            complex(dp) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-            real(dp)    :: vare(self%kfromto(1):self%kfromto(2))
-            real(dp)    :: varo(self%kfromto(1):self%kfromto(2))
-            real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
+            complex(dp) :: even(self%pftsz,self%kfromto(1):self%interpklim)
+            complex(dp) :: odd(self%pftsz,self%kfromto(1):self%interpklim)
+            complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
+            real(dp)    :: vare(self%kfromto(1):self%interpklim)
+            real(dp)    :: varo(self%kfromto(1):self%interpklim)
+            real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%interpklim)
             integer     :: icls, k
             ! Calculates per slice contribution to global FSC/variance
             ! no need to loop over mirrored slices
@@ -272,8 +273,8 @@ contains
         end subroutine calc_fsc
 
         subroutine add_invtausq2rho
-            real(dp) :: sig2e(self%kfromto(1):self%kfromto(2)), sig2o(self%kfromto(1):self%kfromto(2))
-            real(dp) :: ssnr(self%kfromto(1):self%kfromto(2)), tau2(self%kfromto(1):self%kfromto(2))
+            real(dp) :: sig2e(self%kfromto(1):self%interpklim), sig2o(self%kfromto(1):self%interpklim)
+            real(dp) :: ssnr(self%kfromto(1):self%interpklim), tau2(self%kfromto(1):self%interpklim)
             real(dp) :: cc, fudge, invtau2
             integer  :: icls, k, kstart, p, nhalf
             nhalf = self%ncls/2
@@ -281,14 +282,14 @@ contains
             sig2e = 0.d0; sig2o = 0.d0
             !$omp parallel do default(shared) schedule(static) proc_bind(close)&
             !$omp private(k) reduction(+:sig2e,sig2o)
-            do k = self%kfromto(1),self%kfromto(2)
+            do k = self%kfromto(1),self%interpklim
                 sig2e(k) = sig2e(k) + sum(ctf2_even(:,k,1:nhalf))
                 sig2o(k) = sig2o(k) + sum(ctf2_odd(:,k,1:nhalf))
             enddo
             !$omp end parallel do
             ! SSNR
             fudge = real(self%p_ptr%tau,dp)
-            do k = self%kfromto(1),self%kfromto(2)
+            do k = self%kfromto(1),self%interpklim
                 cc = max(0.001d0,min(0.999d0,fsc(k)))
                 ssnr(k) = fudge * cc / (1.d0 - cc)
             enddo
@@ -303,7 +304,7 @@ contains
             end where
             tau2 = ssnr * sig2e
             !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
-            do k = kstart,self%kfromto(2)
+            do k = kstart,self%interpklim
                 if( tau2(k) > DTINY )then
                     ! CTF2 <- CTF2 + avgCTF2/(tau*SSNR)
                     invtau2 = 1.d0 / (fudge * tau2(k))
@@ -326,7 +327,7 @@ contains
             end where
             tau2 = ssnr * sig2o
             !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
-            do k = kstart,self%kfromto(2)
+            do k = kstart,self%interpklim
                 if( tau2(k) > DTINY )then
                     invtau2 = 1.d0 / (fudge * tau2(k))
                     ctf2_odd(:,k,:) = ctf2_odd(:,k,:) + invtau2
@@ -345,8 +346,8 @@ contains
         ! Deals with summing slices and their mirror
         subroutine mirror_slices( ref_space )
             type(oris), intent(in) :: ref_space
-            complex(dp) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-            real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
+            complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
+            real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%interpklim)
             real        :: psi
             integer     :: iref, m
             logical     :: l_rotm
@@ -387,12 +388,12 @@ contains
 
         ! Restores slices
         subroutine restore_references
-            complex(dp) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-            complex(dp) :: pfte(self%pftsz,self%kfromto(1):self%kfromto(2))
-            complex(dp) :: pfto(self%pftsz,self%kfromto(1):self%kfromto(2))
-            real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%kfromto(2))
-            real(dp)    :: ctf2e(self%pftsz,self%kfromto(1):self%kfromto(2))
-            real(dp)    :: ctf2o(self%pftsz,self%kfromto(1):self%kfromto(2))
+            complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
+            complex(dp) :: pfte(self%pftsz,self%kfromto(1):self%interpklim)
+            complex(dp) :: pfto(self%pftsz,self%kfromto(1):self%interpklim)
+            real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%interpklim)
+            real(dp)    :: ctf2e(self%pftsz,self%kfromto(1):self%interpklim)
+            real(dp)    :: ctf2o(self%pftsz,self%kfromto(1):self%interpklim)
             real        :: psi
             integer     :: icls, m
             logical     :: l_rotm
@@ -533,7 +534,7 @@ contains
         real,                intent(in)    :: filter(:)
         integer :: k
         real    :: fk
-        do k = self%kfromto(1),self%kfromto(2)
+        do k = self%kfromto(1),self%interpklim
             fk = filter(k)
             self%pfts_merg(:,k,icls) = fk * self%pfts_merg(:,k,icls)
             self%pfts_even(:,k,icls) = fk * self%pfts_even(:,k,icls)
@@ -548,16 +549,16 @@ contains
         class(polarft_calc), intent(in)    :: self
         type(oris),          intent(in)    :: ref_space
         type(sym),           intent(in)    :: symop
-        complex(kind=dp),    intent(inout) :: pfts_cl_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        complex(kind=dp),    intent(inout) :: pfts_cl_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        real(kind=dp),       intent(inout) :: ctf2_cl_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        real(kind=dp),       intent(inout) :: ctf2_cl_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        complex(kind=dp),    intent(inout) :: pfts_cl_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(kind=dp),    intent(inout) :: pfts_cl_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(kind=dp),       intent(inout) :: ctf2_cl_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(kind=dp),       intent(inout) :: ctf2_cl_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp), allocatable :: Rsym(:,:,:)
-        complex(dp) :: cl_l(self%kfromto(1):self%kfromto(2)), cl_r(self%kfromto(1):self%kfromto(2))
-        complex(dp) :: cl_e(self%kfromto(1):self%kfromto(2)), cl_o(self%kfromto(1):self%kfromto(2))
-        real(dp)    :: rl_l(self%kfromto(1):self%kfromto(2)), rl_r(self%kfromto(1):self%kfromto(2))
-        real(dp)    :: rl_e(self%kfromto(1):self%kfromto(2)), rl_o(self%kfromto(1):self%kfromto(2))
-        real(dp)    :: wl(self%kfromto(1):self%kfromto(2)), wr(self%kfromto(1):self%kfromto(2))
+        complex(dp) :: cl_l(self%kfromto(1):self%interpklim), cl_r(self%kfromto(1):self%interpklim)
+        complex(dp) :: cl_e(self%kfromto(1):self%interpklim), cl_o(self%kfromto(1):self%interpklim)
+        real(dp)    :: rl_l(self%kfromto(1):self%interpklim), rl_r(self%kfromto(1):self%interpklim)
+        real(dp)    :: rl_e(self%kfromto(1):self%interpklim), rl_o(self%kfromto(1):self%interpklim)
+        real(dp)    :: wl(self%kfromto(1):self%interpklim), wr(self%kfromto(1):self%interpklim)
         real(dp)    :: R(3,3,self%ncls), Rj(3,3), tRi(3,3), eulers(3), psi
         real        :: Rtmp(3,3)
         integer     :: rotl, rotr, iref, jref, m, isym, nsym
@@ -659,9 +660,9 @@ contains
         ! Extrapolate cline, rline to pfts_clin and ctf2_clin
         subroutine extrapolate_line(ref, rot, weight, cle, clo, rle, rlo)
             integer,     intent(in) :: ref, rot
-            real(dp),    intent(in) :: weight(self%kfromto(1):self%kfromto(2))
-            complex(dp), intent(in) :: cle(self%kfromto(1):self%kfromto(2)), clo(self%kfromto(1):self%kfromto(2))
-            real(dp),    intent(in) :: rle(self%kfromto(1):self%kfromto(2)), rlo(self%kfromto(1):self%kfromto(2))
+            real(dp),    intent(in) :: weight(self%kfromto(1):self%interpklim)
+            complex(dp), intent(in) :: cle(self%kfromto(1):self%interpklim), clo(self%kfromto(1):self%interpklim)
+            real(dp),    intent(in) :: rle(self%kfromto(1):self%interpklim), rlo(self%kfromto(1):self%interpklim)
             integer :: irot
             irot = rot
             if( irot < 1 )then
@@ -685,8 +686,8 @@ contains
     ! produces y-mirror of real (reciprocal) matrix 
     module pure subroutine mirror_ctf2( self, ctf2in, ctf2out )
         class(polarft_calc), intent(in)    :: self
-        real(dp),            intent(in)    :: ctf2in(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp),            intent(inout) :: ctf2out(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp),            intent(in)    :: ctf2in(self%pftsz,self%kfromto(1):self%interpklim)
+        real(dp),            intent(inout) :: ctf2out(self%pftsz,self%kfromto(1):self%interpklim)
         integer :: i,j
         ctf2out(1,:) = ctf2in(1,:)
         do i = 2,self%pftsz/2
@@ -698,11 +699,11 @@ contains
         ctf2out(i,:) = ctf2in(i,:)
     end subroutine mirror_ctf2
 
-    ! produces y-mirror of complex (reciprocal) matrix 
+    ! produces y-mirror of complex (reciprocal) matrix, for particles only
     module pure subroutine mirror_pft( self, pftin, pftout )
         class(polarft_calc), intent(in)    :: self
-        complex(dp),         intent(in)    :: pftin(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp),         intent(inout) :: pftout(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),         intent(in)    :: pftin(self%pftsz,self%kfromto(1):self%interpklim)
+        complex(dp),         intent(inout) :: pftout(self%pftsz,self%kfromto(1):self%interpklim)
         integer :: i,j
         pftout(1,:) = conjg(pftin(1,:))
         do i = 2,self%pftsz/2
@@ -717,13 +718,13 @@ contains
     ! Private utility
     module pure subroutine safe_norm( self, Mnum, Mdenom, Mout )
         class(polarft_calc), intent(in)    :: self
-        complex(dp),         intent(in)    :: Mnum(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp),            intent(inout) :: Mdenom(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp),         intent(inout) :: Mout(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),         intent(in)    :: Mnum(self%pftsz,self%kfromto(1):self%interpklim)
+        real(dp),            intent(inout) :: Mdenom(self%pftsz,self%kfromto(1):self%interpklim)
+        complex(dp),         intent(inout) :: Mout(self%pftsz,self%kfromto(1):self%interpklim)
         logical  :: msk(self%pftsz)
         real(dp) :: avg, t
         integer  :: k, n
-        do k = self%kfromto(1),self%kfromto(2)
+        do k = self%kfromto(1),self%interpklim
             msk = Mdenom(:,k) > DSMALL
             n   = count(msk)
             if( n == 0 ) cycle
@@ -743,8 +744,8 @@ contains
         class(polarft_calc), intent(in)  :: self
         integer,             intent(in)  :: ref, rot
         logical,             intent(in)  :: even
-        complex(dp),         intent(out) :: pftline(self%kfromto(1):self%kfromto(2))
-        real(dp),            intent(out) :: ctf2line(self%kfromto(1):self%kfromto(2))
+        complex(dp),         intent(out) :: pftline(self%kfromto(1):self%interpklim)
+        real(dp),            intent(out) :: ctf2line(self%kfromto(1):self%interpklim)
         integer :: irot
         if( rot >  self%nrots )then
             irot = rot - self%nrots
@@ -778,13 +779,13 @@ contains
 
     module subroutine polar_cavger_calc_frc( self, pft1, pft2, n, frc )
         class(polarft_calc), intent(in)    :: self
-        complex(dp),         intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%kfromto(2)), pft2(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),         intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%interpklim), pft2(self%pftsz,self%kfromto(1):self%interpklim)
         integer,             intent(in)    :: n
         real(sp),            intent(inout) :: frc(1:n)
         real(dp) :: var1, var2, denom
         integer  :: k
         frc(1:self%kfromto(1)-1) = 0.999
-        do k = self%kfromto(1), self%kfromto(2)
+        do k = self%kfromto(1), self%interpklim
             var1  = sum(csq_fast(pft1(:,k)))
             var2  = sum(csq_fast(pft2(:,k)))
             if( (var1>DTINY) .and. (var2>DTINY) )then
@@ -794,7 +795,7 @@ contains
                 frc(k) = 0.0
             endif
         enddo
-        if( self%kfromto(2) < n ) frc(self%kfromto(2)+1:) = 0.0
+        if( self%interpklim < n ) frc(self%interpklim+1:) = 0.0
     end subroutine polar_cavger_calc_frc
 
 end submodule simple_polarft_ops_restore

@@ -5,19 +5,16 @@ implicit none
 contains
 
     !>  \brief  Converts the polar references to a cartesian grid
-    module subroutine polar_cavger_refs2cartesian( self, cavgs, which, pfts_in )
+    module subroutine polar_cavger_refs2cartesian( self, cavgs, which )
         class(polarft_calc),     intent(in)    :: self
         type(image),             intent(inout) :: cavgs(self%ncls)
         character(len=*),        intent(in)    :: which
-        complex(dp),   optional, intent(in)    :: pfts_in(1:self%pftsz,self%kfromto(1):self%kfromto(2),1:self%ncls)
         complex, allocatable :: cmat(:,:)
         real,    allocatable :: norm(:,:)
         integer, parameter :: EVEN_CASE = 0, ODD_CASE = 1, MERGED_CASE = 2  
-        complex :: pft(1:self%pftsz,self%kfromto(1):self%kfromto(2)), fc
+        complex :: pft(1:self%pftsz,self%kfromto(1):self%interpklim), fc
         real    :: phys(2), dh,dk,mdk,mdh
         integer :: k,c,irot,physh,physk,box,icls,case_sel
-        logical :: pfts_in_present
-        pfts_in_present = present(pfts_in)
         box = self%p_ptr%box_crop
         c   = box/2+1
         select case(trim(which))
@@ -32,23 +29,19 @@ contains
         !$omp parallel do schedule(guided) proc_bind(close) default(shared)&
         !$omp private(icls,pft,cmat,norm,irot,k,phys,fc,physh,physk,dh,dk,mdh,mdk)
         do icls = 1,self%ncls
-            if( pfts_in_present )then
-                pft = cmplx(pfts_in(1:self%pftsz,self%kfromto(1):self%kfromto(2),icls), kind=sp)
-            else
-                select case(case_sel)
-                    case(EVEN_CASE)
-                        pft = cmplx(self%pfts_even(1:self%pftsz,self%kfromto(1):self%kfromto(2),icls), kind=sp)
-                    case(ODD_CASE)
-                        pft = cmplx(self%pfts_odd(1:self%pftsz,self%kfromto(1):self%kfromto(2),icls), kind=sp)
-                    case(MERGED_CASE)
-                        pft = cmplx(self%pfts_merg(1:self%pftsz,self%kfromto(1):self%kfromto(2),icls), kind=sp)
-                end select
-            endif
+            select case(case_sel)
+                case(EVEN_CASE)
+                    pft = cmplx(self%pfts_even(1:self%pftsz,self%kfromto(1):self%interpklim,icls), kind=sp)
+                case(ODD_CASE)
+                    pft = cmplx(self%pfts_odd(1:self%pftsz,self%kfromto(1):self%interpklim,icls), kind=sp)
+                case(MERGED_CASE)
+                    pft = cmplx(self%pfts_merg(1:self%pftsz,self%kfromto(1):self%interpklim,icls), kind=sp)
+            end select
             ! Bi-linear interpolation
             cmat = CMPLX_ZERO
             norm = 0.0
             do irot = 1,self%pftsz
-                do k = self%kfromto(1),self%kfromto(2)
+                do k = self%kfromto(1),self%interpklim
                     phys  = self%get_coord(irot,k) + [1.,real(c)]
                     fc    = pft(irot,k)
                     physh = floor(phys(1))
@@ -333,11 +326,8 @@ contains
 
     !>  \brief  Reads in and reduces partial matrices prior to restoration
     !! performance critical code
-    module subroutine polar_cavger_assemble_sums_from_parts( self, reforis, symop, clin_anneal )
+    module subroutine polar_cavger_assemble_sums_from_parts( self )
         class(polarft_calc),  intent(inout) :: self
-        type(oris), optional, intent(in)    :: reforis
-        type(sym),  optional, intent(in)    :: symop
-        real,       optional, intent(in)    :: clin_anneal
         complex(dp), allocatable :: pfte(:,:,:),      pfto(:,:,:)
         complex(sp), allocatable :: pfte_buf(:,:,:),  pfto_buf(:,:,:)
         real(dp),    allocatable :: ctf2e(:,:,:),     ctf2o(:,:,:)
@@ -346,8 +336,8 @@ contains
         integer :: dims_cae(4), dims_cao(4), dims_cte(4), dims_cto(4)
         integer :: funit_cae, funit_cao, funit_cte, funit_cto
         integer :: ipart, i 
-        allocate(pfte(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls),  pfto(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls),&
-               &ctf2e(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls), ctf2o(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls))
+        allocate(pfte(self%pftsz,self%kfromto(1):self%interpklim,self%ncls),  pfto(self%pftsz,self%kfromto(1):self%interpklim,self%ncls),&
+               &ctf2e(self%pftsz,self%kfromto(1):self%interpklim,self%ncls), ctf2o(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
         call self%polar_cavger_zero_pft_refs
         do ipart = 1,self%p_ptr%nparts
             cae = 'cavgs_even_part'    //int2str_pad(ipart,self%p_ptr%numlen)//BIN_EXT
@@ -405,15 +395,15 @@ contains
     module subroutine write_pft_array_local( self, funit, array )
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: funit
-        complex(dp),         intent(in) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        write(unit=funit,pos=1) [self%pftsz, self%kfromto(1), self%kfromto(2), self%ncls]
+        complex(dp),         intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        write(unit=funit,pos=1) [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]
         write(unit=funit,pos=(4*sizeof(funit)+1)) cmplx(array,kind=sp)
     end subroutine write_pft_array_local
 
     ! private method
     module subroutine write_pft_array( self, array, fname )
         class(polarft_calc), intent(in) :: self
-        complex(dp),         intent(in) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        complex(dp),         intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         class(string),       intent(in) :: fname
         integer :: funit
         call open_pft_or_ctf2_array_for_write(fname, funit)
@@ -425,15 +415,15 @@ contains
     module subroutine write_ctf2_array_local( self, funit, array )
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: funit
-        real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        write(unit=funit,pos=1) [self%pftsz, self%kfromto(1), self%kfromto(2), self%ncls]
+        real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        write(unit=funit,pos=1) [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]
         write(unit=funit,pos=(4*sizeof(funit)+1)) real(array,kind=sp)
     end subroutine write_ctf2_array_local
 
     ! private method
     module subroutine write_ctf2_array( self, array, fname )
         class(polarft_calc), intent(in) :: self
-        real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         class(string),       intent(in) :: fname
         integer :: funit
         call open_pft_or_ctf2_array_for_write(fname, funit)
@@ -470,9 +460,9 @@ contains
         call fileiochk('read_pft_array; fopen failed: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) dims
         if( .not.allocated(array) )then
-            allocate(array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls))
+            allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
         endif
-        if( .not. all(dims == [self%pftsz, self%kfromto(1), self%kfromto(2), self%ncls]) )then
+        if( .not. all(dims == [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]) )then
             if( self%pftsz > dims(1) )then
                 ! padding required
             elseif( self%pftsz < dims(1) )then
@@ -489,7 +479,7 @@ contains
     ! private method
     module subroutine transfer_pft_array_buffer( self, array, funit, dims, buffer )
         class(polarft_calc), intent(in)    :: self
-        complex(dp),         intent(inout) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        complex(dp),         intent(inout) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,             intent(in)    :: funit, dims(4)
         complex(sp),         intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
         integer :: klo, khi
@@ -499,7 +489,7 @@ contains
         array(:,:,:) = (0.0_dp, 0.0_dp)
         ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
         klo = max(self%kfromto(1), dims(2))
-        khi = min(self%kfromto(2), dims(3))
+        khi = min(self%interpklim, dims(3))
         if( klo <= khi ) array(:,klo:khi,:) = cmplx(buffer(:,klo:khi,:), kind=dp)
     end subroutine transfer_pft_array_buffer
 
@@ -529,9 +519,9 @@ contains
         call fileiochk('open_ctf2_array_for_read; fopen failed: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) dims
         if( .not.allocated(array) )then
-            allocate(array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls))
+            allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
         endif
-        if( .not. all(dims == [self%pftsz, self%kfromto(1), self%kfromto(2), self%ncls]) )then
+        if( .not. all(dims == [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]) )then
             if( self%pftsz /= dims(1) )then
                 THROW_HARD('Incompatible real array size in '//fname%to_char()//': '//int2str(self%pftsz)//' vs '//int2str(dims(1)))
             endif
@@ -545,7 +535,7 @@ contains
     ! private helper
     module subroutine transfer_ctf2_array_buffer( self, array, funit, dims, buffer )
         class(polarft_calc), intent(in) :: self
-        real(dp), intent(inout) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        real(dp), intent(inout) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,  intent(in)    :: funit, dims(4)
         real(sp), intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
         integer :: klo, khi
@@ -555,7 +545,7 @@ contains
         array(:,:,:) = 0.0_dp
         ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
         klo = max(self%kfromto(1), dims(2))
-        khi = min(self%kfromto(2), dims(3))
+        khi = min(self%interpklim, dims(3))
         if( klo <= khi )then
             array(:,klo:khi,:) = real(buffer(:,klo:khi,:), dp)
         endif
@@ -566,13 +556,13 @@ contains
     !     class(polarft_calc), intent(inout) :: self
     !     type(image) :: img
     !     integer :: nk,i,k,icls
-    !     nk = self%kfromto(2)
+    !     nk = self%interpklim
     !     if( .not.is_even(nk) ) nk = nk+1
     !     call img%new([self%pftsz,nk,1],1.0)
     !     do icls = 1,self%ncls
     !         img = 0.0
     !         do i = 1,self%pftsz
-    !             do k = self%kfromto(1),self%kfromto(2)
+    !             do k = self%kfromto(1),self%interpklim
     !                 call img%set([i,k,1], real(abs(self%pfts_merg(i,k,icls))))
     !             enddo
     !         enddo

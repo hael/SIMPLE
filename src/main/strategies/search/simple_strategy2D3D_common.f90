@@ -1004,7 +1004,7 @@ contains
         logical,     optional,    intent(in)    :: do_polar
         real, allocatable :: gaufilter(:)
         type(string)      :: fname
-        integer           :: ithr, iproj, nrefs, filtsz
+        integer           :: ithr, iproj, nrefs, filtsz, interplim
         logical           :: l_polar, l_filtrefs
         l_polar = .false.
         if( present(do_polar) ) l_polar = do_polar
@@ -1017,8 +1017,10 @@ contains
                 call estimate_lp_refvols(params, build, cline)
             endif
             ! Calculator init
-            nrefs = params%nspace * params%nstates
-            call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+            nrefs     = params%nspace * params%nstates
+            interplim = params%kfromto(2)
+            ! interplim = min(params%kfromto(2)+5, fdim(params%box_crop)-1)
+            call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto, iklim=interplim)
             ! Read polar references
             call build%pftc%polar_cavger_new(.true.)
             call build%pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
@@ -1065,7 +1067,7 @@ contains
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call build%esig%new(params, build%pftc, fname, params%box)
             call build%esig%read_part(  build%spproj_field)
-            call build%esig%read_groups(build%pftc, build%spproj_field)
+            call build%esig%read_groups(build%spproj_field)
         end if
         ! PREPARATION OF PARTICLES
         call prepimgbatch(params, build, batchsz)
@@ -1177,7 +1179,7 @@ contains
         ! memoize CTF stuff
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())   
         ! memoize for polarize_oversamp
-        call tmp_imgs_pad(1)%memoize4polarize_oversamp(build%pftc%get_pdim())     
+        call tmp_imgs_pad(1)%memoize4polarize_oversamp(build%pftc%get_ptcl_interp_dim())
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,pft) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
@@ -1185,7 +1187,7 @@ contains
             ! prep
             call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
             ! transfer to polar coordinates
-            pft = build%pftc%allocate_pft()
+            pft = build%pftc%allocate_ptcl_pft()
             call tmp_imgs_pad(ithr)%polarize_oversamp(pft, mask=build%l_resmsk)
             call build%pftc%set_ptcl_pft(iptcl, pft)
             deallocate(pft)

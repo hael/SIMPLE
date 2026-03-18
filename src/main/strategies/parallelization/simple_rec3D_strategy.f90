@@ -146,7 +146,7 @@ contains
         if( params%l_ml_reg )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call build%esig%new(params, build%pftc, fname, params%box)
-            call build%esig%read_groups(build%pftc, build%spproj_field)
+            call build%esig%read_groups(build%spproj_field)
         endif
         ! Reconstruction kernel
         call calc_3Drec( params, build, cline, nptcls2update, pinds )

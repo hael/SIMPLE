@@ -89,11 +89,13 @@ contains
             if( trim(params%multivol_mode).ne.'single' )then
                 THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
             endif
+            ! comment to activate lpauto
             if( trim(params%lp_auto).eq.'yes' )then
                 THROW_WARN('POLAR=YES not compatible LP_AUTO=YES; reverting to LP_AUTO=NO')
             endif
             params%lp_auto = 'no'; params%l_lpauto = .false.; l_lpauto=.false.
             call cline%set('lp_auto', 'no')
+            ! end comment to activate lpauto
             l_polar = .true. ! global parameter
         else
             call cline%delete('ref_type')
@@ -544,11 +546,13 @@ contains
             if( trim(params%multivol_mode).ne.'single' )then
                 THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
             endif
+            ! comment to activate lpauto
             if( trim(params%lp_auto).eq.'yes' )then
                 THROW_WARN('POLAR=YES not compatible LP_AUTO=YES; reverting to LP_AUTO=NO')
             endif
             params%lp_auto = 'no'; params%l_lpauto = .false.; l_lpauto=.false.
             call cline%set('lp_auto', 'no')
+            ! end comment to activate lpauto
             l_polar = .true. ! global parameter
         else
             call cline%delete('ref_type')

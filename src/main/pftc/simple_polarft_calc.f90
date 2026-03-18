@@ -24,21 +24,21 @@ type fftw_crmat
 end type fftw_crmat
 
 type heap_vars
-    complex(sp), pointer :: pft_ref(:,:)       => null()
-    complex(sp), pointer :: pft_ref_tmp(:,:)   => null()
-    real(dp),    pointer :: argvec(:)          => null()
-    complex(sp), pointer :: shmat(:,:)         => null()
-    real(dp),    pointer :: kcorrs(:)          => null()
-    complex(dp), pointer :: pft_ref_8(:,:)     => null()
-    complex(dp), pointer :: pft_ref_tmp_8(:,:) => null()
-    complex(dp), pointer :: pft_dref_8(:,:,:)  => null()
-    complex(dp), pointer :: shvec(:)           => null()
-    complex(dp), pointer :: shmat_8(:,:)       => null()
-    real(dp),    pointer :: pft_r1_8(:,:)      => null()
-    real(sp),    pointer :: pft_r(:,:)         => null()
+    complex(sp), pointer :: pft_ref(:,:)        => null()
+    complex(sp), pointer :: pft_ref_tmp(:,:)    => null()
+    real(dp),    pointer :: argvec(:)           => null()
+    complex(sp), pointer :: shmat(:,:)          => null()
+    real(dp),    pointer :: kcorrs(:)           => null()
+    complex(dp), pointer :: pft_ref_8(:,:)      => null()
+    complex(dp), pointer :: pft_ref_tmp_8(:,:)  => null()
+    complex(dp), pointer :: pft_ref_tmp2_8(:,:) => null()
+    complex(dp), pointer :: shvec(:)            => null()
+    complex(dp), pointer :: shmat_8(:,:)        => null()
+    real(dp),    pointer :: pft_r1_8(:,:)       => null()
+    real(sp),    pointer :: pft_r(:,:)          => null()
     ! cache arrays for batched computations
-    real(dp),    pointer :: w_weights(:)       => null()  ! k/sigma2 weights
-    real(dp),    pointer :: sumsq_cache(:)     => null()  ! particle sumsq per k
+    real(dp),    pointer :: w_weights(:)        => null()  ! k/sigma2 weights
+    real(dp),    pointer :: sumsq_cache(:)      => null()  ! particle sumsq per k
 end type heap_vars
 
 type :: polarft_calc
@@ -53,6 +53,7 @@ type :: polarft_calc
     integer                  :: ldim(3)    = 0           !< logical dimensions of original cartesian image
     integer                  :: kfromto(2)               !< band-pass Fourier index limits
     integer                  :: nk                       !< number of shells used during alignment
+    integer                  :: interpklim               !< highest shell index used for interpolation
     real                     :: dang                     !< angular increment
     integer,     allocatable :: pinds(:)                 !< index array (to reduce memory when frac_update < 1)
     real(dp),    allocatable :: sqsums_ptcls(:)          !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
@@ -107,11 +108,11 @@ type :: polarft_calc
     procedure          :: cp_refs
     procedure          :: swap_ptclsevenodd
     procedure          :: set_eo
-    procedure          :: set_eos
     procedure          :: set_with_ctf
     procedure          :: assign_sigma2_noise
     ! ===== GETTERS + POINTER ACCESSORS: simple_polarft_access.f90
     procedure          :: get_nrots
+    procedure          :: get_ptcl_interp_dim
     procedure          :: get_pdim
     procedure          :: get_kfromto
     procedure          :: get_pftsz
@@ -128,9 +129,7 @@ type :: polarft_calc
     procedure          :: get_pinds
     procedure          :: is_with_ctf
     procedure          :: allocate_pft
-    procedure, private :: get_work_pft_ptr
-    procedure, private :: get_work_rpft_ptr
-    procedure, private :: get_work_rpft8_ptr
+    procedure          :: allocate_ptcl_pft
     ! ===== VIS (print, vis_ptcl, vis_ref, read/write): simple_polarft_vis.f90
     procedure          :: vis_ptcl
     procedure          :: vis_ref
@@ -144,10 +143,9 @@ type :: polarft_calc
     procedure          :: shift_ptcl
     procedure          :: shift_ref
     procedure          :: mirror_ref_pft
-    procedure, private :: rotate_pft_1, rotate_pft_2, rotate_pft_3, rotate_pft_4
-    generic            :: rotate_pft => rotate_pft_1, rotate_pft_2, rotate_pft_3, rotate_pft_4
-    procedure, private :: rotate_iref_1, rotate_iref_2
-    generic            :: rotate_iref => rotate_iref_1, rotate_iref_2
+    procedure, private :: rotate_ref_8
+    procedure, private :: rotate_ptcl
+    procedure, private :: rotate_ctf
     ! ===== MEMO: simple_polarft_memo.f90
     procedure          :: memoize_sqsum_ptcl
     procedure          :: memoize_ptcls, memoize_refs
@@ -215,13 +213,13 @@ interface
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-   module subroutine new(self, params, nrefs, pfromto, kfromto, eoarr)
+   module subroutine new(self, params, nrefs, pfromto, kfromto, iklim)
         use simple_parameters, only: parameters
         class(polarft_calc), target, intent(inout) :: self
         class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
-        integer, optional,           intent(in)    :: eoarr(pfromto(1):pfromto(2))
+        integer,           optional, intent(in)    :: iklim
     end subroutine new
 
     module subroutine kill(self)
@@ -244,10 +242,10 @@ interface
     module subroutine set_ptcl_pft(self, iptcl, pft)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
-        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine set_ptcl_pft
 
-    module subroutine set_ref_fcomp(self, iref, irot, k, comp, iseven)
+    module pure subroutine set_ref_fcomp(self, iref, irot, k, comp, iseven)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, irot, k
         complex(sp),         intent(in)    :: comp
@@ -289,11 +287,6 @@ interface
         logical,             intent(in)    :: is_even
     end subroutine set_eo
 
-    module subroutine set_eos(self, eoarr)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: eoarr(self%nptcls)
-    end subroutine set_eos
-
     module subroutine set_with_ctf(self, l_wctf)
         class(polarft_calc), intent(inout) :: self
         logical,             intent(in)    :: l_wctf
@@ -315,6 +308,11 @@ interface
         class(polarft_calc), intent(in) :: self
         integer :: pdim(3)
     end function get_pdim
+
+    module pure function get_ptcl_interp_dim(self) result(dims)
+        class(polarft_calc), intent(in) :: self
+        integer :: dims(3)
+    end function get_ptcl_interp_dim
 
     module pure function get_kfromto(self) result(kfromto)
         class(polarft_calc), intent(in) :: self
@@ -390,20 +388,10 @@ interface
         complex(sp), allocatable :: pft(:,:)
     end function allocate_pft
 
-    module subroutine get_work_pft_ptr( self, ptr )
+    module function allocate_ptcl_pft( self ) result( pft )
         class(polarft_calc),  intent(in)  :: self
-        complex(sp), pointer, intent(out) :: ptr(:,:)
-    end subroutine get_work_pft_ptr
-
-    module subroutine get_work_rpft_ptr( self, ptr )
-        class(polarft_calc), intent(in)  :: self
-        real(sp), pointer,   intent(out) :: ptr(:,:)
-    end subroutine get_work_rpft_ptr
-
-    module subroutine get_work_rpft8_ptr( self, ptr )
-        class(polarft_calc), intent(in)  :: self
-        real(dp), pointer,   intent(out) :: ptr(:,:)
-    end subroutine get_work_rpft8_ptr
+        complex(sp), allocatable :: pft(:,:)
+    end function allocate_ptcl_pft
 
     ! ===== VIS (print, vis_ptcl, vis_ref, read/write) =====
 
@@ -431,7 +419,7 @@ interface
         integer, optional,         intent(in)    :: pfromto(2)
     end subroutine create_polar_absctfmats
 
-    ! ===== GEOM (rotate_pft, rotate_iref, shift matrices) =====
+    ! ===== GEOM (rotation & shift of matrices) =====
 
     module subroutine gen_shmat(self, ithr, shift, shmat)
         class(polarft_calc),  intent(inout) :: self
@@ -473,47 +461,24 @@ interface
         integer,                     intent(in) :: iref
     end subroutine mirror_ref_pft
 
-    module subroutine rotate_pft_1(self, pft, irot, pft_rot)
+    module subroutine rotate_ref_8(self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
         complex(dp),         intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,             intent(in)  :: irot
         complex(dp),         intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-    end subroutine rotate_pft_1
+    end subroutine rotate_ref_8
 
-    module subroutine rotate_pft_2(self, pft, irot, pft_rot)
+    module subroutine rotate_ptcl(self, i, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
-        complex(sp),         intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,             intent(in)  :: irot
-        complex(sp),         intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-    end subroutine rotate_pft_2
+        integer,             intent(in)  :: i, irot
+        complex(sp),         intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%interpklim)
+    end subroutine rotate_ptcl
 
-    module subroutine rotate_pft_3(self, pft, irot, pft_rot)
+    module subroutine rotate_ctf(self, i, irot, ctf_rot)
         class(polarft_calc), intent(in)  :: self
-        real(sp),            intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,             intent(in)  :: irot
-        real(sp),            intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-    end subroutine rotate_pft_3
-
-    module subroutine rotate_pft_4(self, pft, irot, pft_rot)
-        class(polarft_calc), intent(in)  :: self
-        real(dp),            intent(in)  :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,             intent(in)  :: irot
-        real(dp),            intent(out) :: pft_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-    end subroutine rotate_pft_4
-
-    module subroutine rotate_iref_1(self, iref, irot, sh)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, irot
-        real,                intent(in)    :: sh(2)
-    end subroutine rotate_iref_1
-
-    module subroutine rotate_iref_2(self, pft_ref, irot, sh, pft_ref_out)
-        class(polarft_calc),  intent(inout) :: self
-        complex(dp), pointer, intent(in)    :: pft_ref(:,:)
-        integer,              intent(in)    :: irot
-        real,                 intent(in)    :: sh(2)
-        complex(dp), pointer, intent(out)   :: pft_ref_out(:,:)
-    end subroutine rotate_iref_2
+        integer,             intent(in)  :: i, irot
+        real(sp),            intent(out) :: ctf_rot(self%pftsz,self%kfromto(1):self%interpklim)
+    end subroutine rotate_ctf
 
     ! ===== MEMO  =====
 
@@ -787,11 +752,10 @@ interface
 
     ! ===== I/O: simple_polarft_ops_io.f90
 
-    module subroutine polar_cavger_refs2cartesian( self, cavgs, which, pfts_in )
+    module subroutine polar_cavger_refs2cartesian( self, cavgs, which )
         class(polarft_calc),     intent(in)    :: self
         type(image),             intent(inout) :: cavgs(self%ncls)
         character(len=*),        intent(in)    :: which
-        complex(dp),   optional, intent(in)    :: pfts_in(1:self%pftsz,self%kfromto(1):self%kfromto(2),1:self%ncls)
     end subroutine polar_cavger_refs2cartesian
 
     module subroutine polar_cavger_read( self, fname, which )
@@ -832,11 +796,8 @@ interface
         character(len=*),    intent(in)    :: which
     end subroutine polar_cavger_readwrite_partial_sums
 
-    module subroutine polar_cavger_assemble_sums_from_parts( self, reforis, symop, clin_anneal )
+    module subroutine polar_cavger_assemble_sums_from_parts( self )
         class(polarft_calc),  intent(inout) :: self
-        type(oris), optional, intent(in)    :: reforis
-        type(sym),  optional, intent(in)    :: symop
-        real,       optional, intent(in)    :: clin_anneal
     end subroutine polar_cavger_assemble_sums_from_parts
 
     module subroutine write_pft_array_local( self, funit, array )
@@ -950,21 +911,22 @@ contains
             return
         endif
         call polarft_dims_from_file_header(str_even, pftc%pftsz, pftc%kfromto, pftc%ncls)
+        pftc%interpklim = pftc%kfromto(2)
         call pftc%read_pft_array(str_even, even)
         call pftc%read_pft_array(str_odd,  odd)
         ! search range
         kstart = max(pftc%kfromto(1), max(kfromto(1), calc_fourier_index(lprange(1), box, smpd)))
-        kend   = min(pftc%kfromto(2), min(kfromto(2), calc_fourier_index(lprange(2), box, smpd)))
+        kend   = min(pftc%interpklim, min(kfromto(2), calc_fourier_index(lprange(2), box, smpd)))
         if( kstart >= kend )then
             lpopt = calc_lowpass_lim(kstart, box, smpd)
             return
         endif
         ! precalculation of even variance & even-odd variance
-        allocate(vec(pftc%kfromto(1):pftc%kfromto(2)), mag_e(pftc%kfromto(1):pftc%kfromto(2)),&
-            &mag_diff(pftc%kfromto(1):pftc%kfromto(2)))
+        allocate(vec(pftc%kfromto(1):pftc%interpklim), mag_e(pftc%kfromto(1):pftc%interpklim),&
+            &mag_diff(pftc%kfromto(1):pftc%interpklim))
         mag_e = 0.d0; mag_diff = 0.d0
         !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,iref,vec,wk)
-        do k = pftc%kfromto(1),pftc%kfromto(2)
+        do k = pftc%kfromto(1),pftc%interpklim
             ! Shell magnitudes
             do iref = 1,pftc%ncls
                 vec      = even(:,k,iref)
@@ -972,7 +934,7 @@ contains
                 vec         = vec - odd(:,k,iref)
                 mag_diff(k) = mag_diff(k) + real(sum(vec*conjg(vec)),dp)
             enddo
-            ! Shell weights to reproduce volumetric cartesian representation
+            ! Shell weights to reproduce volumetric cartesian representation values
             wk          = real(box,dp)**3 * (4.d0/3.d0)*DPI * (real(k,dp)**3 -real(k-1,dp)**3)
             wk          = wk  / real(2*pftc%ncls*pftc%pftsz,dp)
             mag_e(k)    = wk * mag_e(k)
@@ -985,7 +947,7 @@ contains
         do k = kstart,kend
             score = sum(mag_diff(pftc%kfromto(1):k))
             if( k < kend )then
-                score = score + sum(mag_e(k+1:pftc%kfromto(2)))
+                score = score + sum(mag_e(k+1:pftc%interpklim))
             endif
             if( score < best_score )then
                 best_score = score
