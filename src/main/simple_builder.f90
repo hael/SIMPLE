@@ -12,6 +12,8 @@ use simple_parameters,       only: parameters
 use simple_euclid_sigma2,    only: euclid_sigma2
 use simple_polarft_calc,     only: polarft_calc
 use simple_srchspace_map,    only: srchspace_map
+use simple_multi_dendro,     only: multi_dendro
+use simple_block_tree,       only: gen_eulspace_block_tree_map
 implicit none
 
 public :: builder
@@ -35,8 +37,10 @@ type :: builder
     type(image)                         :: mskvol                 !< envelope mask volume
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     type(image),            allocatable :: img_pad_heap(:)        !< heap of padded images for use in norm_noise_taper_edge_pad_fft_gen_fplane4rec
+    ! neighborhood structures
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
     integer,                allocatable :: subspace_full2sub_map(:)!< labels of eulspace in eulspace_sub
+    type(multi_dendro)                  :: block_tree
 
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
@@ -284,6 +288,10 @@ contains
                 call o%kill
                 call o_sub%kill
                 call osym%kill
+                if( str_has_substr(params%refine, 'tree') )then
+                    self%block_tree = &
+                    &gen_eulspace_block_tree_map(self%eulspace, self%subspace_full2sub_map, self%pgrpsyms)   
+                endif
             endif
         endif
         if( params%box > 0 )then

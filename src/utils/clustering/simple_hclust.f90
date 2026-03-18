@@ -7,10 +7,6 @@ public :: hclust, test_hclust
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: LINK_SINGLE   = 1
-integer, parameter :: LINK_COMPLETE = 2
-integer, parameter :: LINK_AVERAGE  = 3
-
 type hclust
     private
     integer              :: N = 0

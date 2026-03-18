@@ -1092,7 +1092,7 @@ contains
         type(ori) :: o_tmp
         real      :: xyz(3)
         integer   :: s, iproj, iref, nrefs
-        logical   :: do_center
+        logical   :: do_center, l_prob_align_mode
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_refvols(params, build, cline, [params%lpstart,params%lpstop])
         else
@@ -1101,9 +1101,15 @@ contains
         ! pftc
         nrefs = params%nspace * params%nstates
         call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+        select case(trim(params%refine))
+            case('prob','prob_state','prob_neigh')
+                l_prob_align_mode = .true.
+            case DEFAULT
+                l_prob_align_mode = .false.
+        end select
         ! read reference volumes and create polar projections
         do s=1,params%nstates
-            if( str_has_substr(params%refine, 'prob') )then
+            if( l_prob_align_mode )then
                 ! already mapping shifts in prob_tab with shared-memory execution
                 call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), do_center, xyz, map_shift=l_distr_worker_glob)
             else

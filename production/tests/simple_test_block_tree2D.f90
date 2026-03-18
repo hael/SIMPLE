@@ -12,6 +12,7 @@ use simple_corrmat,                 only: calc_inpl_invariant_cc_nomirr
 use simple_binary_tree,             only: bt_node 
 use simple_timer
 use simple_block_tree
+use simple_block_tree_corr,         only: gen_eulspace_block_tree_corr, gen_corr_block_tree_aff_prop
 implicit none 
 type(oris)                      :: eulspace, eulspace_sub
 type(ori)                       :: osmp, o, osym

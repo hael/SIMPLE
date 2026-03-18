@@ -160,7 +160,7 @@ contains
         call refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
         call refine3D%add_input(UI_SRCH, nstates, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, objfun, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}',&
+        call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree){shc}',&
         &.false., 'shc', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
         &'no', gui_submenu="search")

@@ -126,6 +126,10 @@ integer, parameter    :: MC_MINPATCHSZ             = 200            !< Minimum p
 integer, parameter    :: MIN_ITERS_SHC             = 5              !< minimum number of iterations of stochastic search
 integer, parameter    :: BATCHTHRSZ                = 50             !< # of images per thread
 integer, parameter    :: AMSK_FREQ                 = 3              !< automasking every third iteration
+! HAC
+integer, parameter    :: LINK_SINGLE   = 1
+integer, parameter    :: LINK_COMPLETE = 2
+integer, parameter    :: LINK_AVERAGE  = 3
 ! nanoparticles
 real,    parameter    :: AMSKLP_NANO               = 5.
 ! Graphene

@@ -15,6 +15,7 @@ use simple_strategy3D_greedy,      only: strategy3D_greedy
 use simple_strategy3D_greedy_smpl, only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,  only: strategy3D_greedy_sub
 use simple_strategy3D_prob,        only: strategy3D_prob
+use simple_strategy3D_ptree,       only: strategy3D_ptree
 use simple_strategy3D_shc,         only: strategy3D_shc
 use simple_strategy3D_shc_smpl,    only: strategy3D_shc_smpl
 use simple_strategy3D_snhc_smpl,   only: strategy3D_snhc_smpl
@@ -65,7 +66,7 @@ contains
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch
-        logical :: doprint, l_polar, l_restore
+        logical :: doprint, l_polar, l_restore, l_prob_align_mode
         
         ! assign parameters pointer
         p_ptr => params
@@ -77,6 +78,12 @@ contains
             t_tot  = t_init
         endif
         l_polar = trim(p_ptr%polar).eq.'yes'
+        select case(trim(p_ptr%refine))
+            case('prob','prob_state','prob_neigh')
+                l_prob_align_mode = .true.
+            case DEFAULT
+                l_prob_align_mode = .false.
+        end select
         select case(trim(p_ptr%refine))
             case('eval','sigma')
                 l_restore = .false.
@@ -99,18 +106,18 @@ contains
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) ) deallocate(pinds)
-        if( str_has_substr(p_ptr%refine, 'prob') )then
+
+        if( l_prob_align_mode )then
             ! generation of random sample and incr of updatecnts delegated to prob_align
-            call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top],&
-            &nptcls2update, pinds )
+            call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds )
         else
-            ! sampled incremented
+             ! sampled incremented
             if( p_ptr%l_fillin .and. mod(which_iter,5) == 0 )then
                 call sample_ptcls4fillin(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
             else
                 call sample_ptcls4update(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
             endif
-        endif
+        end if
 
         ! PREP BATCH ALIGNMENT
         batchsz_max = min(nptcls2update,p_ptr%nthr*BATCHTHRSZ)
@@ -156,10 +163,11 @@ contains
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
 
         ! READING THE ASSIGNMENT FOR PROB MODE
-        if( str_has_substr(p_ptr%refine, 'prob') .and. .not.(trim(p_ptr%refine) .eq. 'sigma') )then
+
+        if( l_prob_align_mode )then
             call eulprob_obj_part%new(p_ptr, b_ptr, pinds)
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
-        endif
+        end if
 
         if( L_BENCH_GLOB )then
             rt_prep_orisrch          = toc(t_prep_orisrch)
@@ -225,6 +233,8 @@ contains
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('prob','prob_state','prob_neigh')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('ptree')
+                        allocate(strategy3D_ptree                :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)
                         call b_ptr%spproj_field%get_ori(iptcl, orientation)
@@ -234,7 +244,7 @@ contains
                 end select
                 strategy3Dspecs(iptcl_batch)%iptcl     = iptcl
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
-                if( str_has_substr(p_ptr%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
+                if( l_prob_align_mode ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
                 ! search
                 if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
                     ! instance & search

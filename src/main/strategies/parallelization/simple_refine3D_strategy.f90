@@ -149,6 +149,7 @@ contains
         type(commander_calc_pspec)            :: xcalc_pspec
         type(cmdline)                         :: cline_calc_pspec
         integer                               :: startit
+        logical                               :: l_prob_align_mode
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! startit
@@ -156,9 +157,11 @@ contains
         if( cline%defined('startit') ) startit = params%startit
         ! Some refine modes manage sampling/updatecnt internally
         select case(trim(params%refine))
-            case('prob', 'prob_state')
+            case('prob', 'prob_state', 'prob_neigh')
+                l_prob_align_mode = .true.
                 ! random sampling and updatecnt dealt with in prob_align
             case DEFAULT
+                l_prob_align_mode = .false.
                 if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         end select
         if( trim(params%continue) == 'yes' )then
@@ -228,6 +231,7 @@ contains
         type(commander_prob_align_neigh)  :: xprob_align_neigh
         type(cmdline)                     :: cline_prob_align
         integer                           :: state
+        logical                           :: l_prob_align_mode, l_prob_state_mode
         601 format(A,1X,F12.3)
         call self%conv%print_iteration(params%which_iter)
         ! communicate iteration counters
@@ -248,10 +252,17 @@ contains
             call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
         endif
-        ! refine=prob* pre-step
-        if( str_has_substr(params%refine, 'prob') )then
+        select case(trim(params%refine))
+            case('prob','prob_state','prob_neigh')
+                l_prob_align_mode = .true.
+            case DEFAULT
+                l_prob_align_mode = .false.
+        end select
+        l_prob_state_mode = trim(params%refine) == 'prob_state'
+        ! refine=prob* pre-step (except ptree, which runs direct tree-guided search)
+        if( l_prob_align_mode )then
             cline_prob_align = cline
-            if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+            if( params%l_neigh .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else
                 call cline_prob_align%set('prg', 'prob_align')
@@ -264,7 +275,7 @@ contains
             endif
             ! communicate changes to probabilistic alignment
             call build%spproj%write_segment_inside(params%oritype)
-            if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+            if( params%l_neigh .and. (.not. l_prob_state_mode) )then
                 call xprob_align_neigh%execute( cline_prob_align )
             else
                 call xprob_align%execute( cline_prob_align )
@@ -590,7 +601,7 @@ contains
         integer, allocatable :: state_pops(:)
         real    :: smpd
         integer :: state, iter, box
-        logical :: do_automsk
+        logical :: do_automsk, l_prob_align_mode, l_prob_state_mode
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = tic()
@@ -622,9 +633,16 @@ contains
             rt_init = toc(t_init)
             t_prob = tic()
         endif
-        if( str_has_substr(params%refine, 'prob') )then
+        select case(trim(params%refine))
+            case('prob','prob_state','prob_neigh')
+                l_prob_align_mode = .true.
+            case DEFAULT
+                l_prob_align_mode = .false.
+        end select
+        l_prob_state_mode = trim(params%refine) == 'prob_state'
+        if( l_prob_align_mode )then
             cline_prob_align = cline
-            if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+            if( params%l_neigh .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else
                 call cline_prob_align%set('prg', 'prob_align')
@@ -632,7 +650,7 @@ contains
             call cline_prob_align%set('which_iter', iter)
             call cline_prob_align%set('startit',    iter)
             call build%spproj%write_segment_inside(params%oritype)
-            if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+            if( params%l_neigh .and. (.not. l_prob_state_mode) )then
                 call xprob_align_neigh_distr%execute( cline_prob_align )
             else
                 call xprob_align_distr%execute( cline_prob_align )
