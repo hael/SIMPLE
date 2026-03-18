@@ -21,7 +21,6 @@ type :: parameters
     character(len=3)          :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)          :: atom_thres='yes'     !< do atomic thresholding or not (yes|no){yes}
     character(len=3)          :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
-    character(len=3)          :: autosample='no'      !< automatic particles sampling scheme(yes|no){no}
     character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)          :: backgr_subtr='no'    !< Whether to perform micrograph background subtraction
     character(len=3)          :: balance='no'         !< Balance class populations to smallest selected
@@ -662,7 +661,6 @@ contains
         call check_carg('automsk',        self%automsk)
         call check_carg('automatic',      self%automatic)
         call check_carg('autoscale',      self%autoscale)
-        call check_carg('autosample',     self%autosample)
         call check_carg('avg',            self%avg)
         call check_carg('backgr_subtr',   self%backgr_subtr)
         call check_carg('balance',        self%balance)

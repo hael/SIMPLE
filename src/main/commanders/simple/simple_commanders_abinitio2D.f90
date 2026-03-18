@@ -133,23 +133,7 @@ contains
         if( nstages == 1 )then
             ! no autosampling
         else
-            if( trim(params%autosample).eq.'yes' )then
-                call spproj_field%set_all2single('w',1.)
-                call spproj%write_segment_inside(params%oritype, params%projfile)
-                ! mapping of all particles
-                if( stage_parms(nstages)%nptcls < nptcls_eff )then
-                    call set_final_mapping
-                    call execute_cluster2D
-                    if( trim(params%stats).eq.'yes' )then
-                        call spproj%read_segment(params%oritype,params%projfile)
-                        call output_stats('final')
-                    endif
-                else
-                    if( trim(params%stats).eq.'yes' ) call output_stats('final')
-                endif
-            else
-                if( trim(params%stats).eq.'yes' ) call output_stats('final')
-            endif
+            if( trim(params%stats).eq.'yes' ) call output_stats('final')
         endif
         ! final class generation & ranking
         last_iter = cline_cluster2D%get_iarg('endit')
@@ -323,18 +307,6 @@ contains
             nptcls_eff = spproj%count_state_gt_zero()
             stage_parms(:)%max_cls_pop = 0
             stage_parms(:)%nptcls      = nptcls_eff
-            if( trim(params%autosample).eq.'yes' )then
-                do i = 1,NSTAGES
-                    call autosample2D(params, cline, nptcls_eff, params%ncls,&
-                    &stage_parms(i)%max_cls_pop, stage_parms(i)%nptcls)
-                    if( (params%stage > 0) .and. (params%stage < NSTAGES))then
-                        if( i<=params%stage )then
-                            call autosample2D(params, cline, nptcls_eff, params%ncls,&
-                            &stage_parms(i)%max_cls_pop, stage_parms(i)%nptcls, popfac=0.5)
-                        endif
-                    endif
-                enddo
-            endif
         end subroutine set_sampling
 
         subroutine prep_command_lines( cline )
@@ -448,25 +420,19 @@ contains
                                 refs     = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
                                 ml_reg   = params%ml_reg
                                 gauref   = 'no'
-                            end select
-                        case(2)
-                            ! phase constants
-                            imaxits   = iter+ITS_INCR-1
-                            sh_first  = trim(params%sh_first)
-                            trs       = stage_parms(istage)%trslim
-                            center    = trim(params%center)
-                            extr_iter = params%extr_lim+1
-                            refs      = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
-                            ml_reg    = params%ml_reg
-                            gauref    = 'no'
-                            minits    = iter+1
-                    end select
-                if( stage_parms(istage)%max_cls_pop > 0 )then
-                    call cline_cluster2D%set('maxpop', stage_parms(istage)%max_cls_pop)
-                    if( cline%defined('update_frac') )then
-                        call cline_cluster2D%set('update_frac', params%update_frac)
-                    endif
-                endif
+                        end select
+                    case(2)
+                        ! phase constants
+                        imaxits   = iter+ITS_INCR-1
+                        sh_first  = trim(params%sh_first)
+                        trs       = stage_parms(istage)%trslim
+                        center    = trim(params%center)
+                        extr_iter = params%extr_lim+1
+                        refs      = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
+                        ml_reg    = params%ml_reg
+                        gauref    = 'no'
+                        minits    = iter+1
+                end select
             endif
             ! command line update
             if( stage_parms(istage)%l_lpset )then
@@ -497,10 +463,6 @@ contains
             call cline_cluster2D%set('center',    center)
             call cline_cluster2D%set('box_crop',  stage_parms(istage)%box_crop)
             call cline_cluster2D%set('smpd_crop', stage_parms(istage)%smpd_crop)
-            call cline_cluster2D%delete('maxpop')
-            call cline_cluster2D%delete('nsample_max')
-            call cline_cluster2D%delete('nsample')
-            call cline_cluster2D%delete('autosample')
             call cline_cluster2D%delete('update_frac')
             call cline_cluster2D%delete('endit')
         end subroutine set_cline_cluster2D
@@ -544,11 +506,7 @@ contains
             call cline_cluster2D%set('refs',      refs)
             call cline_cluster2D%set('extr_iter', params%extr_lim+1)
             call cline_cluster2D%delete('lp')
-            call cline_cluster2D%delete('nsample_max')
-            call cline_cluster2D%delete('nsample')
-            call cline_cluster2D%delete('autosample')
             call cline_cluster2D%delete('update_frac')
-            call cline_cluster2D%delete('maxpop')
             call cline_cluster2D%delete('endit')
             write(logfhandle,'(A,/,A)')'>>>','>>> FINAL MAPPING'
         end subroutine set_final_mapping
@@ -602,32 +560,5 @@ contains
         end subroutine mskdiam2lplimits_here
 
     end subroutine exec_abinitio2D
-
-    ! pruvate helper
-
-    subroutine autosample2D( params, cline, nptcls, ncls, max_pop, max_nptcls, popfac )
-        class(parameters), intent(in)  :: params
-        class(cmdline),    intent(in)  :: cline
-        integer,           intent(in)  :: nptcls, ncls
-        integer,           intent(out) :: max_pop, max_nptcls
-        real, optional,    intent(in)  :: popfac ! testing purpose
-        max_pop    = 0
-        max_nptcls = nptcls
-        if( trim(params%autosample).ne.'yes' ) return
-        ! Class population limit
-        max_pop = MAXPOP_CLS
-        if( cline%defined('nsample') ) max_pop = params%nsample
-        ! Total population limit
-        max_nptcls = min(nptcls, 2*max_pop*ncls)
-        if( cline%defined('nsample_max') )then
-            max_nptcls = min(params%nsample_max, max_nptcls)
-        else
-            if( present(popfac) )then
-                max_nptcls = min(nint(popfac*real(MAXPOP_PTCLS)), nptcls)
-            else
-                max_nptcls = min(MAXPOP_PTCLS, nptcls)
-            endif
-        endif
-    end subroutine autosample2D
 
 end module simple_commanders_abinitio2D

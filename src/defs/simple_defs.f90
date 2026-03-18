@@ -99,8 +99,6 @@ real,    parameter    :: CENTHRESH                 = 0.5       ! threshold for p
 real,    parameter    :: MAXCENTHRESH2D            = 3.0       ! max threshold for performing cavg centering in pixels
 real,    parameter    :: EXTR_POWER                = 2.0       ! Exponent of the sampling function during extremal stochastic phase of 2D analysis
 real,    parameter    :: POST_EXTR_POWER           = 4.0       ! Exponent of the sampling function after the extremal stochastic phase
-integer, parameter    :: MAXPOP_CLS                = 5000
-integer, parameter    :: MAXPOP_PTCLS              = 1200000
 ! preprocessing constants
 real,    parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0      !< EER target fraction dose in e/A2
 real,    parameter    :: DFMAX_DEFAULT             = 5.0       !< Default maximum bound for defocus search (microns)

@@ -3,7 +3,6 @@ module simple_classaverager
 use simple_core_module_api
 use simple_builder,           only: builder
 use simple_ctf,               only: ctf
-use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2,     only: euclid_sigma2
 use simple_image,             only: image
 use simple_parameters,        only: parameters
@@ -18,6 +17,7 @@ implicit none
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc
 public :: cavger_read_euclid_sigma2, cavger_kill
 ! Interpolation & restoration
+public :: cavger_init_online, cavger_update_sums, cavger_dealloc_online
 public :: cavger_assemble_sums, cavger_restore_cavgs
 ! I/O & handling of distributed sums
 public :: cavger_write_eo, cavger_write_all, cavger_write_merged, cavger_read_all
@@ -103,19 +103,26 @@ type ptcl_record
     integer            :: ind_in_stk = 0     !< index in stack
 end type ptcl_record
 
-! Main module variables
+! Module constantsvariables
+integer,               parameter :: READBUFFSZ = 1024
+
+! Module variables
 type(ptcl_record),   allocatable :: precs(:)                  !< Particle records
 type(image), target, allocatable :: cavgs_even(:)             !< Even class averages for reading
 type(image), target, allocatable :: cavgs_odd(:)              !< Odd class averages for reading
 type(image), target, allocatable :: cavgs_merged(:)           !< Merged class averages for reading
+type(image),         allocatable :: tmp_pad_imgs(:)           !< Temporary images for on-the-fly classes update
 type(cavgs_set)                  :: cavgs                     !< Class averages
+type(kbinterpol)                 :: kbwin                     !< Kaiser-Bessel interpolation object
 type(builder),        pointer    :: b_ptr  => null()          !< active builder instance
 class(parameters),    pointer    :: p_ptr => null()           !< active parameters instance
-logical,             allocatable :: pptcl_mask(:)             !< selected particles
+complex,             allocatable :: cmats(:,:,:), interp_cmats(:,:,:)           !< Images interpolated values
+real,                allocatable :: tvals(:,:,:), interp_rhos(:,:,:)            !< CTF interpolated values
+real,                allocatable :: kbw(:,:,:)                !< Kaiser-Bessel window
+integer,             allocatable :: eo_pops(:,:)              !< Even/odd class populations
+integer,             allocatable :: phys_addrh_crop(:,:), phys_addrk_crop(:,:)  !< Fourier mapping memoization matrices
 integer                          :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
-integer                          :: istart      = 0, iend = 0 !< particle index range in partition
-integer                          :: partsz      = 0           !< size of partition
-integer                          :: ncls        = 0           !< # classes
+integer                          :: ncls       = 0            !< # classes
 integer                          :: ldim(3)        = [0,0,0]  !< logical dimension of image
 integer                          :: ldim_crop(3)   = [0,0,0]  !< logical dimension of cropped image
 integer                          :: ldim_pd(3)     = [0,0,0]  !< logical dimension of image, padded
@@ -264,32 +271,45 @@ interface
     ! Module public routines
     !
 
-    module subroutine cavger_new( params, build, pinds, alloccavgs )
+    module subroutine cavger_new( params, build, alloccavgs )
         class(parameters), target, intent(inout) :: params
         class(builder),    target, intent(inout) :: build
-        integer, optional,         intent(in)    :: pinds(:)
         logical, optional,         intent(in)    :: alloccavgs 
     end subroutine cavger_new
 
     ! Book-keeping & metadata
 
-    module subroutine cavger_transf_oridat( spproj )
+    module subroutine cavger_transf_oridat( nptcls, pinds )
         use simple_sp_project, only: sp_project
-        class(sp_project), intent(inout) :: spproj
+        integer, intent(in) :: nptcls
+        integer, intent(in) :: pinds(nptcls)
     end subroutine cavger_transf_oridat
 
     module subroutine cavger_read_euclid_sigma2
     end subroutine cavger_read_euclid_sigma2
 
-    module subroutine cavger_gen2Dclassdoc( spproj )
-        use simple_sp_project, only: sp_project
-        class(sp_project), target, intent(inout) :: spproj
+    module subroutine cavger_gen2Dclassdoc()
     end subroutine cavger_gen2Dclassdoc
 
     ! Restoration
 
+    module subroutine cavger_init_online( maxbatchsz, do_frac_update )
+        integer, intent(in) :: maxbatchsz
+        logical, intent(in) :: do_frac_update
+    end subroutine cavger_init_online
+
+    module subroutine cavger_dealloc_online()
+    end subroutine cavger_dealloc_online
+
+    module subroutine cavger_update_sums( nptcls, ptcl_imgs )
+        use simple_math_ft, only: upsample_sigma2
+        integer,      intent(in)    :: nptcls
+        class(image), intent(inout) :: ptcl_imgs(nptcls)
+    end subroutine cavger_update_sums
+
     module subroutine cavger_assemble_sums( do_frac_update )
-        logical, intent(in)      :: do_frac_update
+        use simple_strategy2D3D_common, only: prepimgbatch
+        logical,           intent(in)    :: do_frac_update
     end subroutine cavger_assemble_sums
 
     module subroutine cavger_restore_cavgs( frcs_fname )

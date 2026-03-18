@@ -9,7 +9,6 @@ type(ui_param) :: angerr
 type(ui_param) :: astigthreshold
 type(ui_param) :: astigtol
 type(ui_param) :: automsk
-type(ui_param) :: autosample
 type(ui_param) :: backgr_subtr
 type(ui_param) :: bfac
 type(ui_param) :: box
@@ -187,10 +186,6 @@ subroutine set_ui_params
     call automsk%set_param(        'automsk',         'multi',  'Perform envelope masking', &
                                    'Whether to generate/apply an envelope mask(yes|tight|no){no}', &
                                    '(yes|tight|no){no}', .false., 'no')
-
-    call autosample%set_param(     'autosample',      'binary', 'Automated particles sampling scheme', &
-                                   'Use automated sampling scheme to select particles subsets(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
 
     call backgr_subtr%set_param(   'backgr_subtr',    'binary', 'Perform micrograph background subtraction(new picker only)', &
                                    'Perform micrograph background subtraction before picking/extraction(yes|no){no}', &

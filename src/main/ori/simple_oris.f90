@@ -179,7 +179,6 @@ type :: oris
     procedure          :: sample_balanced_inv
     procedure          :: sample_balanced_parts
     procedure          :: sample_ranked_parts
-    procedure          :: balance_ptcls_within_cls
     procedure, private :: get_sample_ind
     procedure, private :: incr_sampled_updatecnt
     procedure          :: set_nonzero_updatecnt
@@ -1307,12 +1306,6 @@ interface
         integer,            intent(inout) :: states(self%n)
         integer, optional,  intent(in)    :: nptcls_per_part
     end subroutine sample_ranked_parts
-
-    module subroutine balance_ptcls_within_cls( self, nptcls, pinds, maxpop, nparts )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nptcls, maxpop, nparts
-        integer,     intent(in)    :: pinds(1:nptcls)
-    end subroutine balance_ptcls_within_cls
 
     module function get_sample_ind( self, incr_sampled ) result( sample_ind )
         class(oris), intent(in) :: self

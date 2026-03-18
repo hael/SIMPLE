@@ -454,32 +454,6 @@ contains
         enddo
     end subroutine sample_ranked_parts
 
-    module subroutine balance_ptcls_within_cls( self, nptcls, pinds, maxpop, nparts )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nptcls, maxpop, nparts
-        integer,     intent(in)    :: pinds(1:nptcls)
-        real,    allocatable :: cls_scores(:)
-        integer, allocatable :: cls_inds(:)
-        integer :: classes(nptcls), i,icls,pop,n2reject,ncls,mpop
-        if( maxpop < 1 )return
-        classes = self%o(pinds(:))%get_class()
-        ncls    = maxval(classes)
-        mpop    = floor(real(maxpop)/real(nparts))
-        do icls = 1,ncls
-            cls_inds = pack((/(i,i=1,nptcls)/), mask=classes==icls)
-            if( .not.allocated(cls_inds) ) cycle
-            pop = size(cls_inds)
-            if( pop <= mpop )cycle
-            cls_scores = self%o(pinds(cls_inds(:)))%get('corr')
-            call hpsort(cls_scores, cls_inds)
-            n2reject = pop - mpop
-            do i = 1,n2reject
-                call self%o(pinds(cls_inds(i)))%set('w',0.)
-            enddo
-            deallocate(cls_inds,cls_scores)
-        enddo
-    end subroutine balance_ptcls_within_cls
-
     module function get_sample_ind( self, incr_sampled ) result( sample_ind )
         class(oris), intent(in) :: self
         logical,     intent(in) :: incr_sampled

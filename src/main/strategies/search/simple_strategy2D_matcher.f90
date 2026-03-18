@@ -25,7 +25,7 @@ public :: build_batch_particles2D, clean_batch_particles2D
 private
 #include "simple_local_flags.inc"
 
-type(image),   allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+type(image),   allocatable :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
 class(builder),    pointer :: b_ptr => null()
 class(parameters), pointer :: p_ptr => null()
 real(timer_int_kind)       :: rt_init, rt_prep_pftc, rt_align, rt_cavg, rt_projio, rt_tot
@@ -116,7 +116,14 @@ contains
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(p_ptr%frcs) ) call b_ptr%clsfrcs%read(p_ptr%frcs)
 
-        ! PREP REFERENCES
+        ! PREP BATCH ALIGNEMENT
+        batchsz_max = min(nptcls2update,p_ptr%nthr*BATCHTHRSZ)
+        nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
+        batches     = split_nobjs_even(nptcls2update, nbatches)
+        batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
+        allocate(incr_shifts(2,batchsz_max),source=0.)
+
+        ! PREP REFERENCES AND RESTORATION
         if( b_ptr%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_worker_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
             call b_ptr%spproj_field%partition_eo
@@ -130,7 +137,7 @@ contains
             if( .not.l_distr_worker_glob )then
                 l_alloc_read_cavgs = which_iter==1
             endif
-            call cavger_new(p_ptr, b_ptr, pinds, alloccavgs=l_alloc_read_cavgs)
+            call cavger_new(p_ptr, b_ptr, alloccavgs=l_alloc_read_cavgs)
             if( l_alloc_read_cavgs )then
                 if( .not. cline%defined('refs') )then
                     THROW_HARD('need refs to be part of command line for cluster2D execution')
@@ -138,16 +145,11 @@ contains
                 call cavger_read_all
             endif
         endif
+        ! Initialize objects for online clusters update
+        if( .not.l_polar ) call cavger_init_online(batchsz_max, l_partial_sums)
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(p_ptr, b_ptr, cline, which_iter, frac_srch_space)
-
-        ! PREP BATCH ALIGNEMENT
-        batchsz_max = min(nptcls2update,p_ptr%nthr*BATCHTHRSZ)
-        nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
-        batches     = split_nobjs_even(nptcls2update, nbatches)
-        batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
-        allocate(incr_shifts(2,batchsz_max),source=0.)
 
         ! GENERATE POLAR REFERENCES
         if( L_BENCH_GLOB )then
@@ -182,6 +184,7 @@ contains
 
         ! STOCHASTIC IMAGE ALIGNMENT
         rt_align         = 0.
+        rt_cavg          = 0.
         l_ctf            = b_ptr%spproj%get_ctfflag('ptcl2D',iptcl=p_ptr%fromp).ne.'no'
         l_np_cls_defined = cline%defined('nptcls_per_cls')
         ! write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
@@ -277,25 +280,19 @@ contains
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
             enddo ! Particles threaded loop
             !$omp end parallel do
-            if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
-            ! restore polar cavgs
+            if( L_BENCH_GLOB )then
+                 rt_align = rt_align + toc(t_align)
+                 t_cavg = tic()
+            endif
+            ! restore cavgs
             if( l_polar )then
                 call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), b_ptr%spproj, incr_shifts(:,1:batchsz))
+            else
+                call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end))
+                call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz))
             endif
+            if( L_BENCH_GLOB ) rt_cavg = rt_cavg + toc(t_cavg)
         enddo ! Batch loop
-
-        ! BALANCING OF NUMBER OF PARTICLES PER CLASS
-        if( l_stream )then
-            if( p_ptr%l_update_frac .and. p_ptr%maxpop>0 )then
-                call b_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
-                    &p_ptr%maxpop, p_ptr%nparts)
-            endif
-        else
-            if( p_ptr%maxpop>0 )then
-                call b_ptr%spproj_field%balance_ptcls_within_cls(nptcls2update, pinds,&
-                    &p_ptr%maxpop, p_ptr%nparts)
-            endif
-        endif
 
         ! CLEAN-UP
         call clean_strategy2D
@@ -305,6 +302,7 @@ contains
         end do
         call clean_batch_particles2D
         deallocate(strategy2Dsrch,pinds,batches)
+        call cavger_dealloc_online
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( p_ptr%cc_objfun==OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
@@ -320,14 +318,11 @@ contains
         if( L_BENCH_GLOB ) rt_projio = toc(t_projio)
 
         ! WIENER RESTORATION OF CLASS AVERAGES
-        if( L_BENCH_GLOB ) t_cavg = tic()
         if( l_distr_worker_glob )then
             if( trim(p_ptr%restore_cavgs).eq.'yes' )then
                 if( l_polar )then
                     call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
                 else
-                    call cavger_transf_oridat( b_ptr%spproj )
-                    call cavger_assemble_sums( l_partial_sums )
                     call cavger_readwrite_partial_sums('write')
                 endif
             endif
@@ -357,12 +352,8 @@ contains
                     call b_ptr%pftc%polar_cavger_kill
                 else
                     ! cartesian restoration
-                    call cavger_transf_oridat( b_ptr%spproj )
-                    call cavger_assemble_sums( l_partial_sums )
                     call cavger_restore_cavgs( p_ptr%frcs )
-                    ! classdoc gen needs to be after calc of FRCs
-                    call cavger_gen2Dclassdoc( b_ptr%spproj )
-                    ! write references
+                    call cavger_gen2Dclassdoc
                     call cavger_write_merged( p_ptr%refs )
                     if( l_stream )then
                         call cavger_write_eo( p_ptr%refs_even, p_ptr%refs_odd )
@@ -381,10 +372,10 @@ contains
                 deallocate(states)
             endif
         endif
+
         call b_ptr%esig%kill
         ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         call b_ptr%pftc%kill
-        if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished(p_ptr, string('simple_strategy2D_matcher :: cluster2D_exec'))
         if( L_BENCH_GLOB )then
             if( p_ptr%part == 1 )then
@@ -429,9 +420,9 @@ contains
     !>  \brief  initializes convenience objects for particles polar alignment
     subroutine prep_batch_particles2D( batchsz_max )
         integer, intent(in) :: batchsz_max
-        integer :: ithr
+        integer :: i, ithr
         call prepimgbatch(p_ptr, b_ptr, batchsz_max)
-        allocate(ptcl_match_imgs(p_ptr%nthr), ptcl_match_imgs_pad(p_ptr%nthr))
+        allocate(ptcl_imgs(batchsz_max),ptcl_match_imgs(p_ptr%nthr), ptcl_match_imgs_pad(p_ptr%nthr))
         !$omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
         do ithr = 1,p_ptr%nthr
             call ptcl_match_imgs(ithr)%new(    [p_ptr%box_crop,   p_ptr%box_crop,   1],&
@@ -440,11 +431,17 @@ contains
             &p_ptr%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
+        !$omp parallel do private(i) default(shared) proc_bind(close) schedule(static)
+        do i = 1,batchsz_max
+            call ptcl_imgs(i)%new([p_ptr%box, p_ptr%box, 1], p_ptr%smpd, wthreads=.false.)
+        enddo
+        !$omp end parallel do
     end subroutine prep_batch_particles2D
 
     subroutine clean_batch_particles2D
         use simple_imgarr_utils, only: dealloc_imgarr
         call killimgbatch(b_ptr)
+        call dealloc_imgarr(ptcl_imgs)
         call dealloc_imgarr(ptcl_match_imgs)
         call dealloc_imgarr(ptcl_match_imgs_pad)
     end subroutine clean_batch_particles2D
@@ -459,6 +456,10 @@ contains
         ! integer(timer_int_kind) :: t_polarize, t_loop
         integer     :: iptcl_batch, iptcl, ithr
         call discrete_read_imgbatch(p_ptr, b_ptr, nptcls_here, pinds, [1,nptcls_here])
+        ! copy for restoration
+        do iptcl_batch = 1,nptcls_here
+            call ptcl_imgs(iptcl_batch)%copy_fast(b_ptr%imgbatch(iptcl_batch))
+        enddo
         ! reassign particles indices & associated variables
         call b_ptr%pftc%reallocate_ptcls(nptcls_here, pinds)
         ! memoization for polarize_oversamp
@@ -478,7 +479,7 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-                call prepimg4align(p_ptr, b_ptr, iptcl, b_ptr%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
+            call prepimg4align(p_ptr, b_ptr, iptcl, b_ptr%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             ! t_polarize = tic()
             ! call prepimg4align_bench(iptcl, b_ptr%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr),&
             ! &rt_prep1, rt_prep2, rt_prep)

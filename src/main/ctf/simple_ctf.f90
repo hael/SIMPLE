@@ -209,7 +209,7 @@ contains
         real,                     intent(in)    :: angast       !< angle of astigmatism
         integer,                  intent(in)    :: dims_out(2)  !< output dimensions
         real,                     intent(out)   :: tvals(1:dims_out(1), 1:dims_out(2))  ! CTF values
-        complex(c_float_complex), intent(out)   :: cmat(:,:)    !< FT(image) x CTF
+        complex(c_float_complex), intent(inout) :: cmat(1:dims_out(1), 1:dims_out(2))    !< FT(image) x CTF
         real    :: half_wl2_cs, sum_df, diff_df,tval,t
         integer :: h,k, physh,physk
         logical :: l_flip
@@ -223,18 +223,19 @@ contains
         l_flip      = imode == CTFFLAG_FLIP
         sum_df      = self%dfx + self%dfy
         diff_df     = self%dfx - self%dfy
-        do h = ft_map_lims(1,1), ft_map_lims(1,2)
-            do k = ft_map_lims(2,1), ft_map_lims(2,2)
+        do k = ft_map_lims(2,1), ft_map_lims(2,2)
+            do h = ft_map_lims(1,1), ft_map_lims(1,2)
                 ! calculate CTF
                 tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, self%angast, self%amp_contr_const, self%wl, half_wl2_cs)
                 t    = merge(abs(tval), tval, l_flip)
-                ! store tval and multiply image with tval
+                ! store tval
                 physh               = ft_map_phys_addrh(h,k)
                 physk               = ft_map_phys_addrk(h,k)
                 tvals(physh, physk) = t
-                cmat(physh, physk)  = t * cmat(physh,physk)
             end do
         end do
+        ! I x CTF (improved memory alignement outside the loop)
+        cmat = tvals * cmat
     end subroutine eval_and_apply
 
     !>  \brief  Edited Eq 11 of Rohou & Grigorieff (2015)

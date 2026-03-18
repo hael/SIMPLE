@@ -264,7 +264,6 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         call cavger_new(params, build)
-        call cavger_transf_oridat(build%spproj)
         call cavger_read_euclid_sigma2
         call cavger_assemble_sums(.false.)
     end subroutine cavger_prepare_and_assemble
@@ -333,7 +332,7 @@ contains
         ! ------------------------------------------
         ! ---- SHMEM TAIL (differs from worker) ----
         call cavger_restore_cavgs(params%frcs)
-        call cavger_gen2Dclassdoc(self%build%spproj)
+        call cavger_gen2Dclassdoc
         call cavger_write_all(params%refs, params%refs_even, params%refs_odd)
         call cavger_kill
         call shmem_bookkeeping(self%build, params, cline)

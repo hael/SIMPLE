@@ -122,11 +122,8 @@ contains
             call pftc%polar_cavger_kill
         else
             call cavger_new(params, build)
-            call cavger_transf_oridat( build%spproj )
-            call cavger_assemble_sums_from_parts()
-            ! classdoc gen needs to be after calc of FRCs
-            call cavger_gen2Dclassdoc(build%spproj) ! populates the cls2D field in project
-            ! write references
+            call cavger_assemble_sums_from_parts
+            call cavger_gen2Dclassdoc
             call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP')
             call cavger_write_all(params%refs, params%refs_even, params%refs_odd)
             call cavger_kill
