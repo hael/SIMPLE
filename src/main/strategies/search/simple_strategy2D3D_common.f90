@@ -999,8 +999,11 @@ contains
             endif
             ! Calculator init
             nrefs     = params%nspace * params%nstates
-            ! interplim = params%kfromto(2)
-            interplim = min(params%kfromto(2)+5, fdim(params%box_crop)-1)
+            if( params%l_lpauto)then
+                interplim = fdim(params%box_crop)-1
+            else
+                interplim = params%kfromto(2)
+            endif
             call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto, iklim=interplim)
             ! Read polar references
             call build%pftc%polar_cavger_new(.true.)

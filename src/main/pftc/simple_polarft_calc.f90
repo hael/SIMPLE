@@ -893,15 +893,16 @@ contains
 
     ! To estimate resolution limit
     subroutine polarft_estimate_lplim3D( box, smpd, lprange, lpopt )
+        use simple_butterworth, only: butterworth_filter
         integer,      intent(in)  :: box
         real,         intent(in)  :: smpd, lprange(2)
         real,         intent(out) :: lpopt
         type(polarft_calc)        :: pftc ! local  & not instanciated
         type(string)              :: str_even, str_odd
-        complex(dp),  allocatable :: even(:,:,:), odd(:,:,:), vec(:)
-        real(dp),     allocatable :: mag_e(:), mag_diff(:)
-        real(dp) :: cost, best_cost, wk
-        integer  :: kfromto(2), best_k, iref, k
+        complex(dp),  allocatable :: even(:,:,:), odd(:,:,:), diff(:,:)
+        real(sp),     allocatable :: bwfilter(:)
+        real(dp) :: cost, best_cost
+        integer  :: kfromto(2), best_k, iref, k, kk, iproj
         ! read current references
         str_even = POLAR_REFS_FBODY//'_even'//BIN_EXT
         str_odd  = POLAR_REFS_FBODY//'_odd'//BIN_EXT
@@ -922,40 +923,31 @@ contains
             lpopt = calc_lowpass_lim(kfromto(1), box, smpd)
             return
         endif
+        ! allocations
+        allocate(bwfilter(1:pftc%kfromto(2)),diff(pftc%pftsz,pftc%kfromto(1):pftc%kfromto(2)))
         ! Read PFT arrays
         call pftc%read_pft_array(str_even, even)
         call pftc%read_pft_array(str_odd,  odd)
-        ! Pre-calculate shell magnitudes and weights
-        allocate(vec(kfromto(1):kfromto(2)), mag_e(kfromto(1):kfromto(2)),mag_diff(kfromto(1):kfromto(2)))
-        mag_e = 0.d0; mag_diff = 0.d0
-        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,iref,vec,wk)
-        do k = kfromto(1), kfromto(2)
-            ! Shell magnitudes
-            do iref = 1, pftc%ncls
-                vec         = even(:,k,iref)
-                mag_e(k)    = mag_e(k) + real(sum(vec*conjg(vec)),dp)
-                vec         = vec - odd(:,k,iref)
-                mag_diff(k) = mag_diff(k) + real(sum(vec*conjg(vec)),dp)
-            enddo
-            ! Shell weights to reproduce volumetric cartesian representation values
-            wk          = real(box,dp)**3 * (4.d0/3.d0)*DPI * (real(k,dp)**3 - real(k-1,dp)**3)
-            wk          = wk / real(2*pftc%ncls*pftc%pftsz,dp)
-            mag_e(k)    = wk * mag_e(k)
-            mag_diff(k) = wk * mag_diff(k)
-        enddo
-        !$omp end parallel do
         ! Optimization: find best resolution cutoff
         best_k    = kfromto(1)
         best_cost = huge(best_cost)
-        do k = kfromto(1), kfromto(2)
-            cost = sum(mag_diff(kfromto(1):k))
-            if( k < kfromto(2) ) cost = cost + sum(mag_e(k+1:kfromto(2)))
+        do k = kfromto(1), kfromto(2)               ! search range
+            ! Objective function
+            cost = 0.d0
+            call butterworth_filter(k, bwfilter)
+            do kk = pftc%kfromto(1),pftc%kfromto(2) ! resolution range available
+                ! diff = even - bw(odd)
+                diff = even(:,kk,:) - real(bwfilter(kk),dp)*odd(:,kk,:)
+                ! Sum(|diff|2)
+                cost = cost + sum(real(diff*conjg(diff),dp)) !* (real(kk**3 - (kk-1)**3,dp)
+            enddo
+            ! Book-keeping
             if( cost <= best_cost )then
                 best_cost = cost
                 best_k    = k
             endif
         enddo
-        deallocate(even,odd,vec,mag_e,mag_diff)
+        deallocate(even,odd,diff)
         ! Solution
         lpopt = calc_lowpass_lim(best_k, box, smpd)
     end subroutine polarft_estimate_lplim3D
