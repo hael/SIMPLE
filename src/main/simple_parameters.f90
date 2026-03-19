@@ -1790,8 +1790,8 @@ contains
                         self%nspace = max(self%nspace, 20000)
                     endif
                     if( .not. cline%defined('athres') ) self%athres = 10.
-                    self%l_neigh = .true.
             end select
+            self%l_neigh = .true.
         endif
         ! -- shift defaults
         if( .not. cline%defined('trs') )then
