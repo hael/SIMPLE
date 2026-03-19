@@ -1771,13 +1771,27 @@ contains
         ! -- neigh defaults
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') .or. str_has_substr(self%refine, 'tree') )then
-            if( .not. cline%defined('nspace') )then
-                self%nspace = 20000
-            else
-                self%nspace = max(self%nspace, 20000)
-            endif
-            if( .not. cline%defined('athres') ) self%athres = 10.
-            self%l_neigh = .true.
+            select case(trim(self%refine))
+                case('shc_ptree')
+                    if( .not. cline%defined('nspace_sub') )then
+                        self%nspace_sub = 300
+                    else
+                        self%nspace_sub = max(self%nspace_sub, 300)
+                    endif
+                    if( .not. cline%defined('nspace') )then
+                        self%nspace = 2500
+                    else
+                        self%nspace = max(self%nspace, 2500)
+                    endif
+                case DEFAULT
+                    if( .not. cline%defined('nspace') )then
+                        self%nspace = 20000
+                    else
+                        self%nspace = max(self%nspace, 20000)
+                    endif
+                    if( .not. cline%defined('athres') ) self%athres = 10.
+                    self%l_neigh = .true.
+            end select
         endif
         ! -- shift defaults
         if( .not. cline%defined('trs') )then

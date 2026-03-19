@@ -122,7 +122,14 @@ contains
         self%prev_roind = self%b_ptr%pftc%get_roind(360.-self%o_prev%e3get()) ! in-plane angle index
         self%prev_shvec = self%o_prev%get_2Dshift()                           ! shift vector
         self%prev_proj  = self%b_ptr%eulspace%find_closest_proj(self%o_prev)  ! previous projection direction
-        self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj    ! previous reference
+        ! map previous projection direction
+        select case(trim(self%p_ptr%refine))
+            case('shc_ptree')
+                prev_proj_sub = self%b_ptr%subspace_full2sub_map(self%prev_proj)    ! map previous projection direction into subspace for shc_ptree search
+                self%prev_ref = (self%prev_state-1)*self%nprojs_sub + prev_proj_sub ! previous reference
+            case DEFAULT
+                self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj  ! previous reference
+        end select
         call self%b_ptr%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
         ! copy self%o_prev to opeaks to transfer paticle-dependent parameters
         do ipeak = 1, self%npeaks

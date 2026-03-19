@@ -78,7 +78,7 @@ contains
         if( l_multistates ) neff_states = count(s3D%state_exists)
         if( s%l_neigh )then
             select case(trim(s%refine))
-                case('shc_neigh')
+                case('shc_ptree', 'shc_neigh')
                     nrefs_tot  = s%nprojs_sub * neff_states
                     nrefs_eval = s%nrefs_eval
                 case DEFAULT

@@ -85,7 +85,7 @@ contains
             itree = get_tree_for_ref(self%s, iref_best_coarse, ntrees)
             call descend_tree_prob(self%s, itree, corr_best_coarse, nrefs_tree)
         endif
-        self%s%nrefs_eval = nrefs_coarse + nrefs_tree
+        self%s%nrefs_eval = nrefs_coarse ! don't add the tree evaluations
         call self%s%inpl_srch
         call self%oris_assign
     end subroutine srch_shc_ptree
