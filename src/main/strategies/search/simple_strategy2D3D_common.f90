@@ -571,21 +571,24 @@ contains
         call build%spproj_field%set_all2single('res', res_fsc0143)
     end subroutine report_resolution
 
-    subroutine estimate_lp_refvols( params, build, cline, lpfromto, state )
+    subroutine estimate_lp_refvols( params, build, cline, lpstart, lpstop, state )
         use simple_polarft_calc, only: polarft_estimate_lplim3D
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(in)    :: cline
-        real,              intent(in)    :: lpfromto(2)
+        real,              intent(in)    :: lpstart, lpstop
         integer,           intent(in)    :: state
         type(string)       :: vol_even, vol_odd
         logical, parameter :: DEBUG=.true.
         type(image) :: mskvol
         integer     :: npix
         real        :: lpopt
+        if( lpstart < lpstop )then
+            THROW_HARD('Invalid low-pass range ordering: lpstart must be >= lpstop')
+        endif
         if( (trim(params%polar).eq.'yes').and.(.not.cline%defined('vol1')) )then
             ! POLAR REPRESENTATION
-            call polarft_estimate_lplim3D(params%box_crop, params%smpd_crop, lpfromto, lpopt)
+            call polarft_estimate_lplim3D(params%box_crop, params%smpd_crop, lpstart, lpstop, lpopt)
         else
             ! CARTSESIAN REPRESENTATION
             if( params%l_filemsk )then
@@ -603,7 +606,7 @@ contains
             call build%vol%read_and_crop(    vol_even, params%smpd, params%box_crop, params%smpd_crop)
             call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
             ! estimate low-pass limit
-            call estimate_lplim3D(build%vol_odd, build%vol, mskvol, lpfromto, lpopt)
+            call estimate_lplim3D(build%vol_odd, build%vol, mskvol, lpstart, lpstop, lpopt)
         endif        
         ! update low-pass limit in project
         call build%spproj_field%set_all2single('lp_est', lpopt)
@@ -986,7 +989,7 @@ contains
         logical,     optional,    intent(in)    :: do_polar
         real, allocatable :: gaufilter(:)
         type(string)      :: fname
-        integer           :: ithr, iproj, nrefs, filtsz, interplim, state
+        integer           :: ithr, iproj, nrefs, filtsz, state
         logical           :: l_polar, l_filtrefs
         l_polar = .false.
         if( present(do_polar) ) l_polar = do_polar
@@ -995,16 +998,11 @@ contains
             ! Resolution limit estimation
             call report_resolution(params, build, state)
             if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                call estimate_lp_refvols(params, build, cline, [params%lpstart,params%lpstop], state)
+                call estimate_lp_refvols(params, build, cline, params%lpstart, params%lpstop, state)
             endif
             ! Calculator init
             nrefs     = params%nspace * params%nstates
-            if( params%l_lpauto)then
-                interplim = fdim(params%box_crop)-1
-            else
-                interplim = params%kfromto(2)
-            endif
-            call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto, iklim=interplim)
+            call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
             ! Read polar references
             call build%pftc%polar_cavger_new(.true.)
             call build%pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
@@ -1079,7 +1077,7 @@ contains
         logical   :: do_center, l_prob_align_mode
         call report_resolution(params, build, state)
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-            call estimate_lp_refvols(params, build, cline, [params%lpstart,params%lpstop], state)
+            call estimate_lp_refvols(params, build, cline, params%lpstart, params%lpstop, state)
         endif
         ! pftc
         nrefs = params%nspace * params%nstates
@@ -1168,7 +1166,7 @@ contains
         ! memoize CTF stuff
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())   
         ! memoize for polarize_oversamp
-        call tmp_imgs_pad(1)%memoize4polarize_oversamp(build%pftc%get_ptcl_interp_dim())
+        call tmp_imgs_pad(1)%memoize4polarize_oversamp(build%pftc%get_pdim_interp())
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,pft) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1

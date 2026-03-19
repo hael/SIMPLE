@@ -7,30 +7,25 @@ contains
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-    module subroutine new(self, params, nrefs, pfromto, kfromto, iklim)
+    module subroutine new(self, params, nrefs, pfromto, kfromto)
         class(polarft_calc), target, intent(inout) :: self
         class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
-        integer,           optional, intent(in)    :: iklim
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
         integer               :: irot, k, ithr, i
         logical               :: even_dims, test(2)
         call self%kill
         ! set params pointer
-        self%p_ptr => params
+        self%p_ptr      => params
         ! set particle index range
-        self%pfromto = pfromto
+        self%pfromto    =  pfromto
         ! set band-pass Fourier index limits
-        self%kfromto = kfromto
-        self%nk      = self%kfromto(2) - self%kfromto(1) + 1
+        self%kfromto    =  kfromto
+        self%nk         =  self%kfromto(2) - self%kfromto(1) + 1
         ! set particle PFTs interpolation limit
-        if( present(iklim) )then
-            self%interpklim = iklim
-        else
-            self%interpklim = self%kfromto(2)
-        endif
+        self%interpklim =  fdim(self%p_ptr%box_crop) - 1
         ! error check
         if( self%pfromto(2) - self%pfromto(1) + 1 < 1 )then
             write(logfhandle,*) 'pfromto: ', self%pfromto(1), self%pfromto(2)
@@ -87,8 +82,8 @@ contains
         self%argtransf(:self%pftsz,:)     = real(self%polar(:self%pftsz,:),dp)                          * A(1)  ! x-part
         self%argtransf(self%pftsz + 1:,:) = real(self%polar(self%nrots + 1:self%nrots+self%pftsz,:),dp) * A(2)  ! y-part
         ! allocate others
-        allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+        allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%interpklim,self%nrefs),&
+            &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%interpklim,self%nrefs),&
                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                 &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                 &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
@@ -192,12 +187,12 @@ contains
     module subroutine set_ref_pft(self, iref, pft, iseven)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref
-        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
         logical,             intent(in)    :: iseven
         if( iseven )then
             self%pfts_refs_even(:,:,iref) = pft
         else
-            self%pfts_refs_odd(:,:,iref)  = pft
+            self%pfts_refs_odd(:,:,iref) = pft
         endif
     end subroutine set_ref_pft
 

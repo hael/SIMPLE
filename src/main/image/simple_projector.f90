@@ -192,7 +192,7 @@ contains
         logical,             intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         integer :: pdim(3), irot, k
         real    :: loc(3), e_rotmat(3,3), hk(2)
-        pdim     = pftc%get_pdim()
+        pdim     = pftc%get_pdim_srch()
         e_rotmat = e%get_mat()
         do irot = 1,pdim(1)
             do k = pdim(2),pdim(3)
@@ -218,7 +218,7 @@ contains
         logical,             intent(in)    :: mask(:)
         integer :: pdim(3), irot, k
         real    :: loc(3), e_rotmat(3,3), hk(2)
-        pdim     = pftc%get_pdim()
+        pdim     = pftc%get_pdim_srch()
         e_rotmat = e%get_mat()
         do irot = 1, pdim(1)
             do k = pdim(2), pdim(3)

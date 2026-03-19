@@ -150,7 +150,7 @@ contains
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
         ! initialize
         call build%pftc%new(params, nimgs, [1,nimgs], kfromto)
-        call imgs(1)%memoize4polarize(build%pftc%get_pdim())
+        call imgs(1)%memoize4polarize(build%pftc%get_pdim_srch())
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs

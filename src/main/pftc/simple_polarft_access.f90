@@ -13,17 +13,17 @@ contains
         nrots = self%nrots
     end function get_nrots
 
-    module pure function get_pdim(self) result(pdim)
+    module pure function get_pdim_srch(self) result(pdim)
         class(polarft_calc), intent(in) :: self
         integer :: pdim(3)
         pdim = [self%pftsz,self%kfromto(1),self%kfromto(2)]
-    end function get_pdim
+    end function get_pdim_srch
 
-    module pure function get_ptcl_interp_dim(self) result(dims)
+    module pure function get_pdim_interp(self) result(dims)
         class(polarft_calc), intent(in) :: self
         integer :: dims(3)
         dims = [self%pftsz,self%kfromto(1),self%interpklim]
-    end function get_ptcl_interp_dim
+    end function get_pdim_interp
 
     module pure function get_kfromto(self) result(kfromto)
         class(polarft_calc), intent(in) :: self
@@ -83,9 +83,9 @@ contains
         logical,             intent(in) :: iseven
         complex(sp), intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         if( iseven )then
-            pft = self%pfts_refs_even(:,:,iref)
+            pft = self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
         else
-            pft = self%pfts_refs_odd(:,:,iref)
+            pft = self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
         endif
     end subroutine get_ref_pft
 
@@ -124,7 +124,7 @@ contains
     module function allocate_pft( self ) result( pft )
         class(polarft_calc),  intent(in)  :: self
         complex(sp), allocatable :: pft(:,:)
-        allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)), source=CMPLX_ZERO)
+        allocate(pft(self%pftsz,self%kfromto(1):self%interpklim), source=CMPLX_ZERO)
     end function allocate_pft
 
     module function allocate_ptcl_pft( self ) result( pft )

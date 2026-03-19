@@ -69,7 +69,7 @@ contains
         ! IMPORTANT: lims from PADDED grid because self is padded
         lims = transpose(self%loop_lims(3))
         ! KB kernel for padded-grid interpolation
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
+        kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         mem_polwdim = wdim

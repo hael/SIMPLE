@@ -177,7 +177,7 @@ contains
         ! soft masking needed for FT
         call even%mask3D_soft(params%msk)
         call  odd%mask3D_soft(params%msk)
-        call estimate_lplim(odd, even, mskvol, [params%lpstart,params%lpstop], lpopt, odd_filt)
+        call estimate_lplim(odd, even, mskvol, params%lpstart, params%lpstop, lpopt, odd_filt)
         print *, 'found optimal low-pass limit: ', lpopt
         call odd_filt%write(string('odd_filt.mrc'))
         ! destruct
@@ -262,7 +262,7 @@ contains
             call even(iptcl)%read(params%stk2, iptcl)
         enddo
         ! filter
-        call estimate_lplims2D( odd, even, params%msk, [params%lpstart,params%lpstop], lpsopt, odd_filt )
+        call estimate_lplims2D( odd, even, params%msk, params%lpstart, params%lpstop, lpsopt, odd_filt )
         ! write output and destruct
         do iptcl = 1, params%nptcls
             print *, 'found optimal low-pass limit: ', iptcl, lpsopt(iptcl)

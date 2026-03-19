@@ -463,7 +463,7 @@ contains
         ! reassign particles indices & associated variables
         call b_ptr%pftc%reallocate_ptcls(nptcls_here, pinds)
         ! memoization for polarize_oversamp
-        call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(b_ptr%pftc%get_pdim())
+        call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(b_ptr%pftc%get_pdim_interp())
         ! mask memoization for prepimg4align
         call ptcl_match_imgs(1)%memoize_mask_coords
         ! memoize FT mapping stuff
@@ -546,7 +546,7 @@ contains
             endif
         endif
         ! prepare the polarizer images
-        call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(b_ptr%pftc%get_pdim())
+        call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(b_ptr%pftc%get_pdim_srch())
         allocate(match_imgs(p_ptr%ncls))
         cavgs_m => cavgs_merged
         cavgs_e => cavgs_even

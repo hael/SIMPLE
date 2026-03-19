@@ -42,11 +42,11 @@ contains
         character(len=*),    intent(in)    :: which
         select case(trim(which))
             case('merged')
-                call self%set_ref_pft(icls, cmplx(self%pfts_merg(:,self%kfromto(1):self%kfromto(2),icls),kind=sp), .true.)
+                self%pfts_refs_even(:,:,icls) = cmplx(self%pfts_merg(:,self%kfromto(1):self%interpklim,icls),kind=sp)
             case('even')
-                call self%set_ref_pft(icls, cmplx(self%pfts_even(:,self%kfromto(1):self%kfromto(2),icls),kind=sp), .true.)
+                self%pfts_refs_even(:,:,icls) = cmplx(self%pfts_even(:,self%kfromto(1):self%interpklim,icls),kind=sp)
             case('odd')
-                call self%set_ref_pft(icls, cmplx(self%pfts_odd(:,self%kfromto(1):self%kfromto(2),icls),kind=sp), .false.)
+                self%pfts_refs_odd(:,:,icls)  = cmplx(self%pfts_odd(:,self%kfromto(1):self%interpklim,icls),kind=sp)
         end select
     end subroutine polar_cavger_set_ref_pft
 

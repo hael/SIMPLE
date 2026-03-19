@@ -135,8 +135,8 @@ contains
         ithr = omp_get_thread_num() + 1
         shmat => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat)
-        self%pfts_refs_even(:,:,iref) = cmplx(dcmplx(self%pfts_refs_even(:,:,iref)) * shmat(:,self%kfromto(1):self%kfromto(2)))
-        self%pfts_refs_odd( :,:,iref) = cmplx(dcmplx(self%pfts_refs_odd( :,:,iref)) * shmat(:,self%kfromto(1):self%kfromto(2)))
+        self%pfts_refs_even(:,:,iref) = cmplx(dcmplx(self%pfts_refs_even(:,:,iref)) * shmat)
+        self%pfts_refs_odd( :,:,iref) = cmplx(dcmplx(self%pfts_refs_odd( :,:,iref)) * shmat)
     end subroutine shift_ref
 
     ! mirror pft about h (mirror about y of cartesian image)

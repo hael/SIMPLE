@@ -710,7 +710,7 @@ contains
         !$omp end parallel do
         ! initialize pftc, polarizer
         call build%pftc%new(params, 1, [1,2*n], kfromto) ! 2*n because of mirroring
-        call img_ref%memoize4polarize(build%pftc%get_pdim())
+        call img_ref%memoize4polarize(build%pftc%get_pdim_srch())
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs
@@ -818,7 +818,7 @@ contains
         ! initialize mirrores images, pftc, polarizer
         call alloc_imgarr(ntargets, ldim, smpd, imgs_targ_mirr)
         call build%pftc%new(params, nrefs, [1,2*ntargets], kfromto) ! 2*ntargets because of mirroring
-        call imgs_ref(1)%memoize4polarize(build%pftc%get_pdim())
+        call imgs_ref(1)%memoize4polarize(build%pftc%get_pdim_srch())
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs

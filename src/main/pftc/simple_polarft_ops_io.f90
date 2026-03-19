@@ -378,7 +378,7 @@ contains
     ! Format for PFT I/O
     ! First  integer: PFTSZ
     ! Second integer: KFROMTO(1)
-    ! Third  integer: KFROMTO(2)
+    ! Third  integer: INTERPKLIM (upper bound of available on-disk k-range)
     ! Fourth integer: NCLS
     ! input/ouput in kind=dp but read/written in kind=sp
 
@@ -396,6 +396,8 @@ contains
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: funit
         complex(dp),         intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        ! Header contract: dims = [pftsz, kfromto(1), interpklim, ncls].
+        ! Therefore dims(2:3) describes the available on-disk k-range, not a search window.
         write(unit=funit,pos=1) [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]
         write(unit=funit,pos=(4*sizeof(funit)+1)) cmplx(array,kind=sp)
     end subroutine write_pft_array_local
@@ -416,6 +418,7 @@ contains
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: funit
         real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        ! Same header contract as PFT arrays: dims(2:3) = [kfromto(1), interpklim].
         write(unit=funit,pos=1) [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]
         write(unit=funit,pos=(4*sizeof(funit)+1)) real(array,kind=sp)
     end subroutine write_ctf2_array_local
@@ -443,6 +446,7 @@ contains
         read(unit=funit,pos=1) dims
         call fclose(funit)
         pftsz   = dims(1)
+        ! Returned kfromto is the on-disk available range [kfromto(1), interpklim].
         kfromto = dims(2:3)
         nrefs   = dims(4)
     end subroutine get_pft_array_dims
@@ -463,15 +467,10 @@ contains
             allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
         endif
         if( .not. all(dims == [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]) )then
-            if( self%pftsz > dims(1) )then
-                ! padding required
-            elseif( self%pftsz < dims(1) )then
-                ! cropping required, not implemented yet
-                THROW_HARD('Incompatible PFT size in '//fname%to_char()//': '//int2str(self%pftsz)//' vs '//int2str(dims(1)))
-            endif
-            if( self%ncls /= dims(4) )then
-                THROW_HARD('Incompatible NCLS in '//fname%to_char()//': '//int2str(self%ncls)//' vs '//int2str(dims(4)))
-            endif
+            write(logfhandle,*) 'PFT header mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', self%pftsz, self%kfromto(1), self%interpklim, self%ncls
+            write(logfhandle,*) 'found:    ', dims(1), dims(2), dims(3), dims(4)
+            THROW_HARD('Incompatible PFT header; open_pft_array_for_read')
         endif
         if( .not. allocated(buffer) ) allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
     end subroutine open_pft_array_for_read
@@ -482,15 +481,9 @@ contains
         complex(dp),         intent(inout) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,             intent(in)    :: funit, dims(4)
         complex(sp),         intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
-        integer :: klo, khi
         ! Read stored (single-precision) array payload
         read(unit=funit, pos=(sizeof(dims)+1)) buffer
-        ! Default to zero padding everywhere
-        array(:,:,:) = (0.0_dp, 0.0_dp)
-        ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
-        klo = max(self%kfromto(1), dims(2))
-        khi = min(self%interpklim, dims(3))
-        if( klo <= khi ) array(:,klo:khi,:) = cmplx(buffer(:,klo:khi,:), kind=dp)
+        array(:,:,:) = cmplx(buffer(:,:,:), kind=dp)
     end subroutine transfer_pft_array_buffer
 
     ! private helper
@@ -522,12 +515,10 @@ contains
             allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
         endif
         if( .not. all(dims == [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]) )then
-            if( self%pftsz /= dims(1) )then
-                THROW_HARD('Incompatible real array size in '//fname%to_char()//': '//int2str(self%pftsz)//' vs '//int2str(dims(1)))
-            endif
-            if( self%ncls /= dims(4) )then
-                THROW_HARD('Incompatible NCLS in '//fname%to_char()//': '//int2str(self%ncls)//' vs '//int2str(dims(4)))
-            endif
+            write(logfhandle,*) 'CTF2 header mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', self%pftsz, self%kfromto(1), self%interpklim, self%ncls
+            write(logfhandle,*) 'found:    ', dims(1), dims(2), dims(3), dims(4)
+            THROW_HARD('Incompatible CTF2 header; open_ctf2_array_for_read')
         endif
         if( .not. allocated(buffer) ) allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
     end subroutine open_ctf2_array_for_read
@@ -538,37 +529,9 @@ contains
         real(dp), intent(inout) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,  intent(in)    :: funit, dims(4)
         real(sp), intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
-        integer :: klo, khi
         ! Read stored (single-precision) array payload
         read(unit=funit, pos=(sizeof(dims)+1)) buffer
-        ! Default to zero padding everywhere
-        array(:,:,:) = 0.0_dp
-        ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
-        klo = max(self%kfromto(1), dims(2))
-        khi = min(self%interpklim, dims(3))
-        if( klo <= khi )then
-            array(:,klo:khi,:) = real(buffer(:,klo:khi,:), dp)
-        endif
+        array(:,:,:) = real(buffer(:,:,:), dp)
     end subroutine transfer_ctf2_array_buffer
-
-    ! writes out |PFTs_MERG| as mrcs
-    ! module subroutine pft2img( self )
-    !     class(polarft_calc), intent(inout) :: self
-    !     type(image) :: img
-    !     integer :: nk,i,k,icls
-    !     nk = self%interpklim
-    !     if( .not.is_even(nk) ) nk = nk+1
-    !     call img%new([self%pftsz,nk,1],1.0)
-    !     do icls = 1,self%ncls
-    !         img = 0.0
-    !         do i = 1,self%pftsz
-    !             do k = self%kfromto(1),self%interpklim
-    !                 call img%set([i,k,1], real(abs(self%pfts_merg(i,k,icls))))
-    !             enddo
-    !         enddo
-    !         call img%write(string('pfts_it'//int2str(self%p_ptr%which_iter)//'.mrc'),icls)
-    !     enddo
-    !     call img%kill
-    ! end subroutine pft2img
 
 end submodule simple_polarft_ops_io

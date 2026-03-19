@@ -122,7 +122,7 @@ contains
         angstep = abs(pftc%get_rot(2)-pftc%get_rot(1))
         nrots   = pftc%get_nrots()
         ! reference polar coordinates
-        call  pspec_img%memoize4polarize(pftc%get_pdim())
+        call  pspec_img%memoize4polarize(pftc%get_pdim_srch())
         call pspec_img%fft
         pft = pftc%allocate_pft()
         call pspec_img%polarize(pft)

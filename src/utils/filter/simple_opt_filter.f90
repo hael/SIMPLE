@@ -70,9 +70,9 @@ contains
         call odd_filt%kill
     end subroutine estimate_lplim_1
 
-    subroutine estimate_lplim_2( odd, even, mskimg, lprange, lpopt, odd_filt_out )
+    subroutine estimate_lplim_2( odd, even, mskimg, lpstart, lpstop, lpopt, odd_filt_out )
         class(image),           intent(inout) :: odd, even, mskimg
-        real,                   intent(in)    :: lprange(2)
+        real,                   intent(in)    :: lpstart, lpstop
         real,                   intent(out)   :: lpopt
         class(image), optional, intent(out)   :: odd_filt_out
         integer :: ldim(3), box, kfromto(2), best_ind
@@ -80,15 +80,18 @@ contains
         ldim       = odd%get_ldim()
         box        = ldim(1)
         smpd       = odd%get_smpd()
-        kfromto(1) = calc_fourier_index(lprange(1), box, smpd)
-        kfromto(2) = calc_fourier_index(lprange(2), box, smpd)
+        if( lpstart < lpstop )then
+            THROW_HARD('Invalid low-pass range ordering in estimate_lplim_2: lpstart must be >= lpstop')
+        endif
+        kfromto(1) = calc_fourier_index(lpstart, box, smpd)
+        kfromto(2) = calc_fourier_index(lpstop, box, smpd)
         call estimate_lplim_1( odd, even, mskimg, kfromto, best_ind, odd_filt_out )
         lpopt = calc_lowpass_lim(best_ind, box, smpd)
     end subroutine estimate_lplim_2
 
-    subroutine estimate_lplim3D( odd, even, mskvol, lprange, lpopt, odd_filt_out )
+    subroutine estimate_lplim3D( odd, even, mskvol, lpstart, lpstop, lpopt, odd_filt_out )
         class(image),           intent(in)  :: odd, even, mskvol
-        real,                   intent(in)  :: lprange(2)
+        real,                   intent(in)  :: lpstart, lpstop
         real,                   intent(out) :: lpopt
         class(image), optional, intent(out) :: odd_filt_out
         type(image)       :: odd_filt, even_cp, odd_cp
@@ -98,8 +101,11 @@ contains
         ldim       = odd%get_ldim()
         box        = ldim(1)
         smpd       = odd%get_smpd()
-        kfromto(1) = calc_fourier_index(lprange(1), box, smpd)
-        kfromto(2) = calc_fourier_index(lprange(2), box, smpd)
+        if( lpstart < lpstop )then
+            THROW_HARD('Invalid low-pass range ordering in estimate_lplim3D: lpstart must be >= lpstop')
+        endif
+        kfromto(1) = calc_fourier_index(lpstart, box, smpd)
+        kfromto(2) = calc_fourier_index(lpstop, box, smpd)
         if( kfromto(1) == kfromto(2) )then
             ! nothing to search, return limit from current kfromto(1)
             lpopt = calc_lowpass_lim(kfromto(1), box, smpd)
@@ -151,9 +157,9 @@ contains
         call odd_cp%kill
     end subroutine estimate_lplim3D
 
-    subroutine estimate_lplims2D( odd, even, mskrad_px, lprange, lpsopt, odd_filt_out )
+    subroutine estimate_lplims2D( odd, even, mskrad_px, lpstart, lpstop, lpsopt, odd_filt_out )
         class(image),                       intent(inout) :: odd(:), even(:)
-        real,                               intent(in)    :: mskrad_px, lprange(2)
+        real,                               intent(in)    :: mskrad_px, lpstart, lpstop
         real,                  allocatable, intent(inout) :: lpsopt(:)
         type(image), optional, allocatable, intent(inout) :: odd_filt_out(:)
         type(image), allocatable :: masks(:)
@@ -181,13 +187,13 @@ contains
             allocate(odd_filt_out(nptcls))
             !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
             do iptcl = 1, nptcls
-                call estimate_lplim(odd(iptcl), even(iptcl), masks(iptcl), lprange, lpsopt(iptcl), odd_filt_out(iptcl))
+                call estimate_lplim(odd(iptcl), even(iptcl), masks(iptcl), lpstart, lpstop, lpsopt(iptcl), odd_filt_out(iptcl))
             enddo
             !$omp end parallel do
         else
             !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
             do iptcl = 1, nptcls
-                call estimate_lplim(odd(iptcl), even(iptcl), masks(iptcl), lprange, lpsopt(iptcl))
+                call estimate_lplim(odd(iptcl), even(iptcl), masks(iptcl), lpstart, lpstop, lpsopt(iptcl))
             enddo
             !$omp end parallel do
         endif

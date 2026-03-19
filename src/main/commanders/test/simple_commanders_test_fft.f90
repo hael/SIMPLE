@@ -192,7 +192,7 @@ subroutine exec_test_gencorrs_fft( self, cline )
     p%kfromto(2) = 100
     call b%build_general_tbox(p, cline)
     call b%pftc%new(p, p%nptcls, [1, p%nptcls], p%kfromto)
-    call b%img_crop%memoize4polarize(b%pftc%get_pdim())
+    call b%img_crop%memoize4polarize(b%pftc%get_pdim_srch())
     pft = b%pftc%allocate_pft()
     do iptcl=1,p%nptcls
         call b%img_crop%read(p%stk, iptcl)
@@ -306,7 +306,7 @@ subroutine exec_test_polarops( self, cline )
     call b%init_params_and_build_strategy2D_tbox(cline, p)
     call pftc%new(p, NCLS, [1,NIMGS], p%kfromto)
     pinds = (/(i,i=1,NIMGS)/)
-    call b%img_crop%memoize4polarize(pftc%get_pdim())
+    call b%img_crop%memoize4polarize(pftc%get_pdim_interp())
     pft = pftc%allocate_pft()
     do i = 1,NIMGS
         shift = 10.*[ran3(), ran3()] - 5.

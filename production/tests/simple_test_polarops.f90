@@ -47,7 +47,7 @@ call cline%set('ref_type', 'polar_cavg')
 call b%init_params_and_build_strategy2D_tbox(cline, p)
 call pftc%new(p, NCLS, [1,NIMGS], p%kfromto)
 pinds = (/(i,i=1,NIMGS)/)
-call b%img_crop%memoize4polarize(pftc%get_pdim())
+call b%img_crop%memoize4polarize(pftc%get_pdim_interp())
 pft = pftc%allocate_pft()
 do i = 1,NIMGS
     shift = 10.*[ran3(), ran3()] - 5.

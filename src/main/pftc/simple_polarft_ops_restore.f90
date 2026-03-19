@@ -195,7 +195,7 @@ contains
         ! Keeping e/o in register
         find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D, self%p_ptr%box, self%p_ptr%smpd))
         find4eoavg = min(find4eoavg, get_find_at_crit(fsc_boxcrop, FSC4EOAVG3D))
-        find4eoavg = min(self%kfromto(2), find4eoavg)
+        find4eoavg = min(self%interpklim, find4eoavg)
         if( find4eoavg >= self%kfromto(1) )then
             !$omp parallel workshare proc_bind(close)
             self%pfts_even(:,self%kfromto(1):find4eoavg,:) = self%pfts_merg(:,self%kfromto(1):find4eoavg,:)

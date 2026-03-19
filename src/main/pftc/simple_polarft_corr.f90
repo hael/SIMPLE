@@ -26,7 +26,8 @@ contains
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_rot_ref => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat       => self%heap_vars(ithr)%shmat_8
-        pft_ref     = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
+        pft_ref     = merge(self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref), &
+                    self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref), self%iseven(i))
         call self%gen_shmat_8(ithr, real(shvec,dp),shmat)
         pft_ref = pft_ref * shmat(:,:self%kfromto(2))
         call self%rotate_ref_8(pft_ref, irot, pft_rot_ref)
@@ -78,7 +79,8 @@ contains
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_rot_ref => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat       => self%heap_vars(ithr)%shmat_8
-        pft_ref = merge(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), self%iseven(i))
+        pft_ref = merge(self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref), &
+                self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref), self%iseven(i))
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat)
         pft_ref = pft_ref * shmat(:,:self%kfromto(2))
         call self%rotate_ref_8(pft_ref, irot, pft_rot_ref)
@@ -126,9 +128,9 @@ contains
         pft_ref => self%heap_vars(ithr)%pft_ref
         ! Select reference once using pointer (avoids merge overhead)
         if (even) then
-            pft_ref_source => self%pfts_refs_even(:,:,iref)
+            pft_ref_source => self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
         else
-            pft_ref_source => self%pfts_refs_odd(:,:,iref)
+            pft_ref_source => self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
         endif
         ! Check if shift is needed (hoist outside to avoid repeated checks)
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
@@ -207,9 +209,9 @@ contains
         sumsq_cache  => self%heap_vars(ithr)%sumsq_cache
         ! Select reference once using pointer (avoids merge overhead)
         if (even) then
-            pft_ref_source => self%pfts_refs_even(:,:,iref)
+            pft_ref_source => self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
         else
-            pft_ref_source => self%pfts_refs_odd(:,:,iref)
+            pft_ref_source => self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
         endif
         ! Check if shift is needed
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
@@ -284,9 +286,9 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         if (self%iseven(i)) then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            pft_ref_8 = self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            pft_ref_8 = self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
         endif
         ! rotation
         call self%rotate_ref_8(pft_ref_8, irot, pft_ref_tmp_8)
@@ -314,9 +316,9 @@ contains
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
         if (self%iseven(i)) then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            pft_ref_8 = self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            pft_ref_8 = self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
         endif
         ! shift
         call self%gen_shmat_8(ithr, shvec, shmat_8)
@@ -384,9 +386,9 @@ contains
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
         if (self%iseven(i)) then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            pft_ref_8 = self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            pft_ref_8 = self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
         endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8(:,:self%kfromto(2))
@@ -496,9 +498,9 @@ contains
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
         if (self%iseven(i)) then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            pft_ref_8 = self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            pft_ref_8 = self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
         endif
         call self%gen_shmat_8(ithr, shvec, shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8(:,:self%kfromto(2))
@@ -559,9 +561,9 @@ contains
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
         if (self%iseven(i)) then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            pft_ref_8 = self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            pft_ref_8 = self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
         endif
         ! shift
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat_8)

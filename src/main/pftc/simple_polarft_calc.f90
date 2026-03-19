@@ -112,8 +112,8 @@ type :: polarft_calc
     procedure          :: assign_sigma2_noise
     ! ===== GETTERS + POINTER ACCESSORS: simple_polarft_access.f90
     procedure          :: get_nrots
-    procedure          :: get_ptcl_interp_dim
-    procedure          :: get_pdim
+    procedure          :: get_pdim_interp
+    procedure          :: get_pdim_srch
     procedure          :: get_kfromto
     procedure          :: get_pftsz
     procedure          :: get_rot
@@ -213,13 +213,12 @@ interface
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-   module subroutine new(self, params, nrefs, pfromto, kfromto, iklim)
+   module subroutine new(self, params, nrefs, pfromto, kfromto)
         use simple_parameters, only: parameters
         class(polarft_calc), target, intent(inout) :: self
         class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
-        integer,           optional, intent(in)    :: iklim
     end subroutine new
 
     module subroutine kill(self)
@@ -235,7 +234,7 @@ interface
     module subroutine set_ref_pft(self, iref, pft, iseven)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref
-        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
         logical,             intent(in)    :: iseven
     end subroutine set_ref_pft
 
@@ -304,15 +303,15 @@ interface
         integer :: nrots
     end function get_nrots
 
-    module pure function get_pdim(self) result(pdim)
+    module pure function get_pdim_srch(self) result(pdim)
         class(polarft_calc), intent(in) :: self
         integer :: pdim(3)
-    end function get_pdim
+    end function get_pdim_srch
 
-    module pure function get_ptcl_interp_dim(self) result(dims)
+    module pure function get_pdim_interp(self) result(dims)
         class(polarft_calc), intent(in) :: self
         integer :: dims(3)
-    end function get_ptcl_interp_dim
+    end function get_pdim_interp
 
     module pure function get_kfromto(self) result(kfromto)
         class(polarft_calc), intent(in) :: self
@@ -440,8 +439,8 @@ interface
         real(dp),            intent(in)    :: psi
         integer,             intent(inout) :: lrot
         integer,             intent(inout) :: rrot
-        real(dp),            intent(out)   :: lw(self%kfromto(1):self%kfromto(2))
-        real(dp),            intent(out)   :: rw(self%kfromto(1):self%kfromto(2))
+        real(dp),            intent(out)   :: lw(self%kfromto(1):self%interpklim)
+        real(dp),            intent(out)   :: rw(self%kfromto(1):self%interpklim)
     end subroutine gen_clin_weights
 
     module subroutine shift_ptcl( self, iptcl, shvec)
@@ -710,42 +709,42 @@ interface
         class(polarft_calc), intent(in)    :: self
         type(oris),          intent(in)    :: ref_space
         type(sym),           intent(in)    :: symop
-        complex(kind=dp),    intent(inout) :: pfts_cl_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        complex(kind=dp),    intent(inout) :: pfts_cl_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        real(kind=dp),       intent(inout) :: ctf2_cl_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
-        real(kind=dp),       intent(inout) :: ctf2_cl_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        complex(kind=dp),    intent(inout) :: pfts_cl_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(kind=dp),    intent(inout) :: pfts_cl_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(kind=dp),       intent(inout) :: ctf2_cl_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(kind=dp),       intent(inout) :: ctf2_cl_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
     end subroutine calc_comlin_contrib
 
     module pure subroutine mirror_ctf2( self, ctf2in, ctf2out )
         class(polarft_calc), intent(in)    :: self
-        real(dp),            intent(in)    :: ctf2in(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp),            intent(inout) :: ctf2out(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp),            intent(in)    :: ctf2in(self%pftsz,self%kfromto(1):self%interpklim)
+        real(dp),            intent(inout) :: ctf2out(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine mirror_ctf2
 
     module pure subroutine mirror_pft( self, pftin, pftout )
         class(polarft_calc), intent(in)    :: self
-        complex(dp),         intent(in)    :: pftin(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp),         intent(inout) :: pftout(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),         intent(in)    :: pftin(self%pftsz,self%kfromto(1):self%interpklim)
+        complex(dp),         intent(inout) :: pftout(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine mirror_pft
 
     module pure subroutine safe_norm( self, Mnum, Mdenom, Mout )
         class(polarft_calc), intent(in)    :: self
-        complex(dp),         intent(in)    :: Mnum(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp),            intent(inout) :: Mdenom(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp),         intent(inout) :: Mout(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),         intent(in)    :: Mnum(self%pftsz,self%kfromto(1):self%interpklim)
+        real(dp),            intent(inout) :: Mdenom(self%pftsz,self%kfromto(1):self%interpklim)
+        complex(dp),         intent(inout) :: Mout(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine safe_norm
     
     module pure subroutine get_line( self, ref, rot, even, pftline, ctf2line )
         class(polarft_calc), intent(in)  :: self
         integer,             intent(in)  :: ref, rot
         logical,             intent(in)  :: even
-        complex(dp),         intent(out) :: pftline(self%kfromto(1):self%kfromto(2))
-        real(dp),            intent(out) :: ctf2line(self%kfromto(1):self%kfromto(2))
+        complex(dp),         intent(out) :: pftline(self%kfromto(1):self%interpklim)
+        real(dp),            intent(out) :: ctf2line(self%kfromto(1):self%interpklim)
     end subroutine get_line
 
     module subroutine polar_cavger_calc_frc( self, pft1, pft2, n, frc )
         class(polarft_calc), intent(in)    :: self
-        complex(dp),         intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%kfromto(2)), pft2(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),         intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%interpklim), pft2(self%pftsz,self%kfromto(1):self%interpklim)
         integer,             intent(in)    :: n
         real(sp),            intent(inout) :: frc(1:n)
     end subroutine polar_cavger_calc_frc
@@ -803,24 +802,24 @@ interface
     module subroutine write_pft_array_local( self, funit, array )
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: funit
-        complex(dp),         intent(in) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        complex(dp),         intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
     end subroutine write_pft_array_local
 
     module subroutine write_pft_array( self, array, fname )
         class(polarft_calc), intent(in) :: self
-        complex(dp),         intent(in) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        complex(dp),         intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         class(string),       intent(in) :: fname
     end subroutine write_pft_array
 
     module subroutine write_ctf2_array_local( self, funit, array )
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: funit
-        real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
     end subroutine write_ctf2_array_local
 
     module subroutine write_ctf2_array( self, array, fname )
         class(polarft_calc), intent(in) :: self
-        real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        real(dp),            intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         class(string),       intent(in) :: fname
     end subroutine write_ctf2_array
 
@@ -840,7 +839,7 @@ interface
 
     module subroutine transfer_pft_array_buffer( self, array, funit, dims, buffer )
         class(polarft_calc), intent(in)    :: self
-        complex(dp),         intent(inout) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        complex(dp),         intent(inout) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,             intent(in)    :: funit, dims(4)
         complex(sp),         intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
     end subroutine transfer_pft_array_buffer
@@ -861,7 +860,7 @@ interface
 
     module subroutine transfer_ctf2_array_buffer( self, array, funit, dims, buffer )
         class(polarft_calc), intent(in) :: self
-        real(dp), intent(inout) :: array(self%pftsz,self%kfromto(1):self%kfromto(2),self%ncls)
+        real(dp), intent(inout) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,  intent(in)    :: funit, dims(4)
         real(sp), intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
     end subroutine transfer_ctf2_array_buffer
@@ -887,51 +886,108 @@ contains
         read(unit=funit,pos=1) dims
         call fclose(funit)
         pftsz_here   = dims(1)
+        ! On-disk contract: dims(2:3) store [kfromto(1), interpklim] at write time.
         kfromto_here = dims(2:3)
         ncls_here    = dims(4)
     end subroutine polarft_dims_from_file_header
 
     ! To estimate resolution limit
-    subroutine polarft_estimate_lplim3D( box, smpd, lprange, lpopt )
+    subroutine polarft_estimate_lplim3D( box, smpd, lpstart, lpstop, lpopt )
         use simple_butterworth, only: butterworth_filter
         integer,      intent(in)  :: box
-        real,         intent(in)  :: smpd, lprange(2)
+        real,         intent(in)  :: smpd, lpstart, lpstop
         real,         intent(out) :: lpopt
         type(polarft_calc)        :: pftc ! local  & not instanciated
         type(string)              :: str_even, str_odd
         complex(dp),  allocatable :: even(:,:,:), odd(:,:,:), diff(:,:)
         real(sp),     allocatable :: bwfilter(:)
         real(dp) :: cost, best_cost
-        integer  :: kfromto(2), best_k, iref, k, kk, iproj
+        integer  :: kreq(2), ksearch(2), kavail_on_disk(2), best_k, k, kk, pftsz_on_disk, ncls_on_disk, kfallback
+        logical, parameter :: DEBUG = .true.
+        601 format(A,1X,F12.3)
+        602 format(A,1X,I8)
+        603 format(A,1X,2I8)
+        604 format(A,1X,ES16.8)
+        if( lpstart < lpstop )then
+            THROW_HARD('Invalid low-pass range ordering in polarft_estimate_lplim3D: lpstart must be >= lpstop')
+        endif
         ! read current references
         str_even = POLAR_REFS_FBODY//'_even'//BIN_EXT
         str_odd  = POLAR_REFS_FBODY//'_odd'//BIN_EXT
         if( .not.file_exists(str_even) .or. .not.file_exists(str_odd) )then
+            if( DEBUG )then
+                write(logfhandle,'(A)') '>>> DEBUG: polarft_estimate_lplim3D'
+                write(logfhandle,'(A)') '    Missing even/odd PFT files, returning lpstart limit'
+            endif
             ! no update to existing limit
-            lpopt = calc_lowpass_lim(calc_fourier_index(lprange(1), box, smpd), box, smpd)
+            lpopt = calc_lowpass_lim(calc_fourier_index(lpstart, box, smpd), box, smpd)
             return
         endif
-        ! Read PFT array dimensions first
-        call polarft_dims_from_file_header(str_even, pftc%pftsz, pftc%kfromto, pftc%ncls)
-        pftc%interpklim = pftc%kfromto(2)
-        ! Determine search range
-        kfromto(1) = calc_fourier_index(lprange(1), box, smpd)
-        kfromto(2) = calc_fourier_index(lprange(2), box, smpd)
-        kfromto(2) = min(kfromto(2), pftc%kfromto(2))
-        if( kfromto(1) == kfromto(2) )then
-            ! nothing to search, return limit from current kfromto(1)
-            lpopt = calc_lowpass_lim(kfromto(1), box, smpd)
+        ! Read on-disk PFT dimensions first.
+        ! Note: kavail_on_disk(2) is the stored interpklim (not the requested search kend)
+        call polarft_dims_from_file_header(str_even, pftsz_on_disk, kavail_on_disk, ncls_on_disk)
+        pftc%pftsz      = pftsz_on_disk
+        pftc%kfromto    = kavail_on_disk
+        pftc%interpklim = kavail_on_disk(2)
+        pftc%ncls       = ncls_on_disk
+        ! Determine requested search range from lpstart/lpstop
+        kreq(1) = calc_fourier_index(lpstart, box, smpd)
+        kreq(2) = calc_fourier_index(lpstop, box, smpd)
+        if( kreq(1) > kreq(2) )then
+            THROW_HARD('Invalid requested k-range in polarft_estimate_lplim3D: kstart must be <= kstop')
+        endif
+        if( DEBUG )then
+            write(logfhandle,'(A)') '>>> DEBUG: polarft_estimate_lplim3D'
+            write(logfhandle,602) '    box                 =', box
+            write(logfhandle,601) '    smpd                =', smpd
+            write(logfhandle,601) '    lpstart [A]         =', lpstart
+            write(logfhandle,601) '    lpstop  [A]         =', lpstop
+            write(logfhandle,603) '    requested ksearch   =', kreq(1), kreq(2)
+            write(logfhandle,603) '    k available on disk =', kavail_on_disk(1), kavail_on_disk(2)
+            write(logfhandle,602) '    pftc%pftsz          =', pftc%pftsz
+            write(logfhandle,602) '    pftc%ncls           =', pftc%ncls
+        endif
+        if( kreq(2) < kavail_on_disk(1) .or. kreq(1) > kavail_on_disk(2) )then
+            ! No overlap between requested search interval and on-disk available k-range.
+            if( kreq(1) > kavail_on_disk(2) )then
+                kfallback = kavail_on_disk(2)
+            else
+                kfallback = kavail_on_disk(1)
+            endif
+            if( DEBUG )then
+                write(logfhandle,'(A)') '    No overlap between requested range and disk range, using nearest available shell'
+                write(logfhandle,602) '    fallback k          =', kfallback
+            endif
+            lpopt = calc_lowpass_lim(kfallback, box, smpd)
+            return
+        endif
+        ! Clamp requested interval to what is available on disk
+        ksearch(1) = max(kreq(1), kavail_on_disk(1))
+        ksearch(2) = min(kreq(2), kavail_on_disk(2))
+        if( DEBUG )then
+            if( (kreq(1) /= ksearch(1)) .or. (kreq(2) /= ksearch(2)) )then
+                write(logfhandle,603) '    capped ksearch      =', ksearch(1), ksearch(2)
+            endif
+            write(logfhandle,603) '    optimization ksearch=', ksearch(1), ksearch(2)
+        endif
+        if( ksearch(1) == ksearch(2) )then
+            if( DEBUG ) write(logfhandle,'(A)') '    Degenerate search range, returning current cutoff'
+            ! nothing to search, return limit from current ksearch(1)
+            lpopt = calc_lowpass_lim(ksearch(1), box, smpd)
             return
         endif
         ! allocations
-        allocate(bwfilter(1:pftc%kfromto(2)),diff(pftc%pftsz,pftc%kfromto(1):pftc%kfromto(2)))
+        allocate(bwfilter(1:pftc%kfromto(2)), diff(pftc%pftsz,pftc%ncls))
         ! Read PFT arrays
         call pftc%read_pft_array(str_even, even)
         call pftc%read_pft_array(str_odd,  odd)
         ! Optimization: find best resolution cutoff
-        best_k    = kfromto(1)
+        best_k    = ksearch(1)
         best_cost = huge(best_cost)
-        do k = kfromto(1), kfromto(2)               ! search range
+        if( DEBUG )then
+            write(logfhandle,'(A)') '    --- optimization trace (k, cost, is_new_best) ---'
+        endif
+        do k = ksearch(1), ksearch(2)               ! search range
             ! Objective function
             cost = 0.d0
             call butterworth_filter(k, bwfilter)
@@ -941,15 +997,21 @@ contains
                 ! Sum(|diff|2)
                 cost = cost + sum(real(diff*conjg(diff),dp)) !* (real(kk**3 - (kk-1)**3,dp)
             enddo
+            if( DEBUG ) write(logfhandle,'(A,I8,A,ES16.8,A,L1)') '    k=', k, ' cost=', cost, ' new_best=', cost <= best_cost
             ! Book-keeping
             if( cost <= best_cost )then
                 best_cost = cost
                 best_k    = k
             endif
         enddo
-        deallocate(even,odd,diff)
+        deallocate(even, odd, diff, bwfilter)
         ! Solution
         lpopt = calc_lowpass_lim(best_k, box, smpd)
+        if( DEBUG )then
+            write(logfhandle,602) '    best_k=', best_k
+            write(logfhandle,604) '    best_cost=', best_cost
+            write(logfhandle,601) '    lpopt [A]=', lpopt
+        endif
     end subroutine polarft_estimate_lplim3D
 
 end module simple_polarft_calc
