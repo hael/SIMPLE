@@ -67,7 +67,7 @@ contains
         if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',                     90.) ! reduces # failed runs on trpv1 from 4->2/10
         if( .not. cline%defined('cenlp')            ) call cline%set('cenlp',                 CENLP_DEFAULT)
         if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',                      'cavg')
-        if( .not. cline%defined('lp_auto')          ) call cline%set('lp_auto',                       'yes')
+        if( .not. cline%defined('lp_auto')          ) call cline%set('lp_auto',                        'no')
         if( .not. cline%defined('noise_norm')       ) call cline%set('noise_norm',                     'no')
         if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',                          'no')
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',               LPSTART_INI3D)
@@ -82,19 +82,12 @@ contains
         ! set work projfile
         work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
         ! set class global lp_auto flag for low-pass limit estimation
-        l_lpauto = .true.
-        if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
+        params%l_lpauto = .false.; l_lpauto=.false. ! global parameter for low-pass limit estimation
         ! Polar representation
         if( params%l_polar )then
             if( trim(params%multivol_mode).ne.'single' )then
                 THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
             endif
-            ! comment to activate lpauto
-            if( trim(params%lp_auto).eq.'yes' )then
-                THROW_WARN('POLAR=YES not compatible LP_AUTO=YES; reverting to LP_AUTO=NO')
-            endif
-            params%lp_auto = 'no'; params%l_lpauto = .false.; l_lpauto=.false.
-            call cline%set('lp_auto', 'no')
             ! end comment to activate lpauto
             l_polar = .true. ! global parameter
         else
@@ -506,7 +499,7 @@ contains
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
         if( .not. cline%defined('ptclw')               ) call cline%set('ptclw',                          'no')
-        if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                       'yes')
+        if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                        'no')
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                   'comlin')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
@@ -546,13 +539,6 @@ contains
             if( trim(params%multivol_mode).ne.'single' )then
                 THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
             endif
-            ! comment to activate lpauto
-            if( trim(params%lp_auto).eq.'yes' )then
-                THROW_WARN('POLAR=YES not compatible LP_AUTO=YES; reverting to LP_AUTO=NO')
-            endif
-            params%lp_auto = 'no'; params%l_lpauto = .false.; l_lpauto=.false.
-            call cline%set('lp_auto', 'no')
-            ! end comment to activate lpauto
             l_polar = .true. ! global parameter
         else
             call cline%delete('ref_type')
@@ -597,7 +583,7 @@ contains
             l_ini3D     = .true.
         endif
         ! set class global lp_auto flag for low-pass limit estimation
-        l_lpauto = .true.
+        l_lpauto = .false.
         if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
         ! set class global automasking flag
         l_automsk = .false.

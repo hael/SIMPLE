@@ -101,6 +101,7 @@ contains
         kfromto(1) = calc_fourier_index(lprange(1), box, smpd)
         kfromto(2) = calc_fourier_index(lprange(2), box, smpd)
         if( kfromto(1) == kfromto(2) )then
+            ! nothing to search, return limit from current kfromto(1)
             lpopt = calc_lowpass_lim(kfromto(1), box, smpd)
             return
         endif

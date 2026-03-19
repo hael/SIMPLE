@@ -553,40 +553,39 @@ contains
         endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine estimate_lp_refvols( params, build, cline, lpfromto )
-        use simple_polarft_calc, only: polarft_estimate_lplim3D
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        class(cmdline),    intent(in)    :: cline
-        real, optional,    intent(in)    :: lpfromto(2)
-        type(string)       :: vol_even, vol_odd, tmp
+    subroutine report_resolution( params, build, state )
+        class(parameters), intent(in)  :: params
+        class(builder),    intent(in)  :: build
+        integer,           intent(out) :: state
+        real :: res_fsc05, res_fsc0143
         real, allocatable  :: res(:)
-        logical, parameter :: DEBUG=.false.
-        type(image) :: mskvol
-        integer     :: npix, s, loc
-        real        :: lpest(params%nstates), lpopt, res_fsc05, res_fsc0143, lprange(2)
-        601 format(A,1X,F12.3)
-        602 format(A,1X,F12.3,1X,F12.3)
-        ! find best resolved state
+        integer :: s
+        real    :: lpest(params%nstates)
         res = get_resarr(params%box_crop, params%smpd_crop)
         do s = 1, params%nstates
             call get_resolution_at_fsc(build%fsc(s,:), res, 0.5, lpest(s))
         end do
-        loc = minloc(lpest,dim=1)
-        ! set range for low-pass limit estimation
-        if( present(lpfromto) )then
-            lprange = lpfromto
-        else
-            call get_resolution_at_fsc(build%fsc(loc,:), res, 0.6, lprange(1))
-            call get_resolution_at_fsc(build%fsc(loc,:), res, 0.1, lprange(2))
-        endif
+        state = minloc(lpest,dim=1)
+        call get_resolution_at_fsc(build%fsc(state,:), res, 0.50,  res_fsc05)
+        call get_resolution_at_fsc(build%fsc(state,:), res, 0.143, res_fsc0143)
+        call build%spproj_field%set_all2single('res', res_fsc0143)
+    end subroutine report_resolution
+
+    subroutine estimate_lp_refvols( params, build, cline, lpfromto, state )
+        use simple_polarft_calc, only: polarft_estimate_lplim3D
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(in)    :: cline
+        real,              intent(in)    :: lpfromto(2)
+        integer,           intent(in)    :: state
+        type(string)       :: vol_even, vol_odd
+        logical, parameter :: DEBUG=.true.
+        type(image) :: mskvol
+        integer     :: npix
+        real        :: lpopt
         if( (trim(params%polar).eq.'yes').and.(.not.cline%defined('vol1')) )then
             ! POLAR REPRESENTATION
-            ! Estimate alignment resolution limit
-            if( cline%defined('lpstart').and.cline%defined('lpstop') )then
-                lprange = [params%lpstart, params%lpstop]
-            endif
-            call polarft_estimate_lplim3D(params%box, params%smpd, params%kfromto, lprange, lpopt)
+            call polarft_estimate_lplim3D(params%box_crop, params%smpd_crop, lpfromto, lpopt)
         else
             ! CARTSESIAN REPRESENTATION
             if( params%l_filemsk )then
@@ -599,30 +598,13 @@ contains
                     &params%msk_crop, npix )
             endif
             ! read volumes
-            vol_even = params%vols_even(loc)
-            vol_odd  = params%vols_odd(loc)
-            if( params%l_ml_reg )then
-                ! estimate low-pass limit from unfiltered volumes
-                tmp = add2fbody(vol_even, MRC_EXT,'_unfil')
-                if( file_exists(tmp) ) vol_even = tmp
-                tmp = add2fbody(vol_odd, MRC_EXT,'_unfil')
-                if( file_exists(tmp) ) vol_even = tmp
-            endif
+            vol_even = params%vols_even(state)
+            vol_odd  = params%vols_odd(state)
             call build%vol%read_and_crop(    vol_even, params%smpd, params%box_crop, params%smpd_crop)
             call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
             ! estimate low-pass limit
-            call estimate_lplim3D(build%vol_odd, build%vol, mskvol, lprange, lpopt)
-        endif
-        ! generate output
-        call get_resolution_at_fsc(build%fsc(loc,:), res, 0.50,  res_fsc05)
-        call get_resolution_at_fsc(build%fsc(loc,:), res, 0.143, res_fsc0143)
-        call build%spproj_field%set_all2single('res', res_fsc0143)
-        if( params%part == 1 .and. DEBUG )then
-        write(logfhandle,601) '>>> RESOLUTION @ FSC=0.5:                     ', res_fsc05
-        write(logfhandle,601) '>>> RESOLUTION @ FSC=0.143:                   ', res_fsc0143
-        write(logfhandle,602) '>>> LOW-PASS LIMIT RANGE FOR OPTIMIZATION:    ', lprange(1), lprange(2)
-        write(logfhandle,601) '>>> OPTIMAL LOW-PASS LIMIT:                   ', lpopt
-        endif
+            call estimate_lplim3D(build%vol_odd, build%vol, mskvol, lpfromto, lpopt)
+        endif        
         ! update low-pass limit in project
         call build%spproj_field%set_all2single('lp_est', lpopt)
         if( params%l_lpauto )then
@@ -1004,22 +986,21 @@ contains
         logical,     optional,    intent(in)    :: do_polar
         real, allocatable :: gaufilter(:)
         type(string)      :: fname
-        integer           :: ithr, iproj, nrefs, filtsz, interplim
+        integer           :: ithr, iproj, nrefs, filtsz, interplim, state
         logical           :: l_polar, l_filtrefs
         l_polar = .false.
         if( present(do_polar) ) l_polar = do_polar
         ! PREPARATION OF pftc AND REFERENCES
         if( l_polar )then
             ! Resolution limit estimation
+            call report_resolution(params, build, state)
             if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                call estimate_lp_refvols(params, build, cline, [params%lpstart,params%lpstop])
-            else
-                call estimate_lp_refvols(params, build, cline)
+                call estimate_lp_refvols(params, build, cline, [params%lpstart,params%lpstop], state)
             endif
             ! Calculator init
             nrefs     = params%nspace * params%nstates
-            interplim = params%kfromto(2)
-            ! interplim = min(params%kfromto(2)+5, fdim(params%box_crop)-1)
+            ! interplim = params%kfromto(2)
+            interplim = min(params%kfromto(2)+5, fdim(params%box_crop)-1)
             call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto, iklim=interplim)
             ! Read polar references
             call build%pftc%polar_cavger_new(.true.)
@@ -1091,12 +1072,11 @@ contains
         integer,             intent(in)    :: batchsz
         type(ori) :: o_tmp
         real      :: xyz(3)
-        integer   :: s, iproj, iref, nrefs
+        integer   :: s, iproj, iref, nrefs, state
         logical   :: do_center, l_prob_align_mode
+        call report_resolution(params, build, state)
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-            call estimate_lp_refvols(params, build, cline, [params%lpstart,params%lpstop])
-        else
-            call estimate_lp_refvols(params, build, cline)
+            call estimate_lp_refvols(params, build, cline, [params%lpstart,params%lpstop], state)
         endif
         ! pftc
         nrefs = params%nspace * params%nstates

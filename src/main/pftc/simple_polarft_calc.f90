@@ -892,66 +892,67 @@ contains
     end subroutine polarft_dims_from_file_header
 
     ! To estimate resolution limit
-    subroutine polarft_estimate_lplim3D( box, smpd, kfromto, lprange, lpopt )
-        integer,      intent(in)  :: box, kfromto(2)
+    subroutine polarft_estimate_lplim3D( box, smpd, lprange, lpopt )
+        integer,      intent(in)  :: box
         real,         intent(in)  :: smpd, lprange(2)
         real,         intent(out) :: lpopt
         type(polarft_calc)        :: pftc ! local  & not instanciated
         type(string)              :: str_even, str_odd
         complex(dp),  allocatable :: even(:,:,:), odd(:,:,:), vec(:)
         real(dp),     allocatable :: mag_e(:), mag_diff(:)
-        real(dp) :: score, best_score, wk
-        integer  :: iref, k, best_k, kstart, kend
+        real(dp) :: cost, best_cost, wk
+        integer  :: kfromto(2), best_k, iref, k
         ! read current references
         str_even = POLAR_REFS_FBODY//'_even'//BIN_EXT
         str_odd  = POLAR_REFS_FBODY//'_odd'//BIN_EXT
         if( .not.file_exists(str_even) .or. .not.file_exists(str_odd) )then
             ! no update to existing limit
-            lpopt = calc_lowpass_lim(kfromto(2), box, smpd)
+            lpopt = calc_lowpass_lim(calc_fourier_index(lprange(1), box, smpd), box, smpd)
             return
         endif
+        ! Read PFT array dimensions first
         call polarft_dims_from_file_header(str_even, pftc%pftsz, pftc%kfromto, pftc%ncls)
         pftc%interpklim = pftc%kfromto(2)
-        call pftc%read_pft_array(str_even, even)
-        call pftc%read_pft_array(str_odd,  odd)
-        ! search range
-        kstart = max(pftc%kfromto(1), max(kfromto(1), calc_fourier_index(lprange(1), box, smpd)))
-        kend   = min(pftc%interpklim, min(kfromto(2), calc_fourier_index(lprange(2), box, smpd)))
-        if( kstart >= kend )then
-            lpopt = calc_lowpass_lim(kstart, box, smpd)
+        ! Determine search range
+        kfromto(1) = calc_fourier_index(lprange(1), box, smpd)
+        kfromto(2) = calc_fourier_index(lprange(2), box, smpd)
+        kfromto(2) = min(kfromto(2), pftc%kfromto(2))
+        if( kfromto(1) == kfromto(2) )then
+            ! nothing to search, return limit from current kfromto(1)
+            lpopt = calc_lowpass_lim(kfromto(1), box, smpd)
             return
         endif
-        ! precalculation of even variance & even-odd variance
-        allocate(vec(pftc%kfromto(1):pftc%interpklim), mag_e(pftc%kfromto(1):pftc%interpklim),&
-            &mag_diff(pftc%kfromto(1):pftc%interpklim))
+        ! Read PFT arrays
+        call pftc%read_pft_array(str_even, even)
+        call pftc%read_pft_array(str_odd,  odd)
+        ! Pre-calculate shell magnitudes and weights
+        allocate(vec(kfromto(1):kfromto(2)), mag_e(kfromto(1):kfromto(2)),mag_diff(kfromto(1):kfromto(2)))
         mag_e = 0.d0; mag_diff = 0.d0
         !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,iref,vec,wk)
-        do k = pftc%kfromto(1),pftc%interpklim
+        do k = kfromto(1), kfromto(2)
             ! Shell magnitudes
-            do iref = 1,pftc%ncls
-                vec      = even(:,k,iref)
-                mag_e(k) = mag_e(k) + real(sum(vec*conjg(vec)),dp)
+            do iref = 1, pftc%ncls
+                vec         = even(:,k,iref)
+                mag_e(k)    = mag_e(k) + real(sum(vec*conjg(vec)),dp)
                 vec         = vec - odd(:,k,iref)
                 mag_diff(k) = mag_diff(k) + real(sum(vec*conjg(vec)),dp)
             enddo
             ! Shell weights to reproduce volumetric cartesian representation values
-            wk          = real(box,dp)**3 * (4.d0/3.d0)*DPI * (real(k,dp)**3 -real(k-1,dp)**3)
-            wk          = wk  / real(2*pftc%ncls*pftc%pftsz,dp)
+            wk          = real(box,dp)**3 * (4.d0/3.d0)*DPI * (real(k,dp)**3 - real(k-1,dp)**3)
+            wk          = wk / real(2*pftc%ncls*pftc%pftsz,dp)
             mag_e(k)    = wk * mag_e(k)
             mag_diff(k) = wk * mag_diff(k)
         enddo
         !$omp end parallel do
-        ! Optimization
-        best_k     = pftc%kfromto(1)
-        best_score = huge(best_score)
-        do k = kstart,kend
-            score = sum(mag_diff(pftc%kfromto(1):k))
-            if( k < kend )then
-                score = score + sum(mag_e(k+1:pftc%interpklim))
-            endif
-            if( score < best_score )then
-                best_score = score
-                best_k     = k
+        ! Optimization: find best resolution cutoff
+        best_k    = kfromto(1)
+        best_cost = huge(best_cost)
+        do k = kfromto(1), kfromto(2)
+            cost = sum(mag_diff(kfromto(1):k))
+            if( k < kfromto(2) ) cost = cost + sum(mag_e(k+1:kfromto(2)))
+            if( cost <= best_cost )then
+                best_cost = cost
+                best_k    = k
             endif
         enddo
         deallocate(even,odd,vec,mag_e,mag_diff)
