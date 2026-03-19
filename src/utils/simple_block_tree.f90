@@ -63,9 +63,10 @@ contains
         if( DEBUG) print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree
 
-    function gen_eulspace_block_tree_map( eulspace, subspace_full2sub_map, pgrpsym ) result(block_tree)
+    function gen_eulspace_block_tree_map( neulspace, eulspace, subspace_full2sub_map, pgrpsym ) result(block_tree)
+        integer,     intent(in)    :: neulspace
         class(oris), intent(in)    :: eulspace
-        integer,     intent(in)    :: subspace_full2sub_map(eulspace%get_noris())
+        integer,     intent(in)    :: subspace_full2sub_map(neulspace)
         class(sym),  intent(inout) :: pgrpsym
         type(ori)                  :: oi, oj, osym
         type(multi_dendro)         :: block_tree

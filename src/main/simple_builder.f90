@@ -290,7 +290,8 @@ contains
                 call osym%kill
                 if( str_has_substr(params%refine, 'tree') )then
                     self%block_tree = &
-                    &gen_eulspace_block_tree_map(self%eulspace, self%subspace_full2sub_map, self%pgrpsyms)   
+                    &gen_eulspace_block_tree_map(self%eulspace%get_noris(), self%eulspace,&
+                    &self%subspace_full2sub_map, self%pgrpsyms)
                 endif
             endif
         endif
