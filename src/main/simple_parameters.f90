@@ -249,7 +249,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs|lsf)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree){shc}
+    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree|shc_ptree){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: ref_type='comlin'    !< polar reference type(polar_cavg|comlin){comlin}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}

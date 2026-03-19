@@ -17,6 +17,7 @@ use simple_strategy3D_greedy_sub,  only: strategy3D_greedy_sub
 use simple_strategy3D_prob,        only: strategy3D_prob
 use simple_strategy3D_ptree,       only: strategy3D_ptree
 use simple_strategy3D_shc,         only: strategy3D_shc
+use simple_strategy3D_shc_ptree,   only: strategy3D_shc_ptree
 use simple_strategy3D_shc_smpl,    only: strategy3D_shc_smpl
 use simple_strategy3D_snhc_smpl,   only: strategy3D_snhc_smpl
 use simple_strategy3D_srch,        only: strategy3D_spec
@@ -235,6 +236,8 @@ contains
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('ptree')
                         allocate(strategy3D_ptree                :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('shc_ptree')
+                        allocate(strategy3D_shc_ptree            :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)
                         call b_ptr%spproj_field%get_ori(iptcl, orientation)

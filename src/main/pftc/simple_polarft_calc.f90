@@ -903,7 +903,7 @@ contains
         real(sp),     allocatable :: bwfilter(:)
         real(dp) :: cost, best_cost
         integer  :: kreq(2), ksearch(2), kavail_on_disk(2), best_k, k, kk, pftsz_on_disk, ncls_on_disk, kfallback
-        logical, parameter :: DEBUG = .true.
+        logical, parameter :: DEBUG = .false.
         601 format(A,1X,F12.3)
         602 format(A,1X,I8)
         603 format(A,1X,2I8)
@@ -995,7 +995,7 @@ contains
                 ! diff = even - bw(odd)
                 diff = even(:,kk,:) - real(bwfilter(kk),dp)*odd(:,kk,:)
                 ! Sum(|diff|2)
-                cost = cost + sum(real(diff*conjg(diff),dp)) !* (real(kk**3 - (kk-1)**3,dp)
+                cost = cost + sum(real(diff*conjg(diff),dp)) * real(kk**3 - (kk-1)**3,dp)
             enddo
             if( DEBUG ) write(logfhandle,'(A,I8,A,ES16.8,A,L1)') '    k=', k, ' cost=', cost, ' new_best=', cost <= best_cost
             ! Book-keeping
