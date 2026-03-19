@@ -34,8 +34,7 @@ integer,          parameter :: ICM_STAGE             = PROBREFINE_STAGE     ! we
 integer,          parameter :: STOCH_SAMPL_STAGE     = PROBREFINE_STAGE     ! we switch from greedy to stochastic blanced class sampling when prob is switched on
 integer,          parameter :: TRAILREC_STAGE_SINGLE = STOCH_SAMPL_STAGE    ! we start trailing when we start sampling particles randomly
 integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES              ! we start trailing in the last stage
-! integer,          parameter :: LPAUTO_STAGE          = NSTAGES - 1          ! cannot be switched on too early
-integer,          parameter :: LPAUTO_STAGE          = 4                    ! development, to allow testing of lpauto in earlier stages
+integer,          parameter :: LPAUTO_STAGE          = SYMSRCH_STAGE + 1    ! we switch on automatic low-pass limit estimation after symmetry search, but only if lp_auto is switched on by user
 integer,          parameter :: AUTOMSK_STAGE         = LPAUTO_STAGE         ! swith on automasking when lpauto is switched on
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
