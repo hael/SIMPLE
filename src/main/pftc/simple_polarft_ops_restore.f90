@@ -255,7 +255,7 @@ contains
                     odd  = ufrac_trec * odd  + (1.d0-ufrac_trec) * prev_odd(:,:,icls)
                 endif
                 ! FSC contribution
-                do k = self%kfromto(1),self%kfromto(2)
+                do k = self%kfromto(1),self%interpklim
                     fsc(k)   = fsc(k)  + sum(real(even(:,k) * conjg(odd(:,k)), dp))
                     vare(k)  = vare(k) + sum(real(even(:,k) * conjg(even(:,k)),dp))
                     varo(k)  = varo(k) + sum(real(odd(:,k)  * conjg(odd(:,k)), dp))
