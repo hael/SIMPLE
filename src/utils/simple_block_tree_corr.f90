@@ -10,7 +10,7 @@ public :: gen_corr_block_tree_aff_prop
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG = .true.
+logical, parameter :: DEBUG = .false.
 
 contains
 
@@ -36,10 +36,10 @@ contains
             refs  = block_tree%get_tree_refs(itree)
             nrefs = size(refs)
             if( nrefs == 0 ) then
-                write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
+                if(DEBUG) write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
                 cycle
             end if
-            write(*,'(a,1x,i0,a,1x,i0)') 'TREE ', itree, ': NUMBER OF REFS :', nrefs
+            if(DEBUG) write(*,'(a,1x,i0,a,1x,i0)') 'TREE ', itree, ': NUMBER OF REFS :', nrefs
             allocate(sub_distmat(nrefs, nrefs), source=0.0)  
             allocate(sub_imgs(nrefs))
             ! getting images corresponding to each tree
@@ -52,7 +52,7 @@ contains
         end do
         call neigh_map%kill
         if (allocated(labels)) deallocate(labels)
-        if( DEBUG) print *, 'Finished building block tree.'
+        if(DEBUG) print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree_corr
 
     function gen_corr_block_tree_aff_prop(refimgs, params) result(block_tree)
@@ -82,7 +82,7 @@ contains
             refs  = block_tree%get_tree_refs(itree)
             nrefs = size(refs)
             if( nrefs == 0 ) then
-                write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
+                if(DEBUG) write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
                 cycle
             end if
             allocate(sub_distmat(nrefs,nrefs), source = 0.)

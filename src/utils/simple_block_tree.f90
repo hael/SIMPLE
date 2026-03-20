@@ -1,7 +1,6 @@
 module simple_block_tree
 use simple_core_module_api
 use simple_multi_dendro, only: multi_dendro
-use simple_image,        only: image
 use simple_parameters,   only: parameters
 implicit none
 
@@ -13,7 +12,7 @@ public :: srch_eul_bl_tree_prob
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG = .true.
+logical, parameter :: DEBUG = .false.
 
 contains
 
@@ -38,10 +37,10 @@ contains
             refs  = block_tree%get_tree_refs(itree)
             nrefs = size(refs)
             if( nrefs == 0 ) then
-                write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
+                if(DEBUG) write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
                 cycle
             end if
-            write(*,'(a,1x,i0,a,1x,i0)') 'TREE ', itree, ': NUMBER OF REFS :', nrefs
+            if(DEBUG) write(*,'(a,1x,i0,a,1x,i0)') 'TREE ', itree, ': NUMBER OF REFS :', nrefs
             allocate(sub_distmat(nrefs, nrefs), source=0.0)  
             do i = 1, nrefs - 1
                 call eulspace%get_ori(refs(i), oi)        
@@ -60,7 +59,7 @@ contains
         !$omp end parallel do
         call neigh_map%kill
         if (allocated(labels)) deallocate(labels)
-        if( DEBUG) print *, 'Finished building block tree.'
+        print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree
 
     function gen_eulspace_block_tree_map( neulspace, eulspace, subspace_full2sub_map, pgrpsym ) result(block_tree)
@@ -82,10 +81,10 @@ contains
             refs  = block_tree%get_tree_refs(itree)
             nrefs = size(refs)
             if( nrefs == 0 ) then
-                write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
+                if(DEBUG) write(*,'(a,1x,i0)') 'TREE ', itree, ': EMPTY, SKIPPING...'
                 cycle
             end if
-            write(*,'(a,1x,i0,a,1x,i0)') 'TREE ', itree, ': NUMBER OF REFS :', nrefs
+            if(DEBUG) write(*,'(a,1x,i0,a,1x,i0)') 'TREE ', itree, ': NUMBER OF REFS :', nrefs
             allocate(sub_distmat(nrefs, nrefs), source=0.0)
             do i = 1, nrefs - 1
                 call eulspace%get_ori(refs(i), oi)
@@ -102,7 +101,7 @@ contains
             deallocate(refs)
         end do
         !$omp end parallel do
-        if( DEBUG) print *, 'Finished building block tree.'
+        print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree_map
 
     ! Exhaustive search over *leaf nodes only* reachable from the root.
