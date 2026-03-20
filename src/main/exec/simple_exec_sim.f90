@@ -24,6 +24,10 @@ contains
         l_silent      = .false.
         l_did_execute = .true.
         select case(trim(which))
+            ! case( 'cif2pdb' )
+            !     call xcif2pdb%execute(cline)
+            ! case( 'cif2mrc' )
+            !     call xcif2mrc%execute(cline)
             case( 'pdb2mrc' )
                 call xpdb2mrc%execute(cline)
             case( 'simulate_movie' )

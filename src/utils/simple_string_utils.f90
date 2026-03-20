@@ -408,7 +408,7 @@ contains
     end function str2real_2
 
     !> \brief  converts a real number to a string
-    function realsp2str(rval) result(str)
+    function realsp2str( rval ) result( str )
         real, intent(in)  :: rval
         character(len=32) :: str
         type(string)      :: str_cast
@@ -715,11 +715,27 @@ contains
         end do
     end function findloc_str_2
 
+    pure function ends_with( str, ext ) result( does_end )
+        class(string), intent(in) :: str, ext
+        logical :: does_end
+        integer :: len_str, len_ext, i
+        character(len=STDLEN) :: string, suffix
+        string = str%to_char()
+        suffix = ext%to_char()
+        does_end   = .false.
+        len_str    = len_trim(string)
+        len_ext    = len_trim(suffix)
+        if( len_str < len_ext )return  
+        if( string(len_str-len_ext+1:len_str) .eq. suffix )then
+            does_end = .true.
+        endif
+    end function ends_with
+
     !> Stable lexicographic sort:
     !>  - case-insensitive
     !>  - ignores leading/trailing spaces
     !>  - stable (preserves original order for equal keys)
-    subroutine lex_sort_1(strArr, inds)
+    subroutine lex_sort_1( strArr, inds )
         implicit none
         character(len=*),               intent(inout) :: strArr(:)
         integer, optional, allocatable, intent(out)   :: inds(:)
@@ -750,7 +766,7 @@ contains
 
     contains
 
-        recursive subroutine mergesort_idx(l, r)
+        recursive subroutine mergesort_idx( l, r )
             integer, intent(in) :: l, r
             integer :: m
             if (l >= r) return
@@ -760,7 +776,7 @@ contains
             call merge_idx(l, m, r)
         end subroutine mergesort_idx
 
-        subroutine merge_idx(l, m, r)
+        subroutine merge_idx( l, m, r )
             integer, intent(in) :: l, m, r
             integer :: i, j, k
             i = l
@@ -790,7 +806,7 @@ contains
             idx(l:r) = tmp(l:r)
         end subroutine merge_idx
 
-        logical function key_less(i1, i2)
+        logical function key_less( i1, i2 )
             integer, intent(in) :: i1, i2
             character(len=:), allocatable :: a, b
             a = norm_key(strArr(i1))
@@ -798,7 +814,7 @@ contains
             key_less = (a < b)
         end function key_less
 
-        pure function norm_key(s) result(out)
+        pure function norm_key( s ) result( out )
             character(len=*), intent(in)  :: s
             character(len=:), allocatable :: out
             character(len=:), allocatable :: t
@@ -823,7 +839,7 @@ contains
     !>  - case-insensitive (ASCII a-z only)
     !>  - ignores leading/trailing spaces
     !>  - stable
-    subroutine lex_sort_2(strArr, inds)
+    subroutine lex_sort_2( strArr, inds )
         type(string),                  intent(inout) :: strArr(:)
         integer, optional, allocatable, intent(out)  :: inds(:)
         integer, allocatable :: idx(:), tmp(:)
@@ -853,7 +869,7 @@ contains
 
     contains
 
-        recursive subroutine mergesort_idx(l, r)
+        recursive subroutine mergesort_idx( l, r )
             integer, intent(in) :: l, r
             integer :: m
             if (l >= r) return
@@ -863,7 +879,7 @@ contains
             call merge_idx(l, m, r)
         end subroutine mergesort_idx
 
-        subroutine merge_idx(l, m, r)
+        subroutine merge_idx( l, m, r )
             integer, intent(in) :: l, m, r
             integer :: i, j, k
             i = l
@@ -893,7 +909,7 @@ contains
             idx(l:r) = tmp(l:r)
         end subroutine merge_idx
 
-        logical function key_less(i1, i2) result(tf)
+        logical function key_less( i1, i2) result( tf ) 
             integer, intent(in) :: i1, i2
             tf = norm_less( strArr(i1), strArr(i2) )
         end function key_less
@@ -901,7 +917,7 @@ contains
         ! Compare two SIMPLE strings using:
         ! - trim(adjustl())
         ! - case-insensitive ASCII
-        logical function norm_less(a, b) result(tf)
+        logical function norm_less( a, b ) result( tf )
             type(string), intent(in) :: a, b
             character(len=:), allocatable :: sa, sb
             integer :: la, lb, k, ca, cb, ncmp

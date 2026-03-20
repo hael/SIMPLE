@@ -3,6 +3,7 @@ module simple_atoms
 use simple_core_module_api
 use simple_defs_atoms
 use simple_molecule_data
+use simple_string_utils, only : ends_with
 implicit none
 
 public :: atoms, test_atoms
@@ -67,9 +68,11 @@ type :: atoms
   contains
     ! CONSTRUCTORS
     procedure, private :: new_instance
-    procedure, private :: new_from_pdb
     procedure, private :: new_from_molecule
-    generic            :: new => new_instance, new_from_pdb, new_from_molecule
+    procedure, private :: new_from_pdb
+    procedure, private :: new_from_cif
+    procedure, private :: new_from_file
+    generic            :: new => new_instance, new_from_file, new_from_molecule
     generic            :: assignment(=) => copy
     procedure          :: copy
     procedure          :: extract_atom
@@ -103,24 +106,26 @@ type :: atoms
     procedure          :: writepdb
     procedure          :: writepdb_aniso
     ! CALCULATORS
+    procedure          :: atom_validate
     procedure          :: cc_res
+    procedure          :: cif2pdb
+    procedure          :: cif2mrc
+    procedure          :: convolve
+    procedure          :: find_masscen
+    procedure          :: geometry_analysis_pdb
+    procedure          :: get_geom_center
     procedure          :: guess_element
     procedure, private :: guess_an_element
-    procedure, private :: Z_and_radius_from_name
-    procedure          :: get_geom_center
-    procedure          :: convolve
-    procedure          :: geometry_analysis_pdb
-    procedure          :: find_masscen
-    procedure          :: pdb2mrc
-    procedure          :: atom_validate
     procedure          :: map_validate
     procedure          :: model_validate
     procedure          :: model_validate_eo
+    procedure          :: pdb2mrc
+    procedure, private :: Z_and_radius_from_name
     ! MODIFIERS
-    procedure          :: translate
-    procedure          :: center_pdbcoord
     procedure          :: center_inbox
+    procedure          :: center_pdbcoord
     procedure          :: rotate
+    procedure          :: translate
     ! DESTRUCTOR
     procedure          :: kill
 end type atoms
@@ -128,6 +133,18 @@ end type atoms
 contains
 
     ! CONSTRUCTORS
+
+    subroutine new_from_file( self, fname )
+        class(atoms),  intent(inout) :: self
+        class(string), intent(in)    :: fname
+        if( ends_with(fname, string('.pdb')) )then
+            call self%new_from_pdb(fname)
+        elseif( ends_with(fname, string('.cif')) ) then
+            call self%new_from_cif(fname)
+        else
+            THROW_HARD('Unsupported file type; new_from_file')
+        endif
+    end subroutine new_from_file
 
     subroutine new_from_pdb( self, fname )
         class(atoms),  intent(inout) :: self
@@ -180,17 +197,17 @@ contains
             endif
             i = i + 1
             if( self%is_xpdb )then
-                read(line,xpdbfmt, iostat=io_stat) elevenfirst, self%name(i), self%altloc(i),&
+                read(line,xpdbfmt,iostat=io_stat) elevenfirst, self%name(i), self%altloc(i),&
                 &self%resname(i), self%chain(i), self%resnum(i), self%xyz(i,:),&
                 &self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
                 self%icode(i)=' '
             else 
-                read(line,pdbfmt, iostat=io_stat) elevenfirst, self%name(i), self%altloc(i),&
+                read(line,pdbfmt,iostat=io_stat) elevenfirst, self%name(i), self%altloc(i),&
                 &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
                 &self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
                 self%element(i)=adjustl(self%element(i))
             endif
-            self%num(i) = num
+            self%num(i)  = num
             self%name(i) = strip_digits(self%name(i))
             call fileiochk('new_from_pdb; simple_atoms error reading line '//fname%to_char(), io_stat)
             self%het(i) = atom_field == 'HETATM'
@@ -205,7 +222,7 @@ contains
                 character(len=6), intent(in) :: str
                 is_valid_entry = .false.
                 if( str(1:6).eq.'HETATM' ) is_valid_entry = .true.
-                if( str(1:4).eq.'ATOM' )   is_valid_entry = .true.
+                if( str(1:4).eq.'ATOM'   ) is_valid_entry = .true.
             end function is_valid_entry
 
             elemental function strip_digits( name ) result( out )
@@ -213,16 +230,255 @@ contains
                 character(len=2) :: out
                 integer :: i, j
                 out = '  '
-                j = 0
+                j   = 0
                 do i = 1, len_trim(name)
-                    if (name(i:i) >= 'A' .and. name(i:i) <= 'Z') then
+                    if( name(i:i) >= 'A' .and. name(i:i) <= 'Z' )then
                         j = j + 1
-                        if (j <= 2) out(j:j) = name(i:i)
-                    end if
-                end do
+                        if( j <= 2 ) out(j:j) = name(i:i)
+                    endif
+                enddo
             end function strip_digits
 
     end subroutine new_from_pdb
+
+    subroutine new_from_cif( self, fname )
+        class(atoms),  intent(inout) :: self
+        class(string), intent(in)    :: fname
+        integer :: natoms
+        call self%kill
+        call scan_cif( fname, .false., natoms ) ! count the number of atoms in the cif file
+        call scan_cif( fname,  .true., natoms ) ! fill atoms attributes from cif data file
+        call self%new_instance(natoms)
+        if( self%n > 99999 .or. maxval(self%resnum) > 9999 ) self%is_xpdb = .true. 
+        call self%guess_element
+
+        contains
+        
+            subroutine scan_cif( fname, fill, natoms )
+                class(string), intent(in)  :: fname
+                logical,       intent(in)  :: fill
+                integer,       intent(out) :: natoms
+                integer               :: io_stat, filnum, nl, u, i, j, ncol, ntok
+                integer,    parameter :: maxcol = 300, maxtok = 400
+                character(len=STDLEN) :: cols(maxcol), tok(maxtok)
+                character(len=STDLEN) :: line
+                logical               :: in_atom_loop
+                integer               :: c_id, c_name, c_alt, c_comp, c_chain, c_seq, c_x, c_y, c_z
+                integer               :: c_occ, c_b, c_elem, c_group, serial
+                character(len=:), allocatable :: tmp
+                natoms = 0
+                call fopen(filnum, status='OLD', action='READ', file=fname, iostat=io_stat)
+                call fileiochk('new_from_cif; simple_atoms opening '//fname%to_char(), io_stat)
+                nl     = nlines(fname)
+                if( nl == 0 .or. .not.file_exists(fname) ) THROW_HARD('I/O, file: '//fname%to_char()//'; new_from_cif')
+                cols(:) = ''
+                tok(:)  = ''
+                serial  = 0
+                do i = 1, nl
+                    read(filnum,'(A)',iostat=io_stat) line
+                    if( len_trim(line) == 0 ) cycle
+                    line = adjustl(line)
+                    if( line(1:1) == '#' ) cycle
+                    if( index(line, 'loop_') /= 1 ) cycle
+                    ncol = 0
+                    do
+                        read(filnum,'(A)',iostat=io_stat) line
+                        line = adjustl(line)
+                        if( line(1:1) == '_' )then
+                            ncol = ncol + 1
+                            if( ncol <= maxcol ) cols(ncol) = trim(line)
+                        else
+                            exit
+                        endif
+                    enddo
+                    in_atom_loop = .false.
+                    do j = 1, ncol
+                        if( index(cols(j), '_atom_site.') == 1 )then
+                            in_atom_loop = .true.
+                            exit
+                        endif
+                    enddo
+                    if( .not. in_atom_loop ) THROW_HARD('No _atom_site loop found; new_from_cif')
+                    c_id    = find_col(cols, ncol, '_atom_site.id')
+                    c_name  = find_col(cols, ncol, '_atom_site.label_atom_id')
+                    if( c_name == 0 ) c_name = find_col(cols, ncol, '_atom_site.auth_atom_id')
+                    c_alt   = find_col(cols, ncol, '_atom_site.label_alt_id')
+                    c_comp  = find_col(cols, ncol, '_atom_site.label_comp_id')
+                    if( c_comp == 0 ) c_comp = find_col(cols, ncol, '_atom_site.auth_comp_id')
+                    c_chain = find_col(cols, ncol, '_atom_site.auth_asym_id')
+                    if( c_chain == 0 ) c_chain = find_col(cols, ncol, '_atom_site.label_asym_id')
+                    c_seq   = find_col(cols, ncol, '_atom_site.auth_seq_id')
+                    if( c_seq == 0 ) c_seq = find_col(cols, ncol, '_atom_site.label_seq_id')
+                    c_x     = find_col(cols, ncol, '_atom_site.Cartn_x')
+                    c_y     = find_col(cols, ncol, '_atom_site.Cartn_y')
+                    c_z     = find_col(cols, ncol, '_atom_site.Cartn_z')
+                    c_occ   = find_col(cols, ncol, '_atom_site.occupancy')
+                    c_b     = find_col(cols, ncol, '_atom_site.B_iso_or_equiv')
+                    c_elem  = find_col(cols, ncol, '_atom_site.type_symbol')
+                    c_group = find_col(cols, ncol, '_atom_site.group_PDB')
+                    if( c_group == 0 ) c_group = find_col(cols, ncol, '_atom_site.group_pdb')
+                    do
+                        if( len_trim(line) == 0 ) exit
+                        if( line(1:1) == '#'    ) exit
+                        if( line(1:1) == '_' .or. index(line, 'loop_') == 1 )then
+                            backspace(filnum)
+                            exit
+                        endif
+                        call split_tokens(line, tok, ntok)
+                        if( ntok <= 0 )then
+                            read(filnum,'(A)',iostat=io_stat) line
+                            if( io_stat /= 0 ) exit
+                            line = adjustl(line)
+                            cycle
+                        endif
+                        if( .not. fill )then
+                            natoms = natoms + 1
+                        else
+                            serial = serial + 1
+                            if( serial > self%n ) exit
+                            self%num(serial) = serial
+                            if( c_id > 0 .and. c_id <= ntok )then
+                                read(tok(c_id), *, iostat=io_stat) self%num(serial)
+                                if( io_stat /= 0 ) self%num(serial) = serial
+                            endif
+                            self%name(serial) = '    '
+                            if( c_name > 0 .and. c_name <= ntok )then
+                                tmp = adjustl(tok(c_name))
+                                self%name(serial) = tmp(1:min(4,len_trim(tmp)))
+                            endif
+                            self%resname(serial) = '   '
+                            if( c_comp > 0 .and. c_comp <= ntok )then
+                                tmp = adjustl(tok(c_comp))
+                                self%resname(serial) = tmp(1:min(3,len_trim(tmp)))
+                            endif
+                            self%chain(serial) = ' '
+                            if( c_chain > 0 .and. c_chain <= ntok .and. len_trim(tok(c_chain)) > 0 ) &
+                                self%chain(serial) = tok(c_chain)(1:1)
+                            self%altloc(serial) = ' '
+                            if( c_alt > 0 .and. c_alt <= ntok )then
+                                if( tok(c_alt) /= '.' .and. tok(c_alt) /= '?' ) self%altloc(serial) = tok(c_alt)(1:1)
+                            endif
+                            self%icode(serial)  = ' '
+                            self%charge(serial) = '  '
+                            self%resnum(serial) = 0
+                            if( c_seq > 0 .and. c_seq <= ntok )then
+                                read(tok(c_seq),*,iostat=io_stat) self%resnum(serial)
+                                if( io_stat /= 0 ) self%resnum(serial) = 0
+                            endif
+                            self%xyz(serial,1) = 0.0
+                            self%xyz(serial,2) = 0.0
+                            self%xyz(serial,3) = 0.0
+                            if( c_x > 0 .and. c_x <= ntok )then
+                                read(tok(c_x),*,iostat=io_stat) self%xyz(serial,1)
+                            endif
+                            if( c_y   > 0   .and. c_y   <= ntok ) read(tok(c_y), *,   iostat=io_stat) self%xyz(serial,2)
+                            if( c_z   > 0   .and. c_z   <= ntok ) read(tok(c_z), *,   iostat=io_stat) self%xyz(serial,3)
+                            if( c_occ > 0   .and. c_occ <= ntok ) read(tok(c_occ), *, iostat=io_stat) self%occupancy(serial)
+                            if (c_b   > 0   .and. c_b   <= ntok ) read(tok(c_b), *,   iostat=io_stat) self%beta(serial)
+                            self%element(serial) = '  '
+                            if( c_elem > 0 .and. c_elem <= ntok )then
+                                tmp = adjustl(tok(c_elem))
+                                self%element(serial) = tmp(1:min(2,len_trim(tmp)))
+                            else
+                                self%element(serial) = element_from_name(self%name(serial))
+                            endif
+                            self%het(serial) = .false.
+                            if( c_group > 0 .and. c_group <= ntok )then
+                                if( trim(tok(c_group) ) == 'HETATM' ) self%het(serial) = .true.
+                            endif
+                        endif
+                        read(filnum,'(A)',iostat=io_stat) line
+                        if( io_stat /= 0 )exit
+                        line = adjustl(line)
+                    enddo
+                    if( io_stat /= 0 )exit
+                enddo
+                close(filnum)
+            end subroutine scan_cif
+
+            subroutine split_tokens( line, tok, ntok )
+                character(len=*),      intent(in)  :: line
+                character(len=STDLEN), intent(out) :: tok(:)
+                integer, intent(out)  :: ntok
+                integer               :: i, l, t
+                character(len=STDLEN) :: cur
+                character             :: c, q
+                logical               :: inq
+                tok(:) = ''
+                cur    = ''
+                q      = ' '
+                inq    = .false.
+                ntok   = 0
+                t      = 0
+                l      = len_trim(line)
+                do i = 1, l
+                    c = line(i:i)
+                    if( .not. inq )then
+                        if( c == ' ' .or. c == char(9) )then
+                            if( len_trim(cur) > 0 )then
+                                t = t + 1
+                                if( t <= size(tok) ) tok(t) = adjustl(cur)
+                                cur = ''
+                            endif
+                        elseif( c == '''' .or. c == '"' )then
+                            inq = .true.
+                            q   = c
+                            cur = ''
+                        else
+                            cur = trim(cur) // c
+                        endif
+                    else
+                        if( c == q )then
+                            inq = .false.
+                            t = t + 1
+                            if( t <= size(tok) ) tok(t) = adjustl(cur)
+                            cur = ''
+                        else
+                            cur = trim(cur) // c
+                        endif
+                    endif
+                enddo
+                if( len_trim(cur) > 0 )then
+                    t = t + 1
+                    if( t <= size(tok)) tok(t) = adjustl(cur)
+                endif
+                ntok = t
+            end subroutine split_tokens
+
+            integer function find_col( cols, ncol, tag ) result( idx )
+                character(len=STDLEN), intent(in) :: cols(:)
+                character(len=*),      intent(in) :: tag
+                integer,               intent(in) :: ncol
+                integer :: i
+                idx = 0
+                do i = 1, ncol
+                    if( trim(cols(i)) == trim(tag) )then
+                        idx = i
+                        return
+                    endif
+                enddo
+            end function find_col
+
+            character(len=2) function element_from_name( name ) result( el )
+                character(len=*), intent(in) :: name
+                integer   :: i, k
+                character :: c
+                el = '  '
+                k  = 0
+                do i = 1, len_trim(name)
+                    c = name(i:i)
+                    if( (c >= 'A' .and. c <= 'Z') .or. (c >= 'a' .and. c <= 'z') )then
+                        k = k + 1
+                        if( k <= 2 )then
+                            if( c >= 'a' .and. c <= 'z') c = achar(iachar(c) - 32)
+                            el(k:k) = c
+                        endif
+                    endif
+                    if( k >= 2 ) exit
+                enddo
+            end function element_from_name
+
+    end subroutine new_from_cif
 
     subroutine new_from_molecule( self, mol )
         class(atoms),        intent(inout) :: self
@@ -339,7 +595,7 @@ contains
 
     ! CHECKERS
 
-    !>brief check if PDB coordinates are off centered with respect to the volume - mostly PDBs for X-ray exps.
+    !>brief check if PDB coordinates are off centered with respect to the volume - mostly PDBs from X-ray
     logical function check_center( self )
         class(atoms),  intent(inout) :: self
         if( any(self%xyz(:,:) < 0.) )then
@@ -1051,9 +1307,9 @@ contains
     end subroutine convolve
 
     subroutine geometry_analysis_pdb( self, pdbfile, thresh )
-        class(atoms),     intent(inout) :: self
-        class(string),    intent(in)    :: pdbfile   ! all the atomic positions
-        real, optional,   intent(in)    :: thresh    ! for belonging
+        class(atoms),   intent(inout) :: self
+        class(string),  intent(in)    :: pdbfile   ! all the atomic positions
+        real, optional, intent(in)    :: thresh    ! for belonging
         character(len=2)     :: element
         type(atoms)          :: init_atoms, final_atoms
         real,    allocatable :: radii(:),line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:), distances_totheline(:)
@@ -1262,7 +1518,7 @@ contains
     end function find_masscen
 
     !>brief compute average volume-model atomic cross correlation by residue
-    function cc_res( self, resnum ) result(cc)
+    function cc_res( self, resnum ) result( cc )
         class(atoms), intent(in) :: self
         integer,      intent(in) :: resnum
         integer :: i_atom, cnt
@@ -1276,6 +1532,28 @@ contains
         enddo
         cc = cc / real(cnt)
     end function cc_res
+
+    subroutine cif2pdb( self, ciffile, pdbfile )
+        class(atoms),     intent(inout) :: self
+        type(string),     intent(in)    :: ciffile, pdbfile
+        call self%kill()
+        call self%new(ciffile)
+        call self%writepdb(pdbfile)
+    end subroutine cif2pdb
+
+    subroutine cif2mrc( self, ciffile, smpd )
+        class(atoms),  intent(inout) :: self
+        type(string),  intent(in)    :: ciffile
+        real,          intent(in)    :: smpd
+        type(string) :: pdbfile, volfile
+        volfile = get_fbody(ciffile,string('cif'))//'.mrc'
+        pdbfile = get_fbody(ciffile,string('cif'))//'.mrc'
+        volfile = ciffile//'.mrc'
+        pdbfile = ciffile//'.pdb'
+        call self%kill()
+        call self%new_from_cif(ciffile)
+        call self%pdb2mrc(volfile=volfile, smpd=smpd) 
+    end subroutine cif2mrc
 
     subroutine pdb2mrc( self, pdbfile, volfile, smpd, center_pdb, pdb_out, vol_dim, mol )
         use simple_image, only: image
