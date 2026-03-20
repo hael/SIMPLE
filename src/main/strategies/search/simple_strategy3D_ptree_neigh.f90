@@ -93,7 +93,7 @@ contains
             itree = self%s%b_ptr%subspace_full2sub_map(iproj_full)
             if( itree < 1 .or. itree > ntrees ) THROW_HARD('tree index out of bound; ptree_neigh search')
             ! negate: select_peak_trees maximises, we want minimum distance
-            neg_dists(itree) = -dtmp
+            neg_dists(itree) = max(neg_dists(itree), -dtmp)
         enddo
         ! ------------------------------------------------------------------
         ! Select the npeak_target trees whose representatives lie closest

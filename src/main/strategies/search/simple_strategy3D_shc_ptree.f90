@@ -35,12 +35,13 @@ contains
     end subroutine new_shc_ptree
 
     subroutine srch_shc_ptree( self, os, ithr )
+        use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy3D_shc_ptree), intent(inout) :: self
         class(oris),                 intent(inout) :: os
         integer,                     intent(in)    :: ithr
-        integer :: iref, isample, loc(1), itree, ntrees
+        integer :: iref, isample, loc(1), itree, ntrees, inds(self%s%nrots)
         integer :: nrefs_coarse, nrefs_tree, iref_best_coarse
-        real    :: inpl_corrs(self%s%nrots), corr_best_coarse
+        real    :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots), corr_best_coarse
         if( os%get_state(self%s%iptcl) <= 0 )then
             call os%reject(self%s%iptcl)
             return
@@ -69,7 +70,7 @@ contains
             else
                 call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
             endif
-            loc = maxloc(inpl_corrs)
+            loc = angle_sampling(eulprob_dist_switch(inpl_corrs, self%s%p_ptr%cc_objfun), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres)
             call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
             nrefs_coarse = nrefs_coarse + 1
             if( inpl_corrs(loc(1)) > corr_best_coarse )then
@@ -85,7 +86,7 @@ contains
             itree = get_tree_for_ref(self%s, iref_best_coarse, ntrees)
             call descend_tree_prob_fixed_state(self%s, itree, corr_best_coarse, nrefs_tree, s3D%proj_space_state(iref_best_coarse))
         endif
-        self%s%nrefs_eval = nrefs_coarse ! don't add the tree evaluations
+        self%s%nrefs_eval = nrefs_coarse ! don't add the tree evaluations, coarse samples only
         call self%s%inpl_srch
         call self%oris_assign
     end subroutine srch_shc_ptree
