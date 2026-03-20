@@ -637,7 +637,7 @@ contains
         real             :: smpd, mskdiam_default, msk_default
         integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer          :: idir, nsp_files, box, nptcls, nthr
-        logical          :: nparts_set, ssilent, def_vol1, def_even, def_odd, is_2D
+        logical          :: nparts_set, ssilent, def_vol1, def_even, def_odd, is_2D, l_tree
         ! initialize dynamically allocated strings
         call self%init_strings
         ! set silent flag
@@ -1770,7 +1770,13 @@ contains
         ! refine flag dependent things
         ! -- neigh defaults
         self%l_neigh = .false.
-        if( str_has_substr(self%refine, 'neigh') .or. str_has_substr(self%refine, 'tree') )then
+        l_tree = str_has_substr(self%refine, 'tree')
+        if( str_has_substr(self%refine, 'neigh') .or. l_tree )then
+            ! we always do probabilistic in-plane sampling for tree-based approaches
+            if( l_tree )then
+                self%prob_inpl = 'yes'
+                self%l_prob_inpl = .true.
+            endif
             select case(trim(self%refine))
                 case('shc_ptree')
                     if( .not. cline%defined('nspace_sub') )then

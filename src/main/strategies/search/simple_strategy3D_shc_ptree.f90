@@ -2,7 +2,7 @@
 module simple_strategy3D_shc_ptree
 use simple_core_module_api
 use simple_strategy3D_alloc
-use simple_strategy3D_ptree_utils, only: descend_tree_prob, get_tree_for_ref
+use simple_strategy3D_ptree_utils, only: descend_tree_prob_fixed_state, get_tree_for_ref
 use simple_strategy3D_utils
 use simple_parameters,      only: parameters
 use simple_oris,            only: oris
@@ -83,7 +83,7 @@ contains
         end do
         if( nrefs_coarse > 0 )then
             itree = get_tree_for_ref(self%s, iref_best_coarse, ntrees)
-            call descend_tree_prob(self%s, itree, corr_best_coarse, nrefs_tree)
+            call descend_tree_prob_fixed_state(self%s, itree, corr_best_coarse, nrefs_tree, s3D%proj_space_state(iref_best_coarse))
         endif
         self%s%nrefs_eval = nrefs_coarse ! don't add the tree evaluations
         call self%s%inpl_srch

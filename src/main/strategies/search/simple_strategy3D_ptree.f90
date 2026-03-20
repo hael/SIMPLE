@@ -7,7 +7,7 @@ module simple_strategy3D_ptree
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_ptree_utils,&
-                           &only: select_peak_trees, descend_tree_prob, get_tree_for_ref
+                           &only: select_peak_trees, descend_tree_prob_fixed_state, get_tree_for_ref
 use simple_strategy3D_utils
 use simple_parameters,      only: parameters
 use simple_oris,            only: oris
@@ -43,8 +43,8 @@ contains
         class(strategy3D_ptree), intent(inout) :: self
         class(oris),             intent(inout) :: os
         integer,                 intent(in)    :: ithr
-        integer, allocatable :: peak_trees(:)
-	    real,    allocatable :: tree_best_corrs(:), peak_tree_corrs(:)
+        integer, allocatable :: peak_trees(:), tree_best_states(:), peak_tree_states(:)
+        real,    allocatable :: tree_best_corrs(:), peak_tree_corrs(:)
         integer              :: npeak_trees, ntrees, nrefs_coarse, nrefs_tree
         integer              :: isample, iref, itree, npeak_target, loc(1)
         real                 :: inpl_corrs(self%s%nrots), corr_best
@@ -63,6 +63,7 @@ contains
         endif
         if( ntrees > 0 )then
             allocate(tree_best_corrs(ntrees), source=-huge(1.0))
+            allocate(tree_best_states(ntrees), source=1)
         endif
         ! ----------------------------------------------------------------------
         ! Phase 1: coarse subspace search, matching strategy3D_greedy_sub.
@@ -84,7 +85,10 @@ contains
             nrefs_coarse = nrefs_coarse + 1
             if( ntrees > 0 )then
                 itree = get_tree_for_ref(self%s, iref, ntrees)
-                tree_best_corrs(itree) = max(tree_best_corrs(itree), corr_best)
+                if( corr_best > tree_best_corrs(itree) )then
+                    tree_best_corrs(itree)  = corr_best
+                    tree_best_states(itree) = s3D%proj_space_state(iref)
+                endif
             endif
         end do
         ! ----------------------------------------------------------------------
@@ -99,9 +103,11 @@ contains
             if( npeak_target > 0 )then
                 allocate(peak_trees(npeak_target),      source=0)
                 allocate(peak_tree_corrs(npeak_target), source=-huge(1.0))
+                allocate(peak_tree_states(npeak_target), source=1)
                 call select_peak_trees(tree_best_corrs, peak_trees, peak_tree_corrs, npeak_trees)
+                peak_tree_states(1:npeak_trees) = tree_best_states(peak_trees(1:npeak_trees))
                 do itree = 1, npeak_trees
-                    call descend_tree_prob(self%s, peak_trees(itree), peak_tree_corrs(itree), nrefs_tree)
+                    call descend_tree_prob_fixed_state(self%s, peak_trees(itree), peak_tree_corrs(itree), nrefs_tree, peak_tree_states(itree))
                 end do
             endif
         endif
