@@ -185,7 +185,6 @@ type :: polarft_calc
     procedure, private :: mirror_ctf2
     procedure, private :: mirror_pft
     procedure, private :: safe_norm
-    procedure, private :: get_line
     procedure          :: polar_cavger_calc_frc
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: polar_cavger_refs2cartesian
@@ -733,14 +732,6 @@ interface
         real(dp),            intent(inout) :: Mdenom(self%pftsz,self%kfromto(1):self%interpklim)
         complex(dp),         intent(inout) :: Mout(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine safe_norm
-    
-    module pure subroutine get_line( self, ref, rot, even, pftline, ctf2line )
-        class(polarft_calc), intent(in)  :: self
-        integer,             intent(in)  :: ref, rot
-        logical,             intent(in)  :: even
-        complex(dp),         intent(out) :: pftline(self%kfromto(1):self%interpklim)
-        real(dp),            intent(out) :: ctf2line(self%kfromto(1):self%interpklim)
-    end subroutine get_line
 
     module subroutine polar_cavger_calc_frc( self, pft1, pft2, n, frc )
         class(polarft_calc), intent(in)    :: self

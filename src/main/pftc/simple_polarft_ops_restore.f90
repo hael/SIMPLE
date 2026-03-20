@@ -554,15 +554,17 @@ contains
         real(kind=dp),       intent(inout) :: ctf2_cl_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(kind=dp),       intent(inout) :: ctf2_cl_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp), allocatable :: Rsym(:,:,:)
-        complex(dp) :: cl_l(self%kfromto(1):self%interpklim), cl_r(self%kfromto(1):self%interpklim)
+        complex(dp) :: pft_slice_e(self%kfromto(1):self%interpklim,self%pftsz)
+        complex(dp) :: pft_slice_o(self%kfromto(1):self%interpklim,self%pftsz)
         complex(dp) :: cl_e(self%kfromto(1):self%interpklim), cl_o(self%kfromto(1):self%interpklim)
-        real(dp)    :: rl_l(self%kfromto(1):self%interpklim), rl_r(self%kfromto(1):self%interpklim)
+        real(dp)    :: ctf2_slice_e(self%kfromto(1):self%interpklim,self%pftsz)
+        real(dp)    :: ctf2_slice_o(self%kfromto(1):self%interpklim,self%pftsz)
         real(dp)    :: rl_e(self%kfromto(1):self%interpklim), rl_o(self%kfromto(1):self%interpklim)
         real(dp)    :: wl(self%kfromto(1):self%interpklim), wr(self%kfromto(1):self%interpklim)
         real(dp)    :: R(3,3,self%ncls), Rj(3,3), tRi(3,3), eulers(3), psi
         real        :: Rtmp(3,3)
         integer     :: rotl, rotr, iref, jref, m, isym, nsym
-        logical     :: l_rotm
+        logical     :: l_rotm, conjgl, conjgr
         if( .not.ref_space%isthere('mirr') )then
             THROW_HARD('Mirror index missing in reference search space')
         endif
@@ -570,8 +572,8 @@ contains
         nsym = symop%get_nsym()
         allocate(Rsym(3,3,nsym),source=0.d0)
         !$omp parallel default(shared) proc_bind(close)&
-        !$omp private(iref,jref,m,isym,tRi,Rj,Rtmp,eulers,wl,wr,psi,l_rotm)&
-        !$omp& private(cl_l,cl_r,cl_e,cl_o,rl_l,rl_r,rl_e,rl_o,rotl,rotr)
+        !$omp private(iref,jref,m,isym,tRi,Rj,Rtmp,eulers,wl,wr,psi,l_rotm,cl_e,cl_o,rl_e,rl_o)&
+        !$omp& private(rotl,rotr,conjgl,conjgr,pft_slice_e,pft_slice_o,ctf2_slice_e,ctf2_slice_o)
         ! Init
         !$omp workshare
         pfts_cl_even = DCMPLX_ZERO
@@ -596,6 +598,10 @@ contains
         do iref = 1,self%ncls/2
             tRi = transpose(R(:,:,iref))
             m   = ref_space%get_int(iref,'mirr')
+            pft_slice_e  = DCMPLX_ZERO
+            pft_slice_o  = DCMPLX_ZERO
+            ctf2_slice_e = 0.d0
+            ctf2_slice_o = 0.d0
             do jref = 1,self%ncls/2
                 do isym = 1,nsym
                     if( isym == 1 )then
@@ -615,26 +621,38 @@ contains
                     psi = 360.d0 - eulers(3)
                     ! get the weights, rotation indices and compute the interpolated common line
                     call self%gen_clin_weights(psi, rotl, rotr, wl, wr)
+                    call update_index(rotl, conjgl)
+                    call update_index(rotr, conjgr)
                     ! even
-                    call self%get_line(jref, rotl, .true., cl_l, rl_l)
-                    call self%get_line(jref, rotr, .true., cl_r, rl_r)
-                    cl_e = wl*cl_l + wr*cl_r
-                    rl_e = wl*rl_l + wr*rl_r
+                    cl_e =        wl * merge(conjg(self%pfts_even(rotl,:,jref)), self%pfts_even(rotl,:,jref), conjgl)
+                    cl_e = cl_e + wr * merge(conjg(self%pfts_even(rotr,:,jref)), self%pfts_even(rotr,:,jref), conjgr)
+                    rl_e = wl * self%ctf2_even(rotl,:,jref) + wr * self%ctf2_even(rotr,:,jref)
                     ! odd
-                    call self%get_line(jref, rotl, .false., cl_l, rl_l)
-                    call self%get_line(jref, rotr, .false., cl_r, rl_r)
-                    cl_o = wl*cl_l + wr*cl_r
-                    rl_o = wl*rl_l + wr*rl_r
+                    cl_o =        wl * merge(conjg(self%pfts_odd(rotl,:,jref)), self%pfts_odd(rotl,:,jref), conjgl)
+                    cl_o = cl_o + wr * merge(conjg(self%pfts_odd(rotr,:,jref)), self%pfts_odd(rotr,:,jref), conjgr)
+                    rl_o = wl * self%ctf2_odd(rotl,:,jref) + wr * self%ctf2_odd(rotr,:,jref)
                     ! in plane rotation angle of iref slice
                     psi = eulers(1)
-                    ! get the weights, rotation indices and extrapolate the common line
+                    ! get the weights, rotation indices
                     call self%gen_clin_weights(psi, rotl, rotr, wl, wr)
-                    ! leftmost line
-                    call extrapolate_line(iref, rotl, wl, cl_e, cl_o, rl_e, rl_o)
-                    ! rightmost line
-                    call extrapolate_line(iref, rotr, wr, cl_e, cl_o, rl_e, rl_o)
+                    call update_index(rotl, conjgl)
+                    call update_index(rotr, conjgr)
+                    ! interpolate intersecting line into iref plane
+                    pft_slice_e(:,rotl)  = pft_slice_e(:,rotl)  + wl * merge(conjg(cl_e), cl_e, conjgl)
+                    pft_slice_e(:,rotr)  = pft_slice_e(:,rotr)  + wr * merge(conjg(cl_e), cl_e, conjgr)
+                    ctf2_slice_e(:,rotl) = ctf2_slice_e(:,rotl) + wl * rl_e
+                    ctf2_slice_e(:,rotr) = ctf2_slice_e(:,rotr) + wr * rl_e
+                    pft_slice_o(:,rotl)  = pft_slice_o(:,rotl)  + wl * merge(conjg(cl_o), cl_o, conjgl)
+                    pft_slice_o(:,rotr)  = pft_slice_o(:,rotr)  + wr * merge(conjg(cl_o), cl_o, conjgr)
+                    ctf2_slice_o(:,rotl) = ctf2_slice_o(:,rotl) + wl * rl_o
+                    ctf2_slice_o(:,rotr) = ctf2_slice_o(:,rotr) + wr * rl_o
                 enddo
             enddo
+            ! memory layout
+            pfts_cl_even(:,:,iref) = transpose(pft_slice_e)
+            pfts_cl_odd(:,:,iref)  = transpose(pft_slice_o)
+            ctf2_cl_even(:,:,iref) = transpose(ctf2_slice_e)
+            ctf2_cl_odd(:,:,iref)  = transpose(ctf2_slice_o)
         enddo
         !$omp end do
         ! Mirroring contributions
@@ -654,32 +672,24 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
-
     contains
 
-        ! Extrapolate cline, rline to pfts_clin and ctf2_clin
-        subroutine extrapolate_line(ref, rot, weight, cle, clo, rle, rlo)
-            integer,     intent(in) :: ref, rot
-            real(dp),    intent(in) :: weight(self%kfromto(1):self%interpklim)
-            complex(dp), intent(in) :: cle(self%kfromto(1):self%interpklim), clo(self%kfromto(1):self%interpklim)
-            real(dp),    intent(in) :: rle(self%kfromto(1):self%interpklim), rlo(self%kfromto(1):self%interpklim)
+        pure subroutine update_index( rot, conjugate )
+            integer, intent(inout)  :: rot
+            logical, intent(out) :: conjugate
             integer :: irot
-            irot = rot
+            irot = merge(rot-self%nrots, rot, rot>self%nrots)
             if( irot < 1 )then
-                irot = irot + self%pftsz
-                pfts_cl_even(irot,:,ref) = pfts_cl_even(irot,:,ref) + weight * conjg(cle)
-                pfts_cl_odd( irot,:,ref) = pfts_cl_odd( irot,:,ref) + weight * conjg(clo)
+                irot      = irot + self%pftsz
+                conjugate = .true.
             elseif( irot > self%pftsz )then
-                irot = irot - self%pftsz
-                pfts_cl_even(irot,:,ref) = pfts_cl_even(irot,:,ref) + weight * conjg(cle)
-                pfts_cl_odd( irot,:,ref) = pfts_cl_odd( irot,:,ref) + weight * conjg(clo)
+                irot      = irot - self%pftsz
+                conjugate = .true.
             else
-                pfts_cl_even(irot,:,ref) = pfts_cl_even(irot,:,ref) + weight * cle
-                pfts_cl_odd( irot,:,ref) = pfts_cl_odd( irot,:,ref) + weight * clo
+                conjugate = .false.
             endif
-            ctf2_cl_even(irot,:,ref) = ctf2_cl_even(irot,:,ref) + weight * rle
-            ctf2_cl_odd( irot,:,ref) = ctf2_cl_odd( irot,:,ref) + weight * rlo
-        end subroutine extrapolate_line
+            rot = irot
+        end subroutine update_index
 
     end subroutine calc_comlin_contrib
 
@@ -738,44 +748,6 @@ contains
             Mout = DCMPLX_ZERO
         end where
     end subroutine safe_norm
-
-    ! Returns complex and ctf2 polar lines given ref and rotational indices
-    module pure subroutine get_line( self, ref, rot, even, pftline, ctf2line )
-        class(polarft_calc), intent(in)  :: self
-        integer,             intent(in)  :: ref, rot
-        logical,             intent(in)  :: even
-        complex(dp),         intent(out) :: pftline(self%kfromto(1):self%interpklim)
-        real(dp),            intent(out) :: ctf2line(self%kfromto(1):self%interpklim)
-        integer :: irot
-        if( rot >  self%nrots )then
-            irot = rot - self%nrots
-        else
-            irot = rot
-        endif
-        if( even )then
-            if( irot < 1 )then
-                irot    = irot + self%pftsz
-                pftline = conjg(self%pfts_even(irot,:,ref))
-            elseif( irot > self%pftsz )then
-                irot    = irot - self%pftsz
-                pftline = conjg(self%pfts_even(irot,:,ref))
-            else
-                pftline = self%pfts_even(irot,:,ref)
-            endif
-            ctf2line = self%ctf2_even(irot,:,ref)
-        else
-            if( irot < 1 )then
-                irot    = irot + self%pftsz
-                pftline = conjg(self%pfts_odd(irot,:,ref))
-            elseif( irot > self%pftsz )then
-                irot    = irot - self%pftsz
-                pftline = conjg(self%pfts_odd(irot,:,ref))
-            else
-                pftline = self%pfts_odd(irot,:,ref)
-            endif
-            ctf2line = self%ctf2_odd(irot,:,ref)
-        endif
-    end subroutine get_line
 
     module subroutine polar_cavger_calc_frc( self, pft1, pft2, n, frc )
         class(polarft_calc), intent(in)    :: self
