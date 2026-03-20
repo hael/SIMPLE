@@ -901,7 +901,8 @@ contains
         type(string)              :: str_even, str_odd
         complex(dp),  allocatable :: even(:,:,:), odd(:,:,:), diff(:,:)
         real(sp),     allocatable :: bwfilter(:)
-        real(dp) :: cost, best_cost
+        real(dp),     allocatable :: costs(:)
+        real(dp) :: cost, best_cost, wk
         integer  :: kreq(2), ksearch(2), kavail_on_disk(2), best_k, k, kk, pftsz_on_disk, ncls_on_disk, kfallback
         logical, parameter :: DEBUG = .false.
         601 format(A,1X,F12.3)
@@ -976,35 +977,45 @@ contains
             lpopt = calc_lowpass_lim(ksearch(1), box, smpd)
             return
         endif
-        ! allocations
-        allocate(bwfilter(1:pftc%kfromto(2)), diff(pftc%pftsz,pftc%ncls))
         ! Read PFT arrays
         call pftc%read_pft_array(str_even, even)
         call pftc%read_pft_array(str_odd,  odd)
         ! Optimization: find best resolution cutoff
-        best_k    = ksearch(1)
-        best_cost = huge(best_cost)
         if( DEBUG )then
             write(logfhandle,'(A)') '    --- optimization trace (k, cost, is_new_best) ---'
         endif
-        do k = ksearch(1), ksearch(2)               ! search range
-            ! Objective function
+        ! allocations (bwfilter and diff are allocated per OMP thread inside the parallel loop)
+        allocate(costs(ksearch(1):ksearch(2)))
+        !$omp parallel do default(shared) schedule(dynamic,1) &
+        !$omp private(k, cost, bwfilter, diff, kk, wk)
+        do k = ksearch(1), ksearch(2) ! search range
+            ! Per-thread private workspace
+            allocate(bwfilter(1:pftc%kfromto(2)), diff(pftc%pftsz,pftc%ncls))
             cost = 0.d0
             call butterworth_filter(k, bwfilter)
             do kk = pftc%kfromto(1),pftc%kfromto(2) ! resolution range available
                 ! diff = even - bw(odd)
                 diff = even(:,kk,:) - real(bwfilter(kk),dp)*odd(:,kk,:)
-                ! Sum(|diff|2)
-                cost = cost + sum(real(diff*conjg(diff),dp)) * real(kk**3 - (kk-1)**3,dp)
+                ! Weighted sum(|diff|2) with shell volume and normalization factor.
+                wk = real(box,dp)**3 * (4.d0/3.d0)*DPI * (real(kk,dp)**3 - real(kk-1,dp)**3)
+                wk = wk / real(2*pftc%ncls*pftc%pftsz,dp)
+                cost = cost + wk * sum(real(diff*conjg(diff),dp))
             enddo
-            if( DEBUG ) write(logfhandle,'(A,I8,A,ES16.8,A,L1)') '    k=', k, ' cost=', cost, ' new_best=', cost <= best_cost
-            ! Book-keeping
-            if( cost <= best_cost )then
-                best_cost = cost
+            costs(k) = cost
+            deallocate(bwfilter, diff)
+        enddo
+        !$omp end parallel do
+        ! Sequential reduction: find k that achieves the minimum
+        best_cost = huge(best_cost)
+        best_k    = ksearch(1)
+        do k = ksearch(1), ksearch(2)
+            if( DEBUG ) write(logfhandle,'(A,I8,A,ES16.8,A,L1)') '    k=', k, ' cost=', costs(k), ' new_best=', costs(k) <= best_cost
+            if( costs(k) <= best_cost )then
+                best_cost = costs(k)
                 best_k    = k
             endif
         enddo
-        deallocate(even, odd, diff, bwfilter)
+        deallocate(even, odd, costs)
         ! Solution
         lpopt = calc_lowpass_lim(best_k, box, smpd)
         if( DEBUG )then
