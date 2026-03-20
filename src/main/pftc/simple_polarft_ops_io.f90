@@ -466,10 +466,24 @@ contains
         if( .not.allocated(array) )then
             allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
         endif
-        if( .not. all(dims == [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]) )then
-            write(logfhandle,*) 'PFT header mismatch in: ', trim(fname%to_char())
-            write(logfhandle,*) 'expected: ', self%pftsz, self%kfromto(1), self%interpklim, self%ncls
-            write(logfhandle,*) 'found:    ', dims(1), dims(2), dims(3), dims(4)
+        if( dims(1) /= self%pftsz )then
+            write(logfhandle,*) 'PFTZ header mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', self%pftsz
+            write(logfhandle,*) 'found:    ', dims(1)
+            THROW_HARD('Incompatible PFT header; open_pft_array_for_read')
+        endif
+        if( dims(4) /= self%ncls )then
+            write(logfhandle,*) 'NCLS header mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', self%ncls
+            write(logfhandle,*) 'found:    ', dims(4)
+            THROW_HARD('Incompatible PFT header; open_pft_array_for_read')
+        endif
+        if( self%interpklim >= dims(3) )then
+            ! identical size and padding allowed
+        else if( self%interpklim < dims(3) )then
+            write(logfhandle,*) 'INTERPKLIM header mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', self%interpklim
+            write(logfhandle,*) 'found:    ', dims(3)
             THROW_HARD('Incompatible PFT header; open_pft_array_for_read')
         endif
         if( .not. allocated(buffer) ) allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
@@ -481,9 +495,15 @@ contains
         complex(dp),         intent(inout) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,             intent(in)    :: funit, dims(4)
         complex(sp),         intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
+        integer :: klo, khi
         ! Read stored (single-precision) array payload
         read(unit=funit, pos=(sizeof(dims)+1)) buffer
-        array(:,:,:) = cmplx(buffer(:,:,:), kind=dp)
+        ! Default to zero padding everywhere
+        array(:,:,:) = (0.0_dp, 0.0_dp)
+        ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
+        klo = max(self%kfromto(1), dims(2))
+        khi = min(self%interpklim, dims(3))
+        if( klo <= khi ) array(:,klo:khi,:) = cmplx(buffer(:,klo:khi,:), kind=dp)
     end subroutine transfer_pft_array_buffer
 
     ! private helper
@@ -514,11 +534,25 @@ contains
         if( .not.allocated(array) )then
             allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
         endif
-        if( .not. all(dims == [self%pftsz, self%kfromto(1), self%interpklim, self%ncls]) )then
-            write(logfhandle,*) 'CTF2 header mismatch in: ', trim(fname%to_char())
-            write(logfhandle,*) 'expected: ', self%pftsz, self%kfromto(1), self%interpklim, self%ncls
-            write(logfhandle,*) 'found:    ', dims(1), dims(2), dims(3), dims(4)
-            THROW_HARD('Incompatible CTF2 header; open_ctf2_array_for_read')
+        if( dims(1) /= self%pftsz )then
+            write(logfhandle,*) 'PFTZ header mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', self%pftsz
+            write(logfhandle,*) 'found:    ', dims(1)
+            THROW_HARD('Incompatible CTF2 header; open_pft_array_for_read')
+        endif
+        if( dims(4) /= self%ncls )then
+            write(logfhandle,*) 'NCLS header mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', self%ncls
+            write(logfhandle,*) 'found:    ', dims(4)
+            THROW_HARD('Incompatible CTF2 header; open_pft_array_for_read')
+        endif
+        if( self%interpklim >= dims(3) )then
+            ! identical size and padding allowed
+        else if( self%interpklim < dims(3) )then
+            write(logfhandle,*) 'INTERPKLIM header mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', self%interpklim
+            write(logfhandle,*) 'found:    ', dims(3)
+            THROW_HARD('Incompatible CTF2 header; open_pft_array_for_read')
         endif
         if( .not. allocated(buffer) ) allocate(buffer(dims(1),dims(2):dims(3),dims(4)))
     end subroutine open_ctf2_array_for_read
@@ -529,9 +563,17 @@ contains
         real(dp), intent(inout) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,  intent(in)    :: funit, dims(4)
         real(sp), intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
+        integer :: klo, khi
         ! Read stored (single-precision) array payload
         read(unit=funit, pos=(sizeof(dims)+1)) buffer
-        array(:,:,:) = real(buffer(:,:,:), dp)
+        ! Default to zero padding everywhere
+        array(:,:,:) = 0.0_dp
+        ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
+        klo = max(self%kfromto(1), dims(2))
+        khi = min(self%interpklim, dims(3))
+        if( klo <= khi )then
+            array(:,klo:khi,:) = real(buffer(:,klo:khi,:), dp)
+        endif
     end subroutine transfer_ctf2_array_buffer
 
 end submodule simple_polarft_ops_io
