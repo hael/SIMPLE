@@ -55,12 +55,6 @@ contains
         corr_best_coarse = -huge(1.0)
         iref_best_coarse = self%s%prev_ref
         ntrees = self%s%b_ptr%block_tree%get_n_trees()
-        if( .not. allocated(self%s%b_ptr%subspace_full2sub_map) )then
-            THROW_HARD('SHC-ptree search requires subspace_full2sub_map. Check builder construction.')
-        endif
-        if( ntrees <= 0 )then
-            THROW_HARD('SHC-ptree search requires at least one block tree.')
-        endif
         ! Coarse SHC pass: keep a single selected coarse node/tree.
         do isample = 1, self%s%nrefs_sub
             iref = s3D%srch_order_sub(isample, self%s%ithr)

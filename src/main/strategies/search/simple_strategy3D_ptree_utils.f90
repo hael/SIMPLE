@@ -5,6 +5,9 @@ use simple_strategy3D_alloc
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
 
+real, parameter :: INVALID_CORR        = -huge(1.0)
+real, parameter :: INVALID_CORR_THRESH = INVALID_CORR / 2.0
+
 public :: select_peak_trees, descend_tree_prob, descend_tree_prob_fixed_state, get_tree_for_ref
 private
 #include "simple_local_flags.inc"
@@ -19,18 +22,18 @@ contains
         integer :: loc(1)
         real    :: work_corrs(size(tree_best_corrs))
         peak_trees      = 0
-        peak_tree_corrs = -huge(1.0)
+        peak_tree_corrs = INVALID_CORR
         npeak_trees     = 0
         if( size(tree_best_corrs) == 0 ) return
         if( size(peak_trees)      == 0 ) return
         work_corrs = tree_best_corrs
         do while( npeak_trees < size(peak_trees) )
             loc = maxloc(work_corrs)
-            if( work_corrs(loc(1)) <= -huge(1.0) / 2.0 ) exit
+            if( is_invalid_corr(work_corrs(loc(1))) ) exit
             npeak_trees                  = npeak_trees + 1
             peak_trees(npeak_trees)      = loc(1)
             peak_tree_corrs(npeak_trees) = work_corrs(loc(1))
-            work_corrs(loc(1))           = -huge(1.0)
+            work_corrs(loc(1))           = INVALID_CORR
         end do
     end subroutine select_peak_trees
 
@@ -46,12 +49,6 @@ contains
         real          :: best_corr_L, best_corr_R, tree_best_corr
         logical       :: did_descend
         node_root = s%b_ptr%block_tree%get_root_node(itree)
-        if( node_root%node_idx == 0 )then
-            THROW_HARD('Selected block tree has an invalid root node.')
-        endif
-        if( node_root%ref_idx == 0 )then
-            THROW_HARD('Selected block tree root has no ref_idx.')
-        endif
         call eval_tree_ref_across_states(s, node_root%ref_idx, tree_best_corr, nrefs_tree)
         did_descend = .false.
         inode = node_root%node_idx
@@ -68,9 +65,6 @@ contains
             if( inode_next == 0 ) exit
             inode = inode_next
         end do
-        ! if( did_descend .and. tree_best_corr <= coarse_tree_corr )then
-        !     call exhaustive_tree_scan(s, itree, tree_best_corr, nrefs_tree)
-        ! endif
     end subroutine descend_tree_prob
 
     ! Fixed-state variant: evaluates only the provided state during descent
@@ -85,19 +79,7 @@ contains
         integer       :: inode, inode_next
         real          :: best_corr_L, best_corr_R, tree_best_corr
         logical       :: did_descend
-        if( istate_fixed < 1 .or. istate_fixed > s%nstates )then
-            THROW_HARD('descend_tree_prob_fixed_state: istate_fixed out of range')
-        endif
-        if( .not. s3D%state_exists(istate_fixed) )then
-            THROW_HARD('descend_tree_prob_fixed_state: requested state does not exist')
-        endif
         node_root = s%b_ptr%block_tree%get_root_node(itree)
-        if( node_root%node_idx == 0 )then
-            THROW_HARD('Selected block tree has an invalid root node.')
-        endif
-        if( node_root%ref_idx == 0 )then
-            THROW_HARD('Selected block tree root has no ref_idx.')
-        endif
         call eval_tree_ref_fixed_state(s, node_root%ref_idx, istate_fixed, tree_best_corr, nrefs_tree)
         did_descend = .false.
         inode = node_root%node_idx
@@ -114,9 +96,6 @@ contains
             if( inode_next == 0 ) exit
             inode = inode_next
         end do
-        ! if( did_descend .and. tree_best_corr <= coarse_tree_corr )then
-        !     call exhaustive_tree_scan_fixed_state(s, itree, istate_fixed, tree_best_corr, nrefs_tree)
-        ! endif
     end subroutine descend_tree_prob_fixed_state
 
     integer function get_tree_for_ref( s, iref, ntrees ) result(itree)
@@ -124,13 +103,7 @@ contains
         integer,                intent(in) :: iref, ntrees
         integer :: iproj
         iproj = s3D%proj_space_proj(iref)
-        if( iproj < 1 .or. iproj > size(s%b_ptr%subspace_full2sub_map) )then
-            THROW_HARD('Invalid projection index encountered during block-tree search.')
-        endif
         itree = s%b_ptr%subspace_full2sub_map(iproj)
-        if( itree < 1 .or. itree > ntrees )then
-            THROW_HARD('Invalid tree index mapped from reference. Check builder construction.')
-        endif
     end function get_tree_for_ref
 
     subroutine eval_child_best( s, itree, child_idx, best_corr, nrefs_tree )
@@ -141,7 +114,7 @@ contains
         real,                   intent(out)   :: best_corr
         integer,                intent(inout) :: nrefs_tree
         type(bt_node) :: node_child
-        best_corr = -huge(1.0)
+        best_corr = INVALID_CORR
         if( child_idx == 0 ) return
         node_child = s%b_ptr%block_tree%get_node(itree, child_idx)
         if( node_child%ref_idx == 0 ) return
@@ -157,7 +130,7 @@ contains
         real,                   intent(out)   :: best_corr
         integer,                intent(inout) :: nrefs_tree
         type(bt_node) :: node_child
-        best_corr = -huge(1.0)
+        best_corr = INVALID_CORR
         if( child_idx == 0 ) return
         node_child = s%b_ptr%block_tree%get_node(itree, child_idx)
         if( node_child%ref_idx == 0 ) return
@@ -175,7 +148,7 @@ contains
         integer :: istate
         integer :: loc(1)
         real    :: corr_tmp, inpl_corrs(s%nrots), sorted_corrs(s%nrots)
-        best_corr = -huge(1.0)
+        best_corr = INVALID_CORR
         do istate = 1, s%nstates
             iref = (istate - 1) * s%p_ptr%nspace + ref_idx
             if( .not. s3D%state_exists(s3D%proj_space_state(iref)) ) cycle
@@ -213,7 +186,7 @@ contains
         real    :: corr_tmp, inpl_corrs(s%nrots), sorted_corrs(s%nrots)
         iref = (istate_fixed - 1) * s%p_ptr%nspace + ref_idx
         if( .not. s3D%state_exists(s3D%proj_space_state(iref)) )then
-            best_corr = -huge(1.0)
+            best_corr = INVALID_CORR
             return
         endif
         if( s%p_ptr%l_sh_first )then
@@ -285,7 +258,7 @@ contains
             inode_next = left_idx
             return
         endif
-        if( corr_left <= -huge(1.0) / 2.0 .and. corr_right <= -huge(1.0) / 2.0 )then
+        if( is_invalid_corr(corr_left) .and. is_invalid_corr(corr_right) )then
             if( sample_two(1.0, 1.0) == 1 )then
                 inode_next = left_idx
             else
@@ -294,12 +267,12 @@ contains
             return
         endif
         cmax = max(corr_left, corr_right)
-        if( corr_left <= -huge(1.0) / 2.0 )then
+        if( is_invalid_corr(corr_left) )then
             p_left = 0.0
         else
             p_left = exp(corr_left - cmax)
         endif
-        if( corr_right <= -huge(1.0) / 2.0 )then
+        if( is_invalid_corr(corr_right) )then
             p_right = 0.0
         else
             p_right = exp(corr_right - cmax)
@@ -310,6 +283,11 @@ contains
             inode_next = right_idx
         endif
     end function choose_next_child
+
+    logical pure function is_invalid_corr( corr ) result(invalid)
+        real, intent(in) :: corr
+        invalid = corr <= INVALID_CORR_THRESH
+    end function is_invalid_corr
 
     integer function sample_two( p1, p2 ) result(which)
         real, intent(in) :: p1

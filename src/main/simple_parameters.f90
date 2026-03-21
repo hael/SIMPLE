@@ -1783,16 +1783,21 @@ contains
             select case(trim(self%refine))
                 case('shc_ptree')
                     if( .not. cline%defined('nspace_sub') )then
-                        self%nspace_sub = 300
+                        self%nspace_sub = 50
                     else
-                        self%nspace_sub = max(self%nspace_sub, 300)
+                        self%nspace_sub = max(self%nspace_sub, 50)
                     endif
                     if( .not. cline%defined('nspace') )then
-                        self%nspace = 2500
+                        self%nspace = 2000
                     else
-                        self%nspace = max(self%nspace, 2500)
+                        self%nspace = max(self%nspace, 2000)
                     endif
                 case DEFAULT
+                    if( .not. cline%defined('nspace_sub') )then
+                        self%nspace_sub = 500
+                    else
+                        self%nspace_sub = max(self%nspace_sub, 500)
+                    endif
                     if( .not. cline%defined('nspace') )then
                         self%nspace = 20000
                     else
