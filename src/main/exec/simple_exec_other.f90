@@ -1,6 +1,7 @@
 !@descr: execution of other commanders
 module simple_exec_other
 use simple_cmdline,                 only: cmdline
+use simple_commanders_atoms,        only: commander_cif2pdb
 use simple_commanders_distr,        only: commander_split
 use simple_commanders_project_ptcl, only: commander_split_stack
 implicit none
@@ -8,12 +9,13 @@ implicit none
 public :: exec_other_commander
 private
 
+type(commander_cif2pdb)     :: xcif2pdb
 type(commander_split)       :: xsplit
 type(commander_split_stack) :: xsplit_stack
 
 contains
 
-    subroutine exec_other_commander(which, cline, l_silent, l_did_execute)
+    subroutine exec_other_commander( which, cline, l_silent, l_did_execute )
         character(len=*),    intent(in)    :: which
         class(cmdline),      intent(inout) :: cline
         logical,             intent(inout) :: l_did_execute
@@ -22,6 +24,8 @@ contains
         l_silent      = .false.
         l_did_execute = .true.
         select case(trim(which))
+            case('cif2pdb')
+                call xcif2pdb%execute(cline)
             case( 'split' )
                 call xsplit%execute(cline)
             case( 'split_stack' )

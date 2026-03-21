@@ -204,9 +204,9 @@ contains
         call pdb%new(params%pdbfile)
         if( pdb%check_center() .or. params%center_pdb .eq. 'yes' )then
             pdbout_fname = get_fbody(params%pdbfile, 'pdb') // '_centered.pdb'
-            call pdb%pdb2mrc( params%pdbfile, fname_pdb, params%smpd, center_pdb=.true., pdb_out=pdbout_fname, vol_dim=ldim )
+            call pdb%pdb2mrc(params%pdbfile, fname_pdb, params%smpd, center_pdb=.true., pdb_out=pdbout_fname, vol_dim=ldim)
         else 
-            call pdb%pdb2mrc( params%pdbfile, fname_pdb, params%smpd, vol_dim=ldim )
+            call pdb%pdb2mrc(params%pdbfile, fname_pdb, params%smpd, vol_dim=ldim)
         endif
         call vol_pdb%new(ldim, params%smpd)
         call vol_pdb%read(fname_pdb)

@@ -4,7 +4,8 @@ use simple_cmdline,               only: cmdline
 use simple_commanders_test_utils, only: commander_test_ansi_colors, commander_test_binoris_test, &
                                         commander_test_binoris_io_test, commander_test_cmdline, &
                                         commander_test_install, commander_test_nice, commander_test_pdb2mrc, &
-                                        commander_test_serialize, commander_test_stringmatch
+                                        commander_test_serialize, commander_test_stringmatch, commander_test_cif2pdb, &
+                                        commander_test_cif2mrc
 
 implicit none
 
@@ -14,6 +15,8 @@ private
 type(commander_test_ansi_colors)     :: xansi_colors
 type(commander_test_binoris_test)    :: xbinoris_test
 type(commander_test_binoris_io_test) :: xbinoris_io_test
+type(commander_test_cif2mrc)         :: xcif2mrc
+type(commander_test_cif2pdb)         :: xcif2pdb
 type(commander_test_cmdline)         :: xcmdline
 type(commander_test_install)         :: xinstall
 type(commander_test_nice)            :: xnice
@@ -38,6 +41,10 @@ contains
                 call xbinoris_test%execute(cline)
             case( 'binoris_io_test' )
                 call xbinoris_io_test%execute(cline)
+            case( 'cif2mrc' )
+                call xcif2mrc%execute(cline)
+            case( 'cif2pdb' )
+                call xcif2pdb%execute(cline)
             case( 'cmdline' )
                 call xcmdline%execute(cline)
             case( 'install' )

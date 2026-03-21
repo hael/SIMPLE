@@ -597,10 +597,9 @@ contains
 
     !>brief check if PDB coordinates are off centered with respect to the volume - mostly PDBs from X-ray
     logical function check_center( self )
-        class(atoms),  intent(inout) :: self
+        class(atoms), intent(inout) :: self
         if( any(self%xyz(:,:) < 0.) )then
             check_center = .true.
-            THROW_WARN('PDB atomic center off of the center volume; check_center')
         else
             check_center = .false.
         endif
@@ -1537,7 +1536,7 @@ contains
         class(atoms),     intent(inout) :: self
         type(string),     intent(in)    :: ciffile, pdbfile
         call self%kill()
-        call self%new(ciffile)
+        call self%new_from_cif(ciffile)
         call self%writepdb(pdbfile)
     end subroutine cif2pdb
 
@@ -1547,12 +1546,11 @@ contains
         real,          intent(in)    :: smpd
         type(string) :: pdbfile, volfile
         volfile = get_fbody(ciffile,string('cif'))//'.mrc'
-        pdbfile = get_fbody(ciffile,string('cif'))//'.mrc'
-        volfile = ciffile//'.mrc'
-        pdbfile = ciffile//'.pdb'
+        pdbfile = get_fbody(ciffile,string('cif'))//'.pdb'
         call self%kill()
         call self%new_from_cif(ciffile)
-        call self%pdb2mrc(volfile=volfile, smpd=smpd) 
+        call self%writepdb(pdbfile)
+        call self%pdb2mrc(pdbfile=pdbfile, volfile=volfile, smpd=smpd) 
     end subroutine cif2mrc
 
     subroutine pdb2mrc( self, pdbfile, volfile, smpd, center_pdb, pdb_out, vol_dim, mol )
@@ -1569,7 +1567,8 @@ contains
         type(image)  :: vol
         real         :: mol_dim(3), center(3), max_dist, dist
         integer      :: ldim(3), i_atom, j_atom
-        logical      :: use_center = .false.
+        logical      :: use_center
+        use_center = .false.
         call self%kill()
         if( present(pdbfile) )then
             pdb_file = pdbfile
@@ -1600,6 +1599,7 @@ contains
         mol_dim(2) = maxval(self%xyz(:,2)) - minval(self%xyz(:,2))
         mol_dim(3) = maxval(self%xyz(:,3)) - minval(self%xyz(:,3))
         if( use_center )then
+            THROW_WARN('PDB atomic center off of the center volume; check_center')
             center = self%get_geom_center()
             write(logfhandle,'(A,2(f6.1,","),f6.1,A)') "Atomic center at ", center," (center of volume at 0, 0, 0)"
         endif

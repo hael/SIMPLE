@@ -17,6 +17,16 @@ type, extends(commander_base) :: commander_atoms_register
     procedure :: execute      => exec_atoms_register
 end type commander_atoms_register
 
+type, extends(commander_base) :: commander_cif2mrc
+  contains
+    procedure :: execute      => exec_cif2mrc
+end type commander_cif2mrc
+
+type, extends(commander_base) :: commander_cif2pdb
+  contains
+    procedure :: execute      => exec_cif2pdb
+end type commander_cif2pdb
+
 type, extends(commander_base) :: commander_crys_score
   contains
     procedure :: execute      => exec_crys_score
@@ -179,6 +189,33 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_ATOMS_REGISTER NORMAL STOP ****')
     end subroutine exec_atoms_register
+
+    subroutine exec_cif2mrc( self, cline )
+        class(commander_cif2mrc), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(parameters) :: params
+        type(atoms)      :: molecule
+        call params%new(cline)
+        call molecule%new(params%ciffile)
+        call molecule%cif2mrc(params%ciffile, params%smpd)
+        call molecule%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_CIF2MRC NORMAL STOP ****')
+    end subroutine exec_cif2mrc
+
+    subroutine exec_cif2pdb( self, cline )
+        class(commander_cif2pdb), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(parameters) :: params
+        type(atoms)      :: molecule
+        call params%new(cline)
+        params%pdbfile = get_fbody(params%pdbfile,'cif')//'.pdb'
+        call molecule%new(params%ciffile)
+        call molecule%writepdb(params%pdbfile)
+        call molecule%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_CIF2PDB NORMAL STOP ****')
+    end subroutine exec_cif2pdb
 
     subroutine exec_crys_score( self, cline )
         use simple_commanders_sim, only: commander_simulate_atoms
@@ -420,7 +457,7 @@ contains
    
     subroutine exec_map_validate( self, cline )
         class(commander_map_validate), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(cmdline),                intent(inout) :: cline
         type(parameters) :: params
         type(atoms)      :: molecule
         type(image)      :: exp_vol, sim_vol

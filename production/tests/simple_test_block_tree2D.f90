@@ -43,7 +43,7 @@ params%ctf    = 'no'
 params%objfun = 'cc'
 vol_file      = 'molecule.mrc'
 mol = sars_cov2_spkgp_6vxx()
-call molecule%pdb2mrc( smpd=params%smpd, mol=mol)
+call molecule%pdb2mrc(smpd=params%smpd, mol=mol)
 call find_ldim_nptcls(vol_file, params%ldim, params%nptcls)
 params%box = params%ldim(1)
 params%mskdiam = params%smpd * params%ldim(1) / 2.

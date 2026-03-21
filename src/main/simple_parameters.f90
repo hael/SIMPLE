@@ -130,6 +130,7 @@ type :: parameters
     ! default initialization is done in the init_strings method below
     type(string)              :: boxfile              !< file with EMAN particle coordinates(.txt)
     type(string)              :: boxtab               !< table (text file) of files with EMAN particle coordinates(.txt)
+    type(string)              :: ciffile              !< xPDB/mmCIF file          
     type(string)              :: classdoc             !< doc with per-class stats(.txt)
     type(string)              :: cwd
     type(string)              :: deftab               !< file with CTF info(.txt|.simple)

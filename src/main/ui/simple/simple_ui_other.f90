@@ -3,24 +3,52 @@ module simple_ui_other
 use simple_ui_modules
 implicit none
 
+type(ui_program), target :: cif2pdb
 type(ui_program), target :: split_
 type(ui_program), target :: split_stack
 
 contains
 
-    subroutine construct_other_programs(prgtab)
+    subroutine construct_other_programs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        call new_cif2pdb(prgtab)
         call new_split_(prgtab)
         call new_split_stack(prgtab)
     end subroutine construct_other_programs
 
-    subroutine print_other_programs(logfhandle)
+    subroutine print_other_programs( logfhandle )
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('OTHER UTILITIES:', C_UNDERLINED)
+        write(logfhandle,'(A)') cif2pdb%name%to_char()
         write(logfhandle,'(A)') split_%name%to_char()
         write(logfhandle,'(A)') split_stack%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_other_programs
+
+    subroutine new_cif2pdb( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call cif2pdb%new(&
+        &'cif2pdb',&                                       ! name
+        &'convert PDBx/mmCIF to PDB',&                     ! descr_short
+        &'is a program for converting PDBx/mmCIF to PDB',& ! descr_long
+        &'simple_exec',&                                   ! executable
+        &.false.)                                          ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cif2pdb%add_input(UI_IMG, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif')
+        ! parameter input/output
+        ! computer controls
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>               
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('cif2pdb', cif2pdb, prgtab)
+    end subroutine new_cif2pdb
 
     subroutine new_split_( prgtab )
         class(ui_hash), intent(inout) :: prgtab

@@ -9,7 +9,7 @@ type(atoms)         :: molecule
 type(molecule_data) :: mol
 real, parameter     :: smpd = 1.3
 mol = sars_cov2_spkgp_6vxx()
-call molecule%pdb2mrc( smpd=smpd, mol=mol )
+call molecule%pdb2mrc(smpd=smpd, mol=mol)
 mol = betagal_1jyx()
-call molecule%pdb2mrc( smpd=smpd, mol=mol )
+call molecule%pdb2mrc(smpd=smpd, mol=mol)
 end program simple_test_pdb2mrc

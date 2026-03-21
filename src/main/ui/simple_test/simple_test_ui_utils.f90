@@ -6,6 +6,8 @@ implicit none
 type(ui_program), target :: ansi_colors
 type(ui_program), target :: binoris_test
 type(ui_program), target :: binoris_io_test
+type(ui_program), target :: cif2mrc
+type(ui_program), target :: cif2pdb
 type(ui_program), target :: cmdline
 type(ui_program), target :: install
 type(ui_program), target :: nice
@@ -20,6 +22,8 @@ contains
         call new_ansi_colors(tsttab)
         call new_binoris_test(tsttab)
         call new_binoris_io_test(tsttab)
+        call new_cif2mrc(tsttab)
+        call new_cif2pdb(tsttab)
         call new_cmdline(tsttab)
         call new_install(tsttab)
         call new_nice(tsttab)
@@ -34,6 +38,8 @@ contains
         write(logfhandle,'(A)') ansi_colors%name%to_char()
         write(logfhandle,'(A)') binoris_test%name%to_char()
         write(logfhandle,'(A)') binoris_io_test%name%to_char()
+        write(logfhandle,'(A)') cif2mrc%name%to_char()
+        write(logfhandle,'(A)') cif2pdb%name%to_char()
         write(logfhandle,'(A)') cmdline%name%to_char()
         write(logfhandle,'(A)') install%name%to_char()
         write(logfhandle,'(A)') nice%name%to_char()
@@ -49,7 +55,7 @@ contains
         call ansi_colors%new(&
         &'ansi_colors',&                       ! name
         &'ansi_colors ',&                      ! descr_short
-        &'is a test program for ',&
+        &'is a test program for ansi colors',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -77,7 +83,7 @@ contains
         call binoris_test%new(&
         &'binoris_test',&                      ! name
         &'binoris_test ',&                     ! descr_short
-        &'is a test program for ',&
+        &'is a test program for binoris',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -105,7 +111,7 @@ contains
         call binoris_io_test%new(&
         &'binoris_io_test',&                   ! name
         &'binoris_io_test ',&                  ! descr_short
-        &'is a test program for ',&
+        &'is a test program for binoris input/output',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -127,13 +133,69 @@ contains
         call add_ui_program('binoris_io_test', binoris_io_test, tsttab)
     end subroutine new_binoris_io_test
 
+    subroutine new_cif2mrc( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call cif2mrc%new(&
+        &'cif2mrc',&                         ! name
+        &'cif2mrc',&                         ! descr_short
+        &'is a test program for PDBx/mmCIF to MRC',&
+        &'simple_test_exec',&                ! executable
+        &.false.)                            ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call cmdline%add_input(UI_IO, )
+        ! parameter input/output
+        !call cmdline%add_input(UI_IMG, )
+        ! alternative inputs
+        !call cmdline%add_input(UI_PARM, )
+        ! search controls
+        !call cmdline%add_input(UI_SRCH, )
+        ! filter controls
+        !call cmdline%add_input(UI_FILT, )
+        ! mask controls
+        !call cmdline%add_input(UI_MASK, )
+        ! computer controls
+        !call cmdline%add_input(UI_COMP, )
+        ! add to ui_hash
+        call add_ui_program('cif2mrc', cif2mrc, tsttab)
+    end subroutine new_cif2mrc
+
+    subroutine new_cif2pdb( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call cif2pdb%new(&
+        &'cif2pdb',&                         ! name
+        &'test for cif2pdb',&                        ! descr_short
+        &'is a test program for PDBx/mmCIF to PDB convertion',&
+        &'simple_test_exec',&                ! executable
+        &.false.)                            ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !call cmdline%add_input(UI_IO, )
+        ! parameter input/output
+        !call cmdline%add_input(UI_IMG, )
+        ! alternative inputs
+        !call cmdline%add_input(UI_PARM, )
+        ! search controls
+        !call cmdline%add_input(UI_SRCH, )
+        ! filter controls
+        !call cmdline%add_input(UI_FILT, )
+        ! mask controls
+        !call cmdline%add_input(UI_MASK, )
+        ! computer controls
+        !call cmdline%add_input(UI_COMP, )
+        ! add to ui_hash
+        call add_ui_program('cif2pdb', cif2pdb, tsttab)
+    end subroutine new_cif2pdb
+
     subroutine new_cmdline( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call cmdline%new(&
         &'cmdline',&                         ! name
         &'cmdline ',&                        ! descr_short
-        &'is a test program for ',&
+        &'is a test program for cmdline',&
         &'simple_test_exec',&                ! executable
         &.false.)                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -161,7 +223,7 @@ contains
         call install%new(&
         &'install',&                         ! name
         &'install ',&                        ! descr_short
-        &'is a test program for ',&
+        &'is a test program for install',&
         &'simple_test_exec',&                ! executable
         &.false.)                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

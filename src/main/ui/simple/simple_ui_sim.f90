@@ -3,6 +3,7 @@ module simple_ui_sim
 use simple_ui_modules
 implicit none
 
+type(ui_program), target :: cif2mrc
 type(ui_program), target :: pdb2mrc
 type(ui_program), target :: simulate_movie
 type(ui_program), target :: simulate_noise
@@ -12,6 +13,7 @@ contains
 
     subroutine construct_sim_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
+        call new_cif2mrc(prgtab)
         call new_pdb2mrc(prgtab)
         call new_simulate_movie(prgtab)
         call new_simulate_noise(prgtab)
@@ -21,12 +23,38 @@ contains
     subroutine print_sim_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('SIMULATION:', C_UNDERLINED)
+        write(logfhandle,'(A)') cif2mrc%name%to_char()
         write(logfhandle,'(A)') pdb2mrc%name%to_char()
         write(logfhandle,'(A)') simulate_movie%name%to_char()
         write(logfhandle,'(A)') simulate_noise%name%to_char()
         write(logfhandle,'(A)') simulate_particles%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_sim_programs
+
+    subroutine new_cif2mrc( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call cif2mrc%new(&
+        &'cif2mrc', &                                      ! name
+        &'PDBx/mmCIF to MRC simulator',&                   ! descr_short
+        &'is a program to simulate a 3D density map in MRC format using a PDBx/mmCIF format coordinates file',& ! descr long
+        &'all',&                                           ! executable
+        &.false., gui_advanced=.false.)                    ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cif2mrc%add_input(UI_IMG, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif')
+        ! parameter input/output
+        call cif2mrc%add_input(UI_PARM, smpd,    required_override=.false.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! computer controls
+        ! add to ui_hash
+        call add_ui_program('cif2mrc', cif2mrc, prgtab)
+    end subroutine new_cif2mrc
 
     subroutine new_pdb2mrc( prgtab )
         class(ui_hash), intent(inout) :: prgtab
