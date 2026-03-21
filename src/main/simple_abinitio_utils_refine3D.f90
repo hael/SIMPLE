@@ -12,7 +12,7 @@ integer, parameter :: REFINE3D_ROUTE_TREE_POLAR       = 7
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR_CAVGS = 8
 integer, parameter :: SHC_PTREE_NSPACE                = 2000
 integer, parameter :: SHC_PTREE_NSPACE_SUB            = 50
-integer, parameter :: PROB_NEIGH_NSPACE               = 12000
+integer, parameter :: PROB_NEIGH_NSPACE               = 5000
 integer, parameter :: PROB_NEIGH_NSPACE_SUB           = 300
 
 type :: refine3D_stage_cfg
