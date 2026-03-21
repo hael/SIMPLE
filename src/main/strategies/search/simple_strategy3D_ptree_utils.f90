@@ -68,9 +68,9 @@ contains
             if( inode_next == 0 ) exit
             inode = inode_next
         end do
-        if( did_descend .and. tree_best_corr <= coarse_tree_corr )then
-            call exhaustive_tree_scan(s, itree, tree_best_corr, nrefs_tree)
-        endif
+        ! if( did_descend .and. tree_best_corr <= coarse_tree_corr )then
+        !     call exhaustive_tree_scan(s, itree, tree_best_corr, nrefs_tree)
+        ! endif
     end subroutine descend_tree_prob
 
     ! Fixed-state variant: evaluates only the provided state during descent
@@ -114,9 +114,9 @@ contains
             if( inode_next == 0 ) exit
             inode = inode_next
         end do
-        if( did_descend .and. tree_best_corr <= coarse_tree_corr )then
-            call exhaustive_tree_scan_fixed_state(s, itree, istate_fixed, tree_best_corr, nrefs_tree)
-        endif
+        ! if( did_descend .and. tree_best_corr <= coarse_tree_corr )then
+        !     call exhaustive_tree_scan_fixed_state(s, itree, istate_fixed, tree_best_corr, nrefs_tree)
+        ! endif
     end subroutine descend_tree_prob_fixed_state
 
     integer function get_tree_for_ref( s, iref, ntrees ) result(itree)
