@@ -213,7 +213,9 @@ contains
             call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         call build%spproj%write_segment_inside(params%oritype)
-        call eulprob_obj_glob_neigh%new(params, build, pinds, params%neigh_type)
+        ! Global object only needs sampled-set maps before reading partition sparse tables.
+        ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
+        call eulprob_obj_glob_neigh%new(params, build, pinds, params%neigh_type, build_sparse_graph=.false.)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
         if( .not. cline_prob_tab%defined('nparts') )then

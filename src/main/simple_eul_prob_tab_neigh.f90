@@ -74,7 +74,7 @@ contains
     ! Initializes the global particle/reference maps and builds
     ! sparse neighborhoods
     !===========================================================
-    subroutine new(self, params, build, pinds, neigh_type, empty_okay, state )
+    subroutine new(self, params, build, pinds, neigh_type, empty_okay, state, build_sparse_graph )
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
@@ -82,28 +82,34 @@ contains
         character(len=*),          intent(in)    :: neigh_type
         logical, optional,         intent(in)    :: empty_okay
         integer, optional,         intent(in)    :: state
+        logical, optional,         intent(in)    :: build_sparse_graph
+        logical :: do_build_sparse_graph
+        do_build_sparse_graph = .true.
+        if( present(build_sparse_graph) ) do_build_sparse_graph = build_sparse_graph
         call self%init_common(params, build, pinds, empty_okay)
         call self%build_ref_lists_and_map
-        call self%check_subspace_prereqs
-        select case(trim(neigh_type))
-            case('geom')
-                call self%build_neigh_mask_from_prev_geom
-            case('subspace_srch')
-                if( present(state) ) then
-                    call self%build_neigh_mask_from_subspace_peaks_one_state(state)
-                else
-                    call self%build_neigh_mask_from_subspace_peaks
-                endif
-            case('ptree_srch')
-                if( present(state) ) then
-                    call self%build_neigh_mask_from_ptree_srch_one_state(state)
-                else
-                    call self%build_neigh_mask_from_ptree_srch
-                endif
-            case default
-                THROW_HARD('new: unsupported neigh_type='//trim(neigh_type)//'; expected geom, subspace_srch or ptree_srch')
-        end select
-        call self%build_ref_adjacency
+        if( do_build_sparse_graph )then
+            call self%check_subspace_prereqs
+            select case(trim(neigh_type))
+                case('geom')
+                    call self%build_neigh_mask_from_prev_geom
+                case('subspace_srch')
+                    if( present(state) ) then
+                        call self%build_neigh_mask_from_subspace_peaks_one_state(state)
+                    else
+                        call self%build_neigh_mask_from_subspace_peaks
+                    endif
+                case('ptree_srch')
+                    if( present(state) ) then
+                        call self%build_neigh_mask_from_ptree_srch_one_state(state)
+                    else
+                        call self%build_neigh_mask_from_ptree_srch
+                    endif
+                case default
+                    THROW_HARD('new: unsupported neigh_type='//trim(neigh_type)//'; expected geom, subspace_srch or ptree_srch')
+            end select
+            call self%build_ref_adjacency
+        endif
     end subroutine new
 
     !===========================================================

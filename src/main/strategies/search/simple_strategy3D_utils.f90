@@ -78,6 +78,12 @@ contains
         if( l_multistates ) neff_states = count(s3D%state_exists)
         if( s%l_neigh )then
             select case(trim(s%refine))
+                case('prob_neigh')
+                    ! Keep convergence accounting consistent with refine=prob.
+                    ! prob_neigh uses a sparse candidate graph, but nrefs_eval is
+                    ! already set by the probabilistic strategy in full-space terms.
+                    nrefs_tot  = s%nprojs * neff_states
+                    nrefs_eval = s%nrefs_eval
                 case('shc_ptree', 'shc_neigh')
                     nrefs_tot  = s%nprojs_sub * neff_states
                     nrefs_eval = s%nrefs_eval
@@ -96,7 +102,11 @@ contains
             nrefs_eval = s%nrefs_eval
             nrefs_tot  = s%nprojs * neff_states
         endif
-        frac = 100.0 * real(nrefs_eval) / real(nrefs_tot)
+        if( nrefs_tot > 0 )then
+            frac = 100.0 * real(nrefs_eval) / real(nrefs_tot)
+        else
+            frac = 100.0
+        endif
         call s%b_ptr%spproj_field%set(s%iptcl, 'frac', frac)
         ! weight
         pw = s3D%proj_space_w(ref, s%ithr)
