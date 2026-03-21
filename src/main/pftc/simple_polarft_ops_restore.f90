@@ -211,6 +211,11 @@ contains
             !$omp end parallel workshare
             fname = string(POLAR_REFS_FBODY)//BIN_EXT
             call self%get_pft_array_dims(fname, tmp_pftsz, tmp_kfromto, tmp_nrefs)
+
+            !!!!!!!!!!!!!!!!!!!! suggested by Claude
+            ! if( tmp_nrefs /= self%ncls .or. tmp_pftsz /= self%pftsz )then
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            
             if( tmp_nrefs /= self%ncls )then
                 !$omp parallel workshare proc_bind(close)
                 self%pfts_merg = ufrac_trec * self%pfts_merg + (1.d0-ufrac_trec) * 0.5d0 * (prev_even + prev_odd)

@@ -1,6 +1,7 @@
 !@descr: helper routines shared by tree-guided 3D search strategies
-module simple_strategy3D_ptree_utils
+module simple_strategy3D_tree_utils
 use simple_core_module_api
+use simple_multi_dendro, only: multi_dendro
 use simple_strategy3D_alloc
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
@@ -8,9 +9,18 @@ implicit none
 real, parameter :: INVALID_CORR        = -huge(1.0)
 real, parameter :: INVALID_CORR_THRESH = INVALID_CORR / 2.0
 
-public :: select_peak_trees, descend_tree_prob, descend_tree_prob_fixed_state, get_tree_for_ref
+public :: select_peak_trees, descend_tree_prob, descend_tree_prob_fixed_state, &
+          &descend_tree_bestfirst, descend_tree_bestfirst_fixed_state, get_tree_for_ref, trace_tree_prob
 private
 #include "simple_local_flags.inc"
+
+abstract interface
+    subroutine tree_ref_eval(ref_idx, best_corr)
+        import
+        integer, intent(in)  :: ref_idx
+        real,    intent(out) :: best_corr
+    end subroutine tree_ref_eval
+end interface
 
 contains
 
@@ -37,7 +47,7 @@ contains
         end do
     end subroutine select_peak_trees
 
-    ! this is descent with multi-state evaluation at each node
+    ! Stochastic descent with multi-state evaluation at each node.
     subroutine descend_tree_prob( s, itree, coarse_tree_corr, nrefs_tree )
         use simple_binary_tree, only: bt_node
         class(strategy3D_srch), intent(inout) :: s
@@ -47,27 +57,24 @@ contains
         type(bt_node) :: node_cur, node_root
         integer       :: inode, inode_next
         real          :: best_corr_L, best_corr_R, tree_best_corr
-        logical       :: did_descend
         node_root = s%b_ptr%block_tree%get_root_node(itree)
         call eval_tree_ref_across_states(s, node_root%ref_idx, tree_best_corr, nrefs_tree)
-        did_descend = .false.
         inode = node_root%node_idx
         do
             if( inode == 0 ) exit
             if( s%b_ptr%block_tree%is_leaf(itree, inode) ) exit
             node_cur = s%b_ptr%block_tree%get_node(itree, inode)
             if( node_cur%left_idx == 0 .and. node_cur%right_idx == 0 ) exit
-            did_descend = .true.
             call eval_child_best(s, itree, node_cur%left_idx,  best_corr_L, nrefs_tree)
             call eval_child_best(s, itree, node_cur%right_idx, best_corr_R, nrefs_tree)
             tree_best_corr = max(tree_best_corr, best_corr_L, best_corr_R)
-            inode_next = choose_next_child(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
+            inode_next = choose_next_child_prob(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
             if( inode_next == 0 ) exit
             inode = inode_next
         end do
     end subroutine descend_tree_prob
 
-    ! Fixed-state variant: evaluates only the provided state during descent
+    ! Fixed-state stochastic descent
     subroutine descend_tree_prob_fixed_state( s, itree, coarse_tree_corr, nrefs_tree, istate_fixed )
         use simple_binary_tree, only: bt_node
         class(strategy3D_srch), intent(inout) :: s
@@ -78,25 +85,79 @@ contains
         type(bt_node) :: node_cur, node_root
         integer       :: inode, inode_next
         real          :: best_corr_L, best_corr_R, tree_best_corr
-        logical       :: did_descend
         node_root = s%b_ptr%block_tree%get_root_node(itree)
         call eval_tree_ref_fixed_state(s, node_root%ref_idx, istate_fixed, tree_best_corr, nrefs_tree)
-        did_descend = .false.
         inode = node_root%node_idx
         do
             if( inode == 0 ) exit
             if( s%b_ptr%block_tree%is_leaf(itree, inode) ) exit
             node_cur = s%b_ptr%block_tree%get_node(itree, inode)
             if( node_cur%left_idx == 0 .and. node_cur%right_idx == 0 ) exit
-            did_descend = .true.
             call eval_child_best_fixed_state(s, itree, node_cur%left_idx,  istate_fixed, best_corr_L, nrefs_tree)
             call eval_child_best_fixed_state(s, itree, node_cur%right_idx, istate_fixed, best_corr_R, nrefs_tree)
             tree_best_corr = max(tree_best_corr, best_corr_L, best_corr_R)
-            inode_next = choose_next_child(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
+            inode_next = choose_next_child_prob(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
             if( inode_next == 0 ) exit
             inode = inode_next
         end do
     end subroutine descend_tree_prob_fixed_state
+
+    ! Best-first descent with multi-state evaluation at each node. This mirrors
+    ! srch_eul_bl_tree: always descend via the child with the best local score,
+    ! while tracking the best node seen
+    subroutine descend_tree_bestfirst( s, itree, coarse_tree_corr, nrefs_tree )
+        use simple_binary_tree, only: bt_node
+        class(strategy3D_srch), intent(inout) :: s
+        integer,                intent(in)    :: itree
+        real,                   intent(in)    :: coarse_tree_corr
+        integer,                intent(inout) :: nrefs_tree
+        type(bt_node) :: node_cur, node_root
+        integer       :: inode, inode_next
+        real          :: best_corr_L, best_corr_R, tree_best_corr
+        node_root = s%b_ptr%block_tree%get_root_node(itree)
+        call eval_tree_ref_across_states(s, node_root%ref_idx, tree_best_corr, nrefs_tree)
+        inode = node_root%node_idx
+        do
+            if( inode == 0 ) exit
+            if( s%b_ptr%block_tree%is_leaf(itree, inode) ) exit
+            node_cur = s%b_ptr%block_tree%get_node(itree, inode)
+            if( node_cur%left_idx == 0 .and. node_cur%right_idx == 0 ) exit
+            call eval_child_best(s, itree, node_cur%left_idx,  best_corr_L, nrefs_tree)
+            call eval_child_best(s, itree, node_cur%right_idx, best_corr_R, nrefs_tree)
+            tree_best_corr = max(tree_best_corr, best_corr_L, best_corr_R)
+            inode_next = choose_next_child_bestfirst(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
+            if( inode_next == 0 ) exit
+            inode = inode_next
+        end do
+    end subroutine descend_tree_bestfirst
+
+    ! Fixed-state best-first descent.
+    subroutine descend_tree_bestfirst_fixed_state( s, itree, coarse_tree_corr, nrefs_tree, istate_fixed )
+        use simple_binary_tree, only: bt_node
+        class(strategy3D_srch), intent(inout) :: s
+        integer,                intent(in)    :: itree
+        real,                   intent(in)    :: coarse_tree_corr
+        integer,                intent(inout) :: nrefs_tree
+        integer,                intent(in)    :: istate_fixed
+        type(bt_node) :: node_cur, node_root
+        integer       :: inode, inode_next
+        real          :: best_corr_L, best_corr_R, tree_best_corr
+        node_root = s%b_ptr%block_tree%get_root_node(itree)
+        call eval_tree_ref_fixed_state(s, node_root%ref_idx, istate_fixed, tree_best_corr, nrefs_tree)
+        inode = node_root%node_idx
+        do
+            if( inode == 0 ) exit
+            if( s%b_ptr%block_tree%is_leaf(itree, inode) ) exit
+            node_cur = s%b_ptr%block_tree%get_node(itree, inode)
+            if( node_cur%left_idx == 0 .and. node_cur%right_idx == 0 ) exit
+            call eval_child_best_fixed_state(s, itree, node_cur%left_idx,  istate_fixed, best_corr_L, nrefs_tree)
+            call eval_child_best_fixed_state(s, itree, node_cur%right_idx, istate_fixed, best_corr_R, nrefs_tree)
+            tree_best_corr = max(tree_best_corr, best_corr_L, best_corr_R)
+            inode_next = choose_next_child_bestfirst(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
+            if( inode_next == 0 ) exit
+            inode = inode_next
+        end do
+    end subroutine descend_tree_bestfirst_fixed_state
 
     integer function get_tree_for_ref( s, iref, ntrees ) result(itree)
         class(strategy3D_srch), intent(in) :: s
@@ -105,6 +166,31 @@ contains
         iproj = s3D%proj_space_proj(iref)
         itree = s%b_ptr%subspace_full2sub_map(iproj)
     end function get_tree_for_ref
+
+    subroutine trace_tree_prob( block_tree, itree, eval_ref )
+        use simple_binary_tree, only: bt_node
+        class(multi_dendro), intent(in) :: block_tree
+        integer,             intent(in) :: itree
+        procedure(tree_ref_eval)        :: eval_ref
+        type(bt_node) :: node_cur, node_root
+        integer       :: inode, inode_next
+        real          :: best_corr_L, best_corr_R, best_corr_root
+        node_root = block_tree%get_root_node(itree)
+        if( node_root%node_idx == 0 ) return
+        call eval_ref(node_root%ref_idx, best_corr_root)
+        inode = node_root%node_idx
+        do
+            if( inode == 0 ) exit
+            if( block_tree%is_leaf(itree, inode) ) exit
+            node_cur = block_tree%get_node(itree, inode)
+            if( node_cur%left_idx == 0 .and. node_cur%right_idx == 0 ) exit
+            call eval_child_best_generic(block_tree, itree, node_cur%left_idx,  eval_ref, best_corr_L)
+            call eval_child_best_generic(block_tree, itree, node_cur%right_idx, eval_ref, best_corr_R)
+            inode_next = choose_next_child_prob(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
+            if( inode_next == 0 ) exit
+            inode = inode_next
+        end do
+    end subroutine trace_tree_prob
 
     subroutine eval_child_best( s, itree, child_idx, best_corr, nrefs_tree )
         use simple_binary_tree, only: bt_node
@@ -120,6 +206,21 @@ contains
         if( node_child%ref_idx == 0 ) return
         call eval_tree_ref_across_states(s, node_child%ref_idx, best_corr, nrefs_tree)
     end subroutine eval_child_best
+
+    subroutine eval_child_best_generic( block_tree, itree, child_idx, eval_ref, best_corr )
+        use simple_binary_tree, only: bt_node
+        class(multi_dendro), intent(in)    :: block_tree
+        integer,             intent(in)    :: itree
+        integer,             intent(in)    :: child_idx
+        procedure(tree_ref_eval)           :: eval_ref
+        real,                intent(out)   :: best_corr
+        type(bt_node) :: node_child
+        best_corr = INVALID_CORR
+        if( child_idx == 0 ) return
+        node_child = block_tree%get_node(itree, child_idx)
+        if( node_child%ref_idx == 0 ) return
+        call eval_ref(node_child%ref_idx, best_corr)
+    end subroutine eval_child_best_generic
 
     subroutine eval_child_best_fixed_state( s, itree, child_idx, istate_fixed, best_corr, nrefs_tree )
         use simple_binary_tree, only: bt_node
@@ -242,7 +343,7 @@ contains
         if( allocated(tree_refs) ) deallocate(tree_refs)
     end subroutine exhaustive_tree_scan_fixed_state
 
-    integer function choose_next_child( left_idx, right_idx, corr_left, corr_right ) result(inode_next)
+    integer function choose_next_child_prob( left_idx, right_idx, corr_left, corr_right ) result(inode_next)
         integer, intent(in) :: left_idx, right_idx
         real,    intent(in) :: corr_left, corr_right
         real :: cmax
@@ -282,7 +383,35 @@ contains
         else
             inode_next = right_idx
         endif
-    end function choose_next_child
+    end function choose_next_child_prob
+
+    integer function choose_next_child_bestfirst( left_idx, right_idx, corr_left, corr_right ) result(inode_next)
+        integer, intent(in) :: left_idx, right_idx
+        real,    intent(in) :: corr_left, corr_right
+        inode_next = 0
+        if( left_idx == 0 .and. right_idx == 0 ) return
+        if( left_idx == 0 )then
+            inode_next = right_idx
+            return
+        endif
+        if( right_idx == 0 )then
+            inode_next = left_idx
+            return
+        endif
+        if( is_invalid_corr(corr_left) .and. is_invalid_corr(corr_right) )then
+            inode_next = left_idx
+            return
+        endif
+        if( is_invalid_corr(corr_left) )then
+            inode_next = right_idx
+            return
+        endif
+        if( is_invalid_corr(corr_right) )then
+            inode_next = left_idx
+            return
+        endif
+        inode_next = merge(left_idx, right_idx, corr_left >= corr_right)
+    end function choose_next_child_bestfirst
 
     logical pure function is_invalid_corr( corr ) result(invalid)
         real, intent(in) :: corr
@@ -290,8 +419,7 @@ contains
     end function is_invalid_corr
 
     integer function sample_two( p1, p2 ) result(which)
-        real, intent(in) :: p1
-        real, intent(in) :: p2
+        real, intent(in) :: p1, p2
         real :: psum
         real :: r
         psum = p1 + p2
@@ -303,4 +431,4 @@ contains
         which = merge(1, 2, r < p1 / psum)
     end function sample_two
 
-end module simple_strategy3D_ptree_utils
+end module simple_strategy3D_tree_utils

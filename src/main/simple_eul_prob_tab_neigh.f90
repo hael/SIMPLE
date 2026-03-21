@@ -1,10 +1,11 @@
 !> Neighborhood sparse probabilistic ref table + globally coupled assignment
 module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
-use simple_builder,            only: builder
-use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
-use simple_eul_prob_tab,       only: angle_sampling, calc_num2sample, calc_athres, eulprob_dist_switch
-use simple_eulspace_neigh_map, only: eulspace_neigh_map
+use simple_builder,               only: builder
+use simple_pftc_shsrch_grad,      only: pftc_shsrch_grad
+use simple_eul_prob_tab,          only: angle_sampling, calc_num2sample, calc_athres, eulprob_dist_switch
+use simple_eulspace_neigh_map,    only: eulspace_neigh_map
+use simple_strategy3D_tree_utils, only: select_peak_trees, trace_tree_prob
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -52,6 +53,9 @@ contains
     procedure, private :: build_neigh_mask_from_subspace_peaks
     procedure, private :: build_neigh_mask_from_subspace_peaks_one_state
     procedure, private :: build_neigh_mask_from_subspace_peaks_impl
+    procedure, private :: build_neigh_mask_from_ptree_srch
+    procedure, private :: build_neigh_mask_from_ptree_srch_one_state
+    procedure, private :: build_neigh_mask_from_ptree_srch_impl
     procedure, private :: build_neigh_mask_from_prev_geom
     procedure, private :: check_subspace_prereqs
     procedure, private :: build_ref_lists_and_map
@@ -70,32 +74,35 @@ contains
     ! Initializes the global particle/reference maps and builds
     ! sparse neighborhoods
     !===========================================================
-    subroutine new(self, params, build, pinds, l_docked_states, empty_okay, state)
+    subroutine new(self, params, build, pinds, neigh_type, empty_okay, state )
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
-        logical, optional,         intent(in)    :: l_docked_states
+        character(len=*),          intent(in)    :: neigh_type
         logical, optional,         intent(in)    :: empty_okay
         integer, optional,         intent(in)    :: state
-        logical :: ll_docked_states
-        ll_docked_states = .false.
-        if( present(l_docked_states) ) ll_docked_states = l_docked_states
         call self%init_common(params, build, pinds, empty_okay)
         call self%build_ref_lists_and_map
         call self%check_subspace_prereqs
-        if( ll_docked_states ) then
-            ! docked states, no coarse search to define peaks --> build neighborhoods from previous assignments only
-            call self%build_neigh_mask_from_prev_geom
-        else
-            if( present(state) ) then
-                ! coarse search on one state defines the neighborhood peaks 
-                call self%build_neigh_mask_from_subspace_peaks_one_state(state)
-            else
-                ! full coarse search across states defines the neighborhood peaks
-                call self%build_neigh_mask_from_subspace_peaks
-            endif
-        endif
+        select case(trim(neigh_type))
+            case('geom')
+                call self%build_neigh_mask_from_prev_geom
+            case('subspace_srch')
+                if( present(state) ) then
+                    call self%build_neigh_mask_from_subspace_peaks_one_state(state)
+                else
+                    call self%build_neigh_mask_from_subspace_peaks
+                endif
+            case('ptree_srch')
+                if( present(state) ) then
+                    call self%build_neigh_mask_from_ptree_srch_one_state(state)
+                else
+                    call self%build_neigh_mask_from_ptree_srch
+                endif
+            case default
+                THROW_HARD('new: unsupported neigh_type='//trim(neigh_type)//'; expected geom, subspace_srch or ptree_srch')
+        end select
         call self%build_ref_adjacency
     end subroutine new
 
@@ -297,6 +304,172 @@ contains
         endif
         call self%build_neigh_mask_from_subspace_peaks_impl(state)
     end subroutine build_neigh_mask_from_subspace_peaks_one_state
+
+    !===========================================================
+    ! Build per-particle neighborhood mask using the tree-based
+    ! coarse search logic from simple_strategy3D_ptree. Subspace
+    ! representatives are scored first, best score per tree is kept,
+    ! then the top unique trees are selected and only the local
+    ! extrema encountered during the stochastic tree descent are
+    ! inserted into the sparse candidate set.
+    !===========================================================
+    subroutine build_neigh_mask_from_ptree_srch(self)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        call self%build_neigh_mask_from_ptree_srch_impl()
+    end subroutine build_neigh_mask_from_ptree_srch
+
+    subroutine build_neigh_mask_from_ptree_srch_one_state(self, state)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer,                   intent(in)    :: state
+        if( state < 1 .or. state > self%p_ptr%nstates )then
+            THROW_HARD('build_neigh_mask_from_ptree_srch_one_state: state index out of range')
+        endif
+        if( .not. self%state_exists(state) )then
+            THROW_HARD('build_neigh_mask_from_ptree_srch_one_state: requested state does not exist')
+        endif
+        call self%build_neigh_mask_from_ptree_srch_impl(state)
+    end subroutine build_neigh_mask_from_ptree_srch_one_state
+
+    subroutine build_neigh_mask_from_ptree_srch_impl(self, state_opt)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer, optional,         intent(in)    :: state_opt
+        type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
+        type(ori) :: o_prev
+        logical, allocatable :: mask(:,:)
+        integer, allocatable :: peak_trees(:,:)
+        real,    allocatable :: inpl_corrs(:,:), tree_best_corrs(:,:), peak_tree_corrs(:,:)
+        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_shift(2)
+        logical :: do_shift_first
+        integer :: nrots, nspace_sub, npeak_use, ntrees
+        integer :: i, isub, ithr, iptcl, istate, iproj_full, irot, iref_start, iref_prev, itree, state_i
+        integer :: npeak_trees, ipeak, prev_iproj
+        real    :: corr_best
+        call self%check_subspace_prereqs()
+        nspace_sub     = self%p_ptr%nspace_sub
+        ntrees         = self%b_ptr%block_tree%get_n_trees()
+        if( ntrees <= 0 )then
+            THROW_HARD('build_neigh_mask_from_ptree_srch_impl: block_tree has no trees')
+        endif
+        npeak_use      = max(1, min(self%p_ptr%npeaks, ntrees))
+        nrots          = self%b_ptr%pftc%get_nrots()
+        do_shift_first = self%p_ptr%l_sh_first .and. self%p_ptr%l_doshift
+        allocate(mask(self%p_ptr%nspace, self%nptcls), source=.false.)
+        allocate(inpl_corrs(nrots, nthr_glob), tree_best_corrs(ntrees, nthr_glob), &
+                 peak_trees(npeak_use, nthr_glob), peak_tree_corrs(npeak_use, nthr_glob))
+        if( do_shift_first )then
+            lims(:,1)      = -self%p_ptr%trs
+            lims(:,2)      =  self%p_ptr%trs
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            do ithr = 1, nthr_glob
+                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier, &
+                                               maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+            enddo
+        endif
+        !$omp parallel do default(shared) private(i,iptcl,ithr,cxy_shift,o_prev,prev_iproj,istate,iref_start,iref_prev,irot,cxy,isub,iproj_full,itree,corr_best,state_i,npeak_trees,ipeak) &
+        !$omp proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            iptcl = self%pinds(i)
+            ithr  = omp_get_thread_num() + 1
+            cxy_shift = [0.,0.]
+            if( do_shift_first )then
+                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
+                prev_iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)
+                istate     = o_prev%get_state()
+                if( present(state_opt) ) istate = state_opt
+                if( istate >= 1 .and. istate <= self%p_ptr%nstates )then
+                    if( self%state_exists(istate) .and. prev_iproj > 0 )then
+                        if( self%proj_exists(prev_iproj, istate) )then
+                            iref_start = (istate - 1) * self%p_ptr%nspace
+                            iref_prev  = iref_start + prev_iproj
+                            irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
+                            call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
+                            cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                            cxy_shift = 0.
+                            if( irot /= 0 ) cxy_shift = cxy(2:3)
+                        endif
+                    endif
+                endif
+                call o_prev%kill
+            endif
+            tree_best_corrs(:,ithr) = -huge(1.0)
+            do isub = 1, nspace_sub
+                iproj_full = self%b_ptr%subspace_inds(isub)
+                if( iproj_full < 1 .or. iproj_full > self%p_ptr%nspace )then
+                    THROW_HARD('build_neigh_mask_from_ptree_srch_impl: representative projection index out of range')
+                endif
+                itree = self%b_ptr%subspace_full2sub_map(iproj_full)
+                if( itree < 1 .or. itree > ntrees )then
+                    THROW_HARD('build_neigh_mask_from_ptree_srch_impl: tree index out of range')
+                endif
+                if( present(state_opt) )then
+                    if( .not. self%proj_exists(iproj_full, state_opt) ) cycle
+                    call self%b_ptr%pftc%gen_objfun_vals((state_opt - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_corrs(:,ithr))
+                    corr_best = maxval(inpl_corrs(:,ithr))
+                    tree_best_corrs(itree,ithr) = max(tree_best_corrs(itree,ithr), corr_best)
+                else
+                    do state_i = 1, self%nstates
+                        istate = self%active_state_indices(state_i)
+                        if( .not. self%proj_exists(iproj_full, istate) ) cycle
+                        call self%b_ptr%pftc%gen_objfun_vals((istate - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_corrs(:,ithr))
+                        corr_best = maxval(inpl_corrs(:,ithr))
+                        tree_best_corrs(itree,ithr) = max(tree_best_corrs(itree,ithr), corr_best)
+                    enddo
+                endif
+            enddo
+            mask(:,i) = .false.
+            peak_trees(:,ithr)      = 0
+            peak_tree_corrs(:,ithr) = -huge(1.0)
+            call select_peak_trees(tree_best_corrs(:,ithr), peak_trees(:,ithr), peak_tree_corrs(:,ithr), npeak_trees)
+            do ipeak = 1, npeak_trees
+                call trace_tree_prob(self%b_ptr%block_tree, peak_trees(ipeak,ithr), mark_ptree_ref_eval)
+            enddo
+            if( .not. any(mask(:,i) .and. (self%proj_active_state_count > 0)) )then
+                mask(:,i) = (self%proj_active_state_count > 0)
+            endif
+        enddo
+        !$omp end parallel do
+        if( do_shift_first )then
+            do ithr = 1, nthr_glob
+                call grad_shsrch_obj(ithr)%kill
+            enddo
+        endif
+        call self%build_sparse_from_mask(mask)
+        if( allocated(mask)            ) deallocate(mask)
+        if( allocated(inpl_corrs)      ) deallocate(inpl_corrs)
+        if( allocated(tree_best_corrs) ) deallocate(tree_best_corrs)
+        if( allocated(peak_trees)      ) deallocate(peak_trees)
+        if( allocated(peak_tree_corrs) ) deallocate(peak_tree_corrs)
+
+    contains
+
+        subroutine mark_ptree_ref_eval(ref_idx, best_corr)
+            integer, intent(in)  :: ref_idx
+            real,    intent(out) :: best_corr
+            integer :: istate, state_i
+            logical :: have_valid_ref
+            real    :: inpl_corrs(nrots)
+            best_corr      = -huge(1.0)
+            have_valid_ref = .false.
+            if( ref_idx < 1 .or. ref_idx > self%p_ptr%nspace ) return
+            if( present(state_opt) )then
+                if( .not. self%proj_exists(ref_idx, state_opt) ) return
+                call self%b_ptr%pftc%gen_objfun_vals((state_opt - 1) * self%p_ptr%nspace + ref_idx, iptcl, cxy_shift, inpl_corrs)
+                best_corr      = maxval(inpl_corrs)
+                have_valid_ref = .true.
+            else
+                do state_i = 1, self%nstates
+                    istate = self%active_state_indices(state_i)
+                    if( .not. self%proj_exists(ref_idx, istate) ) cycle
+                    call self%b_ptr%pftc%gen_objfun_vals((istate - 1) * self%p_ptr%nspace + ref_idx, iptcl, cxy_shift, inpl_corrs)
+                    best_corr      = max(best_corr, maxval(inpl_corrs))
+                    have_valid_ref = .true.
+                enddo
+            endif
+            if( have_valid_ref ) mask(ref_idx,i) = .true.
+        end subroutine mark_ptree_ref_eval
+
+    end subroutine build_neigh_mask_from_ptree_srch_impl
 
     !===========================================================
     ! Implementation: unified routine for both multi-state and

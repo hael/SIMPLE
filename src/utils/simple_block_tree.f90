@@ -31,7 +31,7 @@ contains
         labels = neigh_map%get_full2sub_map()
         call block_tree%new(labels)
         ntrees = block_tree%get_n_trees()
-        write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
+        if(DEBUG) write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
         !$omp parallel do default(shared) proc_bind(close) private(itree,refs,nrefs,sub_distmat,i,j,oi,oj,osym,inplrotdist,dtmp) schedule(static)
         do itree = 1, ntrees
             refs  = block_tree%get_tree_refs(itree)
@@ -59,7 +59,7 @@ contains
         !$omp end parallel do
         call neigh_map%kill
         if (allocated(labels)) deallocate(labels)
-        print *, 'Finished building block tree.'
+        if(DEBUG) print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree
 
     function gen_eulspace_block_tree_map( neulspace, eulspace, subspace_full2sub_map, pgrpsym ) result(block_tree)
@@ -75,7 +75,7 @@ contains
         real                       :: inplrotdist, dtmp
         call block_tree%new(subspace_full2sub_map)
         ntrees = block_tree%get_n_trees()
-        write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
+        if(DEBUG)write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
         !$omp parallel do default(shared) proc_bind(close) private(itree,refs,nrefs,sub_distmat,i,j,oi,oj,osym,inplrotdist,dtmp) schedule(static)
         do itree = 1, ntrees
             refs  = block_tree%get_tree_refs(itree)
@@ -101,7 +101,7 @@ contains
             deallocate(refs)
         end do
         !$omp end parallel do
-        print *, 'Finished building block tree.'
+        if(DEBUG) print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree_map
 
     ! Exhaustive search over *leaf nodes only* reachable from the root.

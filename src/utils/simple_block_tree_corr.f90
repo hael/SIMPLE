@@ -31,7 +31,7 @@ contains
         labels = neigh_map%get_full2sub_map()
         call block_tree%new(labels)
         ntrees = block_tree%get_n_trees()
-        write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
+        if(DEBUG) write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
         do itree = 1, ntrees
             refs  = block_tree%get_tree_refs(itree)
             nrefs = size(refs)

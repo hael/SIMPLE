@@ -10,8 +10,10 @@ integer, parameter :: REFINE3D_ROUTE_TREE_STD         = 5
 integer, parameter :: REFINE3D_ROUTE_TREE_CAVGS       = 6
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR       = 7
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR_CAVGS = 8
-integer, parameter :: SHC_PTREE_NSPACE                = 2500
-integer, parameter :: SHC_PTREE_NSPACE_SUB            = 300
+integer, parameter :: SHC_PTREE_NSPACE                = 2000
+integer, parameter :: SHC_PTREE_NSPACE_SUB            = 50
+integer, parameter :: PROB_NEIGH_NSPACE               = 12000
+integer, parameter :: PROB_NEIGH_NSPACE_SUB           = 300
 
 type :: refine3D_stage_cfg
     type(string) :: sh_first, prob_sh, ml_reg, fillin, cavgw
@@ -142,7 +144,11 @@ contains
         if( is_tree_route(route) ) cfg%refine = 'shc_ptree'
         cfg%prob_sh = 'no'
         if( istage >= PROBREFINE_STAGE )then
-            cfg%refine  = 'prob'
+            if( is_tree_route(route) )then
+                cfg%refine  = 'prob_neigh'
+            else
+                cfg%refine  = 'prob'
+            endif
             cfg%prob_sh = 'yes'
         endif
         if( trim(params%multivol_mode).eq.'input_oris_fixed' )then
@@ -307,9 +313,14 @@ contains
                 cfg%fracsrch      = 90.
                 cfg%snr_noise_reg = 6.0
         end select
-        if( is_tree_route(route) .and. cfg%refine == 'shc_ptree' )then
-            cfg%inspace     = SHC_PTREE_NSPACE
-            cfg%inspace_sub = SHC_PTREE_NSPACE_SUB
+        if( is_tree_route(route) )then
+            if( cfg%refine == 'shc_ptree' )then
+                cfg%inspace     = SHC_PTREE_NSPACE
+                cfg%inspace_sub = SHC_PTREE_NSPACE_SUB
+            else if( cfg%refine == 'prob_neigh' )then
+                cfg%inspace     = PROB_NEIGH_NSPACE
+                cfg%inspace_sub = PROB_NEIGH_NSPACE_SUB
+            endif
         endif
     end subroutine set_refine3D_phase_controls
 

@@ -90,22 +90,6 @@ contains
         integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        ! exception handling for required neighborhood data structures and incompatible refine policies
-        if( str_has_substr(params%refine, 'prob_state') )then
-            THROW_HARD('exec_prob_tab_neigh does not support refine=prob_state; use the dense probabilistic state path')
-        endif
-        if( .not. allocated(build%subspace_inds) )then
-            THROW_HARD('exec_prob_tab_neigh requires neighborhood representative projections; enable l_neigh and set nspace_sub')
-        endif
-        if( size(build%subspace_inds) /= params%nspace_sub )then
-            THROW_HARD('exec_prob_tab_neigh: size(subspace_inds) must equal nspace_sub')
-        endif
-        if( .not. allocated(build%subspace_full2sub_map) )then
-            THROW_HARD('exec_prob_tab_neigh requires full-space neighborhood labels (subspace_full2sub_map)')
-        endif
-        if( size(build%subspace_full2sub_map) /= params%nspace )then
-            THROW_HARD('exec_prob_tab_neigh: size(subspace_full2sub_map) must equal nspace')
-        endif
         call set_bp_range( params, build, cline )
         ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
         if( build%spproj_field%has_been_sampled() )then
@@ -118,7 +102,7 @@ contains
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
         ! Build polar particle images
         call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
-        call eulprob_obj_part_neigh%new(params, build, pinds)
+        call eulprob_obj_part_neigh%new(params, build, pinds, params%neigh_type)
         call eulprob_obj_part_neigh%fill_tab
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part_neigh%write_tab(fname)
@@ -222,25 +206,6 @@ contains
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-        ! exception handling for required neighborhood setup
-        if( .not. params%l_neigh )then
-            THROW_HARD('exec_prob_align_neigh requires l_neigh=yes')
-        endif
-        if( str_has_substr(params%refine, 'prob_state') )then
-            THROW_HARD('exec_prob_align_neigh does not support refine=prob_state; use exec_prob_align')
-        endif
-        if( .not. allocated(build%subspace_inds) )then
-            THROW_HARD('exec_prob_align_neigh requires neighborhood representative projections; enable l_neigh and set nspace_sub')
-        endif
-        if( size(build%subspace_inds) /= params%nspace_sub )then
-            THROW_HARD('exec_prob_align_neigh: size(subspace_inds) must equal nspace_sub')
-        endif
-        if( .not. allocated(build%subspace_full2sub_map) )then
-            THROW_HARD('exec_prob_align_neigh requires full-space neighborhood labels (subspace_full2sub_map)')
-        endif
-        if( size(build%subspace_full2sub_map) /= params%nspace )then
-            THROW_HARD('exec_prob_align_neigh: size(subspace_full2sub_map) must equal nspace')
-        endif
         if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
             call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
@@ -248,7 +213,7 @@ contains
             call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         call build%spproj%write_segment_inside(params%oritype)
-        call eulprob_obj_glob_neigh%new(params, build, pinds)
+        call eulprob_obj_glob_neigh%new(params, build, pinds, params%neigh_type)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
         if( .not. cline_prob_tab%defined('nparts') )then
