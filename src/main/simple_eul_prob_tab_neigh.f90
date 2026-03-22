@@ -137,7 +137,8 @@ contains
         self%nptcls = size(pinds)
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%assgn_map(self%nptcls))
-        !$omp parallel do default(shared) private(ptcl_local_idx,iptcl) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(ptcl_local_idx,iptcl) &
+        !$omp proc_bind(close) schedule(static)
         do ptcl_local_idx = 1, self%nptcls
             iptcl = self%pinds(ptcl_local_idx)
             self%assgn_map(ptcl_local_idx)%pind   = iptcl
@@ -242,15 +243,15 @@ contains
     end subroutine collect_all_active_projs
 
     ! Expand a projection list into one sparse row over all active states.
-    subroutine materialize_row_from_proj_list(self, iptcl, proj_idx, nproj, row, pref_ref, pref_val, npref)
+    subroutine materialize_row_from_proj_list(self, iptcl, proj_idx, nproj, row, pref_ref, pref_val, pref_nused_opt)
         class(eul_prob_tab_neigh),             intent(in)    :: self
         integer,                               intent(in)    :: iptcl, nproj
         integer,                               intent(in)    :: proj_idx(:)
         type(sparse_row_tmp),                  intent(inout) :: row
         integer,        allocatable, optional, intent(in)    :: pref_ref(:)
         type(ptcl_ref), allocatable, optional, intent(in)    :: pref_val(:)
-        integer,         optional, intent(in)    :: npref
-        integer :: i, j, nrow, iproj, istate, ref_idx, slot, npref_use
+        integer,         optional, intent(in)    :: pref_nused_opt
+        integer :: i, j, nrow, iproj, istate, ref_idx, slot, pref_nused
         if (allocated(row%ref_idx)) deallocate(row%ref_idx)
         if (allocated(row%val))     deallocate(row%val)
         nrow = 0
@@ -264,8 +265,8 @@ contains
         endif
         allocate(row%ref_idx(nrow), row%val(nrow))
         nrow = 0
-        npref_use = 0
-        if (present(npref)) npref_use = npref
+        pref_nused = 0
+        if (present(pref_nused_opt)) pref_nused = pref_nused_opt
         do i = 1, nproj
             iproj = proj_idx(i)
             if (iproj < 1 .or. iproj > self%p_ptr%nspace) cycle
@@ -279,7 +280,7 @@ contains
                 slot = 0
                 if (present(pref_ref) .and. present(pref_val)) then
                     if (allocated(pref_ref) .and. allocated(pref_val)) then
-                        if (npref_use > 0) slot = find_int_buf(pref_ref, npref_use, ref_idx)
+                        if (pref_nused > 0) slot = find_int_buf(pref_ref, ref_idx, pref_nused)
                     endif
                 endif
                 if (slot > 0) then
@@ -343,7 +344,10 @@ contains
         npeak_use  = max(1, min(self%p_ptr%npeaks, nspace_sub))
         call neigh_map%new(self%b_ptr%subspace_full2sub_map, self%p_ptr%nspace_sub)
         allocate(rows(self%nptcls))
-        !$omp parallel do default(shared) private(i,iptcl,o_prev,isub,iproj_full,dtmp,inplrotdist,o_sub,osym,prev_iproj,prev_sub,j,nproj) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) &
+        !$omp private(i,iptcl,o_prev,isub,iproj_full,dtmp,inplrotdist,o_sub,osym, &
+        !$omp& prev_iproj,prev_sub,j,nproj) &
+        !$omp proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             block
                 integer, allocatable :: peak_sub_idxs(:), proj_sel(:), neigh_proj(:)
@@ -455,7 +459,10 @@ contains
                                                maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             enddo
         endif
-        !$omp parallel do default(shared) private(i,ithr,iptcl,o_prev,istate,isub,iproj_full,irot,iref_start,iref_prev,cxy,cxy_shift,state_i,nvalid_sub,prev_sub,prev_iproj,j,nproj) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) &
+        !$omp private(i,ithr,iptcl,o_prev,istate,isub,iproj_full,irot,iref_start, &
+        !$omp& iref_prev,cxy,cxy_shift,state_i,nvalid_sub,prev_sub,prev_iproj,j,nproj) &
+        !$omp proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             block
                 integer, allocatable :: proj_sel(:), neigh_proj(:)
@@ -618,7 +625,7 @@ contains
         logical :: do_shift_first
         integer :: nrots, nspace_sub, npeak_use, ntrees
         integer :: i, isub, ithr, iptcl, istate, iproj_full, irot, iref_start, iref_prev, itree, state_i
-        integer :: npeak_trees, ipeak, nproj, npref, prev_iproj
+        integer :: npeak_trees, ipeak, proj_nused, pref_nused, prev_iproj
         real    :: corr_best
         call self%check_subspace_prereqs()
         nspace_sub     = self%p_ptr%nspace_sub
@@ -628,9 +635,6 @@ contains
         endif
         npeak_use      = max(1, min(self%p_ptr%npeaks, ntrees))
         nrots          = self%b_ptr%pftc%get_nrots()
-
-        print *, '************************ nrots = ', nrots
-
         do_shift_first = self%p_ptr%l_sh_first .and. self%p_ptr%l_doshift
         allocate(rows(self%nptcls))
         allocate(inpl_corrs(nrots, nthr_glob), tree_best_corrs(ntrees, nthr_glob), &
@@ -651,14 +655,17 @@ contains
                                                maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             enddo
         endif
-        !$omp parallel do default(shared) private(i,iptcl,ithr,cxy_shift,o_prev,istate,iref_start,iref_prev,irot,cxy,isub,iproj_full,itree,corr_best,state_i,npeak_trees,ipeak,nproj,npref,prev_iproj,proj_sel,pref_ref,pref_val) &
+        !$omp parallel do default(shared) &
+        !$omp private(i,iptcl,ithr,cxy_shift,o_prev,istate,iref_start,iref_prev, &
+        !$omp& irot,cxy,isub,iproj_full,itree,corr_best,state_i,npeak_trees,ipeak, &
+        !$omp& proj_nused,pref_nused,prev_iproj,proj_sel,pref_ref,pref_val) &
         !$omp proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             iptcl = self%pinds(i)
             ithr  = omp_get_thread_num() + 1
             cxy_shift = [0., 0.]
-            nproj = 0
-            npref = 0
+            proj_nused = 0
+            pref_nused = 0
             if (allocated(proj_sel)) deallocate(proj_sel)
             if (allocated(pref_ref)) deallocate(pref_ref)
             if (allocated(pref_val)) deallocate(pref_val)
@@ -713,8 +720,8 @@ contains
             do ipeak = 1, npeak_trees
                 call trace_tree_prob(self%b_ptr%block_tree, peak_trees(ipeak,ithr), iptcl, ithr, score_ptree_ref)
             enddo
-            if (nproj <= 0) call self%collect_all_active_projs(proj_sel, nproj)
-            call self%materialize_row_from_proj_list(iptcl, proj_sel, nproj, rows(i), pref_ref, pref_val, npref)
+            if (proj_nused <= 0) call self%collect_all_active_projs(proj_sel, proj_nused)
+            call self%materialize_row_from_proj_list(iptcl, proj_sel, proj_nused, rows(i), pref_ref, pref_val, pref_nused)
             if (allocated(proj_sel)) deallocate(proj_sel)
             if (allocated(pref_ref)) deallocate(pref_ref)
             if (allocated(pref_val)) deallocate(pref_val)
@@ -766,7 +773,7 @@ contains
                         v%y = rot_xy_loc(2)
                         v%has_sh = .true.
                     endif
-                    call append_or_improve_ref(pref_ref, pref_val, npref, ref_idx_loc, v)
+                    call append_or_improve_ref(pref_ref, pref_val, pref_nused, ref_idx_loc, v)
                     have_valid = .true.
                 endif
             else
@@ -789,12 +796,12 @@ contains
                         v%y = rot_xy_loc(2)
                         v%has_sh = .true.
                     endif
-                    call append_or_improve_ref(pref_ref, pref_val, npref, ref_idx_loc, v)
+                    call append_or_improve_ref(pref_ref, pref_val, pref_nused, ref_idx_loc, v)
                     have_valid = .true.
                 enddo
             endif
 
-            if (have_valid) call append_unique_int(proj_sel, nproj, iproj_eval)
+            if (have_valid) call append_unique_int(proj_sel, proj_nused, iproj_eval)
         end subroutine score_ptree_ref
 
     end subroutine build_graph_from_ptree_srch_impl
@@ -859,7 +866,10 @@ contains
                 call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier, &
                                                maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             enddo
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,iproj,irot,iref_start,cxy,rotmat,rot_xy,n_candidates,e,ri,candidate_i,n_refine,refine_rank,cxy_prob,iref_full,edge_ready) &
+            !$omp parallel do default(shared) &
+            !$omp private(i,iptcl,ithr,o_prev,istate,iproj,irot,iref_start,cxy, &
+            !$omp& rotmat,rot_xy,n_candidates,e,ri,candidate_i,n_refine,refine_rank, &
+            !$omp& cxy_prob,iref_full,edge_ready) &
             !$omp proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
@@ -943,7 +953,10 @@ contains
                     call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier, &
                                                    maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
                 enddo
-                !$omp parallel do default(shared) private(i,iptcl,ithr,n_candidates,e,ri,istate,iproj,irot,candidate_i,n_refine,refine_rank,cxy,iref_full,iref_start,edge_ready) &
+                !$omp parallel do default(shared) &
+                !$omp private(i,iptcl,ithr,n_candidates,e,ri,istate,iproj,irot, &
+                !$omp& candidate_i,n_refine,refine_rank,cxy,iref_full,iref_start, &
+                !$omp& edge_ready) &
                 !$omp proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
@@ -994,7 +1007,9 @@ contains
                 enddo
                 !$omp end parallel do
             else
-                !$omp parallel do default(shared) private(i,iptcl,ithr,e,ri,istate,iproj,irot,iref_full,iref_start,edge_ready) &
+                !$omp parallel do default(shared) &
+                !$omp private(i,iptcl,ithr,e,ri,istate,iproj,irot,iref_full,iref_start, &
+                !$omp& edge_ready) &
                 !$omp proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
@@ -1030,7 +1045,8 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer :: ptcl_local_idx, edge_idx
         real    :: sum_dist, min_dist, max_dist
-        !$omp parallel do default(shared) private(ptcl_local_idx,edge_idx,sum_dist) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(ptcl_local_idx,edge_idx,sum_dist) &
+        !$omp proc_bind(close) schedule(static)
         do ptcl_local_idx = 1, self%nptcls
             sum_dist = 0.
             do edge_idx = self%ptcl_off(ptcl_local_idx), self%ptcl_off(ptcl_local_idx+1)-1
@@ -1050,7 +1066,8 @@ contains
         min_dist = minval(self%edge_val(:)%dist)
         max_dist = maxval(self%edge_val(:)%dist)
         if ((max_dist - min_dist) < TINY) then
-            !$omp parallel do default(shared) private(edge_idx) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(edge_idx) &
+            !$omp proc_bind(close) schedule(static)
             do edge_idx = 1, self%nedges
                 self%edge_val(edge_idx)%dist = ran3()
             enddo
@@ -1064,7 +1081,9 @@ contains
     subroutine sort_ref_lists_by_dist(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer :: ref_idx, ref_first_ptr, ref_last_ptr, n_ref_edges
-        !$omp parallel do default(shared) private(ref_idx,ref_first_ptr,ref_last_ptr,n_ref_edges) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) &
+        !$omp private(ref_idx,ref_first_ptr,ref_last_ptr,n_ref_edges) &
+        !$omp proc_bind(close) schedule(static)
         do ref_idx = 1, self%nrefs
             ref_first_ptr = self%ref_edge_offsets(ref_idx)
             ref_last_ptr  = self%ref_edge_offsets(ref_idx+1) - 1
@@ -1444,14 +1463,16 @@ contains
 
     ! Helper functions for managing dynamic integer buffers used in reference edge lists
 
-    ! Return the 1-based position of val within buf(1:n), or 0 if not present.
-    integer function find_int_buf(buf, n, val) result(pos)
-        integer, intent(in) :: buf(:)
-        integer, intent(in) :: n, val
-        integer :: i, n_use
+    ! Return the 1-based position of val within buf(1:nused), or 0 if not present.
+    integer function find_int_buf(buf, val, nused) result(pos)
+        integer,           intent(in) :: buf(:)
+        integer,           intent(in) :: val
+        integer, optional, intent(in) :: nused
+        integer :: i, nscan
         pos = 0
-        n_use = max(0, min(n, size(buf)))
-        do i = 1, n_use
+        nscan = size(buf)
+        if (present(nused)) nscan = min(max(nused, 0), nscan)
+        do i = 1, nscan
             if (buf(i) == val) then
                 pos = i
                 return
@@ -1460,81 +1481,63 @@ contains
     end function find_int_buf
 
     ! Append a value to a dynamic integer buffer only if it is not already present.
-    subroutine append_unique_int(buf, n, val)
+    subroutine append_unique_int(buf, nused, val)
         integer, allocatable, intent(inout) :: buf(:)
-        integer,              intent(inout) :: n
+        integer,              intent(inout) :: nused
         integer,              intent(in)    :: val
         integer, allocatable :: tmp(:)
-        integer :: newcap, n_use
-        if (allocated(buf)) then
-            n_use = max(0, min(n, size(buf)))
-            n = n_use
-            if (n_use > 0) then
-                if (find_int_buf(buf, n_use, val) > 0) return
-            endif
-            if (n_use >= size(buf)) then
-                newcap = max(8, 2 * size(buf))
-                allocate(tmp(newcap))
-                if (n_use > 0) tmp(1:n_use) = buf(1:n_use)
-                deallocate(buf)
-                call move_alloc(tmp, buf)
-            endif
-        else
-            allocate(buf(8))
-            n = 0
+        integer :: used_count
+        used_count = 0
+        if (allocated(buf)) used_count = min(max(nused, 0), size(buf))
+        if (used_count > 0) then
+            if (find_int_buf(buf, val, used_count) > 0) return
         endif
-        n = n + 1
-        buf(n) = val
+        allocate(tmp(used_count + 1))
+        if (used_count > 0) tmp(1:used_count) = buf(1:used_count)
+        tmp(used_count + 1) = val
+        call move_alloc(tmp, buf)
+        nused = used_count + 1
     end subroutine append_unique_int
 
     ! Append all values from vals into buf while preserving uniqueness.
-    subroutine append_unique_int_list(buf, n, vals)
+    subroutine append_unique_int_list(buf, nused, vals)
         integer, allocatable, intent(inout) :: buf(:)
-        integer,              intent(inout) :: n
+        integer,              intent(inout) :: nused
         integer,              intent(in)    :: vals(:)
         integer :: i
         do i = 1, size(vals)
-            call append_unique_int(buf, n, vals(i))
+            call append_unique_int(buf, nused, vals(i))
         enddo
     end subroutine append_unique_int_list
 
     ! Insert or update one preferred ref entry, keeping the smaller dist on duplicates.
-    subroutine append_or_improve_ref(pref_ref, pref_val, npref, ref_idx, v)
+    subroutine append_or_improve_ref(pref_ref, pref_val, nused, ref_idx, v)
         integer,        allocatable, intent(inout) :: pref_ref(:)
         type(ptcl_ref), allocatable, intent(inout) :: pref_val(:)
-        integer,                     intent(inout) :: npref
+        integer,                     intent(inout) :: nused
         integer,                     intent(in)    :: ref_idx
         type(ptcl_ref),              intent(in)    :: v
-        integer, allocatable :: tmp_ref(:)
+        integer,        allocatable :: tmp_ref(:)
         type(ptcl_ref), allocatable :: tmp_val(:)
-        integer :: pos, newcap, npref_use
-        if (allocated(pref_ref)) then
-            npref_use = max(0, min(npref, size(pref_ref)))
-            npref = npref_use
-            pos = 0
-            if (npref_use > 0) pos = find_int_buf(pref_ref, npref_use, ref_idx)
-            if (pos > 0) then
-                if (v%dist < pref_val(pos)%dist) pref_val(pos) = v
-                return
-            endif
-            if (npref_use >= size(pref_ref)) then
-                newcap = max(8, 2 * size(pref_ref))
-                allocate(tmp_ref(newcap), tmp_val(newcap))
-                if (npref_use > 0) then
-                    tmp_ref(1:npref_use) = pref_ref(1:npref_use)
-                    tmp_val(1:npref_use) = pref_val(1:npref_use)
-                endif
-                deallocate(pref_ref, pref_val)
-                call move_alloc(tmp_ref, pref_ref)
-                call move_alloc(tmp_val, pref_val)
-            endif
-        else
-            allocate(pref_ref(8), pref_val(8))
-            npref = 0
+        integer :: pos, used_count
+        used_count = 0
+        if (allocated(pref_ref)) used_count = min(max(nused, 0), size(pref_ref))
+        pos = 0
+        if (used_count > 0) pos = find_int_buf(pref_ref, ref_idx, used_count)
+        if (pos > 0) then
+            if (v%dist < pref_val(pos)%dist) pref_val(pos) = v
+            return
         endif
-        npref = npref + 1
-        pref_ref(npref) = ref_idx
-        pref_val(npref) = v
+        allocate(tmp_ref(used_count + 1), tmp_val(used_count + 1))
+        if (used_count > 0) then
+            tmp_ref(1:used_count) = pref_ref(1:used_count)
+            tmp_val(1:used_count) = pref_val(1:used_count)
+        endif
+        tmp_ref(used_count + 1) = ref_idx
+        tmp_val(used_count + 1) = v
+        call move_alloc(tmp_ref, pref_ref)
+        call move_alloc(tmp_val, pref_val)
+        nused = used_count + 1
     end subroutine append_or_improve_ref
 
 end module simple_eul_prob_tab_neigh
