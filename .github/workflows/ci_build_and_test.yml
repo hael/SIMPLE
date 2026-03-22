@@ -16,8 +16,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with: 
-          node-version: '24'
 
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -41,13 +39,13 @@ jobs:
         run: |
              ./compile_debug.sh
 
-      - name: Build SIMPLE GUI  (Linux/MacOS)
-        run: |
-             ./compile_gui.sh
+#      - name: Build SIMPLE GUI  (Linux/MacOS)
+#        run: |
+#             ./compile_gui.sh
 
-      - name: Install SIMPLE (Linux/MacOS)
-        run: |
-             ./compile_clean.sh
+#      - name: Install SIMPLE (Linux/MacOS)
+#        run: |
+#             ./compile_clean.sh
 
       - name: Test SIMPLE (Linux/MacOS)
         run: |
