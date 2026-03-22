@@ -1448,9 +1448,10 @@ contains
     integer function find_int_buf(buf, n, val) result(pos)
         integer, intent(in) :: buf(:)
         integer, intent(in) :: n, val
-        integer :: i
+        integer :: i, n_use
         pos = 0
-        do i = 1, n
+        n_use = max(0, min(n, size(buf)))
+        do i = 1, n_use
             if (buf(i) == val) then
                 pos = i
                 return
@@ -1464,19 +1465,22 @@ contains
         integer,              intent(inout) :: n
         integer,              intent(in)    :: val
         integer, allocatable :: tmp(:)
-        integer :: newcap
+        integer :: newcap, n_use
         if (allocated(buf)) then
-            if (n > 0) then
-                if (find_int_buf(buf, n, val) > 0) return
+            n_use = max(0, min(n, size(buf)))
+            n = n_use
+            if (n_use > 0) then
+                if (find_int_buf(buf, n_use, val) > 0) return
             endif
-            if (n == size(buf)) then
+            if (n_use >= size(buf)) then
                 newcap = max(8, 2 * size(buf))
                 allocate(tmp(newcap))
-                if (n > 0) tmp(1:n) = buf(1:n)
+                if (n_use > 0) tmp(1:n_use) = buf(1:n_use)
                 call move_alloc(tmp, buf)
             endif
         else
             allocate(buf(8))
+            n = 0
         endif
         n = n + 1
         buf(n) = val
@@ -1502,26 +1506,29 @@ contains
         type(ptcl_ref),              intent(in)    :: v
         integer, allocatable :: tmp_ref(:)
         type(ptcl_ref), allocatable :: tmp_val(:)
-        integer :: pos, newcap
+        integer :: pos, newcap, npref_use
         if (allocated(pref_ref)) then
+            npref_use = max(0, min(npref, size(pref_ref)))
+            npref = npref_use
             pos = 0
-            if (npref > 0) pos = find_int_buf(pref_ref, npref, ref_idx)
+            if (npref_use > 0) pos = find_int_buf(pref_ref, npref_use, ref_idx)
             if (pos > 0) then
                 if (v%dist < pref_val(pos)%dist) pref_val(pos) = v
                 return
             endif
-            if (npref == size(pref_ref)) then
+            if (npref_use >= size(pref_ref)) then
                 newcap = max(8, 2 * size(pref_ref))
                 allocate(tmp_ref(newcap), tmp_val(newcap))
-                if (npref > 0) then
-                    tmp_ref(1:npref) = pref_ref(1:npref)
-                    tmp_val(1:npref) = pref_val(1:npref)
+                if (npref_use > 0) then
+                    tmp_ref(1:npref_use) = pref_ref(1:npref_use)
+                    tmp_val(1:npref_use) = pref_val(1:npref_use)
                 endif
                 call move_alloc(tmp_ref, pref_ref)
                 call move_alloc(tmp_val, pref_val)
             endif
         else
             allocate(pref_ref(8), pref_val(8))
+            npref = 0
         endif
         npref = npref + 1
         pref_ref(npref) = ref_idx
