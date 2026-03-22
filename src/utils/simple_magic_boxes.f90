@@ -22,6 +22,8 @@ interface magic_pftsz
     module procedure magic_pftsz_1, magic_pftsz_2
 end interface magic_pftsz
 
+integer, parameter :: MIN_PFTSZ = 36
+
 contains
 
     !>  For finding fftw-friendly dimension for polar representation from mask radius
@@ -37,6 +39,7 @@ contains
             ! defaults to original logic when relative size difference > 10%
             magic_pftsz_1 = pftsz_old
         endif
+        magic_pftsz_1 = max(MIN_PFTSZ, magic_pftsz_1)
     end function magic_pftsz_1
 
     !>  For finding fftw-friendly dimension for polar representation
