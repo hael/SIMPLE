@@ -658,7 +658,8 @@ contains
         !$omp parallel do default(shared) &
         !$omp private(i,iptcl,ithr,cxy_shift,o_prev,istate,iref_start,iref_prev, &
         !$omp& irot,cxy,isub,iproj_full,itree,corr_best,state_i,npeak_trees,ipeak, &
-        !$omp& proj_nused,pref_nused,prev_iproj,proj_sel,pref_ref,pref_val) &
+        !$omp& proj_nused,pref_nused,prev_iproj) &
+        !$omp firstprivate(proj_sel,pref_ref,pref_val) &
         !$omp proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             iptcl = self%pinds(i)
@@ -1520,8 +1521,11 @@ contains
         integer,        allocatable :: tmp_ref(:)
         type(ptcl_ref), allocatable :: tmp_val(:)
         integer :: pos, used_count
+        if (allocated(pref_ref) .neqv. allocated(pref_val)) then
+            THROW_HARD('append_or_improve_ref: pref_ref/pref_val allocation mismatch')
+        endif
         used_count = 0
-        if (allocated(pref_ref)) used_count = min(max(nused, 0), size(pref_ref))
+        if (allocated(pref_ref)) used_count = min(max(nused, 0), min(size(pref_ref), size(pref_val)))
         pos = 0
         if (used_count > 0) pos = find_int_buf(pref_ref, ref_idx, used_count)
         if (pos > 0) then
