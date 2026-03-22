@@ -17,6 +17,7 @@ contains
     procedure, private :: new_from_spaces
     generic            :: new => new_from_labels, new_from_spaces
     procedure          :: get_neighbors_mask
+    procedure          :: get_neighbors_list
     procedure          :: get_neighbors_mask_pooled
     procedure          :: get_full2sub_map
     procedure          :: get_nspace
@@ -86,6 +87,20 @@ contains
         if (sub_idx < 1 .or. sub_idx > self%nsub) THROW_HARD('get_neighbors_mask: sub_idx out of range')
         mask = (self%full2sub_map == sub_idx)
     end subroutine get_neighbors_mask
+
+    subroutine get_neighbors_list(self, sub_idx, proj_list)
+        class(eulspace_neigh_map), intent(in)  :: self
+        integer,                   intent(in)  :: sub_idx
+        integer, allocatable,      intent(out) :: proj_list(:)
+        integer :: nsel, i
+
+        if (.not. allocated(self%full2sub_map)) THROW_HARD('get_neighbors_list: map not initialized')
+        if (sub_idx < 1 .or. sub_idx > self%nsub) THROW_HARD('get_neighbors_list: sub_idx out of range')
+
+        nsel = count(self%full2sub_map == sub_idx)
+        allocate(proj_list(nsel))
+        if (nsel > 0) proj_list = pack([(i, i=1,self%nspace)], self%full2sub_map == sub_idx)
+    end subroutine get_neighbors_list
 
     subroutine get_neighbors_mask_pooled(self, sub_idxs, mask)
         class(eulspace_neigh_map), intent(in)  :: self
