@@ -15,9 +15,10 @@ private
 #include "simple_local_flags.inc"
 
 abstract interface
-    subroutine tree_ref_eval(ref_idx, ithr, best_corr)
+    subroutine tree_ref_eval(ref_idx, iptcl, ithr, best_corr)
         import
         integer, intent(in)  :: ref_idx
+        integer, intent(in)  :: iptcl
         integer, intent(in)  :: ithr
         real,    intent(out) :: best_corr
     end subroutine tree_ref_eval
@@ -168,10 +169,11 @@ contains
         itree = s%b_ptr%subspace_full2sub_map(iproj)
     end function get_tree_for_ref
 
-    subroutine trace_tree_prob( block_tree, itree, ithr, eval_ref )
+    subroutine trace_tree_prob( block_tree, itree, iptcl, ithr, eval_ref )
         use simple_binary_tree, only: bt_node
         class(multi_dendro), intent(in) :: block_tree
         integer,             intent(in) :: itree
+        integer,             intent(in) :: iptcl
         integer,             intent(in) :: ithr
         procedure(tree_ref_eval)        :: eval_ref
         type(bt_node) :: node_cur, node_root
@@ -179,15 +181,15 @@ contains
         real          :: best_corr_L, best_corr_R, best_corr_root
         node_root = block_tree%get_root_node(itree)
         if( node_root%node_idx == 0 ) return
-        call eval_ref(node_root%ref_idx, ithr, best_corr_root)
+        call eval_ref(node_root%ref_idx, iptcl, ithr, best_corr_root)
         inode = node_root%node_idx
         do
             if( inode == 0 ) exit
             if( block_tree%is_leaf(itree, inode) ) exit
             node_cur = block_tree%get_node(itree, inode)
             if( node_cur%left_idx == 0 .and. node_cur%right_idx == 0 ) exit
-            call eval_child_best_generic(block_tree, itree, node_cur%left_idx,  ithr, eval_ref, best_corr_L)
-            call eval_child_best_generic(block_tree, itree, node_cur%right_idx, ithr, eval_ref, best_corr_R)
+            call eval_child_best_generic(block_tree, itree, node_cur%left_idx,  iptcl, ithr, eval_ref, best_corr_L)
+            call eval_child_best_generic(block_tree, itree, node_cur%right_idx, iptcl, ithr, eval_ref, best_corr_R)
             inode_next = choose_next_child_prob(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
             if( inode_next == 0 ) exit
             inode = inode_next
@@ -209,11 +211,12 @@ contains
         call eval_tree_ref_across_states(s, node_child%ref_idx, best_corr, nrefs_tree)
     end subroutine eval_child_best
 
-    subroutine eval_child_best_generic( block_tree, itree, child_idx, ithr, eval_ref, best_corr )
+    subroutine eval_child_best_generic( block_tree, itree, child_idx, iptcl, ithr, eval_ref, best_corr )
         use simple_binary_tree, only: bt_node
         class(multi_dendro), intent(in)    :: block_tree
         integer,             intent(in)    :: itree
         integer,             intent(in)    :: child_idx
+        integer,             intent(in)    :: iptcl
         integer,             intent(in)    :: ithr
         procedure(tree_ref_eval)           :: eval_ref
         real,                intent(out)   :: best_corr
@@ -222,7 +225,7 @@ contains
         if( child_idx == 0 ) return
         node_child = block_tree%get_node(itree, child_idx)
         if( node_child%ref_idx == 0 ) return
-        call eval_ref(node_child%ref_idx, ithr, best_corr)
+        call eval_ref(node_child%ref_idx, iptcl, ithr, best_corr)
     end subroutine eval_child_best_generic
 
     subroutine eval_child_best_fixed_state( s, itree, child_idx, istate_fixed, best_corr, nrefs_tree )

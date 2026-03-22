@@ -711,7 +711,7 @@ contains
             peak_tree_corrs(:,ithr) = -huge(1.0)
             call select_peak_trees(tree_best_corrs(:,ithr), peak_trees(:,ithr), peak_tree_corrs(:,ithr), npeak_trees)
             do ipeak = 1, npeak_trees
-                call trace_tree_prob(self%b_ptr%block_tree, peak_trees(ipeak,ithr), ithr, score_ptree_ref)
+                call trace_tree_prob(self%b_ptr%block_tree, peak_trees(ipeak,ithr), iptcl, ithr, score_ptree_ref)
             enddo
             if (nproj <= 0) call self%collect_all_active_projs(proj_sel, nproj)
             call self%materialize_row_from_proj_list(iptcl, proj_sel, nproj, rows(i), pref_ref, pref_val, npref)
@@ -736,8 +736,9 @@ contains
 
     contains
 
-        subroutine score_ptree_ref(iproj_eval, ithr_eval, best_corr)
+        subroutine score_ptree_ref(iproj_eval, iptcl_eval, ithr_eval, best_corr)
             integer, intent(in)  :: iproj_eval
+            integer, intent(in)  :: iptcl_eval
             integer, intent(in)  :: ithr_eval
             real,    intent(out) :: best_corr
             integer :: istate_loc, state_j, irot_loc, ref_idx_loc
@@ -749,13 +750,13 @@ contains
             if (iproj_eval < 1 .or. iproj_eval > self%p_ptr%nspace) return
             if (present(state_opt)) then
                 if (.not. self%proj_exists(iproj_eval, state_opt)) return
-                call self%b_ptr%pftc%gen_objfun_vals((state_opt - 1) * self%p_ptr%nspace + iproj_eval, iptcl, cxy_shift, inpl_corrs(:,ithr_eval))
+                call self%b_ptr%pftc%gen_objfun_vals((state_opt - 1) * self%p_ptr%nspace + iproj_eval, iptcl_eval, cxy_shift, inpl_corrs(:,ithr_eval))
                 best_corr = maxval(inpl_corrs(:,ithr_eval))
                 dist_obj = eulprob_dist_switch(inpl_corrs(:,ithr_eval), self%p_ptr%cc_objfun)
                 irot_loc = angle_sampling(dist_obj, dists_sorted(:,ithr_eval), inds_sorted(:,ithr_eval), inpl_angle_thres(state_opt), self%p_ptr%prob_athres)
                 ref_idx_loc = self%ref_index_map(iproj_eval, state_opt)
                 if (ref_idx_loc > 0) then
-                    call self%init_edge_default(iptcl, ref_idx_loc, v)
+                    call self%init_edge_default(iptcl_eval, ref_idx_loc, v)
                     v%dist = dist_obj(irot_loc)
                     v%inpl = irot_loc
                     if (do_shift_first) then
@@ -772,13 +773,13 @@ contains
                 do state_j = 1, self%nstates
                     istate_loc = self%active_state_indices(state_j)
                     if (.not. self%proj_exists(iproj_eval, istate_loc)) cycle
-                    call self%b_ptr%pftc%gen_objfun_vals((istate_loc - 1) * self%p_ptr%nspace + iproj_eval, iptcl, cxy_shift, inpl_corrs(:,ithr_eval))
+                    call self%b_ptr%pftc%gen_objfun_vals((istate_loc - 1) * self%p_ptr%nspace + iproj_eval, iptcl_eval, cxy_shift, inpl_corrs(:,ithr_eval))
                     best_corr = max(best_corr, maxval(inpl_corrs(:,ithr_eval)))
                     dist_obj = eulprob_dist_switch(inpl_corrs(:,ithr_eval), self%p_ptr%cc_objfun)
                     irot_loc = angle_sampling(dist_obj, dists_sorted(:,ithr_eval), inds_sorted(:,ithr_eval), inpl_angle_thres(istate_loc), self%p_ptr%prob_athres)
                     ref_idx_loc = self%ref_index_map(iproj_eval, istate_loc)
                     if (ref_idx_loc <= 0) cycle
-                    call self%init_edge_default(iptcl, ref_idx_loc, v)
+                    call self%init_edge_default(iptcl_eval, ref_idx_loc, v)
                     v%dist = dist_obj(irot_loc)
                     v%inpl = irot_loc
                     if (do_shift_first) then
