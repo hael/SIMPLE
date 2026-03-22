@@ -7,11 +7,12 @@ on:
     branches: [ continuous_integration ]
 
 jobs:
-  Build_and_Test:
-    name: Build SIMPLE and Test 
+  Build:
+    name: Build SIMPLE
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        node-version: [24]
         os: [ubuntu-latest, macos-latest]
 
     steps:
@@ -43,6 +44,35 @@ jobs:
         run: |
              ./compile_gui.sh
 
+  Build_and_Test:
+    name: Build SIMPLE and Test 
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        node-version: [24]
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+             sudo apt-get update
+             echo "Install Basic Dependencies"
+             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev 
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+             echo >> /Users/runner/.bash_profile
+             echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/runner/.bash_profile
+             eval "$(/opt/homebrew/bin/brew shellenv)"
+             brew install jbigkit
+             brew install python@3.10
+             brew install fftw
+             
       - name: Install SIMPLE (Linux/MacOS)
         run: |
              ./compile_clean.sh
