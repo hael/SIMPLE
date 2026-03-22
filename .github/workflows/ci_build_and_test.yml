@@ -2,9 +2,9 @@ name: Build SIMPLE & Run Tests (Linux/MacOS)
 
 on:
   workflow_dispatch:
-    branches: [ continuous-integration ]
+    branches: [ continuous_integration ]
   push:
-    branches: [ continuous-integration ]
+    branches: [ continuous_integration ]
 
 jobs:
   Build_and_Test:
@@ -16,6 +16,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with: 
+          node-version: '24'
 
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
