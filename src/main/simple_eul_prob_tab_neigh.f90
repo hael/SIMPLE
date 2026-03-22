@@ -26,6 +26,14 @@ type :: sparse_row_tmp
     type(ptcl_ref), allocatable :: val(:)
 end type sparse_row_tmp
 
+type :: ptree_thread_buf
+    integer,        allocatable :: proj_sel(:)
+    integer,        allocatable :: pref_ref(:)
+    type(ptcl_ref), allocatable :: pref_val(:)
+    integer                     :: proj_nused = 0
+    integer                     :: pref_nused = 0
+end type ptree_thread_buf
+
 type :: eul_prob_tab_neigh
     class(builder),     pointer :: b_ptr => null()
     class(parameters),  pointer :: p_ptr => null()
@@ -252,6 +260,7 @@ contains
         type(ptcl_ref), allocatable, optional, intent(in)    :: pref_val(:)
         integer,         optional, intent(in)    :: pref_nused_opt
         integer :: i, j, nrow, iproj, istate, ref_idx, slot, pref_nused
+        logical :: have_pref_cache
         if (allocated(row%ref_idx)) deallocate(row%ref_idx)
         if (allocated(row%val))     deallocate(row%val)
         nrow = 0
@@ -267,6 +276,13 @@ contains
         nrow = 0
         pref_nused = 0
         if (present(pref_nused_opt)) pref_nused = pref_nused_opt
+        have_pref_cache = .false.
+        if (present(pref_ref) .and. present(pref_val)) then
+            if (allocated(pref_ref) .and. allocated(pref_val)) then
+                pref_nused = min(max(pref_nused, 0), min(size(pref_ref), size(pref_val)))
+                have_pref_cache = (pref_nused > 0)
+            endif
+        endif
         do i = 1, nproj
             iproj = proj_idx(i)
             if (iproj < 1 .or. iproj > self%p_ptr%nspace) cycle
@@ -278,11 +294,7 @@ contains
                 nrow = nrow + 1
                 row%ref_idx(nrow) = ref_idx
                 slot = 0
-                if (present(pref_ref) .and. present(pref_val)) then
-                    if (allocated(pref_ref) .and. allocated(pref_val)) then
-                        if (pref_nused > 0) slot = find_int_buf(pref_ref, ref_idx, pref_nused)
-                    endif
-                endif
+                if (have_pref_cache) slot = find_int_buf(pref_ref, ref_idx, pref_nused)
                 if (slot > 0) then
                     row%val(nrow) = pref_val(slot)
                 else
@@ -617,15 +629,16 @@ contains
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(ori)              :: o_prev
         type(sparse_row_tmp), allocatable :: rows(:)
-        integer,              allocatable :: peak_trees(:,:), proj_sel(:), pref_ref(:)
+        integer,              allocatable :: peak_trees(:,:)
         real,                 allocatable :: inpl_corrs(:,:), tree_best_corrs(:,:), peak_tree_corrs(:,:), dists_sorted(:,:), inpl_angle_thres(:)
-        type(ptcl_ref),       allocatable :: pref_val(:)
+        type(ptree_thread_buf), allocatable :: tbuf(:)
         integer,              allocatable :: inds_sorted(:,:)
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_shift(2)
-        logical :: do_shift_first
+        logical :: do_shift_first, has_state_opt
         integer :: nrots, nspace_sub, npeak_use, ntrees
+        integer :: state_fixed
         integer :: i, isub, ithr, iptcl, istate, iproj_full, irot, iref_start, iref_prev, itree, state_i
-        integer :: npeak_trees, ipeak, proj_nused, pref_nused, prev_iproj
+        integer :: npeak_trees, ipeak, prev_iproj
         real    :: corr_best
         call self%check_subspace_prereqs()
         nspace_sub     = self%p_ptr%nspace_sub
@@ -636,10 +649,15 @@ contains
         npeak_use      = max(1, min(self%p_ptr%npeaks, ntrees))
         nrots          = self%b_ptr%pftc%get_nrots()
         do_shift_first = self%p_ptr%l_sh_first .and. self%p_ptr%l_doshift
-        allocate(rows(self%nptcls))
-        allocate(inpl_corrs(nrots, nthr_glob), tree_best_corrs(ntrees, nthr_glob), &
-                 peak_trees(npeak_use, nthr_glob), peak_tree_corrs(npeak_use, nthr_glob), &
-                 dists_sorted(nrots, nthr_glob), inds_sorted(nrots, nthr_glob))
+        has_state_opt  = present(state_opt)
+        if (has_state_opt) then
+            state_fixed = state_opt
+        else
+            state_fixed = 1
+        endif
+        allocate(rows(self%nptcls), inpl_corrs(nrots, nthr_glob), tree_best_corrs(ntrees, nthr_glob), &
+                &peak_trees(npeak_use, nthr_glob), peak_tree_corrs(npeak_use, nthr_glob), &
+                &dists_sorted(nrots, nthr_glob), inds_sorted(nrots, nthr_glob), tbuf(nthr_glob))
         allocate(inpl_angle_thres(self%p_ptr%nstates), source=0.)
         do state_i = 1, self%nstates
             istate = self%active_state_indices(state_i)
@@ -658,23 +676,19 @@ contains
         !$omp parallel do default(shared) &
         !$omp private(i,iptcl,ithr,cxy_shift,o_prev,istate,iref_start,iref_prev, &
         !$omp& irot,cxy,isub,iproj_full,itree,corr_best,state_i,npeak_trees,ipeak, &
-        !$omp& proj_nused,pref_nused,prev_iproj) &
-        !$omp firstprivate(proj_sel,pref_ref,pref_val) &
+        !$omp& prev_iproj) &
         !$omp proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             iptcl = self%pinds(i)
             ithr  = omp_get_thread_num() + 1
             cxy_shift = [0., 0.]
-            proj_nused = 0
-            pref_nused = 0
-            if (allocated(proj_sel)) deallocate(proj_sel)
-            if (allocated(pref_ref)) deallocate(pref_ref)
-            if (allocated(pref_val)) deallocate(pref_val)
+            tbuf(ithr)%proj_nused = 0
+            tbuf(ithr)%pref_nused = 0
             if (do_shift_first) then
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
                 prev_iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)
                 istate     = o_prev%get_state()
-                if (present(state_opt)) istate = state_opt
+                if (has_state_opt) istate = state_fixed
                 if (istate >= 1 .and. istate <= self%p_ptr%nstates) then
                     if (self%state_exists(istate) .and. prev_iproj > 0) then
                         if (self%proj_exists(prev_iproj, istate)) then
@@ -693,16 +707,16 @@ contains
             tree_best_corrs(:,ithr) = -huge(1.0)
             do isub = 1, nspace_sub
                 iproj_full = self%b_ptr%subspace_inds(isub)
-                if (iproj_full < 1 .or. iproj_full > self%p_ptr%nspace) then
-                    THROW_HARD('build_graph_from_ptree_srch_impl: representative projection index out of range')
-                endif
+                ! if (iproj_full < 1 .or. iproj_full > self%p_ptr%nspace) then
+                !     THROW_HARD('build_graph_from_ptree_srch_impl: representative projection index out of range')
+                ! endif
                 itree = self%b_ptr%subspace_full2sub_map(iproj_full)
-                if (itree < 1 .or. itree > ntrees) then
-                    THROW_HARD('build_graph_from_ptree_srch_impl: tree index out of range')
-                endif
-                if (present(state_opt)) then
-                    if (.not. self%proj_exists(iproj_full, state_opt)) cycle
-                    call self%b_ptr%pftc%gen_objfun_vals((state_opt - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_corrs(:,ithr))
+                ! if (itree < 1 .or. itree > ntrees) then
+                !     THROW_HARD('build_graph_from_ptree_srch_impl: tree index out of range')
+                ! endif
+                if (has_state_opt) then
+                    if (.not. self%proj_exists(iproj_full, state_fixed)) cycle
+                    call self%b_ptr%pftc%gen_objfun_vals((state_fixed - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_corrs(:,ithr))
                     corr_best = maxval(inpl_corrs(:,ithr))
                     tree_best_corrs(itree,ithr) = max(tree_best_corrs(itree,ithr), corr_best)
                 else
@@ -721,11 +735,11 @@ contains
             do ipeak = 1, npeak_trees
                 call trace_tree_prob(self%b_ptr%block_tree, peak_trees(ipeak,ithr), iptcl, ithr, score_ptree_ref)
             enddo
-            if (proj_nused <= 0) call self%collect_all_active_projs(proj_sel, proj_nused)
-            call self%materialize_row_from_proj_list(iptcl, proj_sel, proj_nused, rows(i), pref_ref, pref_val, pref_nused)
-            if (allocated(proj_sel)) deallocate(proj_sel)
-            if (allocated(pref_ref)) deallocate(pref_ref)
-            if (allocated(pref_val)) deallocate(pref_val)
+            if (tbuf(ithr)%proj_nused <= 0) then
+                call self%collect_all_active_projs(tbuf(ithr)%proj_sel, tbuf(ithr)%proj_nused)
+            endif
+            call self%materialize_row_from_proj_list(iptcl, tbuf(ithr)%proj_sel, tbuf(ithr)%proj_nused, rows(i), &
+                                                     tbuf(ithr)%pref_ref, tbuf(ithr)%pref_val, tbuf(ithr)%pref_nused)
         enddo
         !$omp end parallel do
         if (do_shift_first) then
@@ -734,6 +748,12 @@ contains
             enddo
         endif
         call self%flatten_sparse_rows(rows)
+        do ithr = 1, nthr_glob
+            if (allocated(tbuf(ithr)%proj_sel)) deallocate(tbuf(ithr)%proj_sel)
+            if (allocated(tbuf(ithr)%pref_ref)) deallocate(tbuf(ithr)%pref_ref)
+            if (allocated(tbuf(ithr)%pref_val)) deallocate(tbuf(ithr)%pref_val)
+        enddo
+        if (allocated(tbuf))             deallocate(tbuf)
         if (allocated(inpl_corrs))       deallocate(inpl_corrs)
         if (allocated(tree_best_corrs))  deallocate(tree_best_corrs)
         if (allocated(peak_trees))       deallocate(peak_trees)
@@ -756,13 +776,13 @@ contains
             best_corr  = -huge(1.0)
             have_valid = .false.
             if (iproj_eval < 1 .or. iproj_eval > self%p_ptr%nspace) return
-            if (present(state_opt)) then
-                if (.not. self%proj_exists(iproj_eval, state_opt)) return
-                call self%b_ptr%pftc%gen_objfun_vals((state_opt - 1) * self%p_ptr%nspace + iproj_eval, iptcl_eval, cxy_shift, inpl_corrs(:,ithr_eval))
+            if (has_state_opt) then
+                if (.not. self%proj_exists(iproj_eval, state_fixed)) return
+                call self%b_ptr%pftc%gen_objfun_vals((state_fixed - 1) * self%p_ptr%nspace + iproj_eval, iptcl_eval, cxy_shift, inpl_corrs(:,ithr_eval))
                 best_corr = maxval(inpl_corrs(:,ithr_eval))
                 dist_obj = eulprob_dist_switch(inpl_corrs(:,ithr_eval), self%p_ptr%cc_objfun)
-                irot_loc = angle_sampling(dist_obj, dists_sorted(:,ithr_eval), inds_sorted(:,ithr_eval), inpl_angle_thres(state_opt), self%p_ptr%prob_athres)
-                ref_idx_loc = self%ref_index_map(iproj_eval, state_opt)
+                irot_loc = angle_sampling(dist_obj, dists_sorted(:,ithr_eval), inds_sorted(:,ithr_eval), inpl_angle_thres(state_fixed), self%p_ptr%prob_athres)
+                ref_idx_loc = self%ref_index_map(iproj_eval, state_fixed)
                 if (ref_idx_loc > 0) then
                     call self%init_edge_default(iptcl_eval, ref_idx_loc, v)
                     v%dist = dist_obj(irot_loc)
@@ -774,7 +794,7 @@ contains
                         v%y = rot_xy_loc(2)
                         v%has_sh = .true.
                     endif
-                    call append_or_improve_ref(pref_ref, pref_val, pref_nused, ref_idx_loc, v)
+                    call append_or_improve_ref(tbuf(ithr_eval)%pref_ref, tbuf(ithr_eval)%pref_val, tbuf(ithr_eval)%pref_nused, ref_idx_loc, v)
                     have_valid = .true.
                 endif
             else
@@ -797,12 +817,11 @@ contains
                         v%y = rot_xy_loc(2)
                         v%has_sh = .true.
                     endif
-                    call append_or_improve_ref(pref_ref, pref_val, pref_nused, ref_idx_loc, v)
+                    call append_or_improve_ref(tbuf(ithr_eval)%pref_ref, tbuf(ithr_eval)%pref_val, tbuf(ithr_eval)%pref_nused, ref_idx_loc, v)
                     have_valid = .true.
                 enddo
             endif
-
-            if (have_valid) call append_unique_int(proj_sel, proj_nused, iproj_eval)
+            if (have_valid) call append_unique_int(tbuf(ithr_eval)%proj_sel, tbuf(ithr_eval)%proj_nused, iproj_eval)
         end subroutine score_ptree_ref
 
     end subroutine build_graph_from_ptree_srch_impl
@@ -1487,13 +1506,21 @@ contains
         integer,              intent(inout) :: nused
         integer,              intent(in)    :: val
         integer, allocatable :: tmp(:)
-        integer :: used_count
+        integer :: used_count, cap, new_cap
         used_count = 0
         if (allocated(buf)) used_count = min(max(nused, 0), size(buf))
         if (used_count > 0) then
             if (find_int_buf(buf, val, used_count) > 0) return
         endif
-        allocate(tmp(used_count + 1))
+        cap = 0
+        if (allocated(buf)) cap = size(buf)
+        if (used_count < cap) then
+            buf(used_count + 1) = val
+            nused = used_count + 1
+            return
+        endif
+        new_cap = max(1, max(cap * 2, used_count + 1))
+        allocate(tmp(new_cap))
         if (used_count > 0) tmp(1:used_count) = buf(1:used_count)
         tmp(used_count + 1) = val
         call move_alloc(tmp, buf)
@@ -1520,7 +1547,7 @@ contains
         type(ptcl_ref),              intent(in)    :: v
         integer,        allocatable :: tmp_ref(:)
         type(ptcl_ref), allocatable :: tmp_val(:)
-        integer :: pos, used_count
+        integer :: pos, used_count, cap, new_cap
         if (allocated(pref_ref) .neqv. allocated(pref_val)) then
             THROW_HARD('append_or_improve_ref: pref_ref/pref_val allocation mismatch')
         endif
@@ -1532,7 +1559,16 @@ contains
             if (v%dist < pref_val(pos)%dist) pref_val(pos) = v
             return
         endif
-        allocate(tmp_ref(used_count + 1), tmp_val(used_count + 1))
+        cap = 0
+        if (allocated(pref_ref)) cap = min(size(pref_ref), size(pref_val))
+        if (used_count < cap) then
+            pref_ref(used_count + 1) = ref_idx
+            pref_val(used_count + 1) = v
+            nused = used_count + 1
+            return
+        endif
+        new_cap = max(1, max(cap * 2, used_count + 1))
+        allocate(tmp_ref(new_cap), tmp_val(new_cap))
         if (used_count > 0) then
             tmp_ref(1:used_count) = pref_ref(1:used_count)
             tmp_val(1:used_count) = pref_val(1:used_count)
