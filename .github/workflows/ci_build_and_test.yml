@@ -1,0 +1,121 @@
+name: Build SIMPLE & Run Tests (Linux/MacOS)
+
+on:
+  workflow_dispatch:
+    branches: [ continuous-integration ]
+  push:
+    branches: [ continuous-integration ]
+
+jobs:
+  Build_and_Test:
+    name: Build SIMPLE and Test 
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+             sudo apt-get update
+             echo "Install Basic Dependencies"
+             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev 
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+             echo >> /Users/runner/.bash_profile
+             echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/runner/.bash_profile
+             eval "$(/opt/homebrew/bin/brew shellenv)"
+             brew install jbigkit
+             brew install python@3.10
+             brew install fftw
+             
+      - name: Build SIMPLE in debug mode (Linux/MacOS)
+        run: |
+             ./compile_debug.sh
+
+      - name: Build SIMPLE GUI  (Linux/MacOS)
+        run: |
+             ./compile_gui.sh
+
+      - name: Install SIMPLE (Linux/MacOS)
+        run: |
+             ./compile_clean.sh
+
+      - name: Test SIMPLE (Linux/MacOS)
+        run: |
+             export SIMPLE_EMAIL="my.name@uni.edu"
+             export SIMPLE_QSYS="local"
+             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
+             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
+             echo "-------------------- TEST INSTALL -------------------------"
+             simple_test_install 
+             echo "-------------------- TEST ANGRES -------------------------"
+             simple_test_angres
+             echo "-------------------- TEST ANSI COLORS -------------------------"
+             simple_test_ansi_colors
+             echo "-------------------- TEST BINORIS -------------------------"
+             simple_test_binoris
+             echo "-------------------- TEST BOUNDS FROM MASK3D -------------------------"
+             simple_test_bounds_from_mask3D
+             echo "-------------------- TEST COORS TO WEIGHTS -------------------------"
+             simple_test_corrs2weights
+             echo "-------------------- TEST CTF -------------------------"
+             simple_test_ctf
+             echo "-------------------- TEST EXTR FRAC -------------------------"
+             simple_test_extr_frac
+             echo "-------------------- TEST FILE INPUT OUTPUT IN PARALLEL-------------------------"
+             simple_test_io_parallel
+             echo "-------------------- TEST GRAPHENE MASK -------------------------"
+             simple_test_graphene_mask
+             echo "-------------------- TEST IMAGE FILE -------------------------"
+             simple_test_imgfile
+             echo "-------------------- TEST INSIDE WRITE -------------------------"
+             simple_test_inside_write
+             echo "-------------------- TEST INSTALL -------------------------"
+             simple_test_install
+             echo "-------------------- TEST INPUT OUTPUT -------------------------"
+             simple_test_io
+             echo "-------------------- TEST LPLIMS -------------------------"
+             simple_test_lplims
+             echo "-------------------- TEST MASK -------------------------"
+             simple_test_mask
+             echo "-------------------- TEST MULTIMODAL -------------------------"
+             simple_test_multinomal
+             echo "-------------------- TEST MASK ROUTINES -------------------------"
+             simple_test_msk_routines 
+             echo "-------------------- TEST NEIGH -------------------------"
+             simple_test_neigh
+             echo "-------------------- TEST OPENMP -------------------------"
+             simple_test_openmp
+             echo "-------------------- TEST ORDER CORR -------------------------"
+             simple_test_order_corr
+             echo "-------------------- TEST ORI -------------------------"
+             simple_test_ori
+             echo "-------------------- TEST OTSU -------------------------"
+             simple_test_otsu
+             echo "-------------------- TEST PHASE CORR -------------------------"
+             simple_test_phasecorr
+             echo "-------------------- TEST RANK WEIGHTS -------------------------"
+             simple_test_rank_weights
+             echo "-------------------- TEST SERIALIZE -------------------------"
+             simple_test_serialize
+             echo "-------------------- TEST SIMD -------------------------"
+             simple_test_simd
+             echo "-------------------- TEST STRINGMATCH -------------------------"
+             simple_test_stringmatch
+             echo "-------------------- TEST SYM -------------------------"
+             simple_test_sym
+             echo "-------------------- TEST UNIFORM EULER -------------------------"
+             simple_test_uniform_euler
+             echo "-------------------- TEST UNIFORM ROT -------------------------"
+             simple_test_uniform_rot
+             echo "-------------------- TEST UNITS -------------------------"
+             simple_test_units
+         
+
