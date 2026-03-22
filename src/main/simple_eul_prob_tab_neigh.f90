@@ -1476,6 +1476,7 @@ contains
                 newcap = max(8, 2 * size(buf))
                 allocate(tmp(newcap))
                 if (n_use > 0) tmp(1:n_use) = buf(1:n_use)
+                deallocate(buf)
                 call move_alloc(tmp, buf)
             endif
         else
@@ -1523,6 +1524,7 @@ contains
                     tmp_ref(1:npref_use) = pref_ref(1:npref_use)
                     tmp_val(1:npref_use) = pref_val(1:npref_use)
                 endif
+                deallocate(pref_ref, pref_val)
                 call move_alloc(tmp_ref, pref_ref)
                 call move_alloc(tmp_val, pref_val)
             endif
