@@ -39,9 +39,9 @@ jobs:
         run: |
              ./compile_debug.sh
 
-#      - name: Build SIMPLE GUI  (Linux/MacOS)
-#        run: |
-#             ./compile_gui.sh
+      - name: Build SIMPLE GUI  (Linux/MacOS)
+        run: |
+             ./compile_gui.sh
 
       - name: Install SIMPLE (Linux/MacOS)
         run: |
