@@ -43,9 +43,9 @@ jobs:
 #        run: |
 #             ./compile_gui.sh
 
-#      - name: Install SIMPLE (Linux/MacOS)
-#        run: |
-#             ./compile_clean.sh
+      - name: Install SIMPLE (Linux/MacOS)
+        run: |
+             ./compile_clean.sh
 
       - name: Test SIMPLE (Linux/MacOS)
         run: |
