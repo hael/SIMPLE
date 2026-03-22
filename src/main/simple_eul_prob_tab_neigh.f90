@@ -136,29 +136,21 @@ contains
         integer,                   intent(in)    :: pinds(:)
         logical, optional,         intent(in)    :: empty_okay
         integer, parameter :: MIN_POP = 5
-        integer :: ptcl_local_idx, iptcl
         logical :: l_empty
-        real    :: x
         call self%kill
         self%p_ptr => params
         self%b_ptr => build
         self%nptcls = size(pinds)
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%assgn_map(self%nptcls))
-        !$omp parallel do default(shared) private(ptcl_local_idx,iptcl) &
-        !$omp proc_bind(close) schedule(static)
-        do ptcl_local_idx = 1, self%nptcls
-            iptcl = self%pinds(ptcl_local_idx)
-            self%assgn_map(ptcl_local_idx)%pind   = iptcl
-            self%assgn_map(ptcl_local_idx)%istate = 0
-            self%assgn_map(ptcl_local_idx)%iproj  = 0
-            self%assgn_map(ptcl_local_idx)%inpl   = 0
-            self%assgn_map(ptcl_local_idx)%dist   = huge(x)
-            self%assgn_map(ptcl_local_idx)%x      = 0.
-            self%assgn_map(ptcl_local_idx)%y      = 0.
-            self%assgn_map(ptcl_local_idx)%has_sh = .false.
-        enddo
-        !$omp end parallel do
+        self%assgn_map(:)%pind   = self%pinds(:)
+        self%assgn_map(:)%istate = 0
+        self%assgn_map(:)%iproj  = 0
+        self%assgn_map(:)%inpl   = 0
+        self%assgn_map(:)%dist   = huge(1.)
+        self%assgn_map(:)%x      = 0.
+        self%assgn_map(:)%y      = 0.
+        self%assgn_map(:)%has_sh = .false.
         l_empty = (trim(params%empty3Dcavgs) .eq. 'yes')
         if (present(empty_okay)) l_empty = empty_okay
         self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
@@ -219,15 +211,15 @@ contains
         class(eul_prob_tab_neigh), intent(in)  :: self
         integer,                   intent(in)  :: iptcl, ref_idx
         type(ptcl_ref),            intent(out) :: v
-        real :: x
-        v%pind   = iptcl
-        v%istate = self%ref_state_indices(ref_idx)
-        v%iproj  = self%ref_proj_indices(ref_idx)
-        v%inpl   = 0
-        v%dist   = huge(x)
-        v%x      = 0.
-        v%y      = 0.
-        v%has_sh = .false.
+        v = ptcl_ref( &
+            pind   = iptcl, &
+            istate = self%ref_state_indices(ref_idx), &
+            iproj  = self%ref_proj_indices(ref_idx), &
+            inpl   = 0, &
+            dist   = huge(1.), &
+            x      = 0., &
+            y      = 0., &
+            has_sh = .false. )
     end subroutine init_edge_default
 
     ! Collect all projections that have at least one active state.
@@ -266,7 +258,6 @@ contains
         nrow = 0
         do i = 1, nproj
             iproj = proj_idx(i)
-            if (iproj < 1 .or. iproj > self%p_ptr%nspace) cycle
             nrow = nrow + self%proj_active_state_count(iproj)
         enddo
         if (nrow <= 0) then
@@ -285,7 +276,6 @@ contains
         endif
         do i = 1, nproj
             iproj = proj_idx(i)
-            if (iproj < 1 .or. iproj > self%p_ptr%nspace) cycle
             if (self%proj_active_state_count(iproj) <= 0) cycle
             do j = 1, self%nstates
                 istate = self%active_state_indices(j)
@@ -370,9 +360,6 @@ contains
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
                 do isub = 1, nspace_sub
                     iproj_full = self%b_ptr%subspace_inds(isub)
-                    if (iproj_full < 1 .or. iproj_full > self%p_ptr%nspace) then
-                        THROW_HARD('build_graph_from_prev_geom: representative projection index out of range')
-                    endif
                     call self%b_ptr%eulspace%get_ori(iproj_full, o_sub)
                     call self%b_ptr%pgrpsyms%sym_dists(o_prev, o_sub, osym, dtmp, inplrotdist)
                     sub_dists(isub) = dtmp
@@ -389,15 +376,11 @@ contains
                     endif
                 enddo
                 prev_iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)
-                if (prev_iproj >= 1 .and. prev_iproj <= self%p_ptr%nspace) then
-                    prev_sub = self%b_ptr%subspace_full2sub_map(prev_iproj)
-                    if (prev_sub >= 1 .and. prev_sub <= nspace_sub) then
-                        call neigh_map%get_neighbors_list(prev_sub, neigh_proj)
-                        if (allocated(neigh_proj)) then
-                            call append_unique_int_list(proj_sel, nproj, neigh_proj)
-                            deallocate(neigh_proj)
-                        endif
-                    endif
+                prev_sub = self%b_ptr%subspace_full2sub_map(prev_iproj)
+                call neigh_map%get_neighbors_list(prev_sub, neigh_proj)
+                if (allocated(neigh_proj)) then
+                    call append_unique_int_list(proj_sel, nproj, neigh_proj)
+                    deallocate(neigh_proj)
                 endif
                 if (nproj <= 0) then
                     call self%collect_all_active_projs(proj_sel, nproj)
@@ -483,42 +466,32 @@ contains
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
                 cxy_shift = [0., 0.]
                 prev_iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)
-                prev_sub = 0
-                if (prev_iproj >= 1 .and. prev_iproj <= self%p_ptr%nspace) then
-                    prev_sub = self%b_ptr%subspace_full2sub_map(prev_iproj)
-                endif
+                prev_sub = self%b_ptr%subspace_full2sub_map(prev_iproj)
                 if (has_state_opt) then
                     istate = state_fixed
                     if (do_shift_first) then
-                        if (prev_iproj >= 1 .and. prev_iproj <= self%p_ptr%nspace) then
-                            if (self%proj_exists(prev_iproj, istate)) then
-                                iref_start = (istate - 1) * self%p_ptr%nspace
-                                iref_prev  = iref_start + prev_iproj
-                                irot = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
-                                call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
-                                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                                cxy_shift = 0.
-                                if (irot /= 0) cxy_shift = cxy(2:3)
-                            endif
+                        if (self%proj_exists(prev_iproj, istate)) then
+                            iref_start = (istate - 1) * self%p_ptr%nspace
+                            iref_prev  = iref_start + prev_iproj
+                            irot = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
+                            call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
+                            cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                            cxy_shift = 0.
+                            if (irot /= 0) cxy_shift = cxy(2:3)
                         endif
                     endif
                 else
                     istate = o_prev%get_state()
                     if (do_shift_first) then
-                        if (istate >= 1 .and. istate <= self%p_ptr%nstates) then
-                            if (self%state_exists(istate)) then
-                                if (prev_iproj >= 1 .and. prev_iproj <= self%p_ptr%nspace) then
-                                    if (self%proj_exists(prev_iproj, istate)) then
-                                        iref_start = (istate - 1) * self%p_ptr%nspace
-                                        iref_prev  = iref_start + prev_iproj
-                                        irot = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
-                                        call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
-                                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                                        cxy_shift = 0.
-                                        if (irot /= 0) cxy_shift = cxy(2:3)
-                                    endif
-                                endif
-                            endif
+                        if (istate >= 1 .and. istate <= self%p_ptr%nstates .and. &
+                            self%proj_exists(prev_iproj, istate)) then
+                            iref_start = (istate - 1) * self%p_ptr%nspace
+                            iref_prev  = iref_start + prev_iproj
+                            irot = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
+                            call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
+                            cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                            cxy_shift = 0.
+                            if (irot /= 0) cxy_shift = cxy(2:3)
                         endif
                     endif
                 endif
@@ -526,9 +499,6 @@ contains
                 if (has_state_opt) then
                     do isub = 1, nspace_sub
                         iproj_full = self%b_ptr%subspace_inds(isub)
-                        if (iproj_full < 1 .or. iproj_full > self%p_ptr%nspace) then
-                            THROW_HARD('build_graph_from_subspace_peaks_impl: representative projection index out of range')
-                        endif
                         if (.not. self%proj_exists(iproj_full, state_fixed)) cycle
                         call self%b_ptr%pftc%gen_objfun_vals((state_fixed - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_dists(:,ithr))
                         inpl_dists(:,ithr) = eulprob_dist_switch(inpl_dists(:,ithr), self%p_ptr%cc_objfun)
@@ -538,9 +508,6 @@ contains
                 else
                     do isub = 1, nspace_sub
                         iproj_full = self%b_ptr%subspace_inds(isub)
-                        if (iproj_full < 1 .or. iproj_full > self%p_ptr%nspace) then
-                            THROW_HARD('build_graph_from_subspace_peaks_impl: representative projection index out of range')
-                        endif
                         do state_i = 1, self%nstates
                             istate = self%active_state_indices(state_i)
                             if (.not. self%proj_exists(iproj_full, istate)) cycle
@@ -574,12 +541,10 @@ contains
                         enddo
                     endif
                 endif
-                if (prev_sub >= 1 .and. prev_sub <= nspace_sub) then
-                    call neigh_map%get_neighbors_list(prev_sub, neigh_proj)
-                    if (allocated(neigh_proj)) then
-                        call append_unique_int_list(proj_sel, nproj, neigh_proj)
-                        deallocate(neigh_proj)
-                    endif
+                call neigh_map%get_neighbors_list(prev_sub, neigh_proj)
+                if (allocated(neigh_proj)) then
+                    call append_unique_int_list(proj_sel, nproj, neigh_proj)
+                    deallocate(neigh_proj)
                 endif
                 if (nproj <= 0) then
                     call self%collect_all_active_projs(proj_sel, nproj)
@@ -687,39 +652,38 @@ contains
             if (do_shift_first) then
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
                 prev_iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)
-                istate     = o_prev%get_state()
-                if (has_state_opt) istate = state_fixed
+                if (has_state_opt) then
+                    istate = state_fixed
+                else
+                    istate = o_prev%get_state()
+                endif
                 if (istate >= 1 .and. istate <= self%p_ptr%nstates) then
-                    if (self%state_exists(istate) .and. prev_iproj > 0) then
-                        if (self%proj_exists(prev_iproj, istate)) then
-                            iref_start = (istate - 1) * self%p_ptr%nspace
-                            iref_prev  = iref_start + prev_iproj
-                            irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
-                            call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
-                            cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                            cxy_shift = 0.
-                            if (irot /= 0) cxy_shift = cxy(2:3)
-                        endif
+                    if (self%proj_exists(prev_iproj, istate)) then
+                        iref_start = (istate - 1) * self%p_ptr%nspace
+                        iref_prev  = iref_start + prev_iproj
+                        irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
+                        call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
+                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                        cxy_shift = 0.
+                        if (irot /= 0) cxy_shift = cxy(2:3)
                     endif
                 endif
                 call o_prev%kill
             endif
             tree_best_corrs(:,ithr) = -huge(1.0)
-            do isub = 1, nspace_sub
-                iproj_full = self%b_ptr%subspace_inds(isub)
-                ! if (iproj_full < 1 .or. iproj_full > self%p_ptr%nspace) then
-                !     THROW_HARD('build_graph_from_ptree_srch_impl: representative projection index out of range')
-                ! endif
-                itree = self%b_ptr%subspace_full2sub_map(iproj_full)
-                ! if (itree < 1 .or. itree > ntrees) then
-                !     THROW_HARD('build_graph_from_ptree_srch_impl: tree index out of range')
-                ! endif
-                if (has_state_opt) then
+            if (has_state_opt) then
+                do isub = 1, nspace_sub
+                    iproj_full = self%b_ptr%subspace_inds(isub)
+                    itree = self%b_ptr%subspace_full2sub_map(iproj_full)
                     if (.not. self%proj_exists(iproj_full, state_fixed)) cycle
                     call self%b_ptr%pftc%gen_objfun_vals((state_fixed - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_corrs(:,ithr))
                     corr_best = maxval(inpl_corrs(:,ithr))
                     tree_best_corrs(itree,ithr) = max(tree_best_corrs(itree,ithr), corr_best)
-                else
+                enddo
+            else
+                do isub = 1, nspace_sub
+                    iproj_full = self%b_ptr%subspace_inds(isub)
+                    itree = self%b_ptr%subspace_full2sub_map(iproj_full)
                     do state_i = 1, self%nstates
                         istate = self%active_state_indices(state_i)
                         if (.not. self%proj_exists(iproj_full, istate)) cycle
@@ -727,8 +691,8 @@ contains
                         corr_best = maxval(inpl_corrs(:,ithr))
                         tree_best_corrs(itree,ithr) = max(tree_best_corrs(itree,ithr), corr_best)
                     enddo
-                endif
-            enddo
+                enddo
+            endif
             peak_trees(:,ithr)      = 0
             peak_tree_corrs(:,ithr) = -huge(1.0)
             call select_peak_trees(tree_best_corrs(:,ithr), peak_trees(:,ithr), peak_tree_corrs(:,ithr), npeak_trees)
@@ -1063,23 +1027,18 @@ contains
     ! Normalize per-particle edge distances and map them to a robust global range.
     subroutine ref_normalize_sparse(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        integer :: ptcl_local_idx, edge_idx
+        integer :: ptcl_local_idx, edge_idx, lo, hi
         real    :: sum_dist, min_dist, max_dist
-        !$omp parallel do default(shared) private(ptcl_local_idx,edge_idx,sum_dist) &
+        !$omp parallel do default(shared) private(ptcl_local_idx,lo,hi,sum_dist) &
         !$omp proc_bind(close) schedule(static)
         do ptcl_local_idx = 1, self%nptcls
-            sum_dist = 0.
-            do edge_idx = self%ptcl_off(ptcl_local_idx), self%ptcl_off(ptcl_local_idx+1)-1
-                sum_dist = sum_dist + self%edge_val(edge_idx)%dist
-            enddo
+            lo = self%ptcl_off(ptcl_local_idx)
+            hi = self%ptcl_off(ptcl_local_idx+1)-1
+            sum_dist = sum(self%edge_val(lo:hi)%dist)
             if (sum_dist < TINY) then
-                do edge_idx = self%ptcl_off(ptcl_local_idx), self%ptcl_off(ptcl_local_idx+1)-1
-                    self%edge_val(edge_idx)%dist = 0.
-                enddo
+                self%edge_val(lo:hi)%dist = 0.
             else
-                do edge_idx = self%ptcl_off(ptcl_local_idx), self%ptcl_off(ptcl_local_idx+1)-1
-                    self%edge_val(edge_idx)%dist = self%edge_val(edge_idx)%dist / sum_dist
-                enddo
+                self%edge_val(lo:hi)%dist = self%edge_val(lo:hi)%dist / sum_dist
             endif
         enddo
         !$omp end parallel do
@@ -1278,11 +1237,13 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(string),             intent(in)    :: fbody
         integer,                   intent(in)    :: nparts, numlen
-         type(ptcl_ref), allocatable :: edge_val_loc(:)
+        type(ptcl_ref), allocatable :: edge_val_loc(:), stage_edge_val(:), tmp_stage_edge_val(:)
         integer,         allocatable :: degree_by_ptcl(:), fill_ptr(:), pind_to_local(:), pinds_loc(:), ptcl_off_loc(:)
+        integer,         allocatable :: stage_global_i(:), tmp_stage_global_i(:)
         type(string) :: binfname
         integer      :: funit, addr, io_stat, file_header(3), header_bytes
         integer      :: ipart, nrefs_loc, nptcls_loc, nedges_loc, local_i, global_i, local_e, global_e, ref_idx
+        integer      :: row_deg, stage_nused, stage_cap, needed_cap, new_cap
         if (nparts < 1) then
             THROW_HARD('read_tabs_to_glob: nparts must be >= 1')
         endif
@@ -1293,6 +1254,8 @@ contains
         if (allocated(self%ref_edge_offsets)) deallocate(self%ref_edge_offsets)
         if (allocated(self%ref_edge_indices)) deallocate(self%ref_edge_indices)
         allocate(degree_by_ptcl(self%nptcls), pind_to_local(self%p_ptr%nptcls), source=0)
+        stage_nused = 0
+        stage_cap   = 0
         do global_i = 1, self%nptcls
             if (self%pinds(global_i) < 1 .or. self%pinds(global_i) > self%p_ptr%nptcls) then
                 THROW_HARD('read_tabs_to_glob: global particle index out of range')
@@ -1318,11 +1281,13 @@ contains
             if (nrefs_loc /= self%nrefs) then
                 THROW_HARD('read_tabs_to_glob: nrefs mismatch between sparse partition file and global object')
             endif
-            allocate(pinds_loc(nptcls_loc), ptcl_off_loc(nptcls_loc + 1))
+            allocate(pinds_loc(nptcls_loc), ptcl_off_loc(nptcls_loc + 1), edge_val_loc(nedges_loc))
             addr = header_bytes + 1
             read(unit=funit, pos=addr) pinds_loc
             addr = addr + nptcls_loc * sizeof(pinds_loc(1))
             read(unit=funit, pos=addr) ptcl_off_loc
+            addr = addr + (nptcls_loc + 1) * sizeof(ptcl_off_loc(1))
+            read(unit=funit, pos=addr) edge_val_loc
             call fclose(funit)
             if (ptcl_off_loc(1) /= 1) then
                 THROW_HARD('read_tabs_to_glob: invalid sparse partition offsets')
@@ -1338,15 +1303,29 @@ contains
                 if (global_i <= 0) then
                     THROW_HARD('read_tabs_to_glob: partition file contains particle outside the sampled set')
                 endif
-                if (degree_by_ptcl(global_i) /= 0) then
-                    THROW_HARD('read_tabs_to_glob: duplicate particle across sparse partition files')
-                endif
-                degree_by_ptcl(global_i) = ptcl_off_loc(local_i + 1) - ptcl_off_loc(local_i)
-                if (degree_by_ptcl(global_i) <= 0) then
+                row_deg = ptcl_off_loc(local_i + 1) - ptcl_off_loc(local_i)
+                if (row_deg <= 0) then
                     THROW_HARD('read_tabs_to_glob: sparse partition row has no edges')
                 endif
+                degree_by_ptcl(global_i) = degree_by_ptcl(global_i) + row_deg
+                needed_cap = stage_nused + row_deg
+                if (needed_cap > stage_cap) then
+                    new_cap = max(needed_cap, max(1, stage_cap * 2))
+                    allocate(tmp_stage_global_i(new_cap), tmp_stage_edge_val(new_cap))
+                    if (stage_nused > 0) then
+                        tmp_stage_global_i(1:stage_nused) = stage_global_i(1:stage_nused)
+                        tmp_stage_edge_val(1:stage_nused) = stage_edge_val(1:stage_nused)
+                    endif
+                    call move_alloc(tmp_stage_global_i, stage_global_i)
+                    call move_alloc(tmp_stage_edge_val, stage_edge_val)
+                    stage_cap = new_cap
+                endif
+                stage_global_i(stage_nused + 1:stage_nused + row_deg) = global_i
+                stage_edge_val(stage_nused + 1:stage_nused + row_deg) = &
+                    edge_val_loc(ptcl_off_loc(local_i):ptcl_off_loc(local_i + 1) - 1)
+                stage_nused = stage_nused + row_deg
             enddo
-            deallocate(pinds_loc, ptcl_off_loc)
+            deallocate(pinds_loc, ptcl_off_loc, edge_val_loc)
         enddo
         if (any(degree_by_ptcl <= 0)) then
             THROW_HARD('read_tabs_to_glob: missing sparse neighborhood rows for one or more particles')
@@ -1359,54 +1338,29 @@ contains
         self%nedges = self%ptcl_off(self%nptcls + 1) - 1
         self%maxdeg_ptcl = maxval(degree_by_ptcl)
         allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
+        if (stage_nused /= self%nedges) then
+            THROW_HARD('read_tabs_to_glob: staged edge count does not match reconstructed global size')
+        endif
         allocate(fill_ptr(self%nptcls), source=self%ptcl_off(1:self%nptcls))
-        do ipart = 1, nparts
-            binfname = fbody//int2str_pad(ipart, numlen)//'.dat'
-            if (.not. file_exists(binfname)) then
-                THROW_HARD('file '//binfname%to_char()//' does not exists!')
-            else
-                call fopen(funit, binfname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        do global_e = 1, stage_nused
+            global_i = stage_global_i(global_e)
+            ref_idx = self%ref_index_map(stage_edge_val(global_e)%iproj, stage_edge_val(global_e)%istate)
+            if (ref_idx <= 0) then
+                THROW_HARD('read_tabs_to_glob: sparse partition edge refers to an inactive reference')
             endif
-            call fileiochk('simple_eul_prob_tab_neigh; read_tabs_to_glob; file: '//binfname%to_char(), io_stat)
-            read(unit=funit, pos=1) file_header
-            nptcls_loc = file_header(2)
-            nedges_loc = file_header(3)
-            allocate(pinds_loc(nptcls_loc), ptcl_off_loc(nptcls_loc + 1), edge_val_loc(nedges_loc))
-            addr = header_bytes + 1
-            read(unit=funit, pos=addr) pinds_loc
-            addr = addr + nptcls_loc * sizeof(pinds_loc(1))
-            read(unit=funit, pos=addr) ptcl_off_loc
-            addr = addr + (nptcls_loc + 1) * sizeof(ptcl_off_loc(1))
-            read(unit=funit, pos=addr) edge_val_loc
-            call fclose(funit)
-            do local_i = 1, nptcls_loc
-                global_i = pind_to_local(pinds_loc(local_i))
-                global_e = fill_ptr(global_i)
-                do local_e = ptcl_off_loc(local_i), ptcl_off_loc(local_i + 1) - 1
-                    if (edge_val_loc(local_e)%iproj < 1 .or. edge_val_loc(local_e)%iproj > self%p_ptr%nspace) then
-                        THROW_HARD('read_tabs_to_glob: sparse partition edge has iproj out of range')
-                    endif
-                    if (edge_val_loc(local_e)%istate < 1 .or. edge_val_loc(local_e)%istate > self%p_ptr%nstates) then
-                        THROW_HARD('read_tabs_to_glob: sparse partition edge has istate out of range')
-                    endif
-                    ref_idx = self%ref_index_map(edge_val_loc(local_e)%iproj, edge_val_loc(local_e)%istate)
-                    if (ref_idx <= 0) then
-                        THROW_HARD('read_tabs_to_glob: sparse partition edge refers to an inactive reference')
-                    endif
-                    self%edge_ref_index(global_e) = ref_idx
-                    self%edge_ptcl(global_e)      = global_i
-                    self%edge_val(global_e)       = edge_val_loc(local_e)
-                    global_e = global_e + 1
-                enddo
-                fill_ptr(global_i) = global_e
-            enddo
-            deallocate(pinds_loc, ptcl_off_loc, edge_val_loc)
+            local_e = fill_ptr(global_i)
+            self%edge_ref_index(local_e) = ref_idx
+            self%edge_ptcl(local_e)      = global_i
+            self%edge_val(local_e)       = stage_edge_val(global_e)
+            fill_ptr(global_i) = local_e + 1
         enddo
         if (any(fill_ptr /= self%ptcl_off(2:self%nptcls + 1))) then
             THROW_HARD('read_tabs_to_glob: failed to reconstruct the sparse global table consistently')
         endif
         call self%build_ref_adjacency()
         deallocate(degree_by_ptcl, fill_ptr, pind_to_local)
+        if (allocated(stage_global_i)) deallocate(stage_global_i)
+        if (allocated(stage_edge_val)) deallocate(stage_edge_val)
     end subroutine read_tabs_to_glob
 
     ! Write current particle assignments to a binary stream file.
