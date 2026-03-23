@@ -8,10 +8,10 @@
 !
 module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
-use simple_builder,               only: builder
-use simple_pftc_shsrch_grad,      only: pftc_shsrch_grad
-use simple_eul_prob_tab,          only: angle_sampling, calc_num2sample, calc_athres, eulprob_dist_switch
-use simple_eulspace_neigh_map,    only: eulspace_neigh_map
+use simple_builder,            only: builder
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
+use simple_eul_prob_tab,       only: angle_sampling, calc_num2sample, calc_athres, eulprob_dist_switch
+use simple_eulspace_neigh_map, only: eulspace_neigh_map
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -19,28 +19,28 @@ private
 public :: eul_prob_tab_neigh
 
 type :: eul_prob_tab_neigh
-    class(builder),     pointer :: b_ptr => null()
-    class(parameters),  pointer :: p_ptr => null()
-    integer                     :: nptcls = 0
     integer,        allocatable :: pinds(:)
     type(ptcl_ref), allocatable :: assgn_map(:)
     logical,        allocatable :: proj_exists(:,:)
     logical,        allocatable :: state_exists(:)
-    integer                     :: nstates = 0
-    integer                     :: nrefs   = 0
     integer,        allocatable :: active_state_indices(:)
     integer,        allocatable :: ref_proj_indices(:)
     integer,        allocatable :: ref_state_indices(:)
     integer,        allocatable :: ref_index_map(:,:)
     integer,        allocatable :: proj_active_state_count(:)
-    integer                     :: nedges      = 0
-    integer                     :: maxdeg_ptcl = 0
     integer,        allocatable :: ptcl_off(:)
     integer,        allocatable :: edge_ref_index(:)
     integer,        allocatable :: edge_ptcl(:)
     type(ptcl_ref), allocatable :: edge_val(:)
     integer,        allocatable :: ref_edge_offsets(:)
     integer,        allocatable :: ref_edge_indices(:)
+    class(builder),     pointer :: b_ptr => null()
+    class(parameters),  pointer :: p_ptr => null()
+    integer                     :: nptcls = 0
+    integer                     :: nstates = 0
+    integer                     :: nrefs   = 0
+    integer                     :: nedges      = 0
+    integer                     :: maxdeg_ptcl = 0
 contains
     procedure          :: build_sparse_neigh_graph
     procedure, private :: init_common
@@ -48,6 +48,9 @@ contains
     procedure, private :: check_subspace_prereqs
     procedure, private :: init_edge_default
     procedure, private :: materialize_row_to_csr
+    procedure, private :: finalize_rows_to_csr_geom
+    procedure, private :: finalize_rows_to_csr_subspace
+    generic,   private :: finalize_rows_to_csr => finalize_rows_to_csr_geom, finalize_rows_to_csr_subspace
     procedure, private :: build_graph_from_prev_geom
     procedure, private :: build_graph_from_subspace_peaks
     procedure, private :: build_graph_from_subspace_peaks_one_state
@@ -106,12 +109,12 @@ contains
         logical, optional,         intent(in)    :: empty_okay
         integer, optional,         intent(in)    :: state
         logical, optional,         intent(in)    :: build_sparse_graph
+        type(string)            :: benchfname
         logical                 :: do_build_sparse_graph
         integer(timer_int_kind) :: t_route_tot, t_build_ref_adjacency, t_refine_shift_edges
+        integer                 :: fnr
         real(timer_int_kind)    :: rt_route_build
         real(timer_int_kind)    :: rt_build_ref_adjacency, rt_refine_shift_edges, rt_route_tot
-        type(string)            :: benchfname
-        integer                 :: fnr
         do_build_sparse_graph = .true.
         if (present(build_sparse_graph)) do_build_sparse_graph = build_sparse_graph
         rt_route_build         = 0.
@@ -191,13 +194,13 @@ contains
         logical, optional,         intent(in)    :: empty_okay
         integer, parameter :: MIN_POP = 5
         logical :: l_empty
+        integer :: istate
         call self%kill
         self%p_ptr => params
         self%b_ptr => build
         self%nptcls = size(pinds)
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%assgn_map(self%nptcls))
-        !$omp workshare
         self%assgn_map(:)%pind   = self%pinds(:)
         self%assgn_map(:)%istate = 0
         self%assgn_map(:)%iproj  = 0
@@ -206,17 +209,23 @@ contains
         self%assgn_map(:)%x      = 0.
         self%assgn_map(:)%y      = 0.
         self%assgn_map(:)%has_sh = .false.
-        !$omp end workshare
         l_empty = (trim(params%empty3Dcavgs) .eq. 'yes')
         if (present(empty_okay)) l_empty = empty_okay
         self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
         self%nstates      = count(self%state_exists .eqv. .true.)
+        if (self%nstates == 0) then
+            THROW_HARD('No valid states available after state existence filtering')
+        endif
         if (l_empty) then
             allocate(self%proj_exists(self%p_ptr%nspace, self%p_ptr%nstates), source=.true.)
         else
             self%proj_exists = self%b_ptr%spproj_field%projs_exist(self%p_ptr%nstates, self%p_ptr%nspace, thres=MIN_POP)
         endif
-        self%nrefs = count(self%proj_exists .eqv. .true.)
+        self%nrefs = 0
+        do istate = 1, self%p_ptr%nstates
+            if (.not. self%state_exists(istate)) cycle
+            self%nrefs = self%nrefs + count(self%proj_exists(:, istate))
+        enddo
         if (self%nrefs == 0) then
             THROW_HARD('No valid references available after state/projection existence filtering')
         endif
@@ -225,8 +234,14 @@ contains
     ! Build compressed reference lists and (iproj,istate)->ref index lookup map.
     subroutine build_ref_lists_and_map(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        integer :: state_list_idx, istate, iproj, state_i, local_ref_idx, cnt
         integer, allocatable :: state_ref_counts(:), state_ref_offsets(:)
+        integer :: cnt, iproj, istate, local_ref_idx, state_i, state_list_idx
+        if (self%nstates <= 0) then
+            THROW_HARD('build_ref_lists_and_map: no active states available')
+        endif
+        if (self%nrefs <= 0) then
+            THROW_HARD('build_ref_lists_and_map: no active references available')
+        endif
         allocate(self%active_state_indices(self%nstates), self%ref_proj_indices(self%nrefs), self%ref_state_indices(self%nrefs))
         allocate(self%ref_index_map(self%p_ptr%nspace, self%p_ptr%nstates), self%proj_active_state_count(self%p_ptr%nspace), source=0)
         state_list_idx = 0
@@ -368,20 +383,143 @@ contains
         endif
     end subroutine materialize_row_to_csr
 
+    ! Finalize staged row selections into CSR storage for the geom route.
+    subroutine finalize_rows_to_csr_geom(self, sel_rows, row_nedges, tbuf, inpl_angle_thres)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        type(proj_sel_tmp),        intent(in)    :: sel_rows(:)
+        integer,                   intent(in)    :: row_nedges(:)
+        type(geom_thread_buf),     intent(inout) :: tbuf(:)
+        real,                      intent(in)    :: inpl_angle_thres(:)
+        integer :: i, iptcl, ithr, nproj
+        if (allocated(self%ptcl_off))       deallocate(self%ptcl_off)
+        if (allocated(self%edge_ref_index)) deallocate(self%edge_ref_index)
+        if (allocated(self%edge_ptcl))      deallocate(self%edge_ptcl)
+        if (allocated(self%edge_val))       deallocate(self%edge_val)
+        allocate(self%ptcl_off(self%nptcls + 1))
+        self%ptcl_off(1) = 1
+        do i = 1, self%nptcls
+            if (row_nedges(i) <= 0) then
+                THROW_HARD('finalize_rows_to_csr_geom: particle has zero valid neighbors')
+            endif
+            self%ptcl_off(i+1) = self%ptcl_off(i) + row_nedges(i)
+        enddo
+        self%nedges = self%ptcl_off(self%nptcls + 1) - 1
+        self%maxdeg_ptcl = maxval(row_nedges)
+        allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
+        !$omp parallel do default(shared) private(i,iptcl,ithr,nproj) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            iptcl = self%pinds(i)
+            ithr  = omp_get_thread_num() + 1
+            nproj = size(sel_rows(i)%proj_idx)
+            call self%materialize_row_to_csr(iptcl, i, sel_rows(i)%proj_idx, nproj, self%ptcl_off(i), sel_rows(i)%cxy_shift, &
+                                             sel_rows(i)%shifts_valid, tbuf(ithr)%score_buf, tbuf(ithr)%sorted_dist_scratch, &
+                                             tbuf(ithr)%sorted_idx_scratch, inpl_angle_thres)
+        enddo
+        !$omp end parallel do
+    end subroutine finalize_rows_to_csr_geom
+
+    ! Finalize staged row selections into CSR storage for the subspace route.
+    subroutine finalize_rows_to_csr_subspace(self, sel_rows, row_nedges, tbuf, inpl_angle_thres)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        type(proj_sel_tmp),        intent(in)    :: sel_rows(:)
+        integer,                   intent(in)    :: row_nedges(:)
+        type(subspace_thread_buf), intent(inout) :: tbuf(:)
+        real,                      intent(in)    :: inpl_angle_thres(:)
+        integer :: i, iptcl, ithr, nproj
+        if (allocated(self%ptcl_off))       deallocate(self%ptcl_off)
+        if (allocated(self%edge_ref_index)) deallocate(self%edge_ref_index)
+        if (allocated(self%edge_ptcl))      deallocate(self%edge_ptcl)
+        if (allocated(self%edge_val))       deallocate(self%edge_val)
+        allocate(self%ptcl_off(self%nptcls + 1))
+        self%ptcl_off(1) = 1
+        do i = 1, self%nptcls
+            if (row_nedges(i) <= 0) then
+                THROW_HARD('finalize_rows_to_csr_subspace: particle has zero valid neighbors')
+            endif
+            self%ptcl_off(i+1) = self%ptcl_off(i) + row_nedges(i)
+        enddo
+        self%nedges = self%ptcl_off(self%nptcls + 1) - 1
+        self%maxdeg_ptcl = maxval(row_nedges)
+        allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
+        !$omp parallel do default(shared) private(i,iptcl,ithr,nproj) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            iptcl = self%pinds(i)
+            ithr  = omp_get_thread_num() + 1
+            nproj = size(sel_rows(i)%proj_idx)
+            call self%materialize_row_to_csr(iptcl, i, sel_rows(i)%proj_idx, nproj, self%ptcl_off(i), sel_rows(i)%cxy_shift, &
+                                             sel_rows(i)%shifts_valid, tbuf(ithr)%score_buf, tbuf(ithr)%sorted_dist_scratch, &
+                                             tbuf(ithr)%sorted_idx_scratch, inpl_angle_thres)
+        enddo
+        !$omp end parallel do
+    end subroutine finalize_rows_to_csr_subspace
+
+    ! Release per-particle staged projection selections.
+    subroutine cleanup_staged_rows(sel_rows)
+        type(proj_sel_tmp), allocatable, intent(inout) :: sel_rows(:)
+        integer :: i
+        if (.not. allocated(sel_rows)) return
+        do i = 1, size(sel_rows)
+            if (allocated(sel_rows(i)%proj_idx)) deallocate(sel_rows(i)%proj_idx)
+        enddo
+        deallocate(sel_rows)
+    end subroutine cleanup_staged_rows
+
+    ! Release temporary buffers used by the geom builder.
+    subroutine cleanup_staged_buffers_geom(row_nedges, inpl_angle_thres, tbuf)
+        integer,               allocatable, intent(inout) :: row_nedges(:)
+        real,                  allocatable, intent(inout) :: inpl_angle_thres(:)
+        type(geom_thread_buf), allocatable, intent(inout) :: tbuf(:)
+        integer :: ithr
+        if (allocated(tbuf)) then
+            do ithr = 1, size(tbuf)
+                if (allocated(tbuf(ithr)%sub_dists))            deallocate(tbuf(ithr)%sub_dists)
+                if (allocated(tbuf(ithr)%peak_sub_idxs))        deallocate(tbuf(ithr)%peak_sub_idxs)
+                if (allocated(tbuf(ithr)%score_buf))            deallocate(tbuf(ithr)%score_buf)
+                if (allocated(tbuf(ithr)%sorted_dist_scratch))  deallocate(tbuf(ithr)%sorted_dist_scratch)
+                if (allocated(tbuf(ithr)%sorted_idx_scratch))   deallocate(tbuf(ithr)%sorted_idx_scratch)
+                if (allocated(tbuf(ithr)%proj_sel))             deallocate(tbuf(ithr)%proj_sel)
+            enddo
+            deallocate(tbuf)
+        endif
+        if (allocated(row_nedges))       deallocate(row_nedges)
+        if (allocated(inpl_angle_thres)) deallocate(inpl_angle_thres)
+    end subroutine cleanup_staged_buffers_geom
+
+    ! Release temporary buffers used by the subspace builder.
+    subroutine cleanup_staged_buffers_subspace(inpl_dists, coarse_best_dist, peak_sub_idxs, row_nedges, inpl_angle_thres, tbuf)
+        real,                     allocatable, intent(inout) :: inpl_dists(:,:), coarse_best_dist(:,:)
+        integer,                  allocatable, intent(inout) :: peak_sub_idxs(:,:), row_nedges(:)
+        real,                     allocatable, intent(inout) :: inpl_angle_thres(:)
+        type(subspace_thread_buf), allocatable, intent(inout) :: tbuf(:)
+        integer :: ithr
+        if (allocated(inpl_dists))       deallocate(inpl_dists)
+        if (allocated(coarse_best_dist)) deallocate(coarse_best_dist)
+        if (allocated(peak_sub_idxs))    deallocate(peak_sub_idxs)
+        if (allocated(tbuf)) then
+            do ithr = 1, size(tbuf)
+                if (allocated(tbuf(ithr)%score_buf))            deallocate(tbuf(ithr)%score_buf)
+                if (allocated(tbuf(ithr)%sorted_dist_scratch))  deallocate(tbuf(ithr)%sorted_dist_scratch)
+                if (allocated(tbuf(ithr)%sorted_idx_scratch))   deallocate(tbuf(ithr)%sorted_idx_scratch)
+                if (allocated(tbuf(ithr)%proj_sel))             deallocate(tbuf(ithr)%proj_sel)
+            enddo
+            deallocate(tbuf)
+        endif
+        if (allocated(row_nedges))       deallocate(row_nedges)
+        if (allocated(inpl_angle_thres)) deallocate(inpl_angle_thres)
+    end subroutine cleanup_staged_buffers_subspace
+
     ! Build graph from geometric neighbors around previous particle orientations.
     subroutine build_graph_from_prev_geom(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
+        real, allocatable             :: inpl_angle_thres(:)
+        integer, allocatable          :: neigh_proj(:), row_nedges(:)
         type(proj_sel_tmp), allocatable :: sel_rows(:)
         type(geom_thread_buf), allocatable :: tbuf(:)
-        type(eulspace_neigh_map)          :: neigh_map
-        type(ori) :: o_prev, o_sub, osym
-        integer, allocatable :: neigh_proj(:)
-        integer, allocatable :: row_nedges(:)
-        real, allocatable    :: inpl_angle_thres(:)
-        integer   :: nspace_sub, npeak_use
-        integer   :: i, iptcl, isub, iproj_full, prev_iproj, prev_sub, ithr, state_i, istate, nrots
-        integer   :: j, k, nproj
-        real      :: dtmp, inplrotdist
+        type(eulspace_neigh_map)      :: neigh_map
+        type(ori)                     :: o_prev, o_sub, osym
+        integer :: i, iptcl, iproj_full, isub, istate, ithr, j, npeak_use, nproj
+        integer :: nspace_sub, nrots, prev_iproj, prev_sub, state_i
+        real    :: dtmp, inplrotdist
         nspace_sub = self%p_ptr%nspace_sub
         npeak_use  = max(1, min(self%p_ptr%npeaks, nspace_sub))
         nrots      = self%b_ptr%pftc%get_nrots()
@@ -401,7 +539,7 @@ contains
         enddo
         !$omp parallel do default(shared) &
         !$omp private(i,iptcl,ithr,o_prev,isub,iproj_full,dtmp,inplrotdist,o_sub,osym, &
-        !$omp& prev_iproj,prev_sub,j,nproj) &
+        !$omp& prev_iproj,prev_sub,j,nproj,neigh_proj) &
         !$omp proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             iptcl = self%pinds(i)
@@ -451,46 +589,9 @@ contains
         enddo
         !$omp end parallel do
         call neigh_map%kill
-        if (allocated(self%ptcl_off))       deallocate(self%ptcl_off)
-        if (allocated(self%edge_ref_index)) deallocate(self%edge_ref_index)
-        if (allocated(self%edge_ptcl))      deallocate(self%edge_ptcl)
-        if (allocated(self%edge_val))       deallocate(self%edge_val)
-        allocate(self%ptcl_off(self%nptcls + 1))
-        self%ptcl_off(1) = 1
-        do i = 1, self%nptcls
-            if (row_nedges(i) <= 0) then
-                THROW_HARD('build_graph_from_prev_geom: particle has zero valid neighbors')
-            endif
-            self%ptcl_off(i+1) = self%ptcl_off(i) + row_nedges(i)
-        enddo
-        self%nedges = self%ptcl_off(self%nptcls + 1) - 1
-        self%maxdeg_ptcl = maxval(row_nedges)
-        allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
-        !$omp parallel do default(shared) private(i,iptcl,ithr,nproj) proc_bind(close) schedule(static)
-        do i = 1, self%nptcls
-            iptcl = self%pinds(i)
-            ithr  = omp_get_thread_num() + 1
-            nproj = size(sel_rows(i)%proj_idx)
-            call self%materialize_row_to_csr(iptcl, i, sel_rows(i)%proj_idx, nproj, self%ptcl_off(i), sel_rows(i)%cxy_shift, &
-                                             sel_rows(i)%shifts_valid, tbuf(ithr)%score_buf, tbuf(ithr)%sorted_dist_scratch, &
-                                             tbuf(ithr)%sorted_idx_scratch, inpl_angle_thres)
-        enddo
-        !$omp end parallel do
-        do i = 1, self%nptcls
-            if (allocated(sel_rows(i)%proj_idx)) deallocate(sel_rows(i)%proj_idx)
-        enddo
-        do ithr = 1, nthr_glob
-            if (allocated(tbuf(ithr)%sub_dists))     deallocate(tbuf(ithr)%sub_dists)
-            if (allocated(tbuf(ithr)%peak_sub_idxs)) deallocate(tbuf(ithr)%peak_sub_idxs)
-            if (allocated(tbuf(ithr)%score_buf))           deallocate(tbuf(ithr)%score_buf)
-            if (allocated(tbuf(ithr)%sorted_dist_scratch)) deallocate(tbuf(ithr)%sorted_dist_scratch)
-            if (allocated(tbuf(ithr)%sorted_idx_scratch))  deallocate(tbuf(ithr)%sorted_idx_scratch)
-            if (allocated(tbuf(ithr)%proj_sel))      deallocate(tbuf(ithr)%proj_sel)
-        enddo
-        if (allocated(row_nedges)) deallocate(row_nedges)
-        if (allocated(sel_rows)) deallocate(sel_rows)
-        if (allocated(inpl_angle_thres)) deallocate(inpl_angle_thres)
-        if (allocated(tbuf)) deallocate(tbuf)
+        call self%finalize_rows_to_csr(sel_rows, row_nedges, tbuf, inpl_angle_thres)
+        call cleanup_staged_rows(sel_rows)
+        call cleanup_staged_buffers_geom(row_nedges, inpl_angle_thres, tbuf)
     end subroutine build_graph_from_prev_geom
 
     ! Multi-state wrapper for subspace-peak driven graph construction.
@@ -516,23 +617,19 @@ contains
     subroutine build_graph_from_subspace_peaks_impl(self, state_opt)
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer, optional,         intent(in)    :: state_opt
+        real,                    allocatable :: coarse_best_dist(:,:), inpl_angle_thres(:), inpl_dists(:,:)
+        integer,                 allocatable :: neigh_proj(:), peak_sub_idxs(:,:), row_nedges(:)
         type(proj_sel_tmp), allocatable :: sel_rows(:)
-        real,                 allocatable :: inpl_dists(:,:), coarse_best_dist(:,:)
-        integer,              allocatable :: peak_sub_idxs(:,:)
-        integer,              allocatable :: row_nedges(:)
         type(subspace_thread_buf), allocatable :: tbuf(:)
-        type(eulspace_neigh_map) :: neigh_map
-        type(pftc_shsrch_grad)   :: grad_shsrch_obj(nthr_glob)
-        type(ori)                :: o_prev
-        integer, allocatable     :: neigh_proj(:)
-        real,    allocatable     :: inpl_angle_thres(:)
-        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_shift(2), huge_dist
-        logical :: do_shift_first, has_state_opt
-        integer :: state_fixed, nrots, nspace_sub, npeak_use
-        integer :: i, isub, ithr, iptcl, istate, iproj_full, irot, iref_start, iref_prev
-        integer :: state_i, nvalid_sub, prev_sub, prev_iproj, j, nproj
-        logical :: prev_included
+        type(eulspace_neigh_map)      :: neigh_map
+        type(pftc_shsrch_grad)        :: grad_shsrch_obj(nthr_glob)
+        type(ori)                     :: o_prev
+        logical :: do_shift_first, has_state_opt, prev_included
+        integer :: i, iref_prev, iref_start, iproj_full, iptcl, irot, isub, istate, ithr
+        integer :: j, npeak_use, nproj, nspace_sub, nvalid_sub, nrots, prev_iproj, prev_sub
+        integer :: state_fixed, state_i
         integer(timer_int_kind) :: t_setup, t_shift_init, t_particle_loop, t_finalize
+        real    :: cxy(3), cxy_shift(2), huge_dist, lims(2,2), lims_init(2,2)
         real(timer_int_kind)    :: rt_setup, rt_shift_init, rt_particle_loop, rt_finalize
         rt_setup = 0.
         rt_shift_init = 0.
@@ -580,7 +677,7 @@ contains
         if (L_BENCH_GLOB) t_particle_loop = tic()
         !$omp parallel do default(shared) &
         !$omp private(i,ithr,iptcl,o_prev,istate,isub,iproj_full,irot,iref_start, &
-        !$omp& iref_prev,cxy,cxy_shift,state_i,nvalid_sub,prev_sub,prev_iproj,j,nproj) &
+        !$omp& iref_prev,cxy,cxy_shift,state_i,nvalid_sub,prev_sub,prev_iproj,j,nproj,neigh_proj,prev_included) &
         !$omp proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             iptcl = self%pinds(i)
@@ -699,47 +796,9 @@ contains
             enddo
         endif
         call neigh_map%kill
-        if (allocated(self%ptcl_off))       deallocate(self%ptcl_off)
-        if (allocated(self%edge_ref_index)) deallocate(self%edge_ref_index)
-        if (allocated(self%edge_ptcl))      deallocate(self%edge_ptcl)
-        if (allocated(self%edge_val))       deallocate(self%edge_val)
-        allocate(self%ptcl_off(self%nptcls + 1))
-        self%ptcl_off(1) = 1
-        do i = 1, self%nptcls
-            if (row_nedges(i) <= 0) then
-                THROW_HARD('build_graph_from_subspace_peaks_impl: particle has zero valid neighbors')
-            endif
-            self%ptcl_off(i+1) = self%ptcl_off(i) + row_nedges(i)
-        enddo
-        self%nedges = self%ptcl_off(self%nptcls + 1) - 1
-        self%maxdeg_ptcl = maxval(row_nedges)
-        allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
-        !$omp parallel do default(shared) private(i,iptcl,ithr,nproj) proc_bind(close) schedule(static)
-        do i = 1, self%nptcls
-            iptcl = self%pinds(i)
-            ithr  = omp_get_thread_num() + 1
-            nproj = size(sel_rows(i)%proj_idx)
-            call self%materialize_row_to_csr(iptcl, i, sel_rows(i)%proj_idx, nproj, self%ptcl_off(i), sel_rows(i)%cxy_shift, &
-                                             sel_rows(i)%shifts_valid, tbuf(ithr)%score_buf, tbuf(ithr)%sorted_dist_scratch, &
-                                             tbuf(ithr)%sorted_idx_scratch, inpl_angle_thres)
-        enddo
-        !$omp end parallel do
-        do i = 1, self%nptcls
-            if (allocated(sel_rows(i)%proj_idx)) deallocate(sel_rows(i)%proj_idx)
-        enddo
-        if (allocated(inpl_dists))       deallocate(inpl_dists)
-        if (allocated(coarse_best_dist)) deallocate(coarse_best_dist)
-        if (allocated(peak_sub_idxs))    deallocate(peak_sub_idxs)
-        if (allocated(row_nedges))       deallocate(row_nedges)
-        if (allocated(sel_rows))         deallocate(sel_rows)
-        if (allocated(inpl_angle_thres)) deallocate(inpl_angle_thres)
-        do ithr = 1, nthr_glob
-            if (allocated(tbuf(ithr)%score_buf))           deallocate(tbuf(ithr)%score_buf)
-            if (allocated(tbuf(ithr)%sorted_dist_scratch)) deallocate(tbuf(ithr)%sorted_dist_scratch)
-            if (allocated(tbuf(ithr)%sorted_idx_scratch))  deallocate(tbuf(ithr)%sorted_idx_scratch)
-            if (allocated(tbuf(ithr)%proj_sel)) deallocate(tbuf(ithr)%proj_sel)
-        enddo
-        if (allocated(tbuf)) deallocate(tbuf)
+        call self%finalize_rows_to_csr(sel_rows, row_nedges, tbuf, inpl_angle_thres)
+        call cleanup_staged_rows(sel_rows)
+        call cleanup_staged_buffers_subspace(inpl_dists, coarse_best_dist, peak_sub_idxs, row_nedges, inpl_angle_thres, tbuf)
         if (L_BENCH_GLOB) rt_finalize = toc(t_finalize)
         rt_route_setup         = rt_setup
         rt_route_shift_init    = rt_shift_init
@@ -752,7 +811,7 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer, allocatable :: edge_count_by_ref(:)
         integer, allocatable :: thread_ref_counts(:,:), thread_ref_offsets(:,:)
-        integer :: ref_idx, edge_idx, ithr, slot
+        integer :: edge_idx, ithr, ref_idx, slot
         allocate(edge_count_by_ref(self%nrefs), source=0)
         allocate(thread_ref_counts(self%nrefs, nthr_glob), source=0)
         !$omp parallel default(shared) private(edge_idx,ref_idx,ithr) proc_bind(close)
@@ -805,14 +864,14 @@ contains
     ! Refine shifts on already-scored sparse edges.
     subroutine refine_shift_edges(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         real,    allocatable   :: candidate_dist(:,:)
         integer, allocatable   :: candidate_edge(:,:)
-        integer :: nrots, i, e, ithr, iptcl, ri, istate, iproj, irot, iref_full, iref_start
-        integer :: n_candidates, n_refine, state_i, refine_rank
-        integer :: n_refs_to_refine, n_samples
-        real    :: lims(2,2), lims_init(2,2), cxy_prob(3)
+        type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         logical :: do_shift_refine
+        integer :: e, i, iref_full, iref_start, iproj, iptcl, irot, istate, ithr
+        integer :: n_candidates, n_refine, n_refs_to_refine, n_samples, nrots
+        integer :: refine_rank, ri, state_i
+        real    :: cxy_prob(3), lims(2,2), lims_init(2,2)
         do_shift_refine = self%p_ptr%l_prob_sh .and. self%p_ptr%l_doshift
         if (.not. do_shift_refine) return
         if (any(self%edge_val(:)%dist >= huge(1.) / 2.)) then
@@ -979,10 +1038,9 @@ contains
         integer, allocatable :: ref_frontier_edge(:), active_pos_by_ref(:), active_refs(:)
         real,    allocatable :: best_dist_by_ref(:), active_best_dist(:), sorted_dist_scratch(:)
         integer, allocatable :: sorted_idx_scratch(:)
-        integer :: ref_idx, sampled_active_pos, edge_idx, ptcl_local_idx, neighbor_edge
-        integer :: n_active_refs, n_assigned
         real    :: projs_athres
-        integer :: k, istate
+        integer :: edge_idx, istate, k, n_active_refs, n_assigned, neighbor_edge
+        integer :: ptcl_local_idx, ref_idx, sampled_active_pos
         call self%ref_normalize_sparse()
         call self%sort_ref_lists_by_dist()
         allocate(particle_available(self%nptcls), source=.true.)
@@ -1093,9 +1151,9 @@ contains
         integer,         allocatable :: degree_by_ptcl(:), fill_ptr(:), pind_to_local(:), pinds_loc(:), ptcl_off_loc(:)
         integer,         allocatable :: stage_global_i(:), tmp_stage_global_i(:)
         type(string) :: binfname
-        integer      :: funit, addr, io_stat, file_header(3), header_bytes
-        integer      :: ipart, nrefs_loc, nptcls_loc, nedges_loc, local_i, global_i, local_e, global_e, ref_idx
-        integer      :: row_deg, stage_nused, stage_cap, needed_cap, new_cap
+        integer      :: addr, file_header(3), funit, global_e, global_i, header_bytes, io_stat
+        integer      :: ipart, local_e, local_i, needed_cap, nedges_loc, new_cap, nptcls_loc
+        integer      :: nrefs_loc, ref_idx, row_deg, stage_cap, stage_nused
         if (nparts < 1) then
             THROW_HARD('read_tabs_to_glob: nparts must be >= 1')
         endif
@@ -1233,7 +1291,7 @@ contains
         class(string),             intent(in) :: binfname
         type(ptcl_ref), allocatable :: assgn_glob(:)
         integer,        allocatable :: pind_to_local(:)
-        integer :: funit, io_stat, nptcls_glob, headsz, local_idx, global_idx, pind
+        integer :: funit, global_idx, headsz, io_stat, local_idx, nptcls_glob, pind
         headsz = sizeof(nptcls_glob)
         if (.not. file_exists(binfname)) then
             THROW_HARD('file '//binfname%to_char()//' does not exists!')

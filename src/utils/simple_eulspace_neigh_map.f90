@@ -83,20 +83,15 @@ contains
         class(eulspace_neigh_map), intent(in)  :: self
         integer,                   intent(in)  :: sub_idx
         logical,                   intent(out) :: mask(self%nspace)
-        if (.not. allocated(self%full2sub_map)) THROW_HARD('get_neighbors_mask: map not initialized')
-        if (sub_idx < 1 .or. sub_idx > self%nsub) THROW_HARD('get_neighbors_mask: sub_idx out of range')
         mask = (self%full2sub_map == sub_idx)
     end subroutine get_neighbors_mask
 
     subroutine get_neighbors_list(self, sub_idx, proj_list)
-        class(eulspace_neigh_map), intent(in)  :: self
-        integer,                   intent(in)  :: sub_idx
-        integer, allocatable,      intent(out) :: proj_list(:)
+        class(eulspace_neigh_map), intent(in)    :: self
+        integer,                   intent(in)    :: sub_idx
+        integer, allocatable,      intent(inout) :: proj_list(:)
         integer :: nsel, i
-
-        if (.not. allocated(self%full2sub_map)) THROW_HARD('get_neighbors_list: map not initialized')
-        if (sub_idx < 1 .or. sub_idx > self%nsub) THROW_HARD('get_neighbors_list: sub_idx out of range')
-
+        if (allocated(proj_list)) deallocate(proj_list)
         nsel = count(self%full2sub_map == sub_idx)
         allocate(proj_list(nsel))
         if (nsel > 0) proj_list = pack([(i, i=1,self%nspace)], self%full2sub_map == sub_idx)
@@ -107,11 +102,8 @@ contains
         integer,                   intent(in)  :: sub_idxs(:)
         logical,                   intent(out) :: mask(self%nspace)
         integer :: i
-        if (.not. allocated(self%full2sub_map)) THROW_HARD('get_neighbors_mask_pooled: map not initialized')
-        if (size(sub_idxs) < 1) THROW_HARD('get_neighbors_mask_pooled: sub_idxs cannot be empty')
         mask = .false.
         do i = 1, size(sub_idxs)
-            if (sub_idxs(i) < 1 .or. sub_idxs(i) > self%nsub) THROW_HARD('get_neighbors_mask_pooled: sub_idx out of range')
             mask = mask .or. (self%full2sub_map == sub_idxs(i))
         enddo
     end subroutine get_neighbors_mask_pooled
@@ -119,7 +111,6 @@ contains
     function get_full2sub_map(self) result(labels)
         class(eulspace_neigh_map), intent(in) :: self
         integer, allocatable :: labels(:)
-        if (.not. allocated(self%full2sub_map)) THROW_HARD('get_full2sub_map: map not initialized')
         allocate(labels(self%nspace), source=self%full2sub_map)
     end function get_full2sub_map
 
