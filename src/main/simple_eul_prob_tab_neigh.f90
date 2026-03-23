@@ -3,10 +3,8 @@
 ! Main changes:
 !   * neighborhood builders now emit sparse rows directly
 !   * no global logical mask(:,:) is built
-!   * ptree neighborhood construction caches already-evaluated refs directly
+!   * non-ptree neighborhood pooling uses disjoint subspace blocks
 !   * shift refinement runs internally on already-scored edges
-!
-! 2do: after testing the ptree mode, make a ptree_srch_geom neigh_type that overcomes the need for initial coarse subpace evaluation
 !
 module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
@@ -14,7 +12,6 @@ use simple_builder,               only: builder
 use simple_pftc_shsrch_grad,      only: pftc_shsrch_grad
 use simple_eul_prob_tab,          only: angle_sampling, calc_num2sample, calc_athres, eulprob_dist_switch
 use simple_eulspace_neigh_map,    only: eulspace_neigh_map
-use simple_strategy3D_tree_utils, only: select_peak_trees, trace_tree_prob
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -50,16 +47,11 @@ contains
     procedure, private :: build_ref_lists_and_map
     procedure, private :: check_subspace_prereqs
     procedure, private :: init_edge_default
-    procedure, private :: collect_all_active_projs
-    procedure, private :: materialize_row_from_proj_list
-    procedure, private :: flatten_sparse_rows
+    procedure, private :: materialize_row_to_csr
     procedure, private :: build_graph_from_prev_geom
     procedure, private :: build_graph_from_subspace_peaks
     procedure, private :: build_graph_from_subspace_peaks_one_state
     procedure, private :: build_graph_from_subspace_peaks_impl
-    procedure, private :: build_graph_from_ptree_srch
-    procedure, private :: build_graph_from_ptree_srch_one_state
-    procedure, private :: build_graph_from_ptree_srch_impl
     procedure, private :: build_ref_adjacency
     procedure, private :: refine_shift_edges
     procedure, private :: ref_normalize_sparse
@@ -74,30 +66,33 @@ contains
     procedure          :: kill
 end type eul_prob_tab_neigh
 
-type :: sparse_row_tmp
-    integer,        allocatable :: ref_idx(:)
-    type(ptcl_ref), allocatable :: val(:)
-end type sparse_row_tmp
-
-type :: ptree_thread_buf
-    integer,        allocatable :: proj_sel(:)
-    integer,        allocatable :: pref_ref(:)
-    type(ptcl_ref), allocatable :: pref_val(:)
-    integer                     :: proj_nused = 0
-    integer                     :: pref_nused = 0
-end type ptree_thread_buf
+type :: proj_sel_tmp
+    integer, allocatable :: proj_idx(:)
+    real                 :: cxy_shift(2) = [0., 0.]
+    logical              :: shifts_valid = .false.
+end type proj_sel_tmp
 
 type :: geom_thread_buf
     real,           allocatable :: sub_dists(:)
+    real,           allocatable :: score_buf(:)
+    real,           allocatable :: sorted_dist_scratch(:)
+    integer,        allocatable :: sorted_idx_scratch(:)
     integer,        allocatable :: peak_sub_idxs(:)
     integer,        allocatable :: proj_sel(:)
-    integer                     :: proj_nused = 0
 end type geom_thread_buf
 
 type :: subspace_thread_buf
+    real,           allocatable :: score_buf(:)
+    real,           allocatable :: sorted_dist_scratch(:)
+    integer,        allocatable :: sorted_idx_scratch(:)
     integer,        allocatable :: proj_sel(:)
-    integer                     :: proj_nused = 0
 end type subspace_thread_buf
+
+! Benchmark timings for route-internal steps (set by builder implementations).
+real(timer_int_kind) :: rt_route_setup = 0.
+real(timer_int_kind) :: rt_route_shift_init = 0.
+real(timer_int_kind) :: rt_route_particle_loop = 0.
+real(timer_int_kind) :: rt_route_finalize = 0.
 
 contains
 
@@ -111,33 +106,79 @@ contains
         logical, optional,         intent(in)    :: empty_okay
         integer, optional,         intent(in)    :: state
         logical, optional,         intent(in)    :: build_sparse_graph
-        logical :: do_build_sparse_graph
+        logical                 :: do_build_sparse_graph
+        integer(timer_int_kind) :: t_route_tot, t_build_ref_adjacency, t_refine_shift_edges
+        real(timer_int_kind)    :: rt_route_build
+        real(timer_int_kind)    :: rt_build_ref_adjacency, rt_refine_shift_edges, rt_route_tot
+        type(string)            :: benchfname
+        integer                 :: fnr
         do_build_sparse_graph = .true.
         if (present(build_sparse_graph)) do_build_sparse_graph = build_sparse_graph
+        rt_route_build         = 0.
+        rt_route_setup         = 0.
+        rt_route_shift_init    = 0.
+        rt_route_particle_loop = 0.
+        rt_route_finalize      = 0.
+        rt_build_ref_adjacency = 0.
+        rt_refine_shift_edges  = 0.
+        rt_route_tot           = 0.
         call self%init_common(params, build, pinds, empty_okay)
         call self%build_ref_lists_and_map
         if (do_build_sparse_graph) then
             call self%check_subspace_prereqs
+            if (L_BENCH_GLOB) t_route_tot = tic()
             select case(trim(neigh_type))
                 case('geom')
                     call self%build_graph_from_prev_geom
                 case('subspace_srch')
                     if (present(state)) then
-                        call self%build_graph_from_subspace_peaks_one_state(state)
+                        call self%build_graph_from_subspace_peaks_impl(state)
                     else
-                        call self%build_graph_from_subspace_peaks
-                    endif
-                case('ptree_srch')
-                    if (present(state)) then
-                        call self%build_graph_from_ptree_srch_one_state(state)
-                    else
-                        call self%build_graph_from_ptree_srch
+                        call self%build_graph_from_subspace_peaks_impl()
                     endif
                 case default
-                    THROW_HARD('build_sparse_neigh_graph: unsupported neigh_type='//trim(neigh_type)//'; expected geom, subspace_srch or ptree_srch')
+                    THROW_HARD('build_sparse_neigh_graph: unsupported neigh_type='//trim(neigh_type)//'; expected geom or subspace_srch')
             end select
+            if (L_BENCH_GLOB) then
+                rt_route_build = toc(t_route_tot)
+                t_build_ref_adjacency = tic()
+            endif
             call self%build_ref_adjacency
+            if (L_BENCH_GLOB) then
+                rt_build_ref_adjacency = toc(t_build_ref_adjacency)
+                t_refine_shift_edges = tic()
+            endif
             call self%refine_shift_edges
+            if (L_BENCH_GLOB) then
+                rt_refine_shift_edges = toc(t_refine_shift_edges)
+                rt_route_tot = rt_route_build + rt_build_ref_adjacency + rt_refine_shift_edges
+                if (rt_route_tot > TINY) then
+                    benchfname = 'PROB_TAB_NEIGH_'//trim(neigh_type)//'_BENCH_PART'//int2str_pad(self%p_ptr%part, self%p_ptr%numlen)//'.txt'
+                    call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+                    write(fnr,'(a)') '*** TIMINGS (s) ***'
+                    write(fnr,'(a,1x,f9.3)') trim(neigh_type)//' route total      : ', rt_route_build
+                    write(fnr,'(a,1x,f9.3)') '  setup                   : ', rt_route_setup
+                    write(fnr,'(a,1x,f9.3)') '  shift init              : ', rt_route_shift_init
+                    write(fnr,'(a,1x,f9.3)') '  particle loop           : ', rt_route_particle_loop
+                    write(fnr,'(a,1x,f9.3)') '  finalize                : ', rt_route_finalize
+                    write(fnr,'(a,1x,f9.3)') 'build_ref_adjacency       : ', rt_build_ref_adjacency
+                    write(fnr,'(a,1x,f9.3)') 'refine_shift_edges        : ', rt_refine_shift_edges
+                    write(fnr,'(a,1x,f9.3)') 'route total               : ', rt_route_tot
+                    write(fnr,'(a)') ''
+                    write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+                    write(fnr,'(a,1x,f9.2)') trim(neigh_type)//' route total      : ', (rt_route_build/rt_route_tot) * 100.
+                    write(fnr,'(a,1x,f9.2)') '  setup                   : ', (rt_route_setup/rt_route_tot) * 100.
+                    write(fnr,'(a,1x,f9.2)') '  shift init              : ', (rt_route_shift_init/rt_route_tot) * 100.
+                    write(fnr,'(a,1x,f9.2)') '  particle loop           : ', (rt_route_particle_loop/rt_route_tot) * 100.
+                    write(fnr,'(a,1x,f9.2)') '  finalize                : ', (rt_route_finalize/rt_route_tot) * 100.
+                    write(fnr,'(a,1x,f9.2)') 'build_ref_adjacency       : ', (rt_build_ref_adjacency/rt_route_tot) * 100.
+                    write(fnr,'(a,1x,f9.2)') 'refine_shift_edges        : ', (rt_refine_shift_edges/rt_route_tot) * 100.
+                    write(fnr,'(a,1x,f9.2)') '% accounted for           : ', &
+                        ((rt_route_setup+rt_route_shift_init+rt_route_particle_loop+rt_route_finalize+ &
+                          rt_build_ref_adjacency+rt_refine_shift_edges)/rt_route_tot) * 100.
+                    call fclose(fnr)
+                endif
+            endif
         endif
     end subroutine build_sparse_neigh_graph
 
@@ -184,24 +225,61 @@ contains
     ! Build compressed reference lists and (iproj,istate)->ref index lookup map.
     subroutine build_ref_lists_and_map(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        integer :: state_list_idx, ref_idx, istate, iproj
+        integer :: state_list_idx, istate, iproj, state_i, local_ref_idx, cnt
+        integer, allocatable :: state_ref_counts(:), state_ref_offsets(:)
         allocate(self%active_state_indices(self%nstates), self%ref_proj_indices(self%nrefs), self%ref_state_indices(self%nrefs))
         allocate(self%ref_index_map(self%p_ptr%nspace, self%p_ptr%nstates), self%proj_active_state_count(self%p_ptr%nspace), source=0)
         state_list_idx = 0
-        ref_idx = 0
         do istate = 1, self%p_ptr%nstates
             if (.not. self%state_exists(istate)) cycle
             state_list_idx = state_list_idx + 1
             self%active_state_indices(state_list_idx) = istate
+        enddo
+        allocate(state_ref_counts(self%nstates), state_ref_offsets(self%nstates), source=0)
+        !$omp parallel do default(shared) private(state_i,istate,iproj,cnt) &
+        !$omp proc_bind(close) schedule(static)
+        do state_i = 1, self%nstates
+            istate = self%active_state_indices(state_i)
+            cnt = 0
+            do iproj = 1, self%p_ptr%nspace
+                if (self%proj_exists(iproj, istate)) cnt = cnt + 1
+            enddo
+            state_ref_counts(state_i) = cnt
+        enddo
+        !$omp end parallel do
+        state_ref_offsets(1) = 1
+        do state_i = 2, self%nstates
+            state_ref_offsets(state_i) = state_ref_offsets(state_i-1) + state_ref_counts(state_i-1)
+        enddo
+        if (state_ref_offsets(self%nstates) + state_ref_counts(self%nstates) - 1 /= self%nrefs) then
+            THROW_HARD('build_ref_lists_and_map: reference count mismatch while building sparse mapping')
+        endif
+        !$omp parallel default(shared) private(state_i,istate,iproj,local_ref_idx,cnt) proc_bind(close) 
+        !$omp do schedule(static)
+        do state_i = 1, self%nstates
+            istate = self%active_state_indices(state_i)
+            local_ref_idx = state_ref_offsets(state_i)
             do iproj = 1, self%p_ptr%nspace
                 if (.not. self%proj_exists(iproj, istate)) cycle
-                ref_idx = ref_idx + 1
-                self%ref_proj_indices(ref_idx) = iproj
-                self%ref_state_indices(ref_idx) = istate
-                self%ref_index_map(iproj, istate) = ref_idx
-                self%proj_active_state_count(iproj) = self%proj_active_state_count(iproj) + 1
+                self%ref_proj_indices(local_ref_idx) = iproj
+                self%ref_state_indices(local_ref_idx) = istate
+                self%ref_index_map(iproj, istate) = local_ref_idx
+                local_ref_idx = local_ref_idx + 1
             enddo
         enddo
+        !$omp end do nowait
+        !$omp do schedule(static)
+        do iproj = 1, self%p_ptr%nspace
+            cnt = 0
+            do state_i = 1, self%nstates
+                istate = self%active_state_indices(state_i)
+                if (self%proj_exists(iproj, istate)) cnt = cnt + 1
+            enddo
+            self%proj_active_state_count(iproj) = cnt
+        enddo
+        !$omp end do nowait
+        !$omp end parallel
+        deallocate(state_ref_counts, state_ref_offsets)
     end subroutine build_ref_lists_and_map
 
     ! Validate required subspace mappings before any neighborhood graph construction.
@@ -237,76 +315,28 @@ contains
             has_sh = .false. )
     end subroutine init_edge_default
 
-    ! Collect all projections that have at least one active state.
-    subroutine collect_all_active_projs(self, proj_idx, nproj)
-        class(eul_prob_tab_neigh), intent(in)    :: self
-        integer, allocatable,      intent(inout) :: proj_idx(:)
-        integer,                   intent(out)   :: nproj
-        integer :: iproj
-        if (allocated(proj_idx)) deallocate(proj_idx)
-        nproj = count(self%proj_active_state_count > 0)
-        if (nproj <= 0) then
-            THROW_HARD('collect_all_active_projs: no active projections available')
-        endif
-        allocate(proj_idx(nproj))
-        nproj = 0
-        do iproj = 1, self%p_ptr%nspace
-            if (self%proj_active_state_count(iproj) <= 0) cycle
-            nproj = nproj + 1
-            proj_idx(nproj) = iproj
-        enddo
-    end subroutine collect_all_active_projs
-
-    ! Expand a projection list into one sparse row over all active states and score uncached refs.
-    subroutine materialize_row_from_proj_list(self, iptcl, proj_idx, nproj, row, pref_ref, pref_val, pref_nused_opt, cxy_shift_opt, shifts_valid_opt)
-        class(eul_prob_tab_neigh),             intent(in)    :: self
-        integer,                               intent(in)    :: iptcl, nproj
-        integer,                               intent(in)    :: proj_idx(:)
-        type(sparse_row_tmp),                  intent(inout) :: row
-        integer,        allocatable, optional, intent(in)    :: pref_ref(:)
-        type(ptcl_ref), allocatable, optional, intent(in)    :: pref_val(:)
-        integer,                    optional, intent(in)    :: pref_nused_opt
-        real,                       optional, intent(in)    :: cxy_shift_opt(2)
-        logical,                    optional, intent(in)    :: shifts_valid_opt
-        integer :: i, j, nrow, iproj, istate, ref_idx, slot, pref_nused, irot, iref_full
-        logical :: have_pref_cache
-        real    :: cxy_shift(2), rotmat_loc(2,2), rot_xy_loc(2)
-        logical :: shifts_valid
-        real,    allocatable :: score_buf(:), sorted_dist_scratch(:), inpl_angle_thres(:)
-        integer, allocatable :: sorted_idx_scratch(:)
-        integer :: state_i, nrots
-        if (allocated(row%ref_idx)) deallocate(row%ref_idx)
-        if (allocated(row%val))     deallocate(row%val)
-        nrow = 0
-        nrots = self%b_ptr%pftc%get_nrots()
-        allocate(score_buf(nrots), sorted_dist_scratch(nrots), inpl_angle_thres(self%p_ptr%nstates), source=0.)
-        allocate(sorted_idx_scratch(nrots), source=0)
-        do state_i = 1, self%nstates
-            istate = self%active_state_indices(state_i)
-            inpl_angle_thres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
-        enddo
-        cxy_shift = [0., 0.]
-        if (present(cxy_shift_opt)) cxy_shift = cxy_shift_opt
-        shifts_valid = .false.
-        if (present(shifts_valid_opt)) shifts_valid = shifts_valid_opt
+    ! Score one particle's selected projections and write directly into CSR edge arrays.
+    subroutine materialize_row_to_csr(self, iptcl, ptcl_local_idx, proj_idx, nproj, edge_first, cxy_shift, shifts_valid, &
+                                      score_buf, sorted_dist_scratch, sorted_idx_scratch, inpl_angle_thres)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer,                   intent(in)    :: iptcl, ptcl_local_idx, nproj, edge_first
+        integer,                   intent(in)    :: proj_idx(:)
+        real,                      intent(in)    :: cxy_shift(2)
+        logical,                   intent(in)    :: shifts_valid
+        real,                      intent(inout) :: score_buf(:), sorted_dist_scratch(:)
+        integer,                   intent(inout) :: sorted_idx_scratch(:)
+        real,                      intent(in)    :: inpl_angle_thres(:)
+        integer :: i, j, iproj, istate, ref_idx, irot, iref_full, e, nrow_expect
+        real    :: rotmat_loc(2,2), rot_xy_loc(2)
+        nrow_expect = 0
         do i = 1, nproj
             iproj = proj_idx(i)
-            nrow = nrow + self%proj_active_state_count(iproj)
+            nrow_expect = nrow_expect + self%proj_active_state_count(iproj)
         enddo
-        if (nrow <= 0) then
-            THROW_HARD('materialize_row_from_proj_list: zero-row materialization')
+        if (nrow_expect <= 0) then
+            THROW_HARD('materialize_row_to_csr: zero-row materialization')
         endif
-        allocate(row%ref_idx(nrow), row%val(nrow))
-        nrow = 0
-        pref_nused = 0
-        if (present(pref_nused_opt)) pref_nused = pref_nused_opt
-        have_pref_cache = .false.
-        if (present(pref_ref) .and. present(pref_val)) then
-            if (allocated(pref_ref) .and. allocated(pref_val)) then
-                pref_nused = min(max(pref_nused, 0), min(size(pref_ref), size(pref_val)))
-                have_pref_cache = (pref_nused > 0)
-            endif
-        endif
+        e = edge_first - 1
         do i = 1, nproj
             iproj = proj_idx(i)
             if (self%proj_active_state_count(iproj) <= 0) cycle
@@ -314,91 +344,60 @@ contains
                 istate = self%active_state_indices(j)
                 ref_idx = self%ref_index_map(iproj, istate)
                 if (ref_idx <= 0) cycle
-                nrow = nrow + 1
-                row%ref_idx(nrow) = ref_idx
-                slot = 0
-                if (have_pref_cache) slot = find_int_buf(pref_ref, ref_idx, pref_nused)
-                if (slot > 0) then
-                    row%val(nrow) = pref_val(slot)
-                else
-                    iref_full = (istate - 1) * self%p_ptr%nspace + iproj
-                    call self%b_ptr%pftc%gen_objfun_vals(iref_full, iptcl, cxy_shift, score_buf)
-                    score_buf = eulprob_dist_switch(score_buf, self%p_ptr%cc_objfun)
-                    irot = angle_sampling(score_buf, sorted_dist_scratch, sorted_idx_scratch, inpl_angle_thres(istate), self%p_ptr%prob_athres)
-                    call self%init_edge_default(iptcl, ref_idx, row%val(nrow))
-                    row%val(nrow)%dist = score_buf(irot)
-                    row%val(nrow)%inpl = irot
-                    if (shifts_valid) then
-                        call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat_loc)
-                        rot_xy_loc = matmul(cxy_shift, rotmat_loc)
-                        row%val(nrow)%x = rot_xy_loc(1)
-                        row%val(nrow)%y = rot_xy_loc(2)
-                        row%val(nrow)%has_sh = .true.
-                    endif
+                e = e + 1
+                self%edge_ref_index(e) = ref_idx
+                self%edge_ptcl(e)      = ptcl_local_idx
+                iref_full = (istate - 1) * self%p_ptr%nspace + iproj
+                call self%b_ptr%pftc%gen_objfun_vals(iref_full, iptcl, cxy_shift, score_buf)
+                score_buf = eulprob_dist_switch(score_buf, self%p_ptr%cc_objfun)
+                irot = angle_sampling(score_buf, sorted_dist_scratch, sorted_idx_scratch, inpl_angle_thres(istate), self%p_ptr%prob_athres)
+                call self%init_edge_default(iptcl, ref_idx, self%edge_val(e))
+                self%edge_val(e)%dist = score_buf(irot)
+                self%edge_val(e)%inpl = irot
+                if (shifts_valid) then
+                    call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat_loc)
+                    rot_xy_loc = matmul(cxy_shift, rotmat_loc)
+                    self%edge_val(e)%x = rot_xy_loc(1)
+                    self%edge_val(e)%y = rot_xy_loc(2)
+                    self%edge_val(e)%has_sh = .true.
                 endif
             enddo
         enddo
-        deallocate(score_buf, sorted_dist_scratch, sorted_idx_scratch, inpl_angle_thres)
-    end subroutine materialize_row_from_proj_list
-
-    ! Flatten per-particle temporary rows into particle-major CSR edge arrays.
-    subroutine flatten_sparse_rows(self, rows)
-        class(eul_prob_tab_neigh),         intent(inout) :: self
-        type(sparse_row_tmp), allocatable, intent(inout) :: rows(:)
-        integer :: i, j, e, nrow
-        if (allocated(self%ptcl_off))       deallocate(self%ptcl_off)
-        if (allocated(self%edge_ref_index)) deallocate(self%edge_ref_index)
-        if (allocated(self%edge_ptcl))      deallocate(self%edge_ptcl)
-        if (allocated(self%edge_val))       deallocate(self%edge_val)
-        allocate(self%ptcl_off(self%nptcls + 1))
-        self%ptcl_off(1) = 1
-        do i = 1, self%nptcls
-            nrow = 0
-            if (allocated(rows(i)%ref_idx)) nrow = size(rows(i)%ref_idx)
-            if (nrow <= 0) then
-                THROW_HARD('flatten_sparse_rows: particle has zero valid neighbors')
-            endif
-            self%ptcl_off(i+1) = self%ptcl_off(i) + nrow
-        enddo
-        self%nedges = self%ptcl_off(self%nptcls + 1) - 1
-        self%maxdeg_ptcl = maxval(self%ptcl_off(2:self%nptcls+1) - self%ptcl_off(1:self%nptcls))
-        allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
-        do i = 1, self%nptcls
-            e = self%ptcl_off(i)
-            do j = 1, size(rows(i)%ref_idx)
-                self%edge_ref_index(e) = rows(i)%ref_idx(j)
-                self%edge_ptcl(e)      = i
-                self%edge_val(e)       = rows(i)%val(j)
-                e = e + 1
-            enddo
-        enddo
-        do i = 1, size(rows)
-            if (allocated(rows(i)%ref_idx)) deallocate(rows(i)%ref_idx)
-            if (allocated(rows(i)%val))     deallocate(rows(i)%val)
-        enddo
-        deallocate(rows)
-    end subroutine flatten_sparse_rows
+        if (e /= edge_first + nrow_expect - 1) then
+            THROW_HARD('materialize_row_to_csr: edge fill mismatch')
+        endif
+    end subroutine materialize_row_to_csr
 
     ! Build graph from geometric neighbors around previous particle orientations.
     subroutine build_graph_from_prev_geom(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        type(sparse_row_tmp), allocatable :: rows(:)
+        type(proj_sel_tmp), allocatable :: sel_rows(:)
         type(geom_thread_buf), allocatable :: tbuf(:)
         type(eulspace_neigh_map)          :: neigh_map
         type(ori) :: o_prev, o_sub, osym
         integer, allocatable :: neigh_proj(:)
+        integer, allocatable :: row_nedges(:)
+        real, allocatable    :: inpl_angle_thres(:)
         integer   :: nspace_sub, npeak_use
-        integer   :: i, iptcl, isub, iproj_full, prev_iproj, prev_sub, ithr
-        integer   :: j, nproj
+        integer   :: i, iptcl, isub, iproj_full, prev_iproj, prev_sub, ithr, state_i, istate, nrots
+        integer   :: j, k, nproj
         real      :: dtmp, inplrotdist
         nspace_sub = self%p_ptr%nspace_sub
         npeak_use  = max(1, min(self%p_ptr%npeaks, nspace_sub))
+        nrots      = self%b_ptr%pftc%get_nrots()
         call neigh_map%new(self%b_ptr%subspace_full2sub_map, self%p_ptr%nspace_sub)
-        allocate(rows(self%nptcls))
+        allocate(sel_rows(self%nptcls))
+        allocate(row_nedges(self%nptcls), source=0)
+        allocate(inpl_angle_thres(self%p_ptr%nstates), source=0.)
+        do state_i = 1, self%nstates
+            istate = self%active_state_indices(state_i)
+            inpl_angle_thres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
+        enddo
         allocate(tbuf(nthr_glob))
         do ithr = 1, nthr_glob
-            allocate(tbuf(ithr)%sub_dists(nspace_sub), tbuf(ithr)%peak_sub_idxs(npeak_use))
-            tbuf(ithr)%proj_nused = 0
+            allocate(tbuf(ithr)%sub_dists(nspace_sub), tbuf(ithr)%peak_sub_idxs(npeak_use), &
+                     tbuf(ithr)%score_buf(nrots), tbuf(ithr)%sorted_dist_scratch(nrots))
+            allocate(tbuf(ithr)%sorted_idx_scratch(nrots), tbuf(ithr)%proj_sel(self%p_ptr%nspace), source=0)
         enddo
         !$omp parallel do default(shared) &
         !$omp private(i,iptcl,ithr,o_prev,isub,iproj_full,dtmp,inplrotdist,o_sub,osym, &
@@ -422,34 +421,75 @@ contains
             do j = 1, npeak_use
                 call neigh_map%get_neighbors_list(tbuf(ithr)%peak_sub_idxs(j), neigh_proj)
                 if (allocated(neigh_proj)) then
-                    call append_unique_int_list(tbuf(ithr)%proj_sel, nproj, neigh_proj)
+                    call append_proj_block(tbuf(ithr)%proj_sel, nproj, neigh_proj)
                     deallocate(neigh_proj)
                 endif
             enddo
             prev_iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)
             prev_sub = self%b_ptr%subspace_full2sub_map(prev_iproj)
-            call neigh_map%get_neighbors_list(prev_sub, neigh_proj)
-            if (allocated(neigh_proj)) then
-                call append_unique_int_list(tbuf(ithr)%proj_sel, nproj, neigh_proj)
-                deallocate(neigh_proj)
+            if (.not. any(tbuf(ithr)%peak_sub_idxs(1:npeak_use) == prev_sub)) then
+                call neigh_map%get_neighbors_list(prev_sub, neigh_proj)
+                if (allocated(neigh_proj)) then
+                    call append_proj_block(tbuf(ithr)%proj_sel, nproj, neigh_proj)
+                    deallocate(neigh_proj)
+                endif
             endif
             if (nproj <= 0) then
-                call self%collect_all_active_projs(tbuf(ithr)%proj_sel, nproj)
+                call add_all_active_projs(self, tbuf(ithr)%proj_sel, nproj)
             else if (.not. any(self%proj_active_state_count(tbuf(ithr)%proj_sel(1:nproj)) > 0)) then
-                call self%collect_all_active_projs(tbuf(ithr)%proj_sel, nproj)
+                call add_all_active_projs(self, tbuf(ithr)%proj_sel, nproj)
             endif
-            call self%materialize_row_from_proj_list(iptcl, tbuf(ithr)%proj_sel, nproj, rows(i), cxy_shift_opt=[0., 0.], shifts_valid_opt=.false.)
-            tbuf(ithr)%proj_nused = nproj
+            if (allocated(sel_rows(i)%proj_idx)) deallocate(sel_rows(i)%proj_idx)
+            allocate(sel_rows(i)%proj_idx(nproj), source=tbuf(ithr)%proj_sel(1:nproj))
+            sel_rows(i)%cxy_shift = [0., 0.]
+            sel_rows(i)%shifts_valid = .false.
+            row_nedges(i) = 0
+            do j = 1, nproj
+                row_nedges(i) = row_nedges(i) + self%proj_active_state_count(sel_rows(i)%proj_idx(j))
+            enddo
             call o_prev%kill
         enddo
         !$omp end parallel do
         call neigh_map%kill
-        call self%flatten_sparse_rows(rows)
+        if (allocated(self%ptcl_off))       deallocate(self%ptcl_off)
+        if (allocated(self%edge_ref_index)) deallocate(self%edge_ref_index)
+        if (allocated(self%edge_ptcl))      deallocate(self%edge_ptcl)
+        if (allocated(self%edge_val))       deallocate(self%edge_val)
+        allocate(self%ptcl_off(self%nptcls + 1))
+        self%ptcl_off(1) = 1
+        do i = 1, self%nptcls
+            if (row_nedges(i) <= 0) then
+                THROW_HARD('build_graph_from_prev_geom: particle has zero valid neighbors')
+            endif
+            self%ptcl_off(i+1) = self%ptcl_off(i) + row_nedges(i)
+        enddo
+        self%nedges = self%ptcl_off(self%nptcls + 1) - 1
+        self%maxdeg_ptcl = maxval(row_nedges)
+        allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
+        !$omp parallel do default(shared) private(i,iptcl,ithr,nproj) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            iptcl = self%pinds(i)
+            ithr  = omp_get_thread_num() + 1
+            nproj = size(sel_rows(i)%proj_idx)
+            call self%materialize_row_to_csr(iptcl, i, sel_rows(i)%proj_idx, nproj, self%ptcl_off(i), sel_rows(i)%cxy_shift, &
+                                             sel_rows(i)%shifts_valid, tbuf(ithr)%score_buf, tbuf(ithr)%sorted_dist_scratch, &
+                                             tbuf(ithr)%sorted_idx_scratch, inpl_angle_thres)
+        enddo
+        !$omp end parallel do
+        do i = 1, self%nptcls
+            if (allocated(sel_rows(i)%proj_idx)) deallocate(sel_rows(i)%proj_idx)
+        enddo
         do ithr = 1, nthr_glob
             if (allocated(tbuf(ithr)%sub_dists))     deallocate(tbuf(ithr)%sub_dists)
             if (allocated(tbuf(ithr)%peak_sub_idxs)) deallocate(tbuf(ithr)%peak_sub_idxs)
+            if (allocated(tbuf(ithr)%score_buf))           deallocate(tbuf(ithr)%score_buf)
+            if (allocated(tbuf(ithr)%sorted_dist_scratch)) deallocate(tbuf(ithr)%sorted_dist_scratch)
+            if (allocated(tbuf(ithr)%sorted_idx_scratch))  deallocate(tbuf(ithr)%sorted_idx_scratch)
             if (allocated(tbuf(ithr)%proj_sel))      deallocate(tbuf(ithr)%proj_sel)
         enddo
+        if (allocated(row_nedges)) deallocate(row_nedges)
+        if (allocated(sel_rows)) deallocate(sel_rows)
+        if (allocated(inpl_angle_thres)) deallocate(inpl_angle_thres)
         if (allocated(tbuf)) deallocate(tbuf)
     end subroutine build_graph_from_prev_geom
 
@@ -476,19 +516,29 @@ contains
     subroutine build_graph_from_subspace_peaks_impl(self, state_opt)
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer, optional,         intent(in)    :: state_opt
-        type(sparse_row_tmp), allocatable :: rows(:)
+        type(proj_sel_tmp), allocatable :: sel_rows(:)
         real,                 allocatable :: inpl_dists(:,:), coarse_best_dist(:,:)
         integer,              allocatable :: peak_sub_idxs(:,:)
+        integer,              allocatable :: row_nedges(:)
         type(subspace_thread_buf), allocatable :: tbuf(:)
         type(eulspace_neigh_map) :: neigh_map
         type(pftc_shsrch_grad)   :: grad_shsrch_obj(nthr_glob)
         type(ori)                :: o_prev
         integer, allocatable     :: neigh_proj(:)
+        real,    allocatable     :: inpl_angle_thres(:)
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_shift(2), huge_dist
         logical :: do_shift_first, has_state_opt
         integer :: state_fixed, nrots, nspace_sub, npeak_use
         integer :: i, isub, ithr, iptcl, istate, iproj_full, irot, iref_start, iref_prev
         integer :: state_i, nvalid_sub, prev_sub, prev_iproj, j, nproj
+        logical :: prev_included
+        integer(timer_int_kind) :: t_setup, t_shift_init, t_particle_loop, t_finalize
+        real(timer_int_kind)    :: rt_setup, rt_shift_init, rt_particle_loop, rt_finalize
+        rt_setup = 0.
+        rt_shift_init = 0.
+        rt_particle_loop = 0.
+        rt_finalize = 0.
+        if (L_BENCH_GLOB) t_setup = tic()
         call self%check_subspace_prereqs()
         nspace_sub     = self%p_ptr%nspace_sub
         npeak_use      = max(1, min(self%p_ptr%npeaks, nspace_sub))
@@ -502,11 +552,21 @@ contains
             state_fixed = 1
         endif
         call neigh_map%new(self%b_ptr%subspace_full2sub_map, self%p_ptr%nspace_sub)
-        allocate(rows(self%nptcls), inpl_dists(nrots, nthr_glob), coarse_best_dist(nspace_sub, nthr_glob), peak_sub_idxs(npeak_use, nthr_glob), tbuf(nthr_glob))
-        do ithr = 1, nthr_glob
-            tbuf(ithr)%proj_nused = 0
+        allocate(sel_rows(self%nptcls))
+        allocate(row_nedges(self%nptcls), source=0)
+        allocate(inpl_dists(nrots, nthr_glob), coarse_best_dist(nspace_sub, nthr_glob), peak_sub_idxs(npeak_use, nthr_glob), tbuf(nthr_glob))
+        allocate(inpl_angle_thres(self%p_ptr%nstates), source=0.)
+        do state_i = 1, self%nstates
+            istate = self%active_state_indices(state_i)
+            inpl_angle_thres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
         enddo
+        do ithr = 1, nthr_glob
+            allocate(tbuf(ithr)%score_buf(nrots), tbuf(ithr)%sorted_dist_scratch(nrots))
+            allocate(tbuf(ithr)%sorted_idx_scratch(nrots), tbuf(ithr)%proj_sel(self%p_ptr%nspace), source=0)
+        enddo
+        if (L_BENCH_GLOB) rt_setup = toc(t_setup)
         if (do_shift_first) then
+            if (L_BENCH_GLOB) t_shift_init = tic()
             lims(:,1)      = -self%p_ptr%trs
             lims(:,2)      =  self%p_ptr%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
@@ -515,7 +575,9 @@ contains
                 call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier, &
                                                maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             enddo
+            if (L_BENCH_GLOB) rt_shift_init = toc(t_shift_init)
         endif
+        if (L_BENCH_GLOB) t_particle_loop = tic()
         !$omp parallel do default(shared) &
         !$omp private(i,ithr,iptcl,o_prev,istate,isub,iproj_full,irot,iref_start, &
         !$omp& iref_prev,cxy,cxy_shift,state_i,nvalid_sub,prev_sub,prev_iproj,j,nproj) &
@@ -579,6 +641,7 @@ contains
                 enddo
             endif
             nproj = 0
+            prev_included = .false.
             nvalid_sub = count(coarse_best_dist(:,ithr) < huge_dist / 2.)
             if (nvalid_sub > 0) then
                 if (nvalid_sub <= npeak_use) then
@@ -586,297 +649,157 @@ contains
                         if (coarse_best_dist(isub,ithr) >= huge_dist / 2.) cycle
                         call neigh_map%get_neighbors_list(isub, neigh_proj)
                         if (allocated(neigh_proj)) then
-                            call append_unique_int_list(tbuf(ithr)%proj_sel, nproj, neigh_proj)
+                            call append_proj_block(tbuf(ithr)%proj_sel, nproj, neigh_proj)
                             deallocate(neigh_proj)
                         endif
+                        if (isub == prev_sub) prev_included = .true.
                     enddo
                 else
                     peak_sub_idxs(:,ithr) = minnloc(coarse_best_dist(:,ithr), npeak_use)
                     do j = 1, npeak_use
                         call neigh_map%get_neighbors_list(peak_sub_idxs(j,ithr), neigh_proj)
                         if (allocated(neigh_proj)) then
-                            call append_unique_int_list(tbuf(ithr)%proj_sel, nproj, neigh_proj)
+                            call append_proj_block(tbuf(ithr)%proj_sel, nproj, neigh_proj)
                             deallocate(neigh_proj)
                         endif
                     enddo
+                    prev_included = any(peak_sub_idxs(:,ithr) == prev_sub)
                 endif
             endif
-            call neigh_map%get_neighbors_list(prev_sub, neigh_proj)
-            if (allocated(neigh_proj)) then
-                call append_unique_int_list(tbuf(ithr)%proj_sel, nproj, neigh_proj)
-                deallocate(neigh_proj)
+            if (.not. prev_included) then
+                call neigh_map%get_neighbors_list(prev_sub, neigh_proj)
+                if (allocated(neigh_proj)) then
+                    call append_proj_block(tbuf(ithr)%proj_sel, nproj, neigh_proj)
+                    deallocate(neigh_proj)
+                endif
             endif
             if (nproj <= 0) then
-                call self%collect_all_active_projs(tbuf(ithr)%proj_sel, nproj)
+                call add_all_active_projs(self, tbuf(ithr)%proj_sel, nproj)
             else if (.not. any(self%proj_active_state_count(tbuf(ithr)%proj_sel(1:nproj)) > 0)) then
-                call self%collect_all_active_projs(tbuf(ithr)%proj_sel, nproj)
+                call add_all_active_projs(self, tbuf(ithr)%proj_sel, nproj)
             endif
-            call self%materialize_row_from_proj_list(iptcl, tbuf(ithr)%proj_sel, nproj, rows(i), cxy_shift_opt=cxy_shift, shifts_valid_opt=do_shift_first)
-            tbuf(ithr)%proj_nused = nproj
+            if (allocated(sel_rows(i)%proj_idx)) deallocate(sel_rows(i)%proj_idx)
+            allocate(sel_rows(i)%proj_idx(nproj), source=tbuf(ithr)%proj_sel(1:nproj))
+            sel_rows(i)%cxy_shift = cxy_shift
+            sel_rows(i)%shifts_valid = do_shift_first
+            row_nedges(i) = 0
+            do j = 1, nproj
+                row_nedges(i) = row_nedges(i) + self%proj_active_state_count(sel_rows(i)%proj_idx(j))
+            enddo
             call o_prev%kill
         enddo
         !$omp end parallel do
+        if (L_BENCH_GLOB) then
+            rt_particle_loop = toc(t_particle_loop)
+            t_finalize = tic()
+        endif
         if (do_shift_first) then
             do ithr = 1, nthr_glob
                 call grad_shsrch_obj(ithr)%kill
             enddo
         endif
         call neigh_map%kill
-        call self%flatten_sparse_rows(rows)
-        if (allocated(inpl_dists))       deallocate(inpl_dists)
-        if (allocated(coarse_best_dist)) deallocate(coarse_best_dist)
-        if (allocated(peak_sub_idxs))    deallocate(peak_sub_idxs)
-        do ithr = 1, nthr_glob
-            if (allocated(tbuf(ithr)%proj_sel)) deallocate(tbuf(ithr)%proj_sel)
+        if (allocated(self%ptcl_off))       deallocate(self%ptcl_off)
+        if (allocated(self%edge_ref_index)) deallocate(self%edge_ref_index)
+        if (allocated(self%edge_ptcl))      deallocate(self%edge_ptcl)
+        if (allocated(self%edge_val))       deallocate(self%edge_val)
+        allocate(self%ptcl_off(self%nptcls + 1))
+        self%ptcl_off(1) = 1
+        do i = 1, self%nptcls
+            if (row_nedges(i) <= 0) then
+                THROW_HARD('build_graph_from_subspace_peaks_impl: particle has zero valid neighbors')
+            endif
+            self%ptcl_off(i+1) = self%ptcl_off(i) + row_nedges(i)
         enddo
-        if (allocated(tbuf)) deallocate(tbuf)
-    end subroutine build_graph_from_subspace_peaks_impl
-
-    ! Multi-state wrapper for tree-guided graph construction.
-    subroutine build_graph_from_ptree_srch(self)
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        call self%build_graph_from_ptree_srch_impl()
-    end subroutine build_graph_from_ptree_srch
-
-    ! Fixed-state wrapper for tree-guided graph construction.
-    subroutine build_graph_from_ptree_srch_one_state(self, state)
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        integer,                   intent(in)    :: state
-        if (state < 1 .or. state > self%p_ptr%nstates) then
-            THROW_HARD('build_graph_from_ptree_srch_one_state: state index out of range')
-        endif
-        if (.not. self%state_exists(state)) then
-            THROW_HARD('build_graph_from_ptree_srch_one_state: requested state does not exist')
-        endif
-        call self%build_graph_from_ptree_srch_impl(state)
-    end subroutine build_graph_from_ptree_srch_one_state
-
-    ! Build graph from probabilistic tree descent and cache evaluated edge values.
-    subroutine build_graph_from_ptree_srch_impl(self, state_opt)
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        integer, optional,         intent(in)    :: state_opt
-        type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
-        type(ori)              :: o_prev
-        type(sparse_row_tmp), allocatable :: rows(:)
-        integer,              allocatable :: peak_trees(:,:)
-        real,                 allocatable :: inpl_corrs(:,:), tree_best_corrs(:,:), peak_tree_corrs(:,:), dists_sorted(:,:), inpl_angle_thres(:)
-        type(ptree_thread_buf), allocatable :: tbuf(:)
-        integer,              allocatable :: inds_sorted(:,:)
-        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_shift(2)
-        logical :: do_shift_first, has_state_opt
-        integer :: nrots, nspace_sub, npeak_use, ntrees
-        integer :: state_fixed
-        integer :: i, isub, ithr, iptcl, istate, iproj_full, irot, iref_start, iref_prev, itree, state_i
-        integer :: npeak_trees, ipeak, prev_iproj
-        real    :: corr_best
-        call self%check_subspace_prereqs()
-        nspace_sub     = self%p_ptr%nspace_sub
-        ntrees         = self%b_ptr%block_tree%get_n_trees()
-        if (ntrees <= 0) then
-            THROW_HARD('build_graph_from_ptree_srch_impl: block_tree has no trees')
-        endif
-        npeak_use      = max(1, min(self%p_ptr%npeaks, ntrees))
-        nrots          = self%b_ptr%pftc%get_nrots()
-        do_shift_first = self%p_ptr%l_sh_first .and. self%p_ptr%l_doshift
-        has_state_opt  = present(state_opt)
-        if (has_state_opt) then
-            state_fixed = state_opt
-        else
-            state_fixed = 1
-        endif
-        allocate(rows(self%nptcls), inpl_corrs(nrots, nthr_glob), tree_best_corrs(ntrees, nthr_glob), &
-                &peak_trees(npeak_use, nthr_glob), peak_tree_corrs(npeak_use, nthr_glob), &
-                &dists_sorted(nrots, nthr_glob), inds_sorted(nrots, nthr_glob), tbuf(nthr_glob))
-        allocate(inpl_angle_thres(self%p_ptr%nstates), source=0.)
-        do state_i = 1, self%nstates
-            istate = self%active_state_indices(state_i)
-            inpl_angle_thres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
-        enddo
-        if (do_shift_first) then
-            lims(:,1)      = -self%p_ptr%trs
-            lims(:,2)      =  self%p_ptr%trs
-            lims_init(:,1) = -SHC_INPL_TRSHWDTH
-            lims_init(:,2) =  SHC_INPL_TRSHWDTH
-            do ithr = 1, nthr_glob
-                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier, &
-                                               maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
-            enddo
-        endif
-        !$omp parallel do default(shared) &
-        !$omp private(i,iptcl,ithr,cxy_shift,o_prev,istate,iref_start,iref_prev, &
-        !$omp& irot,cxy,isub,iproj_full,itree,corr_best,state_i,npeak_trees,ipeak, &
-        !$omp& prev_iproj) &
-        !$omp proc_bind(close) schedule(static)
+        self%nedges = self%ptcl_off(self%nptcls + 1) - 1
+        self%maxdeg_ptcl = maxval(row_nedges)
+        allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
+        !$omp parallel do default(shared) private(i,iptcl,ithr,nproj) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             iptcl = self%pinds(i)
             ithr  = omp_get_thread_num() + 1
-            cxy_shift = [0., 0.]
-            tbuf(ithr)%proj_nused = 0
-            tbuf(ithr)%pref_nused = 0
-            if (do_shift_first) then
-                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
-                prev_iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)
-                if (has_state_opt) then
-                    istate = state_fixed
-                else
-                    istate = o_prev%get_state()
-                endif
-                if (istate >= 1 .and. istate <= self%p_ptr%nstates) then
-                    if (self%proj_exists(prev_iproj, istate)) then
-                        iref_start = (istate - 1) * self%p_ptr%nspace
-                        iref_prev  = iref_start + prev_iproj
-                        irot       = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())
-                        call grad_shsrch_obj(ithr)%set_indices(iref_prev, iptcl)
-                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                        cxy_shift = 0.
-                        if (irot /= 0) cxy_shift = cxy(2:3)
-                    endif
-                endif
-                call o_prev%kill
-            endif
-            tree_best_corrs(:,ithr) = -huge(1.0)
-            if (has_state_opt) then
-                do isub = 1, nspace_sub
-                    iproj_full = self%b_ptr%subspace_inds(isub)
-                    itree = self%b_ptr%subspace_full2sub_map(iproj_full)
-                    if (.not. self%proj_exists(iproj_full, state_fixed)) cycle
-                    call self%b_ptr%pftc%gen_objfun_vals((state_fixed - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_corrs(:,ithr))
-                    corr_best = maxval(inpl_corrs(:,ithr))
-                    tree_best_corrs(itree,ithr) = max(tree_best_corrs(itree,ithr), corr_best)
-                enddo
-            else
-                do isub = 1, nspace_sub
-                    iproj_full = self%b_ptr%subspace_inds(isub)
-                    itree = self%b_ptr%subspace_full2sub_map(iproj_full)
-                    do state_i = 1, self%nstates
-                        istate = self%active_state_indices(state_i)
-                        if (.not. self%proj_exists(iproj_full, istate)) cycle
-                        call self%b_ptr%pftc%gen_objfun_vals((istate - 1) * self%p_ptr%nspace + iproj_full, iptcl, cxy_shift, inpl_corrs(:,ithr))
-                        corr_best = maxval(inpl_corrs(:,ithr))
-                        tree_best_corrs(itree,ithr) = max(tree_best_corrs(itree,ithr), corr_best)
-                    enddo
-                enddo
-            endif
-            peak_trees(:,ithr)      = 0
-            peak_tree_corrs(:,ithr) = -huge(1.0)
-            call select_peak_trees(tree_best_corrs(:,ithr), peak_trees(:,ithr), peak_tree_corrs(:,ithr), npeak_trees)
-            do ipeak = 1, npeak_trees
-                call trace_tree_prob(self%b_ptr%block_tree, peak_trees(ipeak,ithr), iptcl, ithr, score_ptree_ref)
-            enddo
-            if (tbuf(ithr)%proj_nused <= 0) then
-                call self%collect_all_active_projs(tbuf(ithr)%proj_sel, tbuf(ithr)%proj_nused)
-            endif
-            call self%materialize_row_from_proj_list(iptcl, tbuf(ithr)%proj_sel, tbuf(ithr)%proj_nused, rows(i), &
-                                                     tbuf(ithr)%pref_ref, tbuf(ithr)%pref_val, tbuf(ithr)%pref_nused, cxy_shift, do_shift_first)
+            nproj = size(sel_rows(i)%proj_idx)
+            call self%materialize_row_to_csr(iptcl, i, sel_rows(i)%proj_idx, nproj, self%ptcl_off(i), sel_rows(i)%cxy_shift, &
+                                             sel_rows(i)%shifts_valid, tbuf(ithr)%score_buf, tbuf(ithr)%sorted_dist_scratch, &
+                                             tbuf(ithr)%sorted_idx_scratch, inpl_angle_thres)
         enddo
         !$omp end parallel do
-        if (do_shift_first) then
-            do ithr = 1, nthr_glob
-                call grad_shsrch_obj(ithr)%kill
-            enddo
-        endif
-        call self%flatten_sparse_rows(rows)
-        do ithr = 1, nthr_glob
-            if (allocated(tbuf(ithr)%proj_sel)) deallocate(tbuf(ithr)%proj_sel)
-            if (allocated(tbuf(ithr)%pref_ref)) deallocate(tbuf(ithr)%pref_ref)
-            if (allocated(tbuf(ithr)%pref_val)) deallocate(tbuf(ithr)%pref_val)
+        do i = 1, self%nptcls
+            if (allocated(sel_rows(i)%proj_idx)) deallocate(sel_rows(i)%proj_idx)
         enddo
-        if (allocated(tbuf))             deallocate(tbuf)
-        if (allocated(inpl_corrs))       deallocate(inpl_corrs)
-        if (allocated(tree_best_corrs))  deallocate(tree_best_corrs)
-        if (allocated(peak_trees))       deallocate(peak_trees)
-        if (allocated(peak_tree_corrs))  deallocate(peak_tree_corrs)
-        if (allocated(dists_sorted))     deallocate(dists_sorted)
-        if (allocated(inds_sorted))      deallocate(inds_sorted)
+        if (allocated(inpl_dists))       deallocate(inpl_dists)
+        if (allocated(coarse_best_dist)) deallocate(coarse_best_dist)
+        if (allocated(peak_sub_idxs))    deallocate(peak_sub_idxs)
+        if (allocated(row_nedges))       deallocate(row_nedges)
+        if (allocated(sel_rows))         deallocate(sel_rows)
         if (allocated(inpl_angle_thres)) deallocate(inpl_angle_thres)
-
-    contains
-
-        subroutine score_ptree_ref(iproj_eval, iptcl_eval, ithr_eval, best_corr)
-            integer, intent(in)  :: iproj_eval
-            integer, intent(in)  :: iptcl_eval
-            integer, intent(in)  :: ithr_eval
-            real,    intent(out) :: best_corr
-            integer :: istate_loc, state_j, irot_loc, ref_idx_loc
-            real    :: dist_obj(nrots), rotmat_loc(2,2), rot_xy_loc(2)
-            type(ptcl_ref) :: v
-            logical :: have_valid
-            best_corr  = -huge(1.0)
-            have_valid = .false.
-            if (iproj_eval < 1 .or. iproj_eval > self%p_ptr%nspace) return
-            if (has_state_opt) then
-                if (.not. self%proj_exists(iproj_eval, state_fixed)) return
-                call self%b_ptr%pftc%gen_objfun_vals((state_fixed - 1) * self%p_ptr%nspace + iproj_eval, iptcl_eval, cxy_shift, inpl_corrs(:,ithr_eval))
-                best_corr = maxval(inpl_corrs(:,ithr_eval))
-                dist_obj = eulprob_dist_switch(inpl_corrs(:,ithr_eval), self%p_ptr%cc_objfun)
-                irot_loc = angle_sampling(dist_obj, dists_sorted(:,ithr_eval), inds_sorted(:,ithr_eval), inpl_angle_thres(state_fixed), self%p_ptr%prob_athres)
-                ref_idx_loc = self%ref_index_map(iproj_eval, state_fixed)
-                if (ref_idx_loc > 0) then
-                    call self%init_edge_default(iptcl_eval, ref_idx_loc, v)
-                    v%dist = dist_obj(irot_loc)
-                    v%inpl = irot_loc
-                    if (do_shift_first) then
-                        call rotmat2d(self%b_ptr%pftc%get_rot(irot_loc), rotmat_loc)
-                        rot_xy_loc = matmul(cxy_shift, rotmat_loc)
-                        v%x = rot_xy_loc(1)
-                        v%y = rot_xy_loc(2)
-                        v%has_sh = .true.
-                    endif
-                    call append_or_improve_ref(tbuf(ithr_eval)%pref_ref, tbuf(ithr_eval)%pref_val, tbuf(ithr_eval)%pref_nused, ref_idx_loc, v)
-                    have_valid = .true.
-                endif
-            else
-                do state_j = 1, self%nstates
-                    istate_loc = self%active_state_indices(state_j)
-                    if (.not. self%proj_exists(iproj_eval, istate_loc)) cycle
-                    call self%b_ptr%pftc%gen_objfun_vals((istate_loc - 1) * self%p_ptr%nspace + iproj_eval, iptcl_eval, cxy_shift, inpl_corrs(:,ithr_eval))
-                    best_corr = max(best_corr, maxval(inpl_corrs(:,ithr_eval)))
-                    dist_obj = eulprob_dist_switch(inpl_corrs(:,ithr_eval), self%p_ptr%cc_objfun)
-                    irot_loc = angle_sampling(dist_obj, dists_sorted(:,ithr_eval), inds_sorted(:,ithr_eval), inpl_angle_thres(istate_loc), self%p_ptr%prob_athres)
-                    ref_idx_loc = self%ref_index_map(iproj_eval, istate_loc)
-                    if (ref_idx_loc <= 0) cycle
-                    call self%init_edge_default(iptcl_eval, ref_idx_loc, v)
-                    v%dist = dist_obj(irot_loc)
-                    v%inpl = irot_loc
-                    if (do_shift_first) then
-                        call rotmat2d(self%b_ptr%pftc%get_rot(irot_loc), rotmat_loc)
-                        rot_xy_loc = matmul(cxy_shift, rotmat_loc)
-                        v%x = rot_xy_loc(1)
-                        v%y = rot_xy_loc(2)
-                        v%has_sh = .true.
-                    endif
-                    call append_or_improve_ref(tbuf(ithr_eval)%pref_ref, tbuf(ithr_eval)%pref_val, tbuf(ithr_eval)%pref_nused, ref_idx_loc, v)
-                    have_valid = .true.
-                enddo
-            endif
-            if (have_valid) call append_unique_int(tbuf(ithr_eval)%proj_sel, tbuf(ithr_eval)%proj_nused, iproj_eval)
-        end subroutine score_ptree_ref
-
-    end subroutine build_graph_from_ptree_srch_impl
+        do ithr = 1, nthr_glob
+            if (allocated(tbuf(ithr)%score_buf))           deallocate(tbuf(ithr)%score_buf)
+            if (allocated(tbuf(ithr)%sorted_dist_scratch)) deallocate(tbuf(ithr)%sorted_dist_scratch)
+            if (allocated(tbuf(ithr)%sorted_idx_scratch))  deallocate(tbuf(ithr)%sorted_idx_scratch)
+            if (allocated(tbuf(ithr)%proj_sel)) deallocate(tbuf(ithr)%proj_sel)
+        enddo
+        if (allocated(tbuf)) deallocate(tbuf)
+        if (L_BENCH_GLOB) rt_finalize = toc(t_finalize)
+        rt_route_setup         = rt_setup
+        rt_route_shift_init    = rt_shift_init
+        rt_route_particle_loop = rt_particle_loop
+        rt_route_finalize      = rt_finalize
+    end subroutine build_graph_from_subspace_peaks_impl
 
     ! Build reference-major adjacency over edge indices for fast per-reference scans.
     subroutine build_ref_adjacency(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        integer, allocatable :: edge_count_by_ref(:), ref_write_ptr(:)
-        integer :: ref_idx, edge_idx
+        integer, allocatable :: edge_count_by_ref(:)
+        integer, allocatable :: thread_ref_counts(:,:), thread_ref_offsets(:,:)
+        integer :: ref_idx, edge_idx, ithr, slot
         allocate(edge_count_by_ref(self%nrefs), source=0)
+        allocate(thread_ref_counts(self%nrefs, nthr_glob), source=0)
+        !$omp parallel default(shared) private(edge_idx,ref_idx,ithr) proc_bind(close)
+        !$omp do schedule(static)
         do edge_idx = 1, self%nedges
-            edge_count_by_ref(self%edge_ref_index(edge_idx)) = edge_count_by_ref(self%edge_ref_index(edge_idx)) + 1
+            ithr = omp_get_thread_num() + 1
+            ref_idx = self%edge_ref_index(edge_idx)
+            thread_ref_counts(ref_idx, ithr) = thread_ref_counts(ref_idx, ithr) + 1
         enddo
+        !$omp end do
+        !$omp do schedule(static)
+        do ref_idx = 1, self%nrefs
+            do ithr = 1, nthr_glob
+                edge_count_by_ref(ref_idx) = edge_count_by_ref(ref_idx) + thread_ref_counts(ref_idx, ithr)
+            enddo
+        enddo
+        !$omp end do
+        !$omp end parallel
         if (allocated(self%ref_edge_offsets)) deallocate(self%ref_edge_offsets)
         if (allocated(self%ref_edge_indices)) deallocate(self%ref_edge_indices)
-        allocate(self%ref_edge_offsets(self%nrefs+1), self%ref_edge_indices(self%nedges), ref_write_ptr(self%nrefs))
+        allocate(self%ref_edge_offsets(self%nrefs+1), self%ref_edge_indices(self%nedges))
         self%ref_edge_offsets(1) = 1
         do ref_idx = 1, self%nrefs
             self%ref_edge_offsets(ref_idx+1) = self%ref_edge_offsets(ref_idx) + edge_count_by_ref(ref_idx)
         enddo
-        ref_write_ptr = self%ref_edge_offsets(1:self%nrefs)
-        do edge_idx = 1, self%nedges
-            ref_idx = self%edge_ref_index(edge_idx)
-            self%ref_edge_indices(ref_write_ptr(ref_idx)) = edge_idx
-            ref_write_ptr(ref_idx) = ref_write_ptr(ref_idx) + 1
+        allocate(thread_ref_offsets(self%nrefs, nthr_glob), source=0)
+        !$omp parallel default(shared) private(edge_idx,ref_idx,slot,ithr) proc_bind(close)
+        !$omp do schedule(static)
+        do ref_idx = 1, self%nrefs
+            slot = self%ref_edge_offsets(ref_idx)
+            do ithr = 1, nthr_glob
+                thread_ref_offsets(ref_idx, ithr) = slot
+                slot = slot + thread_ref_counts(ref_idx, ithr)
+            enddo
         enddo
-        deallocate(edge_count_by_ref, ref_write_ptr)
+        !$omp end do
+        !$omp do schedule(static)
+        do edge_idx = 1, self%nedges
+            ithr = omp_get_thread_num() + 1
+            ref_idx = self%edge_ref_index(edge_idx)
+            slot = thread_ref_offsets(ref_idx, ithr)
+            thread_ref_offsets(ref_idx, ithr) = slot + 1
+            self%ref_edge_indices(slot) = edge_idx
+        enddo
+        !$omp end do
+        !$omp end parallel
+        deallocate(edge_count_by_ref, thread_ref_counts, thread_ref_offsets)
     end subroutine build_ref_adjacency
 
     ! Refine shifts on already-scored sparse edges.
@@ -1364,103 +1287,36 @@ contains
         self%p_ptr       => null()
     end subroutine kill
 
-    ! Helper functions for managing dynamic integer buffers used in reference edge lists
+    ! Append a projection block as-is (subspace neighborhoods are assumed disjoint).
+    subroutine append_proj_block(proj_sel, nused, vals)
+        integer, intent(inout) :: proj_sel(:)
+        integer, intent(inout) :: nused
+        integer, intent(in)    :: vals(:)
+        integer :: nadd
+        nadd = size(vals)
+        if (nadd <= 0) return
+        if (nused + nadd > size(proj_sel)) then
+            THROW_HARD('append_proj_block: projection buffer overflow')
+        endif
+        proj_sel(nused+1:nused+nadd) = vals
+        nused = nused + nadd
+    end subroutine append_proj_block
 
-    ! Return the 1-based position of val within buf(1:nused), or 0 if not present.
-    integer function find_int_buf(buf, val, nused) result(pos)
-        integer,           intent(in) :: buf(:)
-        integer,           intent(in) :: val
-        integer, optional, intent(in) :: nused
-        integer :: i, nscan
-        pos = 0
-        nscan = size(buf)
-        if (present(nused)) nscan = min(max(nused, 0), nscan)
-        do i = 1, nscan
-            if (buf(i) == val) then
-                pos = i
-                return
+    ! Fill projection buffer with all active projections (no dedup needed).
+    subroutine add_all_active_projs(self, proj_sel, nused)
+        class(eul_prob_tab_neigh), intent(in)    :: self
+        integer,                   intent(inout) :: proj_sel(:)
+        integer,                   intent(inout) :: nused
+        integer :: iproj
+        nused = 0
+        do iproj = 1, self%p_ptr%nspace
+            if (self%proj_active_state_count(iproj) <= 0) cycle
+            nused = nused + 1
+            if (nused > size(proj_sel)) then
+                THROW_HARD('add_all_active_projs: projection buffer overflow')
             endif
+            proj_sel(nused) = iproj
         enddo
-    end function find_int_buf
-
-    ! Append a value to a dynamic integer buffer only if it is not already present.
-    subroutine append_unique_int(buf, nused, val)
-        integer, allocatable, intent(inout) :: buf(:)
-        integer,              intent(inout) :: nused
-        integer,              intent(in)    :: val
-        integer, allocatable :: tmp(:)
-        integer :: used_count, cap, new_cap
-        used_count = 0
-        if (allocated(buf)) used_count = min(max(nused, 0), size(buf))
-        if (used_count > 0) then
-            if (find_int_buf(buf, val, used_count) > 0) return
-        endif
-        cap = 0
-        if (allocated(buf)) cap = size(buf)
-        if (used_count < cap) then
-            buf(used_count + 1) = val
-            nused = used_count + 1
-            return
-        endif
-        new_cap = max(1, max(cap * 2, used_count + 1))
-        allocate(tmp(new_cap))
-        if (used_count > 0) tmp(1:used_count) = buf(1:used_count)
-        tmp(used_count + 1) = val
-        call move_alloc(tmp, buf)
-        nused = used_count + 1
-    end subroutine append_unique_int
-
-    ! Append all values from vals into buf while preserving uniqueness.
-    subroutine append_unique_int_list(buf, nused, vals)
-        integer, allocatable, intent(inout) :: buf(:)
-        integer,              intent(inout) :: nused
-        integer,              intent(in)    :: vals(:)
-        integer :: i
-        do i = 1, size(vals)
-            call append_unique_int(buf, nused, vals(i))
-        enddo
-    end subroutine append_unique_int_list
-
-    ! Insert or update one preferred ref entry, keeping the smaller dist on duplicates.
-    subroutine append_or_improve_ref(pref_ref, pref_val, nused, ref_idx, v)
-        integer,        allocatable, intent(inout) :: pref_ref(:)
-        type(ptcl_ref), allocatable, intent(inout) :: pref_val(:)
-        integer,                     intent(inout) :: nused
-        integer,                     intent(in)    :: ref_idx
-        type(ptcl_ref),              intent(in)    :: v
-        integer,        allocatable :: tmp_ref(:)
-        type(ptcl_ref), allocatable :: tmp_val(:)
-        integer :: pos, used_count, cap, new_cap
-        if (allocated(pref_ref) .neqv. allocated(pref_val)) then
-            THROW_HARD('append_or_improve_ref: pref_ref/pref_val allocation mismatch')
-        endif
-        used_count = 0
-        if (allocated(pref_ref)) used_count = min(max(nused, 0), min(size(pref_ref), size(pref_val)))
-        pos = 0
-        if (used_count > 0) pos = find_int_buf(pref_ref, ref_idx, used_count)
-        if (pos > 0) then
-            if (v%dist < pref_val(pos)%dist) pref_val(pos) = v
-            return
-        endif
-        cap = 0
-        if (allocated(pref_ref)) cap = min(size(pref_ref), size(pref_val))
-        if (used_count < cap) then
-            pref_ref(used_count + 1) = ref_idx
-            pref_val(used_count + 1) = v
-            nused = used_count + 1
-            return
-        endif
-        new_cap = max(1, max(cap * 2, used_count + 1))
-        allocate(tmp_ref(new_cap), tmp_val(new_cap))
-        if (used_count > 0) then
-            tmp_ref(1:used_count) = pref_ref(1:used_count)
-            tmp_val(1:used_count) = pref_val(1:used_count)
-        endif
-        tmp_ref(used_count + 1) = ref_idx
-        tmp_val(used_count + 1) = v
-        call move_alloc(tmp_ref, pref_ref)
-        call move_alloc(tmp_val, pref_val)
-        nused = used_count + 1
-    end subroutine append_or_improve_ref
+    end subroutine add_all_active_projs
 
 end module simple_eul_prob_tab_neigh
