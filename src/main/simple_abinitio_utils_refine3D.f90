@@ -145,7 +145,9 @@ contains
         if( is_tree_route(route) ) cfg%refine = 'shc_ptree'
         if( istage >= PROBREFINE_STAGE )then
             if( is_tree_route(route) )then
-                cfg%refine     = 'prob_neigh'
+                ! cfg%refine     = 'prob_neigh'
+                ! cfg%neigh_type = 'subspace_srch'
+                cfg%refine     = 'ptree'
                 cfg%neigh_type = 'subspace_srch'
             else
                 cfg%refine  = 'prob'
