@@ -28,21 +28,6 @@ public :: refine3D_exec
 private
 #include "simple_local_flags.inc"
 
-logical                    :: has_been_searched
-type(eul_prob_tab), target :: eulprob_obj_part
-type(image),   allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
-integer,       allocatable :: pinds(:)
-type(string)               :: fname
-integer                    :: nptcls2update
-class(parameters), pointer :: p_ptr => null()
-class(builder),    pointer :: b_ptr => null()
-! benchmarking
-integer(timer_int_kind)    :: t_init, t_build_batch_particles, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
-integer(timer_int_kind)    :: t_prepare_refs_sigmas_ptcls, t_prepare_polar_references
-real(timer_int_kind)       :: rt_init, rt_build_batch_particles, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
-real(timer_int_kind)       :: rt_prepare_refs_sigmas_ptcls, rt_prepare_polar_references
-type(string)               :: benchfname
-
 contains
 
     subroutine refine3D_exec( params, build, cline, which_iter, converged )
@@ -51,6 +36,9 @@ contains
         class(cmdline),            intent(inout) :: cline
         integer,                   intent(in)    :: which_iter
         logical,                   intent(inout) :: converged
+        class(parameters), pointer :: p_ptr => null()
+        class(builder),    pointer :: b_ptr => null()
+        type(eul_prob_tab), target :: eulprob_obj_part
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
         type :: strategy3D_per_ptcl
             class(strategy3D), pointer :: ptr  => null()
@@ -60,16 +48,23 @@ contains
         !      relevant strategy3D base class
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
         type(class_sample),        allocatable :: clssmp(:)
-        integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:)
+        integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
         real,                      allocatable :: incr_shifts(:,:)
+        type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_rec_imgs(:)
+        type(fplane_type),         allocatable :: fpls(:)
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
-        integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
-        integer :: ibatch
-        logical :: doprint, l_polar, l_restore, l_prob_align_mode
-        
+        integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
+        logical :: doprint, l_polar, l_restore, l_prob_align_mode, has_been_searched
+        ! benchmarking
+        type(string)            :: benchfname
+        integer(timer_int_kind) :: t_init, t_build_batch_particles, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
+        integer(timer_int_kind) :: t_prepare_refs_sigmas_ptcls, t_prepare_polar_references
+        real(timer_int_kind)    :: rt_init, rt_build_batch_particles, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
+        real(timer_int_kind)    :: rt_prepare_refs_sigmas_ptcls, rt_prepare_polar_references
+
         ! assign parameters pointer
         p_ptr => params
         ! assign builder pointer
@@ -90,7 +85,12 @@ contains
             case('eval','sigma')
                 l_restore = .false.
             case DEFAULT
-                l_restore = .true.
+                if( l_polar )then
+                    l_restore = .true.
+                else
+                    ! for cartesian representation we only do restoration if volrec is yes
+                    l_restore = (trim(p_ptr%volrec).eq.'yes')
+                endif
         end select
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
@@ -165,7 +165,6 @@ contains
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
 
         ! READING THE ASSIGNMENT FOR PROB MODE
-
         if( l_prob_align_mode )then
             call eulprob_obj_part%new(p_ptr, b_ptr, pinds)
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
@@ -178,6 +177,12 @@ contains
             rt_rec                   = 0.
         endif
 
+        ! INITIALIZE CARTESIAN RECONSTRUCTION
+        if( l_restore .and. (.not.l_polar) )then
+            call init_rec(params, build, batchsz_max, fpls)
+            call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+        endif
+
         ! BATCH LOOP
         ! write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
         allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0)
@@ -188,7 +193,18 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftc
             if( L_BENCH_GLOB ) t_build_batch_particles = tic()
-            call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), ptcl_match_imgs, ptcl_match_imgs_pad)
+            if( l_polar )then
+                call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
+                    &ptcl_match_imgs, ptcl_match_imgs_pad)
+            else
+                if( l_restore)then
+                    call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
+                        &ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
+                else
+                    call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
+                        &ptcl_match_imgs, ptcl_match_imgs_pad)
+                endif
+            endif
             if( L_BENCH_GLOB ) rt_build_batch_particles = rt_build_batch_particles + toc(t_build_batch_particles)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -270,11 +286,19 @@ contains
             enddo ! Particles loop
             !$omp end parallel do
             if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
-            ! restore polar cavgs
-            if( l_polar .and. l_restore )then
+            ! Online restoration
+            if( l_restore )then
                 if( L_BENCH_GLOB ) t_rec = tic()
-                call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
-                &b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
+                if( l_polar )then
+                    ! Polar representation
+                    call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
+                        &b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
+                else
+                    ! Cartesian lattice update
+                    call prep_imgs4rec(params, build, batchsz, ptcl_rec_imgs(:batchsz),&
+                        &pinds(batch_start:batch_end), fpls(:batchsz))
+                    call update_rec(params, build, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
+                endif
                 if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
             endif
         enddo
@@ -312,8 +336,10 @@ contains
         call clean_strategy3D ! deallocate s3D singleton
         call b_ptr%vol%kill
         call orientation%kill
+        call dealloc_imgarr(ptcl_rec_imgs)
         call dealloc_imgarr(ptcl_match_imgs)
         call dealloc_imgarr(ptcl_match_imgs_pad)
+        call killimgbatch(b_ptr)
 
         ! OUTPUT ORIENTATIONS
         select case(trim(p_ptr%refine))
@@ -343,8 +369,6 @@ contains
             if( L_BENCH_GLOB ) t_rec = tic()
             if( l_polar )then
                 ! Polar representation
-                call killimgbatch(b_ptr)
-                call b_ptr%esig%kill
                 if( l_distr_worker_glob )then
                     call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
                 else
@@ -354,23 +378,13 @@ contains
                     call b_ptr%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
                     call b_ptr%pftc%polar_cavger_kill
                 endif
-                call b_ptr%pftc%kill
             else
-                ! Cartesian volume
-                call b_ptr%pftc%kill
-                if( trim(p_ptr%volrec).eq.'yes' )then
-                     call calc_3Drec( p_ptr, b_ptr, cline, nptcls2update, pinds )
-                endif
-                call b_ptr%esig%kill
-                call killimgbatch(b_ptr)
+                call finalize_rec(params, build, cline, fpls)
             endif
             if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
-        else
-            ! cleanup
-            call killimgbatch(b_ptr)
-            call b_ptr%esig%kill
-            call b_ptr%pftc%kill
         endif
+        call b_ptr%pftc%kill
+        call b_ptr%esig%kill
 
         ! REPORT CONVERGENCE
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))

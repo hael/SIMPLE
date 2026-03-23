@@ -10,10 +10,20 @@ use simple_projector,          only: projector
 use simple_strategy2D_utils,   only: calc_cavg_offset
 implicit none
 
+! Particle image I/O
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
-public :: set_bp_range, set_bp_range2D, sample_ptcls4update, sample_ptcls4fillin, prepimg4align, prepimg4align_bench
-public :: prep2Dref, build_batch_particles, prepare_refs_sigmas_ptcls, calc_3Drec
-public :: calc_2Dref_offset
+! Resolutions limits for alignment
+public :: set_bp_range, set_bp_range2D
+! Particle sampling
+public :: sample_ptcls4update, sample_ptcls4fillin
+! Particle image processing for alignment
+public :: prepimg4align, prepimg4align_bench, build_batch_particles
+! Reference processing for alignment
+public :: prep2Dref, prepare_refs_sigmas_ptcls, calc_2Dref_offset
+! Offline reconstruction
+public :: calc_3Drec
+! Online reconstruction
+public :: init_rec, prep_imgs4rec, update_rec, finalize_rec
 private
 #include "simple_local_flags.inc"
 
@@ -742,116 +752,158 @@ contains
     end subroutine grid_ptcl
 
     !> volumetric 3d reconstruction
-    subroutine calc_3Drec( params, build, cline, nptcls2update, pinds )
+    subroutine calc_3Drec( params, build, cline, nptcls, pinds )
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: nptcls2update
-        integer,           intent(in)    :: pinds(nptcls2update)
+        integer,           intent(in)    :: nptcls
+        integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable   :: fpls(:)
-        type(ctfparams),   allocatable   :: ctfparms(:)
-        type(ori) :: orientation, o_thres, o_mirr
-        real      :: shift(2), euls(3), euls_mirr(3)
-        integer   :: batchlims(2), iptcl, i, i_batch, ibatch, nptcls_eff, ithr, kfromto(2)
-        logical   :: l_rec_state
-        logical   :: DEBUG = .false.
-        integer(timer_int_kind) :: t
-        real(timer_int_kind)    :: t_ini, t_2dprep, t_grid
-        if( trim(params%recthres).eq.'yes' )then
-            euls = [params%e1, params%e2, params%e3]
-            call euler_mirror(euls, euls_mirr)
-            call o_thres%new(is_ptcl=.true.)
-            call o_thres%set_euler(euls)
-            call o_mirr%new(is_ptcl=.true.)
-            call o_mirr%set_euler(euls_mirr)
-        endif
-        l_rec_state = cline%defined('state')
-        ! init volumes
-        call preprecvols(params, build)
-        ! prep batch imgs
+        integer :: batchlims(2), ibatch, batchsz
+        logical :: DEBUG = .false.
+        integer(timer_int_kind) :: t, t0
+        real(timer_int_kind)    :: t_init, t_read, t_prep, t_grid, t_tot
+        if( DEBUG ) t0 = tic()
+        ! Initialize objects for recontruction
+        if( DEBUG ) t = tic()
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls)
+        ! Prep batch image objects
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        ! allocate array
-        allocate(fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
-        if( DEBUG )then
-            t_ini    = 0.
-            t_2dprep = 0.
-            t_grid   = 0.
+        if( DEBUG ) t_init = toc(t)
+        ! gridding batch loop
+        if( DEBUG ) then
+            t_read = 0.d0
+            t_prep = 0.d0
+            t_grid = 0.d0
         endif
+        do ibatch = 1,nptcls,MAXIMGBATCHSZ
+            batchlims = [ibatch, min(nptcls, ibatch+MAXIMGBATCHSZ-1)]
+            batchsz   = batchlims(2) - batchlims(1) + 1
+            ! read images
+            if( DEBUG ) t = tic()
+            call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+            if( DEBUG ) t_read = t_read + toc(t)
+            ! preprocess images into padded objects
+            if( DEBUG ) t = tic()
+            call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz),&
+                                &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+            if( DEBUG ) t_prep = t_prep + toc(t)
+            ! insert padded slices into lattice
+            if( DEBUG ) t = tic()
+            call update_rec(params, build, batchsz, pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+            if( DEBUG ) t_grid = t_grid + toc(t)
+        end do
+        ! Normalize volumes and deallocate temporary objects
+        call finalize_rec(params, build, cline, fpls)
+        if( DEBUG .and. (params%part==1) )then
+            t_tot = toc(t0)
+            print *,'Init          : ', t_init
+            print *,'Read          : ', t_read
+            print *,'Prep          : ', t_prep
+            print *,'Grid          : ', t_grid
+            print *,'Total rec time: ', t_tot
+        endif
+    end subroutine calc_3Drec
+
+    !>  Initiates objects required for online volumetric 3d reconstruction
+    !>  Does not read images
+    subroutine init_rec( params, build, maxbatchsz, fplanes )
+        use simple_imgarr_utils, only: alloc_imgarr
+        class(parameters),              intent(in)    :: params
+        class(builder),                 intent(inout) :: build
+        integer,                        intent(in)    :: maxbatchsz
+        type(fplane_type), allocatable, intent(inout) :: fplanes(:)
+        ! sanity check for ml_reg
         if( params%l_ml_reg )then
             if( .not. allocated(build%esig%sigma2_noise) )then
                 THROW_HARD('build%esig%sigma2_noise is not allocated while ml_reg is enabled; calc_3Drec')
             endif
         endif
-        ! logical/physical adress mapping
-        call memoize_ft_maps([params%boxpd, params%boxpd, 1], build%imgbatch(1)%get_smpd())
+        ! init volumes
+        call preprecvols(params, build)
+        ! allocate convenience CTF & memory aligned objects
+        if( allocated(fplanes) )  deallocate(fplanes)
+        allocate(fplanes(maxbatchsz))
         ! heap of padded images
-        call alloc_imgarr(nthr_glob, [params%boxpd, params%boxpd, 1], build%imgbatch(1)%get_smpd(), build%img_pad_heap)
+        call alloc_imgarr(nthr_glob, [params%boxpd, params%boxpd, 1], params%smpd, build%img_pad_heap)
+    end subroutine init_rec
+
+    !> Preprocess particle images for online volumetric 3d reconstruction
+    subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nptcls
+        class(image),      intent(inout) :: ptcl_imgs(nptcls)
+        integer,           intent(in)    :: pinds(nptcls)
+        type(fplane_type), intent(inout) :: fplanes(nptcls)
+        type(ctfparams) :: ctfparms(nthr_glob)
+        real      :: shift(2)
+        integer   :: iptcl, i, ithr, kfromto(2)
+        ! logical/physical adress mapping because overwritten by polarize
+        call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
         ! gridding batch loop
-        nptcls_eff = 0
-        do i_batch=1,nptcls2update,MAXIMGBATCHSZ
-            if( DEBUG ) t = tic()
-            batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
-            call discrete_read_imgbatch(params, build, nptcls2update, pinds, batchlims)
-            if( DEBUG )then
-                t_ini = t_ini + toc(t)
-                t = tic()
-            endif
-            !$omp parallel do default(shared) private(i,ithr,iptcl,ibatch,shift,kfromto) schedule(static) proc_bind(close)
-            do i=batchlims(1),batchlims(2)
-                ithr   = omp_get_thread_num() + 1
-                iptcl  = pinds(i)
-                ibatch = i - batchlims(1) + 1
-                call build%imgbatch(ibatch)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
-                ctfparms(ibatch) = build%spproj%get_ctfparams(params%oritype, iptcl)
-                shift = build%spproj_field%get_2Dshift(iptcl)
-                kfromto = build%esig%get_kfromto()
-                if( params%l_ml_reg )then
-                    call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ibatch),&
-                    &shift, iptcl, fpls(ibatch), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
-                else
-                    call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ibatch),&
-                    &shift, iptcl, fpls(ibatch))
-                endif
-            end do
-            !$omp end parallel do
-            if( DEBUG )then
-                t_2dprep = t_2dprep + toc(t)
-                t = tic()
-            endif
-            ! gridding
-            do i=batchlims(1),batchlims(2)
-                iptcl  = pinds(i)
-                ibatch = i - batchlims(1) + 1
-                call build%spproj_field%get_ori(iptcl, orientation)
-                if( orientation%isstatezero() ) cycle
-                if( trim(params%recthres).eq.'yes' )then
-                    if( rad2deg(orientation .euldist. o_thres) < params%rec_athres .or.&
-                       &rad2deg(orientation .euldist. o_mirr ) < params%rec_athres ) cycle
-                endif
-                nptcls_eff = nptcls_eff + 1
-                call grid_ptcl(build, fpls(ibatch), build%pgrpsyms, orientation)
-            end do
-            if( DEBUG )then
-                t_grid = t_grid + toc(t)
+        kfromto = build%esig%get_kfromto()
+        !$omp parallel do default(shared) private(i,ithr,iptcl,shift) schedule(static) proc_bind(close)
+        do i = 1,nptcls
+            ithr   = omp_get_thread_num() + 1
+            iptcl  = pinds(i)
+            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+            ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
+            shift = build%spproj_field%get_2Dshift(iptcl)
+            if( params%l_ml_reg )then
+                call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
+                &shift, iptcl, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
+            else
+                call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
+                &shift, iptcl, fplanes(i))
             endif
         end do
+        !$omp end parallel do
+    end subroutine prep_imgs4rec
+
+    !> volumetric 3d reconstruction
+    subroutine update_rec( params, build, nptcls, pinds, fplanes )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nptcls
+        integer,           intent(in)    :: pinds(nptcls)
+        type(fplane_type), intent(inout) :: fplanes(nptcls)
+        type(ori) :: orientation
+        integer   :: iptcl, i
+        call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
+        ! gridding
+        do i = 1,nptcls
+            iptcl  = pinds(i)
+            call build%spproj_field%get_ori(iptcl, orientation)
+            if( orientation%isstatezero() ) cycle
+            call grid_ptcl(build, fplanes(i), build%pgrpsyms, orientation)
+        end do
+        call orientation%kill
+    end subroutine update_rec
+
+    !> volumetric 3d reconstruction
+    subroutine finalize_rec( params, build, cline, fplanes )
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
+        class(parameters),              intent(inout) :: params
+        class(builder),                 intent(inout) :: build
+        class(cmdline),                 intent(inout) :: cline
+        type(fplane_type), allocatable, intent(inout) :: fplanes(:)
+        integer :: i
+        ! deallocate convenience objects
+        do i = 1,size(fplanes)
+            if( allocated(fplanes(i)%cmplx_plane) ) deallocate(fplanes(i)%cmplx_plane)
+            if( allocated(fplanes(i)%ctfsq_plane) ) deallocate(fplanes(i)%ctfsq_plane)
+        end do
+        deallocate(fplanes)
         call dealloc_imgarr(build%img_pad_heap)
-        if( DEBUG ) print *,'timing: ',t_ini, t_2dprep, t_grid
-        if( trim(params%recthres).eq.'yes' ) print *, 'nptcls in 3D reconstruction = ', nptcls_eff
         ! normalise structure factors
+        call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
         call norm_struct_facts(params, build, cline)
         ! destruct
         call forget_ft_maps
         call killrecvols(params, build)
-        do ibatch=1,MAXIMGBATCHSZ
-            if( allocated(fpls(ibatch)%cmplx_plane) ) deallocate(fpls(ibatch)%cmplx_plane)
-            if( allocated(fpls(ibatch)%ctfsq_plane) ) deallocate(fpls(ibatch)%ctfsq_plane)
-            ! call fpls(ibatch)%kill
-        end do
-        deallocate(fpls,ctfparms)
-        call orientation%kill
-    end subroutine calc_3Drec
+    end subroutine finalize_rec
 
     subroutine norm_struct_facts( params, build, cline )
         use simple_gridding, only: prep3D_inv_instrfun4mul
@@ -1150,14 +1202,17 @@ contains
         call build%pftc%memoize_refs
     end subroutine prepare_polar_references
 
-    subroutine build_batch_particles( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad )
-        class(parameters),   intent(in)    :: params
-        class(builder),      intent(inout) :: build
-        integer,             intent(in)    :: nptcls_here
-        integer,             intent(in)    :: pinds_here(nptcls_here)
-        type(image),         intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
+    subroutine build_batch_particles( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, imgs4rec )
+        class(parameters),      intent(in)    :: params
+        class(builder),         intent(inout) :: build
+        integer,                intent(in)    :: nptcls_here
+        integer,                intent(in)    :: pinds_here(nptcls_here)
+        class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
+        class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
         complex, allocatable :: pft(:,:)
-        integer     :: iptcl_batch, iptcl, ithr
+        integer :: iptcl_batch, iptcl, ithr
+        logical :: l_backup_imgs
+        l_backup_imgs = present(imgs4rec)
         ! reassign particles indices & associated variables
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
         call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
@@ -1172,6 +1227,7 @@ contains
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             ! prep
+            if( l_backup_imgs ) call imgs4rec(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
             call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
             ! transfer to polar coordinates
             pft = build%pftc%allocate_ptcl_pft()

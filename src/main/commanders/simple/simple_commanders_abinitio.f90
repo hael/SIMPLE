@@ -492,6 +492,7 @@ contains
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
+        call cline%set('ptclw',         'no')
         if( .not. cline%defined('mkdir')               ) call cline%set('mkdir',                         'yes')
         if( .not. cline%defined('overlap')             ) call cline%set('overlap',                        0.95)
         if( .not. cline%defined('prob_athres')         ) call cline%set('prob_athres',                     10.)
@@ -500,7 +501,6 @@ contains
         if( .not. cline%defined('oritype')             ) call cline%set('oritype',                    'ptcl3D')
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
-        if( .not. cline%defined('ptclw')               ) call cline%set('ptclw',                          'no')
         if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                        'no')
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                   'comlin')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')

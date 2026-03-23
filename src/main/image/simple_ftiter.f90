@@ -36,6 +36,9 @@ type :: ftiter
     procedure :: get_lfny
     procedure :: get_lp
     procedure :: get_spat_freq
+    procedure :: get_ldim
+    procedure :: get_smpd
+    procedure :: reset
     ! LOOPING LIMITS
     procedure :: loop_lims
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
@@ -172,6 +175,37 @@ contains
         real :: spat_freq
         spat_freq = real(ind)/self%dsteps(which)
     end function get_spat_freq
+
+    !>  \brief  is a getter
+    pure function get_ldim( self  ) result( ldim )
+        class(ftiter), intent(in) :: self
+        integer :: ldim(3)
+        ldim = self%ldim
+    end function get_ldim
+
+    !>  \brief  is a getter
+    pure real function get_smpd( self  )
+        class(ftiter), intent(in) :: self
+        get_smpd = self%smpd
+    end function get_smpd
+
+    pure subroutine reset( self )
+        class(ftiter), intent(inout) :: self
+        self%rlogi_lbounds     = 0
+        self%rlogi_ubounds     = 0
+        self%clogi_lbounds     = 0
+        self%clogi_ubounds     = 0
+        self%clogi_lbounds_all = 0
+        self%clogi_ubounds_all = 0
+        self%cphys_ubounds     = 0
+        self%ldim   = 1
+        self%lfnys  = 0
+        self%lhps   = 0
+        self%llps   = 0
+        self%lims   = 0
+        self%dsteps = 0.0
+        self%smpd   = 0.0
+    end subroutine reset
 
     ! LOOPING LIMITS
 

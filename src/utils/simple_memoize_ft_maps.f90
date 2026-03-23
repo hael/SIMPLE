@@ -27,7 +27,10 @@ contains
         real         :: spafreqh, spafreqk, spafreqsqk
         integer      :: phys(2), h,k
         if( OMP_IN_PARALLEL() ) THROW_HARD('No memoization inside OpenMP regions')
-        ! Friedel symmetry
+        if( all(ftiterator%get_ldim() == ldim) .and. abs(smpd-ftiterator%get_smpd())<1.e-4 )then
+            ! already memoized to input dimensions, do nothing
+            return
+        endif
         ! init & alloc
         call forget_ft_maps
         ftiterator     = ftiter([ldim(1), ldim(2), 1], smpd)
@@ -57,6 +60,7 @@ contains
             ft_map_lims    = 0
             ft_map_lims_nr = 0
             deallocate(ft_map_phys_addrh,ft_map_phys_addrk,ft_map_spafreqsq,ft_map_astigang)
+            call ftiterator%reset
         endif
     end subroutine forget_ft_maps
 
@@ -64,7 +68,7 @@ contains
         ft_map_get_lfny = ftiterator%get_lfny(1)
     end function ft_map_get_lfny
 
-    function ft_map_get_farray_shape( )result( cshape )
+    pure function ft_map_get_farray_shape( )result( cshape )
         integer :: cshape(3)
         if( allocated(ft_map_phys_addrh) )then
             cshape = [fdim(size(ft_map_phys_addrh,1)), size(ft_map_phys_addrh,2), 1]
