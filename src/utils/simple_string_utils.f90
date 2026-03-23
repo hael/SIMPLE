@@ -715,22 +715,6 @@ contains
         end do
     end function findloc_str_2
 
-    pure function ends_with( str, ext ) result( does_end )
-        class(string), intent(in) :: str, ext
-        logical :: does_end
-        integer :: len_str, len_ext, i
-        character(len=STDLEN) :: string, suffix
-        string = str%to_char()
-        suffix = ext%to_char()
-        does_end   = .false.
-        len_str    = len_trim(string)
-        len_ext    = len_trim(suffix)
-        if( len_str < len_ext )return  
-        if( string(len_str-len_ext+1:len_str) .eq. suffix )then
-            does_end = .true.
-        endif
-    end function ends_with
-
     !> Stable lexicographic sort:
     !>  - case-insensitive
     !>  - ignores leading/trailing spaces

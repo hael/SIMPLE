@@ -209,7 +209,7 @@ contains
         type(parameters) :: params
         type(atoms)      :: molecule
         call params%new(cline)
-        params%pdbfile = get_fbody(params%pdbfile,'cif')//'.pdb'
+        params%pdbfile = get_fbody(params%ciffile,'cif')//'.pdb'
         call molecule%new(params%ciffile)
         call molecule%writepdb(params%pdbfile)
         call molecule%kill

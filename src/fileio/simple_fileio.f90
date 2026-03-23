@@ -294,19 +294,16 @@ contains
 
     function nlines( fname ) result( n )
         class(string), intent(in) :: fname !< input filename
-        integer          :: n, funit, ios,io_status
-        character(len=1) :: junk
+        integer          :: n, funit, ios, io_status
+        character(len=STDLEN) :: line
         if( file_exists(fname) )then
             call fopen(funit, fname, status='unknown', action='read', iostat=io_status)
             call fileiochk(":nlines error opening file "//fname%to_char(), io_status)
             n = 0
             do
-                read(funit,*,IOSTAT=ios) junk
-                if(ios /= 0)then
-                    exit
-                else
-                    if(.not. str_is_comment(junk))  n = n + 1
-                endif
+                read(funit,'(A)',IOSTAT=ios) line
+                if(ios /= 0) exit
+                if(.not. str_is_comment(line)) n = n + 1
             end do
             call fclose(funit)
         else

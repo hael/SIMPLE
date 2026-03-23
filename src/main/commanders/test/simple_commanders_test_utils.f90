@@ -92,34 +92,25 @@ end subroutine exec_test_binoris_io_test
 subroutine exec_test_cif2mrc( self, cline )
     use simple_image,         only : image
     use simple_atoms,         only : atoms
-    use simple_molecule_data, only : molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
     class(commander_test_cif2mrc), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
-    type(string)        :: pdb_file, vol_file
+    type(string)        :: cif_file
     type(atoms)         :: molecule
-    type(molecule_data) :: mol
     real, parameter     :: smpd = 1.3
-    ! mol = sars_cov2_spkgp_6vxx()
-    ! call molecule%cif2mrc(smpd=smpd, mol=mol)
-    ! mol = betagal_1jyx()
-    ! call molecule%pdb2mrc(smpd=smpd, mol=mol)
-    ! pdb_file = '6VXX.pdb'
-    ! vol_file = '6VXX.mrc'
-    ! mol = sars_cov2_spkgp_6vxx()
-    ! call molecule%pdb2mrc(pdbfile=pdb_file, volfile=vol_file, smpd=smpd, mol=mol )
-    ! pdb_file = '1JXY.pdb'
-    ! vol_file = '1JXY.mrc'
-    ! mol      = betagal_1jyx()
-    ! call molecule%pdb2mrc(pdbfile=pdb_file, volfile=vol_file, smpd=smpd, mol=mol )
+    ! cif_file = '6VXX.cif'
+    ! call molecule%cif2mrc(cif_file, smpd)
     call simple_end('**** SIMPLE_TEST_CIF2MRC_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_cif2mrc
 
 subroutine exec_test_cif2pdb( self, cline )
     use simple_atoms,         only : atoms
-    use simple_molecule_data, only : molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
     class(commander_test_cif2pdb), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
-    type(string) :: cif_file
+    type(atoms)         :: molecule
+    type(string) :: cif_file, pdb_file
+    ! cif_file = '6VXX.cif'
+    ! pdb_file = '6VXX.pdb'
+    ! call molecule%cif2pdb(cif_file, pdb_file)
     call simple_end('**** SIMPLE_TEST_CIF2PDB_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_cif2pdb
 

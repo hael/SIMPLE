@@ -3,7 +3,6 @@ module simple_atoms
 use simple_core_module_api
 use simple_defs_atoms
 use simple_molecule_data
-use simple_string_utils, only : ends_with
 implicit none
 
 public :: atoms, test_atoms
@@ -137,9 +136,11 @@ contains
     subroutine new_from_file( self, fname )
         class(atoms),  intent(inout) :: self
         class(string), intent(in)    :: fname
-        if( ends_with(fname, string('.pdb')) )then
+        type(string) :: subcif, subpdb
+        subcif = 'cif'; subpdb = 'pdb'
+        if( fname%ends_with_substr(subpdb) )then
             call self%new_from_pdb(fname)
-        elseif( ends_with(fname, string('.cif')) ) then
+        elseif( fname%ends_with_substr(subcif) )then
             call self%new_from_cif(fname)
         else
             THROW_HARD('Unsupported file type; new_from_file')
@@ -246,9 +247,10 @@ contains
         class(string), intent(in)    :: fname
         integer :: natoms
         call self%kill
-        call scan_cif( fname, .false., natoms ) ! count the number of atoms in the cif file
-        call scan_cif( fname,  .true., natoms ) ! fill atoms attributes from cif data file
+        call scan_cif( fname, .false., natoms ) ! count atoms in the mmCIF atom_site loop(s)
+        if( natoms <= 0 ) THROW_HARD('no atoms found; new_from_cif')
         call self%new_instance(natoms)
+        call scan_cif( fname,  .true., natoms ) ! fill atom attributes from mmCIF data
         if( self%n > 99999 .or. maxval(self%resnum) > 9999 ) self%is_xpdb = .true. 
         call self%guess_element
 
@@ -258,7 +260,7 @@ contains
                 class(string), intent(in)  :: fname
                 logical,       intent(in)  :: fill
                 integer,       intent(out) :: natoms
-                integer               :: io_stat, filnum, nl, u, i, j, ncol, ntok
+                integer               :: io_stat, filnum, j, ncol, ntok
                 integer,    parameter :: maxcol = 300, maxtok = 400
                 character(len=STDLEN) :: cols(maxcol), tok(maxtok)
                 character(len=STDLEN) :: line
@@ -269,13 +271,13 @@ contains
                 natoms = 0
                 call fopen(filnum, status='OLD', action='READ', file=fname, iostat=io_stat)
                 call fileiochk('new_from_cif; simple_atoms opening '//fname%to_char(), io_stat)
-                nl     = nlines(fname)
-                if( nl == 0 .or. .not.file_exists(fname) ) THROW_HARD('I/O, file: '//fname%to_char()//'; new_from_cif')
+                if( .not.file_exists(fname) ) THROW_HARD('I/O, file: '//fname%to_char()//'; new_from_cif')
                 cols(:) = ''
                 tok(:)  = ''
                 serial  = 0
-                do i = 1, nl
+                do
                     read(filnum,'(A)',iostat=io_stat) line
+                    if( io_stat /= 0 ) exit
                     if( len_trim(line) == 0 ) cycle
                     line = adjustl(line)
                     if( line(1:1) == '#' ) cycle
@@ -283,7 +285,10 @@ contains
                     ncol = 0
                     do
                         read(filnum,'(A)',iostat=io_stat) line
+                        if( io_stat /= 0 ) exit
+                        if( len_trim(line) == 0 ) cycle
                         line = adjustl(line)
+                        if( line(1:1) == '#' ) cycle
                         if( line(1:1) == '_' )then
                             ncol = ncol + 1
                             if( ncol <= maxcol ) cols(ncol) = trim(line)
@@ -291,6 +296,7 @@ contains
                             exit
                         endif
                     enddo
+                    if( io_stat /= 0 ) exit
                     in_atom_loop = .false.
                     do j = 1, ncol
                         if( index(cols(j), '_atom_site.') == 1 )then
@@ -298,6 +304,13 @@ contains
                             exit
                         endif
                     enddo
+                    if( .not. in_atom_loop )then
+                        if( line(1:1) == '_' .or. index(line, 'loop_') == 1 .or. &
+                            index(line, 'data_') == 1 .or. index(line, 'save_') == 1 )then
+                            backspace(filnum)
+                        endif
+                        cycle
+                    endif
                     if( .not. in_atom_loop ) THROW_HARD('No _atom_site loop found; new_from_cif')
                     c_id    = find_col(cols, ncol, '_atom_site.id')
                     c_name  = find_col(cols, ncol, '_atom_site.label_atom_id')
@@ -320,7 +333,8 @@ contains
                     do
                         if( len_trim(line) == 0 ) exit
                         if( line(1:1) == '#'    ) exit
-                        if( line(1:1) == '_' .or. index(line, 'loop_') == 1 )then
+                        if( line(1:1) == '_' .or. index(line, 'loop_') == 1 .or. &
+                            index(line, 'data_') == 1 .or. index(line, 'save_') == 1 )then
                             backspace(filnum)
                             exit
                         endif
@@ -358,8 +372,10 @@ contains
                             if( c_alt > 0 .and. c_alt <= ntok )then
                                 if( tok(c_alt) /= '.' .and. tok(c_alt) /= '?' ) self%altloc(serial) = tok(c_alt)(1:1)
                             endif
-                            self%icode(serial)  = ' '
-                            self%charge(serial) = '  '
+                            self%icode(serial)     = ' '
+                            self%charge(serial)    = '  '
+                            self%occupancy(serial) = 1.0
+                            self%beta(serial)      = 0.0
                             self%resnum(serial) = 0
                             if( c_seq > 0 .and. c_seq <= ntok )then
                                 read(tok(c_seq),*,iostat=io_stat) self%resnum(serial)

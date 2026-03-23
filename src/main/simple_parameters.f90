@@ -546,6 +546,7 @@ contains
         class(parameters), intent(inout) :: self
         self%boxfile=''           !< file with EMAN particle coordinates(.txt)
         self%boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
+        self%ciffile=''           !< PDBx/mmCIF file
         self%classdoc=''          !< doc with per-class stats(.txt)
         self%cwd=''
         self%deftab=''            !< file with CTF info(.txt|.simple)
@@ -833,6 +834,7 @@ contains
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
+        call check_carg('ciffile',        self%ciffile)
         call check_file('classdoc',       self%classdoc,     'T')
         call check_file('deftab',         self%deftab,       'T', 'O')
         call check_file('deselfile',      self%deselfile,    'T')
