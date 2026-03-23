@@ -106,12 +106,14 @@ contains
     ! Specialized methods
     procedure          :: get_ids
     procedure          :: get_included_flags
+    procedure          :: get_nptcls
     procedure          :: get_processed_flags
     procedure          :: get_busy_flags
     procedure          :: set_included_flags
     procedure          :: get_nptcls_tot
     procedure          :: get_nptcls_sel_tot
     procedure          :: get_projfiles
+    procedure          :: get_projnames
 end type rec_list
 
 contains
@@ -420,6 +422,30 @@ contains
         end do
     end function get_ids 
 
+    function get_nptcls( self ) result( nptcls )
+        class(rec_list),   intent(in) :: self
+        integer,          allocatable :: nptcls(:)
+        type(rec_iterator)            :: it
+        class(rec),       allocatable :: r
+        integer                       :: n, i
+        n = self%size()
+        if (self%size() == 0) return
+        allocate(nptcls(n), source=0)
+        it = self%begin()
+        i  = 0
+        do while (it%valid())
+            i = i + 1
+            call it%iter_get_rec(r)
+            select type(t => r)
+            type is(project_rec)
+                nptcls(i) = t%nptcls
+            class default
+                THROW_HARD('requires project_rec only')
+            end select
+            call it%next()
+        end do
+    end function get_nptcls
+
     !=====================================================================
     ! Return an allocated logical mask of "included" flags for all
     ! stored records. When empty, the mask is allocated size zero
@@ -616,5 +642,29 @@ contains
         enddo
         call tmplst%kill
     end function get_projfiles
+
+    function get_projnames( self ) result( projnames )
+        class(rec_list),   intent(in) :: self
+        type(string),     allocatable :: projnames(:)
+        type(rec_iterator)            :: it
+        class(rec),       allocatable :: r
+        integer                       :: n, i
+        n = self%size()
+        if (self%size() == 0) return
+        allocate(projnames(n))
+        it = self%begin()
+        i  = 0
+        do while (it%valid())
+            i = i + 1
+            call it%iter_get_rec(r)
+            select type(t => r)
+            type is(project_rec)
+                projnames(i) = t%projname
+            class default
+                THROW_HARD('requires project_rec only')
+            end select
+            call it%next()
+        end do
+    end function get_projnames
 
 end module simple_rec_list

@@ -3,10 +3,13 @@ module simple_stream_utils
 use simple_core_module_api
 use json_kinds
 use json_module
-use simple_cmdline,             only: cmdline
-use simple_default_clines,      only: set_automask2D_defaults
-use simple_gui_utils,           only: mrc2jpeg_tiled
 use simple_image,               only: image
+use simple_cmdline,             only: cmdline
+use simple_qsys_env,            only: qsys_env
+use simple_rec_list,            only: rec_list, project_rec
+use simple_gui_utils,           only: mrc2jpeg_tiled
+use simple_sp_project,          only: sp_project
+use simple_default_clines,      only: set_automask2D_defaults
 use simple_parameters,          only: parameters
 use simple_stack_io,            only: stack_io
 use simple_stream_communicator, only: stream_http_communicator 
@@ -18,12 +21,65 @@ contains
     subroutine terminate_stream( params, msg )
         class(parameters), intent(in) :: params
         character(len=*), intent(in) :: msg
-        if(trim(params%async).eq.'yes')then
-            if( file_exists(TERM_STREAM) )then
-                call simple_end('**** '//trim(msg)//' ****', print_simple=.false.)
-            endif
+        if(trim(params%async).eq.'yes') then
+            if( file_exists(TERM_STREAM) ) call simple_end('**** '//trim(msg)//' ****', print_simple=.false.)
         endif
     end subroutine terminate_stream
+
+    subroutine create_stream_project( spproj, cline, projname )
+        type(string),         intent(in) :: projname
+        type(cmdline),     intent(inout) :: cline
+        type(sp_project),  intent(inout) :: spproj
+        if( cline%defined('projfile') ) return
+        call cline%set('projname', projname)
+        call cline%set('projfile', string(projname%to_char() // METADATA_EXT))
+        call spproj%update_projinfo(cline)
+        call spproj%update_compenv(cline)
+        call spproj%write()
+    end subroutine create_stream_project
+
+    subroutine init_stream_qenv( params, qenv, envvar )
+        type(parameters), intent(inout) :: params
+        type(qsys_env),   intent(inout) :: qenv
+        type(string),        intent(in) :: envvar
+        character(len=STDLEN)           :: chunk_part_env
+        integer                         :: envlen
+        call get_environment_variable(envvar%to_char(), chunk_part_env, envlen)
+        if(envlen > 0) then
+            call qenv%new(params, 1, exec_bin=string('simple_exec'), qsys_partition=string(trim(chunk_part_env)))
+        else
+            call qenv%new(params, 1, exec_bin=string('simple_exec'))
+        end if
+    end subroutine init_stream_qenv 
+
+    subroutine import_new_projects( project_list, projects, n_mics_imported, n_ptcls_imported )
+        type(rec_list),              intent(inout) :: project_list
+        type(string),   allocatable, intent(inout) :: projects(:)
+        integer,                     intent(inout) :: n_mics_imported, n_ptcls_imported
+        type(project_rec)                          :: prec
+        type(sp_project)                           :: spproj
+        integer :: iproj, imic
+        if( .not.allocated(projects) ) return
+        if( size(projects) == 0      ) return
+        do iproj=1, size(projects)
+            call spproj%read(projects(iproj))
+            ! because pick_extract purges state=0 and nptcls=0 mics,
+            ! all mics can be assumed associated with particles
+            do imic = 1, spproj%os_mic%get_noris()
+                prec%id          = project_list%size() + 1
+                prec%projname    = simple_abspath(projects(iproj))
+                prec%micind      = imic
+                prec%nptcls      = spproj%os_mic%get_int(imic,'nptcls')
+                prec%nptcls_sel  = prec%nptcls
+                prec%included    = .false.
+                n_mics_imported  = n_mics_imported + 1
+                n_ptcls_imported = n_ptcls_imported + prec%nptcls
+                call project_list%push_back(prec)
+            enddo
+            ! cleanup
+            call spproj%kill()
+        end do
+    end subroutine import_new_projects
 
     !> To deal with dynamic user input diring streaming
     subroutine update_user_params( params, cline_here, httpcom )

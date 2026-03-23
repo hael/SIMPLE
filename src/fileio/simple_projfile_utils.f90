@@ -153,7 +153,7 @@ contains
                 top   = chunks(ic)%os_stk%get_top(i)
                 do j = fromp,top
                     iptcl_glob = iptcl_glob + 1
-                    call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
+                    if(chunks(ic)%os_ptcl2D%get_class(j) > 0) call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
                     call chunks(ic)%os_ptcl2D%set_stkind(j, istk)
                     call merged_proj%os_ptcl2D%transfer_ori(iptcl_glob, chunks(ic)%os_ptcl2D, j)
                     if( chunks(ic)%os_ptcl2D%get_state(j) == 0 ) call merged_proj%os_ptcl2D%reject(iptcl_glob)
