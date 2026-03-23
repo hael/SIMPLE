@@ -197,7 +197,6 @@ contains
         type(ori)              :: o_prev
         integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
                   &istate, iref_start
-        logical :: l_doshift
         real    :: rotmat(2,2), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres(self%p_ptr%nstates)
         real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         call seed_rnd
@@ -210,7 +209,7 @@ contains
         enddo
         if( allocated(locn) ) deallocate(locn)
         allocate(locn(projs_ns,nthr_glob), source=0)
-        if( self%p_ptr%l_sh_first .and. self%p_ptr%l_doshift )then
+        if( self%p_ptr%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -self%p_ptr%trs
             lims(:,2)      =  self%p_ptr%trs
@@ -259,91 +258,42 @@ contains
                 enddo
                 ! (3) see if we can refine the shifts by re-searching them for individual references in the 
                 !     identified probabilistic neighborhood
-                if( self%p_ptr%l_prob_sh )then
-                    locn(:,ithr) = minnloc(dists_refs(:,ithr), projs_ns)
-                    do j = 1,projs_ns
-                        ri     = locn(j,ithr)
-                        istate = self%sinds(ri)
-                        iproj  = self%jinds(ri)
-                        ! BFGS over shifts
-                        call grad_shsrch_obj(ithr)%set_indices((istate-1)*self%p_ptr%nspace + iproj, iptcl)
-                        irot     = self%loc_tab(ri,i)%inpl
-                        cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
-                        if( irot > 0 )then
-                            self%loc_tab(ri,i)%inpl   = irot
-                            self%loc_tab(ri,i)%dist   = eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun)
-                            self%loc_tab(ri,i)%x      = cxy_prob(2)
-                            self%loc_tab(ri,i)%y      = cxy_prob(3)
-                            self%loc_tab(ri,i)%has_sh = .true.
-                        endif
-                    end do
-                endif
+                locn(:,ithr) = minnloc(dists_refs(:,ithr), projs_ns)
+                do j = 1,projs_ns
+                    ri     = locn(j,ithr)
+                    istate = self%sinds(ri)
+                    iproj  = self%jinds(ri)
+                    ! BFGS over shifts
+                    call grad_shsrch_obj(ithr)%set_indices((istate-1)*self%p_ptr%nspace + iproj, iptcl)
+                    irot     = self%loc_tab(ri,i)%inpl
+                    cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                    if( irot > 0 )then
+                        self%loc_tab(ri,i)%inpl   = irot
+                        self%loc_tab(ri,i)%dist   = eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun)
+                        self%loc_tab(ri,i)%x      = cxy_prob(2)
+                        self%loc_tab(ri,i)%y      = cxy_prob(3)
+                        self%loc_tab(ri,i)%has_sh = .true.
+                    endif
+                end do
             enddo
             !$omp end parallel do
         else
-            l_doshift = self%p_ptr%l_prob_sh .and. self%p_ptr%l_doshift
-            if( l_doshift )then
-                ! make shift search objects
-                lims(:,1)      = -self%p_ptr%trs
-                lims(:,2)      =  self%p_ptr%trs
-                lims_init(:,1) = -SHC_INPL_TRSHWDTH
-                lims_init(:,2) =  SHC_INPL_TRSHWDTH
-                do ithr = 1,nthr_glob
-                    call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
-                        &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
-                end do
-                ! fill the table
-                !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot,j,cxy) proc_bind(close) schedule(static)
-                do i = 1, self%nptcls
-                    iptcl = self%pinds(i)
-                    ithr  = omp_get_thread_num() + 1
-                    do ri = 1, self%nrefs
-                        istate = self%sinds(ri)
-                        iproj  = self%jinds(ri)
-                        call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
-                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
-                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
-                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
-                        self%loc_tab(ri,i)%inpl = irot
-                        dists_refs(  ri,ithr)   = dists_inpl(irot,ithr)
-                    enddo
-                    locn(:,ithr) = minnloc(dists_refs(:,ithr), projs_ns)
-                    do j = 1,projs_ns
-                        ri     = locn(j,ithr)
-                        istate = self%sinds(ri)
-                        iproj  = self%jinds(ri)
-                        ! BFGS over shifts
-                        call grad_shsrch_obj(ithr)%set_indices((istate-1)*self%p_ptr%nspace + iproj, iptcl)
-                        irot = self%loc_tab(ri,i)%inpl
-                        cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
-                        if( irot > 0 )then
-                            self%loc_tab(ri,i)%inpl = irot
-                            self%loc_tab(ri,i)%dist = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
-                            self%loc_tab(ri,i)%x    = cxy(2)
-                            self%loc_tab(ri,i)%y    = cxy(3)
-                        endif
-                        self%loc_tab(ri,i)%has_sh = .true.
-                    end do
+            ! fill the table
+            !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot) proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                iptcl = self%pinds(i)
+                ithr  = omp_get_thread_num() + 1
+                do ri = 1, self%nrefs
+                    istate = self%sinds(ri)
+                    iproj  = self%jinds(ri)
+                    call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
+                    dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
+                    irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
+                    self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
+                    self%loc_tab(ri,i)%inpl = irot
                 enddo
-                !$omp end parallel do
-            else
-                ! fill the table
-                !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot) proc_bind(close) schedule(static)
-                do i = 1, self%nptcls
-                    iptcl = self%pinds(i)
-                    ithr  = omp_get_thread_num() + 1
-                    do ri = 1, self%nrefs
-                        istate = self%sinds(ri)
-                        iproj  = self%jinds(ri)
-                        call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
-                        dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
-                        irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
-                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
-                        self%loc_tab(ri,i)%inpl = irot
-                    enddo
-                enddo
-                !$omp end parallel do
-            endif
+            enddo
+            !$omp end parallel do
         endif
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill

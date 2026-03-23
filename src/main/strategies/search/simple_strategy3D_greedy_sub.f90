@@ -54,7 +54,7 @@ contains
                 iref = s3D%srch_order_sub(isample,self%s%ithr) ! set the reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
-                    if( self%s%p_ptr%l_sh_first )then
+                    if( self%s%p_ptr%l_doshift )then
                         call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
                         call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
@@ -81,7 +81,7 @@ contains
                 iref = (self%s%prev_state - 1) * self%s%p_ptr%nspace + iproj
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
-                    if( self%s%p_ptr%l_sh_first )then
+                    if( self%s%p_ptr%l_doshift )then
                         call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                     else
                         call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)

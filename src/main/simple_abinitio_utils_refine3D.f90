@@ -12,11 +12,11 @@ integer, parameter :: REFINE3D_ROUTE_TREE_POLAR       = 7
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR_CAVGS = 8
 integer, parameter :: SHC_PTREE_NSPACE                = 2000
 integer, parameter :: SHC_PTREE_NSPACE_SUB            = 50
-integer, parameter :: PROB_NEIGH_NSPACE               = 5000
-integer, parameter :: PROB_NEIGH_NSPACE_SUB           = 300
+integer, parameter :: PROB_NEIGH_NSPACE               = 4000
+integer, parameter :: PROB_NEIGH_NSPACE_SUB           = 100
 
 type :: refine3D_stage_cfg
-    type(string) :: sh_first, prob_sh, ml_reg, fillin, cavgw, neigh_type
+    type(string) :: ml_reg, fillin, cavgw, neigh_type
     type(string) :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
     integer :: iphase, iter, inspace, inspace_sub, imaxits, nsample_dyn, ipftsz
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
@@ -143,7 +143,6 @@ contains
         cfg%refine  = 'shc_smpl'
         cfg%neigh_type = ''
         if( is_tree_route(route) ) cfg%refine = 'shc_ptree'
-        cfg%prob_sh = 'no'
         if( istage >= PROBREFINE_STAGE )then
             if( is_tree_route(route) )then
                 cfg%refine     = 'prob_neigh'
@@ -151,7 +150,6 @@ contains
             else
                 cfg%refine  = 'prob'
             endif
-            cfg%prob_sh = 'yes'
         endif
         if( trim(params%multivol_mode).eq.'input_oris_fixed' )then
             cfg%refine = 'prob_state'
@@ -275,7 +273,6 @@ contains
                 cfg%inspace       = NSPACE(1)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = 0.
-                cfg%sh_first      = 'no'
                 cfg%ml_reg        = 'no'
                 cfg%frac_best     = 1.0
                 cfg%overlap       = 0.99
@@ -285,7 +282,6 @@ contains
                 cfg%inspace       = NSPACE(2)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
-                cfg%sh_first      = 'yes'
                 cfg%ml_reg        = 'yes'
                 if( istage >= STOCH_SAMPL_STAGE )then
                     cfg%frac_best = 0.5
@@ -304,7 +300,6 @@ contains
                 cfg%inspace       = NSPACE(3)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
-                cfg%sh_first      = 'yes'
                 cfg%ml_reg        = 'yes'
                 if( params%nstates > 1 )then
                     cfg%frac_best = 0.98
@@ -412,8 +407,6 @@ contains
         endif
         call cline_refine3D%set('maxits',                 cfg%imaxits)
         call cline_refine3D%set('trs',                    cfg%trs)
-        call cline_refine3D%set('sh_first',               cfg%sh_first)
-        call cline_refine3D%set('prob_sh',                cfg%prob_sh)
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
         call cline_refine3D%set('icm',                    cfg%icm)
         call cline_refine3D%set('frac_best',              cfg%frac_best)

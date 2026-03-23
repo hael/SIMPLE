@@ -93,7 +93,6 @@ type :: parameters
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
-    character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
@@ -108,7 +107,6 @@ type :: parameters
     character(len=3)          :: transp_pca='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)          :: sh_first='no'        !< shifting before orientation search(yes|no){no}
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: srch_oris='yes'      !< whether to search orientations in multivolume assignment(yes|no){yes} 
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -528,8 +526,6 @@ type :: parameters
     logical :: l_phaseplate   = .false.
     logical :: l_polar        = .false. 
     logical :: l_prob_inpl    = .false.
-    logical :: l_prob_sh      = .false.
-    logical :: l_sh_first     = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_trail_rec    = .false.
     logical :: l_remap_cls    = .false.
@@ -772,7 +768,6 @@ contains
         call check_carg('prg',            self%prg)
         call check_carg('print_corrs',    self%print_corrs)
         call check_carg('prob_inpl',      self%prob_inpl)
-        call check_carg('prob_sh',        self%prob_sh)
         call check_carg('proj_is_class',  self%proj_is_class)
         call check_carg('projfile_merged',self%projfile_merged)
         call check_carg('projfile_optics',self%projfile_optics)
@@ -801,7 +796,6 @@ contains
         call check_carg('script',         self%script)
         call check_carg('select_flag',    self%select_flag)
         call check_carg('shbarrier',      self%shbarrier)
-        call check_carg('sh_first',       self%sh_first)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('snapshot',       self%snapshot)
         call check_carg('sort',           self%sort)
@@ -1827,8 +1821,6 @@ contains
             self%l_doshift = .false.
         endif
         self%l_prob_inpl = trim(self%prob_inpl).eq.'yes'
-        self%l_prob_sh   = trim(self%prob_sh)  .eq.'yes'
-        self%l_sh_first  = trim(self%sh_first) .eq.'yes'
         ! motion correction
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then

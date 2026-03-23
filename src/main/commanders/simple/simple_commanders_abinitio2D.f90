@@ -58,7 +58,6 @@ contains
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('center')     ) call cline%set('center',     'yes')
         if( .not. cline%defined('center_type')) call cline%set('center_type','seg')
-        if( .not. cline%defined('sh_first')   ) call cline%set('sh_first',   'no')
         if( .not. cline%defined('cls_init')   ) call cline%set('cls_init',   'rand')
         if( .not. cline%defined('gauref')     ) call cline%set('gauref',     'yes')
         if( .not. cline%defined('polar')      ) call cline%set('polar',      'no')
@@ -326,7 +325,7 @@ contains
 
         subroutine set_cline_cluster2D( istage )
             integer, intent(in) :: istage
-            type(string) :: sh_first, refine, center, objfun, refs, gauref, ml_reg
+            type(string) :: refine, center, objfun, refs, gauref, ml_reg
             integer      :: iphase, iter, imaxits, minits, extr_iter
             real         :: trs, gaufreq
             logical      :: l_gauref, l_gaufreq_input
@@ -352,7 +351,6 @@ contains
                 imaxits   = ITS_INCR_SINGLE+2
                 extr_iter = 999
                 trs       = stage_parms(1)%trslim
-                sh_first  = trim(params%sh_first)
                 center    = trim(params%center)
                 objfun    = 'euclid'
                 ! Filters deactivated
@@ -385,7 +383,6 @@ contains
                         select case(istage)
                             case(1)
                                 trs      = 0.
-                                sh_first = 'no'
                                 center   = 'no'
                                 if( cline%defined('refs') )then
                                     refs     = params%refs
@@ -401,21 +398,18 @@ contains
                                 endif
                             case(2)
                                 trs      = stage_parms(istage)%trslim
-                                sh_first = trim(params%sh_first)
                                 center   = trim(params%center)
                                 refs     = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
                                 ml_reg   = params%ml_reg
                                 gauref   = 'no'
                             case(3)
                                 trs      = stage_parms(istage)%trslim
-                                sh_first = trim(params%sh_first)
                                 center   = trim(params%center)
                                 refs     = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
                                 ml_reg   = params%ml_reg
                                 gauref   = 'no'
                             case(4)
                                 trs      = stage_parms(istage)%trslim
-                                sh_first = trim(params%sh_first)
                                 center   = trim(params%center)
                                 refs     = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
                                 ml_reg   = params%ml_reg
@@ -424,7 +418,6 @@ contains
                     case(2)
                         ! phase constants
                         imaxits   = iter+ITS_INCR-1
-                        sh_first  = trim(params%sh_first)
                         trs       = stage_parms(istage)%trslim
                         center    = trim(params%center)
                         extr_iter = params%extr_lim+1
@@ -459,7 +452,6 @@ contains
             call cline_cluster2D%set('refine',    refine)
             call cline_cluster2D%set('objfun',    objfun)
             call cline_cluster2D%set('trs',       trs)
-            call cline_cluster2D%set('sh_first',  sh_first)
             call cline_cluster2D%set('center',    center)
             call cline_cluster2D%set('box_crop',  stage_parms(istage)%box_crop)
             call cline_cluster2D%set('smpd_crop', stage_parms(istage)%smpd_crop)
@@ -499,7 +491,6 @@ contains
             call cline_cluster2D%set('refine',    'greedy_smpl')
             call cline_cluster2D%set('objfun',    'euclid')
             call cline_cluster2D%set('trs',       stage_parms(NSTAGES)%trslim)
-            call cline_cluster2D%set('sh_first',  params%sh_first)
             call cline_cluster2D%set('center',    'no')
             call cline_cluster2D%set('box_crop',  stage_parms(NSTAGES)%box_crop)
             call cline_cluster2D%set('smpd_crop', stage_parms(NSTAGES)%smpd_crop)
