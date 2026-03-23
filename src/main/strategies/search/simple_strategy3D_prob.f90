@@ -39,7 +39,7 @@ contains
         class(strategy3D_prob), intent(inout) :: self
         class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
-        integer :: iproj, iptcl_map, irot, istate, iref, rot
+        integer :: iproj, iptcl_map, irot, istate, iref
         real    :: corr
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -54,23 +54,12 @@ contains
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
             iref      = (istate-1)*self%s%p_ptr%nspace + iproj
             if( self%s%doshift )then
-                if( self%s%p_ptr%l_sh_first .or. self%s%p_ptr%l_prob_sh )then
-                    if( self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
-                        call assign_ori(self%s, iref, irot, corr,&
-                        &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
-                        & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y], corr)
-                    else
-                        call assign_ori(self%s, iref, irot, corr, [0.,0.], corr)
-                    endif
+                if( self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
+                    call assign_ori(self%s, iref, irot, corr,&
+                    &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
+                    & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y], corr)
                 else
-                    ! take care of the shift with current assignment
-                    rot = irot
-                    call self%s%inpl_srch(ref=iref, irot_in=rot)
-                    if( rot > 0 )then
-                        call assign_ori(self%s, iref, rot, corr, s3D%proj_space_shift(:,iref,self%s%ithr), corr)
-                    else
-                        call assign_ori(self%s, iref, irot, corr, [0.,0.], corr)
-                    endif
+                    call assign_ori(self%s, iref, irot, corr, [0.,0.], corr)
                 endif
             else
                 call assign_ori(self%s, iref, irot, corr, [0.,0.], corr)

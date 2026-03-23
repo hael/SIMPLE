@@ -134,7 +134,7 @@ contains
         endif
         self%best_corr = self%prev_corr
         ! whether to search shifts first
-        self%l_sh_first   = s2D%do_inplsrch(self%iptcl_batch) .and. self%p_ptr%l_sh_first
+        self%l_sh_first   = s2D%do_inplsrch(self%iptcl_batch) .and. self%p_ptr%l_doshift
         self%xy_first     =  0.
         self%xy_first_rot =  0.
     end subroutine prep4srch

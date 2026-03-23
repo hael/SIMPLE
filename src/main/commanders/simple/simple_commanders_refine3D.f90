@@ -75,7 +75,6 @@ contains
         call cline%set('refine',       'neigh') ! greedy multi-neighborhood 3D refinement 
         call cline%set('icm',            'yes') ! ICM regularization to maximize map connectivity
         call cline%set('automsk',        'yes') ! envelope masking for background flattening
-        call cline%set('sh_first',       'yes') ! estimate shifts before rotational search
         call cline%set('overlap',         0.99) ! convergence if overlap > 99%
         call cline%set('nstates',            1) ! only single-state refinement is supported
         call cline%set('objfun',      'euclid') ! the objective function is noise-normalized Euclidean distance

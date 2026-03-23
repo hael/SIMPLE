@@ -205,7 +205,7 @@ contains
         do istate = 1, s%nstates
             iref = (istate - 1) * s%p_ptr%nspace + ref_idx
             if( .not. s3D%state_exists(s3D%proj_space_state(iref)) ) cycle
-            if( s%p_ptr%l_sh_first )then
+            if( s%p_ptr%l_doshift )then
                 call s%b_ptr%pftc%gen_objfun_vals(iref, s%iptcl, s%xy_first, inpl_corrs)
             else
                 call s%b_ptr%pftc%gen_objfun_vals(iref, s%iptcl, [0.,0.], inpl_corrs)
@@ -242,7 +242,7 @@ contains
             best_corr = INVALID_CORR
             return
         endif
-        if( s%p_ptr%l_sh_first )then
+        if( s%p_ptr%l_doshift )then
             call s%b_ptr%pftc%gen_objfun_vals(iref, s%iptcl, s%xy_first, inpl_corrs)
         else
             call s%b_ptr%pftc%gen_objfun_vals(iref, s%iptcl, [0.,0.], inpl_corrs)

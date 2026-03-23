@@ -167,8 +167,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         real    :: cxy(3), rotmat(2,2)
         integer :: irot
-        if( .not. self%doshift           ) return
-        if( .not. self%p_ptr%l_sh_first ) return
+        if( .not. self%doshift ) return
         ! BFGS over shifts with in-plane rot exhaustive callback
         irot = self%prev_roind
         call self%grad_shsrch_first_obj%set_indices(self%prev_ref, self%iptcl)
@@ -200,7 +199,7 @@ contains
         if( present(irot_in) ) irot = irot_in
         ! BFGS over shifts with in-plane rot exhaustive callback
         call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
-        if( self%p_ptr%l_sh_first )then
+        if( self%p_ptr%l_doshift )then
             cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
         else
             cxy = self%grad_shsrch_obj%minimize(irot=irot)
@@ -218,7 +217,7 @@ contains
         refs = maxnloc(s3D%proj_space_corrs(:,self%ithr), self%npeaks_inpl)
         do ipeak = 1, self%npeaks_inpl
             call self%grad_shsrch_obj%set_indices(refs(ipeak), self%iptcl)
-            if( self%p_ptr%l_sh_first )then
+            if( self%p_ptr%l_doshift )then
                 cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
             else
                 cxy = self%grad_shsrch_obj%minimize(irot=irot)
