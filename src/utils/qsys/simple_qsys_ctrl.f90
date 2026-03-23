@@ -197,6 +197,11 @@ contains
 
     ! SCRIPT GENERATORS
 
+    ! generate scripts for the range of partitions defined by fromto_part, using the job description and qsys description provided. 
+    !├── generate_scripts() [PUBLIC] (LOOP)
+    !│   └── Loops through partitions
+    !│       └── generate_script_1() ← INTERNAL ONLY
+    !│           └── Creates N separate scripts
     subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params, extra_params )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
@@ -246,6 +251,7 @@ contains
         if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
     end subroutine generate_scripts
 
+    ! generate_array_script (SINGLE FILE)
     subroutine generate_array_script( self, job_descr, ext, q_descr, outfile_body, part_params )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
@@ -334,6 +340,7 @@ contains
         call wait_for_closure(string(ARRAY_SCRIPT))
     end subroutine generate_array_script
 
+    !   └── generate_script_1() ← INTERNAL ONLY
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
@@ -379,6 +386,9 @@ contains
     end subroutine generate_script_1
 
     !>  \brief  public script generator for single jobs
+    !  └── generate_script [GENERIC OVERLOAD]
+    !   ├── generate_script_2(job_descr, ...) ← EXPLICIT PARAMS
+    !   │   └── 1 script, 1 job
     subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile, exit_code_fname )
         class(qsys_ctrl),        intent(in) :: self
         class(chash),            intent(in) :: job_descr
@@ -433,7 +443,9 @@ contains
         endif
     end subroutine generate_script_2
 
-        !>  \brief  public script generator for single jobs
+    !>  \brief  public script generator for single jobs
+    ! └── generate_script_4(jobs_descr(:), ...) ← MULTIPLE JOBS
+    !  └── 1 script, N sequential jobs
     subroutine generate_script_4( self, jobs_descr, q_descr, exec_bin, script_name, outfile, exec_bins )
         class(qsys_ctrl),          intent(in) :: self
         type(chash),  allocatable, intent(in) :: jobs_descr(:)
@@ -499,6 +511,8 @@ contains
         endif
     end subroutine generate_script_4
 
+    !    ├── generate_script_3(cline, ...) ← CMDLINE INPUT
+    !    └── 1 script, 1 job (converted from cmdline)
     subroutine generate_script_3( self, cline, q_descr, script_name, prgoutput )
         class(qsys_ctrl), intent(inout) :: self
         class(cmdline),   intent(in)    :: cline
