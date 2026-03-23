@@ -1,32 +1,34 @@
-!@descr: Manages the creation, configuration, and submission of pass-1/pass-2 microchunks and a single reference chunk
+!@descr: Manages the creation, configuration, and submission of pass-1/pass-2 microchunks, match microchunks, and a single reference chunk
 !==============================================================================
 ! MODULE: simple_chunked2D
 !
 ! PURPOSE:
 !   Manages the creation, configuration, and submission of microchunks across
-!   two refinement passes and a final reference chunk — sub-projects each
+!   three processing tiers and a final reference chunk — sub-projects each
 !   containing a bounded particle subset drawn from a larger project list —
-!   for parallel ab initio 2D class averaging. Each pass merges surviving
-!   particles from the previous pass for a progressively higher-resolution
-!   result.
+!   for parallel ab initio 2D class averaging. Each tier merges or matches
+!   surviving particles from the previous tier for a progressively
+!   higher-resolution result.
 !
 ! TYPES:
 !   chunk2D    - Holds the identity, particle counts (total and selected),
 !                folder path, project file path, command line, and lifecycle
 !                state flags for a single chunk.
-!   chunked2D  - Owns arrays of pass-1 and pass-2 microchunks and a single
-!                reference chunk, together with the queue environment, output
-!                directories, and shared processing parameters (threads, mask
-!                diameter, parallelism).
+!   chunked2D  - Owns arrays of pass-1, pass-2, and match microchunks and a
+!                single reference chunk, together with the queue environment,
+!                output directories, reference stack path, box size, and shared
+!                processing parameters (threads, mask diameter, parallelism).
 !
 ! WORKFLOW:
-!   1. new()                            — initialise a chunked2D object, creating
-!                                         output directories and the queue
-!                                         environment from a parameters object.
+!   1. new()                            — initialise a chunked2D object: derives
+!                                         output directories, imports any
+!                                         existing chunks from previous runs,
+!                                         creates directories, and initialises
+!                                         the queue environment.
 !   2. cycle()                          — convenience wrapper: collects completed
 !                                         jobs and runs rejection, generates
-!                                         chunks at all three tiers, then
-!                                         submits pending chunks to the queue.
+!                                         chunks at all tiers, then submits
+!                                         pending chunks to the queue.
 !   3. generate_microchunks_pass_1()    — partition un-included records from a
 !                                         rec_list into pass-1 microchunks, each
 !                                         capped at MICROCHUNK_P1_THRESHOLD
@@ -43,25 +45,31 @@
 !                                         reference chunk; no-op if the reference
 !                                         chunk already exists or the threshold
 !                                         is not yet met.
-!   6. submit()                         — dispatch pending chunks to the queue up
+!   6. generate_microchunks_match()     — once the reference chunk rejection is
+!                                         complete, create one match microchunk
+!                                         per rejection-complete pass-2 chunk by
+!                                         copying its project file and setting
+!                                         refs/box on the command line for
+!                                         template-guided classification.
+!   7. submit()                         — dispatch pending chunks to the queue up
 !                                         to the nparallel concurrency limit;
-!                                         the reference chunk takes priority over
-!                                         pass-2, which takes priority over
-!                                         pass-1.
-!   7. collect_and_reject()             — poll running chunks for the
+!                                         priority order: refchunk > match >
+!                                         pass-2 > pass-1.
+!   8. collect_and_reject()             — poll running chunks for the
 !                                         ABINITIO2D_FINISHED sentinel; transition
 !                                         completed chunks and immediately run
 !                                         class-average rejection on each newly
-!                                         finished chunk.
+!                                         finished chunk. Captures refs and box
+!                                         from the refchunk after its rejection.
 !
 ! CONSTANTS:
 !   MICROCHUNK_P1_THRESHOLD — maximum particles per pass-1 microchunk       (5000)
 !   MICROCHUNK_P2_THRESHOLD — maximum selected particles per pass-2 chunk   (5000)
-!   REFCHUNK_THRESHOLD      — minimum selected particles to form a ref chunk(20000)
+!   REFCHUNK_THRESHOLD      — minimum selected particles to form a ref chunk(10000)
 !   DEFAULT_NCLS            — default number of 2D classes                    (100)
 !   DEFAULT_MICRO_P1_LP     — pass-1 microchunk low-pass filter cutoff, Å   (15.0)
 !   DEFAULT_MICRO_P2_LP     — pass-2 microchunk low-pass filter cutoff, Å   (10.0)
-!   DEFAULT_REF_LP          — reference chunk low-pass filter cutoff, Å      (6.0)
+!   DEFAULT_REF_LP          — reference / match chunk low-pass cutoff, Å    (10.0)
 !   DEFAULT_WALLTIME        — per-chunk job time limit, seconds             (1740)
 !
 ! ENVIRONMENT:
@@ -79,7 +87,7 @@ module simple_chunked2D
   use simple_defs,         only: logfhandle, STDLEN, CWD_GLOB, COSMSKHALFWIDTH
   use simple_image,        only: image
   use simple_string,       only: string
-  use simple_fileio,       only: swap_suffix
+  use simple_fileio,       only: swap_suffix, simple_copy_file
   use simple_syslib,       only: simple_mkdir, simple_abspath, simple_chdir, &
                                  simple_getcwd, file_exists, del_file, dir_exists
   use simple_cmdline,      only: cmdline
@@ -106,7 +114,7 @@ module simple_chunked2D
   integer, parameter :: DEFAULT_WALLTIME        = 29 * 60  ! 29 minutes in seconds
   real,    parameter :: DEFAULT_MICRO_P1_LP     = 15.0
   real,    parameter :: DEFAULT_MICRO_P2_LP     = 10.0
-  real,    parameter :: DEFAULT_REF_LP          = 10.0
+  real,    parameter :: DEFAULT_REF_LP          = 8.0
 
   ! Labels used to route rejection strategy inside reject_cavgs
   character(len=*), parameter :: LABEL_PASS_1 = 'MICROCHUNK PASS 1'
@@ -124,6 +132,7 @@ module simple_chunked2D
     logical :: abinitio2D_running  = .false.
     logical :: abinitio2D_complete = .false.
     logical :: rejection_complete  = .false.
+    logical :: match_complete      = .false.
     logical :: complete            = .false.
     logical :: failed              = .false.
   end type chunk2D
@@ -132,13 +141,17 @@ module simple_chunked2D
     private
     type(chunk2D), allocatable :: microchunks_pass_1(:)
     type(chunk2D), allocatable :: microchunks_pass_2(:)
+    type(chunk2D), allocatable :: microchunks_match(:)
     type(chunk2D)              :: refchunk
     type(qsys_env)             :: qenv
     type(string)               :: outdir_microchunks_pass_1
     type(string)               :: outdir_microchunks_pass_2
+    type(string)               :: outdir_microchunks_match
     type(string)               :: outdir_refchunk
+    type(string)               :: refs
     integer                    :: nparallel = 1
     integer                    :: nthr      = 1
+    integer                    :: box       = 0
     real                       :: mskdiam   = 0.0
   contains
     procedure :: new
@@ -146,17 +159,23 @@ module simple_chunked2D
     procedure :: cycle
     procedure :: import_existing_microchunks_pass_1
     procedure :: import_existing_microchunks_pass_2
+    procedure :: import_existing_microchunks_match
+    procedure :: import_existing_refchunk
     procedure :: get_n_microchunks_pass_1
     procedure :: get_n_microchunks_pass_2
+    procedure :: get_n_microchunks_match
     procedure :: get_n_chunks_running
     procedure :: get_n_pass_1_non_rejected_ptcls
     procedure :: get_n_pass_2_non_rejected_ptcls
     procedure :: append_microchunk_pass_1
     procedure :: append_microchunk_pass_2
+    procedure :: append_microchunk_match
     procedure :: generate_microchunks_pass_1
     procedure :: generate_microchunk_pass_1_cline
     procedure :: generate_microchunks_pass_2
     procedure :: generate_microchunk_pass_2_cline
+    procedure :: generate_microchunks_match
+    procedure :: generate_microchunk_match_cline
     procedure :: generate_refchunk
     procedure :: generate_refchunk_cline
     procedure :: submit
@@ -168,9 +187,9 @@ contains
 
   ! Initialises a chunked2D object from a parameters object: derives output
   ! directories from the current working directory, stores the concurrency
-  ! limit, mask diameter, and thread count; creates all three output
-  ! directories; allocates empty microchunk arrays; and initialises the queue
-  ! environment.
+  ! limit, mask diameter, and thread count; imports any existing chunks from a
+  ! previous run; creates all four output directories; allocates empty chunk
+  ! arrays; and initialises the queue environment.
   subroutine new( self, params )
     class(chunked2D), intent(inout) :: self
     type(parameters), intent(in)    :: params
@@ -182,19 +201,26 @@ contains
     self%nthr                      = params%nthr
     self%outdir_microchunks_pass_1 = string(cwd%to_char() // '/microchunks_pass_1')
     self%outdir_microchunks_pass_2 = string(cwd%to_char() // '/microchunks_pass_2')
+    self%outdir_microchunks_match  = string(cwd%to_char() // '/microchunks_match')
     self%outdir_refchunk           = string(cwd%to_char() // '/refchunk')
     allocate(self%microchunks_pass_1(0))
     allocate(self%microchunks_pass_2(0))
+    allocate(self%microchunks_match(0))
+    ! Import completed chunks from a previous run before creating directories
     if( dir_exists(self%outdir_microchunks_pass_1) ) call self%import_existing_microchunks_pass_1()
     if( dir_exists(self%outdir_microchunks_pass_2) ) call self%import_existing_microchunks_pass_2()
+    if( dir_exists(self%outdir_microchunks_match)  ) call self%import_existing_microchunks_match()
+    if( dir_exists(self%outdir_refchunk)           ) call self%import_existing_refchunk()
     call simple_mkdir(self%outdir_microchunks_pass_1)
     call simple_mkdir(self%outdir_microchunks_pass_2)
+    call simple_mkdir(self%outdir_microchunks_match)
     call simple_mkdir(self%outdir_refchunk)
     call self%qenv%new(params, 1, exec_bin=string('simple_exec'))
   end subroutine new
 
-  ! Kills all live command lines for pass-1, pass-2, and the reference chunk,
-  ! then deallocates the two microchunk arrays, releasing all associated memory.
+  ! Kills all live command lines for pass-1, pass-2, match, and the reference
+  ! chunk, then deallocates all three microchunk arrays, releasing all
+  ! associated memory.
   subroutine kill( self )
     class(chunked2D), intent(inout) :: self
     integer :: i
@@ -204,11 +230,18 @@ contains
     do i = 1, self%get_n_microchunks_pass_2()
       call self%microchunks_pass_2(i)%cline%kill()
     end do
+    do i = 1, self%get_n_microchunks_match()
+      call self%microchunks_match(i)%cline%kill()
+    end do
     call self%refchunk%cline%kill()
     if( allocated(self%microchunks_pass_1) ) deallocate(self%microchunks_pass_1)
     if( allocated(self%microchunks_pass_2) ) deallocate(self%microchunks_pass_2)
+    if( allocated(self%microchunks_match)  ) deallocate(self%microchunks_match)
   end subroutine kill
 
+  ! Scans the pass-1 output directory for existing chunk subdirectories and
+  ! populates the pass-1 array with fully completed chunk records. All imported
+  ! chunks are marked complete so they are not resubmitted or re-rejected.
   subroutine import_existing_microchunks_pass_1( self )
     class(chunked2D), intent(inout) :: self
     type(sp_project)                :: chunk_project
@@ -217,16 +250,17 @@ contains
     integer                         :: chunk_id
     chunk_id = 0
     do
-      chunk_id = chunk_id + 1
-      chunk_folder = string(self%outdir_microchunks_pass_1%to_char() // '/microchunk_pass_1_' // int2str(chunk_id))
-      if(.not. dir_exists(chunk_folder)) exit
-      new_chunk%id              = chunk_id
-      new_chunk%folder          = simple_abspath(chunk_folder)
-      new_chunk%projfile        = string(new_chunk%folder%to_char() // &
-                                   '/microchunk_pass_1_' // int2str(chunk_id) // METADATA_EXT)
+      chunk_id    = chunk_id + 1
+      chunk_folder = string(self%outdir_microchunks_pass_1%to_char() // &
+                            '/microchunk_pass_1_' // int2str(chunk_id))
+      if( .not. dir_exists(chunk_folder) ) exit
+      new_chunk%id      = chunk_id
+      new_chunk%folder  = simple_abspath(chunk_folder)
+      new_chunk%projfile = string(new_chunk%folder%to_char() // &
+                                  '/microchunk_pass_1_' // int2str(chunk_id) // METADATA_EXT)
       call chunk_project%read(new_chunk%projfile)
-      new_chunk%nptcls          = chunk_project%os_ptcl2D%get_noris()
-      new_chunk%nptcls_selected = chunk_project%os_ptcl2D%count_state_gt_zero()
+      new_chunk%nptcls              = chunk_project%os_ptcl2D%get_noris()
+      new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
       new_chunk%abinitio2D_running  = .false.
       new_chunk%abinitio2D_complete = .true.
       new_chunk%rejection_complete  = .true.
@@ -239,6 +273,10 @@ contains
     end do
   end subroutine import_existing_microchunks_pass_1
 
+  ! Scans the pass-2 output directory for existing chunk subdirectories and
+  ! populates the pass-2 array with completed chunk records. Imported chunks
+  ! are marked rejection_complete but not complete, so they remain eligible
+  ! for consumption into the reference chunk.
   subroutine import_existing_microchunks_pass_2( self )
     class(chunked2D), intent(inout) :: self
     type(sp_project)                :: chunk_project
@@ -247,16 +285,17 @@ contains
     integer                         :: chunk_id
     chunk_id = 0
     do
-      chunk_id = chunk_id + 1
-      chunk_folder = string(self%outdir_microchunks_pass_2%to_char() // '/microchunk_pass_2_' // int2str(chunk_id))
-      if(.not. dir_exists(chunk_folder)) exit
-      new_chunk%id              = chunk_id
-      new_chunk%folder          = simple_abspath(chunk_folder)
-      new_chunk%projfile        = string(new_chunk%folder%to_char() // &
-                                   '/microchunk_pass_2_' // int2str(chunk_id) // METADATA_EXT)
+      chunk_id    = chunk_id + 1
+      chunk_folder = string(self%outdir_microchunks_pass_2%to_char() // &
+                            '/microchunk_pass_2_' // int2str(chunk_id))
+      if( .not. dir_exists(chunk_folder) ) exit
+      new_chunk%id      = chunk_id
+      new_chunk%folder  = simple_abspath(chunk_folder)
+      new_chunk%projfile = string(new_chunk%folder%to_char() // &
+                                  '/microchunk_pass_2_' // int2str(chunk_id) // METADATA_EXT)
       call chunk_project%read(new_chunk%projfile)
-      new_chunk%nptcls          = chunk_project%os_ptcl2D%get_noris()
-      new_chunk%nptcls_selected = chunk_project%os_ptcl2D%count_state_gt_zero()
+      new_chunk%nptcls              = chunk_project%os_ptcl2D%get_noris()
+      new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
       new_chunk%abinitio2D_running  = .false.
       new_chunk%abinitio2D_complete = .true.
       new_chunk%rejection_complete  = .true.
@@ -269,10 +308,70 @@ contains
     end do
   end subroutine import_existing_microchunks_pass_2
 
+  ! Scans the match output directory for existing chunk subdirectories and
+  ! populates the match array with completed chunk records. Imported chunks
+  ! are marked rejection_complete and complete since match chunks do not
+  ! feed further tiers.
+  subroutine import_existing_microchunks_match( self )
+    class(chunked2D), intent(inout) :: self
+    type(sp_project)                :: chunk_project
+    type(chunk2D)                   :: new_chunk
+    type(string)                    :: chunk_folder
+    integer                         :: chunk_id
+    chunk_id = 0
+    do
+      chunk_id    = chunk_id + 1
+      chunk_folder = string(self%outdir_microchunks_match%to_char() // &
+                            '/microchunk_match_' // int2str(chunk_id))
+      if( .not. dir_exists(chunk_folder) ) exit
+      new_chunk%id      = chunk_id
+      new_chunk%folder  = simple_abspath(chunk_folder)
+      new_chunk%projfile = string(new_chunk%folder%to_char() // &
+                                  '/microchunk_match_' // int2str(chunk_id) // METADATA_EXT)
+      call chunk_project%read(new_chunk%projfile)
+      new_chunk%nptcls              = chunk_project%os_ptcl2D%get_noris()
+      new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
+      new_chunk%abinitio2D_running  = .false.
+      new_chunk%abinitio2D_complete = .true.
+      new_chunk%rejection_complete  = .true.
+      new_chunk%complete            = .true.
+      new_chunk%failed              = .false.
+      call chunk_project%kill()
+      call self%append_microchunk_match(new_chunk)
+      write(logfhandle,'(A,I6,A,I8,A)') &
+        '>>> IMPORTED EXISTING MICROCHUNK MATCH # ', chunk_id, ' WITH ', new_chunk%nptcls, ' PARTICLES'
+    end do
+  end subroutine import_existing_microchunks_match
+
+  ! Reads the reference chunk project file from the refchunk output directory
+  ! if it exists, and restores the refchunk state. The imported refchunk is
+  ! marked fully complete so it is not regenerated or resubmitted.
+  subroutine import_existing_refchunk( self )
+    class(chunked2D), intent(inout) :: self
+    type(sp_project)                :: chunk_project
+    type(string)                    :: chunk_folder
+    chunk_folder = self%outdir_refchunk
+    if( .not. dir_exists(chunk_folder) ) return
+    self%refchunk%id      = 1
+    self%refchunk%folder  = simple_abspath(chunk_folder)
+    self%refchunk%projfile = string(self%refchunk%folder%to_char() // '/refchunk' // METADATA_EXT)
+    if( .not. file_exists(self%refchunk%projfile) ) return
+    call chunk_project%read(self%refchunk%projfile)
+    self%refchunk%nptcls              = chunk_project%os_ptcl2D%get_noris()
+    self%refchunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
+    self%refchunk%abinitio2D_running  = .false.
+    self%refchunk%abinitio2D_complete = .true.
+    self%refchunk%rejection_complete  = .true.
+    self%refchunk%complete            = .true.
+    self%refchunk%failed              = .false.
+    call chunk_project%kill()
+    write(logfhandle,'(A,I8,A)') &
+      '>>> IMPORTED EXISTING REFCHUNK WITH ', self%refchunk%nptcls, ' PARTICLES'
+  end subroutine import_existing_refchunk
 
   ! Convenience wrapper for the main processing loop: collects completed jobs
-  ! and runs rejection, generates new chunks at all three tiers, then submits
-  ! any pending chunks to the queue.
+  ! and runs rejection, generates new chunks at all tiers, then submits any
+  ! pending chunks to the queue.
   subroutine cycle( self, project_list )
     class(chunked2D), intent(inout) :: self
     type(rec_list),   intent(inout) :: project_list
@@ -280,6 +379,7 @@ contains
     call self%generate_microchunks_pass_1(project_list)
     call self%generate_microchunks_pass_2()
     call self%generate_refchunk()
+    call self%generate_microchunks_match()
     call self%submit()
   end subroutine cycle
 
@@ -297,8 +397,15 @@ contains
     if( allocated(self%microchunks_pass_2) ) get_n_microchunks_pass_2 = size(self%microchunks_pass_2)
   end function get_n_microchunks_pass_2
 
-  ! Returns the combined number of currently running pass-1, pass-2, and
-  ! reference chunks.
+  ! Returns the total number of match microchunks; zero if unallocated.
+  pure integer function get_n_microchunks_match( self )
+    class(chunked2D), intent(in) :: self
+    get_n_microchunks_match = 0
+    if( allocated(self%microchunks_match) ) get_n_microchunks_match = size(self%microchunks_match)
+  end function get_n_microchunks_match
+
+  ! Returns the combined number of currently running pass-1, pass-2, match,
+  ! and reference chunks.
   pure integer function get_n_chunks_running( self )
     class(chunked2D), intent(in) :: self
     integer :: i
@@ -308,6 +415,9 @@ contains
     end do
     do i = 1, self%get_n_microchunks_pass_2()
       if( self%microchunks_pass_2(i)%abinitio2D_running ) get_n_chunks_running = get_n_chunks_running + 1
+    end do
+    do i = 1, self%get_n_microchunks_match()
+      if( self%microchunks_match(i)%abinitio2D_running ) get_n_chunks_running = get_n_chunks_running + 1
     end do
     if( self%refchunk%abinitio2D_running ) get_n_chunks_running = get_n_chunks_running + 1
   end function get_n_chunks_running
@@ -357,6 +467,13 @@ contains
     type(chunk2D),    intent(in)    :: new_chunk
     self%microchunks_pass_2 = [self%microchunks_pass_2, new_chunk]
   end subroutine append_microchunk_pass_2
+
+  ! Appends a single chunk2D to the end of the match microchunk array.
+  subroutine append_microchunk_match( self, new_chunk )
+    class(chunked2D), intent(inout) :: self
+    type(chunk2D),    intent(in)    :: new_chunk
+    self%microchunks_match = [self%microchunks_match, new_chunk]
+  end subroutine append_microchunk_match
 
   ! Partitions un-included records from project_list into pass-1 microchunks,
   ! each holding up to MICROCHUNK_P1_THRESHOLD particles. For each chunk:
@@ -437,11 +554,9 @@ contains
     type(chunk2D)                 :: new_chunk
     type(sp_project)              :: chunk_project
     type(string)                  :: chunk_folder
-    character(len=STDLEN)         :: chunk_part_env
-    integer                       :: i, chunk_nptcls, chunk_nptcls_selected, envlen, chunk_id
+    integer                       :: i, chunk_nptcls, chunk_nptcls_selected, chunk_id
 
     do while( self%get_n_pass_1_non_rejected_ptcls() > MICROCHUNK_P2_THRESHOLD )
-      write(*,*) "NON REJECTED", self%get_n_pass_1_non_rejected_ptcls()
       allocate(projfiles(0))
       chunk_nptcls          = 0
       chunk_nptcls_selected = 0
@@ -474,7 +589,6 @@ contains
 
       ! Merge source project files and clear stale 2D results
       call merge_and_clear(projfiles, chunk_folder, chunk_project, new_chunk%cline)
-
       call chunk_project%write(new_chunk%projfile)
       call chunk_project%kill()
 
@@ -498,8 +612,7 @@ contains
 
     type(string),     allocatable :: projfiles(:)
     type(sp_project)              :: chunk_project
-    character(len=STDLEN)         :: chunk_part_env
-    integer                       :: i, chunk_nptcls, chunk_nptcls_selected, envlen
+    integer                       :: i, chunk_nptcls, chunk_nptcls_selected
 
     ! Only generate once, and only when enough selected particles are available
     if( self%refchunk%nptcls > 0 )                                    return
@@ -516,7 +629,6 @@ contains
           chunk_nptcls_selected = chunk_nptcls_selected + src%nptcls_selected
           chunk_nptcls          = chunk_nptcls          + src%nptcls
           projfiles             = [projfiles, src%projfile]
-          src%complete          = .true.
         end if
       end associate
     end do
@@ -532,7 +644,6 @@ contains
 
     ! Merge source project files and clear stale 2D results
     call merge_and_clear(projfiles, self%outdir_refchunk, chunk_project, self%refchunk%cline)
-
     call chunk_project%write(self%refchunk%projfile)
     call chunk_project%kill()
     deallocate(projfiles)
@@ -540,6 +651,44 @@ contains
     write(logfhandle,'(A,I8,A,I8,A)') '>>> REFCHUNK GENERATED WITH ', &
       chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
   end subroutine generate_refchunk
+
+  ! Creates one match microchunk for each rejection-complete pass-2 microchunk
+  ! that does not yet have a corresponding match chunk, provided the reference
+  ! chunk rejection is complete (i.e. refs and box are available). Each match
+  ! chunk reuses the pass-2 project file (copied into a new folder) and is
+  ! configured for template-guided classification against the reference stack.
+  subroutine generate_microchunks_match( self )
+    class(chunked2D), intent(inout) :: self
+    type(chunk2D)                   :: new_chunk
+    type(string)                    :: chunk_folder
+    integer                         :: i, chunk_id
+
+    ! Match chunks require the reference stack — skip until refs is available
+    if( self%box == 0 ) return
+
+    do i = 1, self%get_n_microchunks_pass_2()
+      associate( chunk => self%microchunks_pass_2(i) )
+        if( chunk%rejection_complete .and. .not. chunk%complete) then
+          chunk_id                  = chunk%id
+          chunk_folder              = string(self%outdir_microchunks_match%to_char() // &
+                                            '/microchunk_match_' // int2str(chunk_id))
+          call simple_mkdir(chunk_folder)
+          new_chunk%id              = chunk_id
+          new_chunk%nptcls          = chunk%nptcls
+          new_chunk%nptcls_selected = chunk%nptcls_selected
+          new_chunk%folder          = simple_abspath(chunk_folder)
+          new_chunk%projfile        = string(new_chunk%folder%to_char() // &
+                                            '/microchunk_match_' // int2str(chunk_id) // METADATA_EXT)
+          chunk%complete = .true.
+          call self%generate_microchunk_match_cline(new_chunk)
+          call simple_copy_file(chunk%projfile, new_chunk%projfile)
+          call self%append_microchunk_match(new_chunk)
+          write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> MICROCHUNK MATCH # ', chunk_id, &
+            ' GENERATED WITH ', chunk%nptcls_selected, '/', chunk%nptcls, ' PARTICLES'
+        end if
+      end associate
+    end do
+  end subroutine generate_microchunks_match
 
   ! Populates the abinitio2D command line for a pass-1 microchunk with:
   ! program name, project file and name, no-mkdir flag, thread count, mask
@@ -556,15 +705,15 @@ contains
       call cline%set('nthr',     self%nthr)
       call cline%set('mskdiam',  self%mskdiam)
       call cline%set('ncls',     DEFAULT_NCLS)
-      call cline%set('lp',       DEFAULT_MICRO_P1_LP)
+      call cline%set('lpstop',       DEFAULT_MICRO_P1_LP)
       call cline%set('walltime', DEFAULT_WALLTIME)
     end associate
   end subroutine generate_microchunk_pass_1_cline
 
   ! Populates the abinitio2D command line for a pass-2 microchunk with:
   ! program name, project file and name, no-mkdir flag, thread count, mask
-  ! diameter, class count, tighter low-pass filter cutoff (DEFAULT_MICRO_P2_LP),
-  ! and wall-time limit.
+  ! diameter, class count, low-pass stop cutoff (DEFAULT_MICRO_P2_LP), and
+  ! wall-time limit.
   subroutine generate_microchunk_pass_2_cline( self, new_chunk )
     class(chunked2D), intent(inout) :: self
     type(chunk2D),    intent(inout) :: new_chunk
@@ -576,15 +725,38 @@ contains
       call cline%set('nthr',     self%nthr)
       call cline%set('mskdiam',  self%mskdiam)
       call cline%set('ncls',     DEFAULT_NCLS)
-      call cline%set('lp',       DEFAULT_MICRO_P2_LP)
+      call cline%set('lpstop',   DEFAULT_MICRO_P2_LP)
       call cline%set('walltime', DEFAULT_WALLTIME)
     end associate
   end subroutine generate_microchunk_pass_2_cline
 
+  ! Populates the abinitio2D command line for a match microchunk with:
+  ! program name, project file and name, no-mkdir flag, thread count, mask
+  ! diameter, class count, low-pass stop cutoff (DEFAULT_REF_LP), reference
+  ! stack path (refs), box size, and wall-time limit. The refs and box fields
+  ! enable template-guided classification against the reference stack.
+  subroutine generate_microchunk_match_cline( self, new_chunk )
+    class(chunked2D), intent(inout) :: self
+    type(chunk2D),    intent(inout) :: new_chunk
+    associate( cline => new_chunk%cline )
+      call cline%set('prg',      'abinitio2D')
+      call cline%set('projfile', new_chunk%projfile)
+      call cline%set('projname', 'microchunk_match')
+      call cline%set('mkdir',    'no')
+      call cline%set('nthr',     self%nthr)
+      call cline%set('mskdiam',  self%mskdiam)
+      call cline%set('ncls',     DEFAULT_NCLS)
+      call cline%set('lpstop',   DEFAULT_MICRO_P2_LP)
+      call cline%set('refs',     self%refs)
+      call cline%set('box',      self%box)
+      call cline%set('walltime', DEFAULT_WALLTIME)
+    end associate
+  end subroutine generate_microchunk_match_cline
+
   ! Populates the abinitio2D command line for the reference chunk with:
   ! program name, project file and name, no-mkdir flag, thread count, mask
-  ! diameter, class count, tightest low-pass filter cutoff (DEFAULT_REF_LP),
-  ! and wall-time limit.
+  ! diameter, class count, low-pass stop cutoff (DEFAULT_REF_LP), and
+  ! wall-time limit.
   subroutine generate_refchunk_cline( self, new_chunk )
     class(chunked2D), intent(inout) :: self
     type(chunk2D),    intent(inout) :: new_chunk
@@ -596,17 +768,17 @@ contains
       call cline%set('nthr',     self%nthr)
       call cline%set('mskdiam',  self%mskdiam)
       call cline%set('ncls',     DEFAULT_NCLS)
-      call cline%set('lp',       DEFAULT_REF_LP)
+      call cline%set('lpstop',   DEFAULT_REF_LP)
       call cline%set('walltime', DEFAULT_WALLTIME)
     end associate
   end subroutine generate_refchunk_cline
 
   ! Submits pending chunks to the queue asynchronously, up to the nparallel
-  ! concurrency limit. The reference chunk takes priority, followed by pass-2,
-  ! then pass-1. Skips chunks that are already running or complete. For each
-  ! submitted chunk: changes into its working directory, dispatches the job,
-  ! marks it as running, and releases its command line. Restores the original
-  ! working directory on completion.
+  ! concurrency limit. Priority order: refchunk > match > pass-2 > pass-1.
+  ! Skips chunks that are already running or complete. For each submitted
+  ! chunk: changes into its working directory, dispatches the job, marks it
+  ! as running, and releases its command line. Restores the original working
+  ! directory on completion.
   subroutine submit( self )
     class(chunked2D), intent(inout) :: self
     type(string) :: cwd
@@ -628,7 +800,22 @@ contains
       end if
     end if
 
-    ! Submit pass-2 microchunks second
+    ! Submit match microchunks second
+    do i = 1, self%get_n_microchunks_match()
+      if( self%get_n_chunks_running() >= self%nparallel ) exit
+      associate( chunk => self%microchunks_match(i) )
+        if( chunk%abinitio2D_running .or. chunk%abinitio2D_complete ) cycle
+        call simple_chdir(chunk%folder)
+        CWD_GLOB = chunk%folder%to_char()
+        call self%qenv%exec_simple_prg_in_queue_async( &
+          chunk%cline, string('./distr_microchunk'), string('simple_log_microchunk_match'))
+        chunk%abinitio2D_running = .true.
+        call chunk%cline%kill()
+        write(logfhandle,'(A,I6)') '>>> INITIATED 2D ANALYSIS OF MICROCHUNK MATCH # ', chunk%id
+      end associate
+    end do
+
+    ! Submit pass-2 microchunks third
     do i = 1, self%get_n_microchunks_pass_2()
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%microchunks_pass_2(i) )
@@ -662,11 +849,12 @@ contains
     CWD_GLOB = cwd%to_char()
   end subroutine submit
 
-  ! Polls all running pass-1, pass-2, and reference chunks for the
+  ! Polls all running pass-1, pass-2, match, and reference chunks for the
   ! ABINITIO2D_FINISHED sentinel file. For each newly completed chunk:
   ! transitions it from running to complete and immediately runs class-average
-  ! rejection. The reference chunk rejection is only attempted if it has been
-  ! generated (nptcls > 0).
+  ! rejection. Capturing refs and box from the refchunk after its rejection
+  ! enables subsequent match chunk generation. Pass-2 chunks are marked
+  ! complete after rejection so they are not re-consumed into the refchunk.
   subroutine collect_and_reject( self )
     class(chunked2D), intent(inout) :: self
     integer :: i
@@ -697,6 +885,19 @@ contains
       end associate
     end do
 
+    do i = 1, self%get_n_microchunks_match()
+      associate( chunk => self%microchunks_match(i) )
+        if( chunk%abinitio2D_running ) then
+          if( file_exists(chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED) ) then
+            chunk%abinitio2D_running  = .false.
+            chunk%abinitio2D_complete = .true.
+            chunk%complete            = .true.
+            write(logfhandle,'(A,I6)') '>>> COMPLETED 2D ANALYSIS OF MICROCHUNK MATCH # ', chunk%id
+          end if
+        end if
+      end associate
+    end do
+
     if( self%refchunk%nptcls > 0 ) then
       if( self%refchunk%abinitio2D_running ) then
         if( file_exists(self%refchunk%folder%to_char() // '/' // ABINITIO2D_FINISHED) ) then
@@ -711,11 +912,14 @@ contains
 
   ! Performs rejection on a single chunk. Reads the class-average stack,
   ! computes the mask radius from image dimensions and mskdiam, runs outlier
-  ! then auto (pass-1) or basic (pass-2 / reference) rejection, writes three
-  ! filtered stacks (outlier-rejected, strategy-rejected, selected), propagates
-  ! rejection flags into project states via map2ptcls_state, records the final
-  ! selected particle count, and writes the project. No-op if the chunk is not
-  ! yet complete or has already been rejected. Cleans up all allocations on exit.
+  ! then auto (pass-1) or basic (pass-2 / reference / match) rejection, writes
+  ! three filtered stacks (outlier-rejected, strategy-rejected, selected),
+  ! propagates rejection flags into project states via map2ptcls_state, and
+  ! records the final selected particle count. When called on the reference
+  ! chunk, also captures the selected class-average stack path and box size
+  ! into self%refs and self%box for use by match chunk generation. No-op if
+  ! the chunk is not yet complete or has already been rejected. Cleans up all
+  ! allocations on exit.
   subroutine reject_cavgs( self, chunk, label )
     class(chunked2D), intent(inout) :: self
     type(chunk2D),    intent(inout) :: chunk
@@ -745,7 +949,7 @@ contains
     call reject_outliers(cavg_imgs, mskrad, l_rejected)
     call write_cavgs(stkname, string('_rejected_outliers.mrc'), selected=.false.)
 
-    ! Pass-1 uses auto rejection; pass-2 and reference use basic rejection
+    ! Pass-1 uses auto rejection; all other tiers use basic rejection
     if( label == string(LABEL_PASS_1) ) then
       call reject_auto(cavg_imgs, l_rejected)
       call write_cavgs(stkname, string('_rejected_auto.mrc'),  selected=.false.)
@@ -754,6 +958,12 @@ contains
       call write_cavgs(stkname, string('_rejected_basic.mrc'), selected=.false.)
     end if
     call write_cavgs(stkname, string('_selected.mrc'), selected=.true.)
+
+    ! Capture refs and box from the refchunk for use in match chunk generation
+    if( label == string(LABEL_REF) ) then
+      self%refs = stkname
+      self%box  = ldim(1)
+    end if
 
     ! Propagate rejection flags into project states
     states = spproj%os_cls2D%get_all_asint('state')
@@ -811,18 +1021,16 @@ contains
   ! Merges a list of source project files into chunk_project within the given
   ! output directory, updates projinfo and compenv from cline, kills stale 2D
   ! orientation sets and output oris, and removes intermediate files (FRCs,
-  ! class-average stacks, sigma2 star) carried over from the merge. Applies any
-  ! SIMPLE_CHUNK_PARTITION environment override to the queue partition.
+  ! class-average stacks, sigma2 star file) carried over from the merge.
+  ! Applies any SIMPLE_CHUNK_PARTITION environment override to the queue
+  ! partition.
   subroutine merge_and_clear( projfiles, outdir, chunk_project, cline )
-    type(string),    intent(in)    :: projfiles(:)
-    type(string),    intent(in)    :: outdir
+    type(string),     intent(in)    :: projfiles(:)
+    type(string),     intent(in)    :: outdir
     type(sp_project), intent(inout) :: chunk_project
     type(cmdline),    intent(inout) :: cline
     character(len=STDLEN) :: chunk_part_env
-    integer               :: envlen, i
-    do i=1, size(projfiles)
-      write(*,*) projfiles(i)%to_char()
-    end do
+    integer               :: envlen
     call merge_chunk_projfiles(projfiles, outdir, chunk_project, write_proj=.false.)
     call chunk_project%update_projinfo(cline)
     call chunk_project%update_compenv(cline)
