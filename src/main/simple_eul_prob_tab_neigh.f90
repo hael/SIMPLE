@@ -441,11 +441,11 @@ contains
     ! o_prev is returned live; caller is responsible for o_prev%kill.
     subroutine get_ptcl_prev_geom(self, iptcl, state_fixed, has_state_opt, &
                                    o_prev, prev_iproj, prev_sub, istate)
-        class(eul_prob_tab_neigh), intent(in)    :: self
-        integer,                   intent(in)    :: iptcl, state_fixed
-        logical,                   intent(in)    :: has_state_opt
-        type(ori),                 intent(out)   :: o_prev
-        integer,                   intent(out)   :: prev_iproj, prev_sub, istate
+        class(eul_prob_tab_neigh), intent(in)  :: self
+        integer,                   intent(in)  :: iptcl, state_fixed
+        logical,                   intent(in)  :: has_state_opt
+        type(ori),                 intent(out) :: o_prev
+        integer,                   intent(out) :: prev_iproj, prev_sub, istate
         call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)
         prev_iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)
         prev_sub   = self%b_ptr%subspace_full2sub_map(prev_iproj)
@@ -481,19 +481,18 @@ contains
     ! Build graph from geometric neighbors around previous particle orientations.
     subroutine build_graph_from_prev_geom(self)
         class(eul_prob_tab_neigh), intent(inout) :: self
-        type(sparse_row_tmp), allocatable :: rows(:)
-        type(eulspace_neigh_map)          :: neigh_map
-        type(row_build_thread_buf), allocatable :: tbuf(:)
-        type(proj_set_buf),    allocatable :: proj_buf(:)
-        type(ori), allocatable :: sub_oris(:)        ! precomputed subspace orientations
+        type(sparse_row_tmp),        allocatable :: rows(:)
+        type(row_build_thread_buf),  allocatable :: tbuf(:)
+        type(proj_set_buf),          allocatable :: proj_buf(:)
+        type(ori),                   allocatable :: sub_oris(:)            ! precomputed subspace orientations
+        real,                        allocatable :: score_buf(:,:)
+        real,                        allocatable :: sub_dists_thr(:,:)     ! thread-local distance scratch
+        integer,                     allocatable :: peak_sub_idxs_thr(:,:) ! thread-local peak-index scratch
+        type(eulspace_neigh_map) :: neigh_map
         type(ori) :: o_prev, osym
         integer   :: nspace, nspace_sub, npeak_use, nrots
         integer   :: i, ithr, iptcl, isub, prev_iproj, prev_sub
-        real      :: dtmp, inplrotdist
-        real      :: cxy_shift(2)
-        real,    allocatable :: score_buf(:,:)
-        real,    allocatable :: sub_dists_thr(:,:)       ! thread-local distance scratch
-        integer, allocatable :: peak_sub_idxs_thr(:,:)   ! thread-local peak-index scratch
+        real      :: dtmp, inplrotdist, cxy_shift(2)
         nspace     = self%p_ptr%nspace
         nspace_sub = self%p_ptr%nspace_sub
         npeak_use  = max(1, min(self%p_ptr%npeaks, nspace_sub))
@@ -574,12 +573,12 @@ contains
     subroutine build_graph_from_subspace_peaks_impl(self, state_opt)
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer, optional,         intent(in)    :: state_opt
-        type(sparse_row_tmp), allocatable :: rows(:)
-        real,                 allocatable :: inpl_dists(:,:), coarse_best_dist(:,:)
-        integer,              allocatable :: peak_sub_idxs(:,:)
-        integer,              allocatable :: valid_subs_thr(:,:)
-        type(row_build_thread_buf), allocatable :: tbuf(:)
-        type(proj_set_buf),   allocatable :: proj_buf(:)
+        type(sparse_row_tmp),        allocatable :: rows(:)
+        real,                        allocatable :: inpl_dists(:,:), coarse_best_dist(:,:)
+        integer,                     allocatable :: peak_sub_idxs(:,:)
+        integer,                     allocatable :: valid_subs_thr(:,:)
+        type(row_build_thread_buf),  allocatable :: tbuf(:)
+        type(proj_set_buf),          allocatable :: proj_buf(:)
         type(eulspace_neigh_map) :: neigh_map
         type(pftc_shsrch_grad)   :: grad_shsrch_obj(nthr_glob)
         type(ori)                :: o_prev
@@ -717,12 +716,13 @@ contains
     subroutine build_graph_from_ptree_srch_impl(self, state_opt)
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer, optional,         intent(in)    :: state_opt
+        integer,                     allocatable :: peak_trees(:,:), inds_sorted(:,:)
+        real,                        allocatable :: inpl_corrs(:,:), tree_best_corrs(:,:), peak_tree_corrs(:,:)
+        real,                        allocatable :: dists_sorted(:,:), inpl_angle_thres(:)
+        type(row_build_thread_buf),  allocatable :: tbuf(:)
+        type(sparse_row_tmp),        allocatable :: rows(:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(ori)              :: o_prev
-        type(sparse_row_tmp),   allocatable :: rows(:)
-        integer,                allocatable :: peak_trees(:,:), inds_sorted(:,:)
-        real,                   allocatable :: inpl_corrs(:,:), tree_best_corrs(:,:), peak_tree_corrs(:,:), dists_sorted(:,:), inpl_angle_thres(:)
-        type(row_build_thread_buf), allocatable :: tbuf(:)
         real    :: lims(2,2), lims_init(2,2), cxy_shift(2)
         logical :: do_shift_first, has_state_opt
         integer :: nrots, nspace_sub, npeak_use, ntrees, state_fixed
@@ -814,8 +814,8 @@ contains
             if (tbuf(ithr)%proj_set%nused <= 0) then
                 call self%fill_proj_set_from_active(tbuf(ithr)%proj_set)
             endif
-            call self%score_and_materialize_row_from_proj_list(iptcl, tbuf(ithr)%proj_set%list, tbuf(ithr)%proj_set%nused, cxy_shift, do_shift_first, &
-                                                                inpl_corrs(:,ithr), rows(i), tbuf(ithr)%cached_ref_idx, tbuf(ithr)%cached_edge_val, tbuf(ithr)%ncached)
+            call self%score_and_materialize_row_from_proj_list(iptcl, tbuf(ithr)%proj_set%list, tbuf(ithr)%proj_set%nused,&
+            &cxy_shift, do_shift_first, inpl_corrs(:,ithr), rows(i), tbuf(ithr)%cached_ref_idx, tbuf(ithr)%cached_edge_val, tbuf(ithr)%ncached)
         enddo
         !$omp end parallel do
         if (do_shift_first) then
@@ -1134,7 +1134,7 @@ contains
         real,    allocatable :: best_dist_by_ref(:), active_best_dist(:), sorted_dist_scratch(:)
         integer, allocatable :: sorted_idx_scratch(:)
         integer :: ref_idx, sampled_active_pos, edge_idx, ptcl_local_idx, neighbor_edge
-        integer :: n_active_refs, n_assigned
+        integer :: n_active_refs, n_assigned, progress_step, next_report
         real    :: projs_athres
         integer :: k, istate
         if (any(.not. dist_is_scored(self%edge_val(:)%dist))) then
@@ -1161,6 +1161,9 @@ contains
             projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', self%p_ptr%prob_athres, state=istate))
         enddo
         n_assigned = 0
+        progress_step = max(1, self%nptcls / 20)
+        next_report = progress_step
+        write(logfhandle,'(A,I12,A,I12,A,I12)') '>>> ref_assign_sparse start: nptcls=', self%nptcls, ', nrefs=', self%nrefs, ', nedges=', self%nedges
         do while (n_assigned < self%nptcls)
             if (n_active_refs <= 0) then
                 THROW_HARD('neighborhood too restrictive: no active references but particles remain unassigned')
@@ -1178,6 +1181,10 @@ contains
             do neighbor_edge = self%ptcl_off(ptcl_local_idx), self%ptcl_off(ptcl_local_idx+1)-1
                 call update_ref_frontier(self%edge_ref_index(neighbor_edge))
             enddo
+            if (n_assigned >= next_report .or. n_assigned == self%nptcls) then
+                write(logfhandle,'(A,I12,A,I12,A,F6.2,A,I12)') '>>> ref_assign_sparse progress: assigned=', n_assigned, '/', self%nptcls, ' (', 100.0 * real(n_assigned) / real(self%nptcls), '%), active_refs=', n_active_refs
+                next_report = next_report + progress_step
+            endif
         enddo
         deallocate(particle_available, ref_frontier_edge, best_dist_by_ref, active_pos_by_ref)
         deallocate(active_refs, active_best_dist, sorted_dist_scratch, sorted_idx_scratch)
@@ -1247,13 +1254,12 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(string),             intent(in)    :: fbody
         integer,                   intent(in)    :: nparts, numlen
-        type(ptcl_ref), allocatable :: edge_val_loc(:), stage_edge_val(:), tmp_stage_edge_val(:)
+        type(ptcl_ref), allocatable :: edge_val_loc(:)
         integer,         allocatable :: degree_by_ptcl(:), fill_ptr(:), pind_to_local(:), pinds_loc(:), ptcl_off_loc(:)
-        integer,         allocatable :: stage_global_i(:), tmp_stage_global_i(:)
         type(string) :: binfname
         integer      :: funit, addr, io_stat, file_header(3), header_bytes
         integer      :: ipart, nrefs_loc, nptcls_loc, nedges_loc, local_i, global_i, local_e, global_e, ref_idx
-        integer      :: row_deg, stage_nused, stage_cap, needed_cap, new_cap
+        integer      :: row_deg
         if (nparts < 1) then
             THROW_HARD('read_tabs_to_glob: nparts must be >= 1')
         endif
@@ -1263,9 +1269,8 @@ contains
         if (allocated(self%edge_val))         deallocate(self%edge_val)
         if (allocated(self%ref_edge_offsets)) deallocate(self%ref_edge_offsets)
         if (allocated(self%ref_edge_indices)) deallocate(self%ref_edge_indices)
-        allocate(degree_by_ptcl(self%nptcls), pind_to_local(self%p_ptr%nptcls), source=0)
-        stage_nused = 0
-        stage_cap   = 0
+        allocate(degree_by_ptcl(self%nptcls), source=0)
+        allocate(pind_to_local(self%p_ptr%nptcls), source=0)
         do global_i = 1, self%nptcls
             if (self%pinds(global_i) < 1 .or. self%pinds(global_i) > self%p_ptr%nptcls) then
                 THROW_HARD('read_tabs_to_glob: global particle index out of range')
@@ -1314,31 +1319,15 @@ contains
                     THROW_HARD('read_tabs_to_glob: partition file contains particle outside the sampled set')
                 endif
                 if (degree_by_ptcl(global_i) /= 0) then
-                    THROW_HARD('read_tabs_to_glob: partition invariant violated - particle appears in multiple partition files')
+                    THROW_HARD('read_tabs_to_glob: duplicate particle across sparse partition files')
                 endif
                 row_deg = ptcl_off_loc(local_i + 1) - ptcl_off_loc(local_i)
                 if (row_deg <= 0) then
                     THROW_HARD('read_tabs_to_glob: sparse partition row has no edges')
                 endif
                 degree_by_ptcl(global_i) = row_deg
-                needed_cap = stage_nused + row_deg
-                if (needed_cap > stage_cap) then
-                    new_cap = max(needed_cap, max(1, stage_cap * 2))
-                    allocate(tmp_stage_global_i(new_cap), tmp_stage_edge_val(new_cap))
-                    if (stage_nused > 0) then
-                        tmp_stage_global_i(1:stage_nused) = stage_global_i(1:stage_nused)
-                        tmp_stage_edge_val(1:stage_nused) = stage_edge_val(1:stage_nused)
-                    endif
-                    call move_alloc(tmp_stage_global_i, stage_global_i)
-                    call move_alloc(tmp_stage_edge_val, stage_edge_val)
-                    stage_cap = new_cap
-                endif
-                stage_global_i(stage_nused + 1:stage_nused + row_deg) = global_i
-                stage_edge_val(stage_nused + 1:stage_nused + row_deg) = &
-                    edge_val_loc(ptcl_off_loc(local_i):ptcl_off_loc(local_i + 1) - 1)
-                stage_nused = stage_nused + row_deg
             enddo
-            deallocate(pinds_loc, ptcl_off_loc, edge_val_loc)
+            deallocate(pinds_loc, ptcl_off_loc)
         enddo
         if (any(degree_by_ptcl <= 0)) then
             THROW_HARD('read_tabs_to_glob: missing sparse neighborhood rows for one or more particles')
@@ -1351,29 +1340,54 @@ contains
         self%nedges = self%ptcl_off(self%nptcls + 1) - 1
         self%maxdeg_ptcl = maxval(degree_by_ptcl)
         allocate(self%edge_ref_index(self%nedges), self%edge_ptcl(self%nedges), self%edge_val(self%nedges))
-        if (stage_nused /= self%nedges) then
-            THROW_HARD('read_tabs_to_glob: staged edge count does not match reconstructed global size')
-        endif
         allocate(fill_ptr(self%nptcls), source=self%ptcl_off(1:self%nptcls))
-        do global_e = 1, stage_nused
-            global_i = stage_global_i(global_e)
-            ref_idx = self%ref_index_map(stage_edge_val(global_e)%iproj, stage_edge_val(global_e)%istate)
-            if (ref_idx <= 0) then
-                THROW_HARD('read_tabs_to_glob: sparse partition edge refers to an inactive reference')
+        do ipart = 1, nparts
+            binfname = fbody//int2str_pad(ipart, numlen)//'.dat'
+            if (.not. file_exists(binfname)) then
+                THROW_HARD('file '//binfname%to_char()//' does not exists!')
+            else
+                call fopen(funit, binfname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
             endif
-            local_e                      = fill_ptr(global_i)
-            self%edge_ref_index(local_e) = ref_idx
-            self%edge_ptcl(local_e)      = global_i
-            self%edge_val(local_e)       = stage_edge_val(global_e)
-            fill_ptr(global_i) = local_e + 1
+            call fileiochk('simple_eul_prob_tab_neigh; read_tabs_to_glob; file: '//binfname%to_char(), io_stat)
+            read(unit=funit, pos=1) file_header
+            nptcls_loc = file_header(2)
+            nedges_loc = file_header(3)
+            allocate(pinds_loc(nptcls_loc), ptcl_off_loc(nptcls_loc + 1), edge_val_loc(nedges_loc))
+            addr = header_bytes + 1
+            read(unit=funit, pos=addr) pinds_loc
+            addr = addr + nptcls_loc * sizeof(pinds_loc(1))
+            read(unit=funit, pos=addr) ptcl_off_loc
+            addr = addr + (nptcls_loc + 1) * sizeof(ptcl_off_loc(1))
+            read(unit=funit, pos=addr) edge_val_loc
+            call fclose(funit)
+            do local_i = 1, nptcls_loc
+                global_i = pind_to_local(pinds_loc(local_i))
+                global_e = fill_ptr(global_i)
+                do local_e = ptcl_off_loc(local_i), ptcl_off_loc(local_i + 1) - 1
+                    if (edge_val_loc(local_e)%iproj < 1 .or. edge_val_loc(local_e)%iproj > self%p_ptr%nspace) then
+                        THROW_HARD('read_tabs_to_glob: sparse partition edge has iproj out of range')
+                    endif
+                    if (edge_val_loc(local_e)%istate < 1 .or. edge_val_loc(local_e)%istate > self%p_ptr%nstates) then
+                        THROW_HARD('read_tabs_to_glob: sparse partition edge has istate out of range')
+                    endif
+                    ref_idx = self%ref_index_map(edge_val_loc(local_e)%iproj, edge_val_loc(local_e)%istate)
+                    if (ref_idx <= 0) then
+                        THROW_HARD('read_tabs_to_glob: sparse partition edge refers to an inactive reference')
+                    endif
+                    self%edge_ref_index(global_e) = ref_idx
+                    self%edge_ptcl(global_e)      = global_i
+                    self%edge_val(global_e)       = edge_val_loc(local_e)
+                    global_e = global_e + 1
+                enddo
+                fill_ptr(global_i) = global_e
+            enddo
+            deallocate(pinds_loc, ptcl_off_loc, edge_val_loc)
         enddo
         if (any(fill_ptr /= self%ptcl_off(2:self%nptcls + 1))) then
             THROW_HARD('read_tabs_to_glob: failed to reconstruct the sparse global table consistently')
         endif
         call self%build_ref_adjacency()
         deallocate(degree_by_ptcl, fill_ptr, pind_to_local)
-        if (allocated(stage_global_i)) deallocate(stage_global_i)
-        if (allocated(stage_edge_val)) deallocate(stage_edge_val)
     end subroutine read_tabs_to_glob
 
     ! Write current particle assignments to a binary stream file.
