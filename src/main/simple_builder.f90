@@ -288,7 +288,7 @@ contains
                 call o%kill
                 call o_sub%kill
                 call osym%kill
-                if( str_has_substr(params%refine, 'tree') .or. str_has_substr(params%neigh_type, 'tree') )then
+                if( str_has_substr(params%refine, 'tree') )then
                     self%block_tree = &
                     &gen_eulspace_block_tree_map(self%eulspace%get_noris(), self%eulspace,&
                     &self%subspace_full2sub_map, self%pgrpsyms)

@@ -16,7 +16,7 @@ integer, parameter :: PROB_NEIGH_NSPACE               = 4000
 integer, parameter :: PROB_NEIGH_NSPACE_SUB           = 100
 
 type :: refine3D_stage_cfg
-    type(string) :: ml_reg, fillin, cavgw, neigh_type
+    type(string) :: ml_reg, fillin, cavgw
     type(string) :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
     integer :: iphase, iter, inspace, inspace_sub, imaxits, nsample_dyn, ipftsz
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
@@ -141,14 +141,11 @@ contains
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
         cfg%refine  = 'shc_smpl'
-        cfg%neigh_type = ''
         if( is_tree_route(route) ) cfg%refine = 'shc_ptree'
         if( istage >= PROBREFINE_STAGE )then
             if( is_tree_route(route) )then
                 ! cfg%refine     = 'prob_neigh'
-                ! cfg%neigh_type = 'subspace_srch'
                 cfg%refine     = 'ptree'
-                cfg%neigh_type = 'subspace_srch'
             else
                 cfg%refine  = 'prob'
             endif
@@ -382,11 +379,6 @@ contains
         call cline_refine3D%set('which_iter',             cfg%iter)
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
-        if( cfg%neigh_type%strlen_trim() > 0 )then
-            call cline_refine3D%set('neigh_type',         cfg%neigh_type)
-        else
-            call cline_refine3D%delete('neigh_type')
-        endif
         call cline_refine3D%set('balance',                cfg%balance)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('lp_auto',                cfg%lp_auto)

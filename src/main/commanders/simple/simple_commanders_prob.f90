@@ -102,7 +102,8 @@ contains
                                         do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
         ! Build polar particle images
         call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
-        call eulprob_obj_part_neigh%new_neigh(params, build, pinds, build_sparse_graph=.true.)
+        call eulprob_obj_part_neigh%new_neigh(params, build, pinds)
+        call eulprob_obj_part_neigh%fill_tab
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part_neigh%write_tab(fname)
         call eulprob_obj_part_neigh%kill
@@ -214,7 +215,7 @@ contains
         call build%spproj%write_segment_inside(params%oritype)
         ! Global object only needs sampled-set maps before reading partition sparse tables.
         ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
-        call eulprob_obj_glob_neigh%new_neigh(params, build, pinds, build_sparse_graph=.false.)
+        call eulprob_obj_glob_neigh%new_neigh(params, build, pinds)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
         if( .not. cline_prob_tab%defined('nparts') )then

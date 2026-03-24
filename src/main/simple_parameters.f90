@@ -230,7 +230,6 @@ type :: parameters
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
-    character(len=STDLEN)     :: neigh_type='subspace_srch' !< neighborhood construction for prob_neigh(geom|subspace_srch){subspace_srch}
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
@@ -730,7 +729,6 @@ contains
         call check_carg('ml_reg_pool',    self%ml_reg_pool)
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('multi_moldiams', self%multi_moldiams)
-        call check_carg('neigh_type',     self%neigh_type)
         call check_carg('multivol_mode',  self%multivol_mode)
         call check_carg('neg',            self%neg)
         call check_carg('neigs_per',      self%neigs_per)
