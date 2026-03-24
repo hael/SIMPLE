@@ -633,7 +633,7 @@ contains
         call mskvol%kill
     end subroutine estimate_lp_refvols
 
-    subroutine read_mask_and_filter_refvols( params, build, s )
+    subroutine read_mask_filter_refvols( params, build, s )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: s
@@ -731,7 +731,7 @@ contains
                 call build%vol_odd%apply_filter(cur_fil)
             endif
         endif
-    end subroutine read_mask_and_filter_refvols
+    end subroutine read_mask_filter_refvols
 
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( build, fpl, se, o )
@@ -1095,7 +1095,7 @@ contains
             call build%pftc%memoize_refs
         else
             ! (if needed) estimating lp (over all states) and reseting params%lp and params%kfromto
-            call prepare_polar_references(params, build, cline, batchsz)
+            call read_mask_filter_reproject_refvols(params, build, cline, batchsz)
         endif
         ! PREPARATION OF SIGMAS
         if( params%cc_objfun == OBJFUN_EUCLID )then
@@ -1119,11 +1119,11 @@ contains
         if( allocated(gaufilter) ) deallocate(gaufilter)
     end subroutine prepare_refs_sigmas_ptcls
 
-    subroutine prepare_polar_references( params, build, cline, batchsz )
-        class(parameters),   intent(inout) :: params
-        class(builder),      intent(inout) :: build
-        class(cmdline),      intent(in)    :: cline !< command line
-        integer,             intent(in)    :: batchsz
+    subroutine read_mask_filter_reproject_refvols( params, build, cline, batchsz )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(in)    :: cline !< command line
+        integer,           intent(in)    :: batchsz
         real      :: xyz(3)
         integer   :: s, nrefs, state
         logical   :: do_center, l_prob_align_mode
@@ -1148,7 +1148,7 @@ contains
             else
                 call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), do_center, xyz, map_shift=.true.)
             endif
-            call read_mask_and_filter_refvols(params, build, s)
+            call read_mask_filter_refvols(params, build, s)
             ! PREPARE E/O VOLUMES
             ! do even/odd in separate passes to reduce memory usage when padding is large (2X)
             ! PREPARE EVEN REFERENCES
@@ -1185,7 +1185,7 @@ contains
             call build%vol_odd_pad%kill_expanded
         end do
         call build%pftc%memoize_refs
-    end subroutine prepare_polar_references
+    end subroutine read_mask_filter_reproject_refvols
 
     subroutine build_batch_particles( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, imgs4rec )
         class(parameters),      intent(in)    :: params

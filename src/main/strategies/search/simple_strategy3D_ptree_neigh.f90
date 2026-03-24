@@ -1,19 +1,18 @@
-!@descr: 3D strategy: neighborhood selection by angular distance from previous orientation,
-!        followed by probabilistic tree descent within the selected trees.
-!        The neighborhood is defined by computing symmetry-aware angular distances from
-!        the previous assigned orientation to every subspace (coarse-grid) representative,
-!        then selecting the npeaks nearest representatives as tree roots. Each selected
-!        tree is then descended probabilistically, with exhaustive fallback when the
-!        stochastic walk fails to improve on the previous particle score. States are
-!        optimised jointly within each tree via eval_tree_ref_across_states.
-!        This mirrors the geometry-based pooling in build_neigh_mask_from_prev_geom,
-!        but operates at the tree-search level rather than building a sparse reference
-!        graph.
+!@descr: probabilistic tree descent with neighborhood selection by angular distance from previous orientation
+! 3D strategy: neighborhood selection by angular distance from previous orientation,
+! followed by probabilistic tree descent within the selected trees.
+! The neighborhood is defined by computing symmetry-aware angular distances from
+! the previous assigned orientation to every subspace (coarse-grid) representative,
+! then selecting the npeaks nearest representatives as tree roots. Each selected
+! tree is then descended probabilistically. The tree descent is kept fixed to the particle's
+! previous state, analogously to prob_neigh. This mirrors the geometry-based pooling in 
+! build_neigh_mask_from_prev_geom, but operates at the tree-search level rather than building 
+! a sparse reference graph.
 module simple_strategy3D_ptree_neigh
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_tree_utils, &
-                           &only: select_peak_trees, descend_tree_prob
+                           &only: select_peak_trees, descend_tree_prob_fixed_state
 use simple_strategy3D_utils
 use simple_parameters,      only: parameters
 use simple_oris,            only: oris
@@ -102,13 +101,12 @@ contains
         call select_peak_trees(neg_dists, peak_trees, peak_tree_corrs, npeak_trees)
         ! ------------------------------------------------------------------
         ! Probabilistic tree descent in each selected tree.
-        ! prev_corr serves as the quality bound: if the stochastic walk
-        ! fails to improve on the current best assignment, the selected
-        ! tree is scanned exhaustively.
+        ! The descent is fixed to the previous particle state, analogously
+        ! to prob_neigh. The best solution found along the probabilistic
+        ! tree descent is accepted directly.
         ! ------------------------------------------------------------------
         do i = 1, npeak_trees
-            ! this descent consideres all states
-            call descend_tree_prob(self%s, peak_trees(i), self%s%prev_corr, nrefs_tree)
+            call descend_tree_prob_fixed_state(self%s, peak_trees(i), self%s%prev_corr, nrefs_tree, self%s%prev_state)
         enddo
         self%s%nrefs_eval = nrefs_tree
         call extract_peak_oris(self%s)
