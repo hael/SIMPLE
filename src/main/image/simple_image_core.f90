@@ -161,6 +161,7 @@ contains
             call fftwf_destroy_plan(self%plan_fwd)
             call fftwf_destroy_plan(self%plan_bwd)
             !$omp end critical
+            call self%fit%reset
             self%existence = .false.
         endif
     end subroutine kill

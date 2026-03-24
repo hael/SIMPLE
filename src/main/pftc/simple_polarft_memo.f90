@@ -107,7 +107,7 @@ contains
             ! Extract and store FT(REFeven)* results
             do k = self%kfromto(1), self%kfromto(2)
                 kk = k - k0 + 1
-                self%ft_ref_even(:,k,iref) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk))
+                self%ft_ref_even(:,k,iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
             end do
             ! ========================================================================
             ! Batched computation of FT(REFodd)* for all k shells
@@ -122,7 +122,7 @@ contains
             ! Extract and store FT(REFodd)* results
             do k = self%kfromto(1), self%kfromto(2)
                 kk = k - k0 + 1
-                self%ft_ref_odd(:,k,iref) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk))
+                self%ft_ref_odd(:,k,iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
             end do
             ! ========================================================================
             ! Batched computation of FT(REF2even)* for all k shells

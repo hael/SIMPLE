@@ -116,7 +116,7 @@ contains
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: cc(self%nrots)
-        complex(sp), pointer :: pft_ref(:,:), shmat(:,:), pft_ref_source(:,:)
+        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp) :: shift_mag_sq
         integer  :: i, ithr, k, kk, k0
         logical  :: even, needs_shift
@@ -125,31 +125,36 @@ contains
         k0      =  self%kfromto(1)
         even    =  self%iseven(i)
         shmat   => self%heap_vars(ithr)%shmat
-        pft_ref => self%heap_vars(ithr)%pft_ref
-        ! Select reference once using pointer (avoids merge overhead)
-        if (even) then
-            pft_ref_source => self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
-        else
-            pft_ref_source => self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
-        endif
-        ! Check if shift is needed (hoist outside to avoid repeated checks)
+        ! ========================================================================
+        ! Prepare FFT(S.REF) if needed
+        ! ========================================================================
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
-        needs_shift = shift_mag_sq > SHERRSQ
+        needs_shift  = shift_mag_sq > SHERRSQ
         if (needs_shift) then
+            pft_ref => self%heap_vars(ithr)%pft_ref
+            ! Generate shift matrix
             call self%gen_shmat(ithr, shift, shmat)
-            pft_ref = shmat(:,:self%kfromto(2)) * pft_ref_source
+            ! Shift reference
+            if (even) then
+                pft_ref = shmat(:,:self%kfromto(2)) * self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
+            else
+                pft_ref = shmat(:,:self%kfromto(2)) * self%pfts_refs_odd( :,self%kfromto(1):self%kfromto(2),iref)
+            endif
+            ! Calculate FFT(S.REF)
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       pft_ref(:,k)
+                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(pft_ref(:,k))
+            end do
+            call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
         else
-            pft_ref = pft_ref_source
+            ! no shift, memoized reference is used
+            if( even )then
+                self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = self%ft_ref_even(:,self%kfromto(1):self%kfromto(2),iref)
+            else
+                self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = self%ft_ref_odd( :,self%kfromto(1):self%kfromto(2),iref)
+            endif
         endif
-        ! ========================================================================
-        ! Prepare FFT(S.REF) for all k shells at once
-        ! ========================================================================
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%cmat2_many(ithr)%c(1:self%pftsz, kk) = pft_ref(:,k)
-            self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(pft_ref(:,k))
-        end do
-        call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
         ! ========================================================================
         ! Batched IFFT #1: IFFT( FT(CTF2) x FT(REF2) ) for all k
         ! Single-pass preparation
@@ -194,7 +199,7 @@ contains
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: euclids(self%nrots)
-        complex(sp), pointer :: pft_ref(:,:), shmat(:,:), pft_ref_source(:,:)
+        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(dp), pointer    :: w_weights(:), sumsq_cache(:)
         real(sp) :: shift_mag_sq
         integer  :: k, i, ithr, kk, k0
@@ -204,23 +209,37 @@ contains
         k0           =  self%kfromto(1)
         even         =  self%iseven(i)
         shmat        => self%heap_vars(ithr)%shmat
-        pft_ref      => self%heap_vars(ithr)%pft_ref
         w_weights    => self%heap_vars(ithr)%w_weights
         sumsq_cache  => self%heap_vars(ithr)%sumsq_cache
-        ! Select reference once using pointer (avoids merge overhead)
-        if (even) then
-            pft_ref_source => self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
-        else
-            pft_ref_source => self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
-        endif
-        ! Check if shift is needed
+        ! ========================================================================
+        ! Prepare FFT(S.REF) if needed
+        ! ========================================================================
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
-        needs_shift = shift_mag_sq > SHERRSQ
+        needs_shift  = shift_mag_sq > SHERRSQ
         if (needs_shift) then
+            pft_ref => self%heap_vars(ithr)%pft_ref
+            ! Generate shift matrix
             call self%gen_shmat(ithr, shift, shmat)
-            pft_ref = shmat(:,:self%kfromto(2)) * pft_ref_source
+            ! Shift reference
+            if (even) then
+                pft_ref = shmat(:,:self%kfromto(2)) * self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
+            else
+                pft_ref = shmat(:,:self%kfromto(2)) * self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
+            endif
+            ! Calculate FFT(S.REF)
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       pft_ref(:,k)
+                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(pft_ref(:,k))
+            end do
+            call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
         else
-            pft_ref = pft_ref_source
+            ! no shift, memoized reference can be used
+            if( even )then
+                self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = self%ft_ref_even(:,self%kfromto(1):self%kfromto(2),iref)
+            else
+                self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = self%ft_ref_odd( :,self%kfromto(1):self%kfromto(2),iref)
+            endif
         endif
         ! ========================================================================
         ! Pre-compute weights and particle sums ONCE
@@ -231,15 +250,6 @@ contains
             w_weights(kk)   = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
             sumsq_cache(kk) = sum(real(self%pfts_ptcls(:,k,i) * conjg(self%pfts_ptcls(:,k,i)), dp))
         end do
-        ! ========================================================================
-        ! Prepare FFT(S.REF) for all k shells at once
-        ! ========================================================================
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%cmat2_many(ithr)%c(1:self%pftsz, kk) = pft_ref(:,k)
-            self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(pft_ref(:,k))
-        end do
-        call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
         ! ========================================================================
         ! Batched IFFT: IFFT( FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)* )
         ! Single-pass preparation with branch hoisting
