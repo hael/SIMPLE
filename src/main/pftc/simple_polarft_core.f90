@@ -272,4 +272,30 @@ contains
         self%sigma2_noise => sigma2_noise
     end subroutine assign_sigma2_noise
 
+    module subroutine vol_pad2ref_pfts(self, vol_pad, eulspace, state, iseven, mask)
+        use simple_projector,           only: projector
+        use simple_projector_pft_batch, only: fproject_polar_batch
+        class(polarft_calc), intent(inout) :: self
+        class(projector),    intent(in)    :: vol_pad
+        class(oris),         intent(inout) :: eulspace
+        integer,             intent(in)    :: state
+        logical,             intent(in)    :: iseven
+        logical,             intent(in)    :: mask(:)
+        integer :: iref_from, iref_to
+        if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
+        iref_from = (state - 1) * self%p_ptr%nspace + 1
+        iref_to   = iref_from + self%p_ptr%nspace - 1
+        if( iseven )then
+            call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
+            &self%polar(           1:self%pftsz,            self%kfromto(1):self%kfromto(2)),&
+            &self%polar(self%nrots+1:self%nrots+self%pftsz, self%kfromto(1):self%kfromto(2)),&
+            &self%pfts_refs_even(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+        else
+            call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
+            &self%polar(           1:self%pftsz,            self%kfromto(1):self%kfromto(2)),&
+            &self%polar(self%nrots+1:self%nrots+self%pftsz, self%kfromto(1):self%kfromto(2)),&
+            &self%pfts_refs_odd(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+        endif
+    end subroutine vol_pad2ref_pfts
+
 end submodule simple_polarft_core

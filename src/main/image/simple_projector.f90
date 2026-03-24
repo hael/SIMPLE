@@ -1,6 +1,7 @@
 !@descr: projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms
 module simple_projector
-use simple_pftc_srch_api
+use simple_core_module_api
+use simple_image, only: image
 implicit none
 
 public :: projector
@@ -25,8 +26,6 @@ type, extends(image) :: projector
     ! FOURIER PROJECTORS
     procedure :: fproject
     procedure :: fproject_serial
-    procedure :: fproject_polar
-    procedure :: fproject_polar_oversamp
     procedure :: interp_fcomp_oversamp
     procedure :: interp_fcomp
     ! DESTRUCTOR
@@ -181,57 +180,6 @@ contains
             end do
         end do
     end subroutine fproject_serial
-
-    !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fproject_polar( self, iref, e, pftc, iseven, mask )
-        class(projector),    intent(inout) :: self    !< projector object
-        integer,             intent(in)    :: iref    !< which reference
-        class(ori),          intent(in)    :: e       !< orientation
-        class(polarft_calc), intent(inout) :: pftc    !< object that holds the polar image
-        logical,             intent(in)    :: iseven  !< eo flag
-        logical,             intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
-        integer :: pdim(3), irot, k
-        real    :: loc(3), e_rotmat(3,3), hk(2)
-        pdim     = pftc%get_pdim_srch()
-        e_rotmat = e%get_mat()
-        do irot = 1,pdim(1)
-            do k = pdim(2),pdim(3)
-                if( mask(k) )then
-                    hk  = pftc%get_coord(irot,k)
-                    loc = matmul([hk(1), hk(2), 0.0], e_rotmat)
-                    call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
-                else
-                    call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
-                endif
-            end do
-        end do
-    end subroutine fproject_polar
-
-    !> \brief  extracts a polar FT from a volume's expanded FT (self),
-    !>         using a PADDED expanded FT.
-    subroutine fproject_polar_oversamp( self, iref, e, pftc, iseven, mask )
-        class(projector),    intent(inout) :: self
-        integer,             intent(in)    :: iref
-        class(ori),          intent(in)    :: e
-        class(polarft_calc), intent(inout) :: pftc
-        logical,             intent(in)    :: iseven
-        logical,             intent(in)    :: mask(:)
-        integer :: pdim(3), irot, k
-        real    :: loc(3), e_rotmat(3,3), hk(2)
-        pdim     = pftc%get_pdim_srch()
-        e_rotmat = e%get_mat()
-        do irot = 1, pdim(1)
-            do k = pdim(2), pdim(3)
-                if( mask(k) )then
-                    hk  = pftc%get_coord(irot,k)                 !< ORIGINAL (unpadded) 2D Fourier coords
-                    loc = matmul([hk(1), hk(2), 0.0], e_rotmat)  !< ORIGINAL 3D logical Fourier coords
-                    call pftc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_oversamp(loc), iseven)
-                else
-                    call pftc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
-                endif
-            end do
-        end do
-    end subroutine fproject_polar_oversamp
 
     !> Interpolate from PADDED expanded FT using PADDED-grid weights (unit steps).
     !> loc is in ORIGINAL logical Fourier units; internally we work in padded units.

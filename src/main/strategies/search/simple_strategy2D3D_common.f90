@@ -6,6 +6,7 @@ use simple_builder,            only: builder
 use simple_butterworth,        only: butterworth_filter
 use simple_discrete_stack_io,  only: dstack_io
 use simple_opt_filter,         only: estimate_lplim3D
+use simple_polarft_calc,       only: vol_pad2ref_pfts
 use simple_projector,          only: projector
 use simple_strategy2D_utils,   only: calc_cavg_offset
 implicit none
@@ -1123,9 +1124,8 @@ contains
         class(builder),      intent(inout) :: build
         class(cmdline),      intent(in)    :: cline !< command line
         integer,             intent(in)    :: batchsz
-        type(ori) :: o_tmp
         real      :: xyz(3)
-        integer   :: s, iproj, iref, nrefs, state
+        integer   :: s, nrefs, state
         logical   :: do_center, l_prob_align_mode
         call report_resolution(params, build, state)
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
@@ -1164,17 +1164,9 @@ contains
             call build%vol%pad_fft(build%vol_pad)
             ! expand for fast interpolation & correct for norm when clipped
             call build%vol_pad%expand_cmat(params%box)
-            !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
-            do iproj=1,params%nspace
-                iref = (s - 1) * params%nspace + iproj
-                call build%eulspace%get_ori(iproj, o_tmp)
-                call build%vol_pad%fproject_polar_oversamp(iref, o_tmp, build%pftc, iseven=.true., mask=build%l_resmsk)
-                call o_tmp%kill
-            end do
-            !$omp end parallel do
+            call vol_pad2ref_pfts(build%pftc, build%vol_pad, build%eulspace, s, .true., build%l_resmsk)
             call build%vol_pad%kill
             call build%vol_pad%kill_expanded
-
             ! PREPARE ODD REFERENCES
             call build%vol_odd_pad%new([params%box_croppd, params%box_croppd, params%box_croppd],&
             &params%smpd_crop, wthreads=.true.)
@@ -1188,14 +1180,7 @@ contains
             call build%vol_odd%pad_fft(build%vol_odd_pad)
             ! expand for fast interpolation & correct for norm when clipped
             call build%vol_odd_pad%expand_cmat(params%box)
-            !$omp parallel do default(shared) private(iproj,o_tmp,iref) schedule(static) proc_bind(close)
-            do iproj=1,params%nspace
-                iref = (s - 1) * params%nspace + iproj
-                call build%eulspace%get_ori(iproj, o_tmp)
-                call build%vol_odd_pad%fproject_polar_oversamp(iref, o_tmp, build%pftc, iseven=.false., mask=build%l_resmsk)
-                call o_tmp%kill
-            end do
-            !$omp end parallel do
+            call vol_pad2ref_pfts(build%pftc, build%vol_odd_pad, build%eulspace, s, .false., build%l_resmsk)
             call build%vol_odd_pad%kill
             call build%vol_odd_pad%kill_expanded
         end do

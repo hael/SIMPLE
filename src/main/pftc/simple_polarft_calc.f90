@@ -3,7 +3,7 @@ module simple_polarft_calc
 use simple_pftc_api
 implicit none
 
-public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D
+public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D, vol_pad2ref_pfts
 private
 #include "simple_local_flags.inc"
 
@@ -294,6 +294,16 @@ interface
         class(polarft_calc),       intent(inout) :: self
         real, allocatable, target, intent(inout) :: sigma2_noise(:,:)
     end subroutine assign_sigma2_noise
+
+    module subroutine vol_pad2ref_pfts(self, vol_pad, eulspace, state, iseven, mask)
+        use simple_projector, only: projector
+        class(polarft_calc), intent(inout) :: self
+        class(projector),    intent(in)    :: vol_pad
+        class(oris),         intent(inout) :: eulspace
+        integer,             intent(in)    :: state
+        logical,             intent(in)    :: iseven
+        logical,             intent(in)    :: mask(:)
+    end subroutine vol_pad2ref_pfts
 
     ! ===== GETTERS + POINTER ACCESSORS =====
 
