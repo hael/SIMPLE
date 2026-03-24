@@ -25,6 +25,7 @@ module unix_mqueue
     public :: c_mq_send
     public :: c_mq_setattr
     public :: c_mq_timedreceive
+    public :: c_mq_timedsend
     public :: c_mq_unlink
 
     interface
@@ -99,6 +100,19 @@ module unix_mqueue
             type(c_timespec),             intent(in)        :: abs_timeout
             integer(kind=c_size_t)                          :: c_mq_timedreceive
         end function c_mq_timedreceive
+
+        ! int mq_timedsend(mqd_t mqdes, const char *msg_ptr, size_t msg_len,
+        !                  unsigned int msg_prio, const struct timespec *abs_timeout)
+        function c_mq_timedsend(mqdes, msg_ptr, msg_len, msg_prio, abs_timeout) bind(c, name='mq_timedsend')
+            import :: c_char, c_int, c_mqd_t, c_size_t, c_timespec, c_unsigned_int
+            implicit none
+            integer(kind=c_mqd_t),        intent(in), value :: mqdes
+            character(kind=c_char),       intent(in)        :: msg_ptr
+            integer(kind=c_size_t),       intent(in), value :: msg_len
+            integer(kind=c_unsigned_int), intent(in), value :: msg_prio
+            type(c_timespec),             intent(in)        :: abs_timeout
+            integer(kind=c_int)                             :: c_mq_timedsend
+        end function c_mq_timedsend
 
         ! int mq_unlink(const char *name)
         function c_mq_unlink(name) bind(c, name='mq_unlink')

@@ -7,17 +7,24 @@ use simple_cmdline,        only: cmdline, cmdline_err
 use simple_exec_helpers,   only: script_exec, update_job_descriptions_in_project
 use simple_jiffys,         only: simple_print_git_version, simple_print_timer
 use simple_ui,             only: make_ui, list_stream_prgs_in_ui
-use simple_stream_p01_preprocess
-use simple_stream_p02_assign_optics
-use simple_stream_p03_opening2D
-use simple_stream_p04_refpick_extract
-use simple_stream_p05_sieve_cavgs
-!use simple_stream_p05_sieve_cavgs_new
-use simple_stream_p06_pool2D
+use simple_stream_p00_master,          only: stream_p00_master
+use simple_stream_p01_preprocess,      only: stream_p01_preprocess
+use simple_stream_p02_assign_optics,   only: stream_p02_assign_optics
+use simple_stream_p03_opening2D,       only: stream_p03_opening2D
+use simple_stream_p04_refpick_extract, only: stream_p04_refpick_extract
+use simple_stream_p05_sieve_cavgs,     only: stream_p05_sieve_cavgs
+use simple_stream_p06_pool2D,          only: stream_p06_pool2D
+! use simple_stream_p01_preprocess_new,      only: stream_p01_preprocess
+! use simple_stream_p02_assign_optics_new,   only: stream_p02_assign_optics
+! use simple_stream_p03_opening2D_new,       only: stream_p03_opening2D
+! use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
+! use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
+! use simple_stream_p06_pool2D_new,          only: stream_p06_pool2D
 implicit none
 #include "simple_local_flags.inc"
 
 ! PROGRAMS
+type(stream_p00_master)           :: xmaster
 type(stream_p01_preprocess)       :: xpreprocess
 type(stream_p02_assign_optics)    :: xassign_optics
 type(stream_p03_opening2D)        :: xopening2D
@@ -52,6 +59,8 @@ call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, string(trim(prg)), string('simple_stream'))
 select case(trim(prg))
+    case( 'master' )
+        call xmaster%execute(cline)
     case( 'preproc' )
         call xpreprocess%execute(cline)
     case( 'assign_optics' )
@@ -72,7 +81,7 @@ call update_job_descriptions_in_project(string('simple_stream'), string(trim(prg
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('33706dac')
+call simple_print_git_version('3bcee303')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

@@ -15,7 +15,7 @@ private
 #include "simple_local_flags.inc"
 
 type starproject_stream
-    class(parameters), pointer :: p_ptr => null()
+    type(parameters)           :: params 
     type(starfile_table_type)  :: starfile
     type(string)               :: starfile_name
     type(string)               :: starfile_tmp
@@ -71,7 +71,8 @@ contains
         logical, optional,         intent(in)    :: verbose
         type(string) :: cwd, stem 
         ! set pointer to params
-        self%p_ptr => params
+       ! self%p_ptr => params
+        self%params = params
         if(present(verbose)) self%verbose = verbose
         self%starfile_name = fname
         self%starfile_tmp  = fname // '.tmp'
@@ -409,7 +410,8 @@ contains
         class(sp_project),         intent(inout) :: spproj
         class(string),             intent(in)    :: outdir
         integer :: ioptics
-        if(self%p_ptr%beamtilt .eq. 'yes') then
+       ! if(self%p_ptr%beamtilt .eq. 'yes') then
+        if(self%params%beamtilt .eq. 'yes') then
             self%use_beamtilt = .true.
         else
             self%use_beamtilt = .false.
@@ -583,7 +585,8 @@ contains
         type(ori)                                 :: template_ori
         real                                      :: grp_info(10000, 3) ! max 10000 optics groups ! 1: centroid x, 2: centroid y, 3: population
         integer                                   :: i, ntilt, nshift
-        self%shift_threshold = self%p_ptr%tilt_thres
+        !self%shift_threshold = self%p_ptr%tilt_thres
+        self%shift_threshold = self%params%tilt_thres
         call assign_tiltgroups()
         call assign_shiftgroups()
         do i=1, spproj%os_mic%get_noris()
@@ -832,10 +835,13 @@ contains
         l_write   = .false.
         if( present(verbose) ) l_verbose = verbose
         if( present(write)   ) l_write   = write
-        if( (self%p_ptr%projfile_optics .ne. '') .and.&
-           &(file_exists(string('../')//self%p_ptr%projfile_optics)) ) then
+       ! if( (self%p_ptr%projfile_optics .ne. '') .and.&
+        !   &(file_exists(string('../')//self%p_ptr%projfile_optics)) ) then
+        if( (self%params%projfile_optics .ne. '') .and.&
+           &(file_exists(string('../')//self%params%projfile_optics)) ) then    
             if( l_verbose ) ms0 = tic()
-            call spproj_optics%read(string('../')//self%p_ptr%projfile_optics)
+         !   call spproj_optics%read(string('../')//self%p_ptr%projfile_optics)
+            call spproj_optics%read(string('../')//self%params%projfile_optics) 
             call self%copy_optics(spproj_dest, spproj_optics)
             call spproj_optics%kill()
             if( l_write ) call spproj_dest%write

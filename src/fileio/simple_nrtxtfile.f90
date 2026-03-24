@@ -17,7 +17,7 @@ integer, parameter :: OPEN_TO_WRITE = 2
 
 type :: nrtxtfile
     private
-    integer      :: funit              !< FILE*
+    integer      :: funit         = 0  !< FILE*
     type(string) :: fname              !< filename
     integer      :: recs_per_line = 0  !< recordings per line
     integer      :: ndatalines    = 0  !< # lines
@@ -202,9 +202,11 @@ contains
 
     subroutine kill(self)
         class(nrtxtfile), intent(inout) :: self
-        if( is_open(self%funit) )then
-            call fclose(self%funit)
-        end if
+        if( self%funit /= 0) then
+            if( is_open(self%funit) )then
+                call fclose(self%funit)
+            end if
+        end if 
         self%recs_per_line = 0
         self%ndatalines = 0
     end subroutine kill

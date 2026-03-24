@@ -416,7 +416,7 @@ contains
     !> \brief  Get current working directory
     subroutine simple_getcwd( cwd )
         class(string), intent(inout) :: cwd
-        character(len=XLONGSTRLEN)    :: cwd_tmp
+        character(len=XLONGSTRLEN)   :: cwd_tmp
         integer :: io_status
         io_status = getcwd(cwd_tmp)
         if(io_status /= 0)then

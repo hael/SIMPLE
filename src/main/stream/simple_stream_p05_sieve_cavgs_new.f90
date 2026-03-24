@@ -1,12 +1,12 @@
-!@descr: task 5 in the stream pipeline: chunk-based 2D clustering and automatic selection of high-quality class averages (sieving)
+!@descr: task 5 in the stream pipeline: multi-pass chunk-based 2D classification with automatic sieving of low-quality class averages
 !==============================================================================
 ! MODULE: simple_stream_p05_sieve_cavgs_new
 !
 ! PURPOSE:
 !   Implements stream pipeline task 5: continuously ingests incoming project
-!   files, partitions their particles into micro-, midi-, and maxichunks for
-!   parallel ab initio 2D classification, and automatically rejects low-quality
-!   class averages at each tier (sieving).
+!   files and drives a four-stage chunked2D classification pipeline that
+!   produces progressively refined class averages, automatically rejecting
+!   low-quality averages after each stage (sieving).
 !
 ! TYPES:
 !   stream_p05_sieve_cavgs - commander_base extension; entry point for the
@@ -14,14 +14,18 @@
 !
 ! WORKFLOW:
 !   1. Initialise parameters, queue environment, and chunked2D object.
-!   2. Enter infinite loop:
+!   2. Restore previously imported project history (if present).
+!   3. Enter main loop (runs until termination signal):
 !      a. Watch dir_target for newly completed project files.
-!      b. Import any new projects into the rec_list.
-!      c. Generate microchunks from un-included records.
-!      d. Poll running chunks and reject low-quality class averages.
-!      e. Generate midi- and maxichunks from rejection-complete tiers.
-!      f. Submit pending chunks to the queue.
-!      g. Sleep for WAITTIME before the next cycle.
+!      b. Import new projects into the rec_list.
+!      c. Call chunked_2D%cycle(), which performs per-cycle:
+!           i.  collect_and_reject   — harvest completed chunks, sieve cavgs
+!           ii. generate_microchunks_pass_1 — seed pass-1 chunks from new records
+!           iii.generate_microchunks_pass_2 — promote pass-1 results to pass-2
+!           iv. generate_refchunk          — build reference chunk from pass-2
+!           v.  generate_microchunks_match — match-refine against reference
+!           vi. submit                     — dispatch pending chunks to queue
+!      d. Sleep for WAITTIME before the next cycle.
 !
 ! PARAMETERS (hard-coded):
 !   MAX_MOVIE_IMPORT    — maximum movies imported per loop cycle   (20)
@@ -52,8 +56,9 @@ contains
 
   ! Entry point for stream task 5. Continuously watches dir_target for
   ! completed project files, imports their micrographs and particles into a
-  ! growing rec_list, and drives the chunked2D pipeline (generate, submit,
-  ! collect, reject) on each loop cycle until a termination signal is detected.
+  ! growing rec_list, and drives the four-stage chunked2D pipeline
+  ! (collect/reject → pass-1 → pass-2 → refchunk → match → submit) on each
+  ! loop cycle until a termination signal is detected.
   subroutine exec_stream_p05_sieve_cavgs( self, cline )
     class(stream_p05_sieve_cavgs), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
@@ -100,13 +105,13 @@ contains
     ! Sanity-check: must start from an empty project
     call spproj_glob%read(params%projfile)
     if( spproj_glob%os_mic%get_noris() /= 0 ) &
-      THROW_HARD('stream_cluster2D must start from an empty project (e.g. from root project folder)')
+      THROW_HARD('stream_p05_sieve_cavgs must start from an empty project (e.g. from root project folder)')
 
     ! Initialise the project watcher and chunked2D pipeline
     project_buff = stream_watcher(LONGTIME, params%dir_target // '/' // DIR_STREAM_COMPLETED, &
                                   spproj=.true., nretries=10)
 
-    ! read in existing history
+    ! Restore previously imported project history to avoid re-importing on restart
     if( file_exists('imported_projects.txt') ) then
       call read_filetable(string('imported_projects.txt'), projects)
       if( allocated(projects) ) then

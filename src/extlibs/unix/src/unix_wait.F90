@@ -8,6 +8,8 @@ module unix_wait
     implicit none
     private
 
+    integer(kind=c_int), parameter, public :: WNOHANG = 1 ! do not block if no child has exited
+
     public :: c_wait
     public :: c_waitpid
     

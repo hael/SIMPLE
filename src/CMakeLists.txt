@@ -46,6 +46,7 @@ file(GLOB JSON_src               "extlibs/json/*.[Ff][90][08]")
 file(GLOB NETLIB_src             "extlibs/netlib/*.[Ff][90][08]")
 file(GLOB STARFILE_src           "extlibs/starfile/*.cpp")
 file(GLOB UNIX_src               "extlibs/unix/src/*.[Ff][90][08]")
+file(GLOB CURL_src               "extlibs/curl/src/*.[Ff][90][08]" "extlibs/curl/src/*.c")
 file(GLOB XML_src                "extlibs/xml/*/*.[Ff][90][08]")
 file(GLOB CPLOT2D_src            "extlibs/CPlot2D/*.cpp" "extlibs/CPlot2D/*.[Ff][90][08]")
 file(GLOB_RECURSE UTILS_src      "utils/*.[Ff][90][08]")
@@ -76,6 +77,7 @@ set(SIMPLE_ALL_SOURCES
     ${NETLIB_src}
     ${XML_src}
     ${UNIX_src}
+    ${CURL_src}
     ${JPG_src}
     ${SIMPLE_src}
 )

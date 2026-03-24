@@ -6,6 +6,7 @@ implicit none
 type(ui_program), target :: abinitio2D_stream
 type(ui_program), target :: assign_optics
 type(ui_program), target :: gen_pickrefs
+type(ui_program), target :: master
 type(ui_program), target :: pick_extract
 type(ui_program), target :: preproc
 type(ui_program), target :: sieve_cavgs
@@ -17,6 +18,7 @@ contains
         call new_abinitio2D_stream(prgtab)
         call new_assign_optics(prgtab)
         call new_gen_pickrefs(prgtab)
+        call new_master(prgtab)
         call new_pick_extract(prgtab)
         call new_preproc(prgtab)
         call new_sieve_cavgs(prgtab)
@@ -28,6 +30,7 @@ contains
         write(logfhandle,'(A)') abinitio2D_stream%name%to_char()
         write(logfhandle,'(A)') assign_optics%name%to_char()
         write(logfhandle,'(A)') gen_pickrefs%name%to_char()
+        write(logfhandle,'(A)') master%name%to_char()
         write(logfhandle,'(A)') pick_extract%name%to_char()
         write(logfhandle,'(A)') preproc%name%to_char()
         write(logfhandle,'(A)') sieve_cavgs%name%to_char()
@@ -131,6 +134,39 @@ contains
         ! add to ui_hash
         call add_ui_program('gen_pickrefs', gen_pickrefs, prgtab)
     end subroutine new_gen_pickrefs
+
+    subroutine new_master( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call master%new(&
+        &'master', &                                                                 ! name
+        &'Stream master process',&                                                   ! descr_short
+        &'master process that forks streaming programs, collates metadata,'//&       ! descr_long
+        &'communicates with Nice and provides job control',&
+        &'simple_stream',&                                                           ! executable
+        &.false.)                                                                     ! requires sp_project
+        ! please note: globally declared inputs not used as allows custom descriptions for GUI
+        ! image input/output
+        call master%add_input(UI_IMG, 'dir_movies', 'dir',  'Input movies directory',   'Input movies directory',   '', .true.,  '')
+        call master%add_input(UI_IMG, 'dir_meta',   'dir',  'Input metadata directory', 'Input metadata directory', '', .false., '')
+        call master%add_input(UI_IMG, 'gainref',    'file', 'Gain reference',           'Gain reference',           '', .false., '')
+        ! parameter input/output
+        call master%add_input(UI_PARM, 'cs',             'float',  'Spherical aberration (mm)',   'Spherical aberration (mm)',   '2.7',                    .true.,  '')
+        call master%add_input(UI_PARM, 'fraca',          'float',  'Amplitude contrast fraction', 'Amplitude contrast fraction', '0.1',                    .true.,  '')
+        call master%add_input(UI_PARM, 'kv',             'int',    'Acceleration voltage (kV)',   'Acceleration voltage (kV)',   '300',                    .true.,  '')
+        call master%add_input(UI_PARM, 'smpd',           'float',  'Pixel size (A)',              'Pixel size (A)',              '',                       .true.,  '')
+        call master%add_input(UI_PARM, 'smpd_downscale', 'hidden', 'Downscaled pixel size (A)',   'Downscaled pixel size (A)',   real2str(SMPD4DOWNSCALE), .false., '')
+        call master%add_input(UI_PARM, 'total_dose',     'float',  'Total exposure dose (e/A2)',  'Total exposure dose (e/A2)',  '',                       .true.,  '')
+        call master%add_input(UI_PARM, 'pickrefs',       'file',   '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)',    '', .false., '')
+        call master%add_input(UI_PARM, 'box_extract',    'int',    'Force box size (px, optional)',                        'force a box size (px) eg. to match an existing dataset"', '', .false., '')        
+        ! alternative inputs
+        ! search controls
+        ! filter controls
+        ! mask controls
+        ! computer controls
+        ! add to ui_hash
+        call add_ui_program('master', master, prgtab)
+    end subroutine new_master
 
     subroutine new_pick_extract( prgtab )
         class(ui_hash), intent(inout) :: prgtab
