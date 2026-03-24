@@ -112,8 +112,8 @@ contains
             deallocate(self%orig_stks)
         endif
         self%toanalyze2D = .true.
-        self%converged  = .false.
-        self%available  = .true.
+        self%converged   = .false.
+        self%available   = .true.
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init_chunk
 
@@ -322,7 +322,7 @@ contains
         call debug_print('end chunk%read '//int2str(self%id))
         contains
 
-            subroutine average_into(tmpl)
+            subroutine average_into( tmpl )
                 class(string), intent(in) :: tmpl
                 type(string) :: fname
                 integer      :: icls, ipart, numlen_chunk
@@ -508,7 +508,7 @@ contains
             deallocate(self%orig_stks)
         endif
         self%toanalyze2D = .true.
-        self%converged  = .false.
+        self%converged   = .false.
         self%available  = .false.
         self%p_ptr      => null()
     end subroutine kill

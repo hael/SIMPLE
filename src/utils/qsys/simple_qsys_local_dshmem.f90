@@ -1,0 +1,62 @@
+!@descr: batch-processing manager - Local distributed shared memory system
+module simple_qsys_local_dshmem
+use simple_core_module_api
+use simple_qsys_base, only: qsys_base
+implicit none
+
+public :: qsys_local_dshmem
+private
+
+integer, parameter :: MAXENVITEMS=100
+
+type, extends(qsys_base) :: qsys_local_dshmem
+    private
+    type(chash) :: env !< defines the local environment
+  contains
+    procedure :: new               => new_local_env
+    procedure :: submit_cmd        => get_local_submit_cmd
+    procedure :: write_instr       => write_local_header
+    procedure :: write_array_instr => write_local_array_header
+    procedure :: kill              => kill_local_env
+end type qsys_local_dshmem
+
+contains
+
+    !> \brief  is a constructor
+    subroutine new_local_env( self )
+        class(qsys_local_dshmem), intent(inout) :: self
+        ! make the container
+        call self%env%new(MAXENVITEMS)
+        ! define the environment:
+        call self%env%push('qsys_submit_cmd', 'nohup')
+    end subroutine new_local_env
+
+    !> \brief  is a getter
+    function get_local_submit_cmd( self ) result( cmd )
+        class(qsys_local_dshmem), intent(in) :: self
+        type(string) :: cmd
+        cmd = self%env%get('qsys_submit_cmd')
+    end function get_local_submit_cmd
+
+    !> \brief  writes the header instructions
+    subroutine write_local_header( self, q_descr, fhandle )
+        class(qsys_local_dshmem), intent(in) :: self
+        class(chash),      intent(in) :: q_descr
+        integer, optional, intent(in) :: fhandle
+    end subroutine write_local_header
+
+    !> \brief  writes the array header instructions
+    subroutine write_local_array_header( self, q_descr, parts_fromto, fhandle, nactive )
+        class(qsys_local_dshmem), intent(in) :: self
+        class(chash),      intent(in) :: q_descr
+        integer,           intent(in) :: parts_fromto(2)
+        integer, optional, intent(in) :: fhandle, nactive
+    end subroutine write_local_array_header
+
+    !> \brief  is a destructor
+    subroutine kill_local_env( self )
+        class(qsys_local_dshmem), intent(inout) :: self
+        call self%env%kill
+    end subroutine kill_local_env
+
+end module simple_qsys_local_dshmem

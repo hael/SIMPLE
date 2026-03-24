@@ -2,16 +2,17 @@
 module simple_qsys_env
 use simple_core_module_api
 use simple_defs_environment
-use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup
-use simple_qsys_factory, only: qsys_factory
-use simple_qsys_base,    only: qsys_base
-use simple_qsys_local,   only: qsys_local
-use simple_qsys_slurm,   only: qsys_slurm
-use simple_qsys_lsf,     only: qsys_lsf
-use simple_qsys_pbs,     only: qsys_pbs
-use simple_qsys_sge,     only: qsys_sge
-use simple_qsys_ctrl,    only: qsys_ctrl
-use simple_parameters,   only: parameters
+use simple_qsys_funs,         only: qsys_watcher,qsys_cleanup
+use simple_qsys_factory,      only: qsys_factory
+use simple_qsys_base,         only: qsys_base
+use simple_qsys_local,        only: qsys_local
+use simple_qsys_local_dshmem, only: qsys_local_dshmem
+use simple_qsys_slurm,        only: qsys_slurm
+use simple_qsys_lsf,          only: qsys_lsf
+use simple_qsys_pbs,          only: qsys_pbs
+use simple_qsys_sge,          only: qsys_sge
+use simple_qsys_ctrl,         only: qsys_ctrl
+use simple_parameters,        only: parameters
 implicit none
 
 public :: qsys_env
@@ -90,7 +91,7 @@ contains
         self%qdescr = compenv_o%ori2chash()
         ! deal with time
         call get_environment_variable(SIMPLE_DEFAULT_PARTITION_TIME, default_time_env, envlen)
-        if(envlen > 0 .and. trim(default_time_env) .eq. "true") then
+        if( envlen > 0 .and. trim(default_time_env) .eq. "true" ) then
             if( self%qdescr%isthere('job_time') ) then
                 call self%qdescr%delete('job_time')
             end if
@@ -150,7 +151,7 @@ contains
         call self%qscripts%generate_script(cline, self%qdescr, script_name, prg_output)
     end subroutine gen_script
 
-    subroutine gen_scripts_and_schedule_jobs( self,  job_descr, part_params, algnfbody, array, extra_params)
+    subroutine gen_scripts_and_schedule_jobs( self, job_descr, part_params, algnfbody, array, extra_params )
         class(qsys_env)                        :: self
         class(chash)                           :: job_descr
         class(chash),     optional             :: part_params(self%nparts)
@@ -160,10 +161,12 @@ contains
         logical :: aarray
         aarray = .false.
         if( present(array) ) aarray = array
-        ! we only support array execution by SLURM
+        ! we only support array execution by SLURM and distributed local shared-memory
         select type(pmyqsys => self%myqsys)
             class is(qsys_local)
                 aarray = .false.
+            class is(qsys_local_dshmem)
+                ! keep array value
             class is(qsys_slurm)
                 ! keep aarray value
             class is(qsys_lsf)
@@ -179,6 +182,9 @@ contains
         if( aarray )then
             call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr,&
             &outfile_body=algnfbody, part_params=part_params)
+            call self%qscripts%schedule_array_jobs
+        elseif( aarray .and. self%qdescr%get('qsys_name').eq.'local_dshmem' )then
+            call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr, outfile_body=algnfbody, part_params=part_params)
             call self%qscripts%schedule_array_jobs
         else
             call self%qscripts%generate_scripts(job_descr, string(MRC_EXT), self%qdescr,&

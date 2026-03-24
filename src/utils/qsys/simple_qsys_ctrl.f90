@@ -1,11 +1,12 @@
 !@descr: batch-processing manager - control module
 module simple_qsys_ctrl
 use simple_core_module_api
-use simple_qsys_base,  only: qsys_base
-use simple_qsys_slurm, only: qsys_slurm
-use simple_qsys_lsf,   only: qsys_lsf
-use simple_cmdline,    only: cmdline
-use simple_parameters, only: parameters
+use simple_qsys_base,         only: qsys_base
+use simple_qsys_slurm,        only: qsys_slurm
+use simple_qsys_lsf,          only: qsys_lsf
+use simple_qsys_local_dshmem, only: qsys_local_dshmem
+use simple_cmdline,           only: cmdline
+use simple_parameters,        only: parameters
 use simple_mem_estimator
 implicit none
 
@@ -269,7 +270,7 @@ contains
             class is(qsys_lsf)
                 ! all good
             class DEFAULT
-                THROW_HARD('array submission only supported by SLURM')
+                THROW_HARD('array submission only supported by SLURM and LSF')
         end select
         if( present(outfile_body) ) outfile_body_local = outfile_body
         part_params_present = present(part_params)
@@ -501,7 +502,7 @@ contains
         write(funit,'(a)') 'exit'
         call fclose(funit)
         call wait_for_closure(script_name)
-        if( q_descr%get('qsys_name').eq.'local' )then
+        if( q_descr%get('qsys_name').eq.'local' .or. q_descr%get('qsys_name').eq.'local_dshmem' )then
             ios=simple_chmod(script_name,'+x')
             if( ios .ne. 0 )then
                 write(logfhandle,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_4; Error'
@@ -547,7 +548,7 @@ contains
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
         call fclose(funit)
-        if( q_descr%get('qsys_name').eq.'local' )then
+        if( q_descr%get('qsys_name').eq.'local' .or. q_descr%get('qsys_name').eq.'local_dshmem' )then
             ios = simple_chmod(script_name,'+x')
             if( ios .ne. 0 )then
                 write(logfhandle,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'

@@ -246,7 +246,7 @@ type :: parameters
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
-    character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs|lsf)
+    character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs|lsf|local_dshmem)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree|shc_ptree){shc}
