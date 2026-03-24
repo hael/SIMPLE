@@ -188,12 +188,52 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # ------------------------------------------------------------------------------
-# libCurl 
+# libCurl (REQUIRED)
 # ------------------------------------------------------------------------------
 find_package(CURL)
+if(NOT CURL_FOUND)
+    message(FATAL_ERROR
+        "================================================================================\n"
+        "  libcurl REQUIRED but NOT FOUND\n"
+        "================================================================================\n"
+        "  SIMPLE requires libcurl development headers to compile.\n"
+        "  Install libcurl-devel via your system package manager:\n"
+        "  Linux (Debian/Ubuntu):\n"
+        "    sudo apt-get update\n"
+        "    sudo apt-get install libcurl4-openssl-dev\n"
+        "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
+        "    sudo yum install libcurl-devel\n"
+        "    or: sudo dnf install libcurl-devel\n"
+        "  Linux (Arch):\n"
+        "    sudo pacman -S curl\n"
+        "  macOS (Homebrew):\n"
+        "    brew install curl\n"
+        "  macOS (MacPorts):\n"
+        "    sudo port install curl\n"
+        "  After installation, reconfigure CMake:\n"
+        "    rm -rf build/\n"
+        "    cmake -B build\n"
+        "================================================================================\n"
+    )
+endif()
 list(APPEND SIMPLE_LIBRARIES CURL::libcurl)
+message(STATUS "libcurl: FOUND")
 
 # ------------------------------------------------------------------------------
-# Final status
+# Final dependency summary
 # ------------------------------------------------------------------------------
-message(STATUS "All dependencies configured")
+message(STATUS "=== SIMPLE Dependency Summary ===")
+message(STATUS "  OpenMP:           YES")
+message(STATUS "  FFTW3:            YES")
+if(USE_LIBTIFF)
+    message(STATUS "  TIFF support:     YES")
+else()
+    message(STATUS "  TIFF support:     NO")
+endif()
+if(USE_MPI)
+    message(STATUS "  MPI:              YES")
+else()
+    message(STATUS "  MPI:              NO")
+endif()
+message(STATUS "  libcurl:          YES (REQUIRED)")
+message(STATUS "==================================")
