@@ -34,6 +34,7 @@
 !==============================================================================
 module simple_stream_p05_sieve_cavgs_new
   use simple_stream_api
+  use simple_fileio,               only: read_filetable
   use simple_chunked2D,            only: chunked2D
   use simple_stream_pool2D_utils,  only: set_lpthres_type
 
@@ -67,7 +68,7 @@ contains
     type(chunked2D)              :: chunked_2D
     type(stream_watcher)         :: project_buff
     type(string), allocatable    :: projects(:)
-    integer                      :: nprojects, n_mics_imported, n_ptcls_imported
+    integer                      :: nprojects, n_mics_imported, n_ptcls_imported, i
 
     ! Set fixed command-line defaults
     call cline%set('oritype',      'mic')
@@ -90,9 +91,6 @@ contains
     if( .not. cline%defined('center')        ) call cline%set('center',        'yes')
     if( .not. cline%defined('nmics')         ) call cline%set('nmics',         100)
 
-    ! Clean up any previous run artefacts before starting
-    call cleanup4restart()
-
     ! Create project file, folder structure, and initialise parameters
     call create_stream_project(spproj_glob, cline, string('sieve_cavgs'))
     call simple_mkdir(PATH_HERE // DIR_STREAM_COMPLETED)
@@ -107,7 +105,18 @@ contains
     ! Initialise the project watcher and chunked2D pipeline
     project_buff = stream_watcher(LONGTIME, params%dir_target // '/' // DIR_STREAM_COMPLETED, &
                                   spproj=.true., nretries=10)
-    call chunked_2D%new(params)
+
+    ! read in existing history
+    if( file_exists('imported_projects.txt') ) then
+      call read_filetable(string('imported_projects.txt'), projects)
+      if( allocated(projects) ) then
+        do i=1, size(projects)
+          call project_buff%add2history(projects(i))
+        end do
+        deallocate(projects)
+      endif
+    endif
+    call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
 
     n_mics_imported  = 0
     n_ptcls_imported = 0
@@ -130,49 +139,6 @@ contains
     end do
 
     call chunked_2D%kill()
-
-  contains
-
-    ! Removes artefacts from a previous run in the same directory so the
-    ! pipeline can restart cleanly. Handles both outdir and dir_exec restart
-    ! modes; deletes termination flags, sigma and completed-project directories,
-    ! and any chunk or set subdirectories found in the working directory.
-    subroutine cleanup4restart
-      type(string), allocatable :: folders(:)
-      type(string)              :: cwd_restart, str_dir
-      logical                   :: l_restart
-      integer                   :: i
-      call simple_getcwd(cwd_restart)
-      l_restart = .false.
-      if( cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir')) ) then
-        l_restart = .true.
-        call simple_chdir(cline%get_carg('outdir'))
-      end if
-      if( cline%defined('dir_exec') ) then
-        if( .not. file_exists(cline%get_carg('dir_exec')) ) then
-          str_dir = cline%get_carg('dir_exec')
-          THROW_HARD('Previous directory does not exist: ' // str_dir%to_char())
-          call str_dir%kill()
-        end if
-        l_restart = .true.
-      end if
-      if( l_restart ) then
-        write(logfhandle,'(A,A)') '>>> RESTARTING EXISTING JOB IN ', cwd_restart%to_char()
-        if( cline%defined('dir_exec') ) call cline%delete('dir_exec')
-        call del_file(TERM_STREAM)
-        call del_file(USER_PARAMS2D)
-        call simple_rmdir(SIGMAS_DIR)
-        call simple_rmdir(DIR_STREAM_COMPLETED)
-        folders = simple_list_dirs('.')
-        if( allocated(folders) ) then
-          do i = 1, size(folders)
-            if( folders(i)%has_substr(DIR_CHUNK) .or. folders(i)%has_substr(DIR_SET) ) &
-              call simple_rmdir(folders(i))
-          end do
-        end if
-      end if
-      call simple_chdir(cwd_restart)
-    end subroutine cleanup4restart
 
   end subroutine exec_stream_p05_sieve_cavgs
 

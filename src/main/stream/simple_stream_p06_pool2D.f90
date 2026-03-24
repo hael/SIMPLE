@@ -20,6 +20,7 @@ contains
     subroutine exec_stream_p06_pool2D( self, cline )
         class(stream_p06_pool2D), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
+        logical,                      parameter :: SIGMAS_IN_PROJECT = .false. ! temporary flag to turn on/off getting sigma file locarion friom project whilst in development
         type(parameters)                      :: params
         type(simple_nice_comm)                :: nice_comm
         type(stream_http_communicator)        :: http_communicator
@@ -309,6 +310,7 @@ contains
                     call spprojs(iset)%read_segment('mic',    crec%projfile)
                     call spprojs(iset)%read_segment('stk',    crec%projfile)
                     call spprojs(iset)%read_segment('ptcl2D', crec%projfile)
+                    call spprojs(iset)%read_segment('out',    crec%projfile)
                     nmics2import  = nmics2import  + spprojs(iset)%os_mic%get_noris()
                     nptcls2import = nptcls2import + spprojs(iset)%os_ptcl2D%get_noris()
                     call it%next()
@@ -390,7 +392,12 @@ contains
                     endif
                     i         = i+1
                     ind       = crec%id
-                    sigmas(i) = params%dir_target//'/set_'//int2str(ind)//'/set_'//int2str(ind)//STAR_EXT
+                    if(SIGMAS_IN_PROJECT) then
+                        call spprojs(iset)%get_sigma2(sigmas(i))
+                        write(*,*) sigmas(i)%to_char()
+                    else
+                        sigmas(i) = params%dir_target//'/set_'//int2str(ind)//'/set_'//int2str(ind)//STAR_EXT
+                    endif
                     ! move iterator
                     call it%next()
                 enddo
