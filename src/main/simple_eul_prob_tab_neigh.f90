@@ -118,7 +118,7 @@ contains
                 call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,osym,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob,rot_xy,rotmat,isub,neval,seln,ri_eval,dtmp,inplrotdist,best_sub,min_sub_dist)&
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,osym,istate,prev_state,irot,iproj,iref_start,cxy,ri,j,cxy_prob,rot_xy,rotmat,isub,neval,seln,ri_eval,dtmp,inplrotdist,best_sub,min_sub_dist)&
             !$omp proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
@@ -204,7 +204,7 @@ contains
             !$omp end parallel do
         else
             ! no shift search - evaluate geometric neighborhoods with zero shift only
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,osym,ri,istate,iproj,irot,isub,dtmp,inplrotdist,best_sub,min_sub_dist)&
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,osym,ri,istate,prev_state,iproj,irot,isub,dtmp,inplrotdist,best_sub,min_sub_dist)&
             !$omp proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
@@ -260,47 +260,98 @@ contains
         class(string),             intent(in)    :: fbody
         integer,                   intent(in)    :: nparts, numlen
         type(string) :: fname
-        integer :: ipart
+        integer, allocatable :: touched_counts(:)
+        integer :: ipart, i, ri, max_touched_loaded, cap
         do ipart = 1, nparts
             fname = fbody//int2str_pad(ipart,numlen)//'.dat'
             call self%read_tab_to_glob(fname)
         enddo
+        ! Rebuild sparse bookkeeping from loaded loc_tab so assignment works after write/read cycles.
+        allocate(touched_counts(self%nptcls), source=0)
+        !$omp parallel do default(shared) private(i,ri) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            do ri = 1, self%nrefs
+                if( self%loc_tab(ri,i)%inpl > 0 )then
+                    touched_counts(i) = touched_counts(i) + 1
+                endif
+            enddo
+        enddo
+        !$omp end parallel do
+        max_touched_loaded = max(1, maxval(touched_counts))
+        if( .not. allocated(self%eval_touched_refs) )then
+            allocate(self%eval_touched_refs(max_touched_loaded,self%nptcls), source=0)
+        else
+            cap = size(self%eval_touched_refs,1)
+            if( cap < max_touched_loaded .or. size(self%eval_touched_refs,2) /= self%nptcls )then
+                deallocate(self%eval_touched_refs)
+                allocate(self%eval_touched_refs(max_touched_loaded,self%nptcls), source=0)
+            else
+                self%eval_touched_refs = 0
+            endif
+        endif
+        if( .not. allocated(self%eval_touched_counts) )then
+            allocate(self%eval_touched_counts(self%nptcls), source=0)
+        else if( size(self%eval_touched_counts) /= self%nptcls )then
+            deallocate(self%eval_touched_counts)
+            allocate(self%eval_touched_counts(self%nptcls), source=0)
+        else
+            self%eval_touched_counts = 0
+        endif
+        self%eval_max_touched = size(self%eval_touched_refs,1)
+        !$omp parallel do default(shared) private(i,ri) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            do ri = 1, self%nrefs
+                if( self%loc_tab(ri,i)%inpl > 0 )then
+                    self%eval_touched_counts(i) = self%eval_touched_counts(i) + 1
+                    self%eval_touched_refs(self%eval_touched_counts(i),i) = ri
+                endif
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate(touched_counts)
     end subroutine read_tabs_to_glob
 
     subroutine ref_normalize_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
-        real    :: sum_dist_all, min_dist, max_dist, huge_val
+        real    :: sum_dist_all, min_dist, max_dist
         integer :: i, iref, neval
-        huge_val = huge(1.0)
-        ! normalize only over evaluated refs (dist < huge)
+        ! normalize only over evaluated refs (inpl > 0)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all,iref,neval)
         do i = 1, self%nptcls
-            sum_dist_all = sum(self%loc_tab(:,i)%dist, mask=(self%loc_tab(:,i)%dist < huge_val))
+            sum_dist_all = sum(self%loc_tab(:,i)%dist, mask=(self%loc_tab(:,i)%inpl > 0))
             if( sum_dist_all < TINY )then
-                ! deterministic fallback: uniform weights over evaluated refs
-                neval = count(self%loc_tab(:,i)%dist < huge_val)
+                ! dense-style behavior: collapse to zero; tie handling randomizes later.
+                neval = count(self%loc_tab(:,i)%inpl > 0)
                 if( neval > 0 )then
                     do iref = 1, self%nrefs
-                        if( self%loc_tab(iref,i)%dist < huge_val ) self%loc_tab(iref,i)%dist = 1. / real(neval)
+                        if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = 0.
                     enddo
                 endif
             else
                 ! divide only evaluated refs
                 do iref = 1, self%nrefs
-                    if( self%loc_tab(iref,i)%dist < huge_val )&
+                    if( self%loc_tab(iref,i)%inpl > 0 )&
                     &self%loc_tab(iref,i)%dist = self%loc_tab(iref,i)%dist / sum_dist_all
                 enddo
             endif
         enddo
         !$omp end parallel do
-        if( .not. any(self%loc_tab(:,:)%dist < huge_val) ) return
+        if( .not. any(self%loc_tab(:,:)%inpl > 0) ) return
         ! min/max normalization over evaluated refs only
-        min_dist = minval(self%loc_tab(:,:)%dist, mask=(self%loc_tab(:,:)%dist < huge_val))
-        max_dist = maxval(self%loc_tab(:,:)%dist, mask=(self%loc_tab(:,:)%dist < huge_val))
+        min_dist = minval(self%loc_tab(:,:)%dist, mask=(self%loc_tab(:,:)%inpl > 0))
+        max_dist = maxval(self%loc_tab(:,:)%dist, mask=(self%loc_tab(:,:)%inpl > 0))
         if( (max_dist - min_dist) < TINY )then
             THROW_WARN('WARNING: numerical unstability in eul_prob_tab_neigh normalize')
+            ! dense-style stochastic tie break over evaluated entries only.
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
+            do iref = 1, self%nrefs
+                do i = 1, self%nptcls
+                    if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = ran3()
+                enddo
+            enddo
+            !$omp end parallel do
         else
-            where( self%loc_tab(:,:)%dist < huge_val )
+            where( self%loc_tab(:,:)%inpl > 0 )
                 self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - min_dist) / (max_dist - min_dist)
             endwhere
         endif
@@ -323,7 +374,7 @@ contains
         type(assign_graph_ws)    :: graph
         type(assign_frontier_ws) :: frontier
         type(ori) :: o_prev
-        integer   :: i, iref, assigned_iref, assigned_ptcl, istate, iproj, irot, cand_ptcl, fallback_ref
+        integer   :: i, iref, ri, assigned_iref, assigned_ptcl, istate, iproj, irot, cand_ptcl, fallback_ref
         integer   :: k, idx, nactive, total, m, start, maxref, nleft, assigned_idx, nsel, pos, last_ref
         real      :: projs_athres
         real      :: huge_val
@@ -339,7 +390,6 @@ contains
             do k = 1, self%eval_touched_counts(i)
                 iref = self%eval_touched_refs(k,i)
                 if( iref < 1 .or. iref > self%nrefs       ) cycle
-                if( self%loc_tab(iref,i)%dist >= huge_val ) cycle
                 if( self%loc_tab(iref,i)%inpl <= 0        ) cycle
                 graph%ref_counts(iref) = graph%ref_counts(iref) + 1
                 graph%ptcl_counts(i)   = graph%ptcl_counts(i) + 1
@@ -365,7 +415,6 @@ contains
             do k = 1, self%eval_touched_counts(i)
                 iref = self%eval_touched_refs(k,i)
                 if( iref < 1 .or. iref > self%nrefs ) cycle
-                if( self%loc_tab(iref,i)%dist >= huge_val ) cycle
                 if( self%loc_tab(iref,i)%inpl <= 0        ) cycle
                 idx = graph%ref_fill(iref)
                 graph%ref_list(idx)  = i
@@ -440,7 +489,23 @@ contains
             iproj  = max(1, min(self%p_ptr%nspace, iproj))
             irot   = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())
             if( irot < 1 .or. irot > self%b_ptr%pftc%get_nrots() ) irot = 1
-            fallback_ref             = (istate-1) * self%p_ptr%nspace + iproj
+            ! Map (state,proj) to compact reference index; loc_tab is not dense in (state,proj).
+            fallback_ref = 0
+            do ri = 1, self%nrefs
+                if( self%sinds(ri) == istate .and. self%jinds(ri) == iproj )then
+                    fallback_ref = ri
+                    exit
+                endif
+            enddo
+            if( fallback_ref == 0 )then
+                do ri = 1, self%nrefs
+                    if( self%sinds(ri) == istate )then
+                        fallback_ref = ri
+                        exit
+                    endif
+                enddo
+            endif
+            if( fallback_ref == 0 ) fallback_ref = 1
             self%assgn_map(i)        = self%loc_tab(fallback_ref,i)
             self%assgn_map(i)%inpl   = irot
             self%assgn_map(i)%has_sh = .false.
