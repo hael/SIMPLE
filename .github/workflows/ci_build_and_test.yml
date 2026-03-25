@@ -23,7 +23,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev 
+             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev libcurl4-openssl-dev
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -35,6 +35,7 @@ jobs:
              brew install jbigkit
              brew install python@3.10
              brew install fftw
+             brew install curl 
              
       - name: Build SIMPLE in debug mode (Linux/MacOS)
         run: |
@@ -60,7 +61,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev 
+             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev libcurl4-openssl-dev
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -72,6 +73,7 @@ jobs:
              brew install jbigkit
              brew install python@3.10
              brew install fftw
+             brew install curl 
              
       - name: Install SIMPLE (Linux/MacOS)
         run: |
