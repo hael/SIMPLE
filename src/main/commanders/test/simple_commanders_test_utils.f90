@@ -94,11 +94,15 @@ subroutine exec_test_cif2mrc( self, cline )
     use simple_atoms,         only : atoms
     class(commander_test_cif2mrc), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
-    type(string)        :: cif_file
-    type(atoms)         :: molecule
-    real, parameter     :: smpd = 1.3
-    ! cif_file = '6VXX.cif'
-    ! call molecule%cif2mrc(cif_file, smpd)
+    type(string)    :: cif_file, cmd
+    type(atoms)     :: molecule
+    real, parameter :: smpd = 1.3
+    integer         :: rc
+    cif_file = '6VXX.cif'
+    print *, 'Downloading 6VXX cif file...'
+    cmd = 'curl -L -o '//cif_file%to_char()//' https://files.rcsb.org/download/6VXX.cif'
+    call execute_command_line(cmd%to_char(), exitstat=rc)
+    call molecule%cif2mrc(cif_file, smpd)
     call simple_end('**** SIMPLE_TEST_CIF2MRC_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_cif2mrc
 
@@ -106,11 +110,15 @@ subroutine exec_test_cif2pdb( self, cline )
     use simple_atoms,         only : atoms
     class(commander_test_cif2pdb), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
-    type(atoms)         :: molecule
-    type(string) :: cif_file, pdb_file
-    ! cif_file = '6VXX.cif'
-    ! pdb_file = '6VXX.pdb'
-    ! call molecule%cif2pdb(cif_file, pdb_file)
+    type(atoms)  :: molecule
+    type(string) :: cif_file, pdb_file, cmd
+    integer      :: rc
+    cif_file = '6VXX.cif'
+    pdb_file = '6VXX.pdb'
+    print *, 'Downloading 6VXX cif file...'
+    cmd = 'curl -L -o '//cif_file%to_char()//' https://files.rcsb.org/download/6VXX.cif'
+    call execute_command_line(cmd%to_char(), exitstat=rc)
+    call molecule%cif2pdb(cif_file, pdb_file)
     call simple_end('**** SIMPLE_TEST_CIF2PDB_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_cif2pdb
 
