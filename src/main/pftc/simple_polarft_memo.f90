@@ -27,63 +27,50 @@ contains
 
     module subroutine memoize_ptcls(self)
         class(polarft_calc), intent(inout) :: self
-        integer :: ithr, i, k, kk, k0
+        integer :: ithr, i, k0, k1, nk
         if( OMP_IN_PARALLEL() )then
             THROW_HARD('No memoization inside OpenMP regions')
         endif
         k0 = self%kfromto(1)
-        !$omp parallel do private(i,k,kk,ithr) default(shared) proc_bind(close) schedule(static)
+        k1 = self%kfromto(2)
+        nk = k1 - k0 + 1
+        !$omp parallel do private(i,ithr) default(shared) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             ithr = omp_get_thread_num() + 1
             ! ========================================================================
             ! Batched computation of FT(X.CTF) for all k shells
             ! ========================================================================
             if( self%with_ctf )then
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%cmat2_many(ithr)%c(1:self%pftsz, kk) = self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i)
-                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
-                end do
+                self%cmat2_many(ithr)%c(1:self%pftsz,            1:nk) = self%pfts_ptcls(:,k0:k1,i) * self%ctfmats(:,k0:k1,i)
+                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, 1:nk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, 1:nk))
             else
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%cmat2_many(ithr)%c(1:self%pftsz, kk) = self%pfts_ptcls(:,k,i)
-                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
-                end do
+                self%cmat2_many(ithr)%c(1:self%pftsz,            1:nk) = self%pfts_ptcls(:,k0:k1,i)
+                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, 1:nk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, 1:nk))
             endif
             ! Execute batched C2C FFT
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
             ! Extract and store FT(X.CTF) results
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%ft_ptcl_ctf(:,k,i) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
-            end do
+            self%ft_ptcl_ctf(:,k0:k1,i) = self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:nk)
             ! ========================================================================
             ! Batched computation of FT(CTF2) for all k shells
             ! ========================================================================
             if( self%with_ctf )then
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%crmat1_many(ithr)%r(1:self%pftsz, kk)            = self%ctfmats(:,k,i) * self%ctfmats(:,k,i)
-                    self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, kk) = self%crmat1_many(ithr)%r(1:self%pftsz, kk)
-                end do
+                self%crmat1_many(ithr)%r(1:self%pftsz,            1:nk) = self%ctfmats(:,k0:k1,i) * self%ctfmats(:,k0:k1,i)
+                self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, 1:nk) = self%crmat1_many(ithr)%r(1:self%pftsz, 1:nk)
             else
                 self%crmat1_many(ithr)%r = 1.0
             endif
             ! Execute batched R2C FFT (requires plan_mem_r2c_many)
             call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
             ! Extract and store FT(CTF2) results
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%ft_ctf2(:,k,i) = self%crmat1_many(ithr)%c(:,kk)
-            end do
+            self%ft_ctf2(:,k0:k1,i) = self%crmat1_many(ithr)%c(:,1:nk)
         enddo
         !$omp end parallel do
     end subroutine memoize_ptcls
 
     module subroutine memoize_refs(self)
         class(polarft_calc), intent(inout) :: self
-        integer :: k, kk, k0, ithr, iref
+        integer :: k0, k1, nk, ithr, iref
         if( OMP_IN_PARALLEL() )then
             THROW_HARD('No memoization inside OpenMP regions')
         endif
@@ -91,69 +78,47 @@ contains
         call self%allocate_refs_memoization
         ! memoization
         k0 = self%kfromto(1)
-        !$omp parallel do private(iref,k,kk,ithr) default(shared) proc_bind(close) schedule(static)
+        k1 = self%kfromto(2)
+        nk = k1 - k0 + 1
+        !$omp parallel do private(iref,ithr) default(shared) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             ithr = omp_get_thread_num() + 1
             ! ========================================================================
             ! Batched computation of FT(REFeven)* for all k shells
             ! ========================================================================
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%cmat2_many(ithr)%c(1:self%pftsz, kk) = self%pfts_refs_even(:,k,iref)
-                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
-            end do
+            self%cmat2_many(ithr)%c(1:self%pftsz,            1:nk) = self%pfts_refs_even(:,k0:k1,iref)
+            self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, 1:nk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, 1:nk))
             ! Execute batched C2C FFT for even references
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
             ! Extract and store FT(REFeven)* results
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%ft_ref_even(:,k,iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
-            end do
+            self%ft_ref_even(:,k0:k1,iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:nk)
             ! ========================================================================
             ! Batched computation of FT(REFodd)* for all k shells
             ! ========================================================================
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%cmat2_many(ithr)%c(1:self%pftsz, kk) = self%pfts_refs_odd(:,k,iref)
-                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
-            end do
+            self%cmat2_many(ithr)%c(1:self%pftsz,            1:nk) = self%pfts_refs_odd(:,k0:k1,iref)
+            self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, 1:nk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, 1:nk))
             ! Execute batched C2C FFT for odd references
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
             ! Extract and store FT(REFodd)* results
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%ft_ref_odd(:,k,iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
-            end do
+            self%ft_ref_odd(:,k0:k1,iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:nk)
             ! ========================================================================
             ! Batched computation of FT(REF2even)* for all k shells
             ! ========================================================================
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%crmat1_many(ithr)%r(1:self%pftsz, kk) = real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_even(:,k,iref)))
-                self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, kk) = self%crmat1_many(ithr)%r(1:self%pftsz, kk)
-            end do
+            self%crmat1_many(ithr)%r(1:self%pftsz,            1:nk) = real(self%pfts_refs_even(:,k0:k1,iref) * conjg(self%pfts_refs_even(:,k0:k1,iref)))
+            self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, 1:nk) = self%crmat1_many(ithr)%r(1:self%pftsz, 1:nk)
             ! Execute batched R2C FFT for even reference squares
             call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
             ! Extract and store FT(REF2even)* results
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%ft_ref2_even(:,k,iref) = conjg(self%crmat1_many(ithr)%c(:,kk))
-            end do
+            self%ft_ref2_even(:,k0:k1,iref) = conjg(self%crmat1_many(ithr)%c(:,1:nk))
             ! ========================================================================
             ! Batched computation of FT(REF2odd)* for all k shells
             ! ========================================================================
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%crmat1_many(ithr)%r(1:self%pftsz, kk) = real(self%pfts_refs_odd(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)))
-                self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, kk) = self%crmat1_many(ithr)%r(1:self%pftsz, kk)
-            end do
+            self%crmat1_many(ithr)%r(1:self%pftsz,            1:nk) = real(self%pfts_refs_odd(:,k0:k1,iref) * conjg(self%pfts_refs_odd(:,k0:k1,iref)))
+            self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, 1:nk) = self%crmat1_many(ithr)%r(1:self%pftsz, 1:nk)
             ! Execute batched R2C FFT for odd reference squares
             call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
             ! Extract and store FT(REF2odd)* results
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%ft_ref2_odd(:,k,iref) = conjg(self%crmat1_many(ithr)%c(:,kk))
-            end do
+            self%ft_ref2_odd(:,k0:k1,iref) = conjg(self%crmat1_many(ithr)%c(:,1:nk))
         enddo
         !$omp end parallel do
     end subroutine memoize_refs
