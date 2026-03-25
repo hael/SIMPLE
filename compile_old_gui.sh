@@ -2,7 +2,7 @@
 rm -rf build
 mkdir build
 cd build
-cmake .. -DGUI=on -DUSE_LIBTIFF=on
+cmake .. -DGUI=on
 make -j install
 #exit
 

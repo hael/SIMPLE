@@ -60,7 +60,8 @@ https://zenodo.org/records/18789533
 -   CMake ≥ 3.5
 -   GNU gcc & gfortran ≥ 14.2
 -   FFTW ≥ 3.3 (double + single + threaded builds)
--   libTIFF ≥ 4 (optional, required for motion correction)
+-   libcurl ≥ 7 
+-   libTIFF ≥ 4 
 -   jbigkit ≥ 2 (optional)
 -   Python ≥ 3.10
 
@@ -93,13 +94,6 @@ cd SIMPLE
 mkdir build
 cd build
 cmake ..
-make -j install
-```
-
-Disable TIFF support:
-
-``` bash
-cmake -DUSE_LIBTIFF=OFF ..
 make -j install
 ```
 

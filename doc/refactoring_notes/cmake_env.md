@@ -126,7 +126,6 @@ cmake .. \
 | `USE_OPENACC` | OFF | OpenACC GPU support |
 | `USE_COARRAYS` | OFF | Fortran coarrays |
 | `USE_MPI` | OFF | MPI support |
-| `USE_LIBTIFF` | ON | TIFF library |
 | `BUILD_TESTS` | ON | Build test executables |
 | `BUILD_DOCS` | OFF | Build documentation |
 | `INSTALL_GUI` | ON | Install GUI components |

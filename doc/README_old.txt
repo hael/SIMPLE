@@ -60,11 +60,6 @@ Installation:
     $ cmake ..
     $ make -j install
 
-For users who do not wish to install TIFF support (only required for motion correction), type instead:
-
-    $ cmake -DUSE_LIBTIFF=OFF ..
-    $ make -j install
-
 Upon completion, compilation will finish with the following message
 
 Installation complete.

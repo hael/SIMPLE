@@ -56,9 +56,7 @@ file(GLOB_RECURSE SIMPLE_src     "main/*.[Ff][90][08]")
 # JPG sources including C
 file(GLOB JPG_src "extlibs/jpg/*.[Ff][90][08]")
 list(APPEND JPG_src "extlibs/jpg/stb_image_write.c")
-if(USE_LIBTIFF)
-    list(APPEND JPG_src "extlibs/tiff/libtiff_funs.c")
-endif()
+list(APPEND JPG_src "extlibs/tiff/libtiff_funs.c")
 
 # FILEIO C sources
 list(APPEND FILEIO_src "fileio/simple_posix.c")
