@@ -43,11 +43,12 @@ contains
         class(strategy3D_ptree), intent(inout) :: self
         class(oris),             intent(inout) :: os
         integer,                 intent(in)    :: ithr
-        integer, allocatable :: peak_trees(:), tree_best_states(:), peak_tree_states(:)
-        real,    allocatable :: tree_best_corrs(:), peak_tree_corrs(:)
-        integer              :: npeak_trees, ntrees, nrefs_coarse, nrefs_tree
-        integer              :: isample, iref, itree, npeak_target, loc(1)
-        real                 :: inpl_corrs(self%s%nrots), corr_best
+        integer, parameter :: MAX_NTREES = 2500, MAX_NPEAKS = 64
+        integer :: peak_trees(MAX_NPEAKS), tree_best_states(MAX_NTREES), peak_tree_states(MAX_NPEAKS)
+        real    :: tree_best_corrs(MAX_NTREES), peak_tree_corrs(MAX_NPEAKS)
+        integer :: npeak_trees, ntrees, nrefs_coarse, nrefs_tree
+        integer :: isample, iref, itree, npeak_target, loc(1)
+        real    :: inpl_corrs(self%s%nrots), corr_best
         if( os%get_state(self%s%iptcl) <= 0 )then
             call os%reject(self%s%iptcl)
             return
@@ -61,15 +62,15 @@ contains
         if( .not. allocated(self%s%b_ptr%subspace_full2sub_map) )then
             THROW_HARD('Probabilistic tree search requires subspace_full2sub_map. Check builder construction.')
         endif
+        if( ntrees > MAX_NTREES )then
+            THROW_HARD('Number of trees exceeds MAX_NTREES; srch_ptree')
+        endif
         if( ntrees > 0 )then
-            allocate(tree_best_corrs(ntrees), source=-huge(1.0))
-            allocate(tree_best_states(ntrees), source=1)
+            tree_best_corrs(1:ntrees) = -huge(1.0)
+            tree_best_states(1:ntrees) = 1
         endif
         ! ----------------------------------------------------------------------
-        ! Phase 1: coarse subspace search, matching strategy3D_greedy_sub.
-        ! Keep the best coarse score for each tree so phase 2 can search unique
-        ! trees without losing coverage when multiple coarse peaks fall in the
-        ! same tree.
+        ! Phase 1: coarse subspace search
         ! ----------------------------------------------------------------------
         do isample = 1, self%s%nrefs_sub
             iref = s3D%srch_order_sub(isample, self%s%ithr)
@@ -92,29 +93,96 @@ contains
             endif
         end do
         ! ----------------------------------------------------------------------
-        ! Phase 2: pick the best unique trees from the coarse pass, then do a
-        ! corr-guided stochastic descent in each tree. The root is evaluated
-        ! explicitly, leaf-only trees are handled naturally, and a failed random
-        ! walk falls back to exhaustive tree scoring.
+        ! Phase 2: pick the best trees from the coarse pass, then do a
+        ! corr-guided stochastic descent in each tree.
+        ! When nstates > 1, select one best peak per state. When nstates == 1,
+        ! use the standard selection of top npeaks.
         ! ----------------------------------------------------------------------
         npeak_trees = 0
         if( ntrees > 0 )then
-            npeak_target = min(self%s%npeaks, ntrees)
-            if( npeak_target > 0 )then
-                allocate(peak_trees(npeak_target),      source=0)
-                allocate(peak_tree_corrs(npeak_target), source=-huge(1.0))
-                allocate(peak_tree_states(npeak_target), source=1)
-                call select_peak_trees(tree_best_corrs, peak_trees, peak_tree_corrs, npeak_trees)
-                peak_tree_states(1:npeak_trees) = tree_best_states(peak_trees(1:npeak_trees))
-                do itree = 1, npeak_trees
-                    call descend_tree_prob_fixed_state(self%s, peak_trees(itree), peak_tree_corrs(itree), nrefs_tree, peak_tree_states(itree))
-                end do
+            if( self%s%p_ptr%nstates == 1 )then
+                ! Standard selection: top npeaks trees by correlation
+                npeak_target = min(self%s%npeaks, ntrees, MAX_NPEAKS)
+                if( npeak_target > 0 )then
+                    peak_trees(1:npeak_target)      = 0
+                    peak_tree_corrs(1:npeak_target) = -huge(1.0)
+                    peak_tree_states(1:npeak_target) = 1
+                    call select_peak_trees(tree_best_corrs(1:ntrees), peak_trees(1:npeak_target), peak_tree_corrs(1:npeak_target), npeak_trees)
+                    if( npeak_trees > 0 )then
+                        peak_tree_states(1:npeak_trees) = tree_best_states(peak_trees(1:npeak_trees))
+                    endif
+                    do itree = 1, npeak_trees
+                        call descend_tree_prob_fixed_state(self%s, peak_trees(itree), peak_tree_corrs(itree), nrefs_tree, peak_tree_states(itree))
+                    end do
+                endif
+            else
+                ! Multi-state selection: npeaks best peaks per state
+                npeak_target = min(self%s%p_ptr%nstates * self%s%npeaks, ntrees, MAX_NPEAKS)
+                if( npeak_target > 0 )then
+                    peak_trees(1:npeak_target)      = 0
+                    peak_tree_corrs(1:npeak_target) = -huge(1.0)
+                    peak_tree_states(1:npeak_target) = 1
+                    call select_peak_trees_per_state(npeak_trees)
+                    do itree = 1, npeak_trees
+                        call descend_tree_prob_fixed_state(self%s, peak_trees(itree), peak_tree_corrs(itree), nrefs_tree, peak_tree_states(itree))
+                    end do
+                endif
             endif
         endif
         self%s%nrefs_eval = nrefs_coarse + nrefs_tree
         call extract_peak_oris(self%s)
         call self%s%inpl_srch_peaks
         call self%oris_assign
+
+    contains
+
+        subroutine select_peak_trees_per_state( npeak_trees_out )
+            integer, intent(out) :: npeak_trees_out
+            integer :: istate, itree, irank, best_idx
+            real    :: state_corrs(MAX_NTREES)
+            integer :: state_trees(MAX_NTREES)
+            integer :: nstates, npeaks_to_select, npeaks_this_state
+            real    :: best_corr
+            npeak_trees_out = 0
+            nstates = self%s%p_ptr%nstates
+            npeaks_to_select = self%s%npeaks
+            ! For each state, find the top npeaks trees
+            do istate = 1, nstates
+                ! Collect all trees for this state
+                npeaks_this_state = 0
+                do itree = 1, ntrees
+                    if( tree_best_states(itree) == istate )then
+                        npeaks_this_state = npeaks_this_state + 1
+                        state_corrs(npeaks_this_state) = tree_best_corrs(itree)
+                        state_trees(npeaks_this_state) = itree
+                    endif
+                end do
+                ! Select top npeaks_to_select for this state
+                do irank = 1, min(npeaks_to_select, npeaks_this_state)
+                    ! Find the best remaining tree for this state
+                    best_corr = -huge(1.0)
+                    best_idx = 0
+                    do itree = 1, npeaks_this_state
+                        if( state_corrs(itree) > best_corr )then
+                            best_corr = state_corrs(itree)
+                            best_idx = itree
+                        endif
+                    end do
+                    ! Add to results if space available
+                    if( best_idx > 0 .and. npeak_trees_out < npeak_target )then
+                        npeak_trees_out = npeak_trees_out + 1
+                        peak_trees(npeak_trees_out) = state_trees(best_idx)
+                        peak_tree_corrs(npeak_trees_out) = state_corrs(best_idx)
+                        peak_tree_states(npeak_trees_out) = istate
+                        ! Mark as used
+                        state_corrs(best_idx) = -huge(1.0)
+                    else
+                        exit  ! Stop if we run out of space
+                    endif
+                end do
+            end do
+        end subroutine select_peak_trees_per_state
+
     end subroutine srch_ptree
 
     subroutine oris_assign_ptree( self )
