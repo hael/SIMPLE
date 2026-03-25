@@ -64,7 +64,7 @@ contains
                 endif
             end do
             ! prepare peak orientations
-            call extract_peak_oris(self%s)
+            call extract_peak_oris(self%s, self%s%npeaks)
             ! construct multi-neighborhood search space from subspace peaks
             lnns = .false.
             do ipeak = 1, self%s%npeaks
@@ -97,7 +97,7 @@ contains
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nnn
             ! take care of the in-planes
-            call self%s%inpl_srch_peaks
+            call self%s%inpl_srch_peaks(min(self%s%npeaks_inpl, self%s%nsolns))
             ! prepare orientation
             call self%oris_assign
             ! cleanup

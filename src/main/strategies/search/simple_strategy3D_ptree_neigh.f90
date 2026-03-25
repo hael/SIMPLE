@@ -12,7 +12,8 @@ module simple_strategy3D_ptree_neigh
 use simple_core_module_api
 use simple_strategy3D_alloc
 use simple_strategy3D_tree_utils, &
-                           &only: select_peak_trees, descend_tree_prob_fixed_state
+                           &only: peak_tree_selection, init_peak_tree_selection, select_peak_trees, descend_tree_prob_fixed_state, &
+                           &MAX_NTREES, MAX_NPEAKS
 use simple_strategy3D_utils
 use simple_parameters,      only: parameters
 use simple_oris,            only: oris
@@ -48,8 +49,7 @@ contains
         class(strategy3D_ptree_neigh), intent(inout) :: self
         class(oris),                   intent(inout) :: os
         integer,                       intent(in)    :: ithr
-        integer, allocatable :: peak_trees(:)
-        real,    allocatable :: neg_dists(:), peak_tree_corrs(:)
+        type(peak_tree_selection) :: peak_sel
         integer :: ntrees, npeak_target, npeak_trees
         integer :: nrefs_tree, isub, iproj_full, itree, i
         real    :: dtmp, inplrotdist
@@ -72,16 +72,17 @@ contains
         if( ntrees <= 0 )then
             THROW_HARD('ptree_neigh search requires at least one block tree.')
         endif
+        if( ntrees > MAX_NTREES )then
+            THROW_HARD('Number of trees exceeds MAX_NTREES; srch_ptree_neigh')
+        endif
         ! ------------------------------------------------------------------
         ! Geometry-based neighborhood: compute symmetry-aware angular
         ! distance from the previous orientation to every subspace
         ! representative. Store the minimum distance per tree (multiple
         ! subspace reps can map to the same tree in degenerate build cases).
         ! ------------------------------------------------------------------
-        npeak_target = min(self%s%npeaks, ntrees)
-        allocate(neg_dists(ntrees),             source=-huge(1.0))
-        allocate(peak_trees(npeak_target),      source=0)
-        allocate(peak_tree_corrs(npeak_target), source=-huge(1.0))
+        npeak_target = min(self%s%npeaks, ntrees, MAX_NPEAKS)
+        call init_peak_tree_selection(peak_sel, ntrees, npeak_target, .false., .false.)
         do isub = 1, self%s%p_ptr%nspace_sub
             iproj_full = self%s%b_ptr%subspace_inds(isub)
             if( iproj_full < 1 .or. iproj_full > self%s%p_ptr%nspace ) THROW_HARD('subspace index out of bound; ptree_neigh search')
@@ -92,13 +93,14 @@ contains
             itree = self%s%b_ptr%subspace_full2sub_map(iproj_full)
             if( itree < 1 .or. itree > ntrees ) THROW_HARD('tree index out of bound; ptree_neigh search')
             ! negate: select_peak_trees maximises, we want minimum distance
-            neg_dists(itree) = max(neg_dists(itree), -dtmp)
+            peak_sel%tree_best_corrs(itree) = max(peak_sel%tree_best_corrs(itree), -dtmp)
         enddo
         ! ------------------------------------------------------------------
         ! Select the npeak_target trees whose representatives lie closest
         ! (in angular distance) to the previous orientation.
         ! ------------------------------------------------------------------
-        call select_peak_trees(neg_dists, peak_trees, peak_tree_corrs, npeak_trees)
+        call select_peak_trees(peak_sel)
+        npeak_trees = peak_sel%npeak_trees
         ! ------------------------------------------------------------------
         ! Probabilistic tree descent in each selected tree.
         ! The descent is fixed to the previous particle state, analogously
@@ -106,11 +108,10 @@ contains
         ! tree descent is accepted directly.
         ! ------------------------------------------------------------------
         do i = 1, npeak_trees
-            call descend_tree_prob_fixed_state(self%s, peak_trees(i), self%s%prev_corr, nrefs_tree, self%s%prev_state)
+            call descend_tree_prob_fixed_state(self%s, peak_sel%peak_trees(i), self%s%prev_corr, nrefs_tree, self%s%prev_state)
         enddo
         self%s%nrefs_eval = nrefs_tree
-        call extract_peak_oris(self%s)
-        call self%s%inpl_srch_peaks
+        call self%s%inpl_srch_peaks(min(self%s%npeaks_inpl, self%s%nsolns))
         call self%oris_assign
     end subroutine srch_ptree_neigh
 

@@ -24,6 +24,7 @@ contains
    procedure :: get_n_refs
    procedure :: get_tree_pop
    procedure :: get_tree_refs
+   procedure :: get_tree_refs_static
    procedure :: get_tree_height
    procedure :: build_tree_from_subdistmat
    procedure :: get_root_node           ! returns bt_node
@@ -82,6 +83,26 @@ contains
       if (.not. allocated(self%tree_pops)) return
       pop = self%tree_pops(itree)
    end function get_tree_pop
+
+   !--- Return refs for a given tree into a caller-supplied static array (no allocation).
+   subroutine get_tree_refs_static( self, itree, refs, n_refs_out )
+      class(multi_dendro), intent(in)  :: self
+      integer,             intent(in)  :: itree
+      integer,             intent(out) :: refs(:)
+      integer,             intent(out) :: n_refs_out
+      integer :: iref, n
+      n_refs_out = 0
+      if( itree < 1 .or. itree > self%n_trees ) return
+      if( .not. allocated(self%tree_map) ) return
+      n = 0
+      do iref = 1, self%n_refs
+          if( self%tree_map(itree, iref) )then
+              n = n + 1
+              refs(n) = iref
+          endif
+      end do
+      n_refs_out = n
+   end subroutine get_tree_refs_static
 
    !--- Return refs for a given tree (GLOBAL ref IDs).
    function get_tree_refs(self, itree) result(refs)

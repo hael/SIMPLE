@@ -131,15 +131,16 @@ contains
         call assign_ori( s, ref, inpl, corr, sh )
     end subroutine extract_peak_ori
 
-    subroutine extract_peak_oris( s )
+    subroutine extract_peak_oris( s, npeaks )
         class(strategy3D_srch), intent(inout) :: s
-        integer   :: refs(s%npeaks), state, ipeak
+        integer,               intent(in)    :: npeaks
+        integer   :: refs(npeaks), state, ipeak
         real      :: shvec(2), corr
         logical   :: l_multistates
-        refs = maxnloc(s3D%proj_space_corrs(:,s%ithr), s%npeaks)
+        refs = maxnloc(s3D%proj_space_corrs(:,s%ithr), npeaks)
         if( any(refs < 1) .or. any(refs > s%nrefs) ) THROW_HARD('at least one refs index out of bound; extract_peak_oris')
         l_multistates = s%nstates > 1
-        do ipeak = 1, s%npeaks
+        do ipeak = 1, npeaks
             call s%opeaks%set_euler(ipeak, s3D%proj_space_euls(:,refs(ipeak),s%ithr))
             shvec = s%prev_shvec
             if( s%doshift ) shvec = shvec + s3D%proj_space_shift(:,refs(ipeak),s%ithr)

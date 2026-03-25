@@ -41,6 +41,7 @@ type strategy3D_srch
     integer                    :: nnn             = 0         !< # nearest neighbors
     integer                    :: nbetter         = 0         !< # better orientations identified
     integer                    :: nrefs_eval      = 0         !< # references evaluated
+    integer                    :: nsolns          = 0         !< # distinct refs with a stored solution this search
     integer                    :: ntrs_eval       = 0         !< # shifts evaluated
     integer                    :: prev_roind      = 0         !< previous in-plane rotation index
     integer                    :: prev_state      = 0         !< previous state index
@@ -131,6 +132,7 @@ contains
         end do
         ! init threaded search arrays
         call prep_strategy3D_thread(self%ithr)
+        self%nsolns = 0
         ! search order
         ! -- > full space
         call s3D%rts(     self%ithr)%ne_ran_iarr(s3D%srch_order(:,self%ithr))
@@ -208,14 +210,15 @@ contains
         if( present(irot_in) ) irot_in = irot
     end subroutine inpl_srch
 
-    subroutine inpl_srch_peaks( self )
+    subroutine inpl_srch_peaks( self, npeaks_inpl )
         class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(in)    :: npeaks_inpl
         real    :: cxy(3)
-        integer :: refs(self%npeaks_inpl), irot, ipeak
+        integer :: refs(npeaks_inpl), irot, ipeak
         if( .not. self%doshift ) return
         ! BFGS over shifts with in-plane rot exhaustive callback
-        refs = maxnloc(s3D%proj_space_corrs(:,self%ithr), self%npeaks_inpl)
-        do ipeak = 1, self%npeaks_inpl
+        refs = maxnloc(s3D%proj_space_corrs(:,self%ithr), npeaks_inpl)
+        do ipeak = 1, npeaks_inpl
             call self%grad_shsrch_obj%set_indices(refs(ipeak), self%iptcl)
             if( self%p_ptr%l_doshift )then
                 cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
@@ -235,6 +238,7 @@ contains
         real,                   intent(in)    :: corr
         real,       optional,   intent(in)    :: sh(2)
         real,       optional,   intent(in)    :: w
+        if( s3D%proj_space_corrs(ref, self%ithr) <= -huge(1.0)/2.0 ) self%nsolns = self%nsolns + 1
         if( present(sh) ) s3D%proj_space_shift(:,ref,self%ithr) = sh
         if( present(w)  ) s3D%proj_space_w(      ref,self%ithr) = w
         s3D%proj_space_inplinds(ref,self%ithr) = inpl_ind

@@ -6,38 +6,110 @@ use simple_strategy3D_alloc
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
 
-real, parameter :: INVALID_CORR        = -huge(1.0)
-real, parameter :: INVALID_CORR_THRESH = INVALID_CORR / 2.0
+real,    parameter :: INVALID_CORR        = -huge(1.0)
+real,    parameter :: INVALID_CORR_THRESH = INVALID_CORR / 2.0
+integer, parameter :: MAX_NTREES          = 2500
+integer, parameter :: MAX_NPEAKS          = 64
+integer, parameter :: MAX_TREE_REFS       = 1024
 
-public :: select_peak_trees, descend_tree_prob, descend_tree_prob_fixed_state, &
-          &descend_tree_bestfirst, descend_tree_bestfirst_fixed_state, get_tree_for_ref
+public :: peak_tree_selection, init_peak_tree_selection, select_peak_trees, select_peak_trees_per_state,&
+descend_tree_prob, descend_tree_prob_fixed_state, descend_tree_greedy, descend_tree_greedy_fixed_state,&
+&get_tree_for_ref, MAX_NTREES, MAX_NPEAKS, MAX_TREE_REFS
 private
 #include "simple_local_flags.inc"
 
+type :: peak_tree_selection
+    integer :: ntrees           = 0
+    integer :: npeak_target     = 0
+    integer :: nstates          = 1
+    integer :: npeaks_per_state = 1
+    integer :: npeak_trees      = 0
+    integer :: tree_best_states(MAX_NTREES)
+    integer :: peak_trees(MAX_NPEAKS)
+    integer :: peak_tree_states(MAX_NPEAKS)
+    logical :: has_tree_states  = .false.
+    logical :: has_peak_states  = .false.
+    real    :: tree_best_corrs(MAX_NTREES)
+    real    :: peak_tree_corrs(MAX_NPEAKS)
+end type peak_tree_selection
+
 contains
 
-    subroutine select_peak_trees( tree_best_corrs, peak_trees, peak_tree_corrs, npeak_trees )
-        real,    intent(in)  :: tree_best_corrs(:)
-        integer, intent(out) :: peak_trees(:)
-        real,    intent(out) :: peak_tree_corrs(:)
-        integer, intent(out) :: npeak_trees
+    subroutine init_peak_tree_selection( sel, ntrees, npeak_target, need_tree_states, need_peak_states, nstates, npeaks_per_state )
+        type(peak_tree_selection), intent(inout) :: sel
+        integer,                   intent(in)    :: ntrees, npeak_target
+        logical,                   intent(in)    :: need_tree_states, need_peak_states
+        integer, optional,         intent(in)    :: nstates, npeaks_per_state
+        sel%npeak_trees      = 0
+        sel%ntrees           = ntrees
+        sel%npeak_target     = npeak_target
+        sel%nstates          = 1
+        sel%npeaks_per_state = 1
+        sel%has_tree_states  = need_tree_states
+        sel%has_peak_states  = need_peak_states
+        if( present(nstates) )          sel%nstates          = nstates
+        if( present(npeaks_per_state) ) sel%npeaks_per_state = npeaks_per_state
+        if( ntrees > 0 )then
+            sel%tree_best_corrs(1:ntrees) = INVALID_CORR
+            if( need_tree_states ) sel%tree_best_states(1:ntrees) = 1
+        endif
+        if( npeak_target > 0 )then
+            sel%peak_trees(1:npeak_target)      = 0
+            sel%peak_tree_corrs(1:npeak_target) = INVALID_CORR
+            if( need_peak_states ) sel%peak_tree_states(1:npeak_target) = 1
+        endif
+    end subroutine init_peak_tree_selection
+
+    subroutine select_peak_trees( sel )
+        type(peak_tree_selection), intent(inout) :: sel
         integer :: loc(1)
-        real    :: work_corrs(size(tree_best_corrs))
-        peak_trees      = 0
-        peak_tree_corrs = INVALID_CORR
-        npeak_trees     = 0
-        if( size(tree_best_corrs) == 0 ) return
-        if( size(peak_trees)      == 0 ) return
-        work_corrs = tree_best_corrs
-        do while( npeak_trees < size(peak_trees) )
-            loc = maxloc(work_corrs)
+        real    :: work_corrs(MAX_NTREES)
+        sel%npeak_trees                         = 0
+        sel%peak_trees(1:sel%npeak_target)      = 0
+        sel%peak_tree_corrs(1:sel%npeak_target) = INVALID_CORR
+        if( sel%has_peak_states ) sel%peak_tree_states(1:sel%npeak_target) = 1
+        work_corrs(1:sel%ntrees) = sel%tree_best_corrs(1:sel%ntrees)
+        do while( sel%npeak_trees < sel%npeak_target )
+            loc = maxloc(work_corrs(1:sel%ntrees))
             if( is_invalid_corr(work_corrs(loc(1))) ) exit
-            npeak_trees                  = npeak_trees + 1
-            peak_trees(npeak_trees)      = loc(1)
-            peak_tree_corrs(npeak_trees) = work_corrs(loc(1))
-            work_corrs(loc(1))           = INVALID_CORR
+            sel%npeak_trees                      = sel%npeak_trees + 1
+            sel%peak_trees(sel%npeak_trees)      = loc(1)
+            sel%peak_tree_corrs(sel%npeak_trees) = work_corrs(loc(1))
+            if( sel%has_peak_states ) sel%peak_tree_states(sel%npeak_trees) = 1
+            work_corrs(loc(1)) = INVALID_CORR
         end do
     end subroutine select_peak_trees
+
+    subroutine select_peak_trees_per_state( sel )
+        type(peak_tree_selection), intent(inout) :: sel
+        integer :: istate, irank, best_tree, itree
+        real    :: best_corr
+        real    :: work_corrs(MAX_NTREES)
+        sel%npeak_trees = 0
+        sel%peak_trees(1:sel%npeak_target)       = 0
+        sel%peak_tree_corrs(1:sel%npeak_target)  = INVALID_CORR
+        sel%peak_tree_states(1:sel%npeak_target) = 1
+        work_corrs(1:sel%ntrees) = sel%tree_best_corrs(1:sel%ntrees)
+        state_loop: do istate = 1, sel%nstates
+            do irank = 1, sel%npeaks_per_state
+                best_corr = INVALID_CORR
+                best_tree = 0
+                do itree = 1, sel%ntrees
+                    if( sel%tree_best_states(itree) /= istate ) cycle
+                    if( work_corrs(itree) <= best_corr ) cycle
+                    best_corr = work_corrs(itree)
+                    best_tree = itree
+                end do
+                if( best_tree == 0 ) exit
+                if( sel%npeak_trees >= sel%npeak_target ) exit state_loop
+                sel%npeak_trees = sel%npeak_trees + 1
+                sel%peak_trees(sel%npeak_trees)       = best_tree
+                sel%peak_tree_corrs(sel%npeak_trees)  = best_corr
+                sel%peak_tree_states(sel%npeak_trees) = istate
+                work_corrs(best_tree) = INVALID_CORR
+            end do
+        end do state_loop
+    end subroutine select_peak_trees_per_state
 
     ! Stochastic descent with multi-state evaluation at each node.
     subroutine descend_tree_prob( s, itree, coarse_tree_corr, nrefs_tree )
@@ -94,10 +166,10 @@ contains
         end do
     end subroutine descend_tree_prob_fixed_state
 
-    ! Best-first descent with multi-state evaluation at each node. This mirrors
+    ! Greedy descent with multi-state evaluation at each node. This mirrors
     ! srch_eul_bl_tree: always descend via the child with the best local score,
     ! while tracking the best node seen
-    subroutine descend_tree_bestfirst( s, itree, coarse_tree_corr, nrefs_tree )
+    subroutine descend_tree_greedy( s, itree, coarse_tree_corr, nrefs_tree )
         use simple_binary_tree, only: bt_node
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: itree
@@ -117,14 +189,14 @@ contains
             call eval_child_best(s, itree, node_cur%left_idx,  best_corr_L, nrefs_tree)
             call eval_child_best(s, itree, node_cur%right_idx, best_corr_R, nrefs_tree)
             tree_best_corr = max(tree_best_corr, best_corr_L, best_corr_R)
-            inode_next = choose_next_child_bestfirst(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
+            inode_next = choose_next_child_greedy(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
             if( inode_next == 0 ) exit
             inode = inode_next
         end do
-    end subroutine descend_tree_bestfirst
+    end subroutine descend_tree_greedy
 
-    ! Fixed-state best-first descent.
-    subroutine descend_tree_bestfirst_fixed_state( s, itree, coarse_tree_corr, nrefs_tree, istate_fixed )
+    ! Fixed-state greedy descent.
+    subroutine descend_tree_greedy_fixed_state( s, itree, coarse_tree_corr, nrefs_tree, istate_fixed )
         use simple_binary_tree, only: bt_node
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: itree
@@ -145,11 +217,11 @@ contains
             call eval_child_best_fixed_state(s, itree, node_cur%left_idx,  istate_fixed, best_corr_L, nrefs_tree)
             call eval_child_best_fixed_state(s, itree, node_cur%right_idx, istate_fixed, best_corr_R, nrefs_tree)
             tree_best_corr = max(tree_best_corr, best_corr_L, best_corr_R)
-            inode_next = choose_next_child_bestfirst(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
+            inode_next = choose_next_child_greedy(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
             if( inode_next == 0 ) exit
             inode = inode_next
         end do
-    end subroutine descend_tree_bestfirst_fixed_state
+    end subroutine descend_tree_greedy_fixed_state
 
     integer function get_tree_for_ref( s, iref, ntrees ) result(itree)
         class(strategy3D_srch), intent(in) :: s
@@ -267,15 +339,14 @@ contains
         integer,                intent(in)    :: itree
         real,                   intent(inout) :: tree_best_corr
         integer,                intent(inout) :: nrefs_tree
-        integer, allocatable :: tree_refs(:)
-        integer              :: iref_tree
-        real                 :: best_corr_ref
-        tree_refs = s%b_ptr%block_tree%get_tree_refs(itree)
-        do iref_tree = 1, size(tree_refs)
+        integer :: tree_refs(MAX_TREE_REFS)
+        integer :: n_tree_refs, iref_tree
+        real    :: best_corr_ref
+        call s%b_ptr%block_tree%get_tree_refs_static(itree, tree_refs, n_tree_refs)
+        do iref_tree = 1, n_tree_refs
             call eval_tree_ref_across_states(s, tree_refs(iref_tree), best_corr_ref, nrefs_tree)
             tree_best_corr = max(tree_best_corr, best_corr_ref)
         end do
-        if( allocated(tree_refs) ) deallocate(tree_refs)
     end subroutine exhaustive_tree_scan
 
     subroutine exhaustive_tree_scan_fixed_state( s, itree, istate_fixed, tree_best_corr, nrefs_tree )
@@ -284,15 +355,14 @@ contains
         integer,                intent(in)    :: istate_fixed
         real,                   intent(inout) :: tree_best_corr
         integer,                intent(inout) :: nrefs_tree
-        integer, allocatable :: tree_refs(:)
-        integer              :: iref_tree
-        real                 :: best_corr_ref
-        tree_refs = s%b_ptr%block_tree%get_tree_refs(itree)
-        do iref_tree = 1, size(tree_refs)
+        integer :: tree_refs(MAX_TREE_REFS)
+        integer :: n_tree_refs, iref_tree
+        real    :: best_corr_ref
+        call s%b_ptr%block_tree%get_tree_refs_static(itree, tree_refs, n_tree_refs)
+        do iref_tree = 1, n_tree_refs
             call eval_tree_ref_fixed_state(s, tree_refs(iref_tree), istate_fixed, best_corr_ref, nrefs_tree)
             tree_best_corr = max(tree_best_corr, best_corr_ref)
         end do
-        if( allocated(tree_refs) ) deallocate(tree_refs)
     end subroutine exhaustive_tree_scan_fixed_state
 
     integer function choose_next_child_prob( left_idx, right_idx, corr_left, corr_right ) result(inode_next)
@@ -337,7 +407,7 @@ contains
         endif
     end function choose_next_child_prob
 
-    integer function choose_next_child_bestfirst( left_idx, right_idx, corr_left, corr_right ) result(inode_next)
+    integer function choose_next_child_greedy( left_idx, right_idx, corr_left, corr_right ) result(inode_next)
         integer, intent(in) :: left_idx, right_idx
         real,    intent(in) :: corr_left, corr_right
         inode_next = 0
@@ -363,7 +433,7 @@ contains
             return
         endif
         inode_next = merge(left_idx, right_idx, corr_left >= corr_right)
-    end function choose_next_child_bestfirst
+    end function choose_next_child_greedy
 
     logical pure function is_invalid_corr( corr ) result(invalid)
         real, intent(in) :: corr

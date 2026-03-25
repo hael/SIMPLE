@@ -4,24 +4,25 @@ use simple_pftc_srch_api
 use simple_strategy3D_alloc
 use simple_strategy2D3D_common
 use simple_binoris_io
-use simple_builder,                only: builder
-use simple_convergence,            only: convergence
-use simple_euclid_sigma2,          only: euclid_sigma2
-use simple_eul_prob_tab,           only: eul_prob_tab
-use simple_qsys_funs,              only: qsys_job_finished
-use simple_strategy3D,             only: strategy3D
-use simple_strategy3D_eval,        only: strategy3D_eval
-use simple_strategy3D_greedy,      only: strategy3D_greedy
-use simple_strategy3D_greedy_smpl, only: strategy3D_greedy_smpl
-use simple_strategy3D_greedy_sub,  only: strategy3D_greedy_sub
-use simple_strategy3D_prob,        only: strategy3D_prob
-use simple_strategy3D_ptree,       only: strategy3D_ptree
-use simple_strategy3D_ptree_neigh, only: strategy3D_ptree_neigh
-use simple_strategy3D_shc,         only: strategy3D_shc
-use simple_strategy3D_shc_ptree,   only: strategy3D_shc_ptree
-use simple_strategy3D_shc_smpl,    only: strategy3D_shc_smpl
-use simple_strategy3D_snhc_smpl,   only: strategy3D_snhc_smpl
-use simple_strategy3D_srch,        only: strategy3D_spec
+use simple_builder,                       only: builder
+use simple_convergence,                   only: convergence
+use simple_euclid_sigma2,                 only: euclid_sigma2
+use simple_eul_prob_tab,                  only: eul_prob_tab
+use simple_qsys_funs,                     only: qsys_job_finished
+use simple_strategy3D,                    only: strategy3D
+use simple_strategy3D_eval,               only: strategy3D_eval
+use simple_strategy3D_greedy,             only: strategy3D_greedy
+use simple_strategy3D_greedy_smpl,        only: strategy3D_greedy_smpl
+use simple_strategy3D_greedy_sub,         only: strategy3D_greedy_sub
+use simple_strategy3D_prob,               only: strategy3D_prob
+use simple_strategy3D_ptree,              only: strategy3D_ptree
+use simple_strategy3D_ptree_neigh,        only: strategy3D_ptree_neigh
+use simple_strategy3D_ptree_neigh_states, only: strategy3D_ptree_neigh_states
+use simple_strategy3D_shc,                only: strategy3D_shc
+use simple_strategy3D_shc_ptree,          only: strategy3D_shc_ptree
+use simple_strategy3D_shc_smpl,           only: strategy3D_shc_smpl
+use simple_strategy3D_snhc_smpl,          only: strategy3D_snhc_smpl
+use simple_strategy3D_srch,               only: strategy3D_spec
 implicit none
 
 public :: refine3D_exec
@@ -255,6 +256,8 @@ contains
                         allocate(strategy3D_ptree                :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('ptree_neigh')
                         allocate(strategy3D_ptree_neigh          :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('ptree_neigh_states')
+                        allocate(strategy3D_ptree_neigh_states   :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc_ptree')
                         allocate(strategy3D_shc_ptree            :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
