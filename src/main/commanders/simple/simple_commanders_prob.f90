@@ -24,6 +24,16 @@ type, extends(commander_base) :: commander_prob_align_neigh
         procedure :: execute      => exec_prob_align_neigh
 end type commander_prob_align_neigh
 
+type, extends(commander_base) :: commander_prob_tab2D
+  contains
+    procedure :: execute      => exec_prob_tab2D
+end type commander_prob_tab2D
+
+type, extends(commander_base) :: commander_prob_align2D
+  contains
+    procedure :: execute      => exec_prob_align2D
+end type commander_prob_align2D
+
 contains
 
     subroutine exec_prob_tab( self, cline )
@@ -240,5 +250,118 @@ contains
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN_NEIGH NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align_neigh
+
+    subroutine exec_prob_tab2D( self, cline )
+        use simple_strategy2D3D_common, only: set_bp_range2D
+        use simple_strategy2D_matcher,  only: set_b_p_ptrs2D, prep_batch_particles2D, &
+                                              preppftc4align2D, build_batch_particles2D, &
+                                              clean_batch_particles2D
+        use simple_classaverager,       only: cavger_new, cavger_read_all, cavger_kill
+        use simple_eul_prob_tab2D,      only: eul_prob_tab2D
+        class(commander_prob_tab2D), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        integer,     allocatable :: pinds(:)
+        type(string)             :: fname
+        type(builder)            :: build
+        type(parameters)         :: params
+        type(eul_prob_tab2D)     :: eulprob_obj_part
+        real    :: frac_srch_space
+        integer :: nptcls
+        call cline%set('mkdir', 'no')
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        frac_srch_space = build%spproj_field%get_avg('frac')
+        call set_bp_range2D(params, build, cline, params%which_iter, frac_srch_space)
+        ! reproduce particle sampling from exec_prob_align2D
+        if( build%spproj_field%has_been_sampled() )then
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
+        else
+            THROW_HARD('exec_prob_tab2D requires prior particle sampling (in exec_prob_align2D)')
+        endif
+        call set_b_p_ptrs2D(params, build)
+        call prep_batch_particles2D(nptcls)
+        ! load 2D class average references into pftc
+        call cavger_new(params, build, alloccavgs=.true.)
+        if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
+        call cavger_read_all
+        call preppftc4align2D(nptcls, params%which_iter, .false.)
+        ! build polar particle images
+        call build_batch_particles2D(nptcls, pinds)
+        ! fill and write the 2D probability table
+        call eulprob_obj_part%new(params, build, pinds)
+        call eulprob_obj_part%fill_tab
+        fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        call eulprob_obj_part%write_tab(fname)
+        call eulprob_obj_part%kill
+        call clean_batch_particles2D
+        call cavger_kill
+        call build%pftc%kill
+        call build%kill_general_tbox
+        call qsys_job_finished(params, string('simple_commanders_prob :: exec_prob_tab2D'))
+        call simple_end('**** SIMPLE_PROB_TAB2D NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prob_tab2D
+
+    subroutine exec_prob_align2D( self, cline )
+        use simple_eul_prob_tab2D,       only: eul_prob_tab2D
+        use simple_strategy2D3D_common,  only: sample_ptcls4update, sample_ptcls4fillin
+        use simple_builder,              only: builder
+        class(commander_prob_align2D), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        integer,     allocatable :: pinds(:)
+        type(string)             :: fname
+        type(builder)            :: build
+        type(parameters)         :: params
+        type(commander_prob_tab2D) :: xprob_tab2D
+        type(eul_prob_tab2D)       :: eulprob_obj_glob
+        type(cmdline)              :: cline_prob_tab
+        type(qsys_env)             :: qenv
+        type(chash)                :: job_descr
+        integer :: nptcls, ipart
+        call cline%set('mkdir',  'no')
+        call cline%set('stream', 'no')
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        ! sample particles for this iteration
+        if( params%l_fillin .and. mod(params%startit,5) == 0 )then
+            call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
+        else
+            call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
+        endif
+        ! write sampling to project
+        call build%spproj%write_segment_inside(params%oritype)
+        ! build the global prob table (nclasses x nptcls)
+        call eulprob_obj_glob%new(params, build, pinds)
+        ! generate partition-wise dist tables
+        cline_prob_tab = cline
+        call cline_prob_tab%set('prg', 'prob_tab2D')
+        if( .not. cline_prob_tab%defined('nparts') )then
+            call xprob_tab2D%execute(cline_prob_tab)
+        else
+            call qenv%new(params, params%nparts, nptcls=params%nptcls)
+            call cline_prob_tab%gen_job_descr(job_descr)
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+        endif
+        ! merge all partition tables into global
+        do ipart = 1, params%nparts
+            fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+            call eulprob_obj_glob%read_tab_to_glob(fname)
+        end do
+        ! global probabilistic class assignment
+        call eulprob_obj_glob%ref_assign
+        ! write assignment to file
+        fname = string(ASSIGNMENT_FBODY)//'.dat'
+        call eulprob_obj_glob%write_assignment(fname)
+        ! apply class, angle, shift and corr back into spproj_field
+        call eulprob_obj_glob%apply_assignment
+        call build%spproj%write_segment_inside(params%oritype)
+        ! cleanup
+        call eulprob_obj_glob%kill
+        call cline_prob_tab%kill
+        call qenv%kill
+        call job_descr%kill
+        call build%kill_general_tbox
+        call qsys_job_finished(params, string('simple_commanders_prob :: exec_prob_align2D'))
+        call qsys_cleanup(params)
+        call simple_end('**** SIMPLE_PROB_ALIGN2D NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prob_align2D
 
 end module simple_commanders_prob

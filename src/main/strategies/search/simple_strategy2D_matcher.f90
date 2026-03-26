@@ -20,6 +20,7 @@ use simple_strategy2D_tseries,     only: strategy2D_tseries
 implicit none
 
 public :: cluster2D_exec
+public :: set_b_p_ptrs2D
 public :: sample_ptcls4update2D, preppftc4align2D, prep_batch_particles2D
 public :: build_batch_particles2D, clean_batch_particles2D
 private
@@ -33,6 +34,13 @@ integer(timer_int_kind)    :: t, t_init,  t_prep_pftc,  t_align,  t_cavg,  t_pro
 type(string)               :: benchfname
 
 contains
+
+    subroutine set_b_p_ptrs2D( params, build )
+        class(parameters), target, intent(in) :: params
+        class(builder),    target, intent(in) :: build
+        p_ptr => params
+        b_ptr => build
+    end subroutine set_b_p_ptrs2D
 
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( params, build, cline, which_iter, converged )

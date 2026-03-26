@@ -1,4 +1,16 @@
 !@descr: helper routines shared by tree-guided 3D search strategies
+! Other multi-state tree strategies to consider:
+! *** One-tree, per-state path competition
+! Keep the same geometry-selected single tree, but run one descend_tree_prob_fixed_state per state and pick the best final state/path. 
+! This costs about the same order as free-state descent, but enforces state consistency along each path.
+! *** Top-level multi-state, deep fixed-state
+! Use descend_tree_prob for the root and maybe the first 1–2 levels, then lock to the current best state and continue with 
+! descend_tree_prob_fixed_state. This is probably the most practical follow-up once the random split starts separating meaningfully.
+! *** 2–3 tree beam from geometry
+! Still no exhaustive evaluation, but instead of one nearest tree, take the 2 or 3 nearest trees and descend each probabilistically 
+! across states. This is much safer if the previous orientation is occasionally off.
+! ***  Greedy late-stage version
+! A ptree_neigh_states_greedy using descend_tree_greedy instead of descend_tree_prob. Use this after the classes are already fairly stable.
 module simple_strategy3D_tree_utils
 use simple_core_module_api
 use simple_multi_dendro, only: multi_dendro

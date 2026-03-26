@@ -32,8 +32,7 @@ type :: eul_prob_tab
     integer                     :: nrefs           !< reference number
     contains
     ! CONSTRUCTOR
-    procedure, private :: new_1, new_2
-    generic            :: new => new_1, new_2
+    procedure :: new
     ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
     procedure :: fill_tab
     procedure :: fill_tab_state_only
@@ -57,7 +56,7 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new_1( self, params, build, pinds, empty_okay )
+    subroutine new( self, params, build, pinds, empty_okay )
         class(eul_prob_tab),       intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
@@ -130,64 +129,7 @@ contains
             end do
         end do
         !$omp end parallel do
-    end subroutine new_1
-
-    subroutine new_2( self, params, build, os )
-        class(eul_prob_tab),       intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(builder),    target, intent(in)    :: build
-        class(oris),               intent(in)    :: os
-        integer, allocatable :: states(:)
-        integer :: i, iproj, iptcl, istate, n, iref
-        real    :: x
-        call self%kill
-        self%p_ptr => params
-        self%b_ptr => build
-        self%nptcls  = os%get_noris(consider_state=.true.)
-        self%nstates = self%p_ptr%nstates
-        n = os%get_noris()
-        allocate(states(n), source=nint(os%get_all('state')))
-        self%pinds = pack((/(i,i=1,n)/), mask=states > 0)
-        deallocate(states)
-        allocate(self%loc_tab(self%nrefs,self%nptcls), self%assgn_map(self%nptcls),self%state_tab(self%nstates,self%nptcls))
-        !$omp parallel do default(shared) private(i,iptcl,istate,iproj,iref) proc_bind(close) schedule(static)
-        do i = 1,self%nptcls
-            iptcl = self%pinds(i)
-            self%assgn_map(i)%pind   = iptcl
-            self%assgn_map(i)%istate = 0
-            self%assgn_map(i)%iproj  = 0
-            self%assgn_map(i)%inpl   = 0
-            self%assgn_map(i)%dist   = huge(x)
-            self%assgn_map(i)%x      = 0.
-            self%assgn_map(i)%y      = 0.
-            self%assgn_map(i)%has_sh = .false.
-            do istate = 1,self%nstates
-                self%state_tab(istate,i)%pind   = iptcl
-                self%state_tab(istate,i)%istate = istate
-                self%state_tab(istate,i)%iproj  = 0
-                self%state_tab(istate,i)%inpl   = 0
-                self%state_tab(istate,i)%dist   = huge(x)
-                self%state_tab(istate,i)%x      = 0.
-                self%state_tab(istate,i)%y      = 0.
-                self%state_tab(istate,i)%has_sh = .false.
-                do iproj = 1,self%p_ptr%nspace
-                    iref = (istate-1)*self%p_ptr%nspace + iproj
-                    self%loc_tab(iref,i)%pind   = iptcl
-                    self%loc_tab(iref,i)%istate = istate
-                    self%loc_tab(iref,i)%iproj  = iproj
-                    self%loc_tab(iref,i)%inpl   = 0
-                    self%loc_tab(iref,i)%dist   = huge(x)
-                    self%loc_tab(iref,i)%x      = 0.
-                    self%loc_tab(iref,i)%y      = 0.
-                    self%loc_tab(iref,i)%has_sh = .false.
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        if( file_exists(DIST_FBODY//'.dat') )then
-            call self%read_tab_to_glob(string(DIST_FBODY//'.dat'))
-        endif
-    end subroutine new_2
+    end subroutine new
 
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
     subroutine fill_tab( self )
