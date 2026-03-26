@@ -9,6 +9,7 @@ module simple_gui_metadata_api
   use simple_gui_metadata_histogram,                only: gui_metadata_histogram
   use simple_gui_metadata_timeplot,                 only: gui_metadata_timeplot
   use simple_gui_metadata_optics_group,             only: gui_metadata_optics_group
+  use simple_gui_metadata_cavg2D,                   only: gui_metadata_cavg2D, sprite_sheet_pos
   use simple_gui_metadata_stream_update,            only: gui_metadata_stream_update
   use simple_gui_metadata_stream_preprocess,        only: gui_metadata_stream_preprocess
   use simple_gui_metadata_stream_optics_assignment, only: gui_metadata_stream_optics_assignment

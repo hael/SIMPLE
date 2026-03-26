@@ -28,6 +28,7 @@ use simple_stream_cluster2D_utils, only: cleanup_root_folder, consolidate_sigmas
                                   &test_repick, tidy_2Dstream_iter, update_user_params2D, write_project_stream2D, write_repick_refs
 use simple_stream_communicator,    only: stream_http_communicator 
 use simple_stream_utils,           only: update_user_params, wait_for_folder, stream_datestr, process_selected_refs,&
-                                  &get_latest_optics_map_id, create_stream_project, init_stream_qenv, import_new_projects
+                                  &get_latest_optics_map_id, create_stream_project, init_stream_qenv, import_new_projects,&
+                                  &wait_for_folder2
 use simple_stream_watcher,         only: stream_watcher, sniff_folders_SJ, workout_directory_structure 
 end module simple_stream_api

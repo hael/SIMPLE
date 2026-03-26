@@ -27,12 +27,13 @@ contains
     end subroutine terminate_stream
 
     subroutine create_stream_project( spproj, cline, projname )
-        type(string),         intent(in) :: projname
-        type(cmdline),     intent(inout) :: cline
         type(sp_project),  intent(inout) :: spproj
-        if( cline%defined('projfile') ) return
-        call cline%set('projname', projname)
-        call cline%set('projfile', string(projname%to_char() // METADATA_EXT))
+        type(cmdline),     intent(inout) :: cline
+        type(string),         intent(in) :: projname
+        if( .not. cline%defined('projfile') ) then
+            call cline%set('projname', projname)
+            call cline%set('projfile', string(projname%to_char() // METADATA_EXT))
+        endif
         call spproj%update_projinfo(cline)
         call spproj%update_compenv(cline)
         call spproj%write()
@@ -309,6 +310,22 @@ contains
             end do
         endif
     end subroutine wait_for_folder
+
+    subroutine wait_for_folder2( folder )
+        class(string),                   intent(in)    :: folder
+        integer :: i
+        if(.not. dir_exists(folder)) then
+            write(logfhandle, *) ">>> WAITING FOR ", folder%to_char(), " TO BE GENERATED"
+            ! wait up to 24 hours
+            do i = 1, 8640
+                if(dir_exists(folder)) then
+                    write(logfhandle, *) ">>> ", folder%to_char(), " FOUND"
+                    exit
+                endif
+                call sleep(10)
+            end do
+        endif
+    end subroutine wait_for_folder2
 
     function stream_datestr() 
         character(8)  :: date

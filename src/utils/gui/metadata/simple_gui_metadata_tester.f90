@@ -11,7 +11,7 @@
 !                 a live Unix timestamp)
 !   Types covered:
 !     gui_metadata_base, gui_metadata_micrograph, gui_metadata_histogram,
-!     gui_metadata_timeplot, gui_metadata_optics_group,
+!     gui_metadata_timeplot, gui_metadata_optics_group, gui_metadata_cavg2D,
 !     gui_metadata_stream_preprocess, gui_metadata_stream_optics_assignment,
 !     gui_metadata_stream_update, gui_metadata_stream_initial_picking,
 !     gui_metadata_stream_opening2D
@@ -23,7 +23,7 @@
 !   simple_test_utils, simple_gui_metadata_api
 !==============================================================================
 module simple_gui_metadata_tester
-  use simple_test_utils,    only: assert_true, assert_int, assert_char
+  use simple_test_utils,       only: assert_true, assert_int, assert_char
   use simple_gui_metadata_api
   implicit none
 
@@ -50,6 +50,9 @@ contains
     call test_set_get_optics_group()
     call test_serialise_optics_group()
     call test_jsonise_optics_group()
+    call test_set_get_cavg2D()
+    call test_serialise_cavg2D()
+    call test_jsonise_cavg2D()
     call test_set_get_stream_preprocess()
     call test_serialise_stream_preprocess()
     call test_jsonise_stream_preprocess()
@@ -441,6 +444,89 @@ contains
     deallocate(xshifts, yshifts)
   end subroutine test_jsonise_optics_group
 
+  !---------------- cavg2D ----------------
+
+  ! Verify that all cavg2D fields round-trip through set/get, including optional res and pop.
+  subroutine test_set_get_cavg2D()
+    type(gui_metadata_cavg2D) :: meta
+    type(string)              :: path, mrcpath
+    integer                   :: idx
+    type(sprite_sheet_pos)    :: sprite
+    real                      :: res
+    integer                   :: pop
+    write(*,'(A)') 'test_set_get_cavg2D'
+    call meta%new(GUI_METADATA_CAVG2D_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_CAVG2D_TYPE, 'type is set correctly')
+    call meta%set(path=string('/test/path/to/cavg.jpeg'), mrcpath=string('/test/path/to/cavg.mrc'), &
+                  idx=3, sprite=sprite_sheet_pos(x=25.0, y=50.0, h=800, w=1200), &
+                  i=1, i_max=1, res=3.5, pop=1500)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call assert_int(meta%get_idx(), 3, 'get_idx returns correct value')
+    call assert_true(meta%get(path=path, mrcpath=mrcpath, idx=idx, sprite=sprite, res=res, pop=pop), 'metadata retrieved')
+    call assert_char(path%to_char(),    '/test/path/to/cavg.jpeg', 'path set/get correctly')
+    call assert_char(mrcpath%to_char(), '/test/path/to/cavg.mrc',  'mrcpath set/get correctly')
+    call assert_int(idx,      3,    'idx set/get correctly')
+    call assert_true(sprite%x == 25.0, 'spritex set/get correctly')
+    call assert_true(sprite%y == 50.0, 'spritey set/get correctly')
+    call assert_int(sprite%h, 800,  'spriteh set/get correctly')
+    call assert_int(sprite%w, 1200, 'spritew set/get correctly')
+    call assert_true(res == 3.5,   'res set/get correctly')
+    call assert_int(pop,     1500, 'pop set/get correctly')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_set_get_cavg2D
+
+  ! Verify that the cavg2D serialise buffer is the expected size.
+  subroutine test_serialise_cavg2D()
+    character(len=:),         allocatable :: buffer
+    type(gui_metadata_cavg2D)             :: meta
+    write(*,'(A)') 'test_serialise_cavg2D'
+    call meta%new(GUI_METADATA_CAVG2D_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_CAVG2D_TYPE, 'type is set correctly')
+    call meta%set(path=string('/test/path/to/cavg.jpeg'), mrcpath=string('/test/path/to/cavg.mrc'), &
+                  idx=3, sprite=sprite_sheet_pos(x=25.0, y=50.0, h=800, w=1200), &
+                  i=1, i_max=1, res=3.5, pop=1500)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call meta%serialise(buffer=buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_serialise_cavg2D
+
+  ! Verify the cavg2D JSON output via buffer length and FNV-1a hash.
+  subroutine test_jsonise_cavg2D()
+    character(kind=CK, len=:), allocatable :: buffer
+    type(gui_metadata_cavg2D)              :: meta
+    type(json_core)                        :: json
+    type(json_value),          pointer     :: json_ptr
+    type(string)                           :: json_str, json_hash
+    write(*,'(A)') 'test_jsonise_cavg2D'
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    call meta%new(GUI_METADATA_CAVG2D_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_CAVG2D_TYPE, 'type is set correctly')
+    call meta%set(path=string('/test/path/to/cavg.jpeg'), mrcpath=string('/test/path/to/cavg.mrc'), &
+                  idx=3, sprite=sprite_sheet_pos(x=25.0, y=50.0, h=800, w=1200), &
+                  i=1, i_max=1, res=3.5, pop=1500)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    json_ptr => meta%jsonise()
+    call json%print_to_string(json_ptr, buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_true(len(buffer) > 0, 'json output is non-empty')
+    call assert_int(len(buffer), 166, 'buffer correct size')
+    json_str = buffer
+    call assert_int(json_str%strlen(), 166, 'string correct size')
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), 'BDAB38FA961B3B76', 'correct checksum')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    call json%destroy(json_ptr)
+    call assert_true(.not.json%failed(), 'json destroyed')
+  end subroutine test_jsonise_cavg2D
+
   !---------------- stream preprocess ----------------
 
   ! Verify that all stream-preprocess fields round-trip through set/get.
@@ -720,9 +806,11 @@ contains
   ! non-emptiness is checked — a stable hash comparison is not possible.
   subroutine test_jsonise_stream_initial_picking()
     character(kind=CK, len=:),                allocatable :: buffer
-    type(gui_metadata_stream_initial_picking)              :: meta
-    type(json_core)                                        :: json
-    type(json_value),                          pointer     :: json_ptr
+    type(gui_metadata_stream_initial_picking)             :: meta
+    type(json_core)                                       :: json
+    type(json_value),                          pointer    :: json_ptr
+    type(string)                                          :: json_str, json_hash
+    logical                                               :: found
     write(*,'(A)') 'test_jsonise_stream_initial_picking'
     call json%initialize(no_whitespace=.true., compact_reals=.true.)
     call meta%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
@@ -732,9 +820,15 @@ contains
     call assert_true(meta%assigned(), 'metadata object is set')
     json_ptr => meta%jsonise()
     call assert_true(associated(json_ptr), 'json pointer is associated')
+    call json%update(json_ptr, 'last_micrograph_imported', 0, found)
     call json%print_to_string(json_ptr, buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_true(len(buffer) > 0, 'json output is non-empty')
+    call assert_int(len(buffer), 183, 'buffer correct size')
+    json_str = buffer
+    call assert_int(json_str%strlen(), 183, 'string correct size')
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), '8D93DC7C14327418', 'correct checksum')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     call json%destroy(json_ptr)
@@ -796,6 +890,8 @@ contains
     type(gui_metadata_stream_opening2D)             :: meta
     type(json_core)                                 :: json
     type(json_value),                   pointer     :: json_ptr
+    type(string)                                    :: json_str, json_hash
+    logical                                         :: found
     write(*,'(A)') 'test_jsonise_stream_opening2D'
     call json%initialize(no_whitespace=.true., compact_reals=.true.)
     call meta%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
@@ -805,9 +901,15 @@ contains
     call assert_true(meta%assigned(), 'metadata object is set')
     json_ptr => meta%jsonise()
     call assert_true(associated(json_ptr), 'json pointer is associated')
+    call json%update(json_ptr, 'last_particles_imported', 0, found)
     call json%print_to_string(json_ptr, buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_true(len(buffer) > 0, 'json output is non-empty')
+    call assert_int(len(buffer), 199, 'buffer correct size')
+    json_str = buffer
+    call assert_int(json_str%strlen(), 199, 'string correct size')
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), 'D9735541046FBFA7', 'correct checksum')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     call json%destroy(json_ptr)

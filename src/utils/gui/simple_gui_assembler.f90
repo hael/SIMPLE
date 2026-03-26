@@ -49,6 +49,7 @@ type :: gui_assembler
   type(string)              :: preprocess_hash         ! FNV-1a hash of last sent preprocessing section
   type(string)              :: optics_assignment_hash  ! FNV-1a hash of last sent optics-assignment section
   type(string)              :: initial_picking_hash    ! FNV-1a hash of last sent initial-picking section
+  type(string)              :: opening2D_hash          ! FNV-1a hash of last sent opening2D section
   integer                   :: job_id    = 0           ! pipeline job identifier
   integer                   :: starttime = 0           ! Unix timestamp of job start
   integer                   :: stoptime  = 0           ! Unix timestamp of job stop (0 while running)
@@ -100,6 +101,9 @@ contains
   subroutine clear_hashes( self )
     class(gui_assembler), intent(inout) :: self
     call self%preprocess_hash%kill()
+    call self%optics_assignment_hash%kill()
+    call self%initial_picking_hash%kill()
+    call self%opening2D_hash%kill()
   end subroutine clear_hashes
 
   ! Write the stream_heartbeat section: per-process status fields plus a master
@@ -118,7 +122,7 @@ contains
     call forked_process_status(string('preprocessing'),    fork_preprocess)
     call forked_process_status(string('assign_optics'), fork_assign_optics)
     call forked_process_status(string('initial_picking'),   fork_opening2D)
-    call forked_process_status(string('generate_pickrefs'), fork_opening2D)
+    call forked_process_status(string('opening2D'),         fork_opening2D)
     ! global status
     call self%json%create_object(json_master_ptr, 'master')
     call self%json%add(json_master_ptr, 'timestamp', int(c_time(0_c_long)))
@@ -177,9 +181,9 @@ contains
 
   end subroutine assemble_stream_heartbeat
 
-  ! Write the preprocessing section. Micrographs, histograms, and timeplots are
-  ! added only when allocated and assigned. The section is suppressed when its
-  ! content hash matches the previously sent hash.
+  ! Write the preprocessing section, including micrographs, histograms, and
+  ! timeplots. The whole section is suppressed when its hash matches the
+  ! previously sent hash.
   subroutine assemble_stream_preprocess( self, meta_preprocess, meta_micrographs, meta_histograms, meta_timeplots )
     class(gui_assembler),                              intent(inout) :: self
     type(gui_metadata_stream_preprocess),              intent(inout) :: meta_preprocess
@@ -193,130 +197,8 @@ contains
     logical                                                          :: l_add
     call self%json%remove_if_present(self%json_root, 'preprocessing')
     json_ptr => meta_preprocess%jsonise()
-    if( associated(json_ptr) ) then
-      call self%json%rename(json_ptr, 'preprocessing')
-      ! add micrographs array if present
-      if( allocated(meta_micrographs) ) then
-        l_add = .false.
-        call self%json%create_array(json_mics_ptr, 'latest_micrographs')
-        do i_mic=1, size(meta_micrographs)
-          if( meta_micrographs(i_mic)%assigned() ) then
-            l_add = .true.
-            call self%json%add(json_mics_ptr, meta_micrographs(i_mic)%jsonise())
-          endif
-        enddo
-        if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
-      endif
-      ! add histograms array if present
-      if( allocated(meta_histograms) ) then
-        l_add = .false.
-        call self%json%create_object(json_hists_ptr, 'histograms')
-        do i_hist=1, size(meta_histograms)
-          if( meta_histograms(i_hist)%assigned() ) then
-            l_add = .true.
-            call self%json%add(json_hists_ptr, meta_histograms(i_hist)%jsonise())
-          endif
-        enddo
-        if( l_add ) call self%json%add(json_ptr, json_hists_ptr)
-      endif
-      ! add timeplots array if present
-      if( allocated(meta_timeplots) ) then
-        l_add = .false.
-        call self%json%create_object(json_timeplots_ptr, 'timeplots')
-        do i_timeplot=1, size(meta_timeplots)
-          if( meta_timeplots(i_timeplot)%assigned() ) then
-            l_add = .true.
-            call self%json%add(json_timeplots_ptr, meta_timeplots(i_timeplot)%jsonise())
-          endif
-        enddo
-        if( l_add ) call self%json%add(json_ptr, json_timeplots_ptr)
-      endif
-      ! calculate hash
-      call self%json%print_to_string(json_ptr, buffer)
-      str  = buffer
-      hash = str%to_fnv1a_hash64()
-      ! if hash changed, add to json_root, else remove as already sent
-      if( hash /= self%preprocess_hash ) then
-        call self%json%add(self%json_root, json_ptr)
-        self%preprocess_hash = hash
-      endif
-      if( allocated(buffer) ) deallocate(buffer)
-    endif
-    ! cleanup
-    nullify(json_ptr, json_mics_ptr, json_hists_ptr, json_timeplots_ptr)
-  end subroutine assemble_stream_preprocess
-
-  ! Write the optics-assignment section. Optics groups are added only when
-  ! allocated and assigned. The section is suppressed when its content hash
-  ! matches the previously sent hash.
-  subroutine assemble_stream_optics_assignment( self, meta_optics_assignment, meta_optics_groups )
-    class(gui_assembler),                              intent(inout) :: self
-    type(gui_metadata_stream_optics_assignment),       intent(inout) :: meta_optics_assignment
-    type(gui_metadata_optics_group),      allocatable, intent(inout) :: meta_optics_groups(:)
-    character(kind=CK,len=:),             allocatable                :: buffer
-    type(json_value),                     pointer                    :: json_ptr, json_optics_groups_ptr
-    type(string)                                                     :: str, hash
-    logical                                                          :: l_add
-    integer                                                          :: i_group
-    call self%json%remove_if_present(self%json_root, 'optics_assignment')
-    json_ptr => meta_optics_assignment%jsonise()
-    if( associated(json_ptr) ) then
-      call self%json%rename(json_ptr, 'optics_assignment')
-      ! calculate hash
-      call self%json%print_to_string(json_ptr, buffer)
-      str  = buffer
-      hash = str%to_fnv1a_hash64()
-      ! if hash changed, add to json_root, else remove as already sent
-      if( hash /= self%optics_assignment_hash ) then
-        call self%json%add(self%json_root, json_ptr)
-        self%optics_assignment_hash = hash
-      endif
-      if( allocated(buffer) ) deallocate(buffer)
-    endif
-    ! add optics groups array if present
-    if( allocated(meta_optics_groups) ) then
-      l_add = .false.
-      call self%json%create_array(json_optics_groups_ptr, 'optics_assignments')
-      do i_group=1, size(meta_optics_groups)
-        if( meta_optics_groups(i_group)%assigned() ) then
-          l_add = .true.
-          call self%json%add(json_optics_groups_ptr, meta_optics_groups(i_group)%jsonise())
-        endif
-      enddo
-      if( l_add ) call self%json%add(json_ptr, json_optics_groups_ptr)
-    endif
-    ! cleanup
-    nullify(json_ptr)
-  end subroutine assemble_stream_optics_assignment
-
-  ! Write the initial-picking section. Micrographs are added only when
-  ! allocated and assigned. The section is suppressed when its content hash
-  ! matches the previously sent hash.
-  subroutine assemble_stream_initial_picking( self, meta_initial_picking, meta_micrographs )
-    class(gui_assembler),                              intent(inout) :: self
-    type(gui_metadata_stream_initial_picking),         intent(inout) :: meta_initial_picking
-    type(gui_metadata_micrograph),        allocatable, intent(inout) :: meta_micrographs(:)
-    character(kind=CK,len=:),             allocatable                :: buffer
-    type(json_value),                     pointer                    :: json_ptr, json_mics_ptr
-    type(string)                                                     :: str, hash
-    logical                                                          :: l_add
-    integer                                                          :: i_mic
-    call self%json%remove_if_present(self%json_root, 'initial_picking')
-    json_ptr => meta_initial_picking%jsonise()
-    if( associated(json_ptr) ) then
-      call self%json%rename(json_ptr, 'initial_picking')
-      ! calculate hash
-      call self%json%print_to_string(json_ptr, buffer)
-      str  = buffer
-      hash = str%to_fnv1a_hash64()
-      ! if hash changed, add to json_root, else remove as already sent
-      if( hash /= self%initial_picking_hash ) then
-        call self%json%add(self%json_root, json_ptr)
-        self%initial_picking_hash = hash
-      endif
-      if( allocated(buffer) ) deallocate(buffer)
-    endif
-    ! add micrographs array if present
+    if( .not. associated(json_ptr) ) return
+    call self%json%rename(json_ptr, 'preprocessing')
     if( allocated(meta_micrographs) ) then
       l_add = .false.
       call self%json%create_array(json_mics_ptr, 'latest_micrographs')
@@ -328,36 +210,156 @@ contains
       enddo
       if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
     endif
-    ! cleanup
+    if( allocated(meta_histograms) ) then
+      l_add = .false.
+      call self%json%create_object(json_hists_ptr, 'histograms')
+      do i_hist=1, size(meta_histograms)
+        if( meta_histograms(i_hist)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_hists_ptr, meta_histograms(i_hist)%jsonise())
+        endif
+      enddo
+      if( l_add ) call self%json%add(json_ptr, json_hists_ptr)
+    endif
+    if( allocated(meta_timeplots) ) then
+      l_add = .false.
+      call self%json%create_object(json_timeplots_ptr, 'timeplots')
+      do i_timeplot=1, size(meta_timeplots)
+        if( meta_timeplots(i_timeplot)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_timeplots_ptr, meta_timeplots(i_timeplot)%jsonise())
+        endif
+      enddo
+      if( l_add ) call self%json%add(json_ptr, json_timeplots_ptr)
+    endif
+    call self%json%print_to_string(json_ptr, buffer)
+    str  = buffer
+    hash = str%to_fnv1a_hash64()
+    if( hash /= self%preprocess_hash ) then
+      call self%json%add(self%json_root, json_ptr)
+      self%preprocess_hash = hash
+    endif
+    if( allocated(buffer) ) deallocate(buffer)
+    nullify(json_ptr, json_mics_ptr, json_hists_ptr, json_timeplots_ptr)
+  end subroutine assemble_stream_preprocess
+
+  ! Write the optics-assignment section, including optics groups. The whole
+  ! section is suppressed when its hash matches the previously sent hash.
+  subroutine assemble_stream_optics_assignment( self, meta_optics_assignment, meta_optics_groups )
+    class(gui_assembler),                              intent(inout) :: self
+    type(gui_metadata_stream_optics_assignment),       intent(inout) :: meta_optics_assignment
+    type(gui_metadata_optics_group),      allocatable, intent(inout) :: meta_optics_groups(:)
+    character(kind=CK,len=:),             allocatable                :: buffer
+    type(json_value),                     pointer                    :: json_ptr, json_optics_groups_ptr
+    type(string)                                                     :: str, hash
+    logical                                                          :: l_add
+    integer                                                          :: i_group
+    call self%json%remove_if_present(self%json_root, 'optics_assignment')
+    json_ptr => meta_optics_assignment%jsonise()
+    if( .not. associated(json_ptr) ) return
+    call self%json%rename(json_ptr, 'optics_assignment')
+    if( allocated(meta_optics_groups) ) then
+      l_add = .false.
+      call self%json%create_array(json_optics_groups_ptr, 'optics_assignments')
+      do i_group=1, size(meta_optics_groups)
+        if( meta_optics_groups(i_group)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_optics_groups_ptr, meta_optics_groups(i_group)%jsonise())
+        endif
+      enddo
+      if( l_add ) call self%json%add(json_ptr, json_optics_groups_ptr)
+    endif
+    call self%json%print_to_string(json_ptr, buffer)
+    str  = buffer
+    hash = str%to_fnv1a_hash64()
+    if( hash /= self%optics_assignment_hash ) then
+      call self%json%add(self%json_root, json_ptr)
+      self%optics_assignment_hash = hash
+    endif
+    if( allocated(buffer) ) deallocate(buffer)
+    nullify(json_ptr)
+  end subroutine assemble_stream_optics_assignment
+
+  ! Write the initial-picking section, including micrographs. The whole section
+  ! is suppressed when its hash matches the previously sent hash.
+  subroutine assemble_stream_initial_picking( self, meta_initial_picking, meta_micrographs )
+    class(gui_assembler),                              intent(inout) :: self
+    type(gui_metadata_stream_initial_picking),         intent(inout) :: meta_initial_picking
+    type(gui_metadata_micrograph),        allocatable, intent(inout) :: meta_micrographs(:)
+    character(kind=CK,len=:),             allocatable                :: buffer
+    type(json_value),                     pointer                    :: json_ptr, json_mics_ptr
+    type(string)                                                     :: str, hash
+    logical                                                          :: l_add
+    integer                                                          :: i_mic
+    call self%json%remove_if_present(self%json_root, 'initial_picking')
+    json_ptr => meta_initial_picking%jsonise()
+    if( .not. associated(json_ptr) ) return
+    call self%json%rename(json_ptr, 'initial_picking')
+    if( allocated(meta_micrographs) ) then
+      l_add = .false.
+      call self%json%create_array(json_mics_ptr, 'latest_micrographs')
+      do i_mic=1, size(meta_micrographs)
+        if( meta_micrographs(i_mic)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_mics_ptr, meta_micrographs(i_mic)%jsonise())
+        endif
+      enddo
+      if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
+    endif
+    call self%json%print_to_string(json_ptr, buffer)
+    str  = buffer
+    hash = str%to_fnv1a_hash64()
+    if( hash /= self%initial_picking_hash ) then
+      call self%json%add(self%json_root, json_ptr)
+      self%initial_picking_hash = hash
+    endif
+    if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
   end subroutine assemble_stream_initial_picking
 
-  ! Write the opening2D (2D classification) section. The section is suppressed
-  ! when its content hash matches the previously sent hash.
-  ! NOTE: currently reuses initial_picking_hash — add a dedicated opening2D_hash
-  !       field to gui_assembler if independent suppression is required.
-  subroutine assemble_stream_opening2D( self, meta_opening2D )
-    class(gui_assembler),                intent(inout) :: self
-    type(gui_metadata_stream_opening2D), intent(inout) :: meta_opening2D
-    character(kind=CK,len=:),            allocatable   :: buffer
-    type(json_value),                    pointer       :: json_ptr
-    type(string)                                       :: str, hash
+  ! Write the opening2D (2D classification) section, including any cavgs2D.
+  ! The whole section (header + cavgs2D) is suppressed when its hash matches
+  ! the previously sent hash.
+  subroutine assemble_stream_opening2D( self, meta_opening2D, meta_latest_cavgs2D, meta_final_cavgs2D )
+    class(gui_assembler),                   intent(inout) :: self
+    type(gui_metadata_cavg2D), allocatable, intent(inout) :: meta_latest_cavgs2D(:), meta_final_cavgs2D(:)
+    type(gui_metadata_stream_opening2D),    intent(inout) :: meta_opening2D
+    character(kind=CK,len=:),               allocatable   :: buffer
+    type(json_value),                       pointer       :: json_ptr, json_cavgs2D_ptr
+    type(string)                                          :: str, hash
+    logical                                               :: l_add
+    integer                                               :: i_cls2D
     call self%json%remove_if_present(self%json_root, 'opening2D')
     json_ptr => meta_opening2D%jsonise()
-    if( associated(json_ptr) ) then
-      call self%json%rename(json_ptr, 'opening2D')
-      ! calculate hash
-      call self%json%print_to_string(json_ptr, buffer)
-      str  = buffer
-      hash = str%to_fnv1a_hash64()
-      ! if hash changed, add to json_root, else remove as already sent
-      if( hash /= self%initial_picking_hash ) then
-        call self%json%add(self%json_root, json_ptr)
-        self%initial_picking_hash = hash
-      endif
-      if( allocated(buffer) ) deallocate(buffer)
+    if( .not. associated(json_ptr) ) return
+    call self%json%rename(json_ptr, 'opening2D')
+    l_add = .false.
+    if( allocated(meta_final_cavgs2D) ) then
+      call self%json%create_array(json_cavgs2D_ptr, 'final_cls2D')
+      do i_cls2D=1, size(meta_final_cavgs2D)
+        if( meta_final_cavgs2D(i_cls2D)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_cavgs2D_ptr, meta_final_cavgs2D(i_cls2D)%jsonise())
+        endif
+      enddo
+    else if( allocated(meta_latest_cavgs2D) ) then
+      call self%json%create_array(json_cavgs2D_ptr, 'latest_cls2D')
+      do i_cls2D=1, size(meta_latest_cavgs2D)
+        if( meta_latest_cavgs2D(i_cls2D)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_cavgs2D_ptr, meta_latest_cavgs2D(i_cls2D)%jsonise())
+        endif
+      enddo
     endif
-    ! cleanup
+    if( l_add ) call self%json%add(json_ptr, json_cavgs2D_ptr)
+    call self%json%print_to_string(json_ptr, buffer)
+    str  = buffer
+    hash = str%to_fnv1a_hash64()
+    if( hash /= self%opening2D_hash ) then
+      call self%json%add(self%json_root, json_ptr)
+      self%opening2D_hash = hash
+    endif
+    if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
   end subroutine assemble_stream_opening2D
 

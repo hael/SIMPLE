@@ -81,20 +81,20 @@ contains
         type(http_response)                        :: response
         type(string)                               :: request
         type(json_core)                            :: json
-        type(json_value),              pointer     :: json_response_ptr
+        type(json_value),              pointer     :: json_response_ptr => null()
         type(gui_assembler)                        :: assembler
         ! gui metadata
-        type(gui_metadata_stream_update)           :: meta_update
-        type(gui_metadata_stream_preprocess)       :: meta_preprocess
-        type(gui_metadata_micrograph), allocatable :: meta_preprocess_micrographs(:)
-        type(gui_metadata_histogram),  allocatable :: meta_preprocess_histograms(:)
-        type(gui_metadata_timeplot),   allocatable :: meta_preprocess_timeplots(:)
-        type(gui_metadata_stream_optics_assignment) :: meta_optics_assignment
+        type(gui_metadata_stream_update)             :: meta_update
+        type(gui_metadata_stream_preprocess)         :: meta_preprocess
+        type(gui_metadata_stream_optics_assignment)  :: meta_optics_assignment
+        type(gui_metadata_stream_initial_picking)    :: meta_initial_picking
+        type(gui_metadata_stream_opening2D)          :: meta_opening2D
+        type(gui_metadata_micrograph),   allocatable :: meta_preprocess_micrographs(:)
+        type(gui_metadata_histogram),    allocatable :: meta_preprocess_histograms(:)
+        type(gui_metadata_timeplot),     allocatable :: meta_preprocess_timeplots(:)
         type(gui_metadata_optics_group), allocatable :: meta_optics_assignment_optics_groups(:)
-        type(gui_metadata_stream_initial_picking)  :: meta_initial_picking
-        type(gui_metadata_micrograph), allocatable :: meta_initial_picking_micrographs(:)
-        type(gui_metadata_stream_opening2D)        :: meta_opening2D
-
+        type(gui_metadata_micrograph),   allocatable :: meta_initial_picking_micrographs(:)
+        type(gui_metadata_cavg2D),       allocatable :: meta_opening2D_cavgs2D(:), meta_opening2D_final_cavgs2D(:)
         ! forked processes
         type(preprocess_fork)                      :: fork_preprocess
         type(assign_optics_fork)                   :: fork_assign_optics
@@ -102,8 +102,9 @@ contains
         type(c_pthread_t)                          :: meta_listener_thread
         type(c_ptr)                                :: ptr
         character(len=:),              allocatable :: meta_buffer
+        integer,                       allocatable :: i_arr(:)
         logical                                    :: l_terminate=.false., l_last_loop=.false., l_found, l_test=.false., l_terminate_loop=.false.
-        integer                                    :: stat, i, rc, max_msgsize
+        integer                                    :: stat, i, rc, max_msgsize, i_val
         real(kind=dp)                              :: r_val
         ! init params
         call params%new(cline)
@@ -153,7 +154,7 @@ contains
             call assembler%assemble_stream_preprocess(meta_preprocess, meta_preprocess_micrographs, meta_preprocess_histograms, meta_preprocess_timeplots)
             call assembler%assemble_stream_optics_assignment(meta_optics_assignment, meta_optics_assignment_optics_groups)
             call assembler%assemble_stream_initial_picking(meta_initial_picking, meta_initial_picking_micrographs)
-            call assembler%assemble_stream_opening2D(meta_opening2D)
+            call assembler%assemble_stream_opening2D(meta_opening2D, meta_opening2D_cavgs2D, meta_opening2D_final_cavgs2D)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             ! stringify assembled json
             request = assembler%to_string()
@@ -166,6 +167,8 @@ contains
                     call json%parse(json_response_ptr, response%content%to_char())
                     if( json%failed()) then
                         write(logfhandle, '(A,A)') "FAILED TO PARSE JSON RESPONSE ", response%content%to_char()
+                        call json%clear_exceptions()
+                        nullify(json_response_ptr)
                     else
                         ! check for master process termination
                         call json%get(json_response_ptr, 'terminate', l_test, l_found)
@@ -218,11 +221,16 @@ contains
                         if(l_found) call meta_update%set_astigmatism_update(real(r_val))
                         call json%get(json_response_ptr, 'icescore', r_val, l_found)
                         if(l_found) call meta_update%set_icescore_update(real(r_val))
+                        call json%get(json_response_ptr, 'increase_nmics', i_val, l_found)
+                        if(l_found) call meta_update%set_increase_nmics(i_val)
+                        call json%get(json_response_ptr, 'pickrefs_selection', i_arr, l_found)
+                        if(l_found) call meta_update%set_pickrefs_selection(i_arr)
                         if( meta_update%assigned() .and. mq_stream_master_out%is_active() ) then
                             write(logfhandle, *) "SEND UPDATE"
                             call meta_update%serialise(meta_buffer)
                             call mq_stream_master_out%send(meta_buffer)
                         endif
+                        if(allocated(i_arr)) deallocate(i_arr)
                     endif
                 endif
             else
@@ -293,6 +301,7 @@ contains
         subroutine metadata_listener()
             type(gui_metadata_micrograph)   :: meta_mic_tmp
             type(gui_metadata_optics_group) :: meta_optics_group_tmp
+            type(gui_metadata_cavg2D)       :: meta_cavg2D_tmp
             character(len=:), allocatable :: my_buffer
             integer                       :: my_rc, my_buffer_type, my_i
             logical                       :: my_l_continue, my_l_reinit
@@ -345,9 +354,10 @@ contains
                                             if( .not.meta_preprocess_micrographs(my_i)%initialized() ) THROW_HARD('failed to initialise preprocess micrograph metadata')
                                         enddo
                                     endif
-                                    ! transfer buffer contents to correct index in meta_preprocess_micrographs
-                                    meta_preprocess_micrographs(meta_mic_tmp%get_i()) = transfer(my_buffer, meta_preprocess_micrographs(meta_mic_tmp%get_i()))
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_preprocess_micrographs(meta_mic_tmp%get_i()) = meta_mic_tmp
                                 case( GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE )
+                                    write(*,*) 'GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE'
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of mic meta data
                                     meta_mic_tmp = transfer(my_buffer, meta_mic_tmp)
@@ -366,10 +376,9 @@ contains
                                             if( .not.meta_initial_picking_micrographs(my_i)%initialized() ) THROW_HARD('failed to initialise initial picking micrograph metadata')
                                         enddo
                                     endif
-                                    ! transfer buffer contents to correct index in meta_initial_picking_micrographs
-                                    meta_initial_picking_micrographs(meta_mic_tmp%get_i()) = transfer(my_buffer, meta_initial_picking_micrographs(meta_mic_tmp%get_i()))    
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_initial_picking_micrographs(meta_mic_tmp%get_i()) = meta_mic_tmp
                                 case( GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_OPTICS_GROUP_TYPE )
-                                    write(*,*) "GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_OPTICS_GROUP_TYPE"
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of optics group
                                     meta_optics_group_tmp = transfer(my_buffer, meta_optics_group_tmp)
@@ -388,8 +397,50 @@ contains
                                             if( .not.meta_optics_assignment_optics_groups(my_i)%initialized() ) THROW_HARD('failed to initialise optics assignment optics group metadata')
                                         enddo
                                     endif
-                                    ! transfer buffer contents to correct index in meta_preprocess_micrographs
-                                    meta_optics_assignment_optics_groups(meta_optics_group_tmp%get_i()) = transfer(my_buffer, meta_optics_assignment_optics_groups(meta_optics_group_tmp%get_i()))
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_optics_assignment_optics_groups(meta_optics_group_tmp%get_i()) = meta_optics_group_tmp
+                                case( GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE )
+                                    my_l_reinit = .false.
+                                    ! deserialise temporary copy of cavg2D metadata to read routing fields
+                                    meta_cavg2D_tmp = transfer(my_buffer, meta_cavg2D_tmp)
+                                    ! allocate or resize meta_opening2D_cavgs2D as necessary based on i_max
+                                    if( .not.allocated(meta_opening2D_cavgs2D) ) then
+                                        my_l_reinit = .true.
+                                    else if( size(meta_opening2D_cavgs2D) /= meta_cavg2D_tmp%get_i_max() ) then
+                                        deallocate(meta_opening2D_cavgs2D)
+                                        my_l_reinit = .true.
+                                    endif
+                                    if( my_l_reinit ) then
+                                        ! allocate and initialise each object in meta_opening2D_cavgs2D
+                                        allocate(meta_opening2D_cavgs2D(meta_cavg2D_tmp%get_i_max()))
+                                        do my_i=1, size(meta_opening2D_cavgs2D)
+                                            call meta_opening2D_cavgs2D(my_i)%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)
+                                            if( .not.meta_opening2D_cavgs2D(my_i)%initialized() ) THROW_HARD('failed to initialise opening2D cavg2D metadata')
+                                        enddo
+                                    endif
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_opening2D_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
+                                case( GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE )
+                                    my_l_reinit = .false.
+                                    ! deserialise temporary copy of cavg2D metadata to read routing fields
+                                    meta_cavg2D_tmp = transfer(my_buffer, meta_cavg2D_tmp)
+                                    ! allocate or resize meta_opening2D_final_cavgs2D as necessary based on i_max
+                                    if( .not.allocated(meta_opening2D_final_cavgs2D) ) then
+                                        my_l_reinit = .true.
+                                    else if( size(meta_opening2D_final_cavgs2D) /= meta_cavg2D_tmp%get_i_max() ) then
+                                        deallocate(meta_opening2D_final_cavgs2D)
+                                        my_l_reinit = .true.
+                                    endif
+                                    if( my_l_reinit ) then
+                                        ! allocate and initialise each object in meta_opening2D_final_cavgs2D
+                                        allocate(meta_opening2D_final_cavgs2D(meta_cavg2D_tmp%get_i_max()))
+                                        do my_i=1, size(meta_opening2D_final_cavgs2D)
+                                            call meta_opening2D_final_cavgs2D(my_i)%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)
+                                            if( .not.meta_opening2D_final_cavgs2D(my_i)%initialized() ) THROW_HARD('failed to initialise opening2D cavg2D metadata')
+                                        enddo
+                                    endif
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_opening2D_final_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp    
                             end select
                             deallocate(my_buffer)
                         end if
@@ -465,7 +516,7 @@ contains
             call cline_opening2D%set('outdir',                 OPENING2D_JOB_NAME)
             call cline_opening2D%set('dir_target',               PREPROC_JOB_NAME)
             call cline_opening2D%set('optics_dir',                OPTICS_JOB_NAME)
-            call cline_opening2D%set('nthr',                                    1)
+            call cline_opening2D%set('nthr',                                    4)
             call cline_opening2D%set('mkdir',                               'yes')
             call cline_opening2D%set('nmics',                                   5) ! for testing only
         end subroutine init_cline_opening2D
@@ -478,6 +529,7 @@ contains
             ! opening2D
             call meta_opening2D%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
             if( .not.meta_opening2D%initialized() ) THROW_HARD('failed to initialise opening2D metadata')
+            ! opening2D cavgs2D - allocated on receive
         end subroutine init_metadata_opening2D
 
     end subroutine exec_stream_p00_master

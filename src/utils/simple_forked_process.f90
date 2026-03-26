@@ -227,13 +227,13 @@ contains
     if( self%failed ) then
       self%failtime = int(c_time(0_c_long))
       if( self%restart ) then
-        self%n_restarts = self%n_restarts + 1
         if( self%n_restarts > FORK_MAX_RESTARTS ) then
           THROW_WARN('max restarts reached for forked process ' // self%description%to_char())
           status_code = FORK_STATUS_FAILED
         else
           call self%start()
           status_code = FORK_STATUS_RESTARTING
+          self%n_restarts = self%n_restarts + 1
         end if
       else
         status_code = FORK_STATUS_FAILED

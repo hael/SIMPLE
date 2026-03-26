@@ -16,10 +16,9 @@
 !   json_module, simple_core_module_api, simple_gui_metadata_base
 !==============================================================================
 module simple_gui_metadata_optics_group
-use json_kinds
-use json_module
-use simple_core_module_api
-use simple_gui_metadata_base
+use json_module,              only: json_core, json_value
+use simple_error,             only: simple_exception
+use simple_gui_metadata_base, only: gui_metadata_base
 
 implicit none
 

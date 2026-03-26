@@ -35,7 +35,10 @@ module simple_gui_assembler_tester
                                      GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE, &
                                      GUI_METADATA_OPTICS_GROUP_TYPE,             &
                                      GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,   &
-                                     GUI_METADATA_STREAM_OPENING2D_TYPE
+                                     GUI_METADATA_STREAM_OPENING2D_TYPE,         &
+                                     GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE,   &
+                                     gui_metadata_cavg2D,                        &
+                                     sprite_sheet_pos
   use simple_gui_assembler,    only: gui_assembler
   use simple_test_utils,       only: assert_true, assert_char
   use simple_string,           only: string
@@ -192,6 +195,10 @@ contains
 
   ! Assemble a stream optics-assignment JSON payload from synthetic metadata and
   ! verify its structure is stable via an FNV-1a hash of the serialised output.
+  ! Assemble a stream optics-assignment JSON payload from synthetic metadata and
+  ! verify its structure is stable via an FNV-1a hash of the serialised output.
+  ! NOTE: hash recalibration needed — optics groups are now included in the hash
+  ! (previously they were added after hash computation and omitted from it).
   subroutine test_optics_assignment()
     type(gui_assembler)                              :: assembler
     type(gui_metadata_stream_optics_assignment)      :: meta_optics_assignment
@@ -207,7 +214,6 @@ contains
     enddo
     call meta_optics_assignment%new(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE)
     call meta_optics_assignment%set(stage=string('test stage'), micrographs_assigned=100, optics_groups_assigned=5, last_micrograph_imported=1234)
-    ! optics groups
     allocate(meta_optics_groups(5))
     do i=1, size(meta_optics_groups)
       call meta_optics_groups(i)%new(GUI_METADATA_OPTICS_GROUP_TYPE)
@@ -217,7 +223,7 @@ contains
     call assert_true(assembler%is_associated(), 'assembler json associated')
     call assembler%assemble_stream_optics_assignment(meta_optics_assignment, meta_optics_groups)
     json_str = assembler%to_string()
-    call assert_true(json_str%strlen() > 0, 'json length greater that 0')
+    call assert_true(json_str%strlen() > 0, 'json length greater than 0')
     json_hash = json_str%to_fnv1a_hash64()
     call assert_char(json_hash%to_char(), 'BDBE34825830B633', 'assembler json hash matches')
     call assembler%kill()
@@ -263,20 +269,33 @@ contains
   ! the section is non-empty.  An exact hash comparison is not possible because
   ! the section embeds a live Unix timestamp (last_particles_imported).
   subroutine test_opening2D()
-    type(gui_assembler)                 :: assembler
-    type(gui_metadata_stream_opening2D) :: meta_opening2D
-    type(string)                        :: json_str
+    type(gui_assembler)                            :: assembler
+    type(gui_metadata_stream_opening2D)            :: meta_opening2D
+    type(gui_metadata_cavg2D),         allocatable :: meta_cavgs2D(:), meta_final_cavgs2D(:)
+    type(string)                                   :: json_str
+    integer                                        :: i
     write(*,'(A)') 'test_opening2D'
     call meta_opening2D%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
     call meta_opening2D%set(stage=string('test stage'), particles_imported=50000, &
                             particles_accepted=42000, mask_diam=160, box_size=256, mask_scale=0.75)
+    allocate(meta_cavgs2D(3))
+    do i=1, size(meta_cavgs2D)
+      call meta_cavgs2D(i)%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)
+    enddo
+    call meta_cavgs2D(1)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
+                             idx=1, sprite=sprite_sheet_pos(x=0.0,  y=0.0, h=256, w=768), i=1, i_max=3)
+    call meta_cavgs2D(2)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
+                             idx=2, sprite=sprite_sheet_pos(x=33.3, y=0.0, h=256, w=768), i=2, i_max=3)
+    call meta_cavgs2D(3)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
+                             idx=3, sprite=sprite_sheet_pos(x=66.6, y=0.0, h=256, w=768), i=3, i_max=3)
     call assembler%new(0)
     call assert_true(assembler%is_associated(), 'assembler json associated')
-    call assembler%assemble_stream_opening2D(meta_opening2D)
+    call assembler%assemble_stream_opening2D(meta_opening2D, meta_cavgs2D, meta_final_cavgs2D)
     json_str = assembler%to_string()
     call assert_true(json_str%strlen() > 0, 'json length greater than 0')
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
+    deallocate(meta_cavgs2D)
   end subroutine test_opening2D
 
 end module simple_gui_assembler_tester
