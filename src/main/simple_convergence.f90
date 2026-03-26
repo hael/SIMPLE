@@ -87,6 +87,8 @@ contains
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
+        607 format(A,1X,F4.2)
+        609 format(A)
         states         = os%get_all('state')
         scores         = os%get_all('corr')
         updatecnts     = os%get_all('updatecnt')
@@ -127,6 +129,17 @@ contains
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
+        write(logfhandle,609) '>>> REFINEMENT MODE IS '//trim(params%refine)
+        if( trim(params%gauref).eq.'yes' )then
+        write(logfhandle,607) '>>> GAU REGULARIZATION IS ON'
+        else
+        write(logfhandle,609) '>>> GAU REGULARIZATION IS OFF'
+        endif
+        if( params%l_ml_reg )then
+        write(logfhandle,607) '>>> ML  REGULARIZATION IS ON, TAU:    ', params%tau
+        else
+        write(logfhandle,609) '>>> ML  REGULARIZATION IS OFF'
+        endif
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( cline%defined('trs') .or. params%trs >  MINSHIFT)then

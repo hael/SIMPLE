@@ -140,7 +140,6 @@ contains
                 params%smpd_crop = params%smpd
                 params%box_crop  = params%box
                 params%msk_crop  = params%msk
-                write(*,*) params%smpd, params%box, params%msk
                 if( params%l_autoscale .and. params%box >= MINBOXSZ )then
                     call autoscale(params%box, params%smpd, smpd_target_eff, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOXSZ)
                     params%l_autoscale = params%box_crop < params%box

@@ -49,14 +49,11 @@ contains
             self%s%best_class = icls
             self%s%best_rot   = inpl
             self%s%best_corr  = corr
+            self%s%best_shvec = [0.,0.]
             if( self%s%p_ptr%l_doshift .and. self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%has_sh )then
-                assigned_shift = [self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%x, &
+                self%s%best_shvec = [self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%x, &
                                   self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%y]
-            else
-                assigned_shift = [0.,0.]
             endif
-            ! store_solution applies shift increment to previous shift
-            self%s%best_shvec = assigned_shift - self%s%prev_shvec
             call self%s%store_solution(os)
         else
             call os%reject(self%s%iptcl)

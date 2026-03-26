@@ -269,6 +269,10 @@ contains
         logical :: l_polar, l_use_polar_refs
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            call build%spproj_field%partition_eo
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
         l_polar          = trim(params%polar).eq.'yes'
         l_use_polar_refs = l_polar .and. (params%which_iter > 1)
         frac_srch_space  = build%spproj_field%get_avg('frac')
@@ -326,6 +330,10 @@ contains
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call set_b_p_ptrs2D(params, build)
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            call build%spproj_field%partition_eo
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
         if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sample particles for this iteration
         call sample_ptcls4update2D([params%fromp,params%top], params%l_update_frac, nptcls, pinds)

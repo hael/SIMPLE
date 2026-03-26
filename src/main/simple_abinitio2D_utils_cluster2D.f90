@@ -10,15 +10,16 @@ private
 #include "simple_local_flags.inc"
 
 ! Dimensions
-real,    parameter :: SMPD_TARGET     = 2.67
-integer, parameter :: MINBOXSZ        = 88
+real,    parameter :: SMPD_TARGET      = 2.67
+integer, parameter :: MINBOXSZ         = 88
 ! Stages
-integer, parameter :: NSTAGES_CLS     = 6
-integer, parameter :: NSTAGES_SINGLE  = 1
-integer, parameter :: ITS_INCR_SINGLE = 4
-integer, parameter :: ITS_INCR        = 5
-integer, parameter :: PHASES(2)       = [4, 6]
-integer, parameter :: EXTR_LIM_LOCAL  = 20
+integer, parameter :: NSTAGES_CLS      = 6
+integer, parameter :: NSTAGES_SINGLE   = 1
+integer, parameter :: ITS_INCR_SINGLE  = 4
+integer, parameter :: ITS_INCR         = 5
+integer, parameter :: PHASES(2)        = [4, 6]
+integer, parameter :: EXTR_LIM_LOCAL   = 20
+integer, parameter :: PROBREFINE_STAGE = 5
 
 ! convenience type
 type stage_params
@@ -166,6 +167,15 @@ contains
             call cline_cluster2D%set('gaufreq', gaufreq)
         else
             call cline_cluster2D%delete('gaufreq')
+        endif
+        if( trim(params%refine) == 'prob' )then
+            if( istage < PROBREFINE_STAGE )then
+                refine = 'shc_smpl'
+            else
+                refine = 'prob'
+            endif
+        else
+            refine = trim(params%refine)
         endif
         call cline_cluster2D%set('minits',    minits)
         call cline_cluster2D%set('maxits',    imaxits)

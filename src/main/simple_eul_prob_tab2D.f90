@@ -3,12 +3,15 @@ module simple_eul_prob_tab2D
 use simple_pftc_srch_api
 use simple_builder,          only: builder
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
+use simple_decay_funs,       only: extremal_decay2D
 use simple_eul_prob_tab,     only: eulprob_dist_switch, eulprob_corr_switch
 implicit none
 
 public :: eul_prob_tab2D
 private
 #include "simple_local_flags.inc"
+
+real, parameter :: NHOOD_FRAC = 0.1
 
 type :: eul_prob_tab2D
     class(builder),    pointer  :: b_ptr => null()
@@ -19,12 +22,13 @@ type :: eul_prob_tab2D
     logical,        allocatable :: class_exists(:)   !< class population filter
     integer                     :: nptcls            !< size of pinds array
     integer                     :: nclasses          !< number of classes
+    integer                     :: nhood_sz = 1      !< probabilistic neighborhood size used in fill_tab/ref_assign
     contains
     ! CONSTRUCTOR
     procedure :: new
     ! MAIN PROCEDURES
     procedure :: fill_tab
-    procedure :: ref_assign
+    procedure :: ref_assign => ref_assign_greedy
     procedure :: write_tab
     procedure :: read_tab_to_glob
     procedure :: write_assignment
@@ -45,8 +49,7 @@ contains
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
         logical, optional,         intent(in)    :: empty_okay
-        integer, parameter :: MIN_POP = 5   ! ignoring classes with less than 5 particles
-        integer :: i, icls, iptcl
+        integer :: i, icls, iptcl, nactive
         real    :: x
         logical :: l_empty
         call self%kill
@@ -57,10 +60,14 @@ contains
         self%nptcls    = size(pinds)
         self%nclasses  = params%ncls
         allocate(self%class_exists(self%nclasses))
-        ! Check which classes have min population
-        do icls = 1, self%nclasses
-            self%class_exists(icls) = self%b_ptr%spproj_field%get_pop(icls, 'class') >= MIN_POP
-        end do
+        ! In 2D probabilistic assignment classes must be able to recover, otherwise
+        ! low-population classes are permanently excluded and the solution collapses.
+        self%class_exists = .true.
+        nactive = count(self%class_exists)
+        if( nactive == 0 ) nactive = self%nclasses
+        self%nhood_sz = max(1, ceiling(NHOOD_FRAC * real(nactive)))
+        self%nhood_sz = min(self%nhood_sz, nactive)
+        self%nhood_sz = min(self%nhood_sz, params%npeaks_inpl)
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%loc_tab(self%nclasses, self%nptcls), self%assgn_map(self%nptcls))
         !$omp parallel do default(shared) private(i,iptcl,icls) proc_bind(close) schedule(static)
@@ -92,47 +99,121 @@ contains
         class(eul_prob_tab2D), intent(inout) :: self
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
-        integer :: i, icls, iptcl, ithr, irot, irot0
-        real    :: lims(2,2), lims_init(2,2), cxy(3)
-        if( .not. self%p_ptr%l_doshift ) THROW_HARD('Probabilistic table filling requires shift optimization. Check parameters construction.')
+        integer :: i, icls, iptcl, ithr, irot, irot0, icls_prev, iref_n, nactive, nhood_sz_loc, ninpl_smpl, order_ind
+        integer :: active_cls(self%nclasses)
+        integer :: loc(1), vec_nrots(self%b_ptr%pftc%get_nrots())
+        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rotmat(2,2), rot_xy(2)
+        real    :: inpl_corrs(self%b_ptr%pftc%get_nrots()), cls_dists(self%nclasses), cls_dists_work(self%nclasses)
+        real    :: inpl_corr, power, neigh_frac
+        logical :: class_active(self%nclasses)
         call seed_rnd
-        ! make shift search objects
-        lims(:,1)      = -self%p_ptr%trs
-        lims(:,2)      =  self%p_ptr%trs
-        lims_init(:,1) = -SHC_INPL_TRSHWDTH
-        lims_init(:,2) =  SHC_INPL_TRSHWDTH
-        do ithr = 1, nthr_glob
-            call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
-                &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+        class_active = self%class_exists
+        nactive      = count(class_active)
+        if( nactive == 0 )then
+            class_active = .true.
+            nactive      = self%nclasses
+            THROW_WARN('No active classes after population filtering; falling back to all classes in eul_prob_tab2D')
+        endif
+        nactive = 0
+        do icls = 1, self%nclasses
+            if( class_active(icls) )then
+                nactive = nactive + 1
+                active_cls(nactive) = icls
+            endif
         end do
-        ! fill the table
-        !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls) proc_bind(close) schedule(static)
-        do i = 1, self%nptcls
-            iptcl = self%pinds(i)
-            ithr  = omp_get_thread_num() + 1
-            ! do full search with shift optimization and in-plane rotation callback optimization
-            call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)      ! previous ori
-            irot0 = self%b_ptr%pftc%get_roind(360. - o_prev%e3get()) ! in-plane angle index seed
-            ! search all classes
-            do icls = 1, self%nclasses
-                if( .not. self%class_exists(icls) ) cycle
-                irot = irot0
-                ! BFGS over shifts
-                call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
-                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                if( irot == 0 )then ! no improved solution found, put back the old one
-                    irot     = irot0
-                    cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(icls, iptcl, irot))
-                    cxy(2:3) = 0.
-                endif
-                self%loc_tab(icls,i)%dist   = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
-                self%loc_tab(icls,i)%inpl   = irot
-                self%loc_tab(icls,i)%x      = cxy(2)
-                self%loc_tab(icls,i)%y      = cxy(3)
-                self%loc_tab(icls,i)%has_sh = .true.
+        nhood_sz_loc = min(self%nhood_sz, nactive)
+        neigh_frac = extremal_decay2D(self%p_ptr%extr_iter, self%p_ptr%extr_lim)
+        ninpl_smpl = neighfrac2nsmpl(neigh_frac, self%b_ptr%pftc%get_nrots())
+        ninpl_smpl = max(1, min(ninpl_smpl, self%b_ptr%pftc%get_nrots()))
+        power      = EXTR_POWER
+        if( self%p_ptr%l_doshift )then
+            ! make shift search objects
+            lims(:,1)      = -self%p_ptr%trs
+            lims(:,2)      =  self%p_ptr%trs
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            do ithr = 1, nthr_glob
+                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+                    &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
-        end do
-        !$omp end parallel do
+            ! fill the table
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls,icls_prev,inpl_corrs,loc,cls_dists,cls_dists_work,iref_n,cxy_prob,vec_nrots,order_ind,inpl_corr,rotmat,rot_xy) proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                iptcl = self%pinds(i)
+                ithr  = omp_get_thread_num() + 1
+                ! (1) identify shifts using the previously assigned best class
+                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)      ! previous ori
+                irot0 = self%b_ptr%pftc%get_roind(360. - o_prev%e3get()) ! in-plane angle index seed
+                icls_prev = nint(self%b_ptr%spproj_field%get(iptcl, 'class'))
+                cxy       = 0.
+                if( icls_prev >= 1 .and. icls_prev <= self%nclasses )then
+                    if( class_active(icls_prev) )then
+                        irot = irot0
+                        call grad_shsrch_obj(ithr)%set_indices(icls_prev, iptcl)
+                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                        if( irot == 0 )then
+                            cxy(2:3) = 0.
+                            irot = irot0
+                        endif
+                    endif
+                endif
+                ! (2) search class references using that shared shift
+                cls_dists = huge(1.0)
+                do iref_n = 1, nactive
+                    icls = active_cls(iref_n)
+                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, cxy(2:3), inpl_corrs)
+                    call power_sampling(power, self%b_ptr%pftc%get_nrots(), inpl_corrs, vec_nrots, ninpl_smpl, irot, order_ind, inpl_corr)
+                    rot_xy = 0.
+                    if( irot > 0 )then
+                        call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
+                        rot_xy = matmul(cxy(2:3), rotmat)
+                    endif
+                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(inpl_corr, self%p_ptr%cc_objfun)
+                    self%loc_tab(icls,i)%inpl   = irot
+                    self%loc_tab(icls,i)%x      = rot_xy(1)
+                    self%loc_tab(icls,i)%y      = rot_xy(2)
+                    self%loc_tab(icls,i)%has_sh = irot > 0
+                    cls_dists(icls) = self%loc_tab(icls,i)%dist
+                end do
+                ! (3) refine shifts for a neighborhood of classes around the best one
+                cls_dists_work = cls_dists
+                do iref_n = 1, nhood_sz_loc
+                    loc = minloc(cls_dists_work)
+                    icls = loc(1)
+                    if( cls_dists_work(icls) >= huge(1.0)/2.0 ) exit
+                    call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
+                    irot     = self%loc_tab(icls,i)%inpl
+                    cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                    if( irot > 0 )then
+                        self%loc_tab(icls,i)%inpl   = irot
+                        self%loc_tab(icls,i)%dist   = eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun)
+                        self%loc_tab(icls,i)%x      = cxy_prob(2)
+                        self%loc_tab(icls,i)%y      = cxy_prob(3)
+                        self%loc_tab(icls,i)%has_sh = .true.
+                    endif
+                    cls_dists_work(icls) = huge(1.0)
+                end do
+            end do
+            !$omp end parallel do
+        else
+            ! shift-free path: evaluate classes/in-planes at zero shift
+            !$omp parallel do default(shared) private(i,iptcl,ithr,icls,iref_n,inpl_corrs,vec_nrots,irot,order_ind,inpl_corr) proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                iptcl = self%pinds(i)
+                ithr  = omp_get_thread_num() + 1
+                do iref_n = 1, nactive
+                    icls = active_cls(iref_n)
+                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], inpl_corrs)
+                    call power_sampling(power, self%b_ptr%pftc%get_nrots(), inpl_corrs, vec_nrots, ninpl_smpl, irot, order_ind, inpl_corr)
+                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(inpl_corr, self%p_ptr%cc_objfun)
+                    self%loc_tab(icls,i)%inpl   = irot
+                    self%loc_tab(icls,i)%x      = 0.
+                    self%loc_tab(icls,i)%y      = 0.
+                    self%loc_tab(icls,i)%has_sh = .false.
+                end do
+            end do
+            !$omp end parallel do
+        endif
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
@@ -217,17 +298,17 @@ contains
         endif
     end subroutine ref_normalize
 
-    ! ptcl -> class assignment using the normalized dist value table
-    subroutine ref_assign( self )
+    ! deterministic ptcl -> class assignment (debug): no probabilistic sampling
+    subroutine ref_assign_greedy( self )
         class(eul_prob_tab2D), intent(inout) :: self
-        real,    parameter :: NHOOD_FRAC = 0.2
         integer :: i, icls, assigned_icls, assigned_ptcl, stab_inds(self%nptcls, self%nclasses)
-        integer :: icls_dist_inds(self%nclasses), sorted_inds(self%nclasses), active_cls(self%nclasses)
+        integer :: icls_dist_inds(self%nclasses), active_cls(self%nclasses), eligible_cls(self%nclasses)
         real    :: sorted_tab(self%nptcls, self%nclasses), dists_sorted(self%nclasses)
-        real    :: dists_sorted_work(self%nclasses)
+        real    :: dists_raw(self%nclasses, self%nptcls)
         logical :: ptcl_avail(self%nptcls)
         logical :: class_active(self%nclasses)
-        integer :: nactive, iact, chosen_active, nhood_sz
+        integer :: nactive, iact, chosen_active, neligible
+        real    :: best_dist
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -242,8 +323,8 @@ contains
                 active_cls(nactive) = icls
             endif
         end do
-        nhood_sz = max(1, ceiling(NHOOD_FRAC * real(nactive)))
-        nhood_sz = min(nhood_sz, nactive)
+        ! keep raw distances for output (objective values), normalize only for deterministic assignment ordering
+        dists_raw = self%loc_tab(:,:)%dist
         ! normalization
         call self%ref_normalize
         ! sorting each columns
@@ -258,30 +339,61 @@ contains
             endif
         end do
         !$omp end parallel do
-        ! greedy sampling over available classes
         icls_dist_inds = 1
         ptcl_avail     = .true.
         do while( any(ptcl_avail) )
-            ! collect current best distance for each class
+            ! collect current best distance for each class, skipping exhausted ones
+            neligible = 0
             do iact = 1, nactive
                 icls = active_cls(iact)
-                dists_sorted(iact) = sorted_tab(icls_dist_inds(icls), icls)
+                do while( icls_dist_inds(icls) <= self%nptcls )
+                    assigned_ptcl = stab_inds(icls_dist_inds(icls), icls)
+                    if( ptcl_avail(assigned_ptcl) ) exit
+                    icls_dist_inds(icls) = icls_dist_inds(icls) + 1
+                end do
+                if( icls_dist_inds(icls) <= self%nptcls )then
+                    neligible = neligible + 1
+                    eligible_cls(neligible) = icls
+                    dists_sorted(neligible) = sorted_tab(icls_dist_inds(icls), icls)
+                endif
             end do
-            ! greedy sampling: pick best class (no allocations in loop)
-            chosen_active = greedy_sampling(dists_sorted, dists_sorted_work, sorted_inds, nactive, nhood_sz)
-            assigned_icls = active_cls(chosen_active)
+            if( neligible == 0 ) exit
+            chosen_active = minloc(dists_sorted(1:neligible), dim=1)
+            assigned_icls = eligible_cls(chosen_active)
             assigned_ptcl = stab_inds(icls_dist_inds(assigned_icls), assigned_icls)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_icls, assigned_ptcl)
-            ! update the icls_dist_inds to next available particle for each class
-            do iact = 1, nactive
-                icls = active_cls(iact)
-                do while( icls_dist_inds(icls) < self%nptcls .and. .not.(ptcl_avail(stab_inds(icls_dist_inds(icls), icls))))
-                    icls_dist_inds(icls) = icls_dist_inds(icls) + 1
-                end do
-            end do
+            self%assgn_map(assigned_ptcl)%dist = dists_raw(assigned_icls, assigned_ptcl)
         end do
-    end subroutine ref_assign
+        if( any(ptcl_avail) )then
+            do i = 1, self%nptcls
+                if( .not. ptcl_avail(i) ) cycle
+                assigned_icls = 0
+                best_dist     = huge(1.0)
+                do iact = 1, nactive
+                    icls = active_cls(iact)
+                    if( self%loc_tab(icls,i)%inpl <= 0 ) cycle
+                    if( self%loc_tab(icls,i)%dist < best_dist )then
+                        best_dist     = self%loc_tab(icls,i)%dist
+                        assigned_icls = icls
+                    endif
+                end do
+                if( assigned_icls == 0 )then
+                    do iact = 1, nactive
+                        icls = active_cls(iact)
+                        if( self%loc_tab(icls,i)%dist < best_dist )then
+                            best_dist     = self%loc_tab(icls,i)%dist
+                            assigned_icls = icls
+                        endif
+                    end do
+                endif
+                if( assigned_icls == 0 ) THROW_HARD('Failed particle assignment in eul_prob_tab2D%ref_assign_greedy')
+                self%assgn_map(i) = self%loc_tab(assigned_icls, i)
+                self%assgn_map(i)%dist = dists_raw(assigned_icls, i)
+                ptcl_avail(i)     = .false.
+            end do
+        endif
+    end subroutine ref_assign_greedy
 
     ! DESTRUCTOR
 
