@@ -33,6 +33,8 @@ type(commander_prob_tab)                :: xprob_tab
 type(commander_prob_tab_neigh)          :: xprob_tab_neigh
 type(commander_prob_align)              :: xprob_align
 type(commander_prob_align_neigh)        :: xprob_align_neigh
+type(commander_prob_tab2D)              :: xprob_tab2D
+type(commander_prob_align2D)            :: xprob_align2D
 
 ! RECONSTRUCTION PROGRAMS
 type(commander_volassemble)             :: xvolassemble
@@ -162,6 +164,10 @@ select case(prg)
         call xprob_align%execute(cline)
     case( 'prob_align_neigh' )
         call xprob_align_neigh%execute(cline)
+    case( 'prob_tab2D' )
+        call xprob_tab2D%execute(cline)
+    case( 'prob_align2D' )
+        call xprob_align2D%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
     case( 'reconstruct3D' )

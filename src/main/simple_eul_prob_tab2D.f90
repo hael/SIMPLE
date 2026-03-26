@@ -28,7 +28,7 @@ type :: eul_prob_tab2D
     procedure :: write_tab
     procedure :: read_tab_to_glob
     procedure :: write_assignment
-    procedure :: apply_assignment
+    procedure :: read_assignment
     ! DESTRUCTOR
     procedure :: kill
     ! PRIVATE
@@ -92,61 +92,47 @@ contains
         class(eul_prob_tab2D), intent(inout) :: self
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
-        integer :: i, icls, iptcl, ithr, irot
+        integer :: i, icls, iptcl, ithr, irot, irot0
         real    :: lims(2,2), lims_init(2,2), cxy(3)
+        if( .not. self%p_ptr%l_doshift ) THROW_HARD('Probabilistic table filling requires shift optimization. Check parameters construction.')
         call seed_rnd
-        if( self%p_ptr%l_doshift )then
-            ! make shift search objects
-            lims(:,1)      = -self%p_ptr%trs
-            lims(:,2)      =  self%p_ptr%trs
-            lims_init(:,1) = -SHC_INPL_TRSHWDTH
-            lims_init(:,2) =  SHC_INPL_TRSHWDTH
-            do ithr = 1, nthr_glob
-                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
-                    &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+        ! make shift search objects
+        lims(:,1)      = -self%p_ptr%trs
+        lims(:,2)      =  self%p_ptr%trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        do ithr = 1, nthr_glob
+            call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+                &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+        end do
+        ! fill the table
+        !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            iptcl = self%pinds(i)
+            ithr  = omp_get_thread_num() + 1
+            ! do full search with shift optimization and in-plane rotation callback optimization
+            call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)      ! previous ori
+            irot0 = self%b_ptr%pftc%get_roind(360. - o_prev%e3get()) ! in-plane angle index seed
+            ! search all classes
+            do icls = 1, self%nclasses
+                if( .not. self%class_exists(icls) ) cycle
+                irot = irot0
+                ! BFGS over shifts
+                call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
+                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                if( irot == 0 )then ! no improved solution found, put back the old one
+                    irot     = irot0
+                    cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(icls, iptcl, irot))
+                    cxy(2:3) = 0.
+                endif
+                self%loc_tab(icls,i)%dist   = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
+                self%loc_tab(icls,i)%inpl   = irot
+                self%loc_tab(icls,i)%x      = cxy(2)
+                self%loc_tab(icls,i)%y      = cxy(3)
+                self%loc_tab(icls,i)%has_sh = .true.
             end do
-            ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,cxy,icls) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
-                iptcl = self%pinds(i)
-                ithr  = omp_get_thread_num() + 1
-                ! identify shifts using the previously assigned best class
-                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)  ! previous ori
-                irot = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())  ! in-plane angle index
-                ! search all classes
-                do icls = 1, self%nclasses
-                    if( .not. self%class_exists(icls) ) cycle
-                    ! BFGS over shifts
-                    call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
-                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
-                    self%loc_tab(icls,i)%inpl   = irot
-                    self%loc_tab(icls,i)%x      = cxy(2)
-                    self%loc_tab(icls,i)%y      = cxy(3)
-                    self%loc_tab(icls,i)%has_sh = .true.
-                end do
-            end do
-            !$omp end parallel do
-        else
-            ! fill the table without shift search
-            !$omp parallel do default(shared) private(i,iptcl,o_prev,irot,icls) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
-                iptcl = self%pinds(i)
-                ! identify in-plane angle using the previously assigned best class
-                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)  ! previous ori
-                irot  = self%b_ptr%pftc%get_roind(360. - o_prev%e3get())  ! in-plane angle index
-                ! search all classes
-                do icls = 1, self%nclasses
-                    if( .not. self%class_exists(icls) ) cycle
-                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(real(self%b_ptr%pftc%gen_corr_for_rot_8(icls, iptcl, irot)), self%p_ptr%cc_objfun)
-                    self%loc_tab(icls,i)%inpl   = irot
-                    self%loc_tab(icls,i)%x      = 0.
-                    self%loc_tab(icls,i)%y      = 0.
-                    self%loc_tab(icls,i)%has_sh = .true.
-                end do
-            end do
-            !$omp end parallel do
-        endif
+        end do
+        !$omp end parallel do
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
@@ -157,47 +143,107 @@ contains
     subroutine ref_normalize( self )
         class(eul_prob_tab2D), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
-        integer :: i, icls
+        integer :: i, icls, nactive
+        logical :: class_active(self%nclasses)
+        class_active = self%class_exists
+        nactive      = count(class_active)
+        if( nactive == 0 )then
+            ! fallback to avoid table degeneration when all classes are temporarily low-population
+            class_active = .true.
+            nactive      = self%nclasses
+            THROW_WARN('No active classes after population filtering; falling back to all classes in eul_prob_tab2D')
+        endif
         ! normalize so prob of each ptcl is between [0,1] for all classes
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,icls,sum_dist_all)
         do i = 1, self%nptcls
-            sum_dist_all = sum(self%loc_tab(:,i)%dist)
+            sum_dist_all = 0.
+            do icls = 1, self%nclasses
+                if( class_active(icls) )then
+                    sum_dist_all = sum_dist_all + self%loc_tab(icls,i)%dist
+                else
+                    self%loc_tab(icls,i)%dist = 0.
+                endif
+            end do
             if( sum_dist_all < TINY )then
-                self%loc_tab(:,i)%dist = 0.
+                do icls = 1, self%nclasses
+                    if( class_active(icls) ) self%loc_tab(icls,i)%dist = 0.
+                end do
             else
-                self%loc_tab(:,i)%dist = self%loc_tab(:,i)%dist / sum_dist_all
+                do icls = 1, self%nclasses
+                    if( class_active(icls) ) self%loc_tab(icls,i)%dist = self%loc_tab(icls,i)%dist / sum_dist_all
+                end do
             endif
         end do
         !$omp end parallel do
         ! min/max normalization to obtain values between 0 and 1
-        !$omp parallel workshare proc_bind(close)
-        min_dist = minval(self%loc_tab(:,:)%dist)
-        max_dist = maxval(self%loc_tab(:,:)%dist)
-        !$omp end parallel workshare
+        min_dist = huge(min_dist)
+        max_dist = -huge(max_dist)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,icls) reduction(min:min_dist) reduction(max:max_dist)
+        do i = 1, self%nptcls
+            do icls = 1, self%nclasses
+                if( .not. class_active(icls) ) cycle
+                min_dist = min(min_dist, self%loc_tab(icls,i)%dist)
+                max_dist = max(max_dist, self%loc_tab(icls,i)%dist)
+            end do
+        end do
+        !$omp end parallel do
         ! special case of numerical unstability of dist values
         if( (max_dist - min_dist) < TINY )then
             THROW_WARN('WARNING: numerical unstability in eul_prob_tab2D')
             ! randomize dist so the assignment is stochastic
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i)
             do icls = 1, self%nclasses
+                if( .not. class_active(icls) )then
+                    self%loc_tab(icls,:)%dist = 0.
+                    cycle
+                endif
                 do i = 1, self%nptcls
                     self%loc_tab(icls,i)%dist = ran3()
                 end do
             end do
             !$omp end parallel do
         else
-            self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - min_dist) / (max_dist - min_dist)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i)
+            do icls = 1, self%nclasses
+                if( .not. class_active(icls) )then
+                    self%loc_tab(icls,:)%dist = 0.
+                    cycle
+                endif
+                do i = 1, self%nptcls
+                    self%loc_tab(icls,i)%dist = (self%loc_tab(icls,i)%dist - min_dist) / (max_dist - min_dist)
+                end do
+            end do
+            !$omp end parallel do
         endif
     end subroutine ref_normalize
 
     ! ptcl -> class assignment using the normalized dist value table
     subroutine ref_assign( self )
         class(eul_prob_tab2D), intent(inout) :: self
+        real,    parameter :: NHOOD_FRAC = 0.2
         integer :: i, icls, assigned_icls, assigned_ptcl, stab_inds(self%nptcls, self%nclasses)
-        integer :: icls_dist_inds(self%nclasses), sorted_inds(self%nclasses)
+        integer :: icls_dist_inds(self%nclasses), sorted_inds(self%nclasses), active_cls(self%nclasses)
         real    :: sorted_tab(self%nptcls, self%nclasses), dists_sorted(self%nclasses)
         real    :: dists_sorted_work(self%nclasses)
         logical :: ptcl_avail(self%nptcls)
+        logical :: class_active(self%nclasses)
+        integer :: nactive, iact, chosen_active, nhood_sz
+        class_active = self%class_exists
+        nactive      = count(class_active)
+        if( nactive == 0 )then
+            class_active = .true.
+            nactive      = self%nclasses
+            THROW_WARN('No active classes after population filtering; falling back to all classes in eul_prob_tab2D')
+        endif
+        nactive = 0
+        do icls = 1, self%nclasses
+            if( class_active(icls) )then
+                nactive = nactive + 1
+                active_cls(nactive) = icls
+            endif
+        end do
+        nhood_sz = max(1, ceiling(NHOOD_FRAC * real(nactive)))
+        nhood_sz = min(nhood_sz, nactive)
         ! normalization
         call self%ref_normalize
         ! sorting each columns
@@ -205,7 +251,11 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i)
         do icls = 1, self%nclasses
             stab_inds(:,icls) = (/(i,i=1,self%nptcls)/)
-            call hpsort(sorted_tab(:,icls), stab_inds(:,icls))
+            if( class_active(icls) )then
+                call hpsort(sorted_tab(:,icls), stab_inds(:,icls))
+            else
+                sorted_tab(:,icls) = huge(sorted_tab(1,icls))
+            endif
         end do
         !$omp end parallel do
         ! greedy sampling over available classes
@@ -213,16 +263,19 @@ contains
         ptcl_avail     = .true.
         do while( any(ptcl_avail) )
             ! collect current best distance for each class
-            do icls = 1, self%nclasses
-                dists_sorted(icls) = sorted_tab(icls_dist_inds(icls), icls)
+            do iact = 1, nactive
+                icls = active_cls(iact)
+                dists_sorted(iact) = sorted_tab(icls_dist_inds(icls), icls)
             end do
             ! greedy sampling: pick best class (no allocations in loop)
-            assigned_icls = greedy_sampling(dists_sorted, dists_sorted_work, sorted_inds, self%nclasses, 1)
+            chosen_active = greedy_sampling(dists_sorted, dists_sorted_work, sorted_inds, nactive, nhood_sz)
+            assigned_icls = active_cls(chosen_active)
             assigned_ptcl = stab_inds(icls_dist_inds(assigned_icls), assigned_icls)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_icls, assigned_ptcl)
             ! update the icls_dist_inds to next available particle for each class
-            do icls = 1, self%nclasses
+            do iact = 1, nactive
+                icls = active_cls(iact)
                 do while( icls_dist_inds(icls) < self%nptcls .and. .not.(ptcl_avail(stab_inds(icls_dist_inds(icls), icls))))
                     icls_dist_inds(icls) = icls_dist_inds(icls) + 1
                 end do
@@ -300,28 +353,33 @@ contains
         call fclose(funit)
     end subroutine write_assignment
 
-    ! apply assignment map back to spproj_field (requires b_ptr%pftc to be initialised for angle conversion)
-    subroutine apply_assignment( self )
+    subroutine read_assignment( self, binfname )
         class(eul_prob_tab2D), intent(inout) :: self
-        integer :: i, iptcl, icls, inpl, nrots
-        real    :: corr, e3, x, y, rot
-        if( self%p_ptr%pftsz < 1 ) THROW_HARD('illegal pftsz in eul_prob_tab2D::apply_assignment')
-        nrots = 2 * self%p_ptr%pftsz
-        do i = 1, self%nptcls
-            iptcl = self%pinds(i)
-            icls  = self%assgn_map(i)%icls
-            inpl  = self%assgn_map(i)%inpl
-            x     = self%assgn_map(i)%x
-            y     = self%assgn_map(i)%y
-            corr  = eulprob_corr_switch(self%assgn_map(i)%dist, self%p_ptr%cc_objfun)
-            rot   = real(modulo(inpl - 1, nrots)) * 360. / real(nrots)
-            e3    = 360. - rot
-            call self%b_ptr%spproj_field%set(iptcl, 'class', real(icls))
-            call self%b_ptr%spproj_field%set(iptcl, 'e3',    e3)
-            call self%b_ptr%spproj_field%set(iptcl, 'x',     x)
-            call self%b_ptr%spproj_field%set(iptcl, 'y',     y)
-            call self%b_ptr%spproj_field%set(iptcl, 'corr',  corr)
+        class(string),         intent(in)    :: binfname
+        type(ptcl_ref), allocatable :: assgn_glob(:)
+        integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
+        headsz = sizeof(nptcls_glob)
+        if( .not. file_exists(binfname) )then
+            THROW_HARD('file '//binfname%to_char()//' does not exist!')
+        else
+            call fopen(funit, binfname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        end if
+        call fileiochk('simple_eul_prob_tab2D; read_assignment; file: '//binfname%to_char(), io_stat)
+        read(unit=funit, pos=1) nptcls_glob
+        allocate(assgn_glob(nptcls_glob))
+        read(unit=funit, pos=headsz + 1) assgn_glob
+        call fclose(funit)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        do i_loc = 1, self%nptcls
+            do i_glob = 1, nptcls_glob
+                if( self%assgn_map(i_loc)%pind == assgn_glob(i_glob)%pind )then
+                    self%assgn_map(i_loc) = assgn_glob(i_glob)
+                    exit
+                endif
+            end do
         end do
-    end subroutine apply_assignment
+        !$omp end parallel do
+        deallocate(assgn_glob)
+    end subroutine read_assignment
 
 end module simple_eul_prob_tab2D

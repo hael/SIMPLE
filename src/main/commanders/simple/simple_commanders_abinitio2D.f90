@@ -82,6 +82,9 @@ contains
                 ! in-plane refinement, one stage only
                 nstages = NSTAGES_SINGLE
                 l_inpl  = .true.
+            case('prob')
+                ! probabilistic 2D refinement
+                nstages = NSTAGES_CLS
             case('snhc','snhc_smpl')
                 ! usual suspects
                 nstages = NSTAGES_CLS

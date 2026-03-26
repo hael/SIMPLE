@@ -2,6 +2,7 @@
 module simple_strategy2D_srch
 use simple_pftc_srch_api
 use simple_strategy2D_alloc
+use simple_eul_prob_tab2D,   only: eul_prob_tab2D
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_builder,          only: builder
 implicit none
@@ -12,6 +13,7 @@ private
 #include "simple_local_flags.inc"
 
 type strategy2D_spec
+    type(eul_prob_tab2D), pointer :: eulprob_obj_part2D => null()
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0  ! global particle index
     integer :: iptcl_batch = 0  ! maps to index in batch

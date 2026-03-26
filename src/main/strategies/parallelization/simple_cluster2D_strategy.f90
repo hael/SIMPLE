@@ -135,17 +135,36 @@ contains
         use simple_strategy2D_matcher, only: cluster2D_exec
         use simple_starproject,        only: starproject
         use simple_commanders_euclid,  only: commander_calc_group_sigmas
+        use simple_commanders_prob,    only: commander_prob_align2D
         class(cluster2D_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         logical,                         intent(out)   :: converged
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(commander_prob_align2D)      :: xprob_align2D
         type(starproject) :: starproj
+        type(cmdline)     :: cline_prob_align
+        logical           :: l_prob_align_mode
         call self%conv%print_iteration(params%which_iter)
         call cline%set('startit',    params%which_iter)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
+        select case(trim(params%refine))
+            case('prob')
+                l_prob_align_mode = .true.
+            case DEFAULT
+                l_prob_align_mode = .false.
+        end select
+        if( l_prob_align_mode )then
+            cline_prob_align = cline
+            call cline_prob_align%set('prg', 'prob_align2D')
+            call cline_prob_align%set('which_iter', params%which_iter)
+            call cline_prob_align%set('startit',    params%which_iter)
+            call build%spproj%write_segment_inside(params%oritype)
+            call xprob_align2D%execute(cline_prob_align)
+            call build%spproj%read_segment(params%oritype, params%projfile)
+        endif
         ! main clustering/alignment step
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
         ! Euclid sigma2 consolidation for next iteration
@@ -224,6 +243,7 @@ contains
         use simple_stream_utils,         only: terminate_stream
         use simple_commanders_mkcavgs,   only: commander_cavgassemble
         use simple_commanders_euclid,    only: commander_calc_group_sigmas
+        use simple_commanders_prob,      only: commander_prob_align2D
         class(cluster2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
@@ -231,9 +251,11 @@ contains
         logical,                         intent(out)   :: converged
         type(commander_cavgassemble)      :: xcavgassemble
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(cmdline)                     :: cline_cavgassemble, cline_calc_sigma
+        type(commander_prob_align2D)      :: xprob_align2D
+        type(cmdline)                     :: cline_cavgassemble, cline_calc_sigma, cline_prob_align
         type(string)                      :: str_iter
         real                              :: frac_srch_space
+        logical                           :: l_prob_align_mode
         call self%conv%print_iteration(params%which_iter)
         ! Update job description
         call cline%set('nparts',     params%nparts)
@@ -246,6 +268,21 @@ contains
         call self%job_descr%set('which_iter', int2str(params%which_iter))
         call self%job_descr%set('extr_iter',  int2str(params%extr_iter))
         call self%job_descr%set('frcs',       FRCS_FILE)
+        select case(trim(params%refine))
+            case('prob')
+                l_prob_align_mode = .true.
+            case DEFAULT
+                l_prob_align_mode = .false.
+        end select
+        if( l_prob_align_mode )then
+            cline_prob_align = cline
+            call cline_prob_align%set('prg', 'prob_align2D')
+            call cline_prob_align%set('which_iter', params%which_iter)
+            call cline_prob_align%set('startit',    params%which_iter)
+            call build%spproj%write_segment_inside(params%oritype)
+            call xprob_align2D%execute(cline_prob_align)
+            call build%spproj%read_segment(params%oritype, params%projfile)
+        endif
         ! Schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, &
                                                      algnfbody=string(ALGN_FBODY), &

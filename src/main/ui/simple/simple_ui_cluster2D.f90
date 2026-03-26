@@ -67,8 +67,8 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         call abinitio2D%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="model")
-        call abinitio2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|prob|prob_smpl){snhc_smpl}',&
-        &'(snhc_smpl|prob|prob_smpl){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
+        call abinitio2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|prob){snhc_smpl}',&
+        &'(snhc_smpl|prob){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
         &'Starting # of particles per class to sample', 'min # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
