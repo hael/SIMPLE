@@ -267,15 +267,15 @@ contains
             call os_ran%new(params%nran, is_ptcl=.false.)
             do i=1,params%nran
                 call progress(i, params%nran)
-                call build%img%read(params%stk, pinds(i))
+                j = pinds(i)
+                call build%img%read(params%stk, j)
                 call build%img%write(params%outstk, i)
                 if( cline%defined('oritab') .or. cline%defined('deftab') ) then
-                    call build%spproj_field%get_ori(pinds(i), o)
-                    call os_ran%set_ori(i, o)
-                    call o%kill
+                    call os_ran%transfer_ori(i, build%spproj_field, j)
                 end if
             end do
             if( cline%defined('oritab') .or. cline%defined('deftab') ) then
+                call build%spproj_field%copy(os_ran)
                 call build%spproj_field%write(params%outfile, [1,params%nran])
             end if
         end subroutine handle_random_selection

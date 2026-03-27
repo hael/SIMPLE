@@ -222,12 +222,8 @@ contains
     subroutine add_uncond( self, self2add, w )
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self2add
-        real, optional,     intent(in)    :: w
-        if( present(w) )then
-             self%cmat = self%cmat + self2add%cmat*w
-        else
-            self%cmat = self%cmat + self2add%cmat
-        endif
+        real,               intent(in)    :: w
+        self%cmat = self%cmat + self2add%cmat*w
     end subroutine add_uncond
 
     subroutine add2cmat( self, cmat, w )
