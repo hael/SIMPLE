@@ -198,7 +198,9 @@ contains
         endif
     end subroutine cavger_dealloc_online
 
-    module subroutine cavger_update_sums_refactored( nptcls, ptcl_imgs )
+    !>  \brief  is for updating classes sums in distributed/non-distributed mode
+    !           with provided images using interpolation in Fourier space
+    module subroutine cavger_update_sums( nptcls, ptcl_imgs )
         integer,      intent(in)    :: nptcls
         class(image), intent(inout) :: ptcl_imgs(nptcls)
         real, parameter :: KB2 = KBALPHA**2
@@ -322,150 +324,6 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
-    end subroutine cavger_update_sums_refactored
-
-    !>  \brief  is for updating classes sums in distributed/non-distributed mode
-    !           with provided images using interpolation in Fourier space
-    module subroutine cavger_update_sums( nptcls, ptcl_imgs )
-        use simple_math_ft, only: upsample_sigma2
-        integer,      intent(in)    :: nptcls
-        class(image), intent(inout) :: ptcl_imgs(nptcls)
-        real,   parameter :: KB2 = KBALPHA**2
-        real, allocatable :: sigma2(:,:), sigma2pd(:,:), sqrt_sigma2pd(:,:)
-        complex :: fcomp
-        real    :: loc(2), mat(2,2), tvalsq, croppd_scale, w
-        integer :: fdims_croppd(3), win(2,2), flims_crop(3,2), phys(2)
-        integer :: cyc_lims_croppdR(2,2), cyc_lims_croppd(3,2)
-        integer :: cyc_lims_cropR(2,2), cyc_lims_crop(3,2), sigma2_kfromto(2)
-        integer :: h,k,hh,kk,hp,kp,l,m, icls, nyq_crop, nyq_croppd, physh,physk
-        integer :: iptcl, i, sh, iwinsz, wdim, ithr
-        logical :: l_conjg
-        ! Interpolation parameters
-        iwinsz = ceiling(kbwin%get_winsz() - 0.5)
-        wdim   = kbwin%get_wdim()
-        ! Memoization for cropped padded image
-        call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
-        ! Dimensions & limits
-        croppd_scale          = real(ldim_croppd(1)) / real(ldim_pd(1))
-        cyc_lims_croppd       = ft_map_lims_nr            ! croppd limits
-        cyc_lims_croppdR(:,1) = cyc_lims_croppd(1,:)      ! croppd transposed limits
-        cyc_lims_croppdR(:,2) = cyc_lims_croppd(2,:)
-        fdims_croppd          = ft_map_get_farray_shape() ! croppd dimensions
-        nyq_croppd            = ft_map_get_lfny()         ! croppd Nyquist limit
-        flims_crop     = cavgs%even%flims                 ! crop Fourier limits of complex matrix
-        nyq_crop       = cavgs%even%fit%get_lfny(1)       ! crop Nyquist limit
-        cyc_lims_crop  = cavgs%even%fit%loop_lims(3)
-        cyc_lims_cropR = transpose(cyc_lims_crop(1:2,:))
-        ! sigma2 prep for regularization
-        if( p_ptr%l_ml_reg )then
-            allocate(sigma2(1:nyq_crop,nthr_glob),sigma2pd(0:nyq_croppd,nthr_glob),&
-                    &sqrt_sigma2pd(0:nyq_croppd,nthr_glob),source=0.0)
-            sigma2_kfromto(1) = lbound(b_ptr%esig%sigma2_noise,1)
-            sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
-        endif
-        ! Interpolation loop
-        !$omp parallel default(shared) proc_bind(close)&
-        !$omp private(i,ithr,icls,iptcl,win,mat,h,k,hh,kk,l,m,loc,sh,physh,physk)&
-        !$omp private(fcomp,phys,w,hp,kp,tvalsq,l_conjg)
-        !$omp do schedule(static)
-        do i = 1,nptcls
-            iptcl = precs(i)%pind
-            if( iptcl == 0 ) cycle
-            ithr  = omp_get_thread_num() + 1
-            cmats(:,:,ithr) = CMPLX_ZERO
-            tvals(:,:,ithr) = 0.0
-            ! prep image: noise normalization, edge tappering, padding, shift, copy into cmats
-            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft_shift_2mat(b_ptr%lmsk, tmp_pad_imgs(ithr),&
-                &-precs(i)%shift*croppd_scale, ldim_croppd, ft_map_lims, cmats(:,:,ithr))
-            ! apply CTF to padded image, stores CTF values
-            call precs(i)%tfun%eval_and_apply(ctfflag, precs(i)%dfx, precs(i)%dfy, precs(i)%angast,&
-                &fdims_croppd(1:2), tvals(:,:,ithr), cmats(:,:,ithr))
-            ! upsample sigma2 & multipliy CTF.image & CTF2
-            if( p_ptr%l_ml_reg )then
-                sigma2(sigma2_kfromto(1):nyq_crop,ithr) = b_ptr%esig%sigma2_noise(sigma2_kfromto(1):nyq_crop,iptcl)
-                call upsample_sigma2(sigma2_kfromto(1), nyq_crop, sigma2(:,ithr), nyq_croppd, sigma2pd(:,ithr))
-                sqrt_sigma2pd(:,ithr) = sqrt(sigma2pd(:,ithr))
-                do h = ft_map_lims(1,1),ft_map_lims(1,2)
-                    do k = ft_map_lims(2,1),ft_map_lims(2,2)
-                        sh = nint(hyp(h,k))
-                        if( sh > nyq_croppd )cycle
-                        physh = ft_map_phys_addrh(h,k)
-                        physk = ft_map_phys_addrk(h,k)
-                        cmats(physh,physk,ithr) = cmats(physh,physk,ithr) /      sigma2pd(sh,ithr)
-                        tvals(physh,physk,ithr) = tvals(physh,physk,ithr) / sqrt_sigma2pd(sh,ithr)
-                    enddo
-                enddo
-            end if
-            ! Rotation matrix
-            call rotmat2d(precs(i)%e3, mat)
-            ! Kaiser-Bessel Interpolation
-            interp_cmats(:,:,i) = CMPLX_ZERO
-            interp_rhos(:,:,i)  = 0.0
-            ! loop over cropped original image limits
-            do h = flims_crop(1,1), flims_crop(1,2)
-                hp = h * OSMPL_PAD_FAC        ! padded coordinate
-                do k = flims_crop(2,1), flims_crop(2,2)
-                    sh = nint(hyp(real(h),real(k)))
-                    if( sh > nyq_crop )cycle
-                    kp = k * OSMPL_PAD_FAC    ! padded coordinate
-                    ! rotation on original lattice
-                    loc = matmul(real([h,k]),mat)
-                    ! interpolation window limits on original lattice
-                    win(1,:) = nint(loc)
-                    win(2,:) = win(1,:) + iwinsz
-                    win(1,:) = win(1,:) - iwinsz
-                    ! kernel window
-                    call kbwin%apod_mat_2d(loc, iwinsz, wdim, kbw(:,:,ithr))
-                    ! Physical address in padded image
-                    physh  = ft_map_phys_addrh(hp,kp)
-                    physk  = ft_map_phys_addrk(hp,kp)
-                    ! padded image component with particle weight & padding correction
-                    fcomp  = precs(i)%pw * KB2 * cmats(physh, physk, ithr)
-                    fcomp  = merge(conjg(fcomp), fcomp, hp<0)
-                    ! padded CTF2 with particle weight
-                    tvalsq = precs(i)%pw * tvals(physh, physk, ithr)**2
-                    ! Splat update
-                    do l = 1, wdim
-                        hh      = win(1,1)+ l-1
-                        l_conjg = hh<0
-                        hh      = cyci_1d(cyc_lims_cropR(:,1), hh)
-                        do m = 1, wdim
-                            kk      = win(1,2) + m-1
-                            kk      = cyci_1d(cyc_lims_cropR(:,2), kk)
-                            phys(1) = phys_addrh_crop(hh,kk)
-                            phys(2) = phys_addrk_crop(hh,kk)
-                            w       = kbw(l,m,ithr)
-                            interp_cmats(phys(1),phys(2),i) = interp_cmats(phys(1),phys(2),i) + w * merge(conjg(fcomp), fcomp, l_conjg)
-                            interp_rhos( phys(1),phys(2),i) = interp_rhos( phys(1),phys(2),i) + w * tvalsq
-                        enddo
-                    end do
-                end do
-            end do
-        enddo
-        !$omp end do
-        ! Accumulate sums
-        !$omp do schedule(static)
-        do icls = 1,ncls
-            do i = 1,nptcls
-                if( precs(i)%pind == 0 ) cycle
-                if( precs(i)%class == icls )then
-                    select case(precs(i)%eo)
-                    case(0,-1)
-                        cavgs%even%cmat(:,:,icls)  = cavgs%even%cmat(:,:,icls)  + interp_cmats(:,:,i)
-                        cavgs%even%ctfsq(:,:,icls) = cavgs%even%ctfsq(:,:,icls) + interp_rhos(:,:,i)
-                        eo_pops(1,icls) = eo_pops(1,icls) + 1 ! ok because the first loop is over classes
-                    case(1)
-                        cavgs%odd%cmat(:,:,icls)  = cavgs%odd%cmat(:,:,icls)  + interp_cmats(:,:,i)
-                        cavgs%odd%ctfsq(:,:,icls) = cavgs%odd%ctfsq(:,:,icls) + interp_rhos(:,:,i)
-                        eo_pops(2,icls) = eo_pops(2,icls) + 1
-                    end select
-                endif
-            enddo
-        enddo
-        !$omp end do
-        !$omp end parallel
-        ! cleanup
-        if( p_ptr%l_ml_reg ) deallocate(sigma2,sigma2pd,sqrt_sigma2pd)
     end subroutine cavger_update_sums
 
     !>  \brief  is for generating class averages offline
