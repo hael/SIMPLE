@@ -5,6 +5,7 @@ use simple_builder,          only: builder
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_decay_funs,       only: extremal_decay2D
 use simple_eul_prob_tab,     only: eulprob_dist_switch, eulprob_corr_switch
+use simple_rnd,              only: greedy_sampling
 implicit none
 
 public :: eul_prob_tab2D
@@ -29,6 +30,7 @@ type :: eul_prob_tab2D
     ! MAIN PROCEDURES
     procedure :: fill_tab
     procedure :: ref_assign => ref_assign_greedy
+    procedure :: ref_assign_nhood
     procedure :: write_tab
     procedure :: read_tab_to_glob
     procedure :: write_assignment
@@ -394,6 +396,115 @@ contains
             end do
         endif
     end subroutine ref_assign_greedy
+
+    ! ptcl -> class assignment using a fixed-size probabilistic class neighborhood
+    subroutine ref_assign_nhood( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer :: i, icls, assigned_icls, assigned_ptcl, stab_inds(self%nptcls, self%nclasses)
+        integer :: icls_dist_inds(self%nclasses), active_cls(self%nclasses), eligible_cls(self%nclasses), inds_sorted(self%nclasses)
+        real    :: sorted_tab(self%nptcls, self%nclasses), dists_sorted(self%nclasses), cls_dists(self%nclasses)
+        real    :: dists_raw(self%nclasses, self%nptcls)
+        logical :: ptcl_avail(self%nptcls)
+        logical :: class_active(self%nclasses)
+        integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc
+        real    :: best_dist
+        class_active = self%class_exists
+        nactive      = count(class_active)
+        if( nactive == 0 )then
+            class_active = .true.
+            nactive      = self%nclasses
+            THROW_WARN('No active classes after population filtering; falling back to all classes in eul_prob_tab2D')
+        endif
+        nactive = 0
+        do icls = 1, self%nclasses
+            if( class_active(icls) )then
+                nactive = nactive + 1
+                active_cls(nactive) = icls
+            endif
+        end do
+        nhood_sz_loc = min(self%nhood_sz, nactive)
+        ! keep raw distances for output (objective values), normalize only for deterministic assignment ordering
+        dists_raw = self%loc_tab(:,:)%dist
+        ! normalization
+        call self%ref_normalize
+        ! sorting each columns
+        sorted_tab = transpose(self%loc_tab(:,:)%dist)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i)
+        do icls = 1, self%nclasses
+            stab_inds(:,icls) = (/(i,i=1,self%nptcls)/)
+            if( class_active(icls) )then
+                call hpsort(sorted_tab(:,icls), stab_inds(:,icls))
+            else
+                sorted_tab(:,icls) = huge(sorted_tab(1,icls))
+            endif
+        end do
+        !$omp end parallel do
+        icls_dist_inds = 1
+        ptcl_avail     = .true.
+        do while( any(ptcl_avail) )
+            ! collect current best distance for each class, skipping exhausted ones
+            neligible = 0
+            do iact = 1, nactive
+                icls = active_cls(iact)
+                do while( icls_dist_inds(icls) <= self%nptcls )
+                    assigned_ptcl = stab_inds(icls_dist_inds(icls), icls)
+                    if( ptcl_avail(assigned_ptcl) ) exit
+                    icls_dist_inds(icls) = icls_dist_inds(icls) + 1
+                end do
+                if( icls_dist_inds(icls) <= self%nptcls )then
+                    neligible = neligible + 1
+                    eligible_cls(neligible) = icls
+                    cls_dists(neligible) = sorted_tab(icls_dist_inds(icls), icls)
+                endif
+            end do
+            if( neligible == 0 ) exit
+            chosen_active = sample_class_nhood(cls_dists(1:neligible), dists_sorted(1:neligible), inds_sorted(1:neligible), nhood_sz_loc)
+            assigned_icls = eligible_cls(chosen_active)
+            assigned_ptcl = stab_inds(icls_dist_inds(assigned_icls), assigned_icls)
+            ptcl_avail(assigned_ptcl)     = .false.
+            self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_icls, assigned_ptcl)
+            self%assgn_map(assigned_ptcl)%dist = dists_raw(assigned_icls, assigned_ptcl)
+        end do
+        if( any(ptcl_avail) )then
+            do i = 1, self%nptcls
+                if( .not. ptcl_avail(i) ) cycle
+                assigned_icls = 0
+                best_dist     = huge(1.0)
+                do iact = 1, nactive
+                    icls = active_cls(iact)
+                    if( self%loc_tab(icls,i)%inpl <= 0 ) cycle
+                    if( self%loc_tab(icls,i)%dist < best_dist )then
+                        best_dist     = self%loc_tab(icls,i)%dist
+                        assigned_icls = icls
+                    endif
+                end do
+                if( assigned_icls == 0 )then
+                    do iact = 1, nactive
+                        icls = active_cls(iact)
+                        if( self%loc_tab(icls,i)%dist < best_dist )then
+                            best_dist     = self%loc_tab(icls,i)%dist
+                            assigned_icls = icls
+                        endif
+                    end do
+                endif
+                if( assigned_icls == 0 ) THROW_HARD('Failed particle assignment in eul_prob_tab2D%ref_assign_nhood')
+                self%assgn_map(i) = self%loc_tab(assigned_icls, i)
+                self%assgn_map(i)%dist = dists_raw(assigned_icls, i)
+                ptcl_avail(i)     = .false.
+            end do
+        endif
+    end subroutine ref_assign_nhood
+
+    function sample_class_nhood( pvec, pvec_sorted, sorted_inds, nhood_sz ) result( which )
+        real,    intent(in)    :: pvec(:)
+        real,    intent(inout) :: pvec_sorted(:)
+        integer, intent(inout) :: sorted_inds(:)
+        integer, intent(in)    :: nhood_sz
+        integer :: which, num_ub, num_lb
+        num_ub = min(size(pvec), max(1, nhood_sz))
+        num_lb = min(num_ub, max(1, 1 + floor(0.1 * real(num_ub))))
+        which  = greedy_sampling(pvec, pvec_sorted, sorted_inds, num_ub, num_lb)
+    end function sample_class_nhood
 
     ! DESTRUCTOR
 

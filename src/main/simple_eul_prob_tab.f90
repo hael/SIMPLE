@@ -43,7 +43,6 @@ type :: eul_prob_tab
     procedure :: read_state_tab
     procedure :: read_tab_to_glob
     procedure :: ref_assign
-    procedure :: ref_assign_greedy
     procedure :: write_assignment
     procedure :: state_assign
     ! DESTRUCTOR
@@ -398,42 +397,6 @@ contains
             enddo
         enddo
     end subroutine ref_assign
-
-    ! deterministic ptcl -> (proj, state) assignment using the global normalized dist value table
-    subroutine ref_assign_greedy( self )
-        class(eul_prob_tab), intent(inout) :: self
-        integer :: i, iref, assigned_iref, assigned_ptcl, &
-                    &stab_inds(self%nptcls, self%nrefs), iref_dist_inds(self%nrefs)
-        real    :: sorted_tab(self%nptcls, self%nrefs), iref_dist(self%nrefs)
-        logical :: ptcl_avail(self%nptcls)
-        ! normalization
-        call self%ref_normalize
-        ! sorting each columns
-        sorted_tab = transpose(self%loc_tab(:,:)%dist)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
-        do iref = 1, self%nrefs
-            stab_inds(:,iref) = (/(i,i=1,self%nptcls)/)
-            call hpsort(sorted_tab(:,iref), stab_inds(:,iref))
-        enddo
-        !$omp end parallel do
-        ! first row is the current best reference distribution
-        iref_dist_inds = 1
-        iref_dist      = sorted_tab(1,:)
-        ptcl_avail     = .true.
-        do while( any(ptcl_avail) )
-            assigned_iref = minloc(iref_dist, dim=1)
-            assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
-            ptcl_avail(assigned_ptcl)     = .false.
-            self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
-            ! update the iref_dist and iref_dist_inds
-            do iref = 1, self%nrefs
-                do while( iref_dist_inds(iref) < self%nptcls .and. .not.(ptcl_avail(stab_inds(iref_dist_inds(iref),iref))))
-                    iref_dist_inds(iref) = iref_dist_inds(iref) + 1
-                    iref_dist(     iref) = sorted_tab(iref_dist_inds(iref), iref)
-                enddo
-            enddo
-        enddo
-    end subroutine ref_assign_greedy
 
     ! state normalization (same energy) of the state_tab
     ! [0,1] normalization of the whole table
