@@ -13,8 +13,8 @@
 !     gui_metadata_base, gui_metadata_micrograph, gui_metadata_histogram,
 !     gui_metadata_timeplot, gui_metadata_optics_group, gui_metadata_cavg2D,
 !     gui_metadata_stream_preprocess, gui_metadata_stream_optics_assignment,
-!     gui_metadata_stream_update, gui_metadata_stream_initial_picking,
-!     gui_metadata_stream_opening2D
+!     gui_metadata_stream_update, gui_metadata_stream_picking (initial and
+!     reference picking), gui_metadata_stream_opening2D
 !
 ! ENTRY POINT:
 !   run_all_gui_metadata_tests() — run every test in this module
@@ -65,6 +65,9 @@ contains
     call test_set_get_stream_initial_picking()
     call test_serialise_stream_initial_picking()
     call test_jsonise_stream_initial_picking()
+    call test_set_get_stream_reference_picking()
+    call test_serialise_stream_reference_picking()
+    call test_jsonise_stream_reference_picking()
     call test_set_get_stream_opening2D()
     call test_serialise_stream_opening2D()
     call test_jsonise_stream_opening2D()
@@ -755,23 +758,24 @@ contains
   ! derived fields (micrographs_rejected, particles_per_mic) and that
   ! last_micrograph_imported is populated automatically on first set.
   subroutine test_set_get_stream_initial_picking()
-    type(gui_metadata_stream_initial_picking) :: meta
+    type(gui_metadata_stream_picking) :: meta
     type(string)                              :: stage
     integer :: micrographs_imported, micrographs_accepted, micrographs_rejected
-    integer :: particles_extracted, particles_per_mic, last_micrograph_imported
+    integer :: particles_extracted, particles_per_mic, last_micrograph_imported, box_size
     write(*,'(A)') 'test_set_get_stream_initial_picking'
     call meta%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_INITIAL_PICKING_TYPE, 'type is set correctly')
     call meta%set(stage=string('test stage'), micrographs_imported=200, &
-                  micrographs_accepted=180, particles_extracted=36000)
+                  micrographs_accepted=180, particles_extracted=36000, box_size=256)
     call assert_true(meta%assigned(), 'metadata object is set')
     call assert_true(meta%get(stage=stage, micrographs_imported=micrographs_imported,             &
                               micrographs_accepted=micrographs_accepted,                          &
                               micrographs_rejected=micrographs_rejected,                          &
                               particles_extracted=particles_extracted,                             &
                               particles_per_mic=particles_per_mic,                                &
-                              last_micrograph_imported=last_micrograph_imported), 'metadata retrieved')
+                              last_micrograph_imported=last_micrograph_imported,                  &
+                              box_size=box_size), 'metadata retrieved')
     call assert_char(stage%to_char(), 'test stage',      'stage set/get correctly')
     call assert_int(micrographs_imported,  200,          'micrographs_imported set/get correctly')
     call assert_int(micrographs_accepted,  180,          'micrographs_accepted set/get correctly')
@@ -779,6 +783,7 @@ contains
     call assert_int(particles_extracted,   36000,        'particles_extracted set/get correctly')
     call assert_int(particles_per_mic,     180,          'particles_per_mic derived correctly')
     call assert_true(last_micrograph_imported > 0,       'last_micrograph_imported is set')
+    call assert_int(box_size,              256,          'box_size set/get correctly')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_set_get_stream_initial_picking
@@ -786,13 +791,13 @@ contains
   ! Verify that the stream initial-picking serialise buffer is the expected size.
   subroutine test_serialise_stream_initial_picking()
     character(len=:),                         allocatable :: buffer
-    type(gui_metadata_stream_initial_picking)             :: meta
+    type(gui_metadata_stream_picking)             :: meta
     write(*,'(A)') 'test_serialise_stream_initial_picking'
     call meta%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_INITIAL_PICKING_TYPE, 'type is set correctly')
     call meta%set(stage=string('test stage'), micrographs_imported=200, &
-                  micrographs_accepted=180, particles_extracted=36000)
+                  micrographs_accepted=180, particles_extracted=36000, box_size=256)
     call assert_true(meta%assigned(), 'metadata object is set')
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
@@ -806,7 +811,7 @@ contains
   ! non-emptiness is checked — a stable hash comparison is not possible.
   subroutine test_jsonise_stream_initial_picking()
     character(kind=CK, len=:),                allocatable :: buffer
-    type(gui_metadata_stream_initial_picking)             :: meta
+    type(gui_metadata_stream_picking)             :: meta
     type(json_core)                                       :: json
     type(json_value),                          pointer    :: json_ptr
     type(string)                                          :: json_str, json_hash
@@ -816,7 +821,7 @@ contains
     call meta%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call meta%set(stage=string('test stage'), micrographs_imported=200, &
-                  micrographs_accepted=180, particles_extracted=36000)
+                  micrographs_accepted=180, particles_extracted=36000, box_size=256)
     call assert_true(meta%assigned(), 'metadata object is set')
     json_ptr => meta%jsonise()
     call assert_true(associated(json_ptr), 'json pointer is associated')
@@ -824,17 +829,106 @@ contains
     call json%print_to_string(json_ptr, buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_true(len(buffer) > 0, 'json output is non-empty')
-    call assert_int(len(buffer), 183, 'buffer correct size')
+    call assert_int(len(buffer), 198, 'buffer correct size')
     json_str = buffer
-    call assert_int(json_str%strlen(), 183, 'string correct size')
+    call assert_int(json_str%strlen(), 198, 'string correct size')
     json_hash = json_str%to_fnv1a_hash64()
-    call assert_char(json_hash%to_char(), '8D93DC7C14327418', 'correct checksum')
+    call assert_char(json_hash%to_char(), 'E00E9BC45CFB31B4', 'correct checksum')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     call json%destroy(json_ptr)
     call assert_true(.not.json%failed(), 'json destroyed')
     deallocate(buffer)
   end subroutine test_jsonise_stream_initial_picking
+
+  !---------------- stream reference picking ----------------
+
+  ! Verify that all stream reference-picking fields round-trip, including
+  ! derived fields (micrographs_rejected, particles_per_mic) and that
+  ! last_micrograph_imported is populated automatically on first set.
+  subroutine test_set_get_stream_reference_picking()
+    type(gui_metadata_stream_picking) :: meta
+    type(string)                              :: stage
+    integer :: micrographs_imported, micrographs_accepted, micrographs_rejected
+    integer :: particles_extracted, particles_per_mic, last_micrograph_imported, box_size
+    write(*,'(A)') 'test_set_get_stream_reference_picking'
+    call meta%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE, 'type is set correctly')
+    call meta%set(stage=string('test stage'), micrographs_imported=200, &
+                  micrographs_accepted=180, particles_extracted=36000, box_size=256)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call assert_true(meta%get(stage=stage, micrographs_imported=micrographs_imported,             &
+                              micrographs_accepted=micrographs_accepted,                          &
+                              micrographs_rejected=micrographs_rejected,                          &
+                              particles_extracted=particles_extracted,                             &
+                              particles_per_mic=particles_per_mic,                                &
+                              last_micrograph_imported=last_micrograph_imported,                  &
+                              box_size=box_size), 'metadata retrieved')
+    call assert_char(stage%to_char(), 'test stage',      'stage set/get correctly')
+    call assert_int(micrographs_imported,  200,          'micrographs_imported set/get correctly')
+    call assert_int(micrographs_accepted,  180,          'micrographs_accepted set/get correctly')
+    call assert_int(micrographs_rejected,  20,           'micrographs_rejected derived correctly')
+    call assert_int(particles_extracted,   36000,        'particles_extracted set/get correctly')
+    call assert_int(particles_per_mic,     180,          'particles_per_mic derived correctly')
+    call assert_true(last_micrograph_imported > 0,       'last_micrograph_imported is set')
+    call assert_int(box_size,              256,          'box_size set/get correctly')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_set_get_stream_reference_picking
+
+  ! Verify that the stream reference-picking serialise buffer is the expected size.
+  subroutine test_serialise_stream_reference_picking()
+    character(len=:),                         allocatable :: buffer
+    type(gui_metadata_stream_picking)                     :: meta
+    write(*,'(A)') 'test_serialise_stream_reference_picking'
+    call meta%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE, 'type is set correctly')
+    call meta%set(stage=string('test stage'), micrographs_imported=200, &
+                  micrographs_accepted=180, particles_extracted=36000, box_size=256)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call meta%serialise(buffer=buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    deallocate(buffer)
+  end subroutine test_serialise_stream_reference_picking
+
+  ! jsonise embeds last_micrograph_imported (live Unix timestamp) so only
+  ! non-emptiness is checked — a stable hash comparison is not possible.
+  subroutine test_jsonise_stream_reference_picking()
+    character(kind=CK, len=:),                allocatable :: buffer
+    type(gui_metadata_stream_picking)                     :: meta
+    type(json_core)                                       :: json
+    type(json_value),                          pointer    :: json_ptr
+    type(string)                                          :: json_str, json_hash
+    logical                                               :: found
+    write(*,'(A)') 'test_jsonise_stream_reference_picking'
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    call meta%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call meta%set(stage=string('test stage'), micrographs_imported=200, &
+                  micrographs_accepted=180, particles_extracted=36000, box_size=256)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    json_ptr => meta%jsonise()
+    call assert_true(associated(json_ptr), 'json pointer is associated')
+    call json%update(json_ptr, 'last_micrograph_imported', 0, found)
+    call json%print_to_string(json_ptr, buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_true(len(buffer) > 0, 'json output is non-empty')
+    call assert_int(len(buffer), 198, 'buffer correct size')
+    json_str = buffer
+    call assert_int(json_str%strlen(), 198, 'string correct size')
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), 'E00E9BC45CFB31B4', 'correct checksum')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    call json%destroy(json_ptr)
+    call assert_true(.not.json%failed(), 'json destroyed')
+    deallocate(buffer)
+  end subroutine test_jsonise_stream_reference_picking
 
   !---------------- stream opening2D ----------------
 

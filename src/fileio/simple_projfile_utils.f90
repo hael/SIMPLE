@@ -10,13 +10,14 @@ implicit none
 
 contains
 
-    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out, cavgs_replace, sigma2_out )
+    subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out, cavgs_replace, sigma2_out, update_classno )
         class(string),           intent(in)    :: chunk_fnames(:) ! List of project files
         class(string),           intent(in)    :: folder          ! output folder
         class(sp_project),       intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
         class(string), optional, intent(in)    :: projname_out    ! name for output project file
         logical,       optional, intent(in)    :: write_proj      ! write project file
         logical,       optional, intent(in)    :: cavgs_replace   ! replace cavgs
+        logical,       optional, intent(in)    :: update_classno  ! update the ptcl class numbers
         class(string), optional, intent(in)    :: cavgs_out       ! name for output cls2D stack
         class(string), optional, intent(in)    :: sigma2_out      ! name for combined sigma2 file
         type(sp_project), allocatable :: chunks(:)
@@ -30,11 +31,13 @@ contains
         real             :: smpd
         integer          :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
         integer          :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
-        logical          :: l_write_proj, l_cavgs_replace
-        l_write_proj    = .true.
-        l_cavgs_replace = .false.
-        if( present( write_proj )   ) l_write_proj    = write_proj
-        if( present( cavgs_replace )) l_cavgs_replace = cavgs_replace
+        logical          :: l_write_proj, l_cavgs_replace, l_update_classno
+        l_write_proj     = .true.
+        l_cavgs_replace  = .false.
+        l_update_classno = .true.
+        if( present( write_proj )    ) l_write_proj     = write_proj
+        if( present( cavgs_replace  )) l_cavgs_replace  = cavgs_replace
+        if( present( update_classno )) l_update_classno = update_classno
         nchunks = size(chunk_fnames)
         allocate(chunks(nchunks))
         allocate(chunks_sigma2(nchunks))
@@ -153,7 +156,7 @@ contains
                 top   = chunks(ic)%os_stk%get_top(i)
                 do j = fromp,top
                     iptcl_glob = iptcl_glob + 1
-                    if(chunks(ic)%os_ptcl2D%get_class(j) > 0) call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
+                    if(l_update_classno .and. chunks(ic)%os_ptcl2D%get_class(j) > 0) call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
                     call chunks(ic)%os_ptcl2D%set_stkind(j, istk)
                     call merged_proj%os_ptcl2D%transfer_ori(iptcl_glob, chunks(ic)%os_ptcl2D, j)
                     if( chunks(ic)%os_ptcl2D%get_state(j) == 0 ) call merged_proj%os_ptcl2D%reject(iptcl_glob)

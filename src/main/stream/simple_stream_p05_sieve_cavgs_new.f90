@@ -34,12 +34,12 @@
 !   SIMPLE_STREAM_CHUNK_PARTITION — queue partition for chunk jobs
 !
 ! DEPENDENCIES:
-!   simple_stream_api, simple_chunked2D, simple_stream_pool2D_utils
+!   simple_stream_api, simple_microchunked2D, simple_stream_pool2D_utils
 !==============================================================================
 module simple_stream_p05_sieve_cavgs_new
   use simple_stream_api
   use simple_fileio,               only: read_filetable
-  use simple_chunked2D,            only: chunked2D
+  use simple_microchunked2D,       only: microchunked2D
   use simple_stream_pool2D_utils,  only: set_lpthres_type
 
   implicit none
@@ -70,7 +70,7 @@ contains
     type(parameters)             :: params
     type(qsys_env)               :: qenv
     type(sp_project)             :: spproj_glob
-    type(chunked2D)              :: chunked_2D
+    type(microchunked2D)         :: chunked_2D
     type(stream_watcher)         :: project_buff
     type(string), allocatable    :: projects(:)
     integer                      :: nprojects, n_mics_imported, n_ptcls_imported, i

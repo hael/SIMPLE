@@ -50,6 +50,7 @@ enum, bind(c)
   ! reference picking stage
   enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE          ! 23
   enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE   ! 24
+  enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE   ! 25
 end enum
 
 end module simple_gui_metadata_types

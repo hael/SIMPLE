@@ -6,7 +6,7 @@
 !   Exercises gui_assembler through a set of unit tests covering object
 !   lifecycle (new/kill/reuse/set_stoptime), hash-based change suppression
 !   (clear_hashes), and JSON assembly for the stream-preprocess,
-!   optics-assignment, initial-picking, and opening-2D stages.
+!   optics-assignment, initial-picking, reference-picking, and opening-2D stages.
 !   Where the assembled JSON is fully deterministic (no live timestamps) the
 !   test verifies an FNV-1a hash of the serialised output; otherwise it checks
 !   only that the output is non-empty.
@@ -27,7 +27,7 @@ module simple_gui_assembler_tester
                                      gui_metadata_timeplot,                      &
                                      gui_metadata_stream_optics_assignment,      &
                                      gui_metadata_optics_group,                  &
-                                     gui_metadata_stream_initial_picking,        &
+                                     gui_metadata_stream_picking,        &
                                      gui_metadata_stream_opening2D,              &
                                      GUI_METADATA_STREAM_PREPROCESS_TYPE,        &
                                      GUI_METADATA_MICROGRAPH_TYPE,               &
@@ -35,8 +35,10 @@ module simple_gui_assembler_tester
                                      GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE, &
                                      GUI_METADATA_OPTICS_GROUP_TYPE,             &
                                      GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,   &
-                                     GUI_METADATA_STREAM_OPENING2D_TYPE,         &
-                                     GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE,   &
+                                     GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE,      &
+                                     GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE, &
+                                     GUI_METADATA_STREAM_OPENING2D_TYPE,              &
+                                     GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE,        &
                                      gui_metadata_cavg2D,                        &
                                      sprite_sheet_pos
   use simple_gui_assembler,    only: gui_assembler
@@ -60,6 +62,7 @@ contains
     call test_preprocess()
     call test_optics_assignment()
     call test_initial_picking()
+    call test_reference_picking()
     call test_opening2D()
   end subroutine run_all_gui_assembler_tests
 
@@ -238,14 +241,14 @@ contains
   ! because the section embeds a live Unix timestamp (last_micrograph_imported).
   subroutine test_initial_picking()
     type(gui_assembler)                              :: assembler
-    type(gui_metadata_stream_initial_picking)        :: meta_initial_picking
+    type(gui_metadata_stream_picking)        :: meta_initial_picking
     type(gui_metadata_micrograph),       allocatable :: meta_micrographs(:)
     type(string)                                     :: json_str
     integer                                          :: i
     write(*,'(A)') 'test_initial_picking'
     call meta_initial_picking%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
     call meta_initial_picking%set(stage=string('test stage'), micrographs_imported=200, &
-                                  micrographs_accepted=180, particles_extracted=36000)
+                                  micrographs_accepted=180, particles_extracted=36000, box_size=256)
     allocate(meta_micrographs(3))
     do i=1, size(meta_micrographs)
       call meta_micrographs(i)%new(GUI_METADATA_MICROGRAPH_TYPE)
@@ -262,6 +265,49 @@ contains
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
     deallocate(meta_micrographs)
   end subroutine test_initial_picking
+
+  !---------------- reference picking assembly ----------------
+
+  ! Assemble a stream reference-picking JSON payload from synthetic metadata and
+  ! verify the section is non-empty.  An exact hash comparison is not possible
+  ! because the section embeds a live Unix timestamp (last_micrograph_imported).
+  subroutine test_reference_picking()
+    type(gui_assembler)                              :: assembler
+    type(gui_metadata_stream_picking)                :: meta_reference_picking
+    type(gui_metadata_micrograph),       allocatable :: meta_micrographs(:)
+    type(gui_metadata_cavg2D),           allocatable :: meta_cavgs2D(:)
+    type(string)                                     :: json_str
+    integer                                          :: i
+    write(*,'(A)') 'test_reference_picking'
+    call meta_reference_picking%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
+    call meta_reference_picking%set(stage=string('test stage'), micrographs_imported=200, &
+                                    micrographs_accepted=180, particles_extracted=36000, box_size=256)
+    allocate(meta_micrographs(3))
+    do i=1, size(meta_micrographs)
+      call meta_micrographs(i)%new(GUI_METADATA_MICROGRAPH_TYPE)
+    enddo
+    call meta_micrographs(1)%set(path=string('/test/path/mic1.mrc'), dfx=1.0, dfy=1.1, ctfres=3.5, i_max=3, i=1)
+    call meta_micrographs(2)%set(path=string('/test/path/mic2.mrc'), dfx=2.0, dfy=1.2, ctfres=4.0, i_max=3, i=2)
+    call meta_micrographs(3)%set(path=string('/test/path/mic3.mrc'), dfx=3.0, dfy=1.3, ctfres=4.5, i_max=3, i=3)
+    allocate(meta_cavgs2D(3))
+    do i=1, size(meta_cavgs2D)
+      call meta_cavgs2D(i)%new(GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE)
+    enddo
+    call meta_cavgs2D(1)%set(path=string('/test/path/ref.jpeg'), mrcpath=string('/test/path/ref.mrc'), &
+                             idx=1, sprite=sprite_sheet_pos(x=0.0,  y=0.0, h=256, w=768), i=1, i_max=3)
+    call meta_cavgs2D(2)%set(path=string('/test/path/ref.jpeg'), mrcpath=string('/test/path/ref.mrc'), &
+                             idx=2, sprite=sprite_sheet_pos(x=33.3, y=0.0, h=256, w=768), i=2, i_max=3)
+    call meta_cavgs2D(3)%set(path=string('/test/path/ref.jpeg'), mrcpath=string('/test/path/ref.mrc'), &
+                             idx=3, sprite=sprite_sheet_pos(x=66.6, y=0.0, h=256, w=768), i=3, i_max=3)
+    call assembler%new(0)
+    call assert_true(assembler%is_associated(), 'assembler json associated')
+    call assembler%assemble_stream_reference_picking(meta_reference_picking, meta_micrographs, meta_cavgs2D)
+    json_str = assembler%to_string()
+    call assert_true(json_str%strlen() > 0, 'json length greater than 0')
+    call assembler%kill()
+    call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
+    deallocate(meta_micrographs, meta_cavgs2D)
+  end subroutine test_reference_picking
 
   !---------------- opening2D assembly ----------------
 

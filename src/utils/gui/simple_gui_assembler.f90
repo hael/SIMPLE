@@ -20,8 +20,9 @@
 !     assemble_stream_heartbeat()    — write process-status section
 !     assemble_stream_preprocess()   — write preprocessing section
 !     assemble_stream_optics_assignment() — write optics-assignment section
-!     assemble_stream_initial_picking()   — write initial-picking section
-!     assemble_stream_opening2D()    — write 2D-classification section
+!     assemble_stream_initial_picking()    — write initial-picking section
+!     assemble_stream_reference_picking()  — write reference-picking section
+!     assemble_stream_opening2D()          — write 2D-classification section
 !
 ! DEPENDENCIES:
 !   unix, simple_string, simple_forked_process, simple_gui_metadata_api
@@ -49,6 +50,7 @@ type :: gui_assembler
   type(string)              :: preprocess_hash         ! FNV-1a hash of last sent preprocessing section
   type(string)              :: optics_assignment_hash  ! FNV-1a hash of last sent optics-assignment section
   type(string)              :: initial_picking_hash    ! FNV-1a hash of last sent initial-picking section
+  type(string)              :: reference_picking_hash  ! FNV-1a hash of last sent reference-picking section
   type(string)              :: opening2D_hash          ! FNV-1a hash of last sent opening2D section
   integer                   :: job_id    = 0           ! pipeline job identifier
   integer                   :: starttime = 0           ! Unix timestamp of job start
@@ -66,6 +68,7 @@ contains
   procedure :: assemble_stream_preprocess
   procedure :: assemble_stream_optics_assignment
   procedure :: assemble_stream_initial_picking
+  procedure :: assemble_stream_reference_picking
   procedure :: assemble_stream_opening2D
 end type gui_assembler
 
@@ -103,14 +106,16 @@ contains
     call self%preprocess_hash%kill()
     call self%optics_assignment_hash%kill()
     call self%initial_picking_hash%kill()
+    call self%reference_picking_hash%kill()
     call self%opening2D_hash%kill()
   end subroutine clear_hashes
 
   ! Write the stream_heartbeat section: per-process status fields plus a master
   ! aggregate status derived from the union of all child-process states.
-  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D )
+  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D, fork_reference_picking )
     class(gui_assembler),  intent(inout) :: self
     class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_opening2D
+    class(forked_process), intent(inout) :: fork_reference_picking
     type(json_value),      pointer       :: json_ptr, json_master_ptr
     integer                              :: n_running, n_failed, n_restarting, n_unknown
     n_running    = 0
@@ -123,6 +128,7 @@ contains
     call forked_process_status(string('assign_optics'), fork_assign_optics)
     call forked_process_status(string('initial_picking'),   fork_opening2D)
     call forked_process_status(string('opening2D'),         fork_opening2D)
+    call forked_process_status(string('reference_picking'), fork_reference_picking)
     ! global status
     call self%json%create_object(json_master_ptr, 'master')
     call self%json%add(json_master_ptr, 'timestamp', int(c_time(0_c_long)))
@@ -284,7 +290,7 @@ contains
   ! is suppressed when its hash matches the previously sent hash.
   subroutine assemble_stream_initial_picking( self, meta_initial_picking, meta_micrographs )
     class(gui_assembler),                              intent(inout) :: self
-    type(gui_metadata_stream_initial_picking),         intent(inout) :: meta_initial_picking
+    type(gui_metadata_stream_picking),         intent(inout) :: meta_initial_picking
     type(gui_metadata_micrograph),        allocatable, intent(inout) :: meta_micrographs(:)
     character(kind=CK,len=:),             allocatable                :: buffer
     type(json_value),                     pointer                    :: json_ptr, json_mics_ptr
@@ -316,6 +322,55 @@ contains
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
   end subroutine assemble_stream_initial_picking
+
+  ! Write the reference-picking section, including micrographs. The whole section
+  ! is suppressed when its hash matches the previously sent hash.
+  subroutine assemble_stream_reference_picking( self, meta_reference_picking, meta_micrographs, meta_cavgs2D )
+    class(gui_assembler),                              intent(inout) :: self
+    type(gui_metadata_stream_picking),                 intent(inout) :: meta_reference_picking
+    type(gui_metadata_micrograph),        allocatable, intent(inout) :: meta_micrographs(:)
+    type(gui_metadata_cavg2D),            allocatable, intent(inout) :: meta_cavgs2D(:)
+    character(kind=CK,len=:),             allocatable                :: buffer
+    type(json_value),                     pointer                    :: json_ptr, json_mics_ptr
+    type(string)                                                     :: str, hash
+    logical                                                          :: l_add
+    integer                                                          :: i_mic
+    call self%json%remove_if_present(self%json_root, 'reference_picking')
+    json_ptr => meta_reference_picking%jsonise()
+    if( .not. associated(json_ptr) ) return
+    call self%json%rename(json_ptr, 'reference_picking')
+    if( allocated(meta_micrographs) ) then
+      l_add = .false.
+      call self%json%create_array(json_mics_ptr, 'latest_micrographs')
+      do i_mic=1, size(meta_micrographs)
+        if( meta_micrographs(i_mic)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_mics_ptr, meta_micrographs(i_mic)%jsonise())
+        endif
+      enddo
+      if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
+    endif
+    if( allocated(meta_cavgs2D) ) then
+      l_add = .false.
+      call self%json%create_array(json_mics_ptr, 'picking_references')
+      do i_mic=1, size(meta_cavgs2D)
+        if( meta_cavgs2D(i_mic)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_mics_ptr, meta_cavgs2D(i_mic)%jsonise())
+        endif
+      enddo
+      if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
+    endif
+    call self%json%print_to_string(json_ptr, buffer)
+    str  = buffer
+    hash = str%to_fnv1a_hash64()
+    if( hash /= self%reference_picking_hash ) then
+      call self%json%add(self%json_root, json_ptr)
+      self%reference_picking_hash = hash
+    endif
+    if( allocated(buffer) ) deallocate(buffer)
+    nullify(json_ptr)
+  end subroutine assemble_stream_reference_picking
 
   ! Write the opening2D (2D classification) section, including any cavgs2D.
   ! The whole section (header + cavgs2D) is suppressed when its hash matches

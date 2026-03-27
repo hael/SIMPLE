@@ -78,7 +78,7 @@ contains
         type(commander_shape_rank_cavgs)          :: xshape_rank
         type(gui_metadata_stream_update)          :: meta_update            ! inbound: user selections and threshold updates
         type(gui_metadata_stream_opening2D)       :: meta_opening2D         ! outbound: 2D stage progress
-        type(gui_metadata_stream_initial_picking) :: meta_initial_picking   ! outbound: micrograph / picking progress
+        type(gui_metadata_stream_picking) :: meta_initial_picking   ! outbound: micrograph / picking progress
         integer                                   :: nprojects, i
         integer                                   :: box_in_pix=0           ! box size (px) set by segdiampick_mics; 0 until known
         integer                                   :: box_for_pick           ! box size used for reference picking
@@ -368,7 +368,8 @@ contains
                     stage                = my_stage,                             &
                     micrographs_imported = spproj%os_mic%get_noris(),            &
                     micrographs_accepted = spproj%os_mic%count_state_gt_zero(),  &
-                    particles_extracted  = spproj%os_ptcl2D%get_noris())
+                    particles_extracted  = spproj%os_ptcl2D%get_noris(),         &
+                    box_size             = box_in_pix)
                 if( meta_initial_picking%assigned() .and. mq_stream_master_in%is_active() ) then
                     call meta_initial_picking%serialise(meta_buffer)
                     call mq_stream_master_in%send(meta_buffer)
@@ -474,7 +475,6 @@ contains
                 my_xtile = 0
                 my_ytile = 0
                 do i = 1, n
-                    write(*,*) 'send_available_cavgs2D', my_path%to_char() , i, n, my_xtile, my_ytile
                     call send_cavg2D_meta(my_path, i, n, my_xtile, my_ytile)
                     my_xtile = my_xtile + 1
                     if( my_xtile == xtiles ) then

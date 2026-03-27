@@ -6,6 +6,7 @@ use simple_stream_mq_defs
 use simple_stream_p01_preprocess_new,    only: stream_p01_preprocess
 use simple_stream_p02_assign_optics_new, only: stream_p02_assign_optics
 use simple_stream_p03_opening2D_new,     only: stream_p03_opening2D
+use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
 use simple_http_post,                    only: http_post, http_response
 use simple_forked_process,               only: forked_process, FORK_STATUS_RUNNING
 use simple_gui_metadata_api
@@ -37,6 +38,11 @@ type, extends(forked_process) :: opening2D_fork
     contains
     procedure :: execute => xopening2D
 end type opening2D_fork
+
+type, extends(forked_process) :: reference_picking_fork
+    contains
+    procedure :: execute => xreference_picking
+end type reference_picking_fork
 
 !=========================================================
 
@@ -71,12 +77,19 @@ contains
         call commander%execute(cline)
     end subroutine xopening2D
 
+    subroutine xreference_picking( self, cline )
+        class(reference_picking_fork), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(stream_p04_refpick_extract)             :: commander
+        call commander%execute(cline)
+    end subroutine xreference_picking
+
     subroutine exec_stream_p00_master( self, cline )
         class(stream_p00_master), intent(inout)    :: self
         class(cmdline),           intent(inout)    :: cline
         type(parameters)                           :: params
         type(cmdline)                              :: cline_preprocess, cline_assign_optics
-        type(cmdline)                              :: cline_opening2D
+        type(cmdline)                              :: cline_opening2D, cline_reference_picking
         type(http_post)                            :: post
         type(http_response)                        :: response
         type(string)                               :: request
@@ -87,18 +100,22 @@ contains
         type(gui_metadata_stream_update)             :: meta_update
         type(gui_metadata_stream_preprocess)         :: meta_preprocess
         type(gui_metadata_stream_optics_assignment)  :: meta_optics_assignment
-        type(gui_metadata_stream_initial_picking)    :: meta_initial_picking
+        type(gui_metadata_stream_picking)            :: meta_initial_picking
         type(gui_metadata_stream_opening2D)          :: meta_opening2D
+        type(gui_metadata_stream_picking)            :: meta_reference_picking
         type(gui_metadata_micrograph),   allocatable :: meta_preprocess_micrographs(:)
         type(gui_metadata_histogram),    allocatable :: meta_preprocess_histograms(:)
         type(gui_metadata_timeplot),     allocatable :: meta_preprocess_timeplots(:)
         type(gui_metadata_optics_group), allocatable :: meta_optics_assignment_optics_groups(:)
         type(gui_metadata_micrograph),   allocatable :: meta_initial_picking_micrographs(:)
+        type(gui_metadata_micrograph),   allocatable :: meta_reference_picking_micrographs(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_opening2D_cavgs2D(:), meta_opening2D_final_cavgs2D(:)
+        type(gui_metadata_cavg2D),       allocatable :: meta_reference_picking_cavgs2D(:)
         ! forked processes
         type(preprocess_fork)                      :: fork_preprocess
         type(assign_optics_fork)                   :: fork_assign_optics
         type(opening2D_fork)                       :: fork_opening2D
+        type(reference_picking_fork)               :: fork_reference_picking
         type(c_pthread_t)                          :: meta_listener_thread
         type(c_ptr)                                :: ptr
         character(len=:),              allocatable :: meta_buffer
@@ -120,10 +137,12 @@ contains
         call init_metadata_preprocess()
         call init_metadata_assign_optics()
         call init_metadata_opening2D()
+        call init_metadata_reference_picking()
         ! init cmdlines
         call init_cline_preprocess()
         call init_cline_assign_optics()
         call init_cline_opening2D()
+        call init_cline_reference_picking()
         ! create message queues
         max_msgsize = max_metadata_size()
         call mq_stream_master_in%new(name=string('stream_master_in'), max_msgsize=max_msgsize)
@@ -139,22 +158,25 @@ contains
         call fork_preprocess%start(name=string(PREPROC_JOB_NAME),   logfile=string(PREPROC_JOB_NAME//'.log'),   cline=cline_preprocess,    restart=.true.)
         call fork_assign_optics%start(name=string(OPTICS_JOB_NAME), logfile=string(OPTICS_JOB_NAME//'.log'),    cline=cline_assign_optics, restart=.true.)
         call fork_opening2D%start(name=string(OPENING2D_JOB_NAME),  logfile=string(OPENING2D_JOB_NAME//'.log'), cline=cline_opening2D,     restart=.true.)
+        call fork_reference_picking%start(name=string(REFPICK_JOB_NAME),  logfile=string(REFPICK_JOB_NAME//'.log'), cline=cline_reference_picking, restart=.true.)
         if( fork_preprocess%status()    /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork preprocessing')
         if( fork_assign_optics%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork assign optics')
         if( fork_opening2D%status()     /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D'    )
+        if( fork_reference_picking%status()     /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork reference picking'    )
         ! attach signal handlers after fork else propagated to processes
         call signal(SIGTERM, sigterm_handler)
         call signal(SIGINT,   sigint_handler)
         ! main loop
         do while( .true. )
             ! heartbeat
-            call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D)
+            call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, fork_reference_picking)
             ! processes
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_preprocess(meta_preprocess, meta_preprocess_micrographs, meta_preprocess_histograms, meta_preprocess_timeplots)
             call assembler%assemble_stream_optics_assignment(meta_optics_assignment, meta_optics_assignment_optics_groups)
             call assembler%assemble_stream_initial_picking(meta_initial_picking, meta_initial_picking_micrographs)
             call assembler%assemble_stream_opening2D(meta_opening2D, meta_opening2D_cavgs2D, meta_opening2D_final_cavgs2D)
+            call assembler%assemble_stream_reference_picking(meta_reference_picking, meta_reference_picking_micrographs, meta_reference_picking_cavgs2D)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             ! stringify assembled json
             request = assembler%to_string()
@@ -188,6 +210,10 @@ contains
                         if( l_found .and. l_test ) then
                             if( fork_opening2D%status() == FORK_STATUS_RUNNING ) call fork_opening2D%terminate()
                         endif
+                        call json%get(json_response_ptr, 'terminate_reference_picking', l_test, l_found)
+                        if( l_found .and. l_test ) then
+                            if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call fork_reference_picking%terminate()
+                        endif
                         ! check for forked process restart
                         call json%get(json_response_ptr, 'restart_preprocess', l_test, l_found)
                         if( l_found .and. l_test ) then
@@ -205,6 +231,12 @@ contains
                         if( l_found .and. l_test ) then
                             if( fork_opening2D%status() /= FORK_STATUS_RUNNING ) then
                                 call fork_opening2D%start(name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'),  cline=cline_opening2D, restart=.true.)
+                            endif
+                        endif
+                        call json%get(json_response_ptr, 'restart_reference_picking', l_test, l_found)
+                        if( l_found .and. l_test ) then
+                            if( fork_reference_picking%status() /= FORK_STATUS_RUNNING ) then
+                                call fork_reference_picking%start(name=string(REFPICK_JOB_NAME), logfile=string(REFPICK_JOB_NAME//'.log'),  cline=cline_reference_picking, restart=.true.)
                             endif
                         endif
                         ! wait to get update message from outbound queue and destroy
@@ -248,11 +280,13 @@ contains
                 if( fork_preprocess%status()    == FORK_STATUS_RUNNING ) call fork_preprocess%terminate()
                 if( fork_assign_optics%status() == FORK_STATUS_RUNNING ) call fork_assign_optics%terminate()
                 if( fork_opening2D%status()     == FORK_STATUS_RUNNING ) call fork_opening2D%terminate()
+                if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call fork_reference_picking%terminate()
                 l_last_loop = .true.
                 ! if processes are still running set last_loop back to false
                 if( fork_preprocess%status()    == FORK_STATUS_RUNNING ) l_last_loop = .false.
                 if( fork_assign_optics%status() == FORK_STATUS_RUNNING ) l_last_loop = .false.
                 if( fork_opening2D%status()     == FORK_STATUS_RUNNING ) l_last_loop = .false.
+                if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) l_last_loop = .false.
                 ! set stoptime in assembler
                 call assembler%set_stoptime()
             else
@@ -335,6 +369,8 @@ contains
                                     meta_initial_picking = transfer(my_buffer, meta_initial_picking)
                                 case( GUI_METADATA_STREAM_OPENING2D_TYPE )
                                     meta_opening2D = transfer(my_buffer, meta_opening2D)
+                                case( GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE )
+                                    meta_reference_picking = transfer(my_buffer, meta_reference_picking)
                                 case( GUI_METADATA_STREAM_PREPROCESS_MICROGRAPH_TYPE )
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of mic meta data
@@ -357,7 +393,7 @@ contains
                                     ! place the already-deserialised tmp object into the correct slot
                                     meta_preprocess_micrographs(meta_mic_tmp%get_i()) = meta_mic_tmp
                                 case( GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE )
-                                    write(*,*) 'GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE'
+                                    write(*,*) 'GUI_METADATA_STREAM_PICKING_MICROGRAPH_TYPE'
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of mic meta data
                                     meta_mic_tmp = transfer(my_buffer, meta_mic_tmp)
@@ -378,6 +414,28 @@ contains
                                     endif
                                     ! place the already-deserialised tmp object into the correct slot
                                     meta_initial_picking_micrographs(meta_mic_tmp%get_i()) = meta_mic_tmp
+                                case( GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE )
+                                    write(*,*) 'GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE'
+                                    my_l_reinit = .false.
+                                    ! deserialise temporary copy of mic meta data
+                                    meta_mic_tmp = transfer(my_buffer, meta_mic_tmp)
+                                    ! allocate or resize meta_preprocess_micrographs as neccesary based on i_max
+                                    if( .not.allocated(meta_reference_picking_micrographs) ) then
+                                        my_l_reinit = .true.
+                                    else if( size(meta_reference_picking_micrographs) /= meta_mic_tmp%get_i_max() ) then
+                                        deallocate(meta_reference_picking_micrographs)
+                                        my_l_reinit = .true.
+                                    endif
+                                    if( my_l_reinit ) then
+                                        ! allocate and initialise each object in meta_reference_picking_micrographs
+                                        allocate(meta_reference_picking_micrographs(meta_mic_tmp%get_i_max()))
+                                        do my_i=1, size(meta_reference_picking_micrographs)
+                                            call meta_reference_picking_micrographs(my_i)%new(GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE)
+                                            if( .not.meta_reference_picking_micrographs(my_i)%initialized() ) THROW_HARD('failed to initialise reference picking micrograph metadata')
+                                        enddo
+                                    endif
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_reference_picking_micrographs(meta_mic_tmp%get_i()) = meta_mic_tmp
                                 case( GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_OPTICS_GROUP_TYPE )
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of optics group
@@ -440,7 +498,28 @@ contains
                                         enddo
                                     endif
                                     ! place the already-deserialised tmp object into the correct slot
-                                    meta_opening2D_final_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp    
+                                    meta_opening2D_final_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp  
+                                case( GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE )
+                                    my_l_reinit = .false.
+                                    ! deserialise temporary copy of cavg2D metadata to read routing fields
+                                    meta_cavg2D_tmp = transfer(my_buffer, meta_cavg2D_tmp)
+                                    ! allocate or resize meta_reference_picking_cavgs2D as necessary based on i_max
+                                    if( .not.allocated(meta_reference_picking_cavgs2D) ) then
+                                        my_l_reinit = .true.
+                                    else if( size(meta_reference_picking_cavgs2D) /= meta_cavg2D_tmp%get_i_max() ) then
+                                        deallocate(meta_reference_picking_cavgs2D)
+                                        my_l_reinit = .true.
+                                    endif
+                                    if( my_l_reinit ) then
+                                        ! allocate and initialise each object in meta_reference_picking_cavgs2D
+                                        allocate(meta_reference_picking_cavgs2D(meta_cavg2D_tmp%get_i_max()))
+                                        do my_i=1, size(meta_reference_picking_cavgs2D)
+                                            call meta_reference_picking_cavgs2D(my_i)%new(GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE)
+                                            if( .not.meta_reference_picking_cavgs2D(my_i)%initialized() ) THROW_HARD('failed to initialise opening2D cavg2D metadata')
+                                        enddo
+                                    endif
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_reference_picking_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
                             end select
                             deallocate(my_buffer)
                         end if
@@ -516,9 +595,9 @@ contains
             call cline_opening2D%set('outdir',                 OPENING2D_JOB_NAME)
             call cline_opening2D%set('dir_target',               PREPROC_JOB_NAME)
             call cline_opening2D%set('optics_dir',                OPTICS_JOB_NAME)
-            call cline_opening2D%set('nthr',                                    4)
+            call cline_opening2D%set('nthr',                                   32)
             call cline_opening2D%set('mkdir',                               'yes')
-            call cline_opening2D%set('nmics',                                   5) ! for testing only
+            call cline_opening2D%set('nmics',                                  20) ! for testing only
         end subroutine init_cline_opening2D
 
         subroutine init_metadata_opening2D()
@@ -531,6 +610,24 @@ contains
             if( .not.meta_opening2D%initialized() ) THROW_HARD('failed to initialise opening2D metadata')
             ! opening2D cavgs2D - allocated on receive
         end subroutine init_metadata_opening2D
+
+        subroutine init_cline_reference_picking()
+            call cline_reference_picking%set('prg',                        'pick_extract')
+            call cline_reference_picking%set('projfile',   REFPICK_JOB_NAME//METADATA_EXT)
+            call cline_reference_picking%set('outdir',                   REFPICK_JOB_NAME)
+            call cline_reference_picking%set('dir_target',               PREPROC_JOB_NAME)
+            call cline_reference_picking%set('optics_dir',                OPTICS_JOB_NAME)
+            call cline_reference_picking%set('nthr',                                    1)
+            call cline_reference_picking%set('mkdir',                               'yes')
+            call cline_reference_picking%set('nparts',                                  5)
+            call cline_reference_picking%set('pickrefs',    '../'//OPENING2D_JOB_NAME//'/selected_references.mrcs') 
+        end subroutine init_cline_reference_picking
+
+        subroutine init_metadata_reference_picking()
+            ! initial picking
+            call meta_reference_picking%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
+            if( .not.meta_reference_picking%initialized() ) THROW_HARD('failed to initialise reference picking metadata')
+        end subroutine init_metadata_reference_picking
 
     end subroutine exec_stream_p00_master
 

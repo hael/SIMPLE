@@ -13,6 +13,6 @@ module simple_gui_metadata_api
   use simple_gui_metadata_stream_update,            only: gui_metadata_stream_update
   use simple_gui_metadata_stream_preprocess,        only: gui_metadata_stream_preprocess
   use simple_gui_metadata_stream_optics_assignment, only: gui_metadata_stream_optics_assignment
-  use simple_gui_metadata_stream_initial_picking,   only: gui_metadata_stream_initial_picking
+  use simple_gui_metadata_stream_picking,           only: gui_metadata_stream_picking
   use simple_gui_metadata_stream_opening2D,         only: gui_metadata_stream_opening2D
 end module simple_gui_metadata_api

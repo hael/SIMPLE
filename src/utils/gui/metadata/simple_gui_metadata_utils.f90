@@ -31,7 +31,7 @@ contains
     type(gui_metadata_stream_update)            :: meta_update
     type(gui_metadata_stream_preprocess)        :: meta_preprocess
     type(gui_metadata_stream_optics_assignment) :: meta_optics_assignment
-    type(gui_metadata_stream_initial_picking)   :: meta_initial_picking
+    type(gui_metadata_stream_picking)   :: meta_initial_picking
     type(gui_metadata_stream_opening2D)         :: meta_opening2D
     integer                                     :: max_size
     max_size = max(sizeof(meta_base),              &

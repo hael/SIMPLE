@@ -170,7 +170,9 @@ contains
                                  size(sorted_stats) / 2, AUTO_THRESHOLD)
 
     ! Reject classes below the threshold
-    where( stats < threshold ) l_rejected(indices) = .true.
+    do icls = 1, size(indices)
+      if( stats(icls) < threshold ) l_rejected(indices(icls)) = .true.
+    end do
     write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (AUTO)        :', count(stats < threshold)
 
     deallocate(indices, indices_all, stats, sorted_stats)
