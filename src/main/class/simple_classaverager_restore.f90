@@ -202,7 +202,7 @@ contains
         integer,      intent(in)    :: nptcls
         class(image), intent(inout) :: ptcl_imgs(nptcls)
         real, parameter :: KB2 = KBALPHA**2
-        type(fplane_type) :: fplane
+        type(fplane_type) :: fplanes(nthr_glob)
         complex :: fcomp
         real    :: loc(2), mat(2,2), tvalsq, croppd_scale, w
         integer :: win(2,2), flims_crop(3,2), phys(2)
@@ -227,7 +227,7 @@ contains
             sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
         end if
         !$omp parallel default(shared) proc_bind(close) &
-        !$omp private(i,ithr,iptcl,win,mat,h,k,hh,kk,l,m,loc,sh,hp,kp,phys,w,tvalsq,l_conjg,fcomp,fplane)
+        !$omp private(i,ithr,iptcl,win,mat,h,k,hh,kk,l,m,loc,sh,hp,kp,phys,w,tvalsq,l_conjg,fcomp)
         !$omp do schedule(static)
         do i = 1, nptcls
             iptcl = precs(i)%pind
@@ -245,11 +245,11 @@ contains
             ! gen_fplane4rec applies the minus sign internally.
             if( p_ptr%l_ml_reg ) then
                 call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
-                    precs(i)%ctfparams, precs(i)%shift, fplane, &
+                    precs(i)%ctfparams, precs(i)%shift, fplanes(ithr), &
                     b_ptr%esig%sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl) )
             else
                 call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
-                    precs(i)%ctfparams, precs(i)%shift, fplane )
+                    precs(i)%ctfparams, precs(i)%shift, fplanes(ithr) )
             endif
             ! Rotation matrix
             call rotmat2d( precs(i)%e3, mat )
@@ -274,11 +274,11 @@ contains
                     ! Read from the generated Fourier plane.
                     ! gen_fplane4rec stores only k<=0, so use Friedel symmetry for kp>0.
                     if( kp <= 0 ) then
-                        fcomp  = precs(i)%pw * KB2 * fplane%cmplx_plane(hp, kp)
-                        tvalsq = precs(i)%pw *       fplane%ctfsq_plane(hp, kp)
+                        fcomp  = precs(i)%pw * KB2 * fplanes(ithr)%cmplx_plane(hp, kp)
+                        tvalsq = precs(i)%pw *       fplanes(ithr)%ctfsq_plane(hp, kp)
                     else
-                        fcomp  = precs(i)%pw * KB2 * conjg(fplane%cmplx_plane(-hp, -kp))
-                        tvalsq = precs(i)%pw *       fplane%ctfsq_plane(-hp, -kp)
+                        fcomp  = precs(i)%pw * KB2 * conjg(fplanes(ithr)%cmplx_plane(-hp, -kp))
+                        tvalsq = precs(i)%pw *       fplanes(ithr)%ctfsq_plane(-hp, -kp)
                     endif
                     ! Splat update
                     do l = 1, wdim

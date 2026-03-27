@@ -29,7 +29,7 @@ type :: eul_prob_tab2D
     procedure :: new
     ! MAIN PROCEDURES
     procedure :: fill_tab
-    procedure :: ref_assign => ref_assign_greedy
+    procedure :: ref_assign => ref_assign_nhood
     procedure :: ref_assign_nhood
     procedure :: write_tab
     procedure :: read_tab_to_glob

@@ -139,7 +139,7 @@ contains
         complex(dp), allocatable :: cmat_thr_sum(:,:,:)
         complex,     allocatable :: cmat_sum(:,:,:)
         integer,     allocatable :: pinds(:)
-        real,        allocatable :: pspec(:), sigma2(:,:)
+        real,        allocatable :: sigma2(:,:)
         integer :: batchlims(2), kfromto(2)
         integer :: i, iptcl, imatch, nyq, nptcls_part_sel, batchsz_max, nbatch
         logical :: l_scale_update_frac
@@ -156,7 +156,7 @@ contains
         endif
         ! Init
         nyq = build%img%get_nyq()
-        allocate(sigma2(nyq,params%fromp:params%top), pspec(nyq), source=0.)
+        allocate(sigma2(nyq,params%fromp:params%top), source=0.)
         batchsz_max = min(nptcls_part_sel, 50 * nthr_glob)
         call prepimgbatch(params, build, batchsz_max)
         call sum_img%new([params%box,params%box,1], params%smpd)
@@ -170,16 +170,16 @@ contains
             nbatch    = batchlims(2) - batchlims(1) + 1
             call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
             cmat_thr_sum = dcmplx(0.d0, 0.d0)
-            !$omp parallel do default(shared) private(iptcl,imatch,pspec)&
+            !$omp parallel do default(shared) private(iptcl,imatch)&
             !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum)
             do imatch = 1, nbatch
                 iptcl = pinds(batchlims(1) + imatch - 1)
-                call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, pspec)
+                call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2(:,iptcl))
                 if( l_scale_update_frac )then
                     ! To account for spectra not included in sampling and yield the correct average
-                    sigma2(:,iptcl) = pspec / (2.0 * params%update_frac)
+                    sigma2(:,iptcl) = sigma2(:,iptcl) / (2.0 * params%update_frac)
                 else
-                    sigma2(:,iptcl) = pspec / 2.0
+                    sigma2(:,iptcl) = sigma2(:,iptcl) / 2.0
                 endif
                 ! thread average
                 call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:))
