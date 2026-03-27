@@ -110,6 +110,7 @@ contains
             if( trim(refine_flag)=='snhc' ) refine_flag = 'snhc_smpl'
         endif
         l_polar = trim(p_ptr%polar).eq.'yes'
+
         ! PARTICLE SAMPLING
         if( allocated(pinds) ) deallocate(pinds)
         if( l_prob_align_mode )then
@@ -150,10 +151,8 @@ contains
             ! references are read in prep_polar_pftc4align2D below
             ! On first iteration the references are taken from the input images
         else
-            l_alloc_read_cavgs = .true.
-            if( .not.l_distr_worker_glob )then
-                l_alloc_read_cavgs = which_iter==1
-            endif
+            ! in shared memory the cavger object is permanent throughout iterations
+            l_alloc_read_cavgs = l_distr_worker_glob .or. (which_iter==1)
             call cavger_new(p_ptr, b_ptr, alloccavgs=l_alloc_read_cavgs)
             if( l_alloc_read_cavgs )then
                 if( .not. cline%defined('refs') )then

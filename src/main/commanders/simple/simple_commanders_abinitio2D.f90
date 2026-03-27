@@ -314,30 +314,6 @@ contains
             call rmat2file(M, string(trim(prefix)//'_class_scores.mat'))
         end subroutine output_stats
 
-        subroutine set_final_mapping
-            type(string) :: refs
-            integer :: iter, minits
-            iter      = cline_cluster2D%get_iarg('endit') + 1
-            refs      = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
-            minits    = iter
-            if( params%l_autoscale ) call cline_cluster2D%set('restore_cavgs', 'no')
-            call cline_cluster2D%set('startit',   iter)
-            call cline_cluster2D%set('minits',    minits)
-            call cline_cluster2D%set('maxits',    minits)
-            call cline_cluster2D%set('refine',    'greedy_smpl')
-            call cline_cluster2D%set('objfun',    'euclid')
-            call cline_cluster2D%set('trs',       stage_parms(NSTAGES)%trslim)
-            call cline_cluster2D%set('center',    'no')
-            call cline_cluster2D%set('box_crop',  stage_parms(NSTAGES)%box_crop)
-            call cline_cluster2D%set('smpd_crop', stage_parms(NSTAGES)%smpd_crop)
-            call cline_cluster2D%set('refs',      refs)
-            call cline_cluster2D%set('extr_iter', params%extr_lim+1)
-            call cline_cluster2D%delete('lp')
-            call cline_cluster2D%delete('update_frac')
-            call cline_cluster2D%delete('endit')
-            write(logfhandle,'(A,/,A)')'>>>','>>> FINAL MAPPING'
-        end subroutine set_final_mapping
-
         subroutine gen_final_cavgs( iter )
             type(commander_make_cavgs_distr) :: xmake_cavgs_distr
             type(commander_make_cavgs)       :: xmake_cavgs

@@ -266,7 +266,7 @@ contains
         type(eul_prob_tab2D)     :: eulprob_obj_part
         real    :: frac_srch_space
         integer :: nptcls
-        logical :: l_polar, l_use_polar_refs
+        logical :: l_polar, l_use_polar_refs, l_alloc_read_cavgs
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( build%spproj_field%get_nevenodd() == 0 )then
@@ -289,7 +289,8 @@ contains
         if( l_use_polar_refs )then
             call prep_polar_pftc4align2D(nptcls, params%which_iter, .false.)
         else
-            call cavger_new(params, build, alloccavgs=.true.)
+            l_alloc_read_cavgs = l_distr_worker_glob .or. (params%which_iter==1)
+            call cavger_new(params, build, alloccavgs=l_alloc_read_cavgs)
             if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
             call cavger_read_all
             call preppftc4align2D(nptcls, params%which_iter, .false.)
@@ -303,7 +304,7 @@ contains
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
         call clean_batch_particles2D
-        if( .not. l_use_polar_refs ) call cavger_kill
+        if( (.not.l_use_polar_refs).and.l_distr_worker_glob ) call cavger_kill
         call build%pftc%kill
         call build%kill_general_tbox
         call qsys_job_finished(params, string('simple_commanders_prob :: exec_prob_tab2D'))
