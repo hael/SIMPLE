@@ -172,7 +172,7 @@ contains
         call cline_cluster2D_pool%set('tau',    params%tau)
         ! refinement
         select case(trim(params%refine))
-            case('snhc','snhc_smpl')
+            case('snhc','snhc_smpl','snhc_ptree')
                 call cline_cluster2D_pool%set( 'refine', params%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')

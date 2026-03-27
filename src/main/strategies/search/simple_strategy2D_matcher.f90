@@ -14,6 +14,7 @@ use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
 use simple_strategy2D_inpl,        only: strategy2D_inpl
 use simple_strategy2D_inpl_smpl,   only: strategy2D_inpl_smpl
 use simple_strategy2D_snhc,        only: strategy2D_snhc
+use simple_strategy2D_snhc_ptree,  only: strategy2D_snhc_ptree
 use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
 use simple_strategy2D_prob,        only: strategy2D_prob
 use simple_strategy2D_srch,        only: strategy2D_spec
@@ -246,6 +247,8 @@ contains
                                 allocate(strategy2D_greedy        :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('greedy_smpl')
                                 allocate(strategy2D_greedy_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case('snhc_ptree')
+                                allocate(strategy2D_snhc_ptree    :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('snhc_smpl')
                                 allocate(strategy2D_snhc_smpl     :: strategy2Dsrch(iptcl_batch)%ptr)
                             case DEFAULT ! is refine=snhc
@@ -278,6 +281,8 @@ contains
                     else
                         ! iteration>1 & refine/=*greedy*
                         select case(trim(refine_flag))
+                            case('snhc_ptree')
+                                allocate(strategy2D_snhc_ptree   :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('snhc_smpl')
                                 allocate(strategy2D_snhc_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
                             case DEFAULT ! is refine=snhc

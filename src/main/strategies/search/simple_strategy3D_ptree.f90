@@ -5,10 +5,9 @@
 module simple_strategy3D_ptree
 use simple_core_module_api
 use simple_strategy3D_alloc
-use simple_strategy3D_tree_utils,&
-                           &only: peak_tree_selection, init_peak_tree_selection, select_peak_trees, select_peak_trees_per_state, descend_tree_prob_fixed_state, get_tree_for_ref, &
-                           &MAX_NTREES, MAX_NPEAKS
 use simple_strategy3D_utils
+use simple_strategy3D_tree_utils
+use simple_strategy_tree_helpers, only: MAX_NTREES, MAX_NPEAKS
 use simple_parameters,      only: parameters
 use simple_oris,            only: oris
 use simple_strategy3D,      only: strategy3D

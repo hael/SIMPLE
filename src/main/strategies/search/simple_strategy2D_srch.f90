@@ -9,7 +9,6 @@ implicit none
 
 public :: strategy2D_srch, strategy2D_spec
 private
-
 #include "simple_local_flags.inc"
 
 type strategy2D_spec
@@ -50,6 +49,7 @@ type strategy2D_srch
     procedure :: prep4srch
     procedure :: inpl_srch_first
     procedure :: inpl_srch
+    procedure :: inpl_srch_peaks
     procedure :: store_solution
     procedure :: kill
 end type strategy2D_srch
@@ -194,6 +194,42 @@ contains
             endif
         endif
     end subroutine inpl_srch
+
+    subroutine inpl_srch_peaks( self, npeaks_inpl, cls_corrs, cls_inpl_inds )
+        class(strategy2D_srch), intent(inout) :: self
+        integer,                intent(in)    :: npeaks_inpl
+        real,                   intent(inout) :: cls_corrs(self%nrefs)
+        integer,                intent(inout) :: cls_inpl_inds(self%nrefs)
+        real    :: cxy(3), sorted_cls_corrs(self%nrefs)
+        integer :: sorted_cls_inds(self%nrefs), iref, isample, inpl_ind
+        if( .not. s2D%do_inplsrch(self%iptcl_batch) ) return
+        sorted_cls_corrs = cls_corrs
+        sorted_cls_inds  = (/(iref,iref=1,self%nrefs)/)
+        call hpsort(sorted_cls_corrs, sorted_cls_inds)
+        cls_corrs = -1.
+        do isample = self%nrefs-npeaks_inpl+1,self%nrefs
+            iref = sorted_cls_inds(isample)
+            if( s2D%cls_pops(iref) == 0 ) cycle
+            call self%grad_shsrch_obj2%set_indices(iref, self%iptcl)
+            inpl_ind = cls_inpl_inds(iref)
+            if( self%l_sh_first )then
+                cxy = self%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%xy_first)
+                if( inpl_ind == 0 )then
+                    inpl_ind = cls_inpl_inds(iref)
+                    cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(iref, self%iptcl, real(self%xy_first,dp), inpl_ind))
+                    cxy(2:3) = self%xy_first_rot
+                endif
+            else
+                cxy = self%grad_shsrch_obj2%minimize(irot=inpl_ind)
+                if( inpl_ind == 0 )then
+                    inpl_ind = cls_inpl_inds(iref)
+                    cxy      = [real(self%b_ptr%pftc%gen_corr_for_rot_8(iref, self%iptcl, inpl_ind)), 0.,0.]
+                endif
+            endif
+            cls_corrs(iref)     = cxy(1)
+            cls_inpl_inds(iref) = inpl_ind
+        enddo
+    end subroutine inpl_srch_peaks
 
     subroutine store_solution( self, os, nrefs, w_in )
         class(strategy2D_srch), intent(in)    :: self

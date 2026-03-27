@@ -262,7 +262,7 @@ contains
             endif
         endif
         ! generate discrete projection direction spaces
-        if( ddo3d )then
+        if( ddo3d .or. str_has_substr(params%refine, 'tree') )then
             call self%eulspace%new(params%nspace, is_ptcl=.false.)
             call self%pgrpsyms%build_refspiral(self%eulspace)
             if( params%l_neigh )then

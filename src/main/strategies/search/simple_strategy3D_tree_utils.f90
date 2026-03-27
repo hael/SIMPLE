@@ -13,20 +13,15 @@
 ! A ptree_neigh_states_greedy using descend_tree_greedy instead of descend_tree_prob. Use this after the classes are already fairly stable.
 module simple_strategy3D_tree_utils
 use simple_core_module_api
-use simple_multi_dendro, only: multi_dendro
+use simple_strategy_tree_helpers
 use simple_strategy3D_alloc
+use simple_multi_dendro,    only: multi_dendro
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
 
-real,    parameter :: INVALID_CORR        = -huge(1.0)
-real,    parameter :: INVALID_CORR_THRESH = INVALID_CORR / 2.0
-integer, parameter :: MAX_NTREES          = 2500
-integer, parameter :: MAX_NPEAKS          = 64
-integer, parameter :: MAX_TREE_REFS       = 1024
-
 public :: peak_tree_selection, init_peak_tree_selection, select_peak_trees, select_peak_trees_per_state,&
 descend_tree_prob, descend_tree_prob_fixed_state, descend_tree_greedy, descend_tree_greedy_fixed_state,&
-&get_tree_for_ref, MAX_NTREES, MAX_NPEAKS, MAX_TREE_REFS
+&get_tree_for_ref
 private
 #include "simple_local_flags.inc"
 
@@ -341,124 +336,5 @@ contains
         nrefs_tree = nrefs_tree + 1
         best_corr  = corr_tmp
     end subroutine eval_tree_ref_fixed_state
-
-    subroutine exhaustive_tree_scan( s, itree, tree_best_corr, nrefs_tree )
-        class(strategy3D_srch), intent(inout) :: s
-        integer,                intent(in)    :: itree
-        real,                   intent(inout) :: tree_best_corr
-        integer,                intent(inout) :: nrefs_tree
-        integer :: tree_refs(MAX_TREE_REFS)
-        integer :: n_tree_refs, iref_tree
-        real    :: best_corr_ref
-        call s%b_ptr%block_tree%get_tree_refs_static(itree, tree_refs, n_tree_refs)
-        do iref_tree = 1, n_tree_refs
-            call eval_tree_ref_across_states(s, tree_refs(iref_tree), best_corr_ref, nrefs_tree)
-            tree_best_corr = max(tree_best_corr, best_corr_ref)
-        end do
-    end subroutine exhaustive_tree_scan
-
-    subroutine exhaustive_tree_scan_fixed_state( s, itree, istate_fixed, tree_best_corr, nrefs_tree )
-        class(strategy3D_srch), intent(inout) :: s
-        integer,                intent(in)    :: itree
-        integer,                intent(in)    :: istate_fixed
-        real,                   intent(inout) :: tree_best_corr
-        integer,                intent(inout) :: nrefs_tree
-        integer :: tree_refs(MAX_TREE_REFS)
-        integer :: n_tree_refs, iref_tree
-        real    :: best_corr_ref
-        call s%b_ptr%block_tree%get_tree_refs_static(itree, tree_refs, n_tree_refs)
-        do iref_tree = 1, n_tree_refs
-            call eval_tree_ref_fixed_state(s, tree_refs(iref_tree), istate_fixed, best_corr_ref, nrefs_tree)
-            tree_best_corr = max(tree_best_corr, best_corr_ref)
-        end do
-    end subroutine exhaustive_tree_scan_fixed_state
-
-    integer function choose_next_child_prob( left_idx, right_idx, corr_left, corr_right ) result(inode_next)
-        integer, intent(in) :: left_idx, right_idx
-        real,    intent(in) :: corr_left, corr_right
-        real :: cmax
-        real :: p_left
-        real :: p_right
-        inode_next = 0
-        if( left_idx == 0 .and. right_idx == 0 ) return
-        if( left_idx == 0 )then
-            inode_next = right_idx
-            return
-        endif
-        if( right_idx == 0 )then
-            inode_next = left_idx
-            return
-        endif
-        if( is_invalid_corr(corr_left) .and. is_invalid_corr(corr_right) )then
-            if( sample_two(1.0, 1.0) == 1 )then
-                inode_next = left_idx
-            else
-                inode_next = right_idx
-            endif
-            return
-        endif
-        cmax = max(corr_left, corr_right)
-        if( is_invalid_corr(corr_left) )then
-            p_left = 0.0
-        else
-            p_left = exp(corr_left - cmax)
-        endif
-        if( is_invalid_corr(corr_right) )then
-            p_right = 0.0
-        else
-            p_right = exp(corr_right - cmax)
-        endif
-        if( sample_two(p_left, p_right) == 1 )then
-            inode_next = left_idx
-        else
-            inode_next = right_idx
-        endif
-    end function choose_next_child_prob
-
-    integer function choose_next_child_greedy( left_idx, right_idx, corr_left, corr_right ) result(inode_next)
-        integer, intent(in) :: left_idx, right_idx
-        real,    intent(in) :: corr_left, corr_right
-        inode_next = 0
-        if( left_idx == 0 .and. right_idx == 0 ) return
-        if( left_idx == 0 )then
-            inode_next = right_idx
-            return
-        endif
-        if( right_idx == 0 )then
-            inode_next = left_idx
-            return
-        endif
-        if( is_invalid_corr(corr_left) .and. is_invalid_corr(corr_right) )then
-            inode_next = left_idx
-            return
-        endif
-        if( is_invalid_corr(corr_left) )then
-            inode_next = right_idx
-            return
-        endif
-        if( is_invalid_corr(corr_right) )then
-            inode_next = left_idx
-            return
-        endif
-        inode_next = merge(left_idx, right_idx, corr_left >= corr_right)
-    end function choose_next_child_greedy
-
-    logical pure function is_invalid_corr( corr ) result(invalid)
-        real, intent(in) :: corr
-        invalid = corr <= INVALID_CORR_THRESH
-    end function is_invalid_corr
-
-    integer function sample_two( p1, p2 ) result(which)
-        real, intent(in) :: p1, p2
-        real :: psum
-        real :: r
-        psum = p1 + p2
-        if( psum <= 0.0 )then
-            which = merge(1, 2, ran3() < 0.5)
-            return
-        endif
-        r = ran3()
-        which = merge(1, 2, r < p1 / psum)
-    end function sample_two
 
 end module simple_strategy3D_tree_utils

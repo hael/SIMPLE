@@ -41,7 +41,7 @@ contains
                 l_inpl  = .true.
             case('prob')
                 nstages = NSTAGES_CLS
-            case('snhc','snhc_smpl')
+            case('snhc','snhc_smpl','snhc_ptree')
                 nstages = NSTAGES_CLS
             case DEFAULT
                 THROW_HARD('Unsupported REFINE argument: '//trim(refine))
@@ -147,7 +147,7 @@ contains
                     refs      = CAVGS_ITER_FBODY//int2str_pad(iter-1,3)//params%ext%to_char()
                     ml_reg    = params%ml_reg
                     gauref    = 'no'
-                    minits    = iter+1
+                    minits    = iter + 1
             end select
         endif
         if( stage_parms(istage)%l_lpset )then
