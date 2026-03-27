@@ -107,7 +107,7 @@ contains
         ! The selected tree is descended without fixing the state, so the
         ! particle can move between classes while the orientation is refined.
         ! ------------------------------------------------------------------
-        call descend_tree_prob(self%s, itree_selected, self%s%prev_corr, nrefs_tree)
+        call descend_tree_prob(self%s, itree_selected, nrefs_tree)
 
         self%s%nrefs_eval = nrefs_tree
         call self%s%inpl_srch_peaks(min(self%s%npeaks_inpl, self%s%nsolns))

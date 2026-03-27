@@ -78,7 +78,7 @@ contains
         end do
         if( nrefs_coarse > 0 )then
             itree = get_tree_for_ref(self%s, iref_best_coarse, ntrees)
-            call descend_tree_prob_fixed_state(self%s, itree, corr_best_coarse, nrefs_tree, s3D%proj_space_state(iref_best_coarse))
+            call descend_tree_prob_fixed_state(self%s, itree, nrefs_tree, s3D%proj_space_state(iref_best_coarse))
         endif
         self%s%nrefs_eval = nrefs_coarse ! don't add the tree evaluations, coarse samples only
         call self%s%inpl_srch

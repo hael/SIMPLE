@@ -108,7 +108,7 @@ contains
         ! tree descent is accepted directly.
         ! ------------------------------------------------------------------
         do i = 1, npeak_trees
-            call descend_tree_prob_fixed_state(self%s, peak_sel%peak_trees(i), self%s%prev_corr, nrefs_tree, self%s%prev_state)
+            call descend_tree_prob_fixed_state(self%s, peak_sel%peak_trees(i), nrefs_tree, self%s%prev_state)
         enddo
         self%s%nrefs_eval = nrefs_tree
         call self%s%inpl_srch_peaks(min(self%s%npeaks_inpl, self%s%nsolns))

@@ -109,7 +109,7 @@ contains
                         peak_sel%peak_tree_states(1:npeak_trees) = peak_sel%tree_best_states(peak_sel%peak_trees(1:npeak_trees))
                     endif
                     do itree = 1, npeak_trees
-                        call descend_tree_prob_fixed_state(self%s, peak_sel%peak_trees(itree), peak_sel%peak_tree_corrs(itree), nrefs_tree, peak_sel%peak_tree_states(itree))
+                        call descend_tree_prob_fixed_state(self%s, peak_sel%peak_trees(itree), nrefs_tree, peak_sel%peak_tree_states(itree))
                     end do
                 endif
             else
@@ -118,7 +118,7 @@ contains
                     call select_peak_trees_per_state(peak_sel)
                     npeak_trees = peak_sel%npeak_trees
                     do itree = 1, npeak_trees
-                        call descend_tree_prob_fixed_state(self%s, peak_sel%peak_trees(itree), peak_sel%peak_tree_corrs(itree), nrefs_tree, peak_sel%peak_tree_states(itree))
+                        call descend_tree_prob_fixed_state(self%s, peak_sel%peak_trees(itree), nrefs_tree, peak_sel%peak_tree_states(itree))
                     end do
                 endif
             endif

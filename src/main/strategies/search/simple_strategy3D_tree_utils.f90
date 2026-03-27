@@ -124,11 +124,10 @@ contains
     end subroutine select_peak_trees_per_state
 
     ! Stochastic descent with multi-state evaluation at each node.
-    subroutine descend_tree_prob( s, itree, coarse_tree_corr, nrefs_tree )
+    subroutine descend_tree_prob( s, itree, nrefs_tree )
         use simple_binary_tree, only: bt_node
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: itree
-        real,                   intent(in)    :: coarse_tree_corr
         integer,                intent(inout) :: nrefs_tree
         type(bt_node) :: node_cur, node_root
         integer       :: inode, inode_next
@@ -151,11 +150,10 @@ contains
     end subroutine descend_tree_prob
 
     ! Fixed-state stochastic descent
-    subroutine descend_tree_prob_fixed_state( s, itree, coarse_tree_corr, nrefs_tree, istate_fixed )
+    subroutine descend_tree_prob_fixed_state( s, itree, nrefs_tree, istate_fixed )
         use simple_binary_tree, only: bt_node
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: itree
-        real,                   intent(in)    :: coarse_tree_corr
         integer,                intent(inout) :: nrefs_tree
         integer,                intent(in)    :: istate_fixed
         type(bt_node) :: node_cur, node_root
@@ -181,11 +179,10 @@ contains
     ! Greedy descent with multi-state evaluation at each node. This mirrors
     ! srch_eul_bl_tree: always descend via the child with the best local score,
     ! while tracking the best node seen
-    subroutine descend_tree_greedy( s, itree, coarse_tree_corr, nrefs_tree )
+    subroutine descend_tree_greedy( s, itree, nrefs_tree )
         use simple_binary_tree, only: bt_node
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: itree
-        real,                   intent(in)    :: coarse_tree_corr
         integer,                intent(inout) :: nrefs_tree
         type(bt_node) :: node_cur, node_root
         integer       :: inode, inode_next
@@ -208,11 +205,10 @@ contains
     end subroutine descend_tree_greedy
 
     ! Fixed-state greedy descent.
-    subroutine descend_tree_greedy_fixed_state( s, itree, coarse_tree_corr, nrefs_tree, istate_fixed )
+    subroutine descend_tree_greedy_fixed_state( s, itree, nrefs_tree, istate_fixed )
         use simple_binary_tree, only: bt_node
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: itree
-        real,                   intent(in)    :: coarse_tree_corr
         integer,                intent(inout) :: nrefs_tree
         integer,                intent(in)    :: istate_fixed
         type(bt_node) :: node_cur, node_root
