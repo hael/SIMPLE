@@ -35,10 +35,12 @@ contains
     subroutine srch_snhc_ptree( self, os )
         class(strategy2D_snhc_ptree), intent(inout) :: self
         class(oris),                  intent(inout) :: os
+        real    :: corrs(self%s%nrots), inpl_corr, corr_best_coarse
+        real    :: cls_corrs(self%s%nrefs)
+        integer :: cls_inpl_inds(self%s%nrefs), sorted_cls_inds(self%s%nrefs)
+        integer :: vec_nrots(self%s%nrots)
         integer :: iref, isample, inpl_ind, itree, ntrees, order_ind
         integer :: nrefs_coarse, nrefs_tree, iref_best_coarse
-        real    :: corrs(self%s%nrots), inpl_corr, corr_best_coarse
-        integer :: vec_nrots(self%s%nrots)
         if( os%get_state(self%s%iptcl) <= 0 )then
             call os%reject(self%s%iptcl)
             return
@@ -52,6 +54,8 @@ contains
         if( ntrees <= 0 )then
             THROW_HARD('snhc_ptree search requires at least one block tree.')
         endif
+        cls_corrs        = -1.
+        cls_inpl_inds    = 0
         nrefs_coarse     = 0
         nrefs_tree       = 0
         corr_best_coarse = -huge(1.0)
@@ -68,8 +72,10 @@ contains
             endif
             call power_sampling( s2D%power, self%s%nrots, corrs, vec_nrots, &
                                 &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
+            cls_corrs(iref)     = inpl_corr
+            cls_inpl_inds(iref) = inpl_ind
             nrefs_coarse = nrefs_coarse + 1
-            if( inpl_corr > corr_best_coarse )then
+            if( inpl_corr >= corr_best_coarse )then
                 corr_best_coarse  = inpl_corr
                 iref_best_coarse  = iref
                 self%s%best_class = iref
@@ -79,9 +85,22 @@ contains
         end do
         if( nrefs_coarse > 0 )then
             itree = get_tree_for_ref(self%s, iref_best_coarse, ntrees)
-            if( itree > 0 ) call descend_tree_prob(self%s, itree, nrefs_tree)
+            if( itree > 0 ) call descend_tree_prob(self%s, itree, nrefs_tree, cls_corrs, cls_inpl_inds)
         endif
-        self%s%nrefs_eval = nrefs_coarse
+        ! Shift refinement for top scoring candidates (coarse + tree local extrema)
+        call self%s%inpl_srch_peaks(s2D%snhc_smpl_ncls, cls_corrs, cls_inpl_inds)
+        ! Class selection via power_sampling over shift-refined scores
+        call power_sampling( s2D%power, self%s%nrefs, cls_corrs, sorted_cls_inds, s2D%snhc_smpl_ncls, &
+                            &self%s%best_class, self%s%nrefs_eval, self%s%best_corr )
+        if( cls_inpl_inds(self%s%best_class) > 0 )then
+            self%s%best_rot = cls_inpl_inds(self%s%best_class)
+        endif
+        if( self%s%best_rot <= 0 )then
+            self%s%best_class = self%s%prev_class
+            self%s%best_rot   = max(1, self%s%prev_rot)
+            self%s%best_corr  = self%s%prev_corr
+        endif
+        ! Final in-plane search
         call self%s%inpl_srch
         call self%s%store_solution(os, nrefs=min(self%s%nrefs, s2D%snhc_nrefs_bound+1))
         if( DEBUG ) write(logfhandle,*) '>>> strategy2D_snhc_ptree::FINISHED SNHC+PTREE SEARCH'

@@ -191,20 +191,20 @@ contains
     subroutine normalize_ncls_nspace_oritype(cline, set_ncls_from_nspace)
         class(cmdline), intent(inout) :: cline
         logical,        intent(in)    :: set_ncls_from_nspace
-        if( (cline%defined('ncls')) .and. cline%defined('nspace') )then
-            THROW_HARD('NCLS and NSPACE cannot be both defined!')
-        endif
-        if( cline%defined('nspace') )then
-            if( cline%defined('oritype') )then
-                if( cline%get_carg('oritype') .eq. 'ptcl2D' )then
-                    THROW_HARD('NSPACE & PTCL2D are incompatible!')
-                endif
-            endif
-            call cline%set('oritype', 'ptcl3D')
-            if( set_ncls_from_nspace ) call cline%set('ncls', cline%get_iarg('nspace'))
-        else
+        ! if( (cline%defined('ncls')) .and. cline%defined('nspace') )then
+        !     THROW_HARD('NCLS and NSPACE cannot be both defined!')
+        ! endif
+        ! if( cline%defined('nspace') )then
+        !     if( cline%defined('oritype') )then
+        !         if( cline%get_carg('oritype') .eq. 'ptcl2D' )then
+        !             THROW_HARD('NSPACE & PTCL2D are incompatible!')
+        !         endif
+        !     endif
+        !     call cline%set('oritype', 'ptcl3D')
+        !     if( set_ncls_from_nspace ) call cline%set('ncls', cline%get_iarg('nspace'))
+        ! else
             call cline%set('oritype', 'ptcl2D')
-        endif
+        ! endif
     end subroutine normalize_ncls_nspace_oritype
 
     subroutine generate_cluster_centers(build, params, cline)

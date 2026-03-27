@@ -808,7 +808,7 @@ contains
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
-        call check_carg('test_tree',       self%test_tree)
+        call check_carg('test_tree',      self%test_tree)
         call check_carg('tophat',         self%tophat)
         call check_carg('trail_rec',      self%trail_rec)
         call check_carg('transp_pca',     self%transp_pca)
@@ -1777,6 +1777,21 @@ contains
                 self%l_prob_inpl = .true.
             endif
             select case(trim(self%refine))
+                case('snhc_ptree')
+                    ! if( .not. is_2D )then
+                    !     THROW_HARD('snhc_ptree refine mode only supported for 2D classification')
+                    ! endif
+                    if( .not. cline%defined('nspace_sub') )then
+                        self%nspace_sub = 50
+                    else
+                        self%nspace_sub = min(self%nspace_sub, 50)
+                    endif
+                    if( .not. cline%defined('nspace') )then
+                        self%nspace = 2000
+                    else
+                        self%nspace = min(self%nspace, 2000)
+                    endif
+                    self%ncls = self%nspace
                 case('shc_ptree')
                     if( .not. cline%defined('nspace_sub') )then
                         self%nspace_sub = 50
