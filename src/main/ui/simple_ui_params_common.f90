@@ -629,8 +629,8 @@ subroutine set_ui_params
                                    'give # pixels{512}', .false., 512.)
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
-                                   'Queue system kind(local|slurm|pbs|lsf|local_dshmem)', &
-                                   '(local|slurm|pbs|lsf|local_dshmem)', .false., 'local')
+                                   'Queue system kind(local|slurm|pbs|lsf)', &
+                                   '(local|slurm|pbs|lsf)', .false., 'local')
 
     call qsys_partition%set_param( 'qsys_partition',  'str',    'Name of SLURM/PBS/LSF partition', &
                                    'Name of target partition of distributed computer system (SLURM/PBS/LSF)', &

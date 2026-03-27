@@ -131,7 +131,7 @@ contains
         endif
     end subroutine inmem_initialize
 
-    subroutine inmem_execute_iteration(self, params, build, cline, converged)
+    subroutine inmem_execute_iteration( self, params, build, cline, converged)
         use simple_strategy2D_matcher, only: cluster2D_exec
         use simple_starproject,        only: starproject
         use simple_commanders_euclid,  only: commander_calc_group_sigmas
@@ -177,20 +177,20 @@ contains
         call starproj%export_cls2D(build%spproj, params%which_iter)
     end subroutine inmem_execute_iteration
 
-    subroutine inmem_finalize_iteration(self, params, build)
+    subroutine inmem_finalize_iteration( self, params, build)
         class(cluster2D_inmem_strategy), intent(inout)  :: self
         type(parameters),                intent(in)     :: params
         type(builder),                   intent(inout)  :: build
         call gen_jpeg(params%which_iter) 
     end subroutine inmem_finalize_iteration
 
-    subroutine inmem_cleanup(self, params)
+    subroutine inmem_cleanup( self, params)
         class(cluster2D_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
         ! No cleanup needed for in-memory strategy, but could add here if needed in the future
     end subroutine inmem_cleanup
 
-    subroutine inmem_finalize_run(self, params, build, cline)
+    subroutine inmem_finalize_run( self, params, build, cline )
         class(cluster2D_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
@@ -215,7 +215,7 @@ contains
     ! DISTRIBUTED STRATEGY METHODS
     ! ======================================================================
 
-    subroutine distr_initialize(self, params, build, cline)
+    subroutine distr_initialize( self, params, build, cline )
         use simple_exec_helpers, only: set_master_num_threads
         class(cluster2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
@@ -239,7 +239,7 @@ contains
         call build%spproj%split_stk(params%nparts)
     end subroutine distr_initialize
 
-    subroutine distr_execute_iteration(self, params, build, cline, converged)
+    subroutine distr_execute_iteration( self, params, build, cline, converged )
         use simple_stream_utils,         only: terminate_stream
         use simple_commanders_mkcavgs,   only: commander_cavgassemble
         use simple_commanders_euclid,    only: commander_calc_group_sigmas
@@ -330,7 +330,7 @@ contains
         converged = converged .or. (params%which_iter >= params%maxits)
     end subroutine distr_execute_iteration
 
-    subroutine distr_finalize_iteration(self, params, build)
+    subroutine distr_finalize_iteration( self, params, build )
         class(cluster2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
@@ -338,7 +338,7 @@ contains
         call gen_jpeg(params%which_iter)
     end subroutine distr_finalize_iteration
 
-    subroutine distr_cleanup(self, params)
+    subroutine distr_cleanup( self, params )
         use simple_qsys_funs, only: qsys_cleanup
         class(cluster2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
@@ -346,7 +346,7 @@ contains
         call self%job_descr%kill
     end subroutine distr_cleanup
 
-    subroutine distr_finalize_run(self, params, build, cline)
+    subroutine distr_finalize_run( self, params, build, cline )
         class(cluster2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
@@ -369,8 +369,8 @@ contains
     ! private helpers
 
     !> Initialize references for cluster2D (used by inmem and distr modes).
-    subroutine init_cluster2D_refs(cline, params, build)
-        use simple_procimgstk,       only: copy_imgfile
+    subroutine init_cluster2D_refs( cline, params, build )
+        use simple_procimgstk,         only: copy_imgfile
         use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr
         use simple_commanders_imgops,  only: commander_scale
         class(cmdline),   intent(inout) :: cline
@@ -414,7 +414,7 @@ contains
         call refs_sc%kill
     end subroutine init_cluster2D_refs
 
-    subroutine init_tseries_refs(cline, params, build, cline_make_cavgs, l_scale_inirefs)
+    subroutine init_tseries_refs( cline, params, build, cline_make_cavgs, l_scale_inirefs )
         use simple_procimgstk, only: selection_from_tseries_imgfile
         class(cmdline),   intent(inout) :: cline
         type(parameters), intent(inout) :: params
@@ -455,7 +455,7 @@ contains
         endif
     end subroutine init_tseries_refs
 
-    subroutine init_standard_refs(cline, params, build, cline_make_cavgs, l_scale_inirefs)
+    subroutine init_standard_refs( cline, params, build, cline_make_cavgs, l_scale_inirefs )
         use simple_procimgstk, only: random_selection_from_imgfile, noise_imgfile
         class(cmdline),   intent(inout) :: cline
         type(parameters), intent(inout) :: params
@@ -487,7 +487,7 @@ contains
         end select
     end subroutine init_standard_refs
 
-    subroutine execute_make_cavgs(cline_make_cavgs, cline, params)
+    subroutine execute_make_cavgs( cline_make_cavgs, cline, params)
         use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr
         type(cmdline),    intent(inout) :: cline_make_cavgs
         class(cmdline),   intent(in)    :: cline

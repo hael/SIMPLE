@@ -555,7 +555,7 @@ contains
         params%msk  = min(real(params%box/2)-COSMSKHALFWIDTH-1., 0.5*params%mskdiam /params%smpd)
         ! generate matching distance matrix
         dmat = calc_match_cavgs_dmat(params, stk_imgs_ref, stk_imgs_match, oa_minmax, params%clust_crit)
-        ! genrate cluster distance matrix
+        ! generate cluster distance matrix
         allocate(labels_match(nmatch), source=0)
         labels_match = minloc(dmat, dim=1)
 

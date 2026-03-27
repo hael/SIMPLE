@@ -56,7 +56,7 @@ character(len=:), allocatable :: cmdline_glob                  !< global command
 integer,          parameter   :: NTHR_SHMEM_MAX     = 20       !< maximum number of shared-memory threads used by master process
 logical,          parameter   :: L_BENCH_GLOB       = .true.   !< global benchmarking flag
 logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arrays for jobs where we know nparts
-logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estmate memory usage for parts
+logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estimate memory usage for parts
 logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not
 real,             parameter   :: HPLIM_GUINIER      = 20.      !< high-pass limit for Guinier plot
 ! general parameters

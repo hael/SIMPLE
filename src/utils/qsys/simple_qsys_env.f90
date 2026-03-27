@@ -6,7 +6,6 @@ use simple_qsys_funs,         only: qsys_watcher,qsys_cleanup
 use simple_qsys_factory,      only: qsys_factory
 use simple_qsys_base,         only: qsys_base
 use simple_qsys_local,        only: qsys_local
-use simple_qsys_local_dshmem, only: qsys_local_dshmem
 use simple_qsys_slurm,        only: qsys_slurm
 use simple_qsys_lsf,          only: qsys_lsf
 use simple_qsys_pbs,          only: qsys_pbs
@@ -165,8 +164,6 @@ contains
         select type(pmyqsys => self%myqsys)
             class is(qsys_local)
                 aarray = .false.
-            class is(qsys_local_dshmem)
-                ! keep array value
             class is(qsys_slurm)
                 ! keep aarray value
             class is(qsys_lsf)
@@ -180,15 +177,10 @@ contains
             call qsys_cleanup(extra_params)
         endif
         if( aarray )then
-            call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr,&
-            &outfile_body=algnfbody, part_params=part_params)
-            call self%qscripts%schedule_array_jobs
-        elseif( aarray .and. self%qdescr%get('qsys_name').eq.'local_dshmem' )then
-            call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr, outfile_body=algnfbody, part_params=part_params)
+            call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr,outfile_body=algnfbody, part_params=part_params)
             call self%qscripts%schedule_array_jobs
         else
-            call self%qscripts%generate_scripts(job_descr, string(MRC_EXT), self%qdescr,&
-            &outfile_body=algnfbody, part_params=part_params, extra_params=extra_params)
+            call self%qscripts%generate_scripts(job_descr, string(MRC_EXT), self%qdescr,outfile_body=algnfbody, part_params=part_params, extra_params=extra_params)
             call self%qscripts%schedule_jobs
         endif
     end subroutine gen_scripts_and_schedule_jobs
