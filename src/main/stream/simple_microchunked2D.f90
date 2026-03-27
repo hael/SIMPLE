@@ -121,6 +121,7 @@ module simple_microchunked2D
   integer, parameter :: REFCHUNK_THRESHOLD      = 10000
   integer, parameter :: DEFAULT_NCLS            = 100
   integer, parameter :: DEFAULT_WALLTIME        = 29 * 60  ! 29 minutes in seconds
+  real,    parameter :: DEFAULT_LPSTART         = 15.0
   real,    parameter :: DEFAULT_MICRO_P1_LP     = 15.0
   real,    parameter :: DEFAULT_MICRO_P2_LP     = 10.0
   real,    parameter :: DEFAULT_REF_LP          =  8.0
@@ -524,22 +525,18 @@ contains
     class(microchunked2D), intent(in) :: self
     ! pass-1: all ab-initio microchunks must be rejected
     get_finished = self%get_n_microchunks_pass_1() == 0 .or. &
-                   all(self%microchunks_pass_1(:)%rejection_complete)
-    write(*,*) 'get_finished1', get_finished        
+                   all(self%microchunks_pass_1(:)%rejection_complete)    
     if( .not. get_finished ) return
     ! pass-2: all merged microchunks must be done
     get_finished = self%get_n_microchunks_pass_2() == 0 .or. &
-                   all(self%microchunks_pass_2(:)%complete)
-    write(*,*) 'get_finished2', get_finished     
+                   all(self%microchunks_pass_2(:)%complete)  
     if( .not. get_finished ) return
     ! refchunk: the reference class-average chunk must be done
     get_finished = self%refchunk%complete
-    write(*,*) 'get_finished3', get_finished     
     if( .not. get_finished ) return
     ! match: all template-match chunks must be done
     get_finished = self%get_n_microchunks_match() == 0 .or. &
-                   all(self%microchunks_match(:)%complete)
-    write(*,*) 'get_finished4', get_finished     
+                   all(self%microchunks_match(:)%complete)   
   end function get_finished
 
   ! --------------------------------------------------------------------------
@@ -838,6 +835,7 @@ contains
       call cline%set('nthr',     self%nthr)
       call cline%set('mskdiam',  self%mskdiam)
       call cline%set('ncls',     DEFAULT_NCLS)
+      call cline%set('lpstart',  DEFAULT_LPSTART)
       call cline%set('lpstop',   DEFAULT_MICRO_P1_LP)
       call cline%set('walltime', DEFAULT_WALLTIME)
     end associate
@@ -858,6 +856,7 @@ contains
       call cline%set('nthr',     self%nthr)
       call cline%set('mskdiam',  self%mskdiam)
       call cline%set('ncls',     DEFAULT_NCLS)
+      call cline%set('lpstart',  DEFAULT_LPSTART)
       call cline%set('lpstop',   DEFAULT_MICRO_P2_LP)
       call cline%set('walltime', DEFAULT_WALLTIME)
     end associate
@@ -880,12 +879,12 @@ contains
       call cline%set('nthr',     self%nthr)
       call cline%set('mskdiam',  self%mskdiam)
       call cline%set('ncls',     DEFAULT_NCLS)
+      call cline%set('lpstart',  DEFAULT_LPSTART)
       call cline%set('lpstop',   DEFAULT_MICRO_P2_LP)
       call cline%set('refs',     self%refs)
       call cline%set('box',      self%box)
-      call cline%set('nstages',  3)
+      call cline%set('extr_lim', 12)
       call cline%set('walltime', DEFAULT_WALLTIME)
-     ! ext_lim=12 maxits=16 nstage=4 lpstart=15
     end associate
   end subroutine generate_microchunk_match_cline
 
@@ -952,8 +951,8 @@ contains
     if( n_complete == 0 ) return
     projfiles = projfiles(:n_complete)
 
-    call spproj_ref%read_segment('os_out',   self%refchunk%projfile)
-    call spproj_ref%read_segment('os_cls2D', self%refchunk%projfile)
+    call spproj_ref%read_segment('out',   self%refchunk%projfile)
+    call spproj_ref%read_segment('cls2D', self%refchunk%projfile)
     call spproj_ref%get_cavgs_stk(ref_stkname, nrefs, smpd_refs)
 
     ! Merge, then strip all 2D parameters except class assignment
@@ -967,6 +966,7 @@ contains
     call combined_project%add_cavgs2os_out(ref_stkname, smpd_refs, 'cavg')
     call combined_project%os_ptcl2D%get_pops(pops, 'class')
     call combined_project%os_cls2D%set_all('pop', real(pops))
+    call combined_project%map2ptcls_state()
     call combined_project%write(combined_projfile)
     call combined_project%kill()
     call spproj_ref%kill()
@@ -1122,7 +1122,10 @@ contains
         end if
       end if
       call self%reject_cavgs(self%refchunk, string(LABEL_REF))
-      if( self%refchunk%rejection_complete ) call simple_touch(self%refchunk%folder%to_char() // '/COMPLETE')
+      if( self%refchunk%rejection_complete ) then
+        call simple_touch(self%refchunk%folder%to_char() // '/COMPLETE')
+        self%refchunk%complete = .true.
+      end if
     end if
 
     call timer_stop(t0, string('collect_and_reject'))
