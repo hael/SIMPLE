@@ -17,7 +17,7 @@ implicit none
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc
 public :: cavger_read_euclid_sigma2, cavger_kill
 ! Interpolation & restoration
-public :: cavger_init_online, cavger_update_sums, cavger_dealloc_online
+public :: cavger_init_online, cavger_update_sums, cavger_update_sums_refactored, cavger_dealloc_online
 public :: cavger_assemble_sums, cavger_restore_cavgs
 ! I/O & handling of distributed sums
 public :: cavger_write_eo, cavger_write_all, cavger_write_merged, cavger_read_all
@@ -307,6 +307,12 @@ interface
         integer,      intent(in)    :: nptcls
         class(image), intent(inout) :: ptcl_imgs(nptcls)
     end subroutine cavger_update_sums
+
+    module subroutine cavger_update_sums_refactored( nptcls, ptcl_imgs )
+        use simple_math_ft, only: upsample_sigma2
+        integer,      intent(in)    :: nptcls
+        class(image), intent(inout) :: ptcl_imgs(nptcls)
+    end subroutine cavger_update_sums_refactored
 
     module subroutine cavger_assemble_sums( do_frac_update )
         use simple_strategy2D3D_common, only: prepimgbatch

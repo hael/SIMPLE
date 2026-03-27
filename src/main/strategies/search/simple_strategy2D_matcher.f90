@@ -315,6 +315,7 @@ contains
             else
                 call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end))
                 call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz))
+                ! call cavger_update_sums_refactored(batchsz, ptcl_imgs(1:batchsz))
             endif
             if( L_BENCH_GLOB ) rt_cavg = rt_cavg + toc(t_cavg)
         enddo ! Batch loop

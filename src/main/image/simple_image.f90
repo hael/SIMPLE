@@ -2011,13 +2011,12 @@ interface
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, iptcl, fplane, sig2arr )
+    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: kfromto(2)
         real,              intent(in)    :: smpd_crop
         class(ctfparams),  intent(in)    :: ctfparms
         real,              intent(in)    :: shift(2)
-        integer,           intent(in)    :: iptcl
         type(fplane_type), intent(out)   :: fplane
         real, optional,    intent(in)    :: sig2arr(kfromto(1):kfromto(2))
     end subroutine gen_fplane4rec

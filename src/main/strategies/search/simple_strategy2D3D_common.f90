@@ -854,10 +854,10 @@ contains
             shift = build%spproj_field%get_2Dshift(iptcl)
             if( params%l_ml_reg )then
                 call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
-                &shift, iptcl, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
+                &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
             else
                 call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
-                &shift, iptcl, fplanes(i))
+                &shift, fplanes(i))
             endif
         end do
         !$omp end parallel do

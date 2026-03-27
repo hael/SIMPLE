@@ -198,133 +198,131 @@ contains
         endif
     end subroutine cavger_dealloc_online
 
-    ! module subroutine cavger_update_sums_refactored( nptcls, ptcl_imgs )
-    !     integer,      intent(in)    :: nptcls
-    !     class(image), intent(inout) :: ptcl_imgs(nptcls)
-    !     real, parameter :: KB2 = KBALPHA**2
-    !     type(fplane_type) :: fplane
-    !     complex :: fcomp
-    !     real    :: loc(2), mat(2,2), tvalsq, croppd_scale, w, shift_eff(2)
-    !     integer :: win(2,2), flims_crop(3,2), phys(2)
-    !     integer :: cyc_lims_cropR(2,2), cyc_lims_crop(3,2), sigma2_kfromto(2)
-    !     integer :: h,k,hh,kk,hp,kp,l,m, icls, nyq_crop
-    !     integer :: iptcl, i, sh, iwinsz, wdim, ithr
-    !     logical :: l_conjg
-    !     ! Interpolation parameters
-    !     iwinsz = ceiling(kbwin%get_winsz() - 0.5)
-    !     wdim   = kbwin%get_wdim()
-    !     ! Memoization for full padded image (tmp_pad_imgs is allocated with ldim_pd)
-    !     call memoize_ft_maps(ldim_pd(1:2), p_ptr%smpd)
-    !     ! Dimensions & limits
-    !     croppd_scale  = real(ldim_croppd(1)) / real(ldim_pd(1))
-    !     flims_crop    = cavgs%even%flims
-    !     nyq_crop      = cavgs%even%fit%get_lfny(1)
-    !     cyc_lims_crop = cavgs%even%fit%loop_lims(3)
-    !     cyc_lims_cropR = transpose(cyc_lims_crop(1:2,:))
-    !     sigma2_kfromto = [1, nyq_crop]
-    !     if( p_ptr%l_ml_reg ) then
-    !         sigma2_kfromto(1) = lbound(b_ptr%esig%sigma2_noise,1)
-    !         sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
-    !     end if
-    !     !$omp parallel default(shared) proc_bind(close) &
-    !     !$omp private(i,ithr,iptcl,win,mat,h,k,hh,kk,l,m,loc,sh,hp,kp,phys,w,tvalsq,l_conjg,fcomp,shift_eff,fplane)
-    !     !$omp do schedule(static)
-    !     do i = 1, nptcls
-    !         iptcl = precs(i)%pind
-    !         if( iptcl == 0 ) cycle
-    !         ithr = omp_get_thread_num() + 1
-    !         ! prep image: noise normalization, edge tapering, padding, fftshift, FFT
-    !         call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft( b_ptr%lmsk, tmp_pad_imgs(ithr) )
-    !         ! Get and cache CTF parameters
-    !         precs(i)%ctfparams         = b_ptr%spproj%get_ctfparams(p_ptr%oritype, iptcl)
-    !         precs(i)%ctfparams%ctfflag = ctfflag
-    !         precs(i)%ctfparams%dfx     = precs(i)%dfx
-    !         precs(i)%ctfparams%dfy     = precs(i)%dfy
-    !         precs(i)%ctfparams%angast  = precs(i)%angast
-    !         ! Keep the old effective phase convention, but do not negate here:
-    !         ! gen_fplane4rec applies the minus sign internally.
-    !         shift_eff = precs(i)%shift * croppd_scale
-    !         ! Build Fourier plane with shift, CTF and optional ML regularization
-    !         if( p_ptr%l_ml_reg ) then
-    !             call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
-    !                 precs(i)%ctfparams, shift_eff, iptcl, fplane, &
-    !                 b_ptr%esig%sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl) )
-    !         else
-    !             call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
-    !                 precs(i)%ctfparams, shift_eff, iptcl, fplane )
-    !         endif
-    !         ! Rotation matrix
-    !         call rotmat2d( precs(i)%e3, mat )
-    !         ! Kaiser-Bessel interpolation
-    !         interp_cmats(:,:,i) = CMPLX_ZERO
-    !         interp_rhos(:,:,i)  = 0.0
-    !         ! loop over cropped original image limits
-    !         do h = flims_crop(1,1), flims_crop(1,2)
-    !             hp = h * OSMPL_PAD_FAC
-    !             do k = flims_crop(2,1), flims_crop(2,2)
-    !                 sh = nint(hyp(real(h),real(k)))
-    !                 if( sh > nyq_crop ) cycle
-    !                 kp = k * OSMPL_PAD_FAC
-    !                 ! rotation on original lattice
-    !                 loc = matmul(real([h,k]), mat)
-    !                 ! interpolation window limits on original lattice
-    !                 win(1,:) = nint(loc)
-    !                 win(2,:) = win(1,:) + iwinsz
-    !                 win(1,:) = win(1,:) - iwinsz
-    !                 ! kernel window
-    !                 call kbwin%apod_mat_2d(loc, iwinsz, wdim, kbw(:,:,ithr))
-    !                 ! Read from the generated Fourier plane.
-    !                 ! gen_fplane4rec stores only k<=0, so use Friedel symmetry for kp>0.
-    !                 if( kp <= 0 ) then
-    !                     fcomp  = precs(i)%pw * KB2 * fplane%cmplx_plane(hp, kp)
-    !                     tvalsq = precs(i)%pw *       fplane%ctfsq_plane(hp, kp)
-    !                 else
-    !                     fcomp  = precs(i)%pw * KB2 * conjg(fplane%cmplx_plane(-hp, -kp))
-    !                     tvalsq = precs(i)%pw *       fplane%ctfsq_plane(-hp, -kp)
-    !                 endif
-    !                 ! Splat update
-    !                 do l = 1, wdim
-    !                     hh      = win(1,1) + l - 1
-    !                     l_conjg = hh < 0
-    !                     hh      = cyci_1d(cyc_lims_cropR(:,1), hh)
-    !                     do m = 1, wdim
-    !                         kk      = win(1,2) + m - 1
-    !                         kk      = cyci_1d(cyc_lims_cropR(:,2), kk)
-    !                         phys(1) = phys_addrh_crop(hh,kk)
-    !                         phys(2) = phys_addrk_crop(hh,kk)
-    !                         w       = kbw(l,m,ithr)
-    !                         interp_cmats(phys(1),phys(2),i) = interp_cmats(phys(1),phys(2),i) + &
-    !                             w * merge(conjg(fcomp), fcomp, l_conjg)
-    !                         interp_rhos(phys(1),phys(2),i)  = interp_rhos(phys(1),phys(2),i)  + &
-    !                             w * tvalsq
-    !                     enddo
-    !                 enddo
-    !             enddo
-    !         enddo
-    !     enddo
-    !     !$omp end do
-    !     ! Accumulate sums
-    !     !$omp do schedule(static)
-    !     do icls = 1, ncls
-    !         do i = 1, nptcls
-    !             if( precs(i)%pind == 0 ) cycle
-    !             if( precs(i)%class == icls ) then
-    !                 select case(precs(i)%eo)
-    !                 case(0,-1)
-    !                     cavgs%even%cmat(:,:,icls)  = cavgs%even%cmat(:,:,icls)  + interp_cmats(:,:,i)
-    !                     cavgs%even%ctfsq(:,:,icls) = cavgs%even%ctfsq(:,:,icls) + interp_rhos(:,:,i)
-    !                     eo_pops(1,icls) = eo_pops(1,icls) + 1
-    !                 case(1)
-    !                     cavgs%odd%cmat(:,:,icls)  = cavgs%odd%cmat(:,:,icls)  + interp_cmats(:,:,i)
-    !                     cavgs%odd%ctfsq(:,:,icls) = cavgs%odd%ctfsq(:,:,icls) + interp_rhos(:,:,i)
-    !                     eo_pops(2,icls) = eo_pops(2,icls) + 1
-    !                 end select
-    !             endif
-    !         enddo
-    !     enddo
-    !     !$omp end do
-    !     !$omp end parallel
-    ! end subroutine cavger_update_sums_refactored
+    module subroutine cavger_update_sums_refactored( nptcls, ptcl_imgs )
+        integer,      intent(in)    :: nptcls
+        class(image), intent(inout) :: ptcl_imgs(nptcls)
+        real, parameter :: KB2 = KBALPHA**2
+        type(fplane_type) :: fplane
+        complex :: fcomp
+        real    :: loc(2), mat(2,2), tvalsq, croppd_scale, w
+        integer :: win(2,2), flims_crop(3,2), phys(2)
+        integer :: cyc_lims_cropR(2,2), cyc_lims_crop(3,2), sigma2_kfromto(2)
+        integer :: h,k,hh,kk,hp,kp,l,m, icls, nyq_crop
+        integer :: iptcl, i, sh, iwinsz, wdim, ithr
+        logical :: l_conjg
+        ! Interpolation parameters
+        iwinsz = ceiling(kbwin%get_winsz() - 0.5)
+        wdim   = kbwin%get_wdim()
+        ! Memoization for full padded image (tmp_pad_imgs is allocated with ldim_pd)
+        call memoize_ft_maps(ldim_pd(1:2), p_ptr%smpd)
+        ! Dimensions & limits
+        croppd_scale  = real(ldim_croppd(1)) / real(ldim_pd(1))
+        flims_crop    = cavgs%even%flims
+        nyq_crop      = cavgs%even%fit%get_lfny(1)
+        cyc_lims_crop = cavgs%even%fit%loop_lims(3)
+        cyc_lims_cropR = transpose(cyc_lims_crop(1:2,:))
+        sigma2_kfromto = [1, nyq_crop]
+        if( p_ptr%l_ml_reg ) then
+            sigma2_kfromto(1) = lbound(b_ptr%esig%sigma2_noise,1)
+            sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
+        end if
+        !$omp parallel default(shared) proc_bind(close) &
+        !$omp private(i,ithr,iptcl,win,mat,h,k,hh,kk,l,m,loc,sh,hp,kp,phys,w,tvalsq,l_conjg,fcomp,fplane)
+        !$omp do schedule(static)
+        do i = 1, nptcls
+            iptcl = precs(i)%pind
+            if( iptcl == 0 ) cycle
+            ithr = omp_get_thread_num() + 1
+            ! prep image: noise normalization, edge tapering, padding, fftshift, FFT
+            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft( b_ptr%lmsk, tmp_pad_imgs(ithr) )
+            ! Get and cache CTF parameters
+            precs(i)%ctfparams         = b_ptr%spproj%get_ctfparams(p_ptr%oritype, iptcl)
+            precs(i)%ctfparams%ctfflag = ctfflag
+            precs(i)%ctfparams%dfx     = precs(i)%dfx
+            precs(i)%ctfparams%dfy     = precs(i)%dfy
+            precs(i)%ctfparams%angast  = precs(i)%angast
+            ! Build Fourier plane with shift, CTF and optional ML regularization
+            ! gen_fplane4rec applies the minus sign internally.
+            if( p_ptr%l_ml_reg ) then
+                call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
+                    precs(i)%ctfparams, precs(i)%shift, fplane, &
+                    b_ptr%esig%sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl) )
+            else
+                call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
+                    precs(i)%ctfparams, precs(i)%shift, fplane )
+            endif
+            ! Rotation matrix
+            call rotmat2d( precs(i)%e3, mat )
+            ! Kaiser-Bessel interpolation
+            interp_cmats(:,:,i) = CMPLX_ZERO
+            interp_rhos(:,:,i)  = 0.0
+            ! loop over cropped original image limits
+            do h = flims_crop(1,1), flims_crop(1,2)
+                hp = h * OSMPL_PAD_FAC
+                do k = flims_crop(2,1), flims_crop(2,2)
+                    sh = nint(hyp(real(h),real(k)))
+                    if( sh > nyq_crop ) cycle
+                    kp = k * OSMPL_PAD_FAC
+                    ! rotation on original lattice
+                    loc = matmul(real([h,k]), mat)
+                    ! interpolation window limits on original lattice
+                    win(1,:) = nint(loc)
+                    win(2,:) = win(1,:) + iwinsz
+                    win(1,:) = win(1,:) - iwinsz
+                    ! kernel window
+                    call kbwin%apod_mat_2d(loc, iwinsz, wdim, kbw(:,:,ithr))
+                    ! Read from the generated Fourier plane.
+                    ! gen_fplane4rec stores only k<=0, so use Friedel symmetry for kp>0.
+                    if( kp <= 0 ) then
+                        fcomp  = precs(i)%pw * KB2 * fplane%cmplx_plane(hp, kp)
+                        tvalsq = precs(i)%pw *       fplane%ctfsq_plane(hp, kp)
+                    else
+                        fcomp  = precs(i)%pw * KB2 * conjg(fplane%cmplx_plane(-hp, -kp))
+                        tvalsq = precs(i)%pw *       fplane%ctfsq_plane(-hp, -kp)
+                    endif
+                    ! Splat update
+                    do l = 1, wdim
+                        hh      = win(1,1) + l - 1
+                        l_conjg = hh < 0
+                        hh      = cyci_1d(cyc_lims_cropR(:,1), hh)
+                        do m = 1, wdim
+                            kk      = win(1,2) + m - 1
+                            kk      = cyci_1d(cyc_lims_cropR(:,2), kk)
+                            phys(1) = phys_addrh_crop(hh,kk)
+                            phys(2) = phys_addrk_crop(hh,kk)
+                            w       = kbw(l,m,ithr)
+                            interp_cmats(phys(1),phys(2),i) = interp_cmats(phys(1),phys(2),i) + &
+                                w * merge(conjg(fcomp), fcomp, l_conjg)
+                            interp_rhos(phys(1),phys(2),i)  = interp_rhos(phys(1),phys(2),i)  + &
+                                w * tvalsq
+                        enddo
+                    enddo
+                enddo
+            enddo
+        enddo
+        !$omp end do
+        ! Accumulate sums
+        !$omp do schedule(static)
+        do icls = 1, ncls
+            do i = 1, nptcls
+                if( precs(i)%pind == 0 ) cycle
+                if( precs(i)%class == icls ) then
+                    select case(precs(i)%eo)
+                    case(0,-1)
+                        cavgs%even%cmat(:,:,icls)  = cavgs%even%cmat(:,:,icls)  + interp_cmats(:,:,i)
+                        cavgs%even%ctfsq(:,:,icls) = cavgs%even%ctfsq(:,:,icls) + interp_rhos(:,:,i)
+                        eo_pops(1,icls) = eo_pops(1,icls) + 1
+                    case(1)
+                        cavgs%odd%cmat(:,:,icls)  = cavgs%odd%cmat(:,:,icls)  + interp_cmats(:,:,i)
+                        cavgs%odd%ctfsq(:,:,icls) = cavgs%odd%ctfsq(:,:,icls) + interp_rhos(:,:,i)
+                        eo_pops(2,icls) = eo_pops(2,icls) + 1
+                    end select
+                endif
+            enddo
+        enddo
+        !$omp end do
+        !$omp end parallel
+    end subroutine cavger_update_sums_refactored
 
     !>  \brief  is for updating classes sums in distributed/non-distributed mode
     !           with provided images using interpolation in Fourier space
