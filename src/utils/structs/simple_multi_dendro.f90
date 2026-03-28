@@ -19,6 +19,7 @@ type :: multi_dendro
    integer :: n_refs  = 0
 contains
    procedure :: new
+   procedure :: new_single_balanced
    procedure :: get_n_trees
    procedure :: get_n_nodes
    procedure :: get_n_refs
@@ -27,6 +28,7 @@ contains
    procedure :: get_tree_refs_static
    procedure :: get_tree_height
    procedure :: build_tree_from_subdistmat
+   procedure :: build_tree_balanced
    procedure :: get_root_node           ! returns bt_node
    procedure :: get_node                ! returns bt_node
    procedure :: is_leaf
@@ -55,6 +57,33 @@ contains
       end do
       allocate(self%trees(self%n_trees))
    end subroutine new
+
+   !--- Create a multi_dendro containing exactly one tree, then build it as a
+   !--- deterministic balanced index tree using binary_tree%build_balanced_index_tree.
+   subroutine new_single_balanced(self, n_refs, refs)
+      class(multi_dendro), intent(inout) :: self
+      integer,             intent(in)    :: n_refs
+      integer, optional,   intent(in)    :: refs(:)
+      integer, allocatable :: labels(:), refs_loc(:)
+      integer :: i
+      if (n_refs < 1) THROW_HARD('new_single_balanced: n_refs must be >= 1')
+      allocate(labels(n_refs), source=1)
+      if (present(refs)) then
+         if (size(refs) /= n_refs) then
+            THROW_HARD('new_single_balanced: size(refs) must equal n_refs')
+         end if
+         allocate(refs_loc(n_refs))
+         refs_loc = refs
+      else
+         allocate(refs_loc(n_refs))
+         do i = 1, n_refs
+            refs_loc(i) = i
+         end do
+      end if
+      call self%new(labels)
+      call self%build_tree_balanced(1, refs_loc)
+      deallocate(labels, refs_loc)
+   end subroutine new_single_balanced
 
    pure integer function get_n_trees(self) result(n)
       class(multi_dendro), intent(in) :: self
@@ -162,6 +191,32 @@ contains
       call self%trees(itree)%build_from_hclust(merge_mat, refs, sub_distmat)
       deallocate(merge_mat, height)
    end subroutine build_tree_from_subdistmat
+
+   !--- Build a deterministic balanced tree for one sub-tree of this multi_dendro.
+   !--- refs are GLOBAL ref ids for the members of this tree.
+   subroutine build_tree_balanced(self, itree, refs)
+      class(multi_dendro), intent(inout) :: self
+      integer,             intent(in)    :: itree
+      integer,             intent(in)    :: refs(:)
+      integer, allocatable :: mat(:,:)
+      integer :: meta(3)
+      integer :: n, k, idx
+      if (itree < 1 .or. itree > self%n_trees) then
+         THROW_HARD('build_tree_balanced: itree out of range')
+      end if
+      n = size(refs)
+      if (n < 1) THROW_HARD('build_tree_balanced: empty refs')
+      call self%trees(itree)%kill()
+      call self%trees(itree)%build_balanced_index_tree(n)
+      ! Remap local ref ids (1..n) in the balanced topology back to GLOBAL ref ids.
+      call serialize_tree(self%trees(itree), mat, meta)
+      do k = 1, size(mat,1)
+         idx = mat(k,5)
+         if (idx >= 1 .and. idx <= n) mat(k,5) = refs(idx)
+      end do
+      call deserialize_tree(self%trees(itree), mat, meta)
+      if (allocated(mat)) deallocate(mat)
+   end subroutine build_tree_balanced
 
    pure function get_root_node(self, itree) result(root_node)
       class(multi_dendro), intent(in) :: self

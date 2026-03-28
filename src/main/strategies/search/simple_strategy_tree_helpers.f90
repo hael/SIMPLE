@@ -66,7 +66,11 @@ contains
             return
         endif
         if( is_invalid_corr(corr_left) .and. is_invalid_corr(corr_right) )then
-            inode_next = left_idx
+            if( sample_two(1.0, 1.0) == 1 )then
+                inode_next = left_idx
+            else
+                inode_next = right_idx
+            endif
             return
         endif
         if( is_invalid_corr(corr_left) )then

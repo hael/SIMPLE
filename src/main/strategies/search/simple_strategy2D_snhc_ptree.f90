@@ -38,8 +38,8 @@ contains
         real    :: corrs(self%s%nrots), inpl_corr, corr_best_coarse
         integer :: vec_nrots(self%s%nrots)
         integer :: sorted_cls_inds(self%s%nrefs)
-        integer :: iref, isample, inpl_ind, itree, ntrees, order_ind
-        integer :: nrefs_coarse, nrefs_tree, iref_best_coarse
+        integer :: iref, isample, inpl_ind, itree, ntrees, order_ind, class_rank
+        integer :: nrefs_coarse_eval, nrefs_tree_eval, iref_best_coarse
         if( os%get_state(self%s%iptcl) <= 0 )then
             call os%reject(self%s%iptcl)
             return
@@ -53,14 +53,14 @@ contains
         if( ntrees <= 0 )then
             THROW_HARD('snhc_ptree search requires at least one block tree.')
         endif
-        nrefs_coarse     = 0
-        nrefs_tree       = 0
+        nrefs_coarse_eval = 0
+        nrefs_tree_eval   = 0
         corr_best_coarse = -huge(1.0)
         iref_best_coarse = self%s%prev_class
         do isample = 1, self%s%nrefs
             iref = s2D%srch_order(self%s%iptcl_batch, isample)
-            self%s%nrefs_eval = self%s%nrefs_eval + 1
-            if( self%s%nrefs_eval > s2D%snhc_nrefs_bound ) exit
+            nrefs_coarse_eval = nrefs_coarse_eval + 1
+            if( nrefs_coarse_eval > s2D%snhc_nrefs_bound ) exit
             if( s2D%cls_pops(iref) == 0 ) cycle
             if( self%s%l_sh_first )then
                 call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, corrs)
@@ -70,7 +70,6 @@ contains
             call power_sampling( s2D%power, self%s%nrots, corrs, vec_nrots, &
                                 &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
             call self%s%store_solution(iref, inpl_ind, inpl_corr)
-            nrefs_coarse = nrefs_coarse + 1
             if( inpl_corr >= corr_best_coarse )then
                 corr_best_coarse  = inpl_corr
                 iref_best_coarse  = iref
@@ -79,20 +78,22 @@ contains
                 self%s%best_rot   = inpl_ind
             endif
         end do
-        if( nrefs_coarse > 0 )then
+        if( nrefs_coarse_eval > 0 )then
             itree = get_tree_for_ref(self%s, iref_best_coarse, ntrees)
-            if( itree > 0 ) call descend_tree_prob(self%s, itree, nrefs_tree)
+            if( itree > 0 ) call descend_tree_prob(self%s, itree, nrefs_tree_eval)
         endif
         ! Shift refinement for top scoring candidates (coarse + tree local extrema)
         call self%s%inpl_srch_peaks(s2D%snhc_smpl_ncls)
         ! Class selection via power_sampling over shift-refined scores
         call power_sampling( s2D%power, self%s%nrefs, s2D%class_space_corrs(:, self%s%ithr), &
                             &sorted_cls_inds, s2D%snhc_smpl_ncls, &
-                            &self%s%best_class, self%s%nrefs_eval, self%s%best_corr )
-        if( s2D%class_space_inplinds(self%s%best_class, self%s%ithr) > 0 )then
+                            &self%s%best_class, class_rank, self%s%best_corr )
+        self%s%nrefs_eval = nrefs_coarse_eval
+        self%s%best_rot = 0
+        if( self%s%best_class > 0 )then
             self%s%best_rot = s2D%class_space_inplinds(self%s%best_class, self%s%ithr)
         endif
-        if( self%s%best_rot <= 0 )then
+        if( self%s%best_class <= 0 .or. self%s%best_rot <= 0 )then
             self%s%best_class = self%s%prev_class
             self%s%best_rot   = max(1, self%s%prev_rot)
             self%s%best_corr  = self%s%prev_corr
@@ -100,7 +101,7 @@ contains
         ! Final in-plane search
         call self%s%inpl_srch
         call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
-        call self%s%assign_ori(os, nrefs=min(self%s%nrefs, s2D%snhc_nrefs_bound+1))
+        call self%s%assign_ori(os)
         if( DEBUG ) write(logfhandle,*) '>>> strategy2D_snhc_ptree::FINISHED SNHC+PTREE SEARCH'
     end subroutine srch_snhc_ptree
 

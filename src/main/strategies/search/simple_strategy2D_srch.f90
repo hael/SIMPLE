@@ -245,15 +245,39 @@ contains
         s2D%class_space_corrs(   ref,self%ithr) = corr
     end subroutine store_solution
 
-    subroutine assign_ori( self, os, nrefs, w_in )
+    subroutine assign_ori( self, os, w_in )
         class(strategy2D_srch), intent(in)    :: self
         class(oris),            intent(inout) :: os
-        integer,      optional, intent(in)    :: nrefs
         real,         optional, intent(in)    :: w_in
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
         real :: e3, mi_class, frac, w
+        real :: best_corr_local
+        integer :: iref, best_class_local, best_rot_local
+        logical :: found_valid
+        integer :: ithr
+        ithr = self%ithr
+        found_valid = .false.
+        best_corr_local = -huge(1.0)
+        best_class_local = self%prev_class
+        best_rot_local   = max(1, self%prev_rot)
+        do iref = 1, self%nrefs
+            if( s2D%cls_pops(iref) <= 0 ) cycle
+            if( s2D%class_space_inplinds(iref,ithr) <= 0 ) cycle
+            if( s2D%class_space_corrs(iref,ithr) > best_corr_local )then
+                best_corr_local  = s2D%class_space_corrs(iref,ithr)
+                best_class_local = iref
+                best_rot_local   = s2D%class_space_inplinds(iref,ithr)
+                found_valid      = .true.
+            endif
+        enddo
+        if( .not. found_valid )then
+            best_class_local = self%prev_class
+            best_rot_local   = max(1, self%prev_rot)
+            best_corr_local  = self%prev_corr
+        endif
         ! get in-plane angle from class-space store
-        e3 = s2D%class_space_e3s(self%best_class, self%ithr)
+        e3 = s2D%class_space_e3s(best_class_local, ithr)
+        if( e3 == 0. ) e3 = 360. - self%b_ptr%pftc%get_rot(best_rot_local)
         ! calculate in-plane rot dist (radians)
         u(1) = 0.
         u(2) = 1.
@@ -264,13 +288,9 @@ contains
         dist = myacos(dot_product(x1,x2))
         ! calculate overlap between distributions
         mi_class = 0.
-        if( self%prev_class == self%best_class ) mi_class = 1.
+        if( self%prev_class == best_class_local ) mi_class = 1.
         ! search space explored
-        if( present(nrefs) )then
-            frac = 100.*(real(self%nrefs_eval)/real(nrefs))
-        else
-            frac = 100.*(real(self%nrefs_eval)/real(self%nrefs))
-        endif
+        frac = 100.*(real(self%nrefs_eval)/real(self%nrefs))
         ! weight
         w = 1.0
         if( present(w_in) ) w = w_in
@@ -278,9 +298,9 @@ contains
         call os%e3set(self%iptcl, e3)
         call os%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
         call os%set(self%iptcl, 'shincarg',   arg(self%best_shvec))
-        call os%set(self%iptcl, 'inpl',       real(s2D%class_space_inplinds(self%best_class, self%ithr)))
-        call os%set(self%iptcl, 'class',      real(self%best_class))
-        call os%set(self%iptcl, 'corr',       s2D%class_space_corrs(self%best_class, self%ithr))
+        call os%set(self%iptcl, 'inpl',       real(best_rot_local))
+        call os%set(self%iptcl, 'class',      real(best_class_local))
+        call os%set(self%iptcl, 'corr',       best_corr_local)
         call os%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call os%set(self%iptcl, 'mi_class',   mi_class)
         call os%set(self%iptcl, 'frac',       frac)

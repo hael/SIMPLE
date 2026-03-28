@@ -47,6 +47,10 @@ contains
         integer,                   intent(in)    :: ntrees, npeak_target
         logical,                   intent(in)    :: need_tree_states, need_peak_states
         integer, optional,         intent(in)    :: nstates, npeaks_per_state
+        if( ntrees < 0 ) THROW_HARD('init_peak_tree_selection: ntrees must be >= 0')
+        if( npeak_target < 0 ) THROW_HARD('init_peak_tree_selection: npeak_target must be >= 0')
+        if( ntrees > MAX_NTREES ) THROW_HARD('init_peak_tree_selection: ntrees exceeds MAX_NTREES')
+        if( npeak_target > MAX_NPEAKS ) THROW_HARD('init_peak_tree_selection: npeak_target exceeds MAX_NPEAKS')
         sel%npeak_trees      = 0
         sel%ntrees           = ntrees
         sel%npeak_target     = npeak_target
@@ -71,10 +75,15 @@ contains
         type(peak_tree_selection), intent(inout) :: sel
         integer :: loc(1)
         real    :: work_corrs(MAX_NTREES)
+        if( sel%ntrees < 0 ) THROW_HARD('select_peak_trees: sel%ntrees must be >= 0')
+        if( sel%npeak_target < 0 ) THROW_HARD('select_peak_trees: sel%npeak_target must be >= 0')
+        if( sel%ntrees > MAX_NTREES ) THROW_HARD('select_peak_trees: sel%ntrees exceeds MAX_NTREES')
+        if( sel%npeak_target > MAX_NPEAKS ) THROW_HARD('select_peak_trees: sel%npeak_target exceeds MAX_NPEAKS')
         sel%npeak_trees                         = 0
         sel%peak_trees(1:sel%npeak_target)      = 0
         sel%peak_tree_corrs(1:sel%npeak_target) = INVALID_CORR
         if( sel%has_peak_states ) sel%peak_tree_states(1:sel%npeak_target) = 1
+        if( sel%ntrees <= 0 .or. sel%npeak_target <= 0 ) return
         work_corrs(1:sel%ntrees) = sel%tree_best_corrs(1:sel%ntrees)
         do while( sel%npeak_trees < sel%npeak_target )
             loc = maxloc(work_corrs(1:sel%ntrees))
@@ -92,10 +101,15 @@ contains
         integer :: istate, irank, best_tree, itree
         real    :: best_corr
         real    :: work_corrs(MAX_NTREES)
+        if( sel%ntrees < 0 ) THROW_HARD('select_peak_trees_per_state: sel%ntrees must be >= 0')
+        if( sel%npeak_target < 0 ) THROW_HARD('select_peak_trees_per_state: sel%npeak_target must be >= 0')
+        if( sel%ntrees > MAX_NTREES ) THROW_HARD('select_peak_trees_per_state: sel%ntrees exceeds MAX_NTREES')
+        if( sel%npeak_target > MAX_NPEAKS ) THROW_HARD('select_peak_trees_per_state: sel%npeak_target exceeds MAX_NPEAKS')
         sel%npeak_trees = 0
         sel%peak_trees(1:sel%npeak_target)       = 0
         sel%peak_tree_corrs(1:sel%npeak_target)  = INVALID_CORR
         sel%peak_tree_states(1:sel%npeak_target) = 1
+        if( sel%ntrees <= 0 .or. sel%npeak_target <= 0 ) return
         work_corrs(1:sel%ntrees) = sel%tree_best_corrs(1:sel%ntrees)
         state_loop: do istate = 1, sel%nstates
             do irank = 1, sel%npeaks_per_state

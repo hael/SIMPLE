@@ -36,20 +36,22 @@ contains
         real    :: inpl_corrs(self%s%nrots)
         real    :: inpl_corr
         integer :: sorted_cls_inds(self%s%nrefs), vec_nrots(self%s%nrots)
-        integer :: iref, isample, inpl_ind, order_ind
+        integer :: iref, isample, inpl_ind, order_ind, class_rank
+        integer :: nrefs_coarse_eval
         if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
             call self%s%prep4srch(os)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! Class search
+            nrefs_coarse_eval = 0
             do isample = 1,self%s%nrefs
                 ! stochastic reference index
                 iref = s2D%srch_order(self%s%iptcl_batch, isample)
                 ! keep track of how many references we are evaluating
-                self%s%nrefs_eval = self%s%nrefs_eval + 1
+                nrefs_coarse_eval = nrefs_coarse_eval + 1
                 ! neighbourhood size
-                if(self%s%nrefs_eval > s2D%snhc_nrefs_bound) exit
+                if(nrefs_coarse_eval > s2D%snhc_nrefs_bound) exit
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! In-plane sampling
                 if( self%s%l_sh_first )then
@@ -66,7 +68,8 @@ contains
             ! Class selection
             call power_sampling( s2D%power, self%s%nrefs, s2D%class_space_corrs(:, self%s%ithr), &
                                 &sorted_cls_inds, s2D%snhc_smpl_ncls, &
-                                &self%s%best_class, self%s%nrefs_eval, self%s%best_corr )
+                                &self%s%best_class, class_rank, self%s%best_corr )
+            self%s%nrefs_eval = nrefs_coarse_eval
             ! In-plane angle
             self%s%best_rot = s2D%class_space_inplinds(self%s%best_class, self%s%ithr)
             ! In-plane search

@@ -26,6 +26,10 @@ contains
     subroutine init_peak_tree_selection( sel, ntrees, npeak_target )
         type(peak_tree_selection), intent(inout) :: sel
         integer,                   intent(in)    :: ntrees, npeak_target
+        if( ntrees < 0 ) THROW_HARD('init_peak_tree_selection: ntrees must be >= 0')
+        if( npeak_target < 0 ) THROW_HARD('init_peak_tree_selection: npeak_target must be >= 0')
+        if( ntrees > MAX_NTREES ) THROW_HARD('init_peak_tree_selection: ntrees exceeds MAX_NTREES')
+        if( npeak_target > MAX_NPEAKS ) THROW_HARD('init_peak_tree_selection: npeak_target exceeds MAX_NPEAKS')
         sel%npeak_trees  = 0
         sel%ntrees       = ntrees
         sel%npeak_target = npeak_target
@@ -42,9 +46,14 @@ contains
         type(peak_tree_selection), intent(inout) :: sel
         integer :: loc(1)
         real    :: work_corrs(MAX_NTREES)
+        if( sel%ntrees < 0 ) THROW_HARD('select_peak_trees: sel%ntrees must be >= 0')
+        if( sel%npeak_target < 0 ) THROW_HARD('select_peak_trees: sel%npeak_target must be >= 0')
+        if( sel%ntrees > MAX_NTREES ) THROW_HARD('select_peak_trees: sel%ntrees exceeds MAX_NTREES')
+        if( sel%npeak_target > MAX_NPEAKS ) THROW_HARD('select_peak_trees: sel%npeak_target exceeds MAX_NPEAKS')
         sel%npeak_trees                         = 0
         sel%peak_trees(1:sel%npeak_target)      = 0
         sel%peak_tree_corrs(1:sel%npeak_target) = INVALID_CORR
+        if( sel%ntrees <= 0 .or. sel%npeak_target <= 0 ) return
         work_corrs(1:sel%ntrees) = sel%tree_best_corrs(1:sel%ntrees)
         do while( sel%npeak_trees < sel%npeak_target )
             loc = maxloc(work_corrs(1:sel%ntrees))

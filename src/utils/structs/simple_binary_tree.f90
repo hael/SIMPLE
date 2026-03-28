@@ -22,16 +22,16 @@ type :: binary_tree
     integer :: nrefs    = 0
     logical :: exists   = .false.
 contains
-    procedure :: kill
-    procedure :: get_n_nodes
-    procedure :: get_nrefs
-    procedure :: get_root_node
-    procedure :: get_node
-    procedure :: is_leaf
-    procedure :: get_height
+    procedure          :: kill
+    procedure          :: get_n_nodes
+    procedure          :: get_nrefs
+    procedure          :: get_root_node
+    procedure          :: get_node
+    procedure          :: is_leaf
+    procedure          :: get_height
     procedure, private :: height_recursive
-    procedure :: build_from_hclust
-    procedure :: build_balanced_index_tree
+    procedure          :: build_from_hclust
+    procedure          :: build_balanced_index_tree
 end type binary_tree
 
 contains

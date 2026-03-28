@@ -15,9 +15,11 @@ contains
       call test_initial_state()
       call test_new_counts_and_getters()
       call test_get_tree_refs()
+      call test_new_single_balanced()
       call test_build_tree_singletons()
       call test_build_tree_pairs_basic_structure()
       call test_build_tree_two_triples_basic_structure()
+      call test_build_tree_balanced_two_triples()
       call test_kill_and_reuse()
       write(*,'(A)') '**** finished multi_dendro tests ****'
    end subroutine run_all_multi_dendro_tests
@@ -82,14 +84,12 @@ contains
       integer, allocatable :: refs(:)
       real,    allocatable :: submat(:,:)
       integer :: n, i, j
-
       refs = md%get_tree_refs(itree)
       n = size(refs)
       if (n == 0) then
          deallocate(refs)
          return
       end if
-
       allocate(submat(n,n))
       submat = 0.0
       if (n > 1) then
@@ -100,9 +100,7 @@ contains
             end do
          end do
       end if
-
       call md%build_tree_from_subdistmat(itree, refs, submat, linkage=1)
-
       deallocate(submat)
       deallocate(refs)
    end subroutine build_tree_from_full_dist
@@ -129,17 +127,13 @@ contains
       write(*,'(A)') 'test_new_counts_and_getters'
       labels = [1,2,1,3,2]  ! {1,3}, {2,5}, {4}
       call md%new(labels)
-
       call assert_int(3, md%get_n_trees(), 'n_trees from labels')
       call assert_int(5, md%get_n_refs(),  'n_refs from labels')
-
       call assert_int(2, md%get_tree_pop(1), 'tree_pop(1)=2')
       call assert_int(2, md%get_tree_pop(2), 'tree_pop(2)=2')
       call assert_int(1, md%get_tree_pop(3), 'tree_pop(3)=1')
-
       call assert_int(0, md%get_tree_pop(0), 'tree_pop(0)=0')
       call assert_int(0, md%get_tree_pop(4), 'tree_pop(4)=0')
-
       call md%kill()
    end subroutine test_new_counts_and_getters
 
@@ -150,31 +144,51 @@ contains
       write(*,'(A)') 'test_get_tree_refs'
       labels = [1,1,1, 2,2,2]
       call md%new(labels)
-
       refs = md%get_tree_refs(1)
       call assert_int(3, size(refs), 'tree1 refs size=3')
       call assert_int_in_set(1, refs, 'tree1 contains ref 1')
       call assert_int_in_set(2, refs, 'tree1 contains ref 2')
       call assert_int_in_set(3, refs, 'tree1 contains ref 3')
       deallocate(refs)
-
       refs = md%get_tree_refs(2)
       call assert_int(3, size(refs), 'tree2 refs size=3')
       call assert_int_in_set(4, refs, 'tree2 contains ref 4')
       call assert_int_in_set(5, refs, 'tree2 contains ref 5')
       call assert_int_in_set(6, refs, 'tree2 contains ref 6')
       deallocate(refs)
-
       refs = md%get_tree_refs(0)
       call assert_int(0, size(refs), 'get_tree_refs(0) returns empty')
       deallocate(refs)
-
       refs = md%get_tree_refs(3)
       call assert_int(0, size(refs), 'get_tree_refs(out-of-range) returns empty')
       deallocate(refs)
-
       call md%kill()
    end subroutine test_get_tree_refs
+
+   subroutine test_new_single_balanced()
+      type(multi_dendro) :: md
+      integer :: refs(4)
+      type(bt_node) :: root, n1, n2, n3, n4
+      write(*,'(A)') 'test_new_single_balanced'
+      refs = [10,20,30,40]
+      call md%new_single_balanced(4, refs)
+      call assert_int(1, md%get_n_trees(), 'single_balanced n_trees=1')
+      call assert_int(4, md%get_n_refs(),  'single_balanced n_refs=4')
+      call assert_int(4, md%get_tree_pop(1), 'single_balanced tree_pop=4')
+      call assert_int(3, md%get_tree_height(1), 'single_balanced height=3 for 4 leaves')
+      root = md%get_root_node(1)
+      call assert_int(7, root%node_idx, 'single_balanced root node_idx=2*n-1=7')
+      call assert_true(.not. md%is_leaf(1, root%node_idx), 'single_balanced root is internal')
+      n1 = md%get_node(1,1)
+      n2 = md%get_node(1,2)
+      n3 = md%get_node(1,3)
+      n4 = md%get_node(1,4)
+      call assert_int(10, n1%ref_idx, 'leaf1 remapped ref=10')
+      call assert_int(20, n2%ref_idx, 'leaf2 remapped ref=20')
+      call assert_int(30, n3%ref_idx, 'leaf3 remapped ref=30')
+      call assert_int(40, n4%ref_idx, 'leaf4 remapped ref=40')
+      call md%kill()
+   end subroutine test_new_single_balanced
 
    subroutine test_build_tree_singletons()
       type(multi_dendro) :: md
@@ -184,22 +198,17 @@ contains
       real, allocatable :: submat(:,:)
       type(bt_node) :: root
       write(*,'(A)') 'test_build_tree_singletons'
-
       labels = [1,2,3,4]
       call md%new(labels)
-
       do itree = 1, md%get_n_trees()
          refs = md%get_tree_refs(itree)
          call assert_int(1, size(refs), 'singleton refs size=1')
-
          allocate(submat(1,1))
          submat = 0.0
          call md%build_tree_from_subdistmat(itree, refs, submat, linkage=1)
          deallocate(submat)
-
          call assert_int(1, md%get_tree_pop(itree), 'singleton tree_pop=1')
          call assert_int(1, md%get_tree_height(itree), 'singleton height=1')
-
          root = md%get_root_node(itree)
          call assert_int(1, root%node_idx, 'singleton root node_idx=1')
          call assert_true(md%is_leaf(itree, root%node_idx), 'singleton root is leaf')
@@ -207,10 +216,8 @@ contains
          call assert_int(0, root%left_idx,  'singleton root left=0')
          call assert_int(0, root%right_idx, 'singleton root right=0')
          call assert_int(0, root%parent_idx,'singleton root parent=0')
-
          deallocate(refs)
       end do
-
       call md%kill()
    end subroutine test_build_tree_singletons
 
@@ -223,48 +230,38 @@ contains
       real, allocatable :: submat(:,:)
       type(bt_node) :: root, lch, rch
       integer :: n
-
       write(*,'(A)') 'test_build_tree_pairs_basic_structure'
       call make_distmat_two_pairs(dist)
       labels = [1,1,2,2]   ! {1,2} and {3,4}
       call md%new(labels)
-
       do itree = 1, md%get_n_trees()
          refs = md%get_tree_refs(itree)
          n = size(refs)
          call assert_int(2, n, 'pair refs size=2')
-
          allocate(submat(n,n))
          submat = 0.0
          submat(1,2) = dist(refs(1), refs(2))
          submat(2,1) = submat(1,2)
-
          call md%build_tree_from_subdistmat(itree, refs, submat, linkage=1)
          deallocate(submat)
-
          call assert_int(2, md%get_tree_pop(itree), 'pair tree_pop=2')
          call assert_int(2, md%get_tree_height(itree), 'pair height=2')
-
          root = md%get_root_node(itree)
          call assert_int(3, root%node_idx, 'pair root node_idx = 2*n-1 = 3')
          call assert_true(.not. md%is_leaf(itree, root%node_idx), 'pair root is not leaf')
          call assert_int(0, root%parent_idx, 'pair root parent=0')
          call assert_true(root%left_idx  /= 0, 'pair root left_idx nonzero')
          call assert_true(root%right_idx /= 0, 'pair root right_idx nonzero')
-
          lch = md%get_node(itree, root%left_idx)
          rch = md%get_node(itree, root%right_idx)
          call assert_true(md%is_leaf(itree, lch%node_idx), 'pair left child is leaf')
          call assert_true(md%is_leaf(itree, rch%node_idx), 'pair right child is leaf')
-
          ! leaves carry the physical/global ref ids from refs(:)
          call assert_true(lch%ref_idx == refs(1) .or. lch%ref_idx == refs(2), 'pair left leaf ref in refs')
          call assert_true(rch%ref_idx == refs(1) .or. rch%ref_idx == refs(2), 'pair right leaf ref in refs')
          call assert_true(lch%ref_idx /= rch%ref_idx, 'pair leaves have distinct refs')
-
          deallocate(refs)
       end do
-
       call md%kill()
    end subroutine test_build_tree_pairs_basic_structure
 
@@ -275,12 +272,10 @@ contains
       integer :: itree
       type(bt_node) :: root
       integer :: n
-
       write(*,'(A)') 'test_build_tree_two_triples_basic_structure'
       call make_distmat_two_triples(dist)
       labels = [1,1,1, 2,2,2]
       call md%new(labels)
-
       do itree = 1, md%get_n_trees()
          call build_tree_from_full_dist(md, itree, dist)
          n = md%get_tree_pop(itree)
@@ -293,29 +288,53 @@ contains
          call assert_true(root%left_idx  /= 0, 'triple root left_idx nonzero')
          call assert_true(root%right_idx /= 0, 'triple root right_idx nonzero')
       end do
-
       call md%kill()
    end subroutine test_build_tree_two_triples_basic_structure
+
+   subroutine test_build_tree_balanced_two_triples()
+      type(multi_dendro) :: md
+      integer :: labels(6)
+      integer :: itree
+      integer, allocatable :: refs(:)
+      type(bt_node) :: root, n1, n2, n3
+      write(*,'(A)') 'test_build_tree_balanced_two_triples'
+      labels = [1,1,1, 2,2,2]
+      call md%new(labels)
+      do itree = 1, md%get_n_trees()
+         refs = md%get_tree_refs(itree)
+         call md%build_tree_balanced(itree, refs)
+         call assert_int(3, md%get_tree_pop(itree), 'balanced triple tree_pop=3')
+         call assert_int(3, md%get_tree_height(itree), 'balanced triple height=3')
+         root = md%get_root_node(itree)
+         call assert_int(5, root%node_idx, 'balanced triple root node_idx=5')
+         call assert_true(.not. md%is_leaf(itree, root%node_idx), 'balanced triple root is internal')
+         ! Leaves 1..3 must map back to refs(1..3)
+         n1 = md%get_node(itree, 1)
+         n2 = md%get_node(itree, 2)
+         n3 = md%get_node(itree, 3)
+         call assert_int(refs(1), n1%ref_idx, 'balanced triple leaf1 remapped')
+         call assert_int(refs(2), n2%ref_idx, 'balanced triple leaf2 remapped')
+         call assert_int(refs(3), n3%ref_idx, 'balanced triple leaf3 remapped')
+         deallocate(refs)
+      end do
+      call md%kill()
+   end subroutine test_build_tree_balanced_two_triples
 
    subroutine test_kill_and_reuse()
       type(multi_dendro) :: md
       integer :: labels(6)
       real :: dist(6,6)
       integer :: itree
-
       write(*,'(A)') 'test_kill_and_reuse'
       call make_distmat_two_triples(dist)
       labels = [1,1,1,2,2,2]
       call md%new(labels)
-
       do itree = 1, md%get_n_trees()
          call build_tree_from_full_dist(md, itree, dist)
       end do
-
       call md%kill()
       call assert_int(0, md%get_n_trees(), 'after kill n_trees=0')
       call assert_int(0, md%get_n_refs(),  'after kill n_refs=0')
-
       ! Reuse with new labels
       labels = [1,2,2,2,2,2]
       call md%new(labels)
@@ -323,7 +342,6 @@ contains
       call assert_int(6, md%get_n_refs(),  'reuse n_refs=6')
       call assert_int(1, md%get_tree_pop(1),'reuse tree_pop(1)=1')
       call assert_int(5, md%get_tree_pop(2),'reuse tree_pop(2)=5')
-
       call md%kill()
    end subroutine test_kill_and_reuse
 
