@@ -28,6 +28,11 @@ distributed HPC environments.
 
 ------------------------------------------------------------------------
 
+## 🏗️  Build Status
+[![Build SIMPLE & Run Tests (Linux/MacOS)](https://github.com/hael/SIMPLE/actions/workflows/ci_build_and_test.yml/badge.svg)](https://github.com/hael/SIMPLE/actions/workflows/ci_build_and_test.yml) 
+
+------------------------------------------------------------------------
+
 ## 🚀 Release
 
 Stable release (v3.0.0):
