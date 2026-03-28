@@ -67,7 +67,8 @@ contains
                 call rotmat2d(self%s%b_ptr%pftc%get_rot(self%s%best_rot), rotmat)
                 self%s%best_shvec = matmul(self%s%best_shvec, rotmat)
             endif
-            call self%s%store_solution(os)
+            call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
+            call self%s%assign_ori(os)
         else
             call os%reject(self%s%iptcl)
         endif

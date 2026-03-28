@@ -90,7 +90,8 @@ contains
                 self%s%best_rot   = inpl_glob
             endif
             call self%s%inpl_srch
-            call self%s%store_solution(os, nrefs=min(self%s%nrefs, s2D%snhc_nrefs_bound+1))
+            call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
+            call self%s%assign_ori(os, nrefs=min(self%s%nrefs, s2D%snhc_nrefs_bound+1))
         else
             call os%reject(self%s%iptcl)
         endif

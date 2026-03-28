@@ -36,7 +36,8 @@ contains
         if( os%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch(os)
             self%s%nrefs_eval = self%s%nrefs
-            call self%s%store_solution(os)
+            call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
+            call self%s%assign_ori(os)
         else
             call os%reject(self%s%iptcl)
         endif

@@ -1778,20 +1778,12 @@ contains
             endif
             select case(trim(self%refine))
                 case('snhc_ptree')
-                    ! if( .not. is_2D )then
-                    !     THROW_HARD('snhc_ptree refine mode only supported for 2D classification')
-                    ! endif
-                    if( .not. cline%defined('nspace_sub') )then
-                        self%nspace_sub = 50
-                    else
-                        self%nspace_sub = min(self%nspace_sub, 50)
-                    endif
-                    if( .not. cline%defined('nspace') )then
-                        self%nspace = 2000
-                    else
-                        self%nspace = min(self%nspace, 2000)
-                    endif
-                    self%ncls = self%nspace
+                    self%ncls       = round2even(real(self%ncls))
+                    self%nspace     = self%ncls
+                    if( self%nspace > 5000 ) THROW_WARN('nspace for snhc_ptree is too large, capping it to 5000')
+                    self%nspace     = min(self%nspace, 5000)                        ! capped at 5000
+                    self%nspace_sub = min(round2even(0.025* real(self%nspace)), 50) ! capped at 50
+                    self%nspace_sub = max(self%nspace_sub, 10)                      ! floored at 10
                 case('shc_ptree')
                     if( .not. cline%defined('nspace_sub') )then
                         self%nspace_sub = 50

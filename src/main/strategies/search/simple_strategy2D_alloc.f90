@@ -3,7 +3,7 @@ module simple_strategy2D_alloc
 use simple_pftc_srch_api
 implicit none
 
-public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob
+public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob, prep_strategy2D_thread
 private
 #include "simple_local_flags.inc"
 
@@ -20,6 +20,10 @@ type strategy2D_alloc
     ! per particle
     integer, allocatable :: srch_order(:,:)
     logical, allocatable :: do_inplsrch(:)
+    ! per thread
+    real,    allocatable :: class_space_corrs(:,:)     !< class vs. particle correlations
+    real,    allocatable :: class_space_e3s(:,:)       !< in-plane Euler angles (e3)
+    integer, allocatable :: class_space_inplinds(:,:)  !< in-plane rotation indices
 end type strategy2D_alloc
 
 type(strategy2D_alloc) :: s2D
@@ -28,10 +32,14 @@ contains
 
     subroutine clean_strategy2D
         ! per class
-        if( allocated(s2D%cls_pops)   ) deallocate(s2D%cls_pops)
+        if( allocated(s2D%cls_pops)            ) deallocate(s2D%cls_pops)
         ! per particle
-        if( allocated(s2D%srch_order) ) deallocate(s2D%srch_order)
-        if( allocated(s2D%do_inplsrch)) deallocate(s2D%do_inplsrch)
+        if( allocated(s2D%srch_order)          ) deallocate(s2D%srch_order)
+        if( allocated(s2D%do_inplsrch)         ) deallocate(s2D%do_inplsrch)
+        ! per thread
+        if( allocated(s2D%class_space_corrs)   ) deallocate(s2D%class_space_corrs)
+        if( allocated(s2D%class_space_e3s)     ) deallocate(s2D%class_space_e3s)
+        if( allocated(s2D%class_space_inplinds)) deallocate(s2D%class_space_inplinds)
     end subroutine clean_strategy2D
 
     !>  prep class & global parameters
@@ -92,6 +100,16 @@ contains
                 s2D%power = POST_EXTR_POWER
             endif
         endif
+        ! per-thread class-space arrays
+        if( allocated(s2D%class_space_corrs)    ) deallocate(s2D%class_space_corrs)
+        if( allocated(s2D%class_space_e3s)      ) deallocate(s2D%class_space_e3s)
+        if( allocated(s2D%class_space_inplinds) ) deallocate(s2D%class_space_inplinds)
+        allocate(s2D%class_space_corrs(   params%ncls, nthr_glob),&
+                &s2D%class_space_e3s(     params%ncls, nthr_glob),&
+                &s2D%class_space_inplinds(params%ncls, nthr_glob))
+        s2D%class_space_corrs    = -huge(1.0)
+        s2D%class_space_e3s      = 0.
+        s2D%class_space_inplinds = 0
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)
@@ -124,5 +142,13 @@ contains
         call rt%kill
         if( any(s2D%srch_order == 0) ) THROW_HARD('Invalid index in srch_order; simple_strategy2D_srch :: prep4strategy2D_srch')
     end subroutine prep_strategy2D_batch
+
+    !> init thread-specific class-space search arrays (call per-particle before searching)
+    subroutine prep_strategy2D_thread( ithr )
+        integer, intent(in) :: ithr
+        s2D%class_space_corrs(   :,ithr) = -huge(1.0)
+        s2D%class_space_e3s(     :,ithr) = 0.
+        s2D%class_space_inplinds(:,ithr) = 0
+    end subroutine prep_strategy2D_thread
 
 end module simple_strategy2D_alloc

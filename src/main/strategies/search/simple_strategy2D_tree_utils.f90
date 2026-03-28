@@ -56,26 +56,24 @@ contains
         end do
     end subroutine select_peak_trees
 
-    subroutine descend_tree_prob( s, itree, nrefs_tree, cls_corrs, cls_inpl_inds )
+    subroutine descend_tree_prob( s, itree, nrefs_tree )
         use simple_binary_tree, only: bt_node
         class(strategy2D_srch), intent(inout) :: s
         integer,                intent(in)    :: itree
         integer,                intent(inout) :: nrefs_tree
-        real,                   intent(inout) :: cls_corrs(:)
-        integer,                intent(inout) :: cls_inpl_inds(:)
         type(bt_node) :: node_cur, node_root
         integer       :: inode, inode_next
         real          :: best_corr_L, best_corr_R, tree_best_corr
         node_root = s%b_ptr%block_tree%get_root_node(itree)
-        call eval_tree_ref(s, node_root%ref_idx, tree_best_corr, nrefs_tree, cls_corrs, cls_inpl_inds)
+        call eval_tree_ref(s, node_root%ref_idx, tree_best_corr, nrefs_tree)
         inode = node_root%node_idx
         do
             if( inode == 0 ) exit
             if( s%b_ptr%block_tree%is_leaf(itree, inode) ) exit
             node_cur = s%b_ptr%block_tree%get_node(itree, inode)
             if( node_cur%left_idx == 0 .and. node_cur%right_idx == 0 ) exit
-            call eval_child_best(s, itree, node_cur%left_idx,  best_corr_L, nrefs_tree, cls_corrs, cls_inpl_inds)
-            call eval_child_best(s, itree, node_cur%right_idx, best_corr_R, nrefs_tree, cls_corrs, cls_inpl_inds)
+            call eval_child_best(s, itree, node_cur%left_idx,  best_corr_L, nrefs_tree)
+            call eval_child_best(s, itree, node_cur%right_idx, best_corr_R, nrefs_tree)
             tree_best_corr = max(tree_best_corr, best_corr_L, best_corr_R)
             inode_next = choose_next_child_prob(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
             if( inode_next == 0 ) exit
@@ -89,22 +87,18 @@ contains
         integer,                intent(in)    :: itree
         integer,                intent(inout) :: nrefs_tree
         type(bt_node) :: node_cur, node_root
-        real          :: cls_corrs(s%nrefs)
-        integer       :: cls_inpl_inds(s%nrefs)
         integer       :: inode, inode_next
         real          :: best_corr_L, best_corr_R, tree_best_corr
-        cls_corrs     = INVALID_CORR
-        cls_inpl_inds = 0
         node_root = s%b_ptr%block_tree%get_root_node(itree)
-        call eval_tree_ref(s, node_root%ref_idx, tree_best_corr, nrefs_tree, cls_corrs, cls_inpl_inds)
+        call eval_tree_ref(s, node_root%ref_idx, tree_best_corr, nrefs_tree)
         inode = node_root%node_idx
         do
             if( inode == 0 ) exit
             if( s%b_ptr%block_tree%is_leaf(itree, inode) ) exit
             node_cur = s%b_ptr%block_tree%get_node(itree, inode)
             if( node_cur%left_idx == 0 .and. node_cur%right_idx == 0 ) exit
-            call eval_child_best(s, itree, node_cur%left_idx,  best_corr_L, nrefs_tree, cls_corrs, cls_inpl_inds)
-            call eval_child_best(s, itree, node_cur%right_idx, best_corr_R, nrefs_tree, cls_corrs, cls_inpl_inds)
+            call eval_child_best(s, itree, node_cur%left_idx,  best_corr_L, nrefs_tree)
+            call eval_child_best(s, itree, node_cur%right_idx, best_corr_R, nrefs_tree)
             tree_best_corr = max(tree_best_corr, best_corr_L, best_corr_R)
             inode_next = choose_next_child_greedy(node_cur%left_idx, node_cur%right_idx, best_corr_L, best_corr_R)
             if( inode_next == 0 ) exit
@@ -123,30 +117,26 @@ contains
         endif
     end function get_tree_for_ref
 
-    subroutine eval_child_best( s, itree, child_idx, best_corr, nrefs_tree, cls_corrs, cls_inpl_inds )
+    subroutine eval_child_best( s, itree, child_idx, best_corr, nrefs_tree )
         use simple_binary_tree, only: bt_node
         class(strategy2D_srch), intent(inout) :: s
         integer,                intent(in)    :: itree
         integer,                intent(in)    :: child_idx
         real,                   intent(out)   :: best_corr
         integer,                intent(inout) :: nrefs_tree
-        real,                   intent(inout) :: cls_corrs(:)
-        integer,                intent(inout) :: cls_inpl_inds(:)
         type(bt_node) :: node_child
         best_corr = INVALID_CORR
         if( child_idx == 0 ) return
         node_child = s%b_ptr%block_tree%get_node(itree, child_idx)
         if( node_child%ref_idx == 0 ) return
-        call eval_tree_ref(s, node_child%ref_idx, best_corr, nrefs_tree, cls_corrs, cls_inpl_inds)
+        call eval_tree_ref(s, node_child%ref_idx, best_corr, nrefs_tree)
     end subroutine eval_child_best
 
-    subroutine eval_tree_ref( s, ref_idx, best_corr, nrefs_tree, cls_corrs, cls_inpl_inds )
+    subroutine eval_tree_ref( s, ref_idx, best_corr, nrefs_tree )
         class(strategy2D_srch), intent(inout) :: s
         integer,                intent(in)    :: ref_idx
         real,                   intent(out)   :: best_corr
         integer,                intent(inout) :: nrefs_tree
-        real,                   intent(inout) :: cls_corrs(:)
-        integer,                intent(inout) :: cls_inpl_inds(:)
         integer :: vec_nrots(s%nrots), inpl_ind, order_ind
         real    :: corr_tmp, inpl_corrs(s%nrots)
         best_corr = INVALID_CORR
@@ -159,10 +149,9 @@ contains
         endif
         call power_sampling( s2D%power, s%nrots, inpl_corrs, vec_nrots, &
                             &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, corr_tmp )
-        nrefs_tree             = nrefs_tree + 1
-        best_corr              = corr_tmp
-        cls_corrs(ref_idx)     = corr_tmp
-        cls_inpl_inds(ref_idx) = inpl_ind
+        nrefs_tree = nrefs_tree + 1
+        best_corr  = corr_tmp
+        call s%store_solution(ref_idx, inpl_ind, corr_tmp)
         if( corr_tmp > s%best_corr )then
             s%best_class = ref_idx
             s%best_rot   = inpl_ind

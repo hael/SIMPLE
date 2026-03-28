@@ -117,7 +117,8 @@ contains
             endif
             call self%s%inpl_srch
             self%s%nrefs_eval = self%s%nrefs
-            call self%s%store_solution(os)
+            call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
+            call self%s%assign_ori(os)
         else
             call os%reject(self%s%iptcl)
         endif

@@ -33,9 +33,9 @@ contains
     subroutine srch_snhc_smpl( self, os )   
         class(strategy2D_snhc_smpl), intent(inout) :: self
         class(oris),                 intent(inout) :: os
-        real    :: inpl_corrs(self%s%nrots), cls_corrs(self%s%nrefs)
+        real    :: inpl_corrs(self%s%nrots)
         real    :: inpl_corr
-        integer :: cls_inpl_inds(self%s%nrefs), vec_nrots(self%s%nrots), sorted_cls_inds(self%s%nrefs)
+        integer :: sorted_cls_inds(self%s%nrefs), vec_nrots(self%s%nrots)
         integer :: iref, isample, inpl_ind, order_ind
         if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
@@ -43,8 +43,6 @@ contains
             ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! Class search
-            cls_corrs     = -1.
-            cls_inpl_inds = 0
             do isample = 1,self%s%nrefs
                 ! stochastic reference index
                 iref = s2D%srch_order(self%s%iptcl_batch, isample)
@@ -61,20 +59,21 @@ contains
                 endif
                 call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
                                     &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
-                cls_corrs(iref)     = inpl_corr
-                cls_inpl_inds(iref) = inpl_ind
+                call self%s%store_solution(iref, inpl_ind, inpl_corr)
             end do
             ! Performs shift search for top scoring subset
-            call self%s%inpl_srch_peaks(s2D%snhc_smpl_ncls, cls_corrs, cls_inpl_inds)
+            call self%s%inpl_srch_peaks(s2D%snhc_smpl_ncls)
             ! Class selection
-            call power_sampling( s2D%power, self%s%nrefs, cls_corrs, sorted_cls_inds, s2D%snhc_smpl_ncls,&
+            call power_sampling( s2D%power, self%s%nrefs, s2D%class_space_corrs(:, self%s%ithr), &
+                                &sorted_cls_inds, s2D%snhc_smpl_ncls, &
                                 &self%s%best_class, self%s%nrefs_eval, self%s%best_corr )
             ! In-plane angle
-            self%s%best_rot = cls_inpl_inds(self%s%best_class)
+            self%s%best_rot = s2D%class_space_inplinds(self%s%best_class, self%s%ithr)
             ! In-plane search
             call self%s%inpl_srch
             ! Updates solution
-            call self%s%store_solution(os)
+            call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
+            call self%s%assign_ori(os)
         else
             call os%reject(self%s%iptcl)
         endif

@@ -51,6 +51,7 @@ type strategy2D_srch
     procedure :: inpl_srch
     procedure :: inpl_srch_peaks
     procedure :: store_solution
+    procedure :: assign_ori
     procedure :: kill
 end type strategy2D_srch
 
@@ -139,6 +140,8 @@ contains
         self%l_sh_first   = s2D%do_inplsrch(self%iptcl_batch) .and. self%p_ptr%l_doshift
         self%xy_first     =  0.
         self%xy_first_rot =  0.
+        ! init per-thread class-space arrays
+        call prep_strategy2D_thread(self%ithr)
     end subroutine prep4srch
 
     subroutine inpl_srch_first( self )
@@ -195,51 +198,62 @@ contains
         endif
     end subroutine inpl_srch
 
-    subroutine inpl_srch_peaks( self, npeaks_inpl, cls_corrs, cls_inpl_inds )
+    subroutine inpl_srch_peaks( self, npeaks_inpl )
         class(strategy2D_srch), intent(inout) :: self
         integer,                intent(in)    :: npeaks_inpl
-        real,                   intent(inout) :: cls_corrs(self%nrefs)
-        integer,                intent(inout) :: cls_inpl_inds(self%nrefs)
-        real    :: cxy(3), sorted_cls_corrs(self%nrefs)
-        integer :: sorted_cls_inds(self%nrefs), iref, isample, inpl_ind
+        real    :: sorted_cls_corrs(self%nrefs), cxy(3)
+        integer :: sorted_cls_inds(self%nrefs), saved_inpl_inds(self%nrefs), iref, isample, inpl_ind
         if( .not. s2D%do_inplsrch(self%iptcl_batch) ) return
-        sorted_cls_corrs = cls_corrs
-        sorted_cls_inds  = (/(iref,iref=1,self%nrefs)/)
+        sorted_cls_corrs         = s2D%class_space_corrs(   :, self%ithr)
+        saved_inpl_inds          = s2D%class_space_inplinds(:, self%ithr)
+        sorted_cls_inds          = (/(iref,iref=1,self%nrefs)/)
         call hpsort(sorted_cls_corrs, sorted_cls_inds)
-        cls_corrs = -1.
+        ! reset class-space arrays so only shift-refined entries will be valid
+        s2D%class_space_corrs(   :,self%ithr) = -1.
+        s2D%class_space_e3s(     :,self%ithr) = 0.
+        s2D%class_space_inplinds(:,self%ithr) = 0
         do isample = self%nrefs-npeaks_inpl+1,self%nrefs
-            iref = sorted_cls_inds(isample)
+            iref     = sorted_cls_inds(isample)
+            inpl_ind = saved_inpl_inds(iref)
             if( s2D%cls_pops(iref) == 0 ) cycle
+            if( inpl_ind == 0 ) cycle
             call self%grad_shsrch_obj2%set_indices(iref, self%iptcl)
-            inpl_ind = cls_inpl_inds(iref)
             if( self%l_sh_first )then
                 cxy = self%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%xy_first)
                 if( inpl_ind == 0 )then
-                    inpl_ind = cls_inpl_inds(iref)
+                    inpl_ind = saved_inpl_inds(iref)
                     cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(iref, self%iptcl, real(self%xy_first,dp), inpl_ind))
                     cxy(2:3) = self%xy_first_rot
                 endif
             else
                 cxy = self%grad_shsrch_obj2%minimize(irot=inpl_ind)
                 if( inpl_ind == 0 )then
-                    inpl_ind = cls_inpl_inds(iref)
+                    inpl_ind = saved_inpl_inds(iref)
                     cxy      = [real(self%b_ptr%pftc%gen_corr_for_rot_8(iref, self%iptcl, inpl_ind)), 0.,0.]
                 endif
             endif
-            cls_corrs(iref)     = cxy(1)
-            cls_inpl_inds(iref) = inpl_ind
+            call self%store_solution(iref, inpl_ind, cxy(1))
         enddo
     end subroutine inpl_srch_peaks
 
-    subroutine store_solution( self, os, nrefs, w_in )
+    subroutine store_solution( self, ref, inpl_ind, corr )
+        class(strategy2D_srch), intent(inout) :: self
+        integer,                intent(in)    :: ref, inpl_ind
+        real,                   intent(in)    :: corr
+        s2D%class_space_inplinds(ref,self%ithr) = inpl_ind
+        s2D%class_space_e3s(     ref,self%ithr) = 360. - self%b_ptr%pftc%get_rot(inpl_ind)
+        s2D%class_space_corrs(   ref,self%ithr) = corr
+    end subroutine store_solution
+
+    subroutine assign_ori( self, os, nrefs, w_in )
         class(strategy2D_srch), intent(in)    :: self
         class(oris),            intent(inout) :: os
         integer,      optional, intent(in)    :: nrefs
         real,         optional, intent(in)    :: w_in
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
         real :: e3, mi_class, frac, w
-        ! get in-plane angle
-        e3   = 360. - self%b_ptr%pftc%get_rot(self%best_rot) ! change sgn to fit convention
+        ! get in-plane angle from class-space store
+        e3 = s2D%class_space_e3s(self%best_class, self%ithr)
         ! calculate in-plane rot dist (radians)
         u(1) = 0.
         u(2) = 1.
@@ -261,17 +275,17 @@ contains
         w = 1.0
         if( present(w_in) ) w = w_in
         ! update parameters
-        call os%e3set(self%iptcl,e3)
+        call os%e3set(self%iptcl, e3)
         call os%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
         call os%set(self%iptcl, 'shincarg',   arg(self%best_shvec))
-        call os%set(self%iptcl, 'inpl',       real(self%best_rot))
+        call os%set(self%iptcl, 'inpl',       real(s2D%class_space_inplinds(self%best_class, self%ithr)))
         call os%set(self%iptcl, 'class',      real(self%best_class))
-        call os%set(self%iptcl, 'corr',       self%best_corr)
+        call os%set(self%iptcl, 'corr',       s2D%class_space_corrs(self%best_class, self%ithr))
         call os%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call os%set(self%iptcl, 'mi_class',   mi_class)
         call os%set(self%iptcl, 'frac',       frac)
         call os%set(self%iptcl, 'w',          w)
-    end subroutine store_solution
+    end subroutine assign_ori
 
     subroutine kill( self )
         class(strategy2D_srch), intent(inout) :: self
