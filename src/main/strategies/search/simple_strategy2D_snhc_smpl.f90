@@ -64,7 +64,7 @@ contains
                 call self%s%store_solution(iref, inpl_ind, inpl_corr)
             end do
             ! Performs shift search for top scoring subset
-            call self%s%inpl_srch_peaks(s2D%snhc_smpl_ncls)
+            call self%s%inpl_srch_peaks(min(s2D%snhc_smpl_ncls, self%s%nsolns))
             ! Class selection
             call power_sampling( s2D%power, self%s%nrefs, s2D%class_space_corrs(:, self%s%ithr), &
                                 &sorted_cls_inds, s2D%snhc_smpl_ncls, &

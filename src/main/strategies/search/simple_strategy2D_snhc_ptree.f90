@@ -83,7 +83,7 @@ contains
             if( itree > 0 ) call descend_tree_prob(self%s, itree, nrefs_tree_eval)
         endif
         ! Shift refinement for top scoring candidates (coarse + tree local extrema)
-        call self%s%inpl_srch_peaks(s2D%snhc_smpl_ncls)
+        call self%s%inpl_srch_peaks(min(s2D%snhc_smpl_ncls, self%s%nsolns))
         ! Class selection via power_sampling over shift-refined scores
         call power_sampling( s2D%power, self%s%nrefs, s2D%class_space_corrs(:, self%s%ithr), &
                             &sorted_cls_inds, s2D%snhc_smpl_ncls, &

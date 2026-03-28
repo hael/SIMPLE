@@ -8,10 +8,10 @@ use simple_strategy3D_alloc
 use simple_strategy3D_utils
 use simple_strategy3D_tree_utils
 use simple_strategy_tree_helpers, only: MAX_NTREES, MAX_NPEAKS
-use simple_parameters,      only: parameters
-use simple_oris,            only: oris
-use simple_strategy3D,      only: strategy3D
-use simple_strategy3D_srch, only: strategy3D_spec
+use simple_parameters,            only: parameters
+use simple_oris,                  only: oris
+use simple_strategy3D,            only: strategy3D
+use simple_strategy3D_srch,       only: strategy3D_spec
 implicit none
 
 public :: strategy3D_ptree

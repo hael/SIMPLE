@@ -5,21 +5,22 @@ use simple_binoris_io
 use simple_classaverager
 use simple_progress
 use simple_strategy2D_alloc
-use simple_builder,                only: builder
-use simple_qsys_funs,              only: qsys_job_finished
-use simple_strategy2D,             only: strategy2D, strategy2D_per_ptcl
-use simple_strategy2D3D_common,    only: set_bp_range2d, prepimgbatch, killimgbatch
-use simple_strategy2D_greedy,      only: strategy2D_greedy
-use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
-use simple_strategy2D_inpl,        only: strategy2D_inpl
-use simple_strategy2D_inpl_smpl,   only: strategy2D_inpl_smpl
-use simple_strategy2D_snhc,        only: strategy2D_snhc
-use simple_strategy2D_snhc_ptree,  only: strategy2D_snhc_ptree
-use simple_strategy2D_snhc_smpl,   only: strategy2D_snhc_smpl
-use simple_strategy2D_prob,        only: strategy2D_prob
-use simple_strategy2D_srch,        only: strategy2D_spec
-use simple_strategy2D_tseries,     only: strategy2D_tseries
-use simple_eul_prob_tab2D,         only: eul_prob_tab2D
+use simple_builder,                 only: builder
+use simple_qsys_funs,               only: qsys_job_finished
+use simple_strategy2D,              only: strategy2D, strategy2D_per_ptcl
+use simple_strategy2D3D_common,     only: set_bp_range2d, prepimgbatch, killimgbatch
+use simple_strategy2D_greedy,       only: strategy2D_greedy
+use simple_strategy2D_greedy_smpl,  only: strategy2D_greedy_smpl
+use simple_strategy2D_inpl,         only: strategy2D_inpl
+use simple_strategy2D_inpl_smpl,    only: strategy2D_inpl_smpl
+use simple_strategy2D_snhc,         only: strategy2D_snhc
+use simple_strategy2D_snhc_ptree,   only: strategy2D_snhc_ptree
+use simple_strategy2D_single_ptree, only: strategy2D_single_ptree
+use simple_strategy2D_snhc_smpl,    only: strategy2D_snhc_smpl
+use simple_strategy2D_prob,         only: strategy2D_prob
+use simple_strategy2D_srch,         only: strategy2D_spec
+use simple_strategy2D_tseries,      only: strategy2D_tseries
+use simple_eul_prob_tab2D,          only: eul_prob_tab2D
 implicit none
 
 public :: cluster2D_exec
@@ -249,6 +250,8 @@ contains
                                 allocate(strategy2D_greedy_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('snhc_ptree')
                                 allocate(strategy2D_snhc_ptree    :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case('single_ptree')
+                                allocate(strategy2D_single_ptree  :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('snhc_smpl')
                                 allocate(strategy2D_snhc_smpl     :: strategy2Dsrch(iptcl_batch)%ptr)
                             case DEFAULT ! is refine=snhc
@@ -283,6 +286,8 @@ contains
                         select case(trim(refine_flag))
                             case('snhc_ptree')
                                 allocate(strategy2D_snhc_ptree   :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case('single_ptree')
+                                allocate(strategy2D_single_ptree :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('snhc_smpl')
                                 allocate(strategy2D_snhc_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
                             case DEFAULT ! is refine=snhc

@@ -238,7 +238,11 @@ contains
         real,                   intent(in)    :: corr
         real,       optional,   intent(in)    :: sh(2)
         real,       optional,   intent(in)    :: w
-        if( s3D%proj_space_corrs(ref, self%ithr) <= -huge(1.0)/2.0 ) self%nsolns = self%nsolns + 1
+        if( s3D%proj_space_corrs(ref, self%ithr) <= -huge(1.0)/2.0 )then
+            self%nsolns = self%nsolns + 1
+        elseif( corr <= s3D%proj_space_corrs(ref, self%ithr) )then
+            return
+        endif
         if( present(sh) ) s3D%proj_space_shift(:,ref,self%ithr) = sh
         if( present(w)  ) s3D%proj_space_w(      ref,self%ithr) = w
         s3D%proj_space_inplinds(ref,self%ithr) = inpl_ind

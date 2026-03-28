@@ -28,6 +28,7 @@ type strategy2D_srch
     integer                 :: nrefs           =  0   !< number of references
     integer                 :: nrots           =  0   !< number of in-plane rotations in polar representation
     integer                 :: nrefs_eval      =  0   !< nr of references evaluated
+    integer                 :: nsolns          =  0   !< # distinct refs with a stored solution this search
     integer                 :: prev_class      =  0   !< previous class index
     integer                 :: best_class      =  0   !< best class index found by search
     integer                 :: best_rot        =  0   !< best in-plane rotation found by search
@@ -102,6 +103,7 @@ contains
         class(oris),            intent(inout) :: os
         real    :: corrs(self%b_ptr%pftc%get_nrots())
         self%nrefs_eval = 0
+        self%nsolns     = 0
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
         self%prev_class = nint(os%get(self%iptcl,'class'))                ! class index
@@ -240,6 +242,11 @@ contains
         class(strategy2D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref, inpl_ind
         real,                   intent(in)    :: corr
+        if( s2D%class_space_corrs(ref, self%ithr) <= -huge(1.0)/2.0 )then
+            self%nsolns = self%nsolns + 1
+        elseif( corr <= s2D%class_space_corrs(ref, self%ithr) )then
+            return
+        endif
         s2D%class_space_inplinds(ref,self%ithr) = inpl_ind
         s2D%class_space_e3s(     ref,self%ithr) = 360. - self%b_ptr%pftc%get_rot(inpl_ind)
         s2D%class_space_corrs(   ref,self%ithr) = corr
@@ -258,8 +265,10 @@ contains
         ithr = self%ithr
         found_valid = .false.
         best_corr_local = -huge(1.0)
+        if( self%prev_rot   <= 0 ) THROW_HARD('Previous in-plane rotation index is invalid, cannot assign orientation.')
+        if( self%prev_class <= 0 ) THROW_HARD('Previous in-plane class index is invalid, cannot assign orientation.')
         best_class_local = self%prev_class
-        best_rot_local   = max(1, self%prev_rot)
+        best_rot_local   = self%prev_rot
         do iref = 1, self%nrefs
             if( s2D%cls_pops(iref) <= 0 ) cycle
             if( s2D%class_space_inplinds(iref,ithr) <= 0 ) cycle
@@ -272,7 +281,7 @@ contains
         enddo
         if( .not. found_valid )then
             best_class_local = self%prev_class
-            best_rot_local   = max(1, self%prev_rot)
+            best_rot_local   = self%prev_rot
             best_corr_local  = self%prev_corr
         endif
         ! get in-plane angle from class-space store
