@@ -188,57 +188,31 @@ contains
         if( .not. cline%defined('ml_reg') ) call cline%set('ml_reg','no')
     end subroutine apply_distr_entry_defaults
 
-    subroutine normalize_ncls_nspace_oritype(cline, set_ncls_from_nspace)
-        class(cmdline), intent(inout) :: cline
-        logical,        intent(in)    :: set_ncls_from_nspace
-        ! if( (cline%defined('ncls')) .and. cline%defined('nspace') )then
-        !     THROW_HARD('NCLS and NSPACE cannot be both defined!')
-        ! endif
-        ! if( cline%defined('nspace') )then
-        !     if( cline%defined('oritype') )then
-        !         if( cline%get_carg('oritype') .eq. 'ptcl2D' )then
-        !             THROW_HARD('NSPACE & PTCL2D are incompatible!')
-        !         endif
-        !     endif
-        !     call cline%set('oritype', 'ptcl3D')
-        !     if( set_ncls_from_nspace ) call cline%set('ncls', cline%get_iarg('nspace'))
-        ! else
-            call cline%set('oritype', 'ptcl2D')
-        ! endif
-    end subroutine normalize_ncls_nspace_oritype
-
     subroutine generate_cluster_centers(build, params, cline)
         type(builder),     intent(inout) :: build
         type(parameters),  intent(inout) :: params
         class(cmdline),    intent(inout) :: cline
         integer :: ncls_here
         if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
-        if( trim(params%oritype) .eq. 'ptcl3D' )then
-            call build%eulspace%new(params%nspace, is_ptcl=.false.)
-            call build%pgrpsyms%build_refspiral(build%eulspace)
-            call build%spproj%os_ptcl3D%set_projs(build%eulspace)
-            call build%spproj%os_ptcl3D%proj2class
-        else
-            ncls_here = build%spproj_field%get_n('class')
-            if( .not. cline%defined('ncls') ) params%ncls = build%spproj_field%get_n('class')
+        ncls_here = build%spproj_field%get_n('class')
+        if( .not. cline%defined('ncls') ) params%ncls = build%spproj_field%get_n('class')
 
-            if( params%l_remap_cls )then
-                call build%spproj_field%remap_cls()
-                if( cline%defined('ncls') )then
-                    if( params%ncls < ncls_here ) THROW_HARD('inputted ncls < ncls_in_oritab not allowed!')
-                    if( params%ncls > ncls_here )then
-                        call build%spproj_field%expand_classes(params%ncls)
-                    endif
+        if( params%l_remap_cls )then
+            call build%spproj_field%remap_cls()
+            if( cline%defined('ncls') )then
+                if( params%ncls < ncls_here ) THROW_HARD('inputted ncls < ncls_in_oritab not allowed!')
+                if( params%ncls > ncls_here )then
+                    call build%spproj_field%expand_classes(params%ncls)
                 endif
-            else if( params%tseries .eq. 'yes' )then
-                if( .not. cline%defined('ncls') )then
-                    THROW_HARD('# class averages (ncls) need to be part of command line when tseries=yes')
-                endif
-                call build%spproj_field%ini_tseries(params%ncls, 'class')
-                call build%spproj_field%partition_eo
-            else if( params%proj_is_class .eq. 'yes' )then
-                call build%spproj_field%proj2class
             endif
+        else if( params%tseries .eq. 'yes' )then
+            if( .not. cline%defined('ncls') )then
+                THROW_HARD('# class averages (ncls) need to be part of command line when tseries=yes')
+            endif
+            call build%spproj_field%ini_tseries(params%ncls, 'class')
+            call build%spproj_field%partition_eo
+        else if( params%proj_is_class .eq. 'yes' )then
+            call build%spproj_field%proj2class
         endif
     end subroutine generate_cluster_centers
 
@@ -272,29 +246,10 @@ contains
         type(builder),    intent(inout) :: build
         type(parameters), intent(inout) :: params
         class(cmdline),   intent(inout) :: cline
-        integer :: icls
-        select case(trim(params%oritype))
-            case('ptcl2D')
-                call build%spproj%write_segment_inside('cls2D', params%projfile)
-                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
-                call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
-                call build%spproj%write_segment_inside('out', params%projfile)
-            case('ptcl3D')
-                do icls = 1, params%nspace
-                    call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
-                enddo
-                if( cline%defined('outfile') )then
-                    call build%spproj%os_cls3D%write(params%outfile)
-                else
-                    call build%spproj%os_cls3D%write(string('cls3D_oris.txt'))
-                endif
-                call build%spproj%write_segment_inside('cls3D', params%projfile)
-                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc3D')
-                call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg3D')
-                call build%spproj%write_segment_inside('out', params%projfile)
-            case DEFAULT
-                THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
-        end select
+        call build%spproj%write_segment_inside('cls2D', params%projfile)
+        call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+        call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
+        call build%spproj%write_segment_inside('out', params%projfile)
     end subroutine shmem_bookkeeping
 
     ! ====================================================================
@@ -305,7 +260,6 @@ contains
         class(make_cavgs_shmem_strategy), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         if( self%l_from_distr_cmd ) call apply_distr_entry_defaults(cline)
-        call normalize_ncls_nspace_oritype(cline, set_ncls_from_nspace=.true.)
     end subroutine shmem_apply_defaults
 
     subroutine shmem_initialize(self, params, cline)
@@ -368,7 +322,6 @@ contains
         class(make_cavgs_worker_strategy), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         if( self%l_from_distr_cmd ) call apply_distr_entry_defaults(cline)
-        call normalize_ncls_nspace_oritype(cline, set_ncls_from_nspace=.true.)
     end subroutine worker_apply_defaults
 
     subroutine worker_initialize(self, params, cline)
@@ -423,7 +376,6 @@ contains
         class(make_cavgs_master_strategy), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         call apply_distr_entry_defaults(cline)
-        call normalize_ncls_nspace_oritype(cline, set_ncls_from_nspace=.false.)
     end subroutine master_apply_defaults
 
     subroutine master_initialize(self, params, cline)
@@ -437,12 +389,10 @@ contains
         call set_master_num_threads(self%nthr_master, string('CLUSTER2D'))
         ! Parse parameters & project-field to set ncls default for ptcl2D
         call build_tmp%init_params_and_build_spproj(cline, params)
-        if( .not. cline%defined('nspace') )then
-            ncls_here = build_tmp%spproj_field%get_n('class')
-            if( .not. cline%defined('ncls') )then
-                call cline%set('ncls', ncls_here)
-                params%ncls = ncls_here
-            endif
+        ncls_here = build_tmp%spproj_field%get_n('class')
+        if( .not. cline%defined('ncls') )then
+            call cline%set('ncls', ncls_here)
+            params%ncls = ncls_here
         endif
         call cline%set('mkdir', 'no')  ! avoid nested dirs in workers
         call self%qenv%new(params, params%nparts)
@@ -459,9 +409,6 @@ contains
         endif
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         cline_cavgassemble = cline
-        if( trim(params%oritype) .eq. 'ptcl3D' )then
-            call cline_cavgassemble%set('ncls', params%nspace)
-        endif
         call self%hooks%run_cavgassemble(cline_cavgassemble, self%nthr_master)
         call cline_cavgassemble%kill
     end subroutine master_execute

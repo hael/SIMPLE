@@ -54,7 +54,8 @@ contains
         type(make_cavgs_hooks) :: hooks
         type(parameters) :: params
         ! Ensure distributed scripts see the correct program name.
-        call cline%set('prg', 'make_cavgs')
+        call cline%set('prg',    'make_cavgs')
+        call cline%set('oritype','ptcl2D')
         ! Provide master-side hook for cavgassemble (avoids strategy importing commander modules).
         hooks%run_cavgassemble => make_cavgs_exec_cavgassemble
         strategy = create_make_cavgs_strategy(cline, hooks, from_distr_cmd=from_distr_cmd)
@@ -96,7 +97,7 @@ contains
         real, allocatable  :: states(:)
         integer            :: iterstr_start, iterstr_end, iter, io_stat, icls
         integer            :: pftsz, kfromto(2), ncls
-        if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( cline%defined('which_iter') )then
             params%refs      = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//params%ext%to_char()
@@ -138,39 +139,17 @@ contains
             call starproj%export_cls2D(build%spproj, iter)
         end if
         ! updates project
-        select case(trim(params%oritype))
-            case('ptcl2D')
-                ! cls2D and state congruent cls3D
-                call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
-                states = build%spproj%os_cls2D%get_all('state')
-                call build%spproj%os_cls3D%set_all('state',states)
-                deallocate(states)
-                call build%spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
-                if( .not. params%l_polar )then ! no Cartesian class averages in the polar version
-                    call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
-                endif
-                ! multiple fields updated, do a full write
-                call build%spproj%write(params%projfile)
-            case('ptcl3D')
-                call build%eulspace%new(params%nspace, is_ptcl=.false.)
-                call build%pgrpsyms%build_refspiral(build%eulspace)
-                do icls = 1,params%ncls
-                    call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
-                enddo
-                call build%spproj%write_segment_inside('cls3D', params%projfile)
-                if( cline%defined('outfile') )then
-                    call build%spproj%os_cls3D%write(params%outfile)
-                else
-                    call build%spproj%os_cls3D%write(string('cls3D_oris.txt'))
-                endif
-                call build%spproj%add_frcs2os_out( string(FRCS_FILE), 'frc3D')
-                if( .not. params%l_polar )then ! no Cartesian class averages in the polar version
-                    call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg3D')
-                endif
-                call build%spproj%write_segment_inside('out', params%projfile)
-            case DEFAULT
-                THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
-        end select
+        ! cls2D and state congruent cls3D
+        call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
+        states = build%spproj%os_cls2D%get_all('state')
+        call build%spproj%os_cls3D%set_all('state',states)
+        deallocate(states)
+        call build%spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
+        if( .not. params%l_polar )then ! no Cartesian class averages in the polar version
+            call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
+        endif
+        ! multiple fields updated, do a full write
+        call build%spproj%write(params%projfile)
         ! end gracefully
         call starproj%kill
         call build%spproj%kill

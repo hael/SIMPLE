@@ -313,6 +313,7 @@ type :: parameters
     integer :: nchunksperset=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
+    integer :: ncls_sub=10         !< # sub-clusters
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors 
@@ -915,6 +916,7 @@ contains
         call check_iarg('nchunks',        self%nchunks)
         call check_iarg('nchunksperset',  self%nchunksperset)
         call check_iarg('ncls',           self%ncls)
+        call check_iarg('ncls_sub',       self%ncls_sub)
         call check_iarg('ncls_start',     self%ncls_start)
         call check_iarg('ncunits',        self%ncunits)
         call check_iarg('ndiscrete',      self%ndiscrete)
@@ -1778,12 +1780,10 @@ contains
             endif
             select case(trim(self%refine))
                 case('snhc_ptree')
-                    self%ncls       = round2even(real(self%ncls))
-                    self%nspace     = self%ncls
-                    if( self%nspace > 5000 ) THROW_WARN('nspace for snhc_ptree is too large, capping it to 5000')
-                    self%nspace     = min(self%nspace, 5000)                        ! capped at 5000
-                    self%nspace_sub = min(round2even(0.025* real(self%nspace)), 50) ! capped at 50
-                    self%nspace_sub = max(self%nspace_sub, 10)                      ! floored at 10
+                    if( .not. cline%defined('ncls_sub') )then
+                        self%ncls_sub = min(round2even(0.025* real(self%ncls)), 10) ! capped at 10
+                        self%ncls_sub = max(self%ncls_sub, 10)                      ! floored at 10
+                    endif
                 case('shc_ptree')
                     if( .not. cline%defined('nspace_sub') )then
                         self%nspace_sub = 50

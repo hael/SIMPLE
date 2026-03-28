@@ -15,7 +15,7 @@ contains
       call test_initial_state()
       call test_new_counts_and_getters()
       call test_get_tree_refs()
-      call test_new_single_balanced()
+      call test_new_multi_balanced_single_tree()
       call test_build_tree_singletons()
       call test_build_tree_pairs_basic_structure()
       call test_build_tree_two_triples_basic_structure()
@@ -165,30 +165,28 @@ contains
       call md%kill()
    end subroutine test_get_tree_refs
 
-   subroutine test_new_single_balanced()
+   subroutine test_new_multi_balanced_single_tree()
       type(multi_dendro) :: md
-      integer :: refs(4)
       type(bt_node) :: root, n1, n2, n3, n4
-      write(*,'(A)') 'test_new_single_balanced'
-      refs = [10,20,30,40]
-      call md%new_single_balanced(4, refs)
-      call assert_int(1, md%get_n_trees(), 'single_balanced n_trees=1')
-      call assert_int(4, md%get_n_refs(),  'single_balanced n_refs=4')
-      call assert_int(4, md%get_tree_pop(1), 'single_balanced tree_pop=4')
-      call assert_int(3, md%get_tree_height(1), 'single_balanced height=3 for 4 leaves')
+      write(*,'(A)') 'test_new_multi_balanced_single_tree'
+      call md%new_multi_balanced(4, 1)
+      call assert_int(1, md%get_n_trees(), 'multi_balanced(1 tree) n_trees=1')
+      call assert_int(4, md%get_n_refs(),  'multi_balanced(1 tree) n_refs=4')
+      call assert_int(4, md%get_tree_pop(1), 'multi_balanced(1 tree) tree_pop=4')
+      call assert_int(3, md%get_tree_height(1), 'multi_balanced(1 tree) height=3 for 4 leaves')
       root = md%get_root_node(1)
-      call assert_int(7, root%node_idx, 'single_balanced root node_idx=2*n-1=7')
-      call assert_true(.not. md%is_leaf(1, root%node_idx), 'single_balanced root is internal')
+      call assert_int(7, root%node_idx, 'multi_balanced(1 tree) root node_idx=2*n-1=7')
+      call assert_true(.not. md%is_leaf(1, root%node_idx), 'multi_balanced(1 tree) root is internal')
       n1 = md%get_node(1,1)
       n2 = md%get_node(1,2)
       n3 = md%get_node(1,3)
       n4 = md%get_node(1,4)
-      call assert_int(10, n1%ref_idx, 'leaf1 remapped ref=10')
-      call assert_int(20, n2%ref_idx, 'leaf2 remapped ref=20')
-      call assert_int(30, n3%ref_idx, 'leaf3 remapped ref=30')
-      call assert_int(40, n4%ref_idx, 'leaf4 remapped ref=40')
+      call assert_int(1, n1%ref_idx, 'leaf1 ref=1')
+      call assert_int(2, n2%ref_idx, 'leaf2 ref=2')
+      call assert_int(3, n3%ref_idx, 'leaf3 ref=3')
+      call assert_int(4, n4%ref_idx, 'leaf4 ref=4')
       call md%kill()
-   end subroutine test_new_single_balanced
+   end subroutine test_new_multi_balanced_single_tree
 
    subroutine test_build_tree_singletons()
       type(multi_dendro) :: md

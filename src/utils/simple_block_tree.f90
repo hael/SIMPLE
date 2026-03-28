@@ -6,6 +6,8 @@ implicit none
 
 public :: gen_eulspace_block_tree
 public :: gen_eulspace_block_tree_map
+public :: gen_block_index_tree
+public :: gen_multi_block_index_tree
 public :: gen_single_block_index_tree
 public :: srch_eul_bl_tree_exhaustive
 public :: srch_eul_bl_tree
@@ -105,13 +107,27 @@ contains
         if(DEBUG) print *, 'Finished building block tree.'
     end function gen_eulspace_block_tree_map
 
+    ! Generate a block tree with ntrees deterministic balanced index trees
+    ! over refs 1..nrefs.
+    function gen_block_index_tree(nrefs, ntrees) result(block_tree)
+        integer, intent(in) :: nrefs, ntrees
+        type(multi_dendro)  :: block_tree
+        call block_tree%new_multi_balanced(nrefs, ntrees)
+        if (DEBUG) write(*,'(a,1x,i0,a,1x,i0)') 'Generated balanced block index tree with nrefs/ntrees =', nrefs, '/', ntrees
+    end function gen_block_index_tree
+
+    function gen_multi_block_index_tree(nrefs, ntrees) result(block_tree)
+        integer, intent(in) :: nrefs, ntrees
+        type(multi_dendro)  :: block_tree
+        block_tree = gen_block_index_tree(nrefs, ntrees)
+    end function gen_multi_block_index_tree
+
     ! Generate a block tree with a single deterministic balanced index tree
     ! over refs 1..nrefs.
     function gen_single_block_index_tree(nrefs) result(block_tree)
         integer, intent(in) :: nrefs
         type(multi_dendro)  :: block_tree
-        call block_tree%new_single_balanced(nrefs)
-        if (DEBUG) write(*,'(a,1x,i0)') 'Generated single balanced index tree with nrefs =', nrefs
+        block_tree = gen_block_index_tree(nrefs, 1)
     end function gen_single_block_index_tree
 
     ! Exhaustive search over *leaf nodes only* reachable from the root.

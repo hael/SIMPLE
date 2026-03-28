@@ -77,7 +77,7 @@ contains
             self%s%best_corr  = self%s%prev_corr
         endif
         ! Final in-plane search on the selected candidate
-        call self%s%inpl_srch
+        call self%s%inpl_srch ! needed because inpl_srch_peaks doesn't store shifts
         call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
         call self%s%assign_ori(os)
         if( DEBUG ) write(logfhandle,*) '>>> strategy2D_single_ptree::FINISHED SINGLE PTREE SEARCH'

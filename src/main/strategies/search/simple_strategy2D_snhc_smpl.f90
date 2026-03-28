@@ -73,7 +73,7 @@ contains
             ! In-plane angle
             self%s%best_rot = s2D%class_space_inplinds(self%s%best_class, self%s%ithr)
             ! In-plane search
-            call self%s%inpl_srch
+            call self%s%inpl_srch ! needed because inpl_srch_peaks doesn't store shifts
             ! Updates solution
             call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
             call self%s%assign_ori(os)

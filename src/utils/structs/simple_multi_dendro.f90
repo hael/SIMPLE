@@ -19,7 +19,8 @@ type :: multi_dendro
    integer :: n_refs  = 0
 contains
    procedure :: new
-   procedure :: new_single_balanced
+   procedure :: new_multi_balanced
+   procedure :: get_full2sub_map
    procedure :: get_n_trees
    procedure :: get_n_nodes
    procedure :: get_n_refs
@@ -58,37 +59,56 @@ contains
       allocate(self%trees(self%n_trees))
    end subroutine new
 
-   !--- Create a multi_dendro containing exactly one tree, then build it as a
-   !--- deterministic balanced index tree using binary_tree%build_balanced_index_tree.
-   subroutine new_single_balanced(self, n_refs, refs)
+   !--- Create a multi_dendro with n_trees balanced groups over refs [1..n_refs],
+   !--- then build each group as a deterministic balanced index tree.
+   subroutine new_multi_balanced(self, n_refs, n_trees)
       class(multi_dendro), intent(inout) :: self
       integer,             intent(in)    :: n_refs
-      integer, optional,   intent(in)    :: refs(:)
+      integer,             intent(in)    :: n_trees
       integer, allocatable :: labels(:), refs_loc(:)
-      integer :: i
-      if (n_refs < 1) THROW_HARD('new_single_balanced: n_refs must be >= 1')
-      allocate(labels(n_refs), source=1)
-      if (present(refs)) then
-         if (size(refs) /= n_refs) then
-            THROW_HARD('new_single_balanced: size(refs) must equal n_refs')
-         end if
-         allocate(refs_loc(n_refs))
-         refs_loc = refs
-      else
-         allocate(refs_loc(n_refs))
-         do i = 1, n_refs
-            refs_loc(i) = i
-         end do
-      end if
+      integer :: itree, n_trees_eff, nbase, nrem, start_idx, stop_idx, npop
+      if (n_refs < 1)  THROW_HARD('new_multi_balanced: n_refs must be >= 1')
+      if (n_trees < 1) THROW_HARD('new_multi_balanced: n_trees must be >= 1')
+      n_trees_eff = min(n_trees, n_refs)
+      allocate(labels(n_refs), source=0)
+      ! Balanced contiguous split: first nrem trees get one extra ref.
+      nbase     = n_refs / n_trees_eff
+      nrem      = mod(n_refs, n_trees_eff)
+      start_idx = 1
+      do itree = 1, n_trees_eff
+         npop = nbase
+         if (itree <= nrem) npop = npop + 1
+         stop_idx = start_idx + npop - 1
+         labels(start_idx:stop_idx) = itree
+         start_idx = stop_idx + 1
+      end do
       call self%new(labels)
-      call self%build_tree_balanced(1, refs_loc)
-      deallocate(labels, refs_loc)
-   end subroutine new_single_balanced
+      ! Build one deterministic balanced tree per group.
+      do itree = 1, self%n_trees
+         refs_loc = self%get_tree_refs(itree)
+         call self%build_tree_balanced(itree, refs_loc)
+         if (allocated(refs_loc)) deallocate(refs_loc)
+      end do
+      deallocate(labels)
+   end subroutine new_multi_balanced
 
    pure integer function get_n_trees(self) result(n)
       class(multi_dendro), intent(in) :: self
       n = self%n_trees
    end function get_n_trees
+
+   function get_full2sub_map(self) result(full2sub_map)
+      class(multi_dendro), intent(in) :: self
+      integer, allocatable :: full2sub_map(:)
+      integer :: itree, iref
+      allocate(full2sub_map(self%n_refs), source=0)
+      if (.not. allocated(self%tree_map)) return
+      do itree = 1, self%n_trees
+         do iref = 1, self%n_refs
+            if (self%tree_map(itree, iref)) full2sub_map(iref) = itree
+         end do
+      end do
+   end function get_full2sub_map
 
    pure integer function get_n_nodes(self, itree) result(n)
       class(multi_dendro), intent(in) :: self

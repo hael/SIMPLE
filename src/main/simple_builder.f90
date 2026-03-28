@@ -13,7 +13,7 @@ use simple_euclid_sigma2,    only: euclid_sigma2
 use simple_polarft_calc,     only: polarft_calc
 use simple_srchspace_map,    only: srchspace_map
 use simple_multi_dendro,     only: multi_dendro
-use simple_block_tree,       only: gen_eulspace_block_tree_map, gen_single_block_index_tree
+use simple_block_tree,       only: gen_eulspace_block_tree_map, gen_single_block_index_tree, gen_multi_block_index_tree
 implicit none
 
 public :: builder
@@ -263,41 +263,46 @@ contains
         endif
         ! generate discrete projection direction spaces
         if( ddo3d .or. str_has_substr(params%refine, 'tree') )then
-            if( str_has_substr(params%refine, 'single_ptree') )then
-                self%block_tree = gen_single_block_index_tree(params%ncls)
-            else
-                call self%eulspace%new(params%nspace, is_ptcl=.false.)
-                call self%pgrpsyms%build_refspiral(self%eulspace)
-                if( params%l_neigh )then
-                    call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
-                    call self%pgrpsyms%build_refspiral(eulspace_sub)
-                    allocate(sub_distmat(params%nspace_sub, params%nspace))
-                    !$omp parallel do default(shared) proc_bind(close) private(i,j,o,o_sub,osym,dtmp,inplrotdist) schedule(static)
-                    do i = 1, params%nspace_sub
-                        call eulspace_sub%get_ori(i, o_sub)
-                        do j = 1, params%nspace
-                            call self%eulspace%get_ori(j, o)
-                            call self%pgrpsyms%sym_dists(o_sub, o, osym, dtmp, inplrotdist)
-                            sub_distmat(i,j) = dtmp
+            select case(trim(params%refine))
+                case('single_ptree')
+                    self%block_tree = gen_single_block_index_tree(params%ncls)
+                    self%subspace_full2sub_map = self%block_tree%get_full2sub_map()
+                case('snhc_ptree')
+                    self%block_tree = gen_multi_block_index_tree(params%ncls, params%ncls_sub)
+                    self%subspace_full2sub_map = self%block_tree%get_full2sub_map()
+                case DEFAULT
+                    call self%eulspace%new(params%nspace, is_ptcl=.false.)
+                    call self%pgrpsyms%build_refspiral(self%eulspace)
+                    if( params%l_neigh )then
+                        call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
+                        call self%pgrpsyms%build_refspiral(eulspace_sub)
+                        allocate(sub_distmat(params%nspace_sub, params%nspace))
+                        !$omp parallel do default(shared) proc_bind(close) private(i,j,o,o_sub,osym,dtmp,inplrotdist) schedule(static)
+                        do i = 1, params%nspace_sub
+                            call eulspace_sub%get_ori(i, o_sub)
+                            do j = 1, params%nspace
+                                call self%eulspace%get_ori(j, o)
+                                call self%pgrpsyms%sym_dists(o_sub, o, osym, dtmp, inplrotdist)
+                                sub_distmat(i,j) = dtmp
+                            enddo
                         enddo
-                    enddo
-                    !$omp end parallel do
-                    call sub_mapper%new(params%nspace, params%nspace_sub, sub_distmat)
-                    self%subspace_inds         = sub_mapper%get_sub2full_map()
-                    self%subspace_full2sub_map = sub_mapper%get_full2sub_map()
-                    if( allocated(sub_distmat) ) deallocate(sub_distmat)
-                    call sub_mapper%kill
-                    call eulspace_sub%kill
-                    call o%kill
-                    call o_sub%kill
-                    call osym%kill
-                    if( str_has_substr(params%refine, 'tree') )then
-                        self%block_tree = &
-                        &gen_eulspace_block_tree_map(self%eulspace%get_noris(), self%eulspace,&
-                        &self%subspace_full2sub_map, self%pgrpsyms)
+                        !$omp end parallel do
+                        call sub_mapper%new(params%nspace, params%nspace_sub, sub_distmat)
+                        self%subspace_inds         = sub_mapper%get_sub2full_map()
+                        self%subspace_full2sub_map = sub_mapper%get_full2sub_map()
+                        if( allocated(sub_distmat) ) deallocate(sub_distmat)
+                        call sub_mapper%kill
+                        call eulspace_sub%kill
+                        call o%kill
+                        call o_sub%kill
+                        call osym%kill
+                        if( str_has_substr(params%refine, 'tree') )then
+                            self%block_tree = &
+                            &gen_eulspace_block_tree_map(self%eulspace%get_noris(), self%eulspace,&
+                            &self%subspace_full2sub_map, self%pgrpsyms)
+                        endif
                     endif
-                endif
-            endif
+            end select
         endif
         if( params%box > 0 )then
             ! build image objects
