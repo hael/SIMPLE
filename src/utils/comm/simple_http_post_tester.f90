@@ -27,7 +27,6 @@ module simple_http_post_tester
 use simple_string,     only: string
 use simple_http_post,  only: http_post, http_response
 use simple_test_utils, only: assert_true, assert_int, assert_char
-use simple_syslib,     only: detect_macos
 implicit none
 
 public  :: run_all_http_post_tests
@@ -38,17 +37,11 @@ contains
 
     ! Run all http_post unit tests in order.
     subroutine run_all_http_post_tests()
-        logical :: is_macos
         write(*,'(A)') '**** running all http post tests ****'
         call test_create_and_kill()
-        is_macos = detect_macos()
-        if (is_macos) then
-            write(*,'(A)') 'Skipping HTTP request tests on macOS'
-        else
-            call test_request_no_body()
-            call test_request_with_body()
-            call test_response_reset()
-        endif
+        call test_request_no_body()
+        call test_request_with_body()
+        call test_response_reset()
     end subroutine run_all_http_post_tests
 
     ! Verify that new() marks the object as initialised and kill() clears it.
@@ -75,11 +68,11 @@ contains
         call post%new(string('https://jsonplaceholder.typicode.com/posts'))
         call assert_true(post%initialised(),                 'post is initialised')
         call assert_true(post%request(response),             'body-less request succeeds')
-        call assert_int( response%code, 200,                 'body-less request returns HTTP 200')
+        call assert_int( 200, response%code,                 'body-less request returns HTTP 200')
         content_hash = response%content%to_fnv1a_hash64()
         type_hash    = response%content_type%to_fnv1a_hash64()
-        call assert_char(content_hash%to_char(), 'FF0C62AB7B8AEFF4', 'response content hash matches'     )
-        call assert_char(type_hash%to_char(),    'AE256DC329DC5E8C', 'response content_type hash matches')
+        call assert_char('FF0C62AB7B8AEFF4', content_hash%to_char(), 'response content hash matches'     )
+        call assert_char('AE256DC329DC5E8C', type_hash%to_char(),    'response content_type hash matches')
         call post%kill()
         call assert_true(.not. post%initialised(),           'post is uninitialised after kill()')
     end subroutine test_request_no_body
@@ -97,7 +90,7 @@ contains
         call assert_true( &
             post%request(response, request_str=string('{"title":"foo","body":"bar","userId":1}')), &
             'request with body succeeds')
-        call assert_int( response%code, 201,                     'request with body returns HTTP 201')
+        call assert_int( 201, response%code,                     'request with body returns HTTP 201')
         call assert_true(response%content%is_allocated(),        'response content is populated')
         call assert_true(response%content_type%is_allocated(),   'response content_type is populated')
         call post%kill()

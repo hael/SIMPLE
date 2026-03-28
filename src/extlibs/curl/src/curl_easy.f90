@@ -765,15 +765,35 @@ module curl_easy
             type(c_ptr)                               :: curl_easy_escape_
         end function curl_easy_escape_
 
-        ! CURLcode curl_easy_getinfo(CURL *curl, CURLoption option, ...)
-        function curl_easy_getinfo_(curl, option, parameter) bind(c, name='curl_easy_getinfo')
+        ! CURLcode curl_easy_getinfo(CURL *curl, CURLoption info, double *value)
+        function curl_easy_getinfo_c_double(curl, option, parameter) bind(c, name='curl_easy_getinfo_c_double')
+            import :: c_double, c_int, c_ptr
+            implicit none
+            type(c_ptr),         intent(in), value :: curl
+            integer(kind=c_int), intent(in), value :: option
+            type(c_ptr),         intent(in), value :: parameter
+            integer(kind=c_int)                    :: curl_easy_getinfo_c_double
+        end function curl_easy_getinfo_c_double
+
+        ! CURLcode curl_easy_getinfo(CURL *curl, CURLoption info, long *value)
+        function curl_easy_getinfo_c_long(curl, option, parameter) bind(c, name='curl_easy_getinfo_c_long')
             import :: c_int, c_ptr
             implicit none
             type(c_ptr),         intent(in), value :: curl
             integer(kind=c_int), intent(in), value :: option
             type(c_ptr),         intent(in), value :: parameter
-            integer(kind=c_int)                    :: curl_easy_getinfo_
-        end function curl_easy_getinfo_
+            integer(kind=c_int)                    :: curl_easy_getinfo_c_long
+        end function curl_easy_getinfo_c_long
+
+        ! CURLcode curl_easy_getinfo(CURL *curl, CURLoption info, void **value)
+        function curl_easy_getinfo_c_ptr(curl, option, parameter) bind(c, name='curl_easy_getinfo_c_ptr')
+            import :: c_int, c_ptr
+            implicit none
+            type(c_ptr),         intent(in), value :: curl
+            integer(kind=c_int), intent(in), value :: option
+            type(c_ptr),         intent(in), value :: parameter
+            integer(kind=c_int)                    :: curl_easy_getinfo_c_ptr
+        end function curl_easy_getinfo_c_ptr
 
         ! CURL *curl_easy_init(void)
         function curl_easy_init() bind(c, name='curl_easy_init')
@@ -1090,7 +1110,7 @@ contains
         type(c_ptr), target :: ptr
 
         ptr = c_null_ptr
-        rc = curl_easy_getinfo_(curl, option, c_loc(ptr))
+        rc = curl_easy_getinfo_c_ptr(curl, option, c_loc(ptr))
         call c_f_str_ptr(ptr, parameter)
     end function curl_easy_getinfo_char
 
@@ -1101,7 +1121,7 @@ contains
         real(kind=c_double), target, intent(out) :: parameter
         integer                                  :: rc
 
-        rc = curl_easy_getinfo_(curl, option, c_loc(parameter))
+        rc = curl_easy_getinfo_c_double(curl, option, c_loc(parameter))
     end function curl_easy_getinfo_double
 
     ! CURLcode curl_easy_getinfo(CURL *curl, CURLoption option, ...)
@@ -1113,7 +1133,7 @@ contains
 
         integer(kind=c_long), target  :: i
 
-        rc = curl_easy_getinfo_(curl, option, c_loc(i))
+        rc = curl_easy_getinfo_c_long(curl, option, c_loc(i))
         parameter = int(i)
     end function curl_easy_getinfo_int
 
@@ -1126,18 +1146,18 @@ contains
 
         integer(kind=c_long), target  :: i
 
-        rc = curl_easy_getinfo_(curl, option, c_loc(i))
+        rc = curl_easy_getinfo_c_long(curl, option, c_loc(i))
         parameter = int(i, kind=i8)
     end function curl_easy_getinfo_long
 
     ! CURLcode curl_easy_getinfo(CURL *curl, CURLoption option, ...)
     function curl_easy_getinfo_ptr(curl, option, parameter) result(rc)
-        type(c_ptr), intent(in)    :: curl
-        integer,     intent(in)    :: option
-        type(c_ptr), intent(inout) :: parameter
-        integer                    :: rc
+        type(c_ptr),         intent(in)    :: curl
+        integer,             intent(in)    :: option
+        type(c_ptr), target, intent(inout) :: parameter
+        integer                            :: rc
 
-        rc = curl_easy_getinfo_(curl, option, parameter)
+        rc = curl_easy_getinfo_c_ptr(curl, option, c_loc(parameter))
     end function curl_easy_getinfo_ptr
 
     ! CURLcode curl_easy_setopt(CURL *curl, CURLoption option, ...)

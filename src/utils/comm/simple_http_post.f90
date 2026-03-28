@@ -33,7 +33,8 @@ module simple_http_post
                   curl_easy_getinfo, curl_easy_cleanup,                       &
                   CURL_GLOBAL_DEFAULT, CURLE_OK,                              &
                   CURLOPT_URL, CURLOPT_VERBOSE, CURLOPT_TIMEOUT,              &
-                  CURLOPT_NOSIGNAL, CURLOPT_POSTFIELDS, CURLOPT_POSTFIELDSIZE,&
+                  CURLOPT_NOSIGNAL, CURLOPT_COPYPOSTFIELDS,                   &
+                  CURLOPT_POSTFIELDSIZE,                                      &
                   CURLOPT_WRITEFUNCTION, CURLOPT_WRITEDATA,                   &
                   CURLINFO_RESPONSE_CODE, CURLINFO_CONTENT_TYPE
   use simple_string, only: string
@@ -105,7 +106,7 @@ contains
     type(http_response), target,  intent(inout) :: response
     type(string),        optional, intent(in)   :: request_str
     character(len=:),              allocatable  :: content_type
-    character(len=:),    target,   allocatable  :: buffer
+    character(len=:),              allocatable  :: request_body
     integer                                     :: rc
     logical                                     :: l_success
     l_success     = .true.
@@ -127,11 +128,11 @@ contains
     if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_NOSIGNAL')
     ! Attach POST body if provided
     if( present(request_str) ) then
-      buffer = request_str%to_char()
-      rc = curl_easy_setopt(self%curl_ptr, CURLOPT_POSTFIELDS,    c_loc(buffer))
-      if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_POSTFIELDS')
-      rc = curl_easy_setopt(self%curl_ptr, CURLOPT_POSTFIELDSIZE, len(buffer))
+      request_body = request_str%to_char()
+      rc = curl_easy_setopt(self%curl_ptr, CURLOPT_POSTFIELDSIZE, len(request_body))
       if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_POSTFIELDSIZE')
+      rc = curl_easy_setopt(self%curl_ptr, CURLOPT_COPYPOSTFIELDS, request_body)
+      if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_COPYPOSTFIELDS')
     endif
     ! Register response-body callback
     rc = curl_easy_setopt(self%curl_ptr, CURLOPT_WRITEFUNCTION,  c_funloc(response_callback))
@@ -160,17 +161,17 @@ contains
     ! Clean up curl handle and temporary buffers
     call curl_easy_cleanup(self%curl_ptr)
     if( allocated(content_type) ) deallocate(content_type)
-    if( allocated(buffer) )       deallocate(buffer)
+    if( allocated(request_body) ) deallocate(request_body)
     if( self%l_failed ) l_success = .false.
   end function request
 
   ! libcurl write callback: invoked for each received chunk of the response
   ! body. Accumulates chunks into response_ptr%content.
   ! ptr        — C pointer to the current chunk
-  ! size       — element size; always 1 per the curl API
-  ! nmemb      — number of elements (bytes) in this chunk
+  ! size       — element size in bytes
+  ! nmemb      — number of elements in this chunk
   ! client_data — user-supplied C pointer (cast to http_response here)
-  ! Returns nmemb on success, 0 to signal an error to curl.
+  ! Returns size * nmemb on success, 0 to signal an error to curl.
   function response_callback( ptr, size, nmemb, client_data ) bind(c)
     type(c_ptr),            intent(in), value :: ptr
     integer(kind=c_size_t), intent(in), value :: size
@@ -185,7 +186,7 @@ contains
     if( .not. c_associated(client_data) ) return
     ! Convert C pointers to Fortran pointers and copy the chunk
     call c_f_pointer(client_data, response_ptr)
-    call c_f_str_ptr(ptr, buf, int(nmemb, kind=8))
+    call c_f_str_ptr(ptr, buf, int(size * nmemb, kind=8))
     if( .not. allocated(buf) ) return
     ! Append chunk to the accumulated response body
     if( response_ptr%content%is_allocated() ) then
@@ -194,7 +195,7 @@ contains
       response_ptr%content = buf
     endif
     deallocate(buf)
-    response_callback = nmemb
+    response_callback = size * nmemb
   end function response_callback
 
 end module simple_http_post
