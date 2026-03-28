@@ -80,20 +80,12 @@ contains
             if( present(suffix_filter) )then
                 self%regexp = '\.mrc$|\.mrcs$'
             endif
-#ifdef USING_TIFF
             if( present(suffix_filter) )then
                 self%regexp = '\'//suffix_filter%to_char()//'.mrc$|\'//suffix_filter%to_char()//'.mrcs$|\'&
                 &//suffix_filter%to_char()//'.tif$|\'//suffix_filter%to_char()//'.tiff$|\.eer$'
             else
                 self%regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$|\.eer$'
             endif
-#else
-            if( present(suffix_filter) )then
-                self%regexp = '\'//suffix_filter%to_char()//'.mrc$|\'//suffix_filter%to_char()//'.mrcs$'
-            else
-                self%regexp = '\.mrc$|\.mrcs$'
-            endif
-#endif
         else
             ! watching simple projects
             if(present(nretries)) then

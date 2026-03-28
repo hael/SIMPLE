@@ -404,7 +404,6 @@ contains
         rarr = 0. ! initialize to zero
         select type(ptr)
         type is( TiffImgHead )
-#ifdef USING_TIFF
         if( self%head_format == 'L' ) call TIFFMuteWarnings
         io_stat = TIFFSetDirectory(ptr%fhandle,int(image_index-1,kind=c_int16_t))
         if( self%head_format == 'L' ) call TIFFUnMuteWarnings
@@ -508,7 +507,6 @@ contains
         enddo
         ! cleanup
         io_stat = TIFFfree(strip_buffer_cptr)
-#endif
         end select
     end subroutine rTiffSlices
 

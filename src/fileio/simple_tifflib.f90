@@ -8,7 +8,6 @@ module simple_tifflib
 use, intrinsic :: iso_c_binding
 implicit none
 
-#ifdef USING_TIFF
 interface
 
     function TIFFGetField(tiff, flag, val) bind(C,name="TIFFGetField")
@@ -229,5 +228,4 @@ interface
     end subroutine TIFFUnMuteWarnings
 
 end interface
-#endif
 end module simple_tifflib

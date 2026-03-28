@@ -19,15 +19,12 @@ use simple_string
 use simple_string_utils
 use simple_syslib
 use simple_tifflib
-#ifdef USING_TIFF
-use simple_tifflib
 #define     SAMPLEFORMAT_UINT       1   /* !unsigned integer data */
 #define     SAMPLEFORMAT_INT        2   /* !signed integer data */
 #define     SAMPLEFORMAT_IEEEFP     3   /* !IEEE floating point data */
 #define     SAMPLEFORMAT_VOID       4   /* !untyped data */
 #define     SAMPLEFORMAT_COMPLEXINT 5   /* !complex signed int */
 #define     SAMPLEFORMAT_COMPLEXIEEEFP  6   /* !complex ieee floating */
-#endif
 implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
@@ -433,7 +430,6 @@ contains
         character(len=1) :: form
         integer          :: io_status
         select type( self )
-#ifdef USING_TIFF
             type is( TiffImgHead )
                 filename_c  = to_cstring(fname%to_char())
                 open_mode_c = to_cstring('rc')
@@ -459,7 +455,6 @@ contains
                 self%StripSize        = TIFFStripsize(self%fhandle)
                 self%minval           = TIFFGetMinVal(self%fhandle)
                 self%maxval           = TIFFGetMaxVal(self%fhandle)
-#endif
             class DEFAULT
                 THROW_HARD('format not supported')
         end select
@@ -832,10 +827,8 @@ contains
         integer :: iostat
         select type( self )
             type is( TiffImgHead )
-#ifdef USING_TIFF
                 if( c_associated(self%StripBuffer_cptr) ) iostat = TIFFfree(self%StripBuffer_cptr)
                 if( c_associated(self%fhandle) ) call TIFFClose(self%fhandle)
-#endif
         end select
     end subroutine CloseTiff
 
@@ -1420,7 +1413,6 @@ contains
         smpd_here = 0.
         filename_c  = to_cstring(fname%to_char())
         open_mode_c = to_cstring('rc')
-#ifdef USING_TIFF
         form = fname2format(fname)
         if( form == 'L' ) call TIFFMuteWarnings
         fhandle = TIFFOpen(filename_c,open_mode_c)
@@ -1431,7 +1423,6 @@ contains
         if( form == 'L' ) call TIFFUnMuteWarnings
         if( doprint ) call TIFFPrintInfo(fhandle)
         call TIFFClose(fhandle)
-#endif
     end subroutine get_tiffile_info
 
     subroutine get_eerfile_info(fname, ldim, nptcls, smpd_here, doprint)
@@ -1446,7 +1437,6 @@ contains
         smpd_here = 0.
         filename_c  = to_cstring(fname%to_char())
         open_mode_c = to_cstring('r')
-#ifdef USING_TIFF
         call TIFFMuteWarnings
         fhandle = TIFFOpen(filename_c, open_mode_c)
         call TIFFUnMuteWarnings
@@ -1458,7 +1448,6 @@ contains
         if( doprint )then
             write(logfhandle,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), nptcls
         endif
-#endif
     end subroutine get_eerfile_info
 
     !>  \brief  is for finding logical dimension and number of particles in stack
@@ -1488,12 +1477,10 @@ contains
                 nptcls = ldim(3)
             case('S')
                call get_spifile_info(fname, ldim, iform, nptcls, smpd_here, conv, ddoprint)
-#ifdef USING_TIFF
             case('J','L')
                 call get_tiffile_info(fname, ldim, nptcls, smpd_here, ddoprint)
             case('K')
                 call get_eerfile_info(fname, ldim, nptcls, smpd_here, ddoprint)
-#endif
             case DEFAULT
                 THROW_HARD('format of file: '//fname%to_char()//' not supported')
         end select

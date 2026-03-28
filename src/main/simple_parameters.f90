@@ -1960,7 +1960,6 @@ contains
                         ! PDB files are supported
                         ! *.simple project files are supported
                         ! R=*.star format -- in testing
-#ifdef USING_TIFF
                     case('J')
                         ! TIFF
                         cntfile = cntfile+1
@@ -1973,7 +1972,6 @@ contains
                         ! .eer
                         cntfile = cntfile+1
                         checkupfile(cntfile) = 'K'
-#endif
                     case DEFAULT
                         write(logfhandle,*) 'file: ', var%to_char()
                         THROW_HARD('This file format is not supported by SIMPLE')
@@ -2101,11 +2099,9 @@ contains
                 self%ext = MRC_EXT
             case('S')
                 self%ext = '.spi'
-#ifdef USING_TIFF
             case('J','K','L')
                 ! for tiff/eer/gain we set .mrc as preferred output format
                 self%ext = MRC_EXT
-#endif
             case DEFAULT
                 write(logfhandle,*)'format: ', trim(ext)
                 THROW_HARD('This file format is not supported by SIMPLE')

@@ -61,7 +61,6 @@ contains
         integer,            intent(in)    :: upsampling
         integer :: compression
         call self%kill
-#ifdef USING_TIFF
         if( .not.file_exists(fname) ) THROW_HARD('File could not be found: '//fname%to_char())
         self%fname = fname
         inquire(file=self%fname%to_char(),size=self%filesz)
@@ -94,15 +93,11 @@ contains
         self%l_hasbeenread = .false.
         self%l_exists = .true.
         call self%read
-#else
-        THROW_HARD('EER support requires TIFF support!')
-#endif
     end subroutine new
 
     !>  Parse & store raw bytes
     subroutine read( self )
         class(eer_decoder), intent(inout) :: self
-#ifdef USING_TIFF
         type(c_ptr)               :: stripbuffer_ptr
         integer(kind=1),  pointer :: byte_array8(:)
         integer(kind=8)           :: pos, stripsz8
@@ -132,7 +127,6 @@ contains
         call TIFFClose(self%fhandle)
         nullify(byte_array8)
         self%l_hasbeenread = .true.
-#endif
     end subroutine
 
     !>  reset sampling, output dimensions & pixel size
@@ -191,7 +185,6 @@ contains
         class(eer_decoder), intent(in)    :: self
         class(image),       intent(inout) :: img
         integer,            intent(in)    :: istart, iend ! base 1
-#ifdef USING_TIFF
         integer(kind=2), parameter :: one2 = int(1,kind=2)
         integer(kind=1),   pointer :: byte_array(:)
         type(c_ptr)     :: cptr
@@ -284,7 +277,6 @@ contains
         ! cleanup
         nullify(byte_array)
         iostat = TIFFfree(cptr)
-#endif
     end subroutine decode_frames
 
     subroutine prep_gainref( self, fname, gain )
