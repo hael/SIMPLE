@@ -147,6 +147,28 @@ end interface
 
 contains
 
+    !> Detect if running on macOS by checking the OS type via uname
+    function detect_macos() result(is_macos)
+        logical :: is_macos
+        character(len=256) :: os_type
+        integer :: exit_code
+        is_macos = .false.
+        ! Try to get uname output
+        call execute_command_line('uname -s > /tmp/uname_test.txt 2>/dev/null', exitstat=exit_code)
+        if (exit_code == 0) then
+            open(unit=99, file='/tmp/uname_test.txt', status='old', action='read', iostat=exit_code)
+            if (exit_code == 0) then
+                read(99, '(A)', iostat=exit_code) os_type
+                close(99)
+                if (exit_code == 0) then
+                    if (index(os_type, 'Darwin') > 0) then
+                        is_macos = .true.
+                    endif
+                endif
+            endif
+        endif
+    end function detect_macos
+
     subroutine exec_cmdline( cmdline, waitflag, suppress_errors, exitstat)
         class(*),          intent(in)  :: cmdline
         logical, optional, intent(in)  :: waitflag, suppress_errors

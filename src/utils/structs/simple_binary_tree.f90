@@ -31,6 +31,7 @@ contains
     procedure :: get_height
     procedure, private :: height_recursive
     procedure :: build_from_hclust
+    procedure :: build_balanced_index_tree
 end type binary_tree
 
 contains
@@ -217,6 +218,66 @@ contains
         deallocate(members)
         self%exists = .true.
     end subroutine build_from_hclust
+
+    ! --------------------------
+    ! Build deterministic balanced index tree
+    ! Uses recursive binary partitioning at midpoint for 1..nrefs.
+    ! Guarantees identical topology across multiple calls for the same nrefs.
+    ! --------------------------
+    subroutine build_balanced_index_tree(self, nrefs)
+        class(binary_tree), intent(inout) :: self
+        integer,            intent(in)    :: nrefs
+        integer, allocatable :: all_nodes(:,:)
+        integer :: n_total, next_internal
+        integer :: root_idx, i
+        call self%kill()
+        if (nrefs <= 0) return
+        n_total = 2 * nrefs - 1
+        allocate(all_nodes(n_total, 6))
+        all_nodes = 0
+        ! Initialize next_internal tracker (leaves are 1..nrefs, internals start at nrefs+1)
+        next_internal = nrefs + 1
+        ! Build tree recursively from range [1, nrefs]
+        root_idx = build_range(1, nrefs)
+        ! Copy nodes to self%nodes and finalize
+        allocate(self%nodes(n_total))
+        do i = 1, n_total
+            self%nodes(i)%left_idx   = all_nodes(i, 1)
+            self%nodes(i)%right_idx  = all_nodes(i, 2)
+            self%nodes(i)%parent_idx = all_nodes(i, 3)
+            self%nodes(i)%level      = all_nodes(i, 4)
+            self%nodes(i)%ref_idx    = all_nodes(i, 5)
+            self%nodes(i)%node_idx   = i
+        end do
+        self%root_idx = root_idx
+        self%nrefs    = nrefs
+        self%exists   = .true.
+        deallocate(all_nodes)
+
+    contains
+
+        recursive function build_range(lo, hi) result(idx)
+            integer, intent(in) :: lo, hi
+            integer :: idx, mid, lidx, ridx
+            if (lo == hi) then
+                ! Leaf node: lo is the ref_idx
+                idx = lo
+                all_nodes(idx, 5) = lo
+                return
+            end if
+            ! Internal node: split at midpoint
+            mid = (lo + hi) / 2
+            lidx = build_range(lo, mid)
+            ridx = build_range(mid + 1, hi)
+            idx = next_internal
+            next_internal = next_internal + 1
+            all_nodes(idx, 1) = lidx
+            all_nodes(idx, 2) = ridx
+            all_nodes(idx, 5) = mid
+        end function build_range
+
+    end subroutine build_balanced_index_tree
+
     ! -------------------------------------------------------------------
     ! Serialize / Deserialize routines for binary_tree
     ! -------------------------------------------------------------------

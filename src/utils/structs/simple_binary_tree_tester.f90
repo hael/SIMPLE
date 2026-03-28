@@ -15,6 +15,7 @@ contains
         call test_build_from_hclust_basic_invariants()
         call test_get_node_copy_semantics()
         call test_kill_and_rebuild()
+        call test_build_balanced_index_tree_deterministic()
         write(*,'(A)') '**** finished binary_tree tests ****'
     end subroutine run_all_tree_tests
 
@@ -27,15 +28,12 @@ contains
         integer, allocatable :: merge_mat(:,:)
         integer :: refs(4)
         real, allocatable :: dist(:,:)
-
         ! Leaves: 1..4, internal: 5..7
         ! merges: (1,2)->5, (3,4)->6, (5,6)->7
         allocate(merge_mat(2,3))
         merge_mat(1,:) = [1, 3, 5]
         merge_mat(2,:) = [2, 4, 6]
-
         refs = [1,2,3,4]
-
         allocate(dist(4,4))
         dist = 0.0
         dist(1,2)=1.0;  dist(2,1)=1.0
@@ -44,9 +42,7 @@ contains
         dist(1,4)=10.0; dist(4,1)=10.0
         dist(2,3)=9.0;  dist(3,2)=9.0
         dist(2,4)=9.0;  dist(4,2)=9.0
-
         call t%build_from_hclust(merge_mat, refs, dist)
-
         deallocate(merge_mat)
         deallocate(dist)
     end subroutine build_test_tree
@@ -67,7 +63,6 @@ contains
         call assert_int(0, t%get_n_nodes(), 'new tree has 0 nodes')
         call assert_int(0, t%get_nrefs(),   'new tree nrefs=0')
         call assert_int(0, t%get_height(),  'new tree height=0')
-
         ! root node getter should return zero-initialized node
         block
             type(bt_node) :: r
@@ -84,18 +79,14 @@ contains
         type(binary_tree) :: t
         type(bt_node) :: root, n1, n2, n3, n4, n5, n6
         integer :: nrefs, n_total
-
         write(*,'(A)') 'test_build_from_hclust_basic_invariants'
         call build_test_tree(t)
-
         nrefs = t%get_nrefs()
         call assert_int(4, nrefs, 'nrefs stored')
         n_total = 2*nrefs - 1
         call assert_int(n_total, t%get_n_nodes(), 'n_nodes = 2*nrefs-1')
-
         ! For a full 4-leaf binary merge tree, height must be 3 (nodes along root->leaf path)
         call assert_int(3, t%get_height(), 'height=3 for 4-leaf full merge')
-
         root = t%get_root_node()
         call assert_int(n_total, root%node_idx, 'root node_idx is last slot')
         call assert_int(0, root%parent_idx, 'root parent_idx=0')
@@ -103,7 +94,6 @@ contains
         call assert_idx_valid(root%left_idx,  n_total, 'root left_idx valid')
         call assert_idx_valid(root%right_idx, n_total, 'root right_idx valid')
         call assert_true(root%left_idx /= 0 .and. root%right_idx /= 0, 'root has two children')
-
         ! Leaves: nodes 1..4 are leaves with refs 1..4 (GLOBAL ids)
         n1 = t%get_node(1)
         call assert_true(t%is_leaf(1), 'node1 is leaf')
@@ -111,22 +101,18 @@ contains
         call assert_int(0, n1%left_idx, 'leaf1 left=0')
         call assert_int(0, n1%right_idx,'leaf1 right=0')
         call assert_int(5, n1%parent_idx,'leaf1 parent=5')
-
         n2 = t%get_node(2)
         call assert_true(t%is_leaf(2), 'node2 is leaf')
         call assert_int(2, n2%ref_idx, 'leaf2 ref_idx=2')
         call assert_int(5, n2%parent_idx,'leaf2 parent=5')
-
         n3 = t%get_node(3)
         call assert_true(t%is_leaf(3), 'node3 is leaf')
         call assert_int(3, n3%ref_idx, 'leaf3 ref_idx=3')
         call assert_int(6, n3%parent_idx,'leaf3 parent=6')
-
         n4 = t%get_node(4)
         call assert_true(t%is_leaf(4), 'node4 is leaf')
         call assert_int(4, n4%ref_idx, 'leaf4 ref_idx=4')
         call assert_int(6, n4%parent_idx,'leaf4 parent=6')
-
         ! Internal node 5 merges (1,2)
         n5 = t%get_node(5)
         call assert_true(.not. t%is_leaf(5), 'node5 is internal')
@@ -136,7 +122,6 @@ contains
         call assert_int(1, n5%level,     'node5 level=1')
         ! Deterministic medoid for {1,2} tie -> local 1 -> global 1
         call assert_int(1, n5%ref_idx,   'node5 ref_idx (medoid)=1')
-
         ! Internal node 6 merges (3,4)
         n6 = t%get_node(6)
         call assert_true(.not. t%is_leaf(6), 'node6 is internal')
@@ -146,14 +131,12 @@ contains
         call assert_int(2, n6%level,     'node6 level=2')
         ! Deterministic medoid for {3,4} tie -> local 3 -> global 3
         call assert_int(3, n6%ref_idx,   'node6 ref_idx (medoid)=3')
-
         ! Root node 7 merges (5,6)
         call assert_int(5, root%left_idx,  'root left=5')
         call assert_int(6, root%right_idx, 'root right=6')
         call assert_int(3, root%level,     'root level=3')
         ! Deterministic medoid for {1,2,3,4} is global 2
         call assert_int(2, root%ref_idx,   'root ref_idx (medoid)=2')
-
         call t%kill()
     end subroutine test_build_from_hclust_basic_invariants
 
@@ -162,16 +145,13 @@ contains
         type(bt_node) :: a, b
         write(*,'(A)') 'test_get_node_copy_semantics'
         call build_test_tree(t)
-
         a = t%get_node(5)
         call assert_int(5, a%node_idx, 'get_node returns correct node_idx')
         call assert_int(1, a%ref_idx,  'get_node returns correct ref_idx')
-
         ! mutate local copy; tree must be unchanged
         a%ref_idx = 999
         b = t%get_node(5)
         call assert_int(1, b%ref_idx, 'tree unaffected by local mutation')
-
         call t%kill()
     end subroutine test_get_node_copy_semantics
 
@@ -179,29 +159,66 @@ contains
         type(binary_tree) :: t
         type(bt_node) :: root
         integer :: n_total
-
         write(*,'(A)') 'test_kill_and_rebuild'
         call build_test_tree(t)
-
         call assert_true(t%get_n_nodes() > 0, 'tree built has nodes')
         call t%kill()
         call assert_int(0, t%get_n_nodes(), 'kill deallocates nodes')
         call assert_int(0, t%get_nrefs(),   'kill resets nrefs')
         call assert_int(0, t%get_height(),  'kill => height 0')
-
         call build_test_tree(t)
         call assert_int(4, t%get_nrefs(), 'rebuild nrefs ok')
         n_total = 2*t%get_nrefs() - 1
         call assert_int(n_total, t%get_n_nodes(), 'rebuild n_nodes ok')
-
         root = t%get_root_node()
         call assert_int(n_total, root%node_idx, 'rebuild root in last slot')
         call assert_int(0, root%parent_idx,     'rebuild root parent_idx=0')
         call assert_true(.not. t%is_leaf(root%node_idx), 'rebuild root is internal')
         call assert_int(3, t%get_height(), 'rebuild height=3')
         call assert_int(2, root%ref_idx,   'rebuild root medoid=2')
-
         call t%kill()
     end subroutine test_kill_and_rebuild
+
+    subroutine test_build_balanced_index_tree_deterministic()
+        type(binary_tree) :: t1, t2
+        integer, allocatable :: mat1(:,:), mat2(:,:)
+        integer :: meta1(3), meta2(3), n, k
+        integer, parameter :: nrefs = 7
+        write(*,'(A)') 'test_build_balanced_index_tree_deterministic'
+        ! Build tree twice via build_balanced_index_tree
+        call t1%build_balanced_index_tree(nrefs)
+        call t2%build_balanced_index_tree(nrefs)
+        ! Verify basic invariants for t1
+        call assert_int(nrefs, t1%get_nrefs(),                't1 nrefs=7')
+        call assert_int(2*nrefs-1, t1%get_n_nodes(),          't1 n_nodes=13')
+        call assert_int(4, t1%get_height(),                   't1 height=4 (log2(7)+1)')
+        ! Serialize both trees
+        call serialize_tree(t1, mat1, meta1)
+        call serialize_tree(t2, mat2, meta2)
+        ! Verify identical metadata
+        call assert_int(meta1(1), meta2(1), 't1 and t2 have identical root_idx')
+        call assert_int(meta1(2), meta2(2), 't1 and t2 have identical nrefs')
+        call assert_int(meta1(3), meta2(3), 't1 and t2 have identical exists_flag')
+        ! Verify identical node structure
+        n = size(mat1, 1)
+        call assert_int(size(mat2, 1), n, 't1 and t2 serializations have same n_nodes')
+        do k = 1, n
+            call assert_int(mat1(k,1), mat2(k,1), 'node ' // to_str(k) // ' left_idx matches')
+            call assert_int(mat1(k,2), mat2(k,2), 'node ' // to_str(k) // ' right_idx matches')
+            call assert_int(mat1(k,3), mat2(k,3), 'node ' // to_str(k) // ' parent_idx matches')
+            call assert_int(mat1(k,4), mat2(k,4), 'node ' // to_str(k) // ' level matches')
+            call assert_int(mat1(k,5), mat2(k,5), 'node ' // to_str(k) // ' ref_idx matches')
+        end do
+        deallocate(mat1, mat2)
+        call t1%kill()
+        call t2%kill()
+    end subroutine test_build_balanced_index_tree_deterministic
+
+    function to_str(i) result(s)
+        integer, intent(in) :: i
+        character(len=20) :: s
+        write(s, '(I0)') i
+        s = adjustl(s)
+    end function to_str
 
 end module simple_binary_tree_tester
