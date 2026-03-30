@@ -267,9 +267,11 @@ contains
                 case('single_ptree')
                     self%block_tree = gen_single_block_index_tree(params%ncls)
                     self%subspace_full2sub_map = self%block_tree%get_full2sub_map()
+                    self%subspace_inds         = self%block_tree%get_sub2full_map()
                 case('snhc_ptree')
                     self%block_tree = gen_multi_block_index_tree(params%ncls, params%ncls_sub)
                     self%subspace_full2sub_map = self%block_tree%get_full2sub_map()
+                    self%subspace_inds         = self%block_tree%get_sub2full_map()
                 case DEFAULT
                     call self%eulspace%new(params%nspace, is_ptcl=.false.)
                     call self%pgrpsyms%build_refspiral(self%eulspace)

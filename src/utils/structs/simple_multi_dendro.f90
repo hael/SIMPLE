@@ -21,6 +21,7 @@ contains
    procedure :: new
    procedure :: new_multi_balanced
    procedure :: get_full2sub_map
+   procedure :: get_sub2full_map
    procedure :: get_n_trees
    procedure :: get_n_nodes
    procedure :: get_n_refs
@@ -109,6 +110,24 @@ contains
          end do
       end do
    end function get_full2sub_map
+
+   ! Returns an array of size n_trees where each entry is the index of the first
+   ! (representative) ref belonging to that tree, analogous to srchspace_map's sub2full_map.
+   function get_sub2full_map(self) result(sub2full_map)
+      class(multi_dendro), intent(in) :: self
+      integer, allocatable :: sub2full_map(:)
+      integer :: itree, iref
+      allocate(sub2full_map(self%n_trees), source=0)
+      if (.not. allocated(self%tree_map)) return
+      do itree = 1, self%n_trees
+         do iref = 1, self%n_refs
+            if (self%tree_map(itree, iref)) then
+               sub2full_map(itree) = iref
+               exit
+            end if
+         end do
+      end do
+   end function get_sub2full_map
 
    pure integer function get_n_nodes(self, itree) result(n)
       class(multi_dendro), intent(in) :: self
