@@ -841,30 +841,26 @@ contains
         type(sp_project)         :: spproj
         type(parameters)         :: params
         type(multi_dendro)       :: block_tree
-        type(string)             :: root_dir, tree_outstk
+        type(string)             :: tree_outstk
         integer, allocatable     :: full2sub_map(:), tree_inds(:)
-        integer                  :: ncls, ntrees, itree, i, group_size
+        integer                  :: ncls, ntrees, itree, i, group_size, ncls_sub
         type(image), allocatable :: stk(:), tree_imgs(:)
         call params%new(cline)
-        call spproj%read_segment(params%oritype, params%projfile)
+        call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
-        select case(trim(params%refine))
-            case('snhc_ptree')
-                block_tree = gen_multi_block_index_tree(ncls, params%ncls_sub)
-            case DEFAULT
-                THROW_HARD('Incompatible refinement type: '//trim(params%refine))
-        end select
+        ncls_sub = min(round2even(0.025* real(ncls)), 10) ! capped at 10
+        ncls_sub = max(ncls_sub, 10)                      ! floored at 10
+        block_tree = gen_multi_block_index_tree(ncls, ncls_sub)
         ntrees = block_tree%get_n_trees()
         full2sub_map = block_tree%get_full2sub_map()
-        stk = read_stk_into_imgarr(params%stk)
-        root_dir = get_fpath(params%projfile)//'ranked_tree_cavgs'
-        call simple_mkdir(root_dir, verbose=.false.)
+        ! extract cavgs from project
+        stk = read_cavgs_into_imgarr(spproj)
         do itree = 1, ntrees
             tree_inds = pack((/(i,i=1,ncls)/), full2sub_map == itree)
             group_size = size(tree_inds)
             if( group_size <= 0 ) cycle
             tree_imgs = extract_imgarr(stk, tree_inds)
-            tree_outstk = root_dir//'/tree_'//int2str_pad(itree,2)//'.mrcs'
+            tree_outstk = 'tree_'//int2str_pad(itree,2)//'.mrcs'
             call write_imgarr(tree_imgs, tree_outstk)
             call dealloc_imgarr(tree_imgs)
         end do
