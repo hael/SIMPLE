@@ -34,22 +34,24 @@ contains
         type(sp_project)           :: spproj
         class(oris),       pointer :: spproj_field
         integer :: maxits, istage, last_iter, nptcls_eff, nstages
-        logical :: l_shmem, l_inpl
+        logical :: l_shmem
         call cline%set('oritype',   'ptcl2D')
         call cline%set('sigma_est', 'global')
-        if( .not. cline%defined('autoscale')  ) call cline%set('autoscale',  'yes')
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('center')     ) call cline%set('center',     'yes')
-        if( .not. cline%defined('center_type')) call cline%set('center_type','seg')
-        if( .not. cline%defined('cls_init')   ) call cline%set('cls_init',   'rand')
-        if( .not. cline%defined('gauref')     ) call cline%set('gauref',     'yes')
-        if( .not. cline%defined('polar')      ) call cline%set('polar',      'no')
-        if( .not. cline%defined('extr_lim')   ) call cline%set('extr_lim',   EXTR_LIM_LOCAL)
-        if( .not. cline%defined('rank_cavgs') ) call cline%set('rank_cavgs', 'yes')
-        if( .not. cline%defined('stats')      ) call cline%set('stats',      'no')
-        if( .not. cline%defined('refine')     ) call cline%set('refine',     'snhc_smpl')
-        if( .not. cline%defined('ref_type')   ) call cline%set('ref_type',   'polar_cavg')
-        if( .not. cline%defined('ml_reg')     ) call cline%set('ml_reg',     'yes')
+        if( .not. cline%defined('autoscale')     ) call cline%set('autoscale',     'yes')
+        if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',         'yes')
+        if( .not. cline%defined('center')        ) call cline%set('center',        'yes')
+        if( .not. cline%defined('center_type')   ) call cline%set('center_type',   'seg')
+        if( .not. cline%defined('cls_init')      ) call cline%set('cls_init',      'rand')
+        if( .not. cline%defined('gauref')        ) call cline%set('gauref',        'yes')
+        if( .not. cline%defined('polar')         ) call cline%set('polar',         'no')
+        if( .not. cline%defined('extr_lim')      ) call cline%set('extr_lim',      EXTR_LIM_LOCAL)
+        if( .not. cline%defined('nits_per_stage')) call cline%set('nits_per_stage',ITS_INCR)
+        if( .not. cline%defined('eo_stage')      ) call cline%set('eo_stage',      EO_STAGE)
+        if( .not. cline%defined('rank_cavgs')    ) call cline%set('rank_cavgs',    'yes')
+        if( .not. cline%defined('stats')         ) call cline%set('stats',         'no')
+        if( .not. cline%defined('refine')        ) call cline%set('refine',        'snhc_smpl')
+        if( .not. cline%defined('ref_type')      ) call cline%set('ref_type',      'polar_cavg')
+        if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',        'yes')
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
         ! master parameters
@@ -59,7 +61,7 @@ contains
         maxits = params%extr_lim
         call cline%delete('stats')
         ! check refinement flag and set stages
-        call determine_abinitio2D_stages(trim(params%refine), nstages, l_inpl)
+        call determine_abinitio2D_stages(params, nstages)
         ! override # stages
         if( cline%defined('nstages') ) nstages = min(params%nstages,NSTAGES_CLS)
         allocate(stage_parms(nstages))
@@ -67,7 +69,7 @@ contains
         call spproj%read(params%projfile)
         call set_dims                   ! set downscaling
         call inirefs                    ! deal with initial references
-        call set_lplims                 ! set resolutions limits
+        call set_lplims(nstages)        ! set resolutions limits
         call prep_command_lines(cline)  ! prepare class command lines
         call set_sampling               ! sampling
         ! summary
@@ -78,7 +80,7 @@ contains
         end do
         ! prep particles field
         call spproj_field%set_all2single('w',1.)
-        if( .not.l_inpl ) call spproj_field%delete_2Dclustering
+        call spproj_field%delete_2Dclustering
         if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
         call spproj%write_segment_inside(params%oritype, params%projfile)
         call spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
@@ -91,7 +93,7 @@ contains
                 write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH GOLD STANDARD E/O'
             endif
             ! parameters update
-            call set_cline_cluster2D_stage(cline_cluster2D, cline, params, stage_parms, nstages, maxits, istage)
+            call set_cline_cluster2D_stage(cline_cluster2D, cline, params, stage_parms, maxits, istage)
             ! classify
             call execute_cluster2D
         enddo
@@ -101,11 +103,7 @@ contains
         call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
         call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! weights & final mapping of particles
-        if( nstages == 1 )then
-            ! no autosampling
-        else
-            if( trim(params%stats).eq.'yes' ) call output_stats('final')
-        endif
+        if( trim(params%stats).eq.'yes' ) call output_stats('final')
         ! final class generation & ranking
         last_iter = cline_cluster2D%get_iarg('endit')
         call gen_final_cavgs(last_iter)
@@ -166,20 +164,14 @@ contains
             real         :: smpd
             integer      :: ldim(3), ncls
             logical      :: eo
-            if( .not.cline%defined('refs') .and. (.not.l_inpl) )then
+            if( .not.cline%defined('refs') )then
                 ! Starting from scratch: appropriate starting references
                 ! will be generated by cluster2D/cluster2D_distr
                 return
             endif
-            if( cline%defined('refs') )then
-                refs = params%refs
-                call find_ldim_nptcls(refs, ldim, ncls, smpd=smpd)
-                ldim(3) = 1
-            else
-                ! l_inpl=true & not.cline%defined('refs'):
-                ! refinement so getting references from previous run
-                call spproj%get_cavgs_stk(refs, ncls, smpd, 'cavg')
-            endif
+            refs = params%refs
+            call find_ldim_nptcls(refs, ldim, ncls, smpd=smpd)
+            ldim(3) = 1
             if( .not.file_exists(refs) ) THROW_HARD('File does not exits: '//refs%to_char())
             if( ncls /= params%ncls )    THROW_HARD('Incompatible # of classes in: '//refs%to_char())
             refs_even        = add2fbody(refs, params%ext, '_even')
@@ -214,57 +206,46 @@ contains
         end subroutine inirefs
 
         ! Set resolution limits
-        subroutine set_lplims
+        subroutine set_lplims( local_nstages )
             use simple_class_frcs, only: class_frcs
-            type(class_frcs)              :: clsfrcs
-            type(string) :: frcs
-            real         :: lpstart, lpstop, cenlp
-            integer      :: istage
+            integer, intent(in) :: local_nstages
+            type(class_frcs) :: clsfrcs
+            type(string)     :: frcs
+            real    :: lpstart, lpstop, cenlp
+            integer :: istage
             ! Resolution limits
             call mskdiam2lplimits_cluster2D(params%mskdiam, lpstart, lpstop, cenlp)
             lpstart = max(lpstart, 2.*params%smpd_crop)
             lpstop  = max(lpstop,  2.*params%smpd_crop)
             cenlp   = max(cenlp,   2.*params%smpd_crop)
             ! Stages resolution limits
-            if( nstages == 1 )then
-                if( cline%defined('lp') )then
-                    stage_parms(1)%l_lpset = .true.
-                    lpstart                = params%lp
-                    stage_parms(1)%lp      = params%lp
-                    lpstop                 = params%lp
-                else
-                    call spproj%get_frcs(frcs, 'frc2D')
-                    call clsfrcs%read(frcs)
-                    call clsfrcs%crop(stage_parms(1)%smpd_crop, stage_parms(1)%box_crop)
-                    call clsfrcs%write(string(FRCS_FILE))
-                    stage_parms(1)%l_lpset = .false.
-                    lpstart                = clsfrcs%estimate_lp_for_align()
-                    stage_parms(1)%lp      = lpstart    ! will not be used
-                    lpstop                 = 2.*params%smpd_crop
-                    call clsfrcs%kill
-                endif
+            if( cline%defined('lp') )then
+                ! Set lp throughout
+                stage_parms(:)%lp      = params%lp
+                stage_parms(:)%l_lpset = .true.
+                params%lpstart = params%lp
+                params%lpstop  = params%lp
+            else
+                ! Frequency marching
                 if( .not. cline%defined('lpstart') ) params%lpstart = lpstart
                 if( .not. cline%defined('lpstop')  ) params%lpstop  = lpstop
-            else
-                if( cline%defined('lp') )then
-                    ! Set lp throughout
-                    stage_parms(:)%lp      = params%lp
-                    stage_parms(:)%l_lpset = .true.
-                    params%lpstart = params%lp
-                    params%lpstop  = params%lp
-                else
-                    ! Frequency marching
-                    if( .not. cline%defined('lpstart') ) params%lpstart = lpstart
-                    if( .not. cline%defined('lpstop')  ) params%lpstop  = lpstop
+                if( trim(params%eo_stage)=='yes')then
                     stage_parms(1)%lp      = params%lpstart
                     stage_parms(1)%l_lpset = .true.
-                    do istage = 2, NSTAGES-1
+                    do istage = 2, local_nstages-1
                         stage_parms(istage)%lp      = stage_parms(istage-1)%lp - (stage_parms(istage-1)%lp - params%lpstop)/2.0
                         stage_parms(istage)%l_lpset = .true.
                     end do
-                    stage_parms(NSTAGES-1)%lp    = params%lpstop
-                    stage_parms(NSTAGES)%l_lpset = .false.
-                    stage_parms(NSTAGES)%lp      = params%lpstop
+                    stage_parms(local_nstages-1)%lp    = params%lpstop
+                    stage_parms(local_nstages)%l_lpset = .false.
+                    stage_parms(local_nstages)%lp      = params%lpstop
+                else
+                    stage_parms(1)%lp      = params%lpstart
+                    stage_parms(:)%l_lpset = .true.
+                    do istage = 2, local_nstages
+                        stage_parms(istage)%lp      = stage_parms(istage-1)%lp - (stage_parms(istage-1)%lp - params%lpstop)/2.0
+                    end do
+                    stage_parms(local_nstages)%lp = params%lpstop
                 endif
             endif
             if( .not. cline%defined('cenlp') ) params%cenlp   = cenlp

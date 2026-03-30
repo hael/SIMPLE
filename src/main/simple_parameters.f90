@@ -44,6 +44,7 @@ type :: parameters
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
     character(len=3)          :: empty3Dcavgs='yes'   !< whether 3D empty cavgs are okay(yes|no){yes}
     character(len=3)          :: envfsc='no'          !< envelope mask even/odd pairs for FSC calculation(yes|no){no}
+    character(len=3)          :: eo_stage='yes'       !< Whether the last stage of abinitio2D uses a resolution limit determined with e/o pairs(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
@@ -321,8 +322,9 @@ type :: parameters
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
     integer :: niceprocid=0        !< # id of process in nice database
-    integer :: ninipick=0          !< # number of micrographs to run inipick preprocessing on in preprocess
-    integer :: ninit=3             !< # number of micrographs to use during diameter estimation global search
+    integer :: ninipick=0          !< # of micrographs to run inipick preprocessing on in preprocess
+    integer :: ninit=3             !< # of micrographs to use during diameter estimation global search
+    integer :: nits_per_stage=5    !< # of iterations per stage
     integer :: nmics=0             !< # micrographs
     integer :: nmoldiams=1         !< # moldiams
     integer :: noris=0
@@ -693,6 +695,7 @@ contains
         call check_carg('element',        self%element)
         call check_carg('empty3Dcavgs',   self%empty3Dcavgs)
         call check_carg('envfsc',         self%envfsc)
+        call check_carg('eo_stage',       self%eo_stage)
         call check_carg('even',           self%even)
         call check_carg('extract',        self%extract)
         call check_carg('extractfrommov', self%extractfrommov)
@@ -927,6 +930,7 @@ contains
         call check_iarg('niceprocid',     self%niceprocid)
         call check_iarg('ninipick',       self%ninipick)
         call check_iarg('ninit',          self%ninit)
+        call check_iarg('nits_per_stage', self%nits_per_stage)
         call check_iarg('nmics',          self%nmics)
         call check_iarg('nmoldiams',      self%nmoldiams)
         call check_iarg('nsearch',        self%nsearch)
