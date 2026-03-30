@@ -2,7 +2,7 @@
 module simple_commanders_cavgs
 use simple_commanders_api
 use simple_strategy2D_utils
-use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs
+use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
 implicit none
 #include "simple_local_flags.inc"
 
@@ -45,6 +45,11 @@ type, extends(commander_base) :: commander_shape_rank_cavgs
   contains
     procedure :: execute      => exec_shape_rank_cavgs
 end type commander_shape_rank_cavgs
+
+type, extends(commander_base) :: commander_tree_rank_cavgs
+  contains
+    procedure :: execute      => exec_tree_rank_cavgs
+end type commander_tree_rank_cavgs 
 
 contains
 
@@ -827,5 +832,47 @@ contains
             end function p1_lt_p2
 
     end subroutine exec_shape_rank_cavgs
+
+    subroutine exec_tree_rank_cavgs( self, cline )
+        use simple_block_tree, only: gen_single_block_index_tree, gen_multi_block_index_tree
+        use simple_multi_dendro, only: multi_dendro
+        class(commander_tree_rank_cavgs), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(sp_project)         :: spproj
+        type(parameters)         :: params
+        type(multi_dendro)       :: block_tree
+        type(string)             :: root_dir, tree_outstk
+        integer, allocatable     :: full2sub_map(:), tree_inds(:)
+        integer                  :: ncls, ntrees, itree, i, group_size
+        type(image), allocatable :: stk(:), tree_imgs(:)
+        call params%new(cline)
+        call spproj%read_segment(params%oritype, params%projfile)
+        ncls = spproj%os_cls2D%get_noris()
+        select case(trim(params%refine))
+            case('snhc_ptree')
+                block_tree = gen_multi_block_index_tree(ncls, params%ncls_sub)
+            case DEFAULT
+                THROW_HARD('Incompatible refinement type: '//trim(params%refine))
+        end select
+        ntrees = block_tree%get_n_trees()
+        full2sub_map = block_tree%get_full2sub_map()
+        stk = read_stk_into_imgarr(params%stk)
+        root_dir = get_fpath(params%projfile)//'ranked_tree_cavgs'
+        call simple_mkdir(root_dir, verbose=.false.)
+        do itree = 1, ntrees
+            tree_inds = pack((/(i,i=1,ncls)/), full2sub_map == itree)
+            group_size = size(tree_inds)
+            if( group_size <= 0 ) cycle
+            tree_imgs = extract_imgarr(stk, tree_inds)
+            tree_outstk = root_dir//'/tree_'//int2str_pad(itree,2)//'.mrcs'
+            call write_imgarr(tree_imgs, tree_outstk)
+            call dealloc_imgarr(tree_imgs)
+        end do
+        call dealloc_imgarr(stk)
+        if( allocated(full2sub_map) ) deallocate(full2sub_map)
+        call spproj%kill
+        call block_tree%kill
+        call simple_end('exec_tree_rank_cavgs normal completion', print_simple=.false.)
+    end subroutine exec_tree_rank_cavgs
 
 end module simple_commanders_cavgs
