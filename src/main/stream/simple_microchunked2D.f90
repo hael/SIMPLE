@@ -1,4 +1,4 @@
-!@descr: Manages the creation, configuration, and submission of pass-1/pass-2 microchunks, match microchunks, and a single reference chunk
+!@descr: multi-tier microchunk 2D classification driver (pass-1/pass-2/refchunk/match)
 !==============================================================================
 ! MODULE: simple_microchunked2D
 !
@@ -71,7 +71,7 @@
 !
 ! CONSTANTS:
 !   MICROCHUNK_P1_THRESHOLD — maximum particles per pass-1 microchunk       (5000)
-!   MICROCHUNK_P2_THRESHOLD — maximum selected particles per pass-2 chunk   (5000)
+!   MICROCHUNK_P2_THRESHOLD — maximum selected particles per pass-2 chunk   (8000)
 !   REFCHUNK_THRESHOLD      — minimum selected particles to form a ref chunk(10000)
 !   DEFAULT_NCLS            — default number of 2D classes                    (100)
 !   DEFAULT_MICRO_P1_LP     — pass-1 microchunk low-pass stop cutoff, Å    (15.0)
@@ -117,7 +117,7 @@ module simple_microchunked2D
 
   logical, parameter :: DEBUG                   = .true.
   integer, parameter :: MICROCHUNK_P1_THRESHOLD = 5000
-  integer, parameter :: MICROCHUNK_P2_THRESHOLD = 5000
+  integer, parameter :: MICROCHUNK_P2_THRESHOLD = 8000
   integer, parameter :: REFCHUNK_THRESHOLD      = 10000
   integer, parameter :: DEFAULT_NCLS            = 100
   integer, parameter :: DEFAULT_WALLTIME        = 29 * 60  ! 29 minutes in seconds
@@ -865,26 +865,28 @@ contains
   ! Populates the abinitio2D command line for a match microchunk with:
   ! program name, project file and name, no-mkdir flag, thread count, mask
   ! diameter, class count, low-pass stop cutoff (DEFAULT_MICRO_P2_LP),
-  ! reference stack path (refs), box size, number of stages, and wall-time
-  ! limit. The refs and box fields enable template-guided classification
+  ! reference stack path (refs), extremal limit, number of stages, and
+  ! wall-time limit. The refs field enables template-guided classification
   ! against the reference chunk class averages.
   subroutine generate_microchunk_match_cline( self, new_chunk )
     class(microchunked2D), intent(inout) :: self
     type(chunk2D),    intent(inout) :: new_chunk
     associate( cline => new_chunk%cline )
-      call cline%set('prg',      'abinitio2D')
-      call cline%set('projfile', new_chunk%projfile)
-      call cline%set('projname', 'microchunk_match')
-      call cline%set('mkdir',    'no')
-      call cline%set('nthr',     self%nthr)
-      call cline%set('mskdiam',  self%mskdiam)
-      call cline%set('ncls',     DEFAULT_NCLS)
-      call cline%set('lpstart',  DEFAULT_LPSTART)
-      call cline%set('lpstop',   DEFAULT_MICRO_P2_LP)
-      call cline%set('refs',     self%refs)
-      call cline%set('box',      self%box)
-      call cline%set('extr_lim', 12)
-      call cline%set('walltime', DEFAULT_WALLTIME)
+      call cline%set('prg',            'abinitio2D')
+      call cline%set('projfile',       new_chunk%projfile)
+      call cline%set('projname',       'microchunk_match')
+      call cline%set('mkdir',          'no')
+      call cline%set('nthr',           self%nthr)
+      call cline%set('mskdiam',        self%mskdiam)
+      call cline%set('ncls',           DEFAULT_NCLS)
+      call cline%set('lpstart',        DEFAULT_LPSTART)
+      call cline%set('lpstop',         DEFAULT_MICRO_P2_LP)
+      call cline%set('refs',           self%refs)
+      call cline%set('extr_lim',       14)
+      call cline%set('eo_stage',       'no')
+      call cline%set('nits_per_stage', 3)
+      call cline%set('walltime',       DEFAULT_WALLTIME)
+      call cline%set('refine',         'prob')
     end associate
   end subroutine generate_microchunk_match_cline
 
@@ -905,6 +907,7 @@ contains
       call cline%set('ncls',     DEFAULT_NCLS)
       call cline%set('lpstop',   DEFAULT_REF_LP)
       call cline%set('walltime', DEFAULT_WALLTIME)
+      call cline%set('refine',   'prob')
     end associate
   end subroutine generate_refchunk_cline
 
@@ -1139,8 +1142,12 @@ contains
   ! the final selected particle count, and writes the REJECTION_FINISHED
   ! sentinel. When called on the reference chunk, also captures the
   ! class-average stack path and box size into self%refs and self%box for use
-  ! by match chunk generation. No-op if the chunk is not yet complete or has
-  ! already been rejected. Cleans up all allocations on exit.
+  ! by match chunk generation.
+  ! When DEBUG=.true., also writes a companion _deselected project containing
+  ! only the rejected classes (state=1 for rejected, state=0 for selected) with
+  ! particle states restored to their pre-rejection values, for inspection.
+  ! No-op if the chunk is not yet complete or has already been rejected.
+  ! Cleans up all allocations on exit.
   subroutine reject_cavgs( self, chunk, label )
     class(microchunked2D), intent(inout) :: self
     type(chunk2D),    intent(inout) :: chunk
@@ -1148,7 +1155,7 @@ contains
 
     type(image), allocatable :: cavg_imgs(:)
     logical,     allocatable :: l_rejected(:)
-    integer,     allocatable :: states(:)
+    integer,     allocatable :: states(:), ptcl_states(:)
     type(sp_project)         :: spproj
     type(string)             :: stkname
     integer(timer_int_kind)  :: t0
@@ -1198,6 +1205,7 @@ contains
     ! Propagate rejection flags into project states
     allocate(states(ncls))
     states = spproj%os_cls2D%get_all_asint('state')
+    if( DEBUG ) ptcl_states = spproj%os_ptcl2D%get_all_asint('state')
     where( l_rejected ) states = 0
     call spproj%os_cls2D%set_all('state', states)
     call spproj%os_cls3D%set_all('state', states)
@@ -1211,10 +1219,23 @@ contains
       label%to_char(), ' # ', chunk%id, ' : ', &
       chunk%nptcls_selected, '/', chunk%nptcls, ' PARTICLES SELECTED'
 
+    if( DEBUG ) then
+      l_rejected = .not. l_rejected
+      states     = 1
+      where( l_rejected ) states = 0
+      call spproj%os_cls2D%set_all('state', states)
+      call spproj%os_cls3D%set_all('state', states)
+      call spproj%os_ptcl2D%set_all('state', ptcl_states)
+      call spproj%os_ptcl3D%set_all('state', ptcl_states)
+      call spproj%map2ptcls_state()
+      call spproj%write(swap_suffix(chunk%projfile, '_deselected'//METADATA_EXT, METADATA_EXT))
+    end if
+
     ! Cleanup
     call dealloc_imgarr(cavg_imgs)
     call spproj%kill()
     deallocate(l_rejected, states)
+    if( DEBUG ) deallocate(ptcl_states)
     call timer_stop(t0, string('reject_cavgs'))
 
   contains
@@ -1226,23 +1247,16 @@ contains
     subroutine write_cavgs( stkpath, suffix, selected )
       type(string), intent(in) :: stkpath, suffix
       logical,      intent(in) :: selected
-      type(stack_io) :: stkio_r
       type(string)   :: out_stkname
-      type(image)    :: img
       integer        :: istk, icls
       out_stkname = swap_suffix(stkpath, suffix, string('.mrc'))
-  !    call stkio_r%open(stkpath, smpd, 'read', bufsz=1)
       istk = 0
       do icls = 1, ncls
         if( selected .eqv. (.not. l_rejected(icls)) ) then
           istk = istk + 1
-       !   call img%new([ldim(1), ldim(2), 1], smpd, wthreads=.false.)
-        !  call stkio_r%read(icls, img)
           call cavg_imgs(icls)%write(out_stkname, istk)
-       !   call img%kill()
         end if
       end do
-     ! call stkio_r%close()
     end subroutine write_cavgs
 
   end subroutine reject_cavgs

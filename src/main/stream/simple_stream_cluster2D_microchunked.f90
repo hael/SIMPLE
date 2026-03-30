@@ -79,11 +79,10 @@ contains
             call sleep(WAITTIME)
         end do
         ! --- combine match results and finalise ---
-            ! Build combined projfile path and skip if already written
-
+        call spproj_glob%kill()
+        call del_file(params%projfile)
         call chunked_2D%combine_completed_match_chunks(params%projfile)
         call chunked_2D%kill()
-        call spproj_glob%kill()
         call simple_rmdir(STDERROUT_DIR)
         call simple_rmdir(DIR_PROJS)
         call simple_rmdir(DIR_SNAPSHOT)

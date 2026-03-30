@@ -1,4 +1,4 @@
-!@descr: utilities for microchunk-based 2D clustering in stream
+!@descr: scoring and rejection utilities for microchunk-based 2D classification
 !==============================================================================
 ! MODULE: simple_stream_microchunk_utils
 !
@@ -16,9 +16,16 @@
 !     3. reject_basic    — removes classes with low population or poor
 !                          resolution directly from a cls2D oris object.
 !
+!   All rejection routines set l_rejected elements to .true. and never clear
+!   them, so they may be applied cumulatively.
+!
 ! SCORING:
 !   calc_rejection_score — computes a weighted sum of SNR, signal presence,
 !                          and contrast for a single class-average image.
+!
+! DEBUG LOGGING:
+!   When DEBUG = .true., each rejection step logs the individual class indices
+!   rejected to logfhandle via debug_log_rejected (private).
 !
 ! REJECTION THRESHOLDS (module parameters):
 !   VARIANCE_MAX_Z  — z-score upper bound on class variance             (3.0)
@@ -48,23 +55,23 @@ module simple_stream_microchunk_utils
   private
   public :: reject_outliers, reject_auto, reject_basic, calc_rejection_score
 #include "simple_local_flags.inc"
-
+  logical, parameter :: DEBUG           = .true.
   ! Outlier rejection z-score thresholds
-  real, parameter :: VARIANCE_MAX_Z  =  3.0
-  real, parameter :: VARIANCE_MIN_Z  = -1.0
-  real, parameter :: MAXPIXEL_Z      =  3.0
-  real, parameter :: CEN_EDGE_SNR_Z  = -2.0
-  real, parameter :: SKEW_Z          = -2.0
+  real,    parameter :: VARIANCE_MAX_Z  =  3.0
+  real,    parameter :: VARIANCE_MIN_Z  = -1.0
+  real,    parameter :: MAXPIXEL_Z      =  3.0
+  real,    parameter :: CEN_EDGE_SNR_Z  = -2.0
+  real,    parameter :: SKEW_Z          = -2.0
 
   ! Auto rejection composite score weights and percentile cut
-  real, parameter :: AUTO_SNR_W      =  0.5
-  real, parameter :: AUTO_PRESENCE_W =  0.02
-  real, parameter :: AUTO_CONTRAST_W =  5.0
-  real, parameter :: AUTO_THRESHOLD  =  10.0  ! percentile within top-50%
+  real,    parameter :: AUTO_SNR_W      =  0.5
+  real,    parameter :: AUTO_PRESENCE_W =  0.02
+  real,    parameter :: AUTO_CONTRAST_W =  5.0
+  real,    parameter :: AUTO_THRESHOLD  =  10.0  ! percentile within top-50%
 
   ! Basic rejection hard limits
-  real, parameter :: BASIC_MIN_POP   =  10.0
-  real, parameter :: BASIC_MAX_RES   =  30.0
+  real,    parameter :: BASIC_MIN_POP   =  10.0
+  real,    parameter :: BASIC_MAX_RES   =  30.0
 
 contains
 
@@ -93,12 +100,15 @@ contains
       stats(icls) = imgs(icls)%variance()
     end do
     zscores = robust_z_scores(stats)
-    where( stats    == 0.0           ) l_rejected = .true.
-    where( zscores  >  VARIANCE_MAX_Z) l_rejected = .true.
-    where( zscores  <  VARIANCE_MIN_Z) l_rejected = .true.
-    write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (VARIANCE=0)  :', count(stats   == 0.0)
+    where( stats    == 0.0            ) l_rejected = .true.
+    where( zscores  >  VARIANCE_MAX_Z ) l_rejected = .true.
+    where( zscores  <  VARIANCE_MIN_Z ) l_rejected = .true.
+    write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (VARIANCE=0)  :', count(stats == 0.0)
+    call debug_log_rejected( stats == 0.0 )
     write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (VARIANCE>)   :', count(zscores >  VARIANCE_MAX_Z)
+    call debug_log_rejected( zscores > VARIANCE_MAX_Z )
     write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (VARIANCE<)   :', count(zscores <  VARIANCE_MIN_Z)
+    call debug_log_rejected( zscores < VARIANCE_MIN_Z )
     deallocate(stats, zscores)
 
     ! Maximum pixel value: reject classes with anomalously bright pixels
@@ -110,6 +120,7 @@ contains
     zscores = robust_z_scores(stats)
     where( zscores > MAXPIXEL_Z ) l_rejected = .true.
     write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (MAXPIX)      :', count(zscores > MAXPIXEL_Z)
+    call debug_log_rejected( zscores > MAXPIXEL_Z )
     deallocate(stats, zscores)
 
     ! Centre/edge SNR: reject classes with poor signal localisation
@@ -120,6 +131,7 @@ contains
     zscores = robust_z_scores(stats)
     where( zscores < CEN_EDGE_SNR_Z ) l_rejected = .true.
     write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (CEN/EDGE SNR):', count(zscores < CEN_EDGE_SNR_Z)
+    call debug_log_rejected( zscores < CEN_EDGE_SNR_Z )
     deallocate(stats, zscores)
 
     ! Skewness: reject classes with anomalously negative skew
@@ -130,6 +142,7 @@ contains
     zscores = robust_z_scores(stats)
     where( zscores < SKEW_Z ) l_rejected = .true.
     write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (SKEW)        :', count(zscores < SKEW_Z)
+    call debug_log_rejected( zscores < SKEW_Z )
     deallocate(stats, zscores)
   end subroutine reject_outliers
 
@@ -174,6 +187,11 @@ contains
       if( stats(icls) < threshold ) l_rejected(indices(icls)) = .true.
     end do
     write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (AUTO)        :', count(stats < threshold)
+    if( DEBUG ) then
+      do icls = 1, size(indices)
+        if( stats(icls) < threshold ) write(logfhandle,'(A,I4)') '  REJECTED :', indices(icls)
+      end do
+    endif
 
     deallocate(indices, indices_all, stats, sorted_stats)
 
@@ -203,10 +221,14 @@ contains
     stats = cls2D%get_all('pop')
     if( size(stats) /= size(l_rejected) ) THROW_HARD('pop and rejected arrays differ in size')
     where( stats < BASIC_MIN_POP ) l_rejected = .true.
+    write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (POP)        :', count(stats < BASIC_MIN_POP)
+    call debug_log_rejected( stats < BASIC_MIN_POP )
     deallocate(stats)
     stats = cls2D%get_all('res')
     if( size(stats) /= size(l_rejected) ) THROW_HARD('res and rejected arrays differ in size')
     where( stats > BASIC_MAX_RES ) l_rejected = .true.
+    write(logfhandle,'(A,I4)') '>>> CLASSES REJECTED (RES)        :', count(stats > BASIC_MAX_RES)
+    call debug_log_rejected( stats > BASIC_MAX_RES )
     deallocate(stats)
   end subroutine reject_basic
 
@@ -220,5 +242,14 @@ contains
                          + presence_w * max(0.0, img%presence())    &
                          + contrast_w * img%contrast()
   end function calc_rejection_score
+
+  subroutine debug_log_rejected( mask )
+    logical, intent(in) :: mask(:)
+    integer :: i
+    if( .not. DEBUG ) return
+    do i = 1, size(mask)
+      if( mask(i) ) write(logfhandle,'(A,I4)') '  REJECTED :', i
+    end do
+  end subroutine debug_log_rejected
 
 end module simple_stream_microchunk_utils
