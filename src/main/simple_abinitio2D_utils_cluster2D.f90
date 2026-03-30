@@ -170,7 +170,7 @@ contains
         endif
         if( trim(params%refine) == 'prob' )then
             if( istage < PROBREFINE_STAGE )then
-                refine = 'shc_smpl'
+                refine = 'snhc_smpl'
             else
                 refine = 'prob'
             endif
