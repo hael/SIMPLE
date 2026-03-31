@@ -206,6 +206,8 @@ type :: polarft_calc
     procedure, private :: read_pft_array
     procedure, private :: open_ctf2_array_for_read
     procedure, private :: transfer_ctf2_array_buffer
+    procedure          :: assemble_projected_refs_from_parts
+    procedure, private :: read_ref_pfts_range
 end type polarft_calc
 
 interface
@@ -875,6 +877,18 @@ interface
         integer,  intent(in)    :: funit, dims(4)
         real(sp), intent(inout) :: buffer(dims(1),dims(2):dims(3),dims(4))
     end subroutine transfer_ctf2_array_buffer
+
+    module subroutine assemble_projected_refs_from_parts( self, nparts, numlen )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: nparts, numlen
+    end subroutine assemble_projected_refs_from_parts
+
+    module subroutine read_ref_pfts_range( self, fname, iseven, iref_from, iref_to )
+        class(polarft_calc), intent(inout) :: self
+        class(string),       intent(in)    :: fname
+        logical,             intent(in)    :: iseven
+        integer,             intent(in)    :: iref_from, iref_to
+    end subroutine read_ref_pfts_range
 
 end interface
 

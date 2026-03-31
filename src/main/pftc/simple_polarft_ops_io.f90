@@ -629,4 +629,69 @@ contains
         endif
     end subroutine transfer_ctf2_array_buffer
 
+    ! Reads an even or odd projection-range binary written by vol_pad2ref_pfts_write_range
+    ! and places the payload at the given global reference positions in pfts_refs_even/odd.
+    module subroutine read_ref_pfts_range( self, fname, iseven, iref_from, iref_to )
+        class(polarft_calc), intent(inout) :: self
+        class(string),       intent(in)    :: fname
+        logical,             intent(in)    :: iseven
+        integer,             intent(in)    :: iref_from, iref_to
+        complex(sp), allocatable :: buf(:,:,:)
+        integer :: funit, io_stat, dims(4), klo, khi
+        if( .not. file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist; read_ref_pfts_range')
+        call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('read_ref_pfts_range; fopen failed: '//fname%to_char(), io_stat)
+        read(unit=funit, pos=1) dims
+        if( dims(1) /= self%pftsz )then
+            write(logfhandle,*) 'pftsz mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', self%pftsz, ' found: ', dims(1)
+            THROW_HARD('Incompatible header; read_ref_pfts_range')
+        endif
+        if( dims(4) /= iref_to - iref_from + 1 )then
+            write(logfhandle,*) 'nrefs mismatch in: ', trim(fname%to_char())
+            write(logfhandle,*) 'expected: ', iref_to-iref_from+1, ' found: ', dims(4)
+            THROW_HARD('Incompatible header; read_ref_pfts_range')
+        endif
+        allocate(buf(dims(1), dims(2):dims(3), dims(4)))
+        read(unit=funit, pos=(sizeof(dims)+1)) buf
+        call fclose(funit)
+        klo = max(self%kfromto(1), dims(2))
+        khi = min(self%interpklim, dims(3))
+        if( klo <= khi )then
+            if( iseven )then
+                self%pfts_refs_even(:, klo:khi, iref_from:iref_to) = buf(:, klo:khi, :)
+            else
+                self%pfts_refs_odd( :, klo:khi, iref_from:iref_to) = buf(:, klo:khi, :)
+            endif
+        endif
+        deallocate(buf)
+    end subroutine read_ref_pfts_range
+
+    ! Reassembles pfts_refs_even/odd from per-state/per-part files produced by workers
+    ! that called vol_pad2ref_pfts_write_range.  The partition over nspace is re-derived
+    ! with split_nobjs_even so that it exactly mirrors the worker split.
+    module subroutine assemble_projected_refs_from_parts( self, nparts, numlen )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: nparts, numlen
+        integer, allocatable :: parts(:,:)
+        type(string) :: fname
+        integer :: ipart, s, iref_from, iref_to
+        if( .not. self%existence ) THROW_HARD('polarft_calc does not exist; assemble_projected_refs_from_parts')
+        parts = split_nobjs_even(self%p_ptr%nspace, nparts)
+        do s = 1, self%p_ptr%nstates
+            do ipart = 1, nparts
+                iref_from = (s - 1) * self%p_ptr%nspace + parts(ipart, 1)
+                iref_to   = (s - 1) * self%p_ptr%nspace + parts(ipart, 2)
+                fname = string(POLAR_REFS_FBODY)//'_s'//int2str_pad(s,2)  &
+                      & //'_part'//int2str_pad(ipart, numlen)//'_even'//BIN_EXT
+                call self%read_ref_pfts_range(fname, .true.,  iref_from, iref_to)
+                fname = string(POLAR_REFS_FBODY)//'_s'//int2str_pad(s,2)  &
+                      & //'_part'//int2str_pad(ipart, numlen)//'_odd'//BIN_EXT
+                call self%read_ref_pfts_range(fname, .false., iref_from, iref_to)
+            end do
+        end do
+        call fname%kill
+        deallocate(parts)
+    end subroutine assemble_projected_refs_from_parts
+
 end submodule simple_polarft_ops_io

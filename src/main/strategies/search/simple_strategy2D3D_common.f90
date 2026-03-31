@@ -25,6 +25,8 @@ public :: prep2Dref, prepare_refs_sigmas_ptcls, calc_2Dref_offset
 public :: calc_3Drec
 ! Online reconstruction
 public :: init_rec, prep_imgs4rec, update_rec, finalize_rec
+! Volume read/filter helpers used by reproject strategy
+public :: read_mask_filter_refvols, calcrefvolshift_and_mapshifts2ptcls
 private
 #include "simple_local_flags.inc"
 
