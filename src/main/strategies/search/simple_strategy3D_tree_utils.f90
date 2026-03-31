@@ -10,7 +10,7 @@
 ! Still no exhaustive evaluation, but instead of one nearest tree, take the 2 or 3 nearest trees and descend each probabilistically 
 ! across states. This is much safer if the previous orientation is occasionally off.
 ! ***  Greedy late-stage version
-! A ptree_neigh_states_greedy using descend_tree_greedy instead of descend_tree_prob. Use this after the classes are already fairly stable.
+! A tree_neigh_states_greedy using descend_tree_greedy instead of descend_tree_prob. Use this after the classes are already fairly stable.
 module simple_strategy3D_tree_utils
 use simple_core_module_api
 use simple_strategy_tree_helpers

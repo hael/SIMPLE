@@ -23,7 +23,7 @@ integer, parameter :: REFINE3D_ROUTE_TREE_CAVGS       = 6
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR       = 7
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR_CAVGS = 8
 integer, parameter :: SHC_PTREE_NSPACES(2)            = [50,2000]
-integer, parameter :: PTREE_NEIGH_NSPACES(2)          = [125,5000]
+integer, parameter :: TREE_NEIGH_NSPACES(2)          = [125,5000]
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin, cavgw
@@ -152,7 +152,7 @@ contains
         if( is_tree_route(route) )then
             if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_ptree'
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
-            if( istage >  PHASES(2)        ) cfg%refine = 'ptree_neigh'
+            if( istage >  PHASES(2)        ) cfg%refine = 'tree_neigh'
         else
             if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_smpl'
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
@@ -345,9 +345,9 @@ contains
             case('shc_ptree')
                 cfg%inspace_sub = SHC_PTREE_NSPACES(1)
                 cfg%inspace     = SHC_PTREE_NSPACES(2)
-            case('ptree_neigh','prob_neigh')
-                cfg%inspace_sub = PTREE_NEIGH_NSPACES(1)
-                cfg%inspace     = PTREE_NEIGH_NSPACES(2)
+            case('tree_neigh','prob_neigh')
+                cfg%inspace_sub = TREE_NEIGH_NSPACES(1)
+                cfg%inspace     = TREE_NEIGH_NSPACES(2)
         end select
     end subroutine apply_refine3D_route_overrides
 

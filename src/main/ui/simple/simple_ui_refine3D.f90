@@ -160,7 +160,7 @@ contains
         call refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
         call refine3D%add_input(UI_SRCH, nstates, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, objfun, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree|ptree_neigh_states|shc_ptree){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree|ptree_neigh_states|shc_ptree){shc}',&
+        call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree|tree_neigh_states|shc_ptree){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree|tree_neigh_states|shc_ptree){shc}',&
         &.false., 'shc', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'neigh_type', 'multi', 'Neighborhood construction', 'Neighborhood construction for refine=prob_neigh(geom|subspace_srch|ptree_srch){subspace_srch}', '(geom|subspace_srch|ptree_srch){subspace_srch}', &
         &.false., 'subspace_srch', gui_submenu="search")
