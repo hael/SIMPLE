@@ -200,8 +200,8 @@ contains
 
     !>  \brief  returns the search range for the point-group
     function get_eullims( self ) result( eullims )
-        class(sym), intent(inout) :: self !< this instance
-        real                      :: eullims(3,2) !< 3-axis search range
+        class(sym), intent(in) :: self !< this instance
+        real                   :: eullims(3,2) !< 3-axis search range
         eullims = self%eullims
     end function get_eullims
 

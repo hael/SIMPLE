@@ -35,10 +35,10 @@ integer,          parameter :: MAXITS_BETWEEN        = 10                   ! De
 
 ! singleton variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis    = .false., l_symran        = .false., l_sym                = .false. 
+logical          :: l_srch4symaxis    = .false., l_symran        = .false., l_tree               = .false.
 logical          :: l_update_frac_dyn = .false., l_polar         = .false., l_ini3D              = .false.
 logical          :: l_lpauto          = .false., l_nsample_given = .false., l_nsample_stop_given = .false.
-logical          :: l_automsk         = .false., l_tree          = .false.
+logical          :: l_automsk         = .false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
@@ -112,7 +112,6 @@ contains
         pgrp_start     = lowercase(trim(params%pgrp_start))
         l_srch4symaxis = pgrp .ne. pgrp_start
         l_symran       = .false.
-        l_sym          = l_srch4symaxis
         if( pgrp_start.ne.'c1' .or. pgrp.ne.'c1' )then
             se1 = sym(pgrp_start%to_char())
             se2 = sym(pgrp%to_char())
@@ -131,7 +130,7 @@ contains
 
     subroutine set_lplims_from_frcs( params, spproj, l_cavgs, lpstart, lpstop )
         class(parameters), intent(inout) :: params
-        class(sp_project), intent(inout) :: spproj
+        class(sp_project), intent(in)    :: spproj
         logical,           intent(in)    :: l_cavgs
         real, optional,    intent(in)    :: lpstart, lpstop
         real,         allocatable :: frcs_avg(:)
