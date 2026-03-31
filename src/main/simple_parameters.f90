@@ -128,6 +128,7 @@ type :: parameters
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     ! default initialization is done in the init_strings method below
+    type(string)              :: blocktree            !< block tree file for pool 2D(.bin)
     type(string)              :: boxfile              !< file with EMAN particle coordinates(.txt)
     type(string)              :: boxtab               !< table (text file) of files with EMAN particle coordinates(.txt)
     type(string)              :: ciffile              !< xPDB/mmCIF file          
