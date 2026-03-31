@@ -1789,28 +1789,15 @@ contains
                         self%ncls_sub = max(self%ncls_sub, 10)                      ! floored at 10
                     endif
                 case('shc_ptree')
-                    if( .not. cline%defined('nspace_sub') )then
-                        self%nspace_sub = 50
-                    else
-                        self%nspace_sub = max(self%nspace_sub, 50)
-                    endif
-                    if( .not. cline%defined('nspace') )then
-                        self%nspace = 2000
-                    else
-                        self%nspace = max(self%nspace, 2000)
-                    endif
+                    if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 50
+                    if( .not. cline%defined('nspace')     ) self%nspace     = 2000
+                case('tree_neigh','tree_neigh_states')
+                    if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 125
+                    if( .not. cline%defined('nspace')     ) self%nspace     = 5000
                 case DEFAULT
-                    if( .not. cline%defined('nspace_sub') )then
-                        self%nspace_sub = 500
-                    else
-                        self%nspace_sub = max(self%nspace_sub, 500)
-                    endif
-                    if( .not. cline%defined('nspace') )then
-                        self%nspace = 20000
-                    else
-                        self%nspace = max(self%nspace, 20000)
-                    endif
-                    if( .not. cline%defined('athres') ) self%athres = 10.
+                    if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500
+                    if( .not. cline%defined('nspace')     ) self%nspace     = 20000
+                    if( .not. cline%defined('athres')     ) self%athres     = 10.
             end select
             self%l_neigh = .true.
         endif
