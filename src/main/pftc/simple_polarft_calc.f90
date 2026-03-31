@@ -3,7 +3,7 @@ module simple_polarft_calc
 use simple_pftc_api
 implicit none
 
-public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D, vol_pad2ref_pfts
+public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D, vol_pad2ref_pfts, vol_pad2ref_pfts_write_range
 private
 #include "simple_local_flags.inc"
 
@@ -304,6 +304,16 @@ interface
         logical,             intent(in)    :: iseven
         logical,             intent(in)    :: mask(:)
     end subroutine vol_pad2ref_pfts
+
+    module subroutine vol_pad2ref_pfts_write_range(self, vol_pad, eulspace, state, iproj_from, iproj_to, mask, tmpl_fname)
+        use simple_projector, only: projector
+        class(polarft_calc), intent(inout) :: self
+        class(projector),    intent(in)    :: vol_pad
+        class(oris),         intent(inout) :: eulspace
+        integer,             intent(in)    :: state, iproj_from, iproj_to
+        logical,             intent(in)    :: mask(:)
+        class(string),       intent(in)    :: tmpl_fname
+    end subroutine vol_pad2ref_pfts_write_range
 
     ! ===== GETTERS + POINTER ACCESSORS =====
 

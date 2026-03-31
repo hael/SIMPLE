@@ -4,6 +4,59 @@ implicit none
 #include "simple_local_flags.inc"
 contains
 
+    module subroutine vol_pad2ref_pfts_write_range(self, vol_pad, eulspace, state, iproj_from, iproj_to, mask, tmpl_fname)
+        use simple_projector, only: projector
+        class(polarft_calc), intent(inout) :: self
+        class(projector),    intent(in)    :: vol_pad
+        class(oris),         intent(inout) :: eulspace
+        integer,             intent(in)    :: state, iproj_from, iproj_to
+        logical,             intent(in)    :: mask(:)
+        class(string),       intent(in)    :: tmpl_fname
+        integer :: funit_e, funit_o, nprojs_write, iref_from, iref_to, i
+        if( .not. self%existence ) THROW_HARD('polarft_calc does not exist; vol_pad2ref_pfts_write_range')
+        if( state < 1 .or. state > self%p_ptr%nstates )then
+            write(logfhandle,*) 'state, nstates: ', state, self%p_ptr%nstates
+            THROW_HARD('state out of range; vol_pad2ref_pfts_write_range')
+        endif
+        if( iproj_from < 1 .or. iproj_to > self%p_ptr%nspace .or. iproj_from > iproj_to )then
+            write(logfhandle,*) 'iproj_from, iproj_to, nspace: ', iproj_from, iproj_to, self%p_ptr%nspace
+            THROW_HARD('projection range out of bounds; vol_pad2ref_pfts_write_range')
+        endif
+        if( size(mask) < self%kfromto(2) )then
+            write(logfhandle,*) 'size(mask), kfromto(2): ', size(mask), self%kfromto(2)
+            THROW_HARD('mask too short for requested k-range; vol_pad2ref_pfts_write_range')
+        endif
+        iref_from = (state - 1) * self%p_ptr%nspace + iproj_from
+        iref_to   = (state - 1) * self%p_ptr%nspace + iproj_to
+        call vol_pad2ref_pfts(self, vol_pad, eulspace, state, .true.,  mask)
+        call vol_pad2ref_pfts(self, vol_pad, eulspace, state, .false., mask)
+        nprojs_write = iproj_to - iproj_from + 1
+        call open_pft_or_ctf2_array_for_write(tmpl_fname//'_even'//BIN_EXT, funit_e)
+        call open_pft_or_ctf2_array_for_write(tmpl_fname//'_odd'//BIN_EXT,  funit_o)
+        !$omp parallel do default(shared) private(i) num_threads(2) schedule(static)
+        do i = 1, 2
+            select case(i)
+                case(1)
+                    call write_ref_pft_range_local(funit_e, self%pfts_refs_even, nprojs_write)
+                case(2)
+                    call write_ref_pft_range_local(funit_o, self%pfts_refs_odd,  nprojs_write)
+            end select
+        end do
+        !$omp end parallel do
+        call fclose(funit_e)
+        call fclose(funit_o)
+
+    contains
+
+        subroutine write_ref_pft_range_local(funit, array, nrefs_out)
+            integer,     intent(in) :: funit, nrefs_out
+            complex(sp), intent(in) :: array(self%pftsz,self%kfromto(1):self%interpklim,self%nrefs)
+            write(unit=funit,pos=1) [self%pftsz, self%kfromto(1), self%interpklim, nrefs_out]
+            write(unit=funit,pos=(4*sizeof(funit)+1)) array(:,:,iref_from:iref_to)
+        end subroutine write_ref_pft_range_local
+        
+    end subroutine vol_pad2ref_pfts_write_range
+
     !>  \brief  Converts the polar references to a cartesian grid
     module subroutine polar_cavger_refs2cartesian( self, cavgs, which )
         class(polarft_calc),     intent(in)    :: self
