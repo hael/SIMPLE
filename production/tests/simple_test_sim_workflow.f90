@@ -3,7 +3,7 @@ use simple_stream_api
 use simple_commanders_project_core, only: commander_new_project
 use simple_commanders_project_mov,  only: commander_import_movies
 use simple_commanders_atoms,        only: commander_pdb2mrc
-use simple_commanders_volops,       only: commander_reproject
+use simple_commanders_reproject,    only: commander_reproject
 use simple_commanders_pick,         only: commander_make_pickrefs, commander_pick
 use simple_commanders_sim,          only: commander_simulate_particles, commander_simulate_movie
 use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct

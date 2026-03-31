@@ -388,6 +388,9 @@ contains
         call build%init_params_and_build_spproj(cline, params)
         ! polar toolboxes needed on master for reference assembly
         if( params%l_polar )then
+            ! Ensure scheduled worker command lines carry explicit angular-space size.
+            ! This avoids any fallback to parser defaults in downstream private workers.
+            call cline%set('nspace', params%nspace)
             call build%build_general_tbox(params, cline, do3d=.true.)
             call build%pftc%new(params, 1, [1,1], params%kfromto)
         endif

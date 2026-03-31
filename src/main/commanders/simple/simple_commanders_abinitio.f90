@@ -3,7 +3,7 @@ module simple_commanders_abinitio
 use simple_commanders_api
 use simple_abinitio_utils
 use simple_procimgstk,          only: shift_imgfile
-use simple_commanders_volops,   only: commander_reproject
+use simple_commanders_reproject, only: commander_reproject
 use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D
 use simple_commanders_rec,      only: commander_rec3D, commander_rec3D
 use simple_cluster_seed,        only: gen_labelling

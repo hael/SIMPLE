@@ -160,7 +160,7 @@ subroutine exec_test_opt_lp( self, cline )
     use simple_cmdline,           only: cmdline
     use simple_builder,           only: builder
     use simple_parameters,        only: parameters
-    use simple_commanders_volops, only: commander_reproject
+    use simple_commanders_reproject, only: commander_reproject
     use simple_image,             only: image
     use simple_butterworth,       only: butterworth_filter
     use simple_math,              only: create_hist_vector

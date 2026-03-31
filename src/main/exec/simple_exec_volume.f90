@@ -1,7 +1,8 @@
 !@descr: execution of volume manipulation commanders
 module simple_exec_volume
 use simple_cmdline,           only: cmdline
-use simple_commanders_volops, only: commander_centervol, commander_reproject, commander_volops
+use simple_commanders_volops,    only: commander_centervol, commander_volops
+use simple_commanders_reproject, only: commander_reproject
 implicit none
 
 public :: exec_volume_commander

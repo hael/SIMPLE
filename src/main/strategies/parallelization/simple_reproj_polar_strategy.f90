@@ -3,7 +3,7 @@
 !                to project and write the assigned [fromp,top] range of orientations for
 !                every state into per-state/per-part binary files.
 !        Master: assembles the per-part files back into a full pftc ready for alignment.
-module simple_reproject_strategy
+module simple_reproj_polar_strategy
 use simple_core_module_api
 use simple_builder,              only: builder
 use simple_parameters,           only: parameters
@@ -14,7 +14,7 @@ use simple_polarft_calc,         only: vol_pad2ref_pfts_write_range
 use simple_strategy2D3D_common,  only: read_mask_filter_refvols, calcrefvolshift_and_mapshifts2ptcls
 implicit none
 
-public  :: reproject_strategy, reproject_inmem_strategy, reproject_distr_strategy, create_reproject_strategy
+public  :: reproj_polar_strategy, reproject_inmem_strategy, reproject_distr_strategy, create_reproj_polar_strategy
 private
 #include "simple_local_flags.inc"
 
@@ -22,16 +22,16 @@ private
 ! Strategy interface
 ! --------------------------------------------------------------------
 
-type, abstract :: reproject_strategy
+type, abstract :: reproj_polar_strategy
 contains
     procedure(init_interface),      deferred :: initialize
     procedure(exec_interface),      deferred :: execute
     procedure(finalize_interface),  deferred :: finalize_run
     procedure(cleanup_interface),   deferred :: cleanup
-end type reproject_strategy
+end type reproj_polar_strategy
 
 ! Worker / shared-memory (runs one part)
-type, extends(reproject_strategy) :: reproject_inmem_strategy
+type, extends(reproj_polar_strategy) :: reproject_inmem_strategy
 contains
     procedure :: initialize   => inmem_initialize
     procedure :: execute      => inmem_execute
@@ -40,7 +40,7 @@ contains
 end type reproject_inmem_strategy
 
 ! Distributed master (schedules workers, then assembles)
-type, extends(reproject_strategy) :: reproject_distr_strategy
+type, extends(reproj_polar_strategy) :: reproject_distr_strategy
     type(qsys_env) :: qenv
     type(chash)    :: job_descr
     integer        :: nthr_master = 1
@@ -53,32 +53,32 @@ end type reproject_distr_strategy
 
 abstract interface
     subroutine init_interface(self, params, build, cline)
-        import :: reproject_strategy, parameters, builder, cmdline
-        class(reproject_strategy), intent(inout) :: self
+        import :: reproj_polar_strategy, parameters, builder, cmdline
+        class(reproj_polar_strategy), intent(inout) :: self
         type(parameters),          intent(inout) :: params
         type(builder),             intent(inout) :: build
         class(cmdline),            intent(inout) :: cline
     end subroutine init_interface
 
     subroutine exec_interface(self, params, build, cline)
-        import :: reproject_strategy, parameters, builder, cmdline
-        class(reproject_strategy), intent(inout) :: self
+        import :: reproj_polar_strategy, parameters, builder, cmdline
+        class(reproj_polar_strategy), intent(inout) :: self
         type(parameters),          intent(inout) :: params
         type(builder),             intent(inout) :: build
         class(cmdline),            intent(inout) :: cline
     end subroutine exec_interface
 
     subroutine finalize_interface(self, params, build, cline)
-        import :: reproject_strategy, parameters, builder, cmdline
-        class(reproject_strategy), intent(inout) :: self
+        import :: reproj_polar_strategy, parameters, builder, cmdline
+        class(reproj_polar_strategy), intent(inout) :: self
         type(parameters),          intent(in)    :: params
         type(builder),             intent(inout) :: build
         class(cmdline),            intent(inout) :: cline
     end subroutine finalize_interface
 
     subroutine cleanup_interface(self, params, build, cline)
-        import :: reproject_strategy, parameters, builder, cmdline
-        class(reproject_strategy), intent(inout) :: self
+        import :: reproj_polar_strategy, parameters, builder, cmdline
+        class(reproj_polar_strategy), intent(inout) :: self
         type(parameters),          intent(in)    :: params
         type(builder),             intent(inout) :: build
         class(cmdline),            intent(inout) :: cline
@@ -91,9 +91,9 @@ contains
     ! Strategy selection
     ! --------------------------------------------------------------------
 
-    function create_reproject_strategy(cline) result(strategy)
+    function create_reproj_polar_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
-        class(reproject_strategy), allocatable :: strategy
+        class(reproj_polar_strategy), allocatable :: strategy
         if( cline%defined('nparts') .and. (.not. cline%defined('part')) )then
             allocate(reproject_distr_strategy :: strategy)
             if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED REPROJECT EXECUTION'
@@ -101,7 +101,7 @@ contains
             allocate(reproject_inmem_strategy :: strategy)
             if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SHARED-MEMORY REPROJECT EXECUTION'
         endif
-    end function create_reproject_strategy
+    end function create_reproj_polar_strategy
 
     ! =====================================================================
     ! WORKER (inmem) IMPLEMENTATION
@@ -159,7 +159,8 @@ contains
             call build%vol_pad%kill_expanded
             call part_tmpl%kill
         end do
-        call qsys_job_finished(params, string('simple_reproject_strategy :: reproject_exec'))
+        call build%pftc%kill
+        call qsys_job_finished(params, string('simple_reproj_polar_strategy :: reproject_exec'))
     end subroutine inmem_execute
 
     subroutine inmem_finalize_run(self, params, build, cline)
@@ -190,6 +191,10 @@ contains
         call set_master_num_threads(self%nthr_master, string('reproject'))
         ! Parse parameters and read the project (no particle stacking needed).
         call build%init_params_and_build_spproj(cline, params)
+        ! Ensure worker scripts get explicit orientation range metadata and do not
+        ! fall back to default nspace values.
+        call cline%set('nspace', params%nspace)
+        if( .not. cline%defined('top') ) call cline%set('top', params%nspace)
         ! Avoid nested directory structure for job scripts.
         call cline%set('mkdir', 'no')
         ! Partition nspace orientations across nparts workers: fromp/top will be
@@ -236,4 +241,4 @@ contains
         call self%job_descr%kill
     end subroutine distr_cleanup
 
-end module simple_reproject_strategy
+end module simple_reproj_polar_strategy

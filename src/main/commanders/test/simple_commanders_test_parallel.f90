@@ -24,6 +24,11 @@ type, extends(commander_base) :: commander_test_simd
     procedure :: execute      => exec_test_simd
 end type commander_test_simd
 
+type, extends(commander_base) :: commander_test_reproj_polar_distr
+    contains
+        procedure :: execute      => exec_test_reproj_polar_distr
+end type commander_test_reproj_polar_distr
+
 contains
 
 subroutine exec_test_coarrays( self, cline )
@@ -244,5 +249,86 @@ subroutine exec_test_simd( self, cline )
         end function func2
 
 end subroutine exec_test_simd
+
+subroutine exec_test_reproj_polar_distr( self, cline )
+    use simple_reproj_polar_strategy,  only: reproject_inmem_strategy
+    use simple_strategy2D3D_common,    only: read_mask_filter_reproject_refvols
+    use simple_parameters,             only: parameters
+    use simple_builder,                only: builder
+    use simple_map_reduce,             only: split_nobjs_even
+    class(commander_test_reproj_polar_distr), intent(inout) :: self
+    class(cmdline),                              intent(inout) :: cline
+    type(reproject_inmem_strategy) :: worker
+    type(cmdline)    :: cline_distr, cline_ref, cline_worker
+    type(parameters) :: params_distr, params_ref, params_worker
+    type(builder)    :: build_distr,  build_ref,  build_worker
+    complex(sp), allocatable :: pft_distr(:,:), pft_ref(:,:)
+    real    :: maxdiff, tol
+    integer :: iref, nrefs, pftsz, kfrom, kto, ipart
+    integer :: kfromto_distr(2), kfromto_ref(2)
+    integer, allocatable :: parts(:,:)
+    integer, parameter :: batchsz_ref = 1
+    if( .not. cline%defined('vol1')    ) THROW_HARD('test_reproj_polar_distr requires vol1')
+    if( .not. cline%defined('smpd')    ) THROW_HARD('test_reproj_polar_distr requires smpd')
+    if( .not. cline%defined('pgrp')    ) THROW_HARD('test_reproj_polar_distr requires pgrp')
+    if( .not. cline%defined('mskdiam') ) THROW_HARD('test_reproj_polar_distr requires mskdiam')
+    if( .not. cline%defined('nspace')  ) THROW_HARD('test_reproj_polar_distr requires nspace')
+    cline_distr = cline
+    call cline_distr%set('prg',   'reproj_polar')
+    call cline_distr%set('polar', 'yes')
+    call cline_distr%set('mkdir', 'no')
+    if( .not. cline_distr%defined('oritype')   ) call cline_distr%set('oritype',   'ptcl3D')
+    if( .not. cline_distr%defined('nparts')    ) call cline_distr%set('nparts',    2)
+    call params_distr%new(cline_distr)
+    parts = split_nobjs_even(params_distr%nspace, params_distr%nparts)
+    do ipart = 1, params_distr%nparts
+        cline_worker = cline_distr
+        call cline_worker%set('part',  ipart)
+        call cline_worker%set('fromp', parts(ipart,1))
+        call cline_worker%set('top',   parts(ipart,2))
+        call worker%initialize(params_worker, build_worker, cline_worker)
+        call worker%execute(params_worker, build_worker, cline_worker)
+        call worker%cleanup(params_worker, build_worker, cline_worker)
+        call build_worker%kill_general_tbox
+    enddo
+    nrefs = params_distr%nspace * params_distr%nstates
+    call build_distr%pftc%new(params_distr, nrefs, [1,1], params_distr%kfromto)
+    call build_distr%pftc%assemble_projected_refs_from_parts(params_distr%nparts, params_distr%numlen)
+    call build_distr%pftc%memoize_refs
+    cline_ref = cline_distr
+    call cline_ref%delete('nparts')
+    call cline_ref%delete('part')
+    call build_ref%init_params_and_build_general_tbox(cline_ref, params_ref)
+    call read_mask_filter_reproject_refvols(params_ref, build_ref, cline_ref, batchsz_ref)
+    nrefs         = build_distr%pftc%get_nrefs()
+    pftsz         = build_distr%pftc%get_pftsz()
+    kfromto_distr = build_distr%pftc%get_kfromto()
+    kfromto_ref   = build_ref%pftc%get_kfromto()
+    if( nrefs /= build_ref%pftc%get_nrefs() ) THROW_HARD('nrefs mismatch in test_reproj_polar_distr')
+    if( pftsz /= build_ref%pftc%get_pftsz() ) THROW_HARD('pftsz mismatch in test_reproj_polar_distr')
+    if( any(kfromto_distr /= kfromto_ref)   ) THROW_HARD('kfromto mismatch in test_reproj_polar_distr')
+    kfrom = kfromto_distr(1)
+    kto   = kfromto_distr(2)
+    allocate(pft_distr(pftsz,kfrom:kto), pft_ref(pftsz,kfrom:kto))
+    tol = 1.0e-5
+    maxdiff = 0.0
+    do iref = 1, nrefs
+        call build_distr%pftc%get_ref_pft(iref, .true.,  pft_distr)
+        call build_ref%pftc%get_ref_pft(  iref, .true.,  pft_ref)
+        maxdiff = max(maxdiff, maxval(abs(pft_distr - pft_ref)))
+        call build_distr%pftc%get_ref_pft(iref, .false., pft_distr)
+        call build_ref%pftc%get_ref_pft(  iref, .false., pft_ref)
+        maxdiff = max(maxdiff, maxval(abs(pft_distr - pft_ref)))
+    enddo
+    if( maxdiff > tol )then
+        THROW_HARD('test_reproj_polar_distr failed, maxdiff='//real2str(maxdiff)//' > tol='//real2str(tol))
+    endif
+    if( allocated(pft_distr) ) deallocate(pft_distr)
+    if( allocated(pft_ref)   ) deallocate(pft_ref)
+    if( allocated(parts)     ) deallocate(parts)
+    call build_ref%kill_general_tbox
+    call build_distr%kill_general_tbox
+    call simple_end('**** SIMPLE_TEST_REPROJ_POLAR_DISTR NORMAL STOP ****')
+end subroutine exec_test_reproj_polar_distr
 
 end module simple_commanders_test_parallel

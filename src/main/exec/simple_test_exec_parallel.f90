@@ -2,7 +2,7 @@
 module simple_test_exec_parallel
 use simple_cmdline,                  only: cmdline
 use simple_commanders_test_parallel, only: commander_test_coarrays, commander_test_openacc, &
-                                           commander_test_openmp, commander_test_simd
+                                           commander_test_openmp, commander_test_simd, commander_test_reproj_polar_distr
 implicit none
 
 public :: exec_test_parallel_commander
@@ -12,6 +12,7 @@ type(commander_test_coarrays) :: xcoarrays
 type(commander_test_openacc)  :: xopenacc
 type(commander_test_openmp)   :: xopenmp
 type(commander_test_simd)     :: xsimd
+type(commander_test_reproj_polar_distr) :: xreproj_polar_distr
 
 contains
 
@@ -32,6 +33,8 @@ contains
                 call xopenmp%execute(cline)
             case( 'simd' )
                 call xsimd%execute(cline)
+            case( 'reproj_polar_distr' )
+                call xreproj_polar_distr%execute(cline)
             case default
                 l_did_execute = .false.
         end select
