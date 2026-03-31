@@ -149,9 +149,9 @@ type :: polarft_calc
     ! ===== MEMO: simple_polarft_memo.f90
     procedure          :: memoize_sqsum_ptcl
     procedure          :: memoize_ptcls, memoize_refs
-    procedure, private :: kill_memoized_ptcls, kill_memoized_refs
-    procedure, private :: allocate_memoization_workspace, kill_memoization_workspace
-    procedure, private :: allocate_ptcls_memoization, allocate_refs_memoization
+    procedure, private :: kill_memo_ptcls, kill_memo_refs
+    procedure, private :: allocate_memo_workspace, kill_memo_workspace
+    procedure, private :: alloc_memo_ptcls, alloc_memo_refs
     ! ===== CORR: simple_polarft_corr.f90
     procedure          :: calc_corr_rot_shift
     procedure          :: calc_frc
@@ -516,29 +516,29 @@ interface
         class(polarft_calc), intent(inout) :: self
     end subroutine memoize_refs
 
-    module subroutine allocate_ptcls_memoization(self)
+    module subroutine alloc_memo_ptcls(self)
         class(polarft_calc), intent(inout) :: self
-    end subroutine allocate_ptcls_memoization
+    end subroutine alloc_memo_ptcls
 
-    module subroutine allocate_refs_memoization(self)
+    module subroutine alloc_memo_refs(self)
         class(polarft_calc), intent(inout) :: self
-    end subroutine allocate_refs_memoization
+    end subroutine alloc_memo_refs
 
-    module subroutine allocate_memoization_workspace(self)
+    module subroutine allocate_memo_workspace(self)
         class(polarft_calc), intent(inout) :: self
-    end subroutine allocate_memoization_workspace
+    end subroutine allocate_memo_workspace
 
-    module subroutine kill_memoized_ptcls(self)
+    module subroutine kill_memo_ptcls(self)
         class(polarft_calc), intent(inout) :: self
-    end subroutine kill_memoized_ptcls
+    end subroutine kill_memo_ptcls
 
-    module subroutine kill_memoized_refs(self)
+    module subroutine kill_memo_refs(self)
         class(polarft_calc), intent(inout) :: self
-    end subroutine kill_memoized_refs
+    end subroutine kill_memo_refs
 
-    module subroutine kill_memoization_workspace(self)
+    module subroutine kill_memo_workspace(self)
         class(polarft_calc), intent(inout) :: self
-    end subroutine kill_memoization_workspace
+    end subroutine kill_memo_workspace
 
     ! ===== CORR  =====
 

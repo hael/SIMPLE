@@ -114,6 +114,10 @@ contains
         self%ctfmats = 1.0
         self%with_ctf = .false.
         if( self%p_ptr%ctf .ne. 'no' ) self%with_ctf = .true.
+        ! Eagerly initialize memoization buffers/plans at construction time.
+        call self%allocate_memo_workspace
+        call self%alloc_memo_ptcls
+        call self%alloc_memo_refs
         ! flag existence
         self%existence = .true.
     end subroutine new
@@ -135,9 +139,9 @@ contains
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab,&
                 &self%argtransf, self%pfts_ptcls, self%polar, self%pfts_refs_even, self%pfts_refs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
-            call self%kill_memoized_ptcls
-            call self%kill_memoized_refs
-            call self%kill_memoization_workspace
+            call self%kill_memo_ptcls
+            call self%kill_memo_refs
+            call self%kill_memo_workspace
             nullify(self%sigma2_noise)
             self%p_ptr => null()
             self%existence = .false.
@@ -167,8 +171,7 @@ contains
                      &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                      &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),&
                      &self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
-            call self%kill_memoized_ptcls
-            call self%allocate_ptcls_memoization
+            call self%alloc_memo_ptcls
         endif
         self%pfts_ptcls    = zero
         self%ctfmats       = 1.0

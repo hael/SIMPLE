@@ -1800,6 +1800,10 @@ contains
                     if( .not. cline%defined('nspace')     ) self%nspace     = 20000
                     if( .not. cline%defined('athres')     ) self%athres     = 10.
             end select
+            ! round nspaces to nearest even number to prevent refspiral bugs
+            self%nspace_sub = round2even(real(self%nspace_sub))
+            self%nspace     = round2even(real(self%nspace    ))
+            ! set neigh flag
             self%l_neigh = .true.
         endif
         ! -- shift defaults

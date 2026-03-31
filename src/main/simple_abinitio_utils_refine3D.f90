@@ -23,7 +23,7 @@ integer, parameter :: REFINE3D_ROUTE_TREE_CAVGS       = 6
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR       = 7
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR_CAVGS = 8
 integer, parameter :: SHC_PTREE_NSPACES(2)            = [50,2000]
-integer, parameter :: TREE_NEIGH_NSPACES(2)           = [125,5000]
+integer, parameter :: TREE_NEIGH_NSPACES(2)           = [126,5000]
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin, cavgw
