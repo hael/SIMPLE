@@ -1792,7 +1792,7 @@ contains
                     if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 50
                     if( .not. cline%defined('nspace')     ) self%nspace     = 2000
                 case('tree_neigh','tree_neigh_states')
-                    if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 125
+                    if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 126 ! no odd numbers (previously 125)
                     if( .not. cline%defined('nspace')     ) self%nspace     = 5000
                 case DEFAULT
                     if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500
