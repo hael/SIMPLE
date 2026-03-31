@@ -150,7 +150,8 @@ type :: polarft_calc
     procedure          :: memoize_sqsum_ptcl
     procedure          :: memoize_ptcls, memoize_refs
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
-    procedure          :: allocate_ptcls_memoization, allocate_refs_memoization
+    procedure, private :: allocate_memoization_workspace, kill_memoization_workspace
+    procedure, private :: allocate_ptcls_memoization, allocate_refs_memoization
     ! ===== CORR: simple_polarft_corr.f90
     procedure          :: calc_corr_rot_shift
     procedure          :: calc_frc
@@ -523,6 +524,10 @@ interface
         class(polarft_calc), intent(inout) :: self
     end subroutine allocate_refs_memoization
 
+    module subroutine allocate_memoization_workspace(self)
+        class(polarft_calc), intent(inout) :: self
+    end subroutine allocate_memoization_workspace
+
     module subroutine kill_memoized_ptcls(self)
         class(polarft_calc), intent(inout) :: self
     end subroutine kill_memoized_ptcls
@@ -530,6 +535,10 @@ interface
     module subroutine kill_memoized_refs(self)
         class(polarft_calc), intent(inout) :: self
     end subroutine kill_memoized_refs
+
+    module subroutine kill_memoization_workspace(self)
+        class(polarft_calc), intent(inout) :: self
+    end subroutine kill_memoization_workspace
 
     ! ===== CORR  =====
 

@@ -114,8 +114,6 @@ contains
         self%ctfmats = 1.0
         self%with_ctf = .false.
         if( self%p_ptr%ctf .ne. 'no' ) self%with_ctf = .true.
-        ! allocation for memoization
-        call self%allocate_ptcls_memoization
         ! flag existence
         self%existence = .true.
     end subroutine new
@@ -139,6 +137,7 @@ contains
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
+            call self%kill_memoization_workspace
             nullify(self%sigma2_noise)
             self%p_ptr => null()
             self%existence = .false.

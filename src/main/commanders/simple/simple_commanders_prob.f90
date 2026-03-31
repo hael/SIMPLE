@@ -49,6 +49,7 @@ contains
         type(parameters)         :: params
         type(eul_prob_tab)       :: eulprob_obj_part
         integer :: nptcls
+        logical :: do_polar_prepare
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         call set_bp_range( params, build, cline )
@@ -60,9 +61,17 @@ contains
         else
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
+        do_polar_prepare = (params%l_polar .and. (.not.cline%defined('vol1')))
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
         call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
-                                        do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )           
+                                        do_polar=do_polar_prepare )
+        if( .not. do_polar_prepare )then
+            call read_mask_filter_reproject_refvols(params, build, cline, nptcls)
+            call build%vol%kill
+            call build%vol_odd%kill
+            call build%vol2%kill
+        endif
+        call build%pftc%memoize_refs
         ! Build polar particle images
         call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
@@ -98,6 +107,7 @@ contains
         type(parameters)         :: params
         type(eul_prob_tab_neigh) :: eulprob_obj_part_neigh
         integer :: nptcls
+        logical :: do_polar_prepare
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         call set_bp_range( params, build, cline )
@@ -107,9 +117,17 @@ contains
         else
             THROW_HARD('exec_prob_tab_neigh requires prior particle sampling (in exec_prob_align)')
         endif
+        do_polar_prepare = (params%l_polar .and. (.not.cline%defined('vol1')))
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
         call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
-                                        do_polar=(params%l_polar .and. (.not.cline%defined('vol1'))) )
+                                        do_polar=do_polar_prepare )
+        if( .not. do_polar_prepare )then
+            call read_mask_filter_reproject_refvols(params, build, cline, nptcls)
+            call build%vol%kill
+            call build%vol_odd%kill
+            call build%vol2%kill
+        endif
+        call build%pftc%memoize_refs
         ! Build polar particle images
         call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         call eulprob_obj_part_neigh%new_neigh(params, build, pinds)

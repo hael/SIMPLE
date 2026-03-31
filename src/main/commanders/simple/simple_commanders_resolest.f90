@@ -123,7 +123,6 @@ contains
         enddo
         !$omp end parallel do
         ! Build polar particle images
-        call build%pftc%allocate_refs_memoization
         call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Dealing with polar cavgs
         call build%pftc%polar_cavger_new(.true.)

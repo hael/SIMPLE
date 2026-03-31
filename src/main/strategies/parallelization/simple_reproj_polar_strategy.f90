@@ -218,8 +218,6 @@ contains
         ! Read each worker's per-state binary slices and place them at the correct
         ! global reference positions in pfts_refs_even/odd.
         call build%pftc%assemble_projected_refs_from_parts(params%nparts, params%numlen)
-        ! Memoize the assembled references for immediate use in alignment.
-        call build%pftc%memoize_refs
     end subroutine distr_execute
 
     subroutine distr_finalize_run(self, params, build, cline)

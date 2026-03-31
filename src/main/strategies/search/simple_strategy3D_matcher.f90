@@ -58,13 +58,13 @@ contains
         real    :: frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
-        logical :: doprint, l_polar, l_restore, l_prob_align_mode, has_been_searched
+        logical :: doprint, l_polar, l_restore, l_prob_align_mode, has_been_searched, do_polar_prepare
         ! benchmarking
         type(string)            :: benchfname
-        integer(timer_int_kind) :: t_init, t_build_batch_particles, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
-        integer(timer_int_kind) :: t_prepare_refs_sigmas_ptcls, t_prepare_polar_references
-        real(timer_int_kind)    :: rt_init, rt_build_batch_particles, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
-        real(timer_int_kind)    :: rt_prepare_refs_sigmas_ptcls, rt_prepare_polar_references
+        integer(timer_int_kind) :: t_init, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
+        integer(timer_int_kind) :: t_prep_refs_sigmas_ptcls, t_prep_reproj_refvols, t_prep_polar_refs, t_memoize_refs
+        real(timer_int_kind)    :: rt_init, rt_build_batch_ptcls, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
+        real(timer_int_kind)    :: rt_prep_refs_sigmas_ptcls, rt_prep_reproj_refvols, rt_prep_polar_refs, rt_memoize_refs
 
         ! assign parameters pointer
         p_ptr => params
@@ -128,16 +128,28 @@ contains
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
 
+        do_polar_prepare = (l_polar .and. .not.cline%defined('vol1'))
+
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
         if( L_BENCH_GLOB )then
             rt_init = toc(t_init)
-            t_prepare_refs_sigmas_ptcls = tic()
+            t_prep_refs_sigmas_ptcls = tic()
         endif
         call prepare_refs_sigmas_ptcls( p_ptr, b_ptr, cline, ptcl_match_imgs, ptcl_match_imgs_pad,&
-                                        &batchsz_max, which_iter, do_polar=(l_polar .and. .not.cline%defined('vol1')) )
+                                        &batchsz_max, which_iter, do_polar=do_polar_prepare )
         if( L_BENCH_GLOB )then
-            rt_prepare_refs_sigmas_ptcls = toc(t_prepare_refs_sigmas_ptcls)
-            t_prepare_polar_references   = tic()
+            rt_prep_refs_sigmas_ptcls = toc(t_prep_refs_sigmas_ptcls)
+            t_prep_reproj_refvols     = tic()
+        endif
+        if( .not. do_polar_prepare )then
+            call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
+            call build%vol%kill
+            call build%vol_odd%kill
+            call build%vol2%kill
+        endif
+        if( L_BENCH_GLOB )then
+            rt_prep_reproj_refvols = toc(t_prep_reproj_refvols)
+            t_prep_polar_refs      = tic()
         endif
         if( l_polar .and. l_restore )then
             ! for restoration
@@ -152,13 +164,19 @@ contains
             if( file_exists(p_ptr%frcs) )then
                 call b_ptr%clsfrcs%read(p_ptr%frcs)
             else
-                call b_ptr%clsfrcs%new(p_ptr%nspace, p_ptr%box_crop,&
-                    &p_ptr%smpd_crop, p_ptr%nstates)
+                call b_ptr%clsfrcs%new(p_ptr%nspace, p_ptr%box_crop, p_ptr%smpd_crop, p_ptr%nstates)
             endif
         endif
         if( L_BENCH_GLOB )then
-            rt_prepare_polar_references = toc(t_prepare_polar_references)
-            t_prep_orisrch              = tic()
+            rt_prep_polar_refs = toc(t_prep_polar_refs)
+            t_memoize_refs     = tic()
+        endif
+
+        ! memoize references in pftc
+        call build%pftc%memoize_refs
+        if( L_BENCH_GLOB )then
+            rt_memoize_refs = toc(t_memoize_refs)
+             t_prep_orisrch  = tic()
         endif
 
         ! PREPARE STRATEGY3D
@@ -172,10 +190,10 @@ contains
         end if
 
         if( L_BENCH_GLOB )then
-            rt_prep_orisrch          = toc(t_prep_orisrch)
-            rt_build_batch_particles = 0.
-            rt_align                 = 0.
-            rt_rec                   = 0.
+            rt_prep_orisrch      = toc(t_prep_orisrch)
+            rt_build_batch_ptcls = 0.
+            rt_align             = 0.
+            rt_rec               = 0.
         endif
 
         ! INITIALIZE CARTESIAN RECONSTRUCTION
@@ -193,7 +211,7 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftc
-            if( L_BENCH_GLOB ) t_build_batch_particles = tic()
+            if( L_BENCH_GLOB ) t_build_batch_ptcls = tic()
             if( l_polar )then
                 call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
                     &ptcl_match_imgs, ptcl_match_imgs_pad)
@@ -206,9 +224,11 @@ contains
                         &ptcl_match_imgs, ptcl_match_imgs_pad)
                 endif
             endif
-            if( L_BENCH_GLOB ) rt_build_batch_particles = rt_build_batch_particles + toc(t_build_batch_particles)
+            if( L_BENCH_GLOB )then
+                rt_build_batch_ptcls = rt_build_batch_ptcls + toc(t_build_batch_ptcls)
+                t_align              = tic()
+            endif
             ! Particles loop
-            if( L_BENCH_GLOB ) t_align = tic()
             !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,orientation)&
             !$omp schedule(static) proc_bind(close)
             do iptcl_batch    = 1,batchsz                     ! particle batch index
@@ -255,9 +275,9 @@ contains
                     case('ptree')
                         allocate(strategy3D_ptree                :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('tree_neigh')
-                        allocate(strategy3D_tree_neigh          :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_tree_neigh           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('tree_neigh_states')
-                        allocate(strategy3D_tree_neigh_states   :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_tree_neigh_states    :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc_ptree')
                         allocate(strategy3D_shc_ptree            :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
@@ -403,9 +423,11 @@ contains
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation            : ', rt_init
-                write(fnr,'(a,1x,f9.2)') 'build_batch_particles     : ', rt_build_batch_particles
-                write(fnr,'(a,1x,f9.2)') 'prepare_refs_sigmas_ptcls : ', rt_prepare_refs_sigmas_ptcls
-                write(fnr,'(a,1x,f9.2)') 'prepare_polar_references  : ', rt_prepare_polar_references
+                write(fnr,'(a,1x,f9.2)') 'build_batch_particles     : ', rt_build_batch_ptcls
+                write(fnr,'(a,1x,f9.2)') 'prepare_refs_sigmas_ptcls : ', rt_prep_refs_sigmas_ptcls
+                write(fnr,'(a,1x,f9.2)') 'prepare_reproject_refvols : ', rt_prep_reproj_refvols
+                write(fnr,'(a,1x,f9.2)') 'prepare_polar_references  : ', rt_prep_polar_refs
+                write(fnr,'(a,1x,f9.2)') 'memoize_refs              : ', rt_memoize_refs
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation     : ', rt_prep_orisrch
                 write(fnr,'(a,1x,f9.2)') '3D alignment              : ', rt_align
                 write(fnr,'(a,1x,f9.2)') 'project file I/O          : ', rt_projio
@@ -413,16 +435,19 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'total time                : ', rt_tot
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation            : ', (rt_init/rt_tot)                      * 100.
-                write(fnr,'(a,1x,f9.2)') 'build_batch_particles     : ', (rt_build_batch_particles/rt_tot)     * 100.
-                write(fnr,'(a,1x,f9.2)') 'prepare_refs_sigmas_ptcls : ', (rt_prepare_refs_sigmas_ptcls/rt_tot) * 100.
-                write(fnr,'(a,1x,f9.2)') 'prepare_polar_references  : ', (rt_prepare_polar_references/rt_tot)  * 100.
-                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation     : ', (rt_prep_orisrch/rt_tot)              * 100.
-                write(fnr,'(a,1x,f9.2)') '3D alignment              : ', (rt_align/rt_tot)                     * 100.
-                write(fnr,'(a,1x,f9.2)') 'project file I/O          : ', (rt_projio/rt_tot)                    * 100.
-                write(fnr,'(a,1x,f9.2)') 'reconstruction            : ', (rt_rec/rt_tot)                       * 100.
+                write(fnr,'(a,1x,f9.2)') 'initialisation            : ', (rt_init/rt_tot)                   * 100.
+                write(fnr,'(a,1x,f9.2)') 'build_batch_particles     : ', (rt_build_batch_ptcls/rt_tot)      * 100.
+                write(fnr,'(a,1x,f9.2)') 'prepare_refs_sigmas_ptcls : ', (rt_prep_refs_sigmas_ptcls/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'prepare_reproject_refvols : ', (rt_prep_reproj_refvols/rt_tot)    * 100.
+                write(fnr,'(a,1x,f9.2)') 'prepare_polar_references  : ', (rt_prep_polar_refs/rt_tot)        * 100.
+                write(fnr,'(a,1x,f9.2)') 'memoize_refs              : ', (rt_memoize_refs/rt_tot)           * 100.
+                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation     : ', (rt_prep_orisrch/rt_tot)           * 100.
+                write(fnr,'(a,1x,f9.2)') '3D alignment              : ', (rt_align/rt_tot)                  * 100.
+                write(fnr,'(a,1x,f9.2)') 'project file I/O          : ', (rt_projio/rt_tot)                 * 100.
+                write(fnr,'(a,1x,f9.2)') 'reconstruction            : ', (rt_rec/rt_tot)                    * 100.
                 write(fnr,'(a,1x,f9.2)') '% accounted for           : ',&
-                    &((rt_init+rt_build_batch_particles+rt_prepare_refs_sigmas_ptcls+rt_prepare_polar_references+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
+                    &((rt_init+rt_build_batch_ptcls+rt_prep_refs_sigmas_ptcls+rt_prep_reproj_refvols+&
+                    &rt_prep_polar_refs+rt_memoize_refs+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif

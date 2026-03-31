@@ -1106,11 +1106,6 @@ contains
             !         &(params%nstates==1)       .and.       params%l_doshift )then
             !     call build%pftc%center_3Dpolar_refs(build%spproj_field, build%eulspace)
             ! endif
-            ! Memoize
-            call build%pftc%memoize_refs
-        else
-            ! (if needed) estimating lp (over all states) and reseting params%lp and params%kfromto
-            call read_mask_filter_reproject_refvols(params, build, cline, batchsz)
         endif
         ! PREPARATION OF SIGMAS
         if( params%cc_objfun == OBJFUN_EUCLID )then
@@ -1128,9 +1123,6 @@ contains
             call ptcl_imgs_pad(ithr)%new([params%box_croppd,params%box_croppd,1], params%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
-        call build%vol%kill
-        call build%vol_odd%kill
-        call build%vol2%kill
         if( allocated(gaufilter) ) deallocate(gaufilter)
     end subroutine prepare_refs_sigmas_ptcls
 
@@ -1142,6 +1134,7 @@ contains
         real      :: xyz(3)
         integer   :: s, nrefs, state
         logical   :: do_center, l_prob_align_mode
+        logical   :: do_init_pftc
         call report_resolution(params, build, state)
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_refvols(params, build, cline, params%lpstart, params%lpstop, state)
@@ -1199,7 +1192,6 @@ contains
             call build%vol_odd_pad%kill
             call build%vol_odd_pad%kill_expanded
         end do
-        call build%pftc%memoize_refs
     end subroutine read_mask_filter_reproject_refvols
 
     subroutine build_batch_particles( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, imgs4rec )

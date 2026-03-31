@@ -31,6 +31,9 @@ contains
         if( OMP_IN_PARALLEL() )then
             THROW_HARD('No memoization inside OpenMP regions')
         endif
+        ! allocations
+        call self%allocate_memoization_workspace
+        call self%allocate_ptcls_memoization
         k0 = self%kfromto(1)
         !$omp parallel do private(i,k,kk,ithr) default(shared) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
@@ -88,6 +91,7 @@ contains
             THROW_HARD('No memoization inside OpenMP regions')
         endif
         ! allocations
+        call self%allocate_memoization_workspace
         call self%allocate_refs_memoization
         ! memoization
         k0 = self%kfromto(1)
@@ -160,21 +164,28 @@ contains
 
     module subroutine allocate_ptcls_memoization(self)
         class(polarft_calc), intent(inout) :: self
+        call self%kill_memoized_ptcls
         allocate(self%ft_ptcl_ctf(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
                 &self%ft_ctf2(    self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls))
     end subroutine allocate_ptcls_memoization
 
     module subroutine allocate_refs_memoization(self)
         class(polarft_calc), intent(inout) :: self
-        character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
-        integer(kind=c_int) :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
-        integer             :: ithr
-        if( allocated(self%ft_ref_even) ) call self%kill_memoized_refs
+        call self%kill_memoized_refs
         allocate(self%ft_ref_even( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%ft_ref_odd(  self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%ft_ref2_even(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%ft_ref2_odd( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%drvec(nthr_glob), self%cmat2_many(nthr_glob), self%crmat1_many(nthr_glob))
+                &self%ft_ref2_odd( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs))
+    end subroutine allocate_refs_memoization
+
+    module subroutine allocate_memoization_workspace(self)
+        class(polarft_calc), intent(inout) :: self
+        character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
+        integer(kind=c_int) :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
+        integer             :: ithr
+        if( allocated(self%cmat2_many) .and. allocated(self%crmat1_many) .and. allocated(self%drvec) ) return
+        call self%kill_memoization_workspace
+        allocate(self%drvec(nthr_glob), self%cmat2_many(nthr_glob), self%crmat1_many(nthr_glob))
         ! convenience objects
         do ithr = 1,nthr_glob
             self%drvec(ithr)%p = fftw_alloc_real(int(self%nrots, c_size_t))
@@ -244,7 +255,7 @@ contains
         if (wsdm_ret == 0) then
             write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
         end if
-    end subroutine allocate_refs_memoization
+    end subroutine allocate_memoization_workspace
 
     module subroutine kill_memoized_ptcls(self)
         class(polarft_calc), intent(inout) :: self
@@ -254,19 +265,25 @@ contains
 
     module subroutine kill_memoized_refs(self)
         class(polarft_calc), intent(inout) :: self
-        integer :: ithr
         if( allocated(self%ft_ref_even) )then
+            deallocate(self%ft_ref_even,self%ft_ref_odd,self%ft_ref2_even,self%ft_ref2_odd)
+        endif
+    end subroutine kill_memoized_refs
+
+    module subroutine kill_memoization_workspace(self)
+        class(polarft_calc), intent(inout) :: self
+        integer :: ithr
+        if( allocated(self%cmat2_many) )then
             do ithr = 1,nthr_glob
                 call fftw_free( self%drvec(ithr)%p)
                 call fftwf_free(self%cmat2_many(ithr)%p)
                 call fftwf_free(self%crmat1_many(ithr)%p)
             enddo
-            deallocate(self%ft_ref_even,self%ft_ref_odd,self%ft_ref2_even,self%ft_ref2_odd,&
-            &self%drvec, self%cmat2_many, self%crmat1_many)
+            deallocate(self%drvec, self%cmat2_many, self%crmat1_many)
             call fftwf_destroy_plan(self%plan_mem_r2c_many)
             call fftwf_destroy_plan(self%plan_fwd1_many)
             call fftwf_destroy_plan(self%plan_bwd1_many)
         endif
-    end subroutine kill_memoized_refs
+    end subroutine kill_memoization_workspace
 
 end submodule simple_polarft_memo
