@@ -1,0 +1,90 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src={% static 'nice_stream/panelmovies.js' %}></script>
+</head>
+<body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
+    <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
+    <div class="h-full flex-col flex justify-between">
+        <div class="flex flex-row justify-end items-center">
+            <div class="flex-1 font-bold text-[12px]">movies</div>
+        </div>
+        <div class="flex">
+            <div class="grid grid-cols-2 gap-[2px] text-[10px] ml-[10px] content-baseline">
+                {% if "movies_imported" in jobstats %}
+                    <div class="font-bold">movies detected</div>
+                    <div>{{ jobstats.movies_imported|intcomma }}</div>
+                {% endif %} 
+                {% if "movies_rate" in jobstats %}
+                    <div class="font-bold">movie detection rate</div>
+                    <div>{{ jobstats.movies_rate|intcomma }} movies/hour</div>
+                {% endif %} 
+                {% if "dir_movies" in args %}
+                    <div class="font-bold">movies directory</div>
+                    <div class="overflow-x-scroll" style="scrollbar-width: none">
+                        <div class="w-max">
+                            {{ args.dir_movies }}
+                        </div>
+                    </div>
+                {% endif %}
+                {% if "dir_meta" in args %}
+                    <div class="font-bold">metadata directory</div>
+                    <div class="overflow-x-scroll" style="scrollbar-width: none">
+                        <div class="w-max">
+                            {{ args.dir_meta }}
+                        </div>
+                    </div>
+                {% endif %}
+                {% if "gainref" in args %}
+                    <div class="font-bold">gain reference</div>
+                    <div class="overflow-x-scroll" style="scrollbar-width: none">
+                        <div class="w-max">
+                            {{ args.gainref }}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex flex-row flex-wrap flex-1 mt-[2px]">
+            {% if "timeplots" in jobstats and "astig" in jobstats.timeplots %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[10px] pl-[10px]">astigmatism</div>
+                    <div class="h-[50px] w-[120px] ml-[15px]">
+                        <canvas class="astig_histogram" data-labels='{{ jobstats.timeplots.astig.labels }}' data-values='{{ jobstats.timeplots.astig.data }}' data-values2='{{ jobstats.timeplots.astig.data2 }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+            {% if "timeplots" in jobstats and "ctfres" in jobstats.timeplots %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[10px] pl-[10px]">CTF resolution</div>
+                    <div class="h-[50px] w-[120px] ml-[15px]">
+                        <canvas class="astig_histogram" data-labels='{{ jobstats.timeplots.ctfres.labels }}' data-values='{{ jobstats.timeplots.ctfres.data }}' data-values2='{{ jobstats.timeplots.astig.data2 }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+            {% if "timeplots" in jobstats and "df" in jobstats.timeplots %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[10px] pl-[10px]">average defocus</div>
+                    <div class="h-[50px] w-[120px] ml-[15px]">
+                        <canvas class="df_histogram" data-labels='{{ jobstats.timeplots.df.labels }}' data-values='{{ jobstats.timeplots.df.data }}' data-values2='{{ jobstats.timeplots.astig.data2 }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+            {% if "timeplots" in jobstats and "rate" in jobstats.timeplots %}
+                <div class="flex flex-col">
+                    <div class="font-bold text-[10px] pl-[10px]">exposure rate</div>
+                    <div class="h-[50px] w-[120px] ml-[15px]">
+                        <canvas class="rate_histogram" data-labels='{{ jobstats.timeplots.rate.labels }}' data-values='{{ jobstats.timeplots.rate.data }}'></canvas>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

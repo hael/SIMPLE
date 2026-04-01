@@ -1,0 +1,96 @@
+{% load static %}
+<div>
+    <div class="bg-nice4bubble rounded-xl flex flex-col w-[250px] p-[5px] text-nice4dark border-[2px] border-nice4header">
+        {% if disp == 0 %}
+            <div class="font-bold text-[14px] h-[73px] flex items-center">deleted</div>
+        {% else %}
+            <div class="font-bold text-[14px] flex items-center">
+                {% if status == "running" %}
+                    <div class="rounded-full bg-nice4success h-[10px] w-[10px] mr-[5px]" title="{{ status }}"></div>
+                {% elif status == "queued" %}
+                    <div class="rounded-full bg-nice4header h-[10px] w-[10px] mr-[5px]" title="{{ status }}"></div>
+                {% elif status == "finished" %}
+                    <div class="rounded-full bg-nice4bubble mr-[5px] text-nice4success" title="finished">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                            <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                {% else %}
+                    <div class="rounded-full text-nice4alert mr-[5px]" title="failed">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm2.78-4.22a.75.75 0 0 1-1.06 0L8 9.06l-1.72 1.72a.75.75 0 1 1-1.06-1.06L6.94 8 5.22 6.28a.75.75 0 0 1 1.06-1.06L8 6.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L9.06 8l1.72 1.72a.75.75 0 0 1 0 1.06Z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                {% endif %}
+                <div>{{ disp }}</div>
+                {% if pckg == "simple" %}
+                    <img src={% static 'images/simple_logo_simple.png' %} class="h-[10px] mx-[5px]"/>
+                {% elif pckg == "simple_stream" %}
+                    <img src={% static 'images/simple_stream.png' %} class="h-[14px] mx-[5px]"/> 
+                {% elif pckg == "single" %}
+                    <img src={% static 'images/single_logo.png' %} class="h-[12px] mx-[5px]"/>
+                {% endif %}
+                <div>{{ name }}</div> 
+            </div>
+            <div class="text-[12px] min-h-[18px] flex">
+                <form method="POST" action={% url 'nice_lite:update_job_description' id %} class="flex-1">
+                    {% csrf_token %}
+                    <input name="new_job_description" value="{{ desc }}" onblur="this.form.submit()" disabled class="w-full"></input>
+                </form>
+                <div class="scale-80 hover:text-nice4dark text-nice4header cursor-pointer" onclick="enableJobDescription(this)">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.262a1.75 1.75 0 0 0 0-2.474Z" />
+                        <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9A.75.75 0 0 1 14 9v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z" />
+                    </svg>
+                </div>
+            </div>
+            <div class="flex justify-around">
+                <form method="POST" action={% url 'nice_lite:view_job' id %} class="h-[20px]">
+                    {% csrf_token %}
+                    <button type="submit">
+                        <div class="hover:text-nice4dark text-nice4header cursor-pointer scale-80">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-5">
+                                <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+                                <path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </button>
+                </form>
+                <form method="POST" action={% url 'nice_lite:rerun_job' id %} class="h-[20px]">
+                    {% csrf_token %}
+                    <button type="submit">
+                        <div class="hover:text-nice4dark text-nice4header cursor-pointer scale-80">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-5">
+                                <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </button>
+                </form>
+                {% if status != "finished" and status != "running" %}
+                    <form method="POST" action={% url 'nice_lite:mark_job_complete' id %} class="h-[20px]">
+                        {% csrf_token %}
+                        <button type="submit">
+                            <div class="hover:text-nice4dark text-nice4header cursor-pointer scale-80" title="mark job as finished">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-5">
+                                    <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                        </button>
+                    </form>
+                {% endif %}
+                {% if status != "running" %}
+                    <form method="POST" action={% url 'nice_lite:delete_job' id %} class="h-[20px]">
+                        {% csrf_token %}
+                        <button type="submit">
+                            <div class="hover:text-nice4dark text-nice4header cursor-pointer scale-80">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-5">
+                                    <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>

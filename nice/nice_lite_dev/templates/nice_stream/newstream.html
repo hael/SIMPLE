@@ -1,0 +1,133 @@
+{% load static %}
+{% load random_numbers %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="w-full h-screen flex flex-col bg-nice4bg">
+    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
+        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:dataset' %} title="back">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
+            </svg>
+        </a> 
+    </div>
+    <div class="w-fit mx-auto">
+        <div class="relative bg-nice4bubble rounded-full h-[150px] w-[150px] top-[75px] m-auto border-[2px] border-nice4header">
+            <img src={% static 'nice_lite/simple_stream_min.png' %} class="h-[90px] m-auto relative top-[25px]"/> 
+        </div>
+        <div class="bg-nice4bubble rounded-xl flex flex-col w-max h-max p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="text-[18px] font-bold flex justify-center pb-[15px] pt-[75px]">
+                new stream
+            </div>
+            <form method="POST" action={% url 'nice_lite:create_stream' %}>
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-4 text-[12px] grid-cols-[max-content_auto]">
+                    {% for input in user_inputs %}
+                        {% if input.keytype == "hidden" %}
+                            {% if input.required and "descr_placeholder" in input %}
+                                <input name={{ input.key }} type="hidden" required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.descr_placeholder }}{% endif %}></input>
+                            {% elif input.required %}
+                                <input name={{ input.key }} type="hidden" required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                            {% elif "descr_placeholder" in input %}
+                                <input name={{ input.key }} type="hidden" {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.descr_placeholder }}{% endif %}></input>   
+                            {% else %}
+                                <input name={{ input.key }} type="hidden" {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                            {% endif %}
+                        {% else %}
+                            <div class="font-bold">{{ input.descr_short }}</div>
+                            <div class="bg-nice4bg rounded flex flex-row">
+                                {% if input.keytype == "int" %}
+                                    {% if input.required and "descr_placeholder" in input %}
+                                        <input name={{ input.key }} type="number" min=0 step=1 required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.descr_placeholder }}{% endif %}></input>
+                                    {% elif input.required %}
+                                        <input name={{ input.key }} type="number" min=0 step=1 required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% elif "descr_placeholder" in input %}
+                                        <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.descr_placeholder }}{% endif %}></input>   
+                                    {% else %}
+                                        <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% endif %}
+                                {% elif input.keytype == "float" %}
+                                    {% if input.required and "descr_placeholder" in input %}
+                                        <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.descr_placeholder }}{% endif %}></input>
+                                    {% elif input.required %}
+                                        <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% elif "descr_placeholder" in input %}
+                                        <input name={{ input.key }} type="number" min=0 step=0.0001 {% if "value" in input %}value="{{ input.value }}"{% else %}value={{ input.descr_placeholder }}{% endif %}></input>   
+                                    {% else %}
+                                        <input name={{ input.key }} type="number" min=0 step=0.0001 {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% endif %}
+                                {% elif input.keytype == "multi" %}
+                                    {% if input.required %}
+                                        <select name={{ input.key }} required>
+                                    {% else %}
+                                        <select name={{ input.key }}>
+                                    {% endif %}
+                                    {% for option in input.options %}
+                                        {% if "value" in input and option.val == input.value %}
+                                            <option value={{ option.val }} selected>{{ option.key }}</option>
+                                        {% elif "descr_placeholder" in option and option.descr_placeholder %}
+                                            <option value={{ option.val }} selected>{{ option.key }}</option>
+                                        {% else %}
+                                            <option value={{ option.val }}>{{ option.key }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                    </select>
+                                {% elif input.keytype == "dir" %}
+                                    {% if input.required %}
+                                        <input name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex flex-row"></input>
+                                        <div onclick="this.parentElement.querySelector('.dirselector').classList.remove('hidden')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 m-[3px]">
+                                                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z" />
+                                            </svg>
+                                        </div>
+                                        <iframe name="FS{% random_int 1 10000 %}" class="dirselector hidden absolute top-[0px] left-[0px] w-full h-full bg-nice4bg" height="100%" width="100%" src={% url 'nice_lite:file_browser' 'dir' %}></iframe>
+                                    {% else %}
+                                        <input name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                        <div onclick="this.parentElement.querySelector('.dirselector').classList.remove('hidden')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 m-[3px]">
+                                                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z" />
+                                            </svg>
+                                        </div>
+                                        <iframe name="FS{% random_int 1 10000 %}" class="dirselector hidden absolute top-[0px] left-[0px] w-full h-full bg-nice4bg" height="100%" width="100%" src={% url 'nice_lite:file_browser' 'dir' %}></iframe>
+                                    {% endif %}
+                                {% elif input.keytype == "file" %}
+                                    {% if input.required %}
+                                        <input name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex flex-row"></input>
+                                        <div onclick="this.parentElement.querySelector('.fileselector').classList.remove('hidden')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 m-[3px]">
+                                                <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <iframe name="FS{% random_int 1 10000 %}" class="fileselector hidden absolute top-[0px] left-[0px] w-full h-full bg-nice4bg" height="100%" width="100%" src={% url 'nice_lite:file_browser' 'file' %}></iframe>
+                                    {% else %}
+                                        <input name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                        <div onclick="this.parentElement.querySelector('.fileselector').classList.remove('hidden')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 m-[3px]">
+                                                <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <iframe name="FS{% random_int 1 10000 %}" class="fileselector hidden absolute top-[0px] left-[0px] w-full h-full bg-nice4bg" height="100%" width="100%" src={% url 'nice_lite:file_browser' 'file' %}></iframe>
+                                    {% endif %}
+                                {% else %}
+                                    {% if input.required %}
+                                        <input name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% else %}
+                                        <input name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %}></input>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                <div class="flex mt-[20px] justify-center">
+                    <input type="submit" value="start" class="userbutton"></input>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

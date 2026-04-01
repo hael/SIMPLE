@@ -1,0 +1,68 @@
+{% load static %}
+{% load random_numbers %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="w-full h-screen flex flex-col bg-nice4bg">
+    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
+        {% if mode == "stream" %}
+            <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:dataset' %} title="back">
+        {% else %}
+            <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:workspace' %} title="back">
+        {% endif %}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
+            </svg>
+        </a> 
+    </div>
+    <div class="w-fit h-full mx-auto">
+         <div class="relative bg-nice4bubble rounded-full h-[150px] w-[150px] top-[75px] m-auto border-[2px] border-nice4header">
+            <img src={% static 'nice_lite/simple_stream_min.png' %} class="h-[90px] m-auto relative top-[25px]"/> 
+        </div>
+        <div class="bg-nice4bubble rounded-xl flex flex-col w-max h-max p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="text-[18px] font-bold flex justify-center pb-[15px] pt-[75px]">
+                new project
+            </div>
+            <form method="POST" action={% url 'nice_lite:create_project' %} target="_parent">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-4 text-[12px] grid-cols-[max-content_auto]">
+                    <div class="font-bold">project name</div>
+                    <div class="bg-nice4bg rounded">
+                        <input name="new_project_name" required></input>
+                    </div>
+                    <div class="font-bold">project folder</div>
+                    <div class="bg-nice4bg rounded flex flex-row items-center">
+                        <input class="w-full" name="new_project_dirc" required></input>
+                        <div onclick="this.parentElement.querySelector('.dirselector').classList.remove('hidden')">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 m-[3px]">
+                                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z" />
+                            </svg>
+                        </div>
+                        <iframe name="FS{% random_int 1 10000 %}" class="dirselector hidden absolute top-[0px] left-[0px] w-full h-full bg-nice4bg" height="100%" width="100%" src={% url 'nice_lite:file_browser' 'dir' %}></iframe>
+                    </div>
+                    <div class="font-bold">project description</div>
+                    <div class="bg-nice4bg rounded">
+                        <textarea name="new_project_desc" rows="4" cols="50"></textarea>
+                    </div>
+                </div>
+                <div class="flex mt-[20px] justify-center">
+                    <input type="submit" value="create" class="userbutton"></input>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+            <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</body>
+</html>
+
+

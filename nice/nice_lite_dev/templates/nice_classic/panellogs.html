@@ -1,0 +1,30 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
+    <div class="h-full flex-col flex justify-start p-[10px]">
+        <div class="flex flex-col text-[12px] flex-1 overflow-hidden">
+            <div class="font-bold text-[14px]">log</div>
+            <div class="flex flex-1 overflow-auto p-[10px] bg-nice4bg rounded-xl">
+                <pre>
+{{ stdout }}
+                </pre>
+            </div>
+        </div>
+        <div class="flex flex-col text-[12px] min-h-[25%] overflow-hidden">
+            <div class="font-bold text-[14px]">errors</div>
+            <div class="flex flex-1 overflow-auto p-[10px] bg-nice4bg rounded-xl">
+                <pre>
+{{ stderr }}
+                </pre>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

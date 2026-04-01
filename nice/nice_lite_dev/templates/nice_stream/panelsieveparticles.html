@@ -1,0 +1,152 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src={% static 'nice_stream/panelsieveparticles.js' %}></script>
+</head>
+<body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
+    <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
+    {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
+        <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for particles ...</div>
+    {% endif %}
+    {% if status == "restarting" %}
+        <div class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">restarting ...</div>
+    {% elif status == "terminating" %}
+        <div class="absolute z-2 text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">terminating ...</div>
+    {% endif %}
+    <div class="h-full flex-col flex justify-start">
+        <div class="flex flex-row justify-end items-center">
+            {% if status == "running" %}
+                <div class="rounded-full mr-[5px] text-nice4success" title="{{ jobstats.stage }}&#013;last import: {{ jobstats.last_micrograph_imported }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0ZM6 8c.552 0 1-.672 1-1.5S6.552 5 6 5s-1 .672-1 1.5S5.448 8 6 8Zm5-1.5c0 .828-.448 1.5-1 1.5s-1-.672-1-1.5S9.448 5 10 5s1 .672 1 1.5Zm.005 4.245a.75.75 0 0 0-1.06 0 2.75 2.75 0 0 1-3.89 0 .75.75 0 0 0-1.06 1.06 4.25 4.25 0 0 0 6.01 0 .75.75 0 0 0 0-1.06Z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            {% elif status == "finished" %}
+                <div class="rounded-full mr-[5px] text-nice4success" title="finished">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            {% elif status == "failed" %}
+                <div class="rounded-full text-nice4alert mr-[5px]" title="failed">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm2.78-4.22a.75.75 0 0 1-1.06 0L8 9.06l-1.72 1.72a.75.75 0 1 1-1.06-1.06L6.94 8 5.22 6.28a.75.75 0 0 1 1.06-1.06L8 6.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L9.06 8l1.72 1.72a.75.75 0 0 1 0 1.06Z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            {% else %}
+                <div class="rounded-full bg-nice4header h-[10px] w-[10px] mr-[5px]" title="{{ status }}"></div>
+            {% endif %}
+            <div class="flex-1 font-bold text-[12px]">particle sieving</div>
+            <form class="flex" method="GET" action={% url 'nice_lite:view_stream_sieve_particles_zoom' %} target="_parent">
+                {% csrf_token %}
+                <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
+                <button type="button" class="h-[16px] w-[16px] text-nice4header cursor-pointer"" onclick="this.form.submit()" title="view full screen">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path d="M6.25 8.75v-1h-1a.75.75 0 0 1 0-1.5h1v-1a.75.75 0 0 1 1.5 0v1h1a.75.75 0 0 1 0 1.5h-1v1a.75.75 0 0 1-1.5 0Z" />
+                        <path fill-rule="evenodd" d="M7 12c1.11 0 2.136-.362 2.965-.974l2.755 2.754a.75.75 0 1 0 1.06-1.06l-2.754-2.755A5 5 0 1 0 7 12Zm0-1.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </form>
+            {% if status == "running" %}    
+               <form class="flex" method="POST" action={% url 'nice_lite:term_stream_process' %}>
+                    {% csrf_token %}
+                    <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
+                    <input name="terminate_particle_sieving" type="hidden"></input>
+                    <button type="button" class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="stopProcess(this)" title="stop">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14ZM6.5 5.5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-3Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </form>
+            {% elif status == "finished" or status == "failed" %} 
+                <form class="flex" method="POST" action={% url 'nice_lite:restart_stream_process' %}>
+                    {% csrf_token %}
+                    <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
+                    <input name="restart_particle_sieving" type="hidden"></input>
+                    <button type="button" class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="restartProcess(this)" title="restart">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm-.847-9.766A.75.75 0 0 0 6 5.866v4.268a.75.75 0 0 0 1.153.633l3.353-2.134a.75.75 0 0 0 0-1.266L7.153 5.234Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+        <div class="h-full flex-col flex justify-start">
+            <div class="flex flex-row">
+                <div class="flex flex-col flex-1">
+                    <div class="flex flex-row">
+                        {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
+                            <div class="flex flex-col">
+                                <div class="font-bold text-[10px] pl-[10px]">particles</div>
+                                <div class="h-[40px] w-[150px]">
+                                    <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-accepted={{ jobstats.particles_accepted }} data-rejected={{ jobstats.particles_rejected }}></canvas>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% if status == "running" and "ref_cls2D" not in jobstats %}
+                {% if "stage" in jobstats %}
+                    <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
+                        {{ jobstats.stage }}
+                    </div>
+                {% else %}
+                    <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
+                        sieving particles ...
+                    </div>  
+                {% endif %}
+            {% endif %}
+            {% if "ref_cls2D" in jobstats and jobstats.ref_cls2D|length > 0 or jobstats.ref_cls2D|length > 0 %}
+                <div class="flex flex-col flex-2">
+                    <div class="">
+                        <div class="font-bold text-[10px] pl-[10px]">reference classes</div>
+                        <div class="flex flex-row items-center m-auto w-max">
+                            <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft(this, event)">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                    <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="flex flex-row w-[220px] scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                                <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-3">
+                                    {% for cls2D in jobstats.ref_cls2D %}
+                                        <div class="snap-center sieveclscontainer" data-pop={{ cls2D.pop }} data-res={{ cls2D.res| floatformat:1 }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                            <div oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%" class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
+                                    <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                        <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                        <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                                    </div>
+                                </div>
+                            </div> 
+                            <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight(this, event)">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                    <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        {% if status == "running" and jobstats.user_input is True %}
+            <div class="flex flex-row justify-center">
+                <form method="GET" action={% url 'nice_lite:view_stream_sieve_particles_zoom' %} target="_parent">
+                    {% csrf_token %}
+                    <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
+                    <button class="userbutton animate-bounce" type="submit">update reference selection</button>
+                </form>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

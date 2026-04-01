@@ -1,0 +1,144 @@
+{% load static %}
+{% load random_numbers %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src={% static 'nice_classic/newjob.js' %}></script>
+</head>
+<body class="w-full h-screen flex flex-col bg-nice4bg">
+    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
+        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:new_job_type' parentid %} title="back">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
+            </svg>
+        </a> 
+    </div>
+    <div class="w-fit mx-auto">
+        <div class="relative bg-nice4bubble rounded-full h-[150px] w-[150px] top-[75px] m-auto border-[2px] border-nice4header">
+            <img src={% static 'nice_lite/simple_stream_min.png' %} class="h-[90px] m-auto relative top-[25px]"/> 
+        </div>
+        <div class="bg-nice4bubble rounded-xl flex flex-col w-max h-max p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="text-[25px] text-nice4dark flex justify-center pb-[15px] pt-[75px] items-center">
+                {% if package == "simple" %}
+                    <img src={% static 'images/simple_logo_simple.png' %} class="h-[20px] mr-[10px]"/>
+                {% elif package == "single" %}
+                    <img src={% static 'images/single_logo.png' %} class="h-[20px] mr-[10px]"/>
+                {% endif %}
+                {{ jobdesc }}
+            </div>
+            <form method="POST" action={% url 'nice_lite:create_job' parentid package jobtype %}>
+                {% csrf_token %}
+                {% for section in sections %}
+                    <div class="flex flex-col">
+                        <div class="flex flex-row font-bold text-[14px] bg-nice4header text-nice4bubble rounded-xl mx-[10px] px-[10px] my-[10px] items-center">
+                            <div class="flex-1 min-w-[590px]">{{ section.name }}</div>
+                            <div onclick="toggleAdvanced(this)">
+                                <div id="advancedhidden" class="flex">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                                        <path fill-rule="evenodd" d="M2 2.75A.75.75 0 0 1 2.75 2h9.5a.75.75 0 0 1 0 1.5h-9.5A.75.75 0 0 1 2 2.75ZM2 6.25a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 0 1.5h-5.5A.75.75 0 0 1 2 6.25Zm0 3.5A.75.75 0 0 1 2.75 9h3.5a.75.75 0 0 1 0 1.5h-3.5A.75.75 0 0 1 2 9.75ZM14.78 11.47a.75.75 0 0 1 0 1.06l-2.25 2.25a.75.75 0 0 1-1.06 0l-2.25-2.25a.75.75 0 1 1 1.06-1.06l.97.97V6.75a.75.75 0 0 1 1.5 0v5.69l.97-.97a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div id="advancedvisible" class="flex hidden">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                                        <path fill-rule="evenodd" d="M2 2.75A.75.75 0 0 1 2.75 2h9.5a.75.75 0 0 1 0 1.5h-9.5A.75.75 0 0 1 2 2.75ZM2 6.25a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 0 1.5h-5.5A.75.75 0 0 1 2 6.25Zm0 3.5A.75.75 0 0 1 2.75 9h3.5a.75.75 0 0 1 0 1.5h-3.5A.75.75 0 0 1 2 9.75ZM9.22 9.53a.75.75 0 0 1 0-1.06l2.25-2.25a.75.75 0 0 1 1.06 0l2.25 2.25a.75.75 0 0 1-1.06 1.06l-.97-.97v5.69a.75.75 0 0 1-1.5 0V8.56l-.97.97a.75.75 0 0 1-1.06 0Z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-[12px] mx-[20px]">
+                            {% for input in section.inputs %}
+                                <div class="{% if input.advanced %}advancedinput hidden{% endif %}">{{ input.descr_short }}</div>
+                                <div class="bg-nice4bg rounded flex flex-row {% if input.advanced %}advancedinput hidden{% endif %}">
+                                    {% if input.keytype == "int" %}
+                                        {% if input.required and "default" in input %}
+                                            <input name={{ input.key }} type="number" min=0 step=1 required placeholder={{ input.default }} {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                        {% elif input.required %}
+                                            <input name={{ input.key }} type="number" min=0 step=1 required {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                        {% elif "default" in input %}
+                                            <input name={{ input.key }} type="number" min=0 step=1 placeholder={{ input.default }} {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>   
+                                        {% else %}
+                                            <input name={{ input.key }} type="number" min=0 step=1 {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                        {% endif %}
+                                    {% elif input.keytype == "float" or input.keytype == "num" %}
+                                        {% if input.required and "default" in input %}
+                                            <input name={{ input.key }} type="number" min=0 step=0.0001 required placeholder={{ input.default }} {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                        {% elif input.required %}
+                                            <input name={{ input.key }} type="number" min=0 step=0.0001 required {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                        {% elif "default" in input %}
+                                            <input name={{ input.key }} type="number" min=0 step=0.0001 placeholder={{ input.default }} {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>   
+                                        {% else %}
+                                            <input name={{ input.key }} type="number" min=0 step=0.0001 {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                        {% endif %}
+                                    {% elif input.keytype == "multi" %}
+                                        {% if input.required %}
+                                            <select name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1">
+                                        {% else %}
+                                            <select name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1">
+                                        {% endif %}
+                                        {% for option in input.options %}
+                                            {% if "default" in input and option == input.default %}
+                                                <option value={{ option }} selected >{{ option }}</option>
+                                            {% else %}
+                                                <option value={{ option }}>{{ option }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                        </select>
+                                    {% elif input.keytype == "dir" %}
+                                        {% if input.required %}
+                                            <input name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex flex-1 flex-row"></input>
+                                            <div onclick="this.parentElement.querySelector('.dirselector').classList.remove('hidden')">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 m-[3px]">
+                                                    <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z" />
+                                                </svg>
+                                            </div>
+                                            <iframe name="FS{% random_int 1 10000 %}" class="dirselector hidden absolute top-[0px] left-[0px] w-full h-full bg-nice4bg" height="100%" width="100%" src={% url 'nice_lite:file_browser' 'dir' %}></iframe>
+                                        {% else %}
+                                            <input name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                            <div onclick="this.parentElement.querySelector('.dirselector').classList.remove('hidden')">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 m-[3px]">
+                                                    <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z" />
+                                                </svg>
+                                            </div>
+                                            <iframe name="FS{% random_int 1 10000 %}" class="dirselector hidden absolute top-[0px] left-[0px] w-full h-full bg-nice4bg" height="100%" width="100%" src={% url 'nice_lite:file_browser' 'dir' %}></iframe>
+                                        {% endif %}
+                                    {% elif input.keytype == "file" %}
+                                        {% if input.required %}
+                                            <input name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex flex-row flex-1"></input>
+                                            <div onclick="this.parentElement.querySelector('.fileselector').classList.remove('hidden')">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 m-[3px]">
+                                                    <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
+                                                </svg>
+                                            </div>
+                                            <iframe name="FS{% random_int 1 10000 %}" class="fileselector hidden absolute top-[0px] left-[0px] w-full h-full bg-nice4bg" height="100%" width="100%" src={% url 'nice_lite:file_browser' 'file' %}></iframe>
+                                        {% else %}
+                                            <input name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                            <div onclick="this.parentElement.querySelector('.fileselector').classList.remove('hidden')">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 m-[3px]">
+                                                    <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
+                                                </svg>
+                                            </div>
+                                            <iframe name="FS{% random_int 1 10000 %}" class="fileselector hidden absolute top-[0px] left-[0px] w-full h-full bg-nice4bg" height="100%" width="100%" src={% url 'nice_lite:file_browser' 'file' %}></iframe>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if input.required %}
+                                            <input name={{ input.key }} required {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                        {% else %}
+                                            <input name={{ input.key }} {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+                <div class="flex mt-[20px] justify-center items-center">
+                    <input type="submit" value="start" class="userbutton"></input>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

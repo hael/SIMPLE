@@ -1,0 +1,41 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src={% static 'nice_classic/panelmicrographshistogram.js' %}></script>
+</head>
+<body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
+    <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
+    <div class="h-full flex-col flex justify-start">
+        <div class="flex flex-row text-[12px]">
+            <div class="font-bold text-[14px]">micrographs histogram</div>
+            {% if "mic" in projstats and "numeric_keys" in projstats.mic %}
+                <form class="flex flex-1 items-center justify-center" method="POST" action={% url 'nice_lite:view_job_micrographs_histogram' jobid %}>
+                    {% csrf_token %}
+                    <div class="flex flex-1 justify-center">
+                        <div class="font-bold mr-[5px]">stat</div>
+                        <select name="sort_micrographs_key" oninput="this.form.submit()">
+                            <option>n</option>
+                            {% for key in projstats.mic.numeric_keys %}
+                                <option {% if key == sortkey %} selected {% endif %}>{{ key }}</option>
+                            {% endfor %}
+                        </select>
+                    </div> 
+                </form>
+            {% endif %}
+        </div>
+        <div class="flex flex-row flex-wrap flex-1 overflow-hidden">
+            {% if "histogram" in mics%}
+               <div class="h-full ml-[15px] w-full">
+                    <canvas class="micrographs_histogram" data-labels='{{ mics.histogram.labels }}' data-values='{{ mics.histogram.data }}'></canvas>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

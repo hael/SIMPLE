@@ -1,0 +1,58 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src={% static 'nice_stream/paneloptics.js' %}></script>
+</head>
+<body class="w-full h-screen flex flex-col bg-nice4bg text-nice4dark">
+    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
+        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:view_stream' jobid %} title="back">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
+            </svg>
+        </a>
+        <div class="px-[10px] text-[18px]">{{ displayid }} stream - optics assignment</div>
+    </div>
+    <div class="w-full flex flex-row p-[10px]">
+        <div class="flex flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+            <div class="font-bold text-[12px]">log</div>
+            <div class="logtext h-[200px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+                <pre class="text-[10px]">{{log}}</pre>
+            </div>
+            <div class="font-bold text-[12px]">errors</div>
+            <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+                <pre class="text-[10px]">{{error}}</pre>
+            </div>
+        </div>
+        <div class="flex ml-[10px] flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+            <div class="font-bold text-[12px] pl-[10px]">help</div>
+            <div class="flex-1 w-[200px] overflow-auto mx-[10px] p-[5px]">
+                <div class="text-[10px]">some help text</div>
+            </div>
+        </div>
+    </div>
+    <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
+        <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="grid grid-cols-[max-content_auto] gap-[50px] text-[12px]">
+                {% if "optics_groups_assigned" in jobstats %}
+                    <div class="font-bold pl-[10px]">groups assigned</div>
+                    <div>{{ jobstats.optics_groups_assigned }}</div>
+                {% endif %}
+            </div>
+            {% if "optics_assignments" in jobstats %}
+                <div class="flex flex-col flex-1">
+                    <div class="font-bold text-[12px] pl-[10px]">beam shift groupings</div>
+                    <div class="p-[50px] w-full h-full">
+                        <canvas class="optics_scatter_chart" data-assignments='{{ jobstats.optics_assignments }}''></canvas>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,81 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script src={% static 'nice_classic/newjobtype.js' %}></script>
+</head>
+<body class="w-full h-screen flex flex-col bg-nice4bg">
+    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
+        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:workspace' %} title="back">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
+            </svg>
+        </a> 
+    </div>
+    <div class="w-fit mx-auto">
+        <div class="relative bg-nice4bubble rounded-full h-[150px] w-[150px] top-[75px] m-auto border-[2px] border-nice4header">
+            <img src={% static 'nice_lite/simple_stream_min.png' %} class="h-[90px] m-auto relative top-[25px]"/> 
+        </div>
+        <div class="bg-nice4bubble rounded-xl flex flex-col w-[500px] h-[60vh] p-[5px] text-nice4dark border-[2px] border-nice4header">
+            <div class="text-[25px] font-bold flex justify-center pb-[15px] pt-[75px]">
+                new job
+            </div>
+            <div class="flex flex-row justify-around">
+                <div onclick="toggleSimpleMenu()" title="show SIMPLE jobs only" class="flex items-center border-nice4header border-[2px] hover:border-nice4dark cursor-pointer rounded ">
+                    <img src={% static 'images/simple_logo_simple.png' %} class="w-[100px] m-[5px]"/> 
+                </div>
+                <div onclick="toggleSingleMenu()" title="show SINGLE jobs only" class="flex items-center border-nice4header border-[2px] hover:border-nice4dark cursor-pointer rounded">
+                    <img src={% static 'images/single_logo.png' %} class="w-[100px] m-[5px]"/>
+                </div>
+            </div>
+            <div class="flex flex-row mt-[10px]">
+                <div class="flex flex-row text-nice4dark w-full items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
+                        <path fill-rule="evenodd" d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z" clip-rule="evenodd" />
+                    </svg>
+                    <input type="text" class="bg-nice4bg flex-1 rounded-xl mx-[10px] text-[12px] px-[10px] py-[3px]" placeholder="filter" oninput="filterPrograms(this)"></input>
+                </div>    
+            </div>
+            <div id="simpleprograms" class="flex flex-col mt-[5px] overflow-y-scroll mb-[10px] snap-y snap-mandatory">
+                {% for program in simple_programs %}
+                    <form method="GET" action={% url 'nice_lite:new_job' parentid 'simple' program.prg %} class="program snap-start" data-disp='{{ program.disp }}' data-desc='{{ program.desc }}'>
+                        {% csrf_token %}
+                        <button type="submit" class="w-full">
+                            <div class="flex flex-col items-start border-nice4header hover:border-nice4dark hover:bg-nice4bg border-[2px] rounded p-[5px] my-[5px]">
+                                <div class="font-bold text-[12px] flex flex-row items-center">
+                                    <img src={% static 'images/simple_logo_simple.png' %} class="h-[10px] m-[5px]"/> 
+                                    {{ program.disp }}
+                                </div>
+                                <div class="text-[10px] pl-[10px]">
+                                    {{ program.desc }}
+                                </div>
+                            </div>
+                        </button>
+                    </form>
+                {% endfor %}
+            </div>
+            <div id="singleprograms" class="flex flex-col mt-[5px] hidden overflow-y-scroll mb-[10px] snap-y snap-mandatory">
+                {% for program in single_programs %}
+                    <form method="GET" action={% url 'nice_lite:new_job' parentid 'single' program.prg %} class="program snap-start" data-disp='{{ program.disp }}' data-desc='{{ program.desc }}'>
+                        {% csrf_token %}
+                        <button type="submit" class="w-full">
+                            <div class="flex flex-col items-start border-nice4header hover:border-nice4dark hover:bg-nice4bg border-[2px] rounded p-[5px] my-[5px]">
+                                <div class="font-bold text-[12px] flex flex-row items-center">
+                                    <img src={% static 'images/single_logo.png' %} class="h-[12px] m-[5px]"/> 
+                                    {{ program.disp }}
+                                </div>
+                                <div class="text-[10px] pl-[10px]">
+                                    {{ program.desc }}
+                                </div>
+                            </div>
+                        </button>
+                    </form>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
