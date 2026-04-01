@@ -5,7 +5,7 @@ implicit none
 
 type(ui_program), target :: abinitio2D
 type(ui_program), target :: cleanup2D
-type(ui_program), target :: pool2D
+type(ui_program), target :: pool2D_tree
 type(ui_program), target :: cluster2D
 type(ui_program), target :: cluster2D_subsets
 type(ui_program), target :: cluster2D_subsets_refine
@@ -21,7 +21,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D(prgtab)
         call new_cleanup2D(prgtab)
-        call new_pool2D(prgtab)
+        call new_pool2D_tree(prgtab)
         call new_cluster2D_subsets(prgtab)
         call new_cluster2D_subsets_refine(prgtab)
         call new_cluster2D_microchunked(prgtab)
@@ -36,7 +36,7 @@ contains
         write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)
         write(logfhandle,'(A)') abinitio2D%name%to_char()
         write(logfhandle,'(A)') cleanup2D%name%to_char()
-        write(logfhandle,'(A)') pool2D%name%to_char()
+        write(logfhandle,'(A)') pool2D_tree%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets_refine%name%to_char()
         write(logfhandle,'(A)') cluster2D_microchunked%name%to_char()
@@ -123,26 +123,26 @@ contains
         call add_ui_program('cleanup2D', cleanup2D, prgtab)
     end subroutine new_cleanup2D
 
-    subroutine new_pool2D( prgtab )
+    subroutine new_pool2D_tree( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call pool2D%new(&
-        &'pool2D',&                                                                                           ! name
+        call pool2D_tree%new(&
+        &'pool2D_tree',&                                                                                      ! name
         &'Subset-to-full 2D workflow with reusable HAC tree',&                                                ! descr_short
         &'runs a random subset ab initio-2D pass, builds and stores a HAC block tree, then runs full-data '&
         &'ab initio-2D with refine=snhc_ptree reusing the stored tree',&                                      ! descr_long
         &'simple_exec',&                                                                                       ! executable
         &.true.,&                                                                                              ! requires sp_project
         &gui_advanced=.false., gui_submenu_list = "search,compute")
-        call pool2D%add_input(UI_PARM, projfile, gui_submenu="search", gui_advanced=.false.)
-        call pool2D%add_input(UI_SRCH, ncls, gui_submenu="search", gui_advanced=.false.)
-        call pool2D%add_input(UI_SRCH, 'ncls_sub', 'num', 'Number of ptree subtrees', &
+        call pool2D_tree%add_input(UI_PARM, projfile, gui_submenu="search", gui_advanced=.false.)
+        call pool2D_tree%add_input(UI_SRCH, ncls, gui_submenu="search", gui_advanced=.false.)
+        call pool2D_tree%add_input(UI_SRCH, 'ncls_sub', 'num', 'Number of ptree subtrees', &
         &'Target number of HAC subtrees used for snhc_ptree', '# trees{10}', .false., 10., gui_submenu="search")
-        call pool2D%add_input(UI_PARM, prune, gui_submenu="search")
-        call pool2D%add_input(UI_MASK, mskdiam, gui_submenu="search", gui_advanced=.false.)
-        call pool2D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call pool2D%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('pool2D', pool2D, prgtab)
-    end subroutine new_pool2D
+        call pool2D_tree%add_input(UI_PARM, prune, gui_submenu="search")
+        call pool2D_tree%add_input(UI_MASK, mskdiam, gui_submenu="search", gui_advanced=.false.)
+        call pool2D_tree%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
+        call pool2D_tree%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call add_ui_program('pool2D_tree', pool2D_tree, prgtab)
+    end subroutine new_pool2D_tree
 
     subroutine new_cluster2D_subsets( prgtab )
         class(ui_hash), intent(inout) :: prgtab

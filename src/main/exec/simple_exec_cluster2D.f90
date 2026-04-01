@@ -8,7 +8,7 @@ use simple_commanders_cluster2D,            only: commander_ppca_denoise_classes
 use simple_commanders_mkcavgs,              only: commander_make_cavgs_distr,  commander_write_classes
 use simple_commanders_abinitio2D,           only: commander_abinitio2D
 use simple_commanders_cleanup2D,            only: commander_cleanup2D
-use simple_commanders_pool2D,               only: commander_pool2D
+use simple_commanders_pool2D_tree,          only: commander_pool2D_tree
 use simple_stream_cluster2D_subsets,        only: stream_cluster2D_subsets
 use simple_commanders_cavgs,                only: commander_map_cavgs_selection
 use simple_stream_cluster2D_subsets_refine, only: stream_cluster2D_subsets_refine
@@ -21,7 +21,7 @@ private
 
 type(commander_abinitio2D)                  :: xabinitio2D
 type(commander_cleanup2D)                   :: xcleanup2D 
-type(commander_pool2D)                      :: xpool2D
+type(commander_pool2D_tree)                 :: xpool2D_tree
 type(stream_cluster2D_subsets)              :: xcluster2D_subsets
 type(stream_cluster2D_subsets_refine)       :: xcluster2D_subsets_refine
 type(stream_cluster2D_microchunked)         :: xcluster2D_microchunked
@@ -49,8 +49,8 @@ contains
                 endif
             case( 'cleanup2D' )
                 call xcleanup2D%execute(cline)
-            case( 'pool2D' )
-                call xpool2D%execute(cline)
+            case( 'pool2D_tree', 'pool2D' )
+                call xpool2D_tree%execute(cline)
             case( 'cluster2D_subsets' )
                 call xcluster2D_subsets%execute(cline)
             case( 'cluster2D_subsets_refine' )
