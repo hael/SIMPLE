@@ -409,7 +409,7 @@ contains
                 real,  allocatable  :: boxdata(:)
                 integer             :: my_i, my_x, my_y, my_nrecs, my_nlines, my_xdim, my_ydim
                 call meta_micrograph%set(                                     &
-                    path   = spproj%os_mic%get_str(my_ithumb, "thumb"),       &
+                    path   = spproj%os_mic%get_str(my_ithumb, "thumb"),       & !// TODO - update to use thumb_den. also change caller test
                     dfx    = spproj%os_mic%get(my_ithumb,       "dfx"),       &
                     dfy    = spproj%os_mic%get(my_ithumb,       "dfy"),       &
                     ctfres = spproj%os_mic%get(my_ithumb,    "ctfres"),       &

@@ -44,13 +44,20 @@ enum, bind(c)
   enumerator :: GUI_METADATA_STREAM_INITIAL_PICKING_TYPE              ! 18
   enumerator :: GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE   ! 19
   ! opening 2D stage
-  enumerator :: GUI_METADATA_STREAM_OPENING2D_TYPE          ! 20
-  enumerator :: GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE    ! 21
+  enumerator :: GUI_METADATA_STREAM_OPENING2D_TYPE             ! 20
+  enumerator :: GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE       ! 21
   enumerator :: GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE ! 22
   ! reference picking stage
-  enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE          ! 23
-  enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE   ! 24
-  enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE   ! 25
+  enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE            ! 23
+  enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE ! 24
+  enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE      ! 25
+  ! particle sieving stage
+  enumerator :: GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE           ! 26
+  enumerator :: GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE     ! 27
+  enumerator :: GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE ! 28
+  ! pool 2D stage
+  enumerator :: GUI_METADATA_STREAM_POOL2D_TYPE           ! 29
+  enumerator :: GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE     ! 30
 end enum
 
 end module simple_gui_metadata_types

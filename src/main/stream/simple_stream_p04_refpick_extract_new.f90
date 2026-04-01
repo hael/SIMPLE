@@ -1,10 +1,41 @@
 !@descr: task 4 in the stream pipeline: reference-based picking and extraction
+!
+! Module simple_stream_p04_refpick_extract_new
+!
+! Purpose:
+!   Implements stream pipeline stage 4: reference-based particle picking and
+!   extraction.  The module watches an upstream completed-project directory for
+!   micrograph batches produced by stage 3 (CTF estimation), applies quality
+!   thresholds (CTF resolution, ice fraction, astigmatism), dispatches
+!   pick_extract jobs to the queueing system, and aggregates results into the
+!   master project file.  Progress and micrograph thumbnails are broadcast to
+!   the GUI via the stream message queue.
+!
+! Workflow:
+!   1. Wait for picking references (pickrefs) to appear on disk.
+!   2. On the first incoming micrograph batch, call make_pickrefs to build
+!      low-pass filtered templates at the correct pixel size.
+!   3. For each subsequent batch: select micrographs that pass QC thresholds,
+!      write a per-batch sub-project, and submit it to pick_extract.
+!   4. Collect completed jobs, merge micrograph/particle metadata into the
+!      master project, and export STAR files for downstream use.
+!   5. Terminate cleanly on SIGTERM or when a termination sentinel file appears.
+!
+! Public type:
+!   stream_p04_refpick_extract — commander_base extension; entry point is
+!                                exec_stream_pick_extract.
+!
 module simple_stream_p04_refpick_extract_new
-use simple_stream_api
+use unix,                         only: SIGTERM
+use simple_stream_api         
 use simple_stream_mq_defs,        only: mq_stream_master_in, mq_stream_master_out
-use simple_commanders_pick, only: commander_make_pickrefs
-use simple_timer
-use simple_gui_metadata_api
+use simple_commanders_pick,       only: commander_make_pickrefs
+use simple_timer,                 only: simple_gettime, cast_time_char, timer_int_kind, tic, toc
+use simple_gui_metadata_api,      only: gui_metadata_micrograph, gui_metadata_cavg2D,               &
+                                        gui_metadata_stream_picking, sprite_sheet_pos,              &
+                                        GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE,                 &
+                                        GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE,      &
+                                        GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE
 implicit none
 
 public :: stream_p04_refpick_extract
@@ -24,34 +55,32 @@ contains
         type(commander_make_pickrefs)          :: xmake_pickrefs
         type(parameters)                       :: params
         logical,                   parameter   :: DEBUG_HERE    = .false.
+        integer,                   parameter   :: NTHUMB_MAX = 20
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
-        character(len=:),         allocatable     :: meta_buffer            ! serialised GUI metadata message
-        type(rec_list)                         :: project_list, project_list_main
-        type(json_value),          pointer     :: latest_picked_micrographs, latest_extracted_particles, picking_templates!, picking_diameters
-        type(json_core)                        :: json
+        character(len=:),          allocatable :: meta_buffer            ! serialised GUI metadata message
+        type(rec_list)                         :: project_list
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs, cline_pick_extract
         type(stream_watcher)                   :: project_buff
         type(sp_project)                       :: spproj, stream_spproj
         type(starproject_stream)               :: starproj_stream
-        type(stream_http_communicator)         :: http_communicator
         type(string),              allocatable :: projects(:)
-        type(string)                           :: odir, odir_extract, odir_picker, odir_completed, str_mic, str_box
+        type(string)                           :: odir, odir_extract, odir_picker, odir_completed
         type(string)                           :: cwd_job, str_dir
         type(gui_metadata_micrograph)          :: meta_micrograph
         type(gui_metadata_cavg2D)              :: meta_cavg2D
-        type(gui_metadata_stream_update)       :: meta_update            ! inbound: user selections and threshold updates
         type(gui_metadata_stream_picking)      :: meta_reference_picking
         character(len=STDLEN)                  :: pick_nthr_env, pick_part_env
         real                                   :: pickrefs_thumbnail_scale
-        integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i
+        integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i, i_ori
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
-        integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star, thumbid_offset
-        integer                                :: n_pickrefs, thumbcount, xtile, ytile, xtiles, ytiles
-        logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_once
-        logical                                :: found, l_restart, l_terminate=.false.
+        integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
+        integer                                :: n_pickrefs, xtiles, ytiles
+        logical                                :: l_projects_left, l_haschanged, l_once
+        logical                                :: l_restart, l_terminate=.false.
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
+        call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'yes')
         call cline%set('picker',  'new')
@@ -97,7 +126,6 @@ contains
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         ! initialise metadata
-        call meta_update%new(           GUI_METADATA_STREAM_UPDATE_TYPE)
         call meta_reference_picking%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
         call meta_micrograph%new(       GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE)
         call meta_cavg2D%new(           GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE)
@@ -109,7 +137,7 @@ contains
             write(logfhandle,'(A)') '>>> WAITING UP TO 24 HOURS FOR '//params%pickrefs%to_char()
             do i = 1, 8640
                 call sleep(10)
-                if( file_exists(params%pickrefs) ) call exit(1)
+                if( file_exists(params%pickrefs) ) exit
             end do
             if( .not. file_exists(params%pickrefs) ) THROW_HARD('timed out waiting for pickrefs: '//params%pickrefs%to_char())
         endif
@@ -126,7 +154,7 @@ contains
 
         ! master project file
         call spproj%read( params%projfile )
-        if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
+        if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('stream_pick_extract must start from an empty project (eg from root project folder)')
         ! movie watcher init
         project_buff = stream_watcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         ! directories structure & restart
@@ -138,8 +166,6 @@ contains
         nptcls_glob              = 0    ! global number of particles
         nmics_rejected_glob      = 0    ! global number of micrographs rejected
         nmic_star                = 0
-        thumbid_offset           = 0
-        thumbcount               = 0
         if( l_restart )then
             call del_file(TERM_STREAM)
             if(cline%defined('dir_exec')) call cline%delete('dir_exec')
@@ -232,9 +258,6 @@ contains
                     write(logfhandle,'(A,I4,A,A)')'>>> ',nmics,' NEW MICROGRAPHS ADDED; ',cast_time_char(simple_gettime())
                 endif
                 l_projects_left = cnt .ne. nprojects
-                ! http stats
-              !  call http_communicator%update_json("micrographs_imported",     project_buff%n_history * STREAM_NMOVS_SET, found)
-              !  call http_communicator%update_json("last_micrograph_imported", stream_datestr(), found)
             else
                 l_projects_left = .false.
             endif
@@ -268,45 +291,29 @@ contains
             ! project update
             if( n_imported > 0 )then
                 n_imported = spproj%os_mic%get_noris()
-                write(logfhandle,'(A,I8)')                '>>> # MICROGRAPHS PROCESSED & IMPORTED  : ',n_imported
-                write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED               : ',nptcls_glob
+                write(logfhandle,'(A,I8)') '>>> # MICROGRAPHS PROCESSED & IMPORTED  : ',n_imported
+                write(logfhandle,'(A,I8)') '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
-       
-                    ! http stats   
-                   ! call http_communicator%update_json("stage",               "finding, picking and extracting micrographs",  found)  
-                   ! call http_communicator%update_json("box_size",              params%box,                                   found)
-                  !  call http_communicator%update_json("particles_extracted",   nptcls_glob,                                  found)
-                   ! call http_communicator%update_json("particles_per_mic",     nint(float(nptcls_glob) / float(n_imported)), found)
-                  !  call http_communicator%update_json("micrographs_processed", n_imported,                                   found)
-                  !  call http_communicator%update_json("micrographs_rejected",  n_failed_jobs + nmics_rejected_glob,          found)
-                !     if(spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') \
-                !     .and. spproj%os_mic%isthere('smpd') .and. spproj%os_mic%isthere('boxfile')) then
-                !         i_max = 10
-                !         if(spproj%os_mic%get_noris() < i_max) i_max = spproj%os_mic%get_noris()
-                !         ! create an empty latest_picked_micrographs json array
-                !     !    call json%remove(latest_picked_micrographs, destroy=.true.)
-                !    !     call json%create_array(latest_picked_micrographs, "latest_picked_micrographs")
-                !    !     call http_communicator%add_to_json(latest_picked_micrographs)
-                !         do i_thumb=0, i_max - 1
-                !             str_mic = spproj%os_mic%get_str(spproj%os_mic%get_noris() - i_thumb, "thumb_den")
-                !             str_box = spproj%os_mic%get_str(spproj%os_mic%get_noris() - i_thumb, "boxfile")
-                !             call json_add_micrograph(str_mic, 100, 0, 100, 200,\
-                !             nint(spproj%os_mic%get(spproj%os_mic%get_noris() - i_thumb, "xdim")),\
-                !             nint(spproj%os_mic%get(spproj%os_mic%get_noris() - i_thumb, "ydim")), str_box)
-                !             call str_mic%kill
-                !             call str_box%kill
-                !         end do
-                !     endif
-       
+                call send_meta(string('finding, picking and extracting micrographs'))
+                ! send the NTHUMB_MAX most recent micrograph thumbnails to the GUI
+                if( spproj%os_mic%isthere('thumb') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
+                .and. spproj%os_mic%isthere('smpd') .and. spproj%os_mic%isthere('boxfile') ) then
+                    i_thumb = spproj%os_mic%get_noris()   ! cache; repurposed as offset below
+                    i_max  = min(i_thumb, NTHUMB_MAX)
+                    i_thumb = i_thumb - i_max              ! index just before the first thumbnail
+                    do i_ori = 1, i_max
+                        call send_micrograph_meta(i_ori, i_max, i_thumb + i_ori)
+                    end do
+                endif
                 ! write project for gui, micrographs field only
                 last_injection = simple_gettime()
                 l_haschanged = .true.
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
-                if( n_imported < 1000 .and. l_haschanged )then
+                if( n_imported < 1000 )then
                     call update_user_params(params, cline)
                     call write_micrographs_starfile
-                else if( n_imported > nmic_star + 100 .and. l_haschanged )then
+                else if( n_imported > nmic_star + 100 )then
                     call update_user_params(params, cline)
                     call write_micrographs_starfile
                     nmic_star = n_imported
@@ -324,7 +331,6 @@ contains
                 endif
             endif
             call sleep(WAITTIME)
-         !   call update_user_params(params, cline, http_communicator)
         end do
         ! termination
 
@@ -336,7 +342,6 @@ contains
         call spproj%kill
         call qsys_cleanup(params)
         call project_list%kill
-        call project_list_main%kill
         ! end gracefully
 
         call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT NORMAL STOP ****')
@@ -741,10 +746,10 @@ contains
                         deallocate(boxdata)
                     endif
                     call my_boxfile%kill()
-                    if( meta_micrograph%assigned() .and. mq_stream_master_in%is_active() ) then
-                        call meta_micrograph%serialise(meta_buffer)
-                        call mq_stream_master_in%send(meta_buffer)
-                    endif
+                endif
+                if( meta_micrograph%assigned() .and. mq_stream_master_in%is_active() ) then
+                    call meta_micrograph%serialise(meta_buffer)
+                    call mq_stream_master_in%send(meta_buffer)
                 endif
             end subroutine send_micrograph_meta
 
@@ -780,7 +785,6 @@ contains
                 my_xtile = 0
                 my_ytile = 0
                 do i = 1, n
-                    write(*,*) 'send_available_cavgs2D', my_path%to_char() , i, n, my_xtile, my_ytile
                     call send_cavg2D_meta(my_path, i, n, my_xtile, my_ytile)
                     my_xtile = my_xtile + 1
                     if( my_xtile == xtiles ) then
@@ -793,7 +797,7 @@ contains
             ! Called asynchronously on SIGTERM. Exits immediately after logging.
             subroutine sigterm_handler()
                 write(logfhandle, '(A)') 'SIGTERM RECEIVED'
-                call exit(1)
+                l_terminate = .true.
             end subroutine sigterm_handler
 
     end subroutine exec_stream_pick_extract

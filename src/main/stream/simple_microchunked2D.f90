@@ -102,9 +102,10 @@ module simple_microchunked2D
   use simple_qsys_env,     only: qsys_env
   use simple_rec_list,     only: rec_list, rec_iterator, project_rec
   use simple_stack_io,     only: stack_io
+  use simple_gui_utils,    only: mrc2jpeg_tiled
   use simple_parameters,   only: parameters
   use simple_sp_project,   only: sp_project
-  use simple_defs_fname,   only: METADATA_EXT, ABINITIO2D_FINISHED, FRCS_FILE
+  use simple_defs_fname,   only: METADATA_EXT, ABINITIO2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
   use simple_string_utils, only: int2str
   use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr
   use simple_projfile_utils,          only: merge_chunk_projfiles
@@ -116,9 +117,9 @@ module simple_microchunked2D
 #include "simple_local_flags.inc"
 
   logical, parameter :: DEBUG                   = .true.
-  integer, parameter :: MICROCHUNK_P1_THRESHOLD = 5000
+  integer, parameter :: MICROCHUNK_P1_THRESHOLD = 5000  
   integer, parameter :: MICROCHUNK_P2_THRESHOLD = 8000
-  integer, parameter :: REFCHUNK_THRESHOLD      = 10000
+  integer, parameter :: REFCHUNK_THRESHOLD      = 10000 
   integer, parameter :: DEFAULT_NCLS            = 100
   integer, parameter :: DEFAULT_WALLTIME        = 29 * 60  ! 29 minutes in seconds
   real,    parameter :: DEFAULT_LPSTART         = 15.0
@@ -151,6 +152,9 @@ module simple_microchunked2D
     type(chunk2D), allocatable  :: microchunks_pass_1(:)
     type(chunk2D), allocatable  :: microchunks_pass_2(:)
     type(chunk2D), allocatable  :: microchunks_match(:)
+    integer,       allocatable  :: refs_jpeg_inds(:), refs_jpeg_pops(:), ref_selection(:)
+    integer,       allocatable  :: match_jpeg_inds(:), match_jpeg_pops(:)
+    real,          allocatable  :: refs_jpeg_res(:), match_jpeg_res(:) 
     type(chunk2D)               :: refchunk
     type(qsys_env)              :: qenv
     type(string)                :: outdir_microchunks_pass_1
@@ -159,9 +163,18 @@ module simple_microchunked2D
     type(string)                :: outdir_refchunk
     type(string)                :: completedir
     type(string)                :: refs
+    type(string)                :: refs_jpeg
+    type(string)                :: match_stk
+    type(string)                :: match_jpeg
+    integer                     :: refs_jpeg_xtiles = 0
+    integer                     :: refs_jpeg_ytiles = 0
+    integer                     :: match_jpeg_xtiles = 0
+    integer                     :: match_jpeg_ytiles = 0
     integer                     :: nparallel = 1
     integer                     :: nthr      = 1
     integer                     :: box       = 0
+    integer                     :: n_accepted_ptcls = 0
+    integer                     :: n_rejected_ptcls = 0
     real                        :: mskdiam   = 0.0
   contains
     procedure :: new
@@ -177,7 +190,12 @@ module simple_microchunked2D
     procedure :: get_n_chunks_running
     procedure :: get_n_pass_1_non_rejected_ptcls
     procedure :: get_n_pass_2_non_rejected_ptcls
+    procedure :: get_n_accepted_ptcls
+    procedure :: get_n_rejected_ptcls
     procedure :: get_finished
+    procedure :: get_references
+    procedure :: get_latest_match
+    procedure :: get_reference_selection
     procedure :: append_microchunk_pass_1
     procedure :: append_microchunk_pass_2
     procedure :: append_microchunk_match
@@ -360,11 +378,13 @@ contains
   ! sentinel files.
   subroutine import_existing_microchunks_match( self )
     class(microchunked2D), intent(inout) :: self
+    logical,               allocatable   :: cls_msk(:)
     type(sp_project)                     :: chunk_project
     type(chunk2D)                        :: new_chunk
-    type(string)                         :: chunk_folder
+    type(string)                         :: chunk_folder, stkname
     integer(timer_int_kind)              :: t0
-    integer                              :: chunk_id
+    integer                              :: chunk_id, ncls
+    real                                 :: smpd
     t0       = timer_start()
     chunk_id = 0
     do
@@ -381,6 +401,7 @@ contains
         cycle
       end if
       call chunk_project%read(new_chunk%projfile)
+      call chunk_project%get_cavgs_stk(stkname, ncls, smpd)
       new_chunk%nptcls              = chunk_project%os_ptcl2D%get_noris()
       new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
       new_chunk%abinitio2D_running  = .false.
@@ -388,6 +409,19 @@ contains
       new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED')
       new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE')
       new_chunk%failed              = .false.
+      self%match_stk                = stkname
+      if( new_chunk%complete ) then
+        self%match_jpeg = swap_suffix(self%match_stk, JPG_EXT, MRC_EXT)
+        call chunk_project%cavgs2jpg(self%match_jpeg_inds, self%match_jpeg, self%match_jpeg_xtiles, self%match_jpeg_ytiles)
+        self%match_jpeg_pops = chunk_project%os_cls2D%get_all_asint('pop')
+        self%match_jpeg_res  = chunk_project%os_cls2D%get_all('res')
+        allocate(cls_msk, source=self%match_jpeg_inds /= 0)
+        self%match_jpeg_inds = pack(self%match_jpeg_inds, cls_msk)
+        self%match_jpeg_pops = pack(self%match_jpeg_pops, cls_msk)
+        self%match_jpeg_res  = pack(self%match_jpeg_res,  cls_msk)
+        call chunk_project%kill()
+        deallocate(cls_msk)
+      end if
       call chunk_project%kill()
       call self%append_microchunk_match(new_chunk)
       write(logfhandle,'(A,I6,A,I8,A)') &
@@ -401,8 +435,13 @@ contains
   ! state from sentinel files. No-op if the directory or project file is absent.
   subroutine import_existing_refchunk( self )
     class(microchunked2D), intent(inout) :: self
+    logical,               allocatable   :: cls_msk(:)
+    integer,               allocatable   :: states(:)
     type(sp_project)                     :: chunk_project
+    type(string)                         :: stkname
     integer(timer_int_kind)              :: t0
+    integer                              :: ncls
+    real                                 :: smpd
     t0 = timer_start()
     if( .not. dir_exists(self%outdir_refchunk) ) return
     self%refchunk%id      = 1
@@ -410,6 +449,7 @@ contains
     self%refchunk%projfile = string(self%refchunk%folder%to_char() // '/refchunk' // METADATA_EXT)
     if( .not. file_exists(self%refchunk%projfile) ) return
     call chunk_project%read(self%refchunk%projfile)
+    call chunk_project%get_cavgs_stk(stkname, ncls, smpd)
     self%refchunk%nptcls              = chunk_project%os_ptcl2D%get_noris()
     self%refchunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
     self%refchunk%abinitio2D_running  = .false.
@@ -417,6 +457,24 @@ contains
     self%refchunk%rejection_complete  = file_exists(self%refchunk%folder%to_char() // '/REJECTION_FINISHED')
     self%refchunk%complete            = file_exists(self%refchunk%folder%to_char() // '/COMPLETE')
     self%refchunk%failed              = .false.
+    self%refs                         = stkname
+    if( self%refchunk%complete ) then
+        self%refs_jpeg = swap_suffix(self%refs, JPG_EXT, MRC_EXT)
+        call chunk_project%cavgs2jpg(self%refs_jpeg_inds, self%refs_jpeg, self%refs_jpeg_xtiles, self%refs_jpeg_ytiles)
+        self%ref_selection  = self%refs_jpeg_inds
+        self%refs_jpeg_pops = chunk_project%os_cls2D%get_all_asint('pop')
+        self%refs_jpeg_res  = chunk_project%os_cls2D%get_all('res')
+        allocate(cls_msk, source=self%refs_jpeg_inds /= 0)
+        self%refs_jpeg_inds = pack(self%refs_jpeg_inds, cls_msk)
+        self%refs_jpeg_pops = pack(self%refs_jpeg_pops, cls_msk)
+        self%refs_jpeg_res  = pack(self%refs_jpeg_res,  cls_msk)
+        deallocate(cls_msk)
+        states = chunk_project%os_cls2D%get_all_asint('state')
+        allocate(cls_msk, source=states /= 0)
+        self%ref_selection = pack(self%ref_selection, cls_msk)
+        call chunk_project%kill()
+        deallocate(cls_msk, states)
+    end if
     call chunk_project%kill()
     write(logfhandle,'(A,I8,A)') &
       '>>> IMPORTED EXISTING REFCHUNK WITH ', self%refchunk%nptcls, ' PARTICLES'
@@ -519,6 +577,22 @@ contains
     end do
   end function get_n_pass_2_non_rejected_ptcls
 
+  ! Returns the cumulative number of particles accepted (not rejected) across
+  ! all completed rejection passes. Updated by collect_and_reject as each chunk
+  ! finishes; distinct from get_n_pass_1/2_non_rejected_ptcls, which count
+  ! only unconsumed per-chunk selected particles computed on the fly.
+  pure integer function get_n_accepted_ptcls( self )
+    class(microchunked2D), intent(in) :: self
+    get_n_accepted_ptcls = self%n_accepted_ptcls
+  end function get_n_accepted_ptcls
+
+  ! Returns the cumulative number of particles rejected across all completed
+  ! rejection passes. Updated alongside n_accepted_ptcls by collect_and_reject.
+  pure integer function get_n_rejected_ptcls( self )
+    class(microchunked2D), intent(in) :: self
+    get_n_rejected_ptcls = self%n_rejected_ptcls
+  end function get_n_rejected_ptcls
+
   ! Returns true only when every chunk across all four tiers is marked complete.
   ! Checks proceed in pipeline order; an incomplete earlier tier returns early.
   logical function get_finished( self )
@@ -538,6 +612,90 @@ contains
     get_finished = self%get_n_microchunks_match() == 0 .or. &
                    all(self%microchunks_match(:)%complete)   
   end function get_finished
+
+  ! Returns .true. and populates the reference class-average outputs when the
+  ! refchunk is complete and all reference arrays are allocated; returns .false.
+  ! otherwise. On a .false. return, all intent(out) and intent(inout) outputs
+  ! are left in a defined, safe state (deallocated / zero / empty).
+  logical function get_references( self, jpeg_inds, jpeg_pops, jpeg_res, jpeg, stk, xtiles, ytiles )
+    class(microchunked2D), intent(in)    :: self
+    integer, allocatable,  intent(inout) :: jpeg_inds(:), jpeg_pops(:) ! class indices and populations in the JPEG tile order
+    real,    allocatable,  intent(inout) :: jpeg_res(:)                 ! resolution (Angstrom) per class, same order
+    type(string),          intent(out)   :: jpeg, stk                   ! paths to the JPEG contact sheet and MRC reference stack
+    integer,               intent(out)   :: xtiles, ytiles              ! tile grid dimensions of the JPEG contact sheet
+    ! release any prior allocations so the caller gets a clean result on .false. return
+    if( allocated(jpeg_inds) ) deallocate(jpeg_inds)
+    if( allocated(jpeg_pops) ) deallocate(jpeg_pops)
+    if( allocated(jpeg_res)  ) deallocate(jpeg_res)
+    jpeg   = ''
+    stk    = ''
+    xtiles = 0
+    ytiles = 0
+    ! references are only available once the refchunk has finished
+    if( .not. self%refchunk%complete ) then
+        get_references = .false.
+        return
+    end if
+    ! guard against inconsistent state where refchunk is marked complete but
+    ! the reference arrays have not yet been populated
+    if( .not. (allocated(self%refs_jpeg_inds) .and. allocated(self%refs_jpeg_pops) .and. allocated(self%refs_jpeg_res)) ) then
+        get_references = .false.
+        return
+    end if
+    allocate(jpeg_inds, source=self%refs_jpeg_inds)
+    allocate(jpeg_pops, source=self%refs_jpeg_pops)
+    allocate(jpeg_res,  source=self%refs_jpeg_res)
+    stk    = self%refs
+    jpeg   = self%refs_jpeg
+    xtiles = self%refs_jpeg_xtiles
+    ytiles = self%refs_jpeg_ytiles
+    get_references = .true.
+  end function get_references
+
+  logical function get_latest_match( self, jpeg_inds, jpeg_pops, jpeg_res, jpeg, stk, xtiles, ytiles )
+    class(microchunked2D), intent(in)    :: self
+    integer, allocatable,  intent(inout) :: jpeg_inds(:), jpeg_pops(:) ! class indices and populations in the JPEG tile order
+    real,    allocatable,  intent(inout) :: jpeg_res(:)                 ! resolution (Angstrom) per class, same order
+    type(string),          intent(out)   :: jpeg, stk                   ! paths to the JPEG contact sheet and MRC reference stack
+    integer,               intent(out)   :: xtiles, ytiles              ! tile grid dimensions of the JPEG contact sheet
+    ! release any prior allocations so the caller gets a clean result on .false. return
+    if( allocated(jpeg_inds) ) deallocate(jpeg_inds)
+    if( allocated(jpeg_pops) ) deallocate(jpeg_pops)
+    if( allocated(jpeg_res)  ) deallocate(jpeg_res)
+    jpeg   = ''
+    stk    = ''
+    xtiles = 0
+    ytiles = 0
+    if( self%match_jpeg == '' ) then
+        get_latest_match = .false.
+        return
+    end if
+    ! guard against inconsistent state where match_jpeg is set but the
+    ! match arrays have not yet been populated
+    if( .not. (allocated(self%match_jpeg_inds) .and. allocated(self%match_jpeg_pops) .and. allocated(self%match_jpeg_res)) ) then
+        get_latest_match = .false.
+        return
+    end if
+    allocate(jpeg_inds, source=self%match_jpeg_inds)
+    allocate(jpeg_pops, source=self%match_jpeg_pops)
+    allocate(jpeg_res,  source=self%match_jpeg_res )
+    stk    = self%match_stk
+    jpeg   = self%match_jpeg
+    xtiles = self%match_jpeg_xtiles
+    ytiles = self%match_jpeg_ytiles
+    get_latest_match = .true.
+  end function get_latest_match
+
+  logical function get_reference_selection( self, selection )
+    class(microchunked2D), intent(in)    :: self
+    integer, allocatable,  intent(out)   :: selection(:)
+    if( .not. allocated(self%ref_selection) ) then
+      get_reference_selection = .false.
+      return
+    end if
+    allocate(selection, source=self%ref_selection)
+    get_reference_selection = .true.
+  end function get_reference_selection
 
   ! --------------------------------------------------------------------------
   ! APPEND HELPERS
@@ -1042,7 +1200,7 @@ contains
         write(logfhandle,'(A,I6)') '>>> INITIATED 2D ANALYSIS OF MICROCHUNK PASS 2 # ', chunk%id
       end associate
     end do
-
+    write(*,*) ' self%get_n_microchunks_pass_1()',  self%get_n_microchunks_pass_1()
     ! Submit pass-1 microchunks last — lowest priority
     do i = 1, self%get_n_microchunks_pass_1()
       if( self%get_n_chunks_running() >= self%nparallel ) exit
@@ -1071,8 +1229,12 @@ contains
   ! is written after its rejection completes.
   subroutine collect_and_reject( self )
     class(microchunked2D), intent(inout) :: self
+    logical,               allocatable   :: cls_msk(:)
+    integer,               allocatable   :: states(:)
+    type(sp_project)        :: spproj
     integer(timer_int_kind) :: t0
-    integer                 :: i
+    integer                 :: i, j, non_zero, ncls
+    real                    :: smpd
     t0 = timer_start()
 
     do i = 1, self%get_n_microchunks_pass_1()
@@ -1108,6 +1270,25 @@ contains
             chunk%abinitio2D_running  = .false.
             chunk%abinitio2D_complete = .true.
             chunk%complete            = .true.
+            call spproj%read_segment('out',    chunk%projfile)
+            call spproj%read_segment('ptcl2D', chunk%projfile)
+            call spproj%read_segment('cls2D',  chunk%projfile)
+            non_zero = spproj%os_ptcl2D%count_state_gt_zero()
+            self%n_accepted_ptcls = self%n_accepted_ptcls + non_zero
+            self%n_rejected_ptcls = self%n_rejected_ptcls + spproj%os_ptcl2D%get_noris() - non_zero 
+            call spproj%get_cavgs_stk(self%match_stk, ncls, smpd)
+            self%match_jpeg = swap_suffix(self%match_stk, JPG_EXT, MRC_EXT)
+            call spproj%cavgs2jpg(self%match_jpeg_inds, self%match_jpeg, self%match_jpeg_xtiles, self%match_jpeg_ytiles)
+            self%match_jpeg_pops = spproj%os_cls2D%get_all_asint('pop')
+            self%match_jpeg_res  = spproj%os_cls2D%get_all('res')
+            allocate(cls_msk(size(self%match_jpeg_inds)), source=.false.)
+            do j=1, size(self%match_jpeg_inds)
+              cls_msk(self%match_jpeg_inds(j)) = .true.
+            end do
+            self%match_jpeg_pops = pack(self%match_jpeg_pops, cls_msk)
+            self%match_jpeg_res  = pack(self%match_jpeg_res,  cls_msk)
+            call spproj%kill()
+            deallocate(cls_msk)
             call simple_copy_file(chunk%projfile, self%completedir // '/' // basename(chunk%projfile))
             call simple_touch(chunk%folder%to_char() // '/COMPLETE')
             write(logfhandle,'(A,I6)') '>>> COMPLETED 2D ANALYSIS OF MICROCHUNK MATCH # ', chunk%id
@@ -1126,11 +1307,27 @@ contains
       end if
       call self%reject_cavgs(self%refchunk, string(LABEL_REF))
       if( self%refchunk%rejection_complete ) then
+        call spproj%read_segment('cls2D', self%refchunk%projfile)
+        call spproj%read_segment('out',   self%refchunk%projfile)
+        self%refs_jpeg = swap_suffix(self%refs, JPG_EXT, MRC_EXT)
+        call spproj%cavgs2jpg(self%refs_jpeg_inds, self%refs_jpeg, self%refs_jpeg_xtiles, self%refs_jpeg_ytiles)
+        self%ref_selection  = self%refs_jpeg_inds
+        self%refs_jpeg_pops = spproj%os_cls2D%get_all_asint('pop')
+        self%refs_jpeg_res  = spproj%os_cls2D%get_all('res')
+        allocate(cls_msk, source=self%refs_jpeg_inds /= 0)
+        self%refs_jpeg_inds = pack(self%refs_jpeg_inds, cls_msk)
+        self%refs_jpeg_pops = pack(self%refs_jpeg_pops, cls_msk)
+        self%refs_jpeg_res  = pack(self%refs_jpeg_res,  cls_msk)
+        deallocate(cls_msk)
+        states = spproj%os_cls2D%get_all_asint('state')
+        allocate(cls_msk, source=states /= 0)
+        self%ref_selection = pack(self%ref_selection, cls_msk)
+        call spproj%kill()
+        deallocate(cls_msk, states)
         call simple_touch(self%refchunk%folder%to_char() // '/COMPLETE')
         self%refchunk%complete = .true.
       end if
     end if
-
     call timer_stop(t0, string('collect_and_reject'))
   end subroutine collect_and_reject
 
@@ -1247,9 +1444,10 @@ contains
     subroutine write_cavgs( stkpath, suffix, selected )
       type(string), intent(in) :: stkpath, suffix
       logical,      intent(in) :: selected
-      type(string)   :: out_stkname
+      type(string)   :: out_stkname, out_jpgname
       integer        :: istk, icls
       out_stkname = swap_suffix(stkpath, suffix, string('.mrc'))
+      out_jpgname = swap_suffix(out_stkname, JPG_EXT, MRC_EXT)
       istk = 0
       do icls = 1, ncls
         if( selected .eqv. (.not. l_rejected(icls)) ) then
@@ -1257,6 +1455,8 @@ contains
           call cavg_imgs(icls)%write(out_stkname, istk)
         end if
       end do
+      call mrc2jpeg_tiled(out_stkname, out_jpgname)
+      write(logfhandle,'(A,A)') '>>> JPEG ', out_jpgname%to_char()
     end subroutine write_cavgs
 
   end subroutine reject_cavgs

@@ -64,6 +64,7 @@ contains
     call test_initial_picking()
     call test_reference_picking()
     call test_opening2D()
+    ! //  TODO - add test for particle sievig and pool2D
   end subroutine run_all_gui_assembler_tests
 
   !---------------- lifecycle ----------------

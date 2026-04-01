@@ -56,7 +56,6 @@ contains
   ! Reset all fields and mark the object as uninitialised.
   subroutine kill( self )
     class(gui_metadata_base), intent(inout) :: self
-    if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%meta_type     = 0
     self%l_assigned    = .false.
     self%l_initialized = .false.

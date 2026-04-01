@@ -71,6 +71,7 @@ contains
     call test_set_get_stream_opening2D()
     call test_serialise_stream_opening2D()
     call test_jsonise_stream_opening2D()
+    !// TODO  - add tests for particle sieving and pool2D
   end subroutine run_all_gui_metadata_tests
 
   !---------------- base ----------------

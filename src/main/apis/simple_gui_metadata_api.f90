@@ -15,4 +15,6 @@ module simple_gui_metadata_api
   use simple_gui_metadata_stream_optics_assignment, only: gui_metadata_stream_optics_assignment
   use simple_gui_metadata_stream_picking,           only: gui_metadata_stream_picking
   use simple_gui_metadata_stream_opening2D,         only: gui_metadata_stream_opening2D
+  use simple_gui_metadata_stream_particle_sieving,  only: gui_metadata_stream_particle_sieving
+  use simple_gui_metadata_stream_pool2D,            only: gui_metadata_stream_pool2D
 end module simple_gui_metadata_api

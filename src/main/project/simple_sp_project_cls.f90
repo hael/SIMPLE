@@ -86,11 +86,16 @@ contains
         if( ncls == 0 ) return
         if( allocated(cavg_inds) ) deallocate(cavg_inds)
         allocate(cls_mask(ncls), cavg_inds(ncls))
-        cls_mask = .true.
+        cls_mask  = .true.
+        cavg_inds = 0
         do icls = 1, ncls
-            if( self%os_cls2D%get_int(icls,'pop') == 0 ) cls_mask(icls) = .false.
-            if( self%os_cls2D%get_state(icls)     == 0 ) cls_mask(icls) = .false.
             cavg_inds(icls) = icls
+          !  if( self%os_cls2D%get_int(icls,'pop') == 0 ) cls_mask(icls) = .false.
+           ! if( self%os_cls2D%get_state(icls)     == 0 ) cls_mask(icls) = .false.
+            if( self%os_cls2D%get_int(icls,'pop') == 0 ) then
+                cls_mask(icls)  = .false.
+                cavg_inds(icls) = 0
+            endif
         enddo
         ncls_sel = count(cls_mask)
         if( ncls_sel == 0 ) return

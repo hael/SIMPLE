@@ -601,6 +601,22 @@ contains
                 conv_mi_class = os%get(1,'CLASS_OVERLAP')
                 conv_frac     = os%get(1,'SEARCH_SPACE_SCANNED')
                 conv_score    = os%get(1,'SCORE')
+                ! new
+                last_complete_iter = it
+                if(allocated(pool_jpeg_map)) deallocate(pool_jpeg_map)
+                if(allocated(pool_jpeg_pop)) deallocate(pool_jpeg_pop)
+                if(allocated(pool_jpeg_res)) deallocate(pool_jpeg_res)
+                pool_jpeg_pop = pool_proj%os_cls2D%get_all_asint('pop')
+                pool_jpeg_res = pool_proj%os_cls2D%get_all('res')
+                allocate(pool_jpeg_map, mold=pool_jpeg_pop)
+                do i=1, size(pool_jpeg_map)
+                    pool_jpeg_map(i) = i
+                end do
+                current_jpeg = CAVGS_ITER_FBODY//int2str_pad(it, 3)//'.jpg'
+                current_jpeg_ntiles  = pool_proj%os_cls2D%get_noris()
+                current_jpeg_ntilesx = floor(sqrt(real(current_jpeg_ntiles)))
+                current_jpeg_ntilesy = ceiling(real(current_jpeg_ntiles)/real(current_jpeg_ntilesx))
+                ! end new
                 write(logfhandle,'(A,I6,A,F7.3,A,F7.3,A,F7.3)')'>>> POOL         ITERATION ',it,&
                     &'; CLASS OVERLAP: ',conv_mi_class,'; SEARCH SPACE SCANNED: ',conv_frac,'; SCORE: ',conv_score
             endif

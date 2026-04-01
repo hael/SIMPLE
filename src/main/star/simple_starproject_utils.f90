@@ -78,7 +78,7 @@ contains
 
     subroutine enable_rlnflag(rlnflag, flags, flagindex)
         type(star_flag), intent(inout) :: flags(:)
-        character(LEN=LEN_FLAG) :: rlnflag
+        character(LEN=*) :: rlnflag
         integer                 :: flagindex, i
         do i = 1, size(flags)
             if(index(flags(i)%rlnflag, trim(adjustl(rlnflag))) > 0 .AND. len_trim(flags(i)%splflag) > 0) then

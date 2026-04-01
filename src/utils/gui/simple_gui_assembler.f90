@@ -23,12 +23,14 @@
 !     assemble_stream_initial_picking()    — write initial-picking section
 !     assemble_stream_reference_picking()  — write reference-picking section
 !     assemble_stream_opening2D()          — write 2D-classification section
+!     assemble_stream_particle_sieving()   — write particle-sieving section
+!     assemble_stream_pool2D()             — write pool-2D section
 !
 ! DEPENDENCIES:
 !   unix, simple_string, simple_forked_process, simple_gui_metadata_api
 !==============================================================================
 module simple_gui_assembler
-  use unix,                    only: c_time
+  use unix,                    only: c_time, c_long
   use simple_string,           only: string
   use simple_forked_process,   only: forked_process,       &
                                      FORK_STATUS_RUNNING,   &
@@ -36,7 +38,20 @@ module simple_gui_assembler
                                      FORK_STATUS_STOPPED,   &
                                      FORK_STATUS_RESTARTING,&
                                      FORK_STATUS_SKIPPED
-  use simple_gui_metadata_api
+  use simple_gui_metadata_api, only: CK,                                    &
+                                     json_core,                              &
+                                     json_value,                             &
+                                     gui_metadata_stream_preprocess,         &
+                                     gui_metadata_micrograph,                &
+                                     gui_metadata_histogram,                 &
+                                     gui_metadata_timeplot,                  &
+                                     gui_metadata_stream_optics_assignment,  &
+                                     gui_metadata_optics_group,              &
+                                     gui_metadata_stream_picking,            &
+                                     gui_metadata_cavg2D,                    &
+                                     gui_metadata_stream_opening2D,          &
+                                     gui_metadata_stream_particle_sieving, &
+                                     gui_metadata_stream_pool2D
   implicit none
 
 public :: gui_assembler
@@ -52,6 +67,8 @@ type :: gui_assembler
   type(string)              :: initial_picking_hash    ! FNV-1a hash of last sent initial-picking section
   type(string)              :: reference_picking_hash  ! FNV-1a hash of last sent reference-picking section
   type(string)              :: opening2D_hash          ! FNV-1a hash of last sent opening2D section
+  type(string)              :: particle_sieving_hash
+  type(string)              :: pool2D_hash             ! FNV-1a hash of last sent pool-2D section
   integer                   :: job_id    = 0           ! pipeline job identifier
   integer                   :: starttime = 0           ! Unix timestamp of job start
   integer                   :: stoptime  = 0           ! Unix timestamp of job stop (0 while running)
@@ -70,6 +87,8 @@ contains
   procedure :: assemble_stream_initial_picking
   procedure :: assemble_stream_reference_picking
   procedure :: assemble_stream_opening2D
+  procedure :: assemble_stream_particle_sieving
+  procedure :: assemble_stream_pool2D
 end type gui_assembler
 
 contains
@@ -96,6 +115,7 @@ contains
     self%stoptime  = 0
     self%job_id    = 0
     self%init      = .false.
+    call self%clear_hashes()
     call self%json%destroy(self%json_root)
     nullify(self%json_root)
   end subroutine kill
@@ -108,14 +128,16 @@ contains
     call self%initial_picking_hash%kill()
     call self%reference_picking_hash%kill()
     call self%opening2D_hash%kill()
+    call self%particle_sieving_hash%kill()
+    call self%pool2D_hash%kill()
   end subroutine clear_hashes
 
   ! Write the stream_heartbeat section: per-process status fields plus a master
   ! aggregate status derived from the union of all child-process states.
-  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D, fork_reference_picking )
+  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D, fork_reference_picking, fork_particle_sieving, fork_pool2D )
     class(gui_assembler),  intent(inout) :: self
-    class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_opening2D
-    class(forked_process), intent(inout) :: fork_reference_picking
+    class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_opening2D, fork_particle_sieving
+    class(forked_process), intent(inout) :: fork_reference_picking, fork_pool2D
     type(json_value),      pointer       :: json_ptr, json_master_ptr
     integer                              :: n_running, n_failed, n_restarting, n_unknown
     n_running    = 0
@@ -124,11 +146,13 @@ contains
     n_unknown    = 0
     call self%json%remove_if_present(self%json_root, 'stream_heartbeat')
     call self%json%create_object(json_ptr, 'stream_heartbeat')
-    call forked_process_status(string('preprocessing'),    fork_preprocess)
-    call forked_process_status(string('assign_optics'), fork_assign_optics)
+    call forked_process_status(string('preprocessing'),     fork_preprocess)
+    call forked_process_status(string('assign_optics'),     fork_assign_optics)
     call forked_process_status(string('initial_picking'),   fork_opening2D)
     call forked_process_status(string('opening2D'),         fork_opening2D)
     call forked_process_status(string('reference_picking'), fork_reference_picking)
+    call forked_process_status(string('particle_sieving'),  fork_particle_sieving)
+    call forked_process_status(string('pool2D'),            fork_pool2D)
     ! global status
     call self%json%create_object(json_master_ptr, 'master')
     call self%json%add(json_master_ptr, 'timestamp', int(c_time(0_c_long)))
@@ -331,10 +355,10 @@ contains
     type(gui_metadata_micrograph),        allocatable, intent(inout) :: meta_micrographs(:)
     type(gui_metadata_cavg2D),            allocatable, intent(inout) :: meta_cavgs2D(:)
     character(kind=CK,len=:),             allocatable                :: buffer
-    type(json_value),                     pointer                    :: json_ptr, json_mics_ptr
+    type(json_value),                     pointer                    :: json_ptr, json_mics_ptr, json_cavgs2D_ptr
     type(string)                                                     :: str, hash
     logical                                                          :: l_add
-    integer                                                          :: i_mic
+    integer                                                          :: i_mic, i_cavg
     call self%json%remove_if_present(self%json_root, 'reference_picking')
     json_ptr => meta_reference_picking%jsonise()
     if( .not. associated(json_ptr) ) return
@@ -352,14 +376,14 @@ contains
     endif
     if( allocated(meta_cavgs2D) ) then
       l_add = .false.
-      call self%json%create_array(json_mics_ptr, 'picking_references')
-      do i_mic=1, size(meta_cavgs2D)
-        if( meta_cavgs2D(i_mic)%assigned() ) then
+      call self%json%create_array(json_cavgs2D_ptr, 'picking_references')
+      do i_cavg=1, size(meta_cavgs2D)
+        if( meta_cavgs2D(i_cavg)%assigned() ) then
           l_add = .true.
-          call self%json%add(json_mics_ptr, meta_cavgs2D(i_mic)%jsonise())
+          call self%json%add(json_cavgs2D_ptr, meta_cavgs2D(i_cavg)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
+      if( l_add ) call self%json%add(json_ptr, json_cavgs2D_ptr)
     endif
     call self%json%print_to_string(json_ptr, buffer)
     str  = buffer
@@ -417,6 +441,111 @@ contains
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
   end subroutine assemble_stream_opening2D
+
+  ! Write the particle-sieving section, including reference class averages or
+  ! the latest class averages.  The whole section is suppressed when its hash
+  ! matches the previously sent hash.
+  subroutine assemble_stream_particle_sieving( self, meta_particle_sieving, meta_latest_cavgs2D, meta_ref_cavgs )
+    class(gui_assembler),                       intent(inout) :: self
+    type(gui_metadata_cavg2D),     allocatable, intent(inout) :: meta_latest_cavgs2D(:), meta_ref_cavgs(:)
+    type(gui_metadata_stream_particle_sieving), intent(inout) :: meta_particle_sieving
+    character(kind=CK,len=:),                   allocatable   :: buffer
+    type(json_value),                           pointer       :: json_ptr => null(), json_cavgs2D_ptr => null(), json_cavgs2D_ref_ptr => null()
+    type(string)                                              :: str, hash
+    logical                                                   :: l_add
+    integer                                                   :: i_cls2D
+    call self%json%remove_if_present(self%json_root, 'particle_sieving')
+    json_ptr => meta_particle_sieving%jsonise()
+    if( .not. associated(json_ptr) ) return
+    call self%json%rename(json_ptr, 'particle_sieving')
+    l_add = .false.
+    if( allocated(meta_ref_cavgs) ) then
+      call self%json%create_array(json_cavgs2D_ref_ptr, 'ref_cls2D')
+      do i_cls2D=1, size(meta_ref_cavgs)
+        if( meta_ref_cavgs(i_cls2D)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_cavgs2D_ref_ptr, meta_ref_cavgs(i_cls2D)%jsonise())
+        endif
+      enddo
+      if( l_add ) then
+        call self%json%add(json_ptr, json_cavgs2D_ref_ptr)
+      else
+        call self%json%destroy(json_cavgs2D_ref_ptr)
+        nullify(json_cavgs2D_ref_ptr)
+      end if
+    end if
+    l_add = .false.
+    if( allocated(meta_latest_cavgs2D) ) then
+      call self%json%create_array(json_cavgs2D_ptr, 'latest_cls2D')
+      do i_cls2D=1, size(meta_latest_cavgs2D)
+        if( meta_latest_cavgs2D(i_cls2D)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_cavgs2D_ptr, meta_latest_cavgs2D(i_cls2D)%jsonise())
+        endif
+      enddo
+      if( l_add ) then
+        call self%json%add(json_ptr, json_cavgs2D_ptr)
+      else
+        call self%json%destroy(json_cavgs2D_ptr)
+        nullify(json_cavgs2D_ptr)
+      end if
+    endif
+    call self%json%print_to_string(json_ptr, buffer)
+    str  = buffer
+    hash = str%to_fnv1a_hash64()
+    if( hash /= self%particle_sieving_hash ) then
+      call self%json%add(self%json_root, json_ptr)
+      self%particle_sieving_hash = hash
+    else
+      call self%json%destroy(json_ptr)
+    endif
+    if( allocated(buffer) ) deallocate(buffer)
+    nullify(json_ptr)
+  end subroutine assemble_stream_particle_sieving
+
+  ! Write the pool-2D section, including the latest class averages.
+  ! The whole section is suppressed when its hash matches the previously sent hash.
+  subroutine assemble_stream_pool2D( self, meta_pool2D, meta_latest_cavgs2D )
+    class(gui_assembler),                   intent(inout) :: self
+    type(gui_metadata_cavg2D), allocatable, intent(inout) :: meta_latest_cavgs2D(:)
+    type(gui_metadata_stream_pool2D),       intent(inout) :: meta_pool2D
+    character(kind=CK,len=:),               allocatable   :: buffer
+    type(json_value),                       pointer       :: json_ptr => null(), json_cavgs2D_ptr => null()
+    type(string)                                          :: str, hash
+    logical                                               :: l_add
+    integer                                               :: i_cls2D
+    call self%json%remove_if_present(self%json_root, 'pool2D')
+    json_ptr => meta_pool2D%jsonise()
+    if( .not. associated(json_ptr) ) return
+    call self%json%rename(json_ptr, 'pool2D')
+    l_add = .false.
+    if( allocated(meta_latest_cavgs2D) ) then
+      call self%json%create_array(json_cavgs2D_ptr, 'latest_cls2D')
+      do i_cls2D=1, size(meta_latest_cavgs2D)
+        if( meta_latest_cavgs2D(i_cls2D)%assigned() ) then
+          l_add = .true.
+          call self%json%add(json_cavgs2D_ptr, meta_latest_cavgs2D(i_cls2D)%jsonise())
+        endif
+      enddo
+      if( l_add ) then
+        call self%json%add(json_ptr, json_cavgs2D_ptr)
+      else
+        call self%json%destroy(json_cavgs2D_ptr)
+        nullify(json_cavgs2D_ptr)
+      end if
+    endif
+    call self%json%print_to_string(json_ptr, buffer)
+    str  = buffer
+    hash = str%to_fnv1a_hash64()
+    if( hash /= self%pool2D_hash ) then
+      call self%json%add(self%json_root, json_ptr)
+      self%pool2D_hash = hash
+    else
+      call self%json%destroy(json_ptr)
+    endif
+    if( allocated(buffer) ) deallocate(buffer)
+    nullify(json_ptr)
+  end subroutine assemble_stream_pool2D
 
   ! Record the job stop timestamp (call when the pipeline finishes).
   subroutine set_stoptime( self )
