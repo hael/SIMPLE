@@ -1165,4 +1165,19 @@ contains
         self%cmat(1:c,:,:) = self%cmat(1:c,:,:) / (real(self_b%cmat(1:c,:,:))**2 + aimag(self_b%cmat(1:c,:,:))**2 + lambda * self_r%cmat(1:c,:,:))
     end subroutine tv_apply_reg
 
+    module subroutine bartlett_reg_3D( self, radius )
+        use simple_tent_smooth, only: tent_smooth_3d
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: radius
+        real    :: tmp(self%ldim(1),self%ldim(2),self%ldim(3))
+        integer :: nx, ny, nz
+        if( self%is_2d() ) THROW_HARD('3D images only; tent_smooth_3D')
+        if( self%ft )      THROW_HARD('Real space only; tent_smooth_3D')
+        nx = self%ldim(1)
+        ny = self%ldim(2)
+        nz = self%ldim(3)
+        tmp = 0.
+        call tent_smooth_3d(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), tmp, nx, ny, nz, radius)
+    end subroutine bartlett_reg_3D
+
 end submodule simple_image_filt

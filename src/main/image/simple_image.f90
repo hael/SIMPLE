@@ -203,6 +203,7 @@ contains
     procedure          :: ICM2D, ICM2D_eo, ICM3D, ICM3D_eo
     procedure          :: GLCM
     procedure          :: tv_apply_reg
+    procedure          :: bartlett_reg_3D
     ! FREQUENCY ANALYSIS, file: simple_image_freq_anal.f90
     procedure          :: acf
     procedure          :: ccf
@@ -1362,6 +1363,11 @@ interface
         class(image), intent(in)    :: self_b, self_r
         real,         intent(in)    :: lambda
     end subroutine tv_apply_reg
+
+    module subroutine bartlett_reg_3D( self, radius )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: radius
+    end subroutine bartlett_reg_3D
 
     ! ===== frequency analysis procedure interfaces =====
 
