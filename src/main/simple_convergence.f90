@@ -324,7 +324,7 @@ contains
         write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS OFF'
         endif
         endif
-        if( trim(params%polar).eq.'yes' )then
+        if( params%l_polar )then
         write(logfhandle,609) '>>> POLAR REPRESENTATION IS ON'
         else
         write(logfhandle,609) '>>> CARTESIAN REPRESENTATION IS ON'

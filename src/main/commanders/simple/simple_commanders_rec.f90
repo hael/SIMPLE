@@ -49,7 +49,7 @@ contains
 
     subroutine exec_rec3D_distr_worker( self, cline )
         class(commander_rec3D_worker), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
+        class(cmdline),                intent(inout) :: cline
         type(parameters)     :: params
         type(builder)        :: build
         type(string)         :: fname

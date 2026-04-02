@@ -1586,7 +1586,14 @@ contains
             self%l_filemsk = .true.  ! indicate file is inputted
         endif
         ! comlin generation
-        self%l_polar = trim(self%polar).eq.'yes'
+        select case(trim(self%polar))
+            case('no')
+                self%l_polar = .false.
+            case('yes','new')
+                self%l_polar = .true.
+            case DEFAULT
+                THROW_HARD('Unsupported POLAR argument: '//trim(self%polar))
+        end select
         if( self%l_polar )then
             select case(trim(self%ref_type))
                 case('comlin', 'polar_cavg')

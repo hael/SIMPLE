@@ -268,7 +268,7 @@ contains
                 call cline_prob_align%set('prg', 'prob_align')
             endif
             call cline_prob_align%set('which_iter', params%which_iter)
-            if( trim(params%polar).ne.'yes' )then
+            if( .not.params%l_polar )then
                 do state = 1, params%nstates
                     call cline_prob_align%set('vol'//int2str(state), params%vols(state))
                 enddo

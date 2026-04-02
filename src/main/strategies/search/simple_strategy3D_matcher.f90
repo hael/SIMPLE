@@ -58,7 +58,7 @@ contains
         real    :: frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
-        logical :: doprint, l_polar, l_restore, l_prob_align_mode, has_been_searched, do_polar_prepare
+        logical :: doprint, l_restore, l_prob_align_mode, has_been_searched, do_polar_prepare
         ! benchmarking
         type(string)            :: benchfname
         integer(timer_int_kind) :: t_init, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
@@ -75,7 +75,6 @@ contains
             t_init = tic()
             t_tot  = t_init
         endif
-        l_polar = trim(p_ptr%polar).eq.'yes'
         select case(trim(p_ptr%refine))
             case('prob','prob_state','prob_neigh')
                 l_prob_align_mode = .true.
@@ -86,7 +85,7 @@ contains
             case('eval','sigma')
                 l_restore = .false.
             case DEFAULT
-                if( l_polar )then
+                if( p_ptr%l_polar )then
                     l_restore = .true.
                 else
                     ! for cartesian representation we only do restoration if volrec is yes
@@ -128,15 +127,14 @@ contains
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
 
-        do_polar_prepare = (l_polar .and. .not.cline%defined('vol1'))
-
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
         if( L_BENCH_GLOB )then
             rt_init = toc(t_init)
             t_prep_refs_sigmas_ptcls = tic()
         endif
+        do_polar_prepare = (p_ptr%l_polar .and. .not.cline%defined('vol1'))
         call prepare_refs_sigmas_ptcls( p_ptr, b_ptr, cline, ptcl_match_imgs, ptcl_match_imgs_pad,&
-                                        &batchsz_max, which_iter, do_polar=do_polar_prepare )
+                                        &batchsz_max, do_polar=do_polar_prepare )
         if( L_BENCH_GLOB )then
             rt_prep_refs_sigmas_ptcls = toc(t_prep_refs_sigmas_ptcls)
             t_prep_reproj_refvols     = tic()
@@ -151,13 +149,13 @@ contains
             rt_prep_reproj_refvols = toc(t_prep_reproj_refvols)
             t_prep_polar_refs      = tic()
         endif
-        if( l_polar .and. l_restore )then
+        if( p_ptr%l_polar .and. l_restore )then
             ! for restoration
             if( cline%defined('vol1') )then
                 call b_ptr%pftc%polar_cavger_new(.true.)
                 if( p_ptr%l_trail_rec )then
                     ! In the first iteration the polarized cartesian references are written down
-                    call b_ptr%pftc%polar_cavger_writeall_pftcrefs(string(POLAR_REFS_FBODY))
+                    call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
                 endif
             endif
             call b_ptr%pftc%polar_cavger_zero_pft_refs
@@ -197,9 +195,16 @@ contains
         endif
 
         ! INITIALIZE CARTESIAN RECONSTRUCTION
-        if( l_restore .and. (.not.l_polar) )then
-            call init_rec(params, build, batchsz_max, fpls)
-            call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+        if( l_restore )then
+            if( p_ptr%l_polar )then
+                if( (trim(p_ptr%polar).eq.'new') )then
+                    call init_rec(params, build, batchsz_max, fpls)
+                    call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+                endif
+            else
+                call init_rec(params, build, batchsz_max, fpls)
+                call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+            endif
         endif
 
         ! BATCH LOOP
@@ -212,9 +217,15 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftc
             if( L_BENCH_GLOB ) t_build_batch_ptcls = tic()
-            if( l_polar )then
-                call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
+            if( p_ptr%l_polar )then
+                select case(trim(p_ptr%polar))
+                case('new')
+                    call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
+                        &ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
+                case DEFAULT
+                    call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
                     &ptcl_match_imgs, ptcl_match_imgs_pad)
+                end select
             else
                 if( l_restore)then
                     call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
@@ -312,15 +323,23 @@ contains
             ! Online restoration
             if( l_restore )then
                 if( L_BENCH_GLOB ) t_rec = tic()
-                if( l_polar )then
+                if( p_ptr%l_polar )then
                     ! Polar representation
-                    call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
+                    select case(trim(p_ptr%polar))
+                    case('new')
+                        call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz),&
+                            &pinds(batch_start:batch_end), fpls(:batchsz))
+                        call b_ptr%pftc%polar_cavger_insert_plane_oversamp(b_ptr%eulspace, b_ptr%spproj_field, &
+                            & b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
+                    case DEFAULT
+                        call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
                         &b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
+                    end select
                 else
                     ! Cartesian lattice update
-                    call prep_imgs4rec(params, build, batchsz, ptcl_rec_imgs(:batchsz),&
+                    call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz),&
                         &pinds(batch_start:batch_end), fpls(:batchsz))
-                    call update_rec(params, build, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
+                    call update_rec(params, b_ptr, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
                 endif
                 if( L_BENCH_GLOB ) rt_rec = rt_rec + toc(t_rec)
             endif
@@ -390,14 +409,20 @@ contains
         ! VOLUMETRIC 3D RECONSTRUCTION
         if( l_restore )then
             if( L_BENCH_GLOB ) t_rec = tic()
-            if( l_polar )then
+            if( p_ptr%l_polar )then
                 ! Polar representation
                 if( l_distr_worker_glob )then
                     call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
                 else
                     p_ptr%refs = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//MRC_EXT
-                    call b_ptr%pftc%polar_cavger_merge_eos_and_norm(b_ptr%eulspace,&
-                    &b_ptr%pgrpsyms, cline, b_ptr%spproj_field%get_update_frac())
+                    select case(trim(p_ptr%polar))
+                    case('new')
+                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm_new(b_ptr%eulspace,&
+                            &b_ptr%pgrpsyms, cline, b_ptr%spproj_field%get_update_frac())
+                    case DEFAULT
+                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm(b_ptr%eulspace,&
+                            &b_ptr%pgrpsyms, cline, b_ptr%spproj_field%get_update_frac())
+                    end select
                     call b_ptr%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
                     call b_ptr%pftc%polar_cavger_kill
                 endif

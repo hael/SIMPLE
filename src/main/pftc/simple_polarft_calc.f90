@@ -174,25 +174,32 @@ type :: polarft_calc
     procedure          :: polar_cavger_set_ref_pft
     procedure          :: polar_cavger_calc_pops
     procedure          :: polar_cavger_update_sums
+    procedure          :: polar_cavger_insert_plane_oversamp
     procedure          :: polar_cavger_kill
     procedure          :: center_3Dpolar_refs
     ! ===== RESTORE: simple_polarft_ops_restore.f90
-    procedure          :: polar_cavger_merge_eos_and_norm2D
-    procedure          :: polar_cavger_merge_eos_and_norm
     procedure          :: polar_prep2Dref
-    procedure          :: polar_cavger_gen2Dclassdoc
     procedure          :: polar_filterrefs
+    procedure          :: polar_cavger_merge_eos_and_norm2D
+    procedure, private :: polar_cavger_calc_frc
+    procedure          :: polar_cavger_gen2Dclassdoc
+    procedure          :: polar_cavger_merge_eos_and_norm
+    procedure          :: polar_cavger_merge_eos_and_norm_new
+    procedure, private :: finalize_trail_rec
+    procedure, private :: mirror_slices
+    procedure, private :: calc_fsc
+    procedure, private :: add_invtausq2rho
+    procedure, private :: restore_references
     procedure, private :: calc_comlin_contrib
     procedure, private :: mirror_ctf2
     procedure, private :: mirror_pft
     procedure, private :: safe_norm
-    procedure          :: polar_cavger_calc_frc
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: polar_cavger_refs2cartesian
     procedure          :: polar_cavger_read
     procedure          :: polar_cavger_write
     procedure          :: polar_cavger_writeall
-    procedure          :: polar_cavger_writeall_pftcrefs
+    procedure          :: polar_cavger_write_eo_pftcrefs
     procedure          :: polar_cavger_write_cartrefs
     procedure          :: polar_cavger_read_all
     procedure          :: polar_cavger_readwrite_partial_sums
@@ -205,6 +212,7 @@ type :: polarft_calc
     procedure, private :: open_pft_array_for_read
     procedure, private :: transfer_pft_array_buffer
     procedure, private :: read_pft_array
+    procedure, private :: read_any_pft_array
     procedure, private :: open_ctf2_array_for_read
     procedure, private :: transfer_ctf2_array_buffer
     procedure          :: assemble_projected_refs_from_parts
@@ -688,6 +696,16 @@ interface
         logical,           optional, intent(in)    :: is3d
     end subroutine polar_cavger_update_sums
 
+    module subroutine polar_cavger_insert_plane_oversamp( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+        use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
+        class(polarft_calc),        intent(inout) :: self
+        class(oris),                intent(in)    :: eulspace
+        class(oris),  pointer,      intent(inout) :: ptcl_field
+        class(sym),                 intent(in)    :: symop
+        integer,                    intent(in)    :: nptcls, pinds(nptcls)
+        class(fplane_type), target, intent(inout) :: fpls(nptcls)
+    end subroutine polar_cavger_insert_plane_oversamp
+
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self
     end subroutine polar_cavger_kill
@@ -700,11 +718,39 @@ interface
 
     ! ===== RESTORE: simple_polarft_ops_restore.f90
 
+    module subroutine polar_prep2Dref( self, clsfrcs, icls, gaufilt )
+        use simple_class_frcs, only: class_frcs
+        class(polarft_calc), intent(inout) :: self
+        class(class_frcs),   intent(inout) :: clsfrcs
+        integer,             intent(in)    :: icls
+        logical,             intent(in)    :: gaufilt
+    end subroutine polar_prep2Dref
+
+    module subroutine polar_filterrefs( self, icls, filter )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: icls
+        real,                intent(in)    :: filter(:)
+    end subroutine polar_filterrefs
+
     module subroutine polar_cavger_merge_eos_and_norm2D( self, clsfrcs, fname )
         class(polarft_calc), intent(inout) :: self
         class(class_frcs),   intent(inout) :: clsfrcs
         class(string),       intent(in)    :: fname
     end subroutine polar_cavger_merge_eos_and_norm2D
+
+    module subroutine polar_cavger_calc_frc( self, pft1, pft2, n, frc )
+        class(polarft_calc), intent(in)    :: self
+        complex(dp),         intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%interpklim), pft2(self%pftsz,self%kfromto(1):self%interpklim)
+        integer,             intent(in)    :: n
+        real(sp),            intent(inout) :: frc(1:n)
+    end subroutine polar_cavger_calc_frc
+
+    module subroutine polar_cavger_gen2Dclassdoc( self, spproj, clsfrcs )
+        use simple_class_frcs, only: class_frcs
+        class(polarft_calc),       intent(in)    :: self
+        class(sp_project), target, intent(inout) :: spproj
+        class(class_frcs),         intent(inout) :: clsfrcs
+    end subroutine polar_cavger_gen2Dclassdoc
 
     module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
@@ -714,26 +760,53 @@ interface
         real,                intent(in)    :: update_frac
     end subroutine polar_cavger_merge_eos_and_norm
 
-    module subroutine polar_prep2Dref( self, clsfrcs, icls, gaufilt )
-        use simple_class_frcs, only: class_frcs
+    module subroutine polar_cavger_merge_eos_and_norm_new( self, reforis, symop, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
-        class(class_frcs),   intent(inout) :: clsfrcs
-        integer,             intent(in)    :: icls
-        logical,             intent(in)    :: gaufilt
-    end subroutine polar_prep2Dref
+        type(oris),          intent(in)    :: reforis
+        type(sym),           intent(in)    :: symop
+        type(cmdline),       intent(in)    :: cline
+        real,                intent(in)    :: update_frac
+    end subroutine polar_cavger_merge_eos_and_norm_new
 
-    module subroutine polar_cavger_gen2Dclassdoc( self, spproj, clsfrcs )
-        use simple_class_frcs, only: class_frcs
-        class(polarft_calc),       intent(in)    :: self
-        class(sp_project), target, intent(inout) :: spproj
-        class(class_frcs),         intent(inout) :: clsfrcs
-    end subroutine polar_cavger_gen2Dclassdoc
+    module subroutine finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
+        class(polarft_calc),      intent(inout) :: self
+        real(dp),                 intent(in)    :: ufrac_trec
+        complex(dp), allocatable, intent(inout) :: prev_even(:,:,:)
+        complex(dp), allocatable, intent(inout) :: prev_odd(:,:,:)
+    end subroutine finalize_trail_rec
 
-    module subroutine polar_filterrefs( self, icls, filter )
+    module subroutine mirror_slices( self, ref_space )
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: icls
-        real,                intent(in)    :: filter(:)
-    end subroutine polar_filterrefs
+        type(oris),          intent(in)    :: ref_space
+    end subroutine mirror_slices
+
+    module subroutine calc_fsc( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc, ufrac_trec, prev_even, prev_odd )
+        class(polarft_calc),   intent(inout) :: self
+        complex(dp),           intent(in)    :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp),           intent(in)    :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(in)    :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(in)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(out)   :: fsc(self%kfromto(1):self%interpklim)
+        real(dp),    optional, intent(in)    :: ufrac_trec
+        complex(dp), optional, intent(in)    :: prev_even(:,:,:)
+        complex(dp), optional, intent(in)    :: prev_odd(:,:,:)
+    end subroutine calc_fsc
+
+    module subroutine add_invtausq2rho( self, ctf2_even, ctf2_odd, fsc )
+        class(polarft_calc), intent(inout) :: self
+        real(dp),            intent(inout) :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(inout) :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(in)    :: fsc(self%kfromto(1):self%interpklim)
+    end subroutine add_invtausq2rho
+
+    module subroutine restore_references( self, reforis, pfts_even, pfts_odd, ctf2_even, ctf2_odd )
+        class(polarft_calc), intent(inout) :: self
+        type(oris),          intent(in)    :: reforis
+        complex(dp),         intent(in)    :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp),         intent(in)    :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(in)    :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(in)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+    end subroutine restore_references
 
     module subroutine calc_comlin_contrib( self, ref_space, symop, pfts_cl_even, pfts_cl_odd, ctf2_cl_even, ctf2_cl_odd )
         class(polarft_calc), intent(in)    :: self
@@ -764,13 +837,6 @@ interface
         complex(dp),         intent(inout) :: Mout(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine safe_norm
 
-    module subroutine polar_cavger_calc_frc( self, pft1, pft2, n, frc )
-        class(polarft_calc), intent(in)    :: self
-        complex(dp),         intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%interpklim), pft2(self%pftsz,self%kfromto(1):self%interpklim)
-        integer,             intent(in)    :: n
-        real(sp),            intent(inout) :: frc(1:n)
-    end subroutine polar_cavger_calc_frc
-
     ! ===== I/O: simple_polarft_ops_io.f90
 
     module subroutine polar_cavger_refs2cartesian( self, cavgs, which )
@@ -796,10 +862,10 @@ interface
         class(string),       intent(in)    :: tmpl_fname
     end subroutine polar_cavger_writeall
 
-    module subroutine polar_cavger_writeall_pftcrefs( self, tmpl_fname )
+    module subroutine polar_cavger_write_eo_pftcrefs( self, tmpl_fname )
         class(polarft_calc), intent(inout) :: self
         class(string),       intent(in)    :: tmpl_fname
-    end subroutine polar_cavger_writeall_pftcrefs
+    end subroutine polar_cavger_write_eo_pftcrefs
 
     module subroutine polar_cavger_write_cartrefs( self, tmpl_fname, which )
         class(polarft_calc), intent(in) :: self
@@ -867,10 +933,16 @@ interface
     end subroutine transfer_pft_array_buffer
     
     module subroutine read_pft_array( self, fname, array)
-        class(polarft_calc),      intent(inout) :: self
+        class(polarft_calc),      intent(in)    :: self
         class(string),            intent(in)    :: fname
         complex(dp), allocatable, intent(inout) :: array(:,:,:)
     end subroutine read_pft_array
+
+    module subroutine read_any_pft_array( self, fname, array )
+        class(polarft_calc),      intent(in)    :: self
+        class(string),            intent(in)    :: fname
+        complex(sp), allocatable, intent(inout) :: array(:,:,:)
+    end subroutine read_any_pft_array
 
     module subroutine open_ctf2_array_for_read( self, fname, array, funit, dims, buffer )
         class(polarft_calc),   intent(in)    :: self

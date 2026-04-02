@@ -20,7 +20,7 @@ use iso_c_binding
 use simple_edges_sqwins, only: sqwin_1d
 implicit none
 
-public :: kbinterpol
+public :: kbinterpol, kb_windim
 private
 
 type :: kbinterpol
@@ -272,5 +272,13 @@ contains
             y = y / (((xsq+Q2)*xsq+Q1)*xsq + Q0)
         end if
     end function sinhc
+
+    ! Public utility to get the windows pixel size without instantiating the object
+    pure integer function kb_windim( winsz )
+        real, intent(in) :: winsz
+        integer          :: lb, ub
+        call sqwin_1d(0., winsz, lb, ub)
+        kb_windim = ub - lb  + 1
+    end function kb_windim
 
 end module simple_kbinterpol

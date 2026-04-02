@@ -349,6 +349,14 @@ contains
                 cfg%inspace_sub = TREE_NEIGH_NSPACES(1)
                 cfg%inspace     = TREE_NEIGH_NSPACES(2)
         end select
+        ! This is a temporary fix because nspace can only be increased after
+        ! a cartesian reconstruction that cannot happen with trail_rec=yes for now
+        if( params%l_polar )then
+            select case(cfg%refine%to_char())
+            case('tree_neigh','prob_neigh')
+                cfg%inspace = NSPACE(3)
+            end select
+        endif
     end subroutine apply_refine3D_route_overrides
 
     subroutine normalize_refine3D_stage_cfg( cfg )

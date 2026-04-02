@@ -22,7 +22,7 @@ public :: prepimg4align, prepimg4align_bench, build_batch_particles
 ! Reference processing for alignment
 public :: prep2Dref, prepare_refs_sigmas_ptcls, calc_2Dref_offset
 ! Offline reconstruction
-public :: calc_3Drec
+public :: calc_3Drec, calc_polar_refs
 ! Online reconstruction
 public :: init_rec, prep_imgs4rec, update_rec, finalize_rec
 ! Volume read/filter helpers used by reproject strategy
@@ -601,7 +601,7 @@ contains
         if( lpstart < lpstop )then
             THROW_HARD('Invalid low-pass range ordering: lpstart must be >= lpstop')
         endif
-        if( (trim(params%polar).eq.'yes').and.(.not.cline%defined('vol1')) )then
+        if( params%l_polar .and. (.not.cline%defined('vol1')) )then
             ! POLAR REPRESENTATION
             call polarft_estimate_lplim3D(params%box_crop, params%smpd_crop, lpstart, lpstop, lpopt)
         else
@@ -1046,14 +1046,101 @@ contains
         call gridcorr_img%kill
     end subroutine norm_struct_facts
 
-    subroutine prepare_refs_sigmas_ptcls( params, build, cline, ptcl_imgs, ptcl_imgs_pad, batchsz, which_iter, do_polar )
+    ! generate polar references, for testing only
+    subroutine calc_polar_refs( params, build, cline, nptcls, pinds )
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
+        use simple_builder,      only: builder
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: nptcls
+        integer,           intent(in)    :: pinds(nptcls)
+        type(fplane_type), allocatable   :: fpls(:)
+        type(image),       allocatable   :: cavgs(:)
+        integer :: batchlims(2), ibatch, batchsz, i, maxbatchsz
+        logical :: DEBUG = .true.
+        integer(timer_int_kind) :: t, t0
+        real(timer_int_kind)    :: t_init, t_read, t_prep, t_grid, t_tot
+        if( DEBUG ) t0 = tic()
+        ! Initialize objects for recontruction
+        if( DEBUG ) t = tic()
+        maxbatchsz = MAXIMGBATCHSZ
+        call init_rec(params, build, maxbatchsz, fpls)
+        ! Prep batch image objects
+        call prepimgbatch(params, build, maxbatchsz)
+        if( DEBUG ) t_init = toc(t)
+        ! gridding batch loop
+        if( DEBUG ) then
+            t_read = 0.d0
+            t_prep = 0.d0
+            t_grid = 0.d0
+        endif
+        call build%pftc%new(params, params%nspace, [1,1], [2,5])
+        call build%pftc%polar_cavger_new(.true.)
+        call build%pftc%polar_cavger_zero_pft_refs
+        do ibatch = 1,nptcls,maxbatchsz
+            batchlims = [ibatch, min(nptcls, ibatch+maxbatchsz-1)]
+            batchsz   = batchlims(2) - batchlims(1) + 1
+            ! read images
+            if( DEBUG ) t = tic()
+            call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+            if( DEBUG ) t_read = t_read + toc(t)
+            ! preprocess images into padded objects
+            if( DEBUG ) t = tic()
+            call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz),&
+                               &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+            if( DEBUG ) t_prep = t_prep + toc(t)
+            ! insert padded slices into lattice
+            if( DEBUG ) t = tic()
+            call build%pftc%polar_cavger_insert_plane_oversamp(build%eulspace, build%spproj_field, &
+                        & build%pgrpsyms, batchsz, pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+            if( DEBUG ) t_grid = t_grid + toc(t)
+        end do
+        ! Normalize polar references
+        call build%pftc%polar_cavger_merge_eos_and_norm_new(build%eulspace, build%pgrpsyms, cline, params%update_frac)
+        if( DEBUG )t_tot = toc(t0)
+        ! Write
+        call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+        ! Crude visualization
+        allocate(cavgs(params%nspace))
+        call build%pftc%polar_cavger_refs2cartesian( cavgs, 'even' )
+        do i = 1,params%nspace
+            call cavgs(i)%write(string('prefs_even.mrc'),i)
+        enddo
+        call build%pftc%polar_cavger_refs2cartesian( cavgs, 'odd' )
+        do i = 1,params%nspace
+            call cavgs(i)%write(string('prefs_odd.mrc'),i)
+        enddo
+        call build%pftc%polar_cavger_refs2cartesian( cavgs, 'merged' )
+        do i = 1,params%nspace
+            call cavgs(i)%write(string('prefs_merged.mrc'),i)
+            call cavgs(i)%kill
+        enddo
+        deallocate(cavgs)
+        ! deallocate convenience objects
+        do i = 1,size(fpls)
+            if( allocated(fpls(i)%cmplx_plane) ) deallocate(fpls(i)%cmplx_plane)
+            if( allocated(fpls(i)%ctfsq_plane) ) deallocate(fpls(i)%ctfsq_plane)
+        end do
+        deallocate(fpls)
+        call dealloc_imgarr(build%img_pad_heap)
+        call forget_ft_maps
+        if( DEBUG .and. (params%part==1) )then
+            print *,'Init          : ', t_init
+            print *,'Read          : ', t_read
+            print *,'Prep          : ', t_prep
+            print *,'Grid          : ', t_grid
+            print *,'Total rec time: ', t_tot
+        endif
+    end subroutine calc_polar_refs
+
+    subroutine prepare_refs_sigmas_ptcls( params, build, cline, ptcl_imgs, ptcl_imgs_pad, batchsz, do_polar )
         class(parameters),        intent(inout) :: params
         class(builder),           intent(inout) :: build
         class(cmdline),           intent(in)    :: cline !< command line
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
         type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
         integer,                  intent(in)    :: batchsz
-        integer,                  intent(in)    :: which_iter
         logical,     optional,    intent(in)    :: do_polar
         real, allocatable :: gaufilter(:)
         type(string)      :: fname
@@ -1069,7 +1156,7 @@ contains
                 call estimate_lp_refvols(params, build, cline, params%lpstart, params%lpstop, state)
             endif
             ! Calculator init
-            nrefs     = params%nspace * params%nstates
+            nrefs = params%nspace * params%nstates
             call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
             ! Read polar references
             call build%pftc%polar_cavger_new(.true.)
@@ -1134,7 +1221,6 @@ contains
         real      :: xyz(3)
         integer   :: s, nrefs, state
         logical   :: do_center, l_prob_align_mode
-        logical   :: do_init_pftc
         call report_resolution(params, build, state)
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_refvols(params, build, cline, params%lpstart, params%lpstop, state)

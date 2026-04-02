@@ -209,10 +209,10 @@ contains
 
     ! Write references contained in pftc
     !! performance critical code
-    module subroutine polar_cavger_writeall_pftcrefs( self, tmpl_fname )
+    module subroutine polar_cavger_write_eo_pftcrefs( self, tmpl_fname )
         class(polarft_calc), intent(inout) :: self
         class(string),       intent(in)    :: tmpl_fname
-        integer :: funit_e, funit_o, i
+        integer :: funit_e, funit_o, funit_m, i
         call open_pft_or_ctf2_array_for_write(tmpl_fname//'_even'//BIN_EXT, funit_e)
         call open_pft_or_ctf2_array_for_write(tmpl_fname//'_odd'//BIN_EXT, funit_o)
         !$omp parallel do default(shared) private(i) num_threads(2) schedule(static)
@@ -230,7 +230,7 @@ contains
         call fclose(funit_e)
         call fclose(funit_o)
         call self%polar_cavger_zero_pft_refs !! removed after writing
-    end subroutine polar_cavger_writeall_pftcrefs
+    end subroutine polar_cavger_write_eo_pftcrefs
 
     ! Converts cavgs PFTS to cartesian grids and writes them
     !! this should be removed in performance critical code beacause it is costly
@@ -561,7 +561,7 @@ contains
 
     ! private helper
     module subroutine read_pft_array( self, fname, array)
-        class(polarft_calc),      intent(inout) :: self
+        class(polarft_calc),      intent(in)    :: self
         class(string),            intent(in)    :: fname
         complex(dp), allocatable, intent(inout) :: array(:,:,:)
         complex(sp), allocatable :: buffer(:,:,:)
@@ -571,6 +571,21 @@ contains
         deallocate(buffer)
         call fclose(funit)
     end subroutine read_pft_array
+
+    ! private helper, no checks are performed on dimensions
+    module subroutine read_any_pft_array( self, fname, array )
+        class(polarft_calc),      intent(in)    :: self
+        class(string),            intent(in)    :: fname
+        complex(sp), allocatable, intent(inout) :: array(:,:,:)
+        integer :: dims(4), funit
+        if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
+        call open_pft_or_ctf2_array_for_write(fname, funit)
+        read(unit=funit,pos=1) dims
+        if( allocated(array) ) deallocate(array)
+        allocate(array(dims(1),dims(2):dims(3),dims(4)))
+        read(unit=funit, pos=(sizeof(dims)+1)) array
+        call fclose(funit)
+    end subroutine read_any_pft_array
 
     ! private helper
     module subroutine open_ctf2_array_for_read( self, fname, array, funit, dims, buffer )

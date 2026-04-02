@@ -66,8 +66,8 @@ contains
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
-        logical :: l_partial_sums, l_update_frac, l_ctf, l_snhc, l_polar
-        logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs, l_prob_align_mode
+        logical :: l_partial_sums, l_update_frac, l_ctf, l_snhc, l_prob_align_mode
+        logical :: l_stream, l_greedy, l_np_cls_defined, l_alloc_read_cavgs
 
         ! assign parameters pointer
         p_ptr => params
@@ -111,7 +111,6 @@ contains
             ! alway snhc_smpl
             if( trim(refine_flag)=='snhc' ) refine_flag = 'snhc_smpl'
         endif
-        l_polar = trim(p_ptr%polar).eq.'yes'
 
         ! PARTICLE SAMPLING
         if( allocated(pinds) ) deallocate(pinds)
@@ -149,7 +148,7 @@ contains
             call b_ptr%spproj_field%partition_eo
             call b_ptr%spproj%write_segment_inside(p_ptr%oritype)
         endif
-        if( l_polar .and. which_iter>1 )then
+        if( p_ptr%l_polar .and. which_iter>1 )then
             ! references are read in prep_polar_pftc4align2D below
             ! On first iteration the references are taken from the input images
         else
@@ -164,7 +163,7 @@ contains
             endif
         endif
         ! Initialize objects for online clusters update
-        if( .not.l_polar ) call cavger_init_online(batchsz_max, l_partial_sums)
+        if( .not.p_ptr%l_polar ) call cavger_init_online(batchsz_max, l_partial_sums)
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(p_ptr, b_ptr, cline, which_iter, frac_srch_space)
@@ -176,14 +175,14 @@ contains
         endif
         ! generate particles/references image objects
         call prep_batch_particles2D(batchsz_max)
-        if( l_polar .and. which_iter>1)then
+        if( p_ptr%l_polar .and. which_iter>1)then
             ! Polar references, on first iteration the references are taken from the input images
             call prep_polar_pftc4align2D(batchsz_max, which_iter, l_stream)
         else
             ! Cartesian references
             call preppftc4align2D(batchsz_max, which_iter, l_stream)
         endif
-        if( l_polar )then
+        if( p_ptr%l_polar )then
             ! for restoration
             if( which_iter == 1 ) call b_ptr%pftc%polar_cavger_new(.false.)
             call b_ptr%pftc%polar_cavger_zero_pft_refs
@@ -320,7 +319,7 @@ contains
                  t_cavg = tic()
             endif
             ! restore cavgs
-            if( l_polar )then
+            if( p_ptr%l_polar )then
                 call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), b_ptr%spproj, incr_shifts(:,1:batchsz))
             else
                 call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end))
@@ -356,7 +355,7 @@ contains
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( l_distr_worker_glob )then
             if( trim(p_ptr%restore_cavgs).eq.'yes' )then
-                if( l_polar )then
+                if( p_ptr%l_polar )then
                     call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
                 else
                     call cavger_readwrite_partial_sums('write')
@@ -379,7 +378,7 @@ contains
                 else
                     THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                 endif
-                if( l_polar )then
+                if( p_ptr%l_polar )then
                     if( which_iter == 1) call cavger_kill
                     ! polar restoration
                     call b_ptr%pftc%polar_cavger_merge_eos_and_norm2D(b_ptr%clsfrcs, string(FRCS_FILE))

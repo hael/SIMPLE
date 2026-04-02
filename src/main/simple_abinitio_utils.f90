@@ -232,6 +232,7 @@ contains
                 call cline_asymrec%set('objfun',     'cc')
                 call cline_asymrec%delete('which_iter')
                 call cline_asymrec%delete('endit')
+                call cline_asymrec%delete('polar')
                 call xrec3D%execute(cline_asymrec)
                 vol_iter = 'asymmetric_map'//MRC_EXT
                 call simple_copy_file(string(VOL_FBODY)//int2str_pad(1,2)//MRC_EXT, vol_iter)
@@ -264,6 +265,7 @@ contains
                 call cline_symrec%set('pgrp',       params%pgrp)
                 call cline_symrec%set('which_iter', cline_refine3D%get_iarg('endit'))
                 call cline_symrec%delete('endit')
+                call cline_symrec%delete('polar')
                 call xrec3D%execute(cline_symrec)
                 vol_sym = VOL_FBODY//int2str_pad(1,2)//MRC_EXT
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
@@ -301,8 +303,9 @@ contains
         call cline_rec%delete('endit')
         call cline_rec%delete('automsk')
         call cline_rec%delete('mskfile')
+        call cline_rec%delete('polar')
         call xrec3D%execute(cline_rec)
-        if( trim(params%polar) == 'yes' )then
+        if( params%l_polar )then
             ! Polar=yes branch
             sstate = int2str_pad(1,2)
             sstage = int2str_pad(istage-1,2)

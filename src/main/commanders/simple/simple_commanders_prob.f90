@@ -63,7 +63,7 @@ contains
         endif
         do_polar_prepare = (params%l_polar .and. (.not.cline%defined('vol1')))
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls,&
                                         do_polar=do_polar_prepare )
         if( .not. do_polar_prepare )then
             call read_mask_filter_reproject_refvols(params, build, cline, nptcls)
@@ -119,7 +119,7 @@ contains
         endif
         do_polar_prepare = (params%l_polar .and. (.not.cline%defined('vol1')))
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls, params%which_iter,&
+        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls,&
                                         do_polar=do_polar_prepare )
         if( .not. do_polar_prepare )then
             call read_mask_filter_reproject_refvols(params, build, cline, nptcls)
@@ -284,15 +284,14 @@ contains
         type(eul_prob_tab2D)     :: eulprob_obj_part
         real    :: frac_srch_space
         integer :: nptcls
-        logical :: l_polar, l_use_polar_refs, l_alloc_read_cavgs
+        logical :: l_use_polar_refs, l_alloc_read_cavgs
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
-        l_polar          = trim(params%polar).eq.'yes'
-        l_use_polar_refs = l_polar .and. (params%which_iter > 1)
+        l_use_polar_refs = params%l_polar .and. (params%which_iter > 1)
         frac_srch_space  = build%spproj_field%get_avg('frac')
         call set_bp_range2D(params, build, cline, params%which_iter, frac_srch_space)
         ! reproduce particle sampling from exec_prob_align2D
