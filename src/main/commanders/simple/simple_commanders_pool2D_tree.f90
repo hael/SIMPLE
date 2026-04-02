@@ -86,7 +86,7 @@ contains
         call cline_abinitio2D_full%set('ncls',      params%ncls)
         call cline_abinitio2D_full%set('projfile',  projfile)
         ! set references from previous abinitio2D run
-        call cline_abinitio2D_full%set('refs',      refs_fname)
+        ! call cline_abinitio2D_full%set('refs',      refs_fname)
         call cline_abinitio2D_full%set('blocktree', params%blocktree)
         call xabinitio2D%execute(cline_abinitio2D_full)
     end subroutine exec_pool2D_tree

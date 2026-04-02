@@ -33,7 +33,6 @@ contains
         ! Calculate full distance matrix
         distmat = calc_inpl_invariant_cc_nomirr(params, params%hp, params%lp, params%trs, refimgs)
         distmat = 1.0 - distmat
-        print *, size(distmat)
         call normalize_minmax(distmat)
         ntrees = min(max(1, ntrees_target), nspace)
         allocate(labels(nspace), source=1)

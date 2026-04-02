@@ -465,7 +465,7 @@ type :: parameters
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
-    real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
+    real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejectionboxfile
     real    :: nsig=2.5            !< # sigmas
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
@@ -543,6 +543,7 @@ contains
 
     subroutine init_strings( self )
         class(parameters), intent(inout) :: self
+        self%blocktree=''         !< block tree file for pool 2D(.bin)
         self%boxfile=''           !< file with EMAN particle coordinates(.txt)
         self%boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
         self%ciffile=''           !< PDBx/mmCIF file
@@ -829,6 +830,7 @@ contains
         call check_carg('write_imgarr',   self%write_imgarr)
         call check_carg('zero',           self%zero)
         ! File args
+        call check_file('blocktree',      self%blocktree,      'B')
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
         call check_carg('ciffile',        self%ciffile)
