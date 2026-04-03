@@ -267,8 +267,7 @@ contains
     generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2, real_corr_prenorm_3
     procedure          :: radial_cc
     procedure          :: sqeuclid
-    procedure, private :: sqeuclid_matrix_1, sqeuclid_matrix_2
-    generic            :: sqeuclid_matrix => sqeuclid_matrix_1, sqeuclid_matrix_2
+    procedure         :: nu_objective
     procedure          :: euclid_norm
     procedure          :: weighted_sqsum, masked_sqsum
     procedure          :: weighted_subtr_sqsum, masked_subtr_sqsum
@@ -308,7 +307,7 @@ contains
     procedure          :: mask3D_soft
     procedure          :: mask3D_softavg
     procedure          :: mask3D_hard
-    procedure          :: taper_edges, taper_edges_hann, taper_edges_particle
+    procedure          :: taper_edges, taper_edges_hann, taper_edges_particle, taper_edges_vol
     ! CTF, file: simple_image_ctf.f90
     procedure          :: ctf2img
     procedure          :: apply_ctf_wpad
@@ -1742,15 +1741,10 @@ interface
         real :: r
     end function sqeuclid
 
-    module subroutine sqeuclid_matrix_1( self1, self2, sqdiff )
-        class(image), intent(in)    :: self1, self2
-        real,         intent(inout) :: sqdiff(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-    end subroutine sqeuclid_matrix_1
-
-    module subroutine sqeuclid_matrix_2( self1, self2, sqdiff_img )
-        class(image), intent(in)    :: self1, self2
-        class(image), intent(inout) :: sqdiff_img
-    end subroutine sqeuclid_matrix_2
+    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff )
+        class(image), intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
+        real,         intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+    end subroutine nu_objective
 
     module function euclid_norm( self1, self2 ) result( r )
         class(image), intent(in) :: self1, self2
@@ -1981,6 +1975,12 @@ interface
         integer,      intent(in)    :: winsz
         real,         intent(out)   :: edge_mean
     end subroutine taper_edges_particle
+
+    module subroutine taper_edges_vol(self, winsz, edge_mean)
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: winsz
+        real,         intent(out)   :: edge_mean
+    end subroutine taper_edges_vol
 
     ! ===== image CTF procedure interfaces =====
 

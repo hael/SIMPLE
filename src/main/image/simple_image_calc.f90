@@ -1611,18 +1611,16 @@ contains
         endif
     end function sqeuclid
 
-    module subroutine sqeuclid_matrix_1( self1, self2, sqdiff )
-        class(image), intent(in)    :: self1, self2
-        real,         intent(inout) :: sqdiff(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-        sqdiff = (self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
-        &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0
-    end subroutine sqeuclid_matrix_1
-
-    module subroutine sqeuclid_matrix_2( self1, self2, sqdiff_img )
-        class(image), intent(in)    :: self1, self2
-        class(image), intent(inout) :: sqdiff_img
-        sqdiff_img%rmat = (self1%rmat - self2%rmat)**2.0
-    end subroutine sqeuclid_matrix_2
+    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff )
+        class(image), intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
+        real,         intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+        integer :: nx, ny, nz
+        nx = even_raw%ldim(1)
+        ny = even_raw%ldim(2)
+        nz = even_raw%ldim(3)
+        diff = abs(even_raw%rmat(:nx,:ny,:nz) - odd_filt%rmat(:nx,:ny,:nz)) +&
+              &abs(even_filt%rmat(:nx,:ny,:nz) - odd_raw%rmat(:nx,:ny,:nz))
+    end subroutine nu_objective
 
     module function euclid_norm( self1, self2 ) result( r )
         class(image), intent(in) :: self1, self2
