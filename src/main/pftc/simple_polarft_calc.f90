@@ -174,7 +174,8 @@ type :: polarft_calc
     procedure          :: polar_cavger_set_ref_pft
     procedure          :: polar_cavger_calc_pops
     procedure          :: polar_cavger_update_sums
-    procedure          :: polar_cavger_insert_plane_oversamp
+    procedure          :: polar_cavger_update_sums_from_imgs
+    procedure          :: polar_cavger_insert_comlins_oversamp
     procedure          :: polar_cavger_kill
     procedure          :: center_3Dpolar_refs
     ! ===== RESTORE: simple_polarft_ops_restore.f90
@@ -696,7 +697,18 @@ interface
         logical,           optional, intent(in)    :: is3d
     end subroutine polar_cavger_update_sums
 
-    module subroutine polar_cavger_insert_plane_oversamp( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+    module subroutine polar_cavger_update_sums_from_imgs( self, nptcls, pinds, ptcl_imgs, spproj, lmsk, ctfflag, sigma2_noise, is3D )
+        class(polarft_calc),         intent(inout) :: self
+        integer,                     intent(in)    :: nptcls, pinds(nptcls)
+        class(image),                intent(inout) :: ptcl_imgs(nptcls)
+        class(sp_project),           intent(inout) :: spproj
+        logical,                     intent(in)    :: lmsk(:,:,:)
+        integer,                     intent(in)    :: ctfflag
+        real,              optional, intent(in)    :: sigma2_noise(:,:)
+        logical,           optional, intent(in)    :: is3D
+    end subroutine polar_cavger_update_sums_from_imgs
+
+    module subroutine polar_cavger_insert_comlins_oversamp( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
         class(polarft_calc),        intent(inout) :: self
         class(oris),                intent(in)    :: eulspace
@@ -704,7 +716,7 @@ interface
         class(sym),                 intent(in)    :: symop
         integer,                    intent(in)    :: nptcls, pinds(nptcls)
         class(fplane_type), target, intent(inout) :: fpls(nptcls)
-    end subroutine polar_cavger_insert_plane_oversamp
+    end subroutine polar_cavger_insert_comlins_oversamp
 
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self

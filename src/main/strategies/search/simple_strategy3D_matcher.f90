@@ -329,7 +329,7 @@ contains
                     case('new')
                         call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz),&
                             &pinds(batch_start:batch_end), fpls(:batchsz))
-                        call b_ptr%pftc%polar_cavger_insert_plane_oversamp(b_ptr%eulspace, b_ptr%spproj_field, &
+                        call b_ptr%pftc%polar_cavger_insert_comlins_oversamp(b_ptr%eulspace, b_ptr%spproj_field, &
                             & b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
                     case DEFAULT
                         call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end),&
