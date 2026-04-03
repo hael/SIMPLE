@@ -23,10 +23,10 @@ contains
         !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
         do irot=1,self%pftsz
             do k=self%kfromto(1),self%interpklim
-                hinv = self%polar(irot,k) / self%ldim(1)
-                kinv = self%polar(irot+self%nrots,k) / self%ldim(2)
+                hinv = self%polar(1,k,irot) / self%ldim(1)
+                kinv = self%polar(2,k,irot) / self%ldim(2)
                 spaFreqSq_mat(irot,k) = hinv*hinv+kinv*kinv
-                ang_mat(irot,k)       = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
+                ang_mat(irot,k)       = atan2(self%polar(2,k,irot),self%polar(1,k,irot))
             end do
         end do
         !$omp end parallel do

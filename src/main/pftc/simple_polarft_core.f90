@@ -51,15 +51,15 @@ contains
         self%pftsz  = params%pftsz                            !< size of reference (number of vectors used for matching,determined by radius of molecule)
         self%nrots  = 2 * self%pftsz                          !< number of in-plane rotations for one pft  (pftsz*2)
         ! generate polar coordinates
-        allocate( self%polar(2*self%nrots,self%kfromto(1):self%interpklim),&
+        allocate( self%polar(2,self%kfromto(1):self%interpklim,self%nrots),&
                     &self%angtab(self%nrots), polar_here(2*self%nrots))
         self%dang = twopi/real(self%nrots)
         do irot=1,self%nrots
             self%angtab(irot) = real(irot-1)*self%dang
             ! cycling over non-redundant logical dimensions
             do k=self%kfromto(1),self%interpklim
-                self%polar(irot,k)            =  sin(self%angtab(irot))*real(k) ! x-coordinate
-                self%polar(irot+self%nrots,k) = -cos(self%angtab(irot))*real(k) ! y-coordinate
+                self%polar(1,k,irot) =  sin(self%angtab(irot))*real(k) ! h-coordinate
+                self%polar(2,k,irot) = -cos(self%angtab(irot))*real(k) ! k-coordinate
             end do
             ! for k = 1
             polar_here(irot)            =  sin(real(self%angtab(irot)))
@@ -79,8 +79,8 @@ contains
         self%argtransf_shellone(:self%pftsz  ) = real(polar_here(:self%pftsz),dp)                        * A(1) ! x-part
         self%argtransf_shellone(self%pftsz+1:) = real(polar_here(self%nrots+1:self%nrots+self%pftsz),dp) * A(2) ! y-part
         ! all shells in resolution range
-        self%argtransf(:self%pftsz,:)     = real(self%polar(:self%pftsz,:),dp)                          * A(1)  ! x-part
-        self%argtransf(self%pftsz + 1:,:) = real(self%polar(self%nrots + 1:self%nrots+self%pftsz,:),dp) * A(2)  ! y-part
+        self%argtransf(:self%pftsz,:)     = transpose(real(self%polar(1,self%kfromto(1):self%interpklim,:self%pftsz),dp)) * A(1)  ! h-part
+        self%argtransf(self%pftsz + 1:,:) = transpose(real(self%polar(2,self%kfromto(1):self%interpklim,:self%pftsz),dp)) * A(2)  ! k-part
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%interpklim,self%nrefs),&
             &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%interpklim,self%nrefs),&
@@ -283,20 +283,20 @@ contains
         integer,             intent(in)    :: state
         logical,             intent(in)    :: iseven
         logical,             intent(in)    :: mask(:)
+        real    :: hcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
+        real    :: kcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
         integer :: iref_from, iref_to
         if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
         iref_from = (state - 1) * self%p_ptr%nspace + 1
         iref_to   = iref_from + self%p_ptr%nspace - 1
+        hcoords   = transpose(self%polar(1, self%kfromto(1):self%kfromto(2), 1:self%pftsz))
+        kcoords   = transpose(self%polar(2, self%kfromto(1):self%kfromto(2), 1:self%pftsz))
         if( iseven )then
             call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
-            &self%polar(           1:self%pftsz,            self%kfromto(1):self%kfromto(2)),&
-            &self%polar(self%nrots+1:self%nrots+self%pftsz, self%kfromto(1):self%kfromto(2)),&
-            &self%pfts_refs_even(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+            &hcoords, kcoords, self%pfts_refs_even(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
         else
             call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
-            &self%polar(           1:self%pftsz,            self%kfromto(1):self%kfromto(2)),&
-            &self%polar(self%nrots+1:self%nrots+self%pftsz, self%kfromto(1):self%kfromto(2)),&
-            &self%pfts_refs_odd(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+            &hcoords, kcoords, self%pfts_refs_odd(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
         endif
     end subroutine vol_pad2ref_pfts
 

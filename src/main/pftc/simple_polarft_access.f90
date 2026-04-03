@@ -73,8 +73,8 @@ contains
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: rot, k
         real(sp) :: xy(2)
-        xy(1) = self%polar(rot,k)
-        xy(2) = self%polar(self%nrots+rot,k)
+        xy(1) = self%polar(1,k,rot)
+        xy(2) = self%polar(2,k,rot)
     end function get_coord
 
     module subroutine get_ref_pft(self, iref, iseven, pft)

@@ -80,11 +80,11 @@ contains
         ! --- 2. Loop over all radial points (k) to calculate weights ---
         do k = self%kfromto(1), self%interpklim
             ! LEFT reference line point (h,k) in Cartesian coords
-            l_h_polar = real(self%polar(lrot, k), dp)
-            l_k_polar = real(self%polar(lrot + self%nrots, k), dp)
+            l_h_polar = real(self%polar(1,k,lrot), dp)
+            l_k_polar = real(self%polar(2,k,lrot), dp)
             ! RIGHT reference line point (h,k) in Cartesian coords
-            r_h_polar = real(self%polar(rrot, k), dp)
-            r_k_polar = real(self%polar(rrot + self%nrots, k), dp)
+            r_h_polar = real(self%polar(1,k,rrot), dp)
+            r_k_polar = real(self%polar(2,k,rrot), dp)
             !  TARGET line point (h,k) in Cartesian coords
             h_line    =  sinpsi * real(k, dp)
             k_line    = -cospsi * real(k, dp)

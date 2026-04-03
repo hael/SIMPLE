@@ -278,10 +278,9 @@ contains
                     pw = real(ptcl_field%get(iptcl, 'w'), dp)
                     if( pw < 1.d-8 ) cycle
                     l_even = ptcl_field%get_eo(iptcl) == 0
-                    ! Symmetry loop goes here
-                    ! rejects too close, considered the same slice
+                    ! rejects when too close, considered the same slice
                     ptcl_euls   = ptcl_field%get_euler(iptcl)
-                    Rptcl       = euler2m(ptcl_euls)            ! Particle rotation matrix
+                    Rptcl       = euler2m(ptcl_euls)
                     normal_ptcl = matmul(zvec, Rptcl)
                     if( myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4 ) cycle
                     ! Rotation of both planes by transpose of Rproj => the reference is on the hk-plane
@@ -315,12 +314,12 @@ contains
                         ! angle betwen CL an current reprojection line
                         dang     = modulo(abs(self%angtab(irot) - phi), 180.0)
                         sin_dang = sin(deg2rad(dang))
-                        ! dz increases with sh, so if the first shell fails the slab test, all shells are too far
+                        ! dz increases with sh, so if the first shell is too far, all shells are too far
                         if( abs(sin_theta) * sin_dang * real(self%kfromto(1)*OSMPL_PAD_FAC) > T ) cycle
                         do sh = self%kfromto(1), self%interpklim
                             ! rejects polar points to far from CL
-                            hk(1) = real(OSMPL_PAD_FAC) * self%polar(irot,            sh)
-                            hk(2) = real(OSMPL_PAD_FAC) * self%polar(irot+self%nrots, sh)
+                            hk(1) = real(OSMPL_PAD_FAC) * self%polar(1,sh,irot)
+                            hk(2) = real(OSMPL_PAD_FAC) * self%polar(2,sh,irot)
                             if( abs(proj_cl_addr(1,sh) - hk(1)) > T ) exit
                             if( abs(proj_cl_addr(2,sh) - hk(2)) > T ) exit
                             ! distance from point to common line
@@ -328,7 +327,7 @@ contains
                             dCL = sin_dang * real(sh*OSMPL_PAD_FAC)
                             ! relative altitude of the point to slice
                             dz  = sin_theta * dCL
-                            ! rejects the the point is out-of-plane
+                            ! rejects out-of-plane point
                             if( abs(dz) > T ) exit
                             ! 2D mapping
                             rhk = matmul(hk, R2D)
@@ -377,10 +376,9 @@ contains
                     pw = real(ptcl_field%get(iptcl, 'w'), dp)
                     if( pw < 1.d-8 ) cycle
                     l_even = ptcl_field%get_eo(iptcl) == 0
-                    ! Symmetry loop goes here
                     ! rejects too close, considered the same slice
                     ptcl_euls   = ptcl_field%get_euler(iptcl)
-                    Rptcl       = euler2m(ptcl_euls)            ! Particle rotation matrix
+                    Rptcl       = euler2m(ptcl_euls)
                     normal_ptcl = matmul(zvec, Rptcl)
                     if( myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4 ) cycle
                     ! Rotation of both planes by transpose of Rproj => the reference is on the hk-plane
@@ -418,8 +416,8 @@ contains
                         if( abs(sin_theta) * sin_dang * real(self%kfromto(1)*OSMPL_PAD_FAC) > T ) cycle
                         do sh = self%kfromto(1), self%interpklim
                             ! rejects polar points to far from CL
-                            hk(1) = real(OSMPL_PAD_FAC) * self%polar(irot,            sh)
-                            hk(2) = real(OSMPL_PAD_FAC) * self%polar(irot+self%nrots, sh)
+                            hk(1) = real(OSMPL_PAD_FAC) * self%polar(1,sh,irot)
+                            hk(2) = real(OSMPL_PAD_FAC) * self%polar(2,sh,irot)
                             if( abs(proj_cl_addr(1,sh) - hk(1)) > T ) exit
                             if( abs(proj_cl_addr(2,sh) - hk(2)) > T ) exit
                             ! distance from point to common line
@@ -427,7 +425,7 @@ contains
                             dCL = sin_dang * real(sh*OSMPL_PAD_FAC)
                             ! relative altitude of the point to slice
                             dz  = sin_theta * dCL
-                            ! rejects the the point is out-of-plane
+                            ! rejects out-of-plane point
                             if( abs(dz) > T ) exit
                             ! 2D mapping
                             rhk = matmul(hk, R2D)

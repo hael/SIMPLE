@@ -60,7 +60,7 @@ contains
         type(kbinterpol)  :: kbwin
         real, allocatable :: w(:,:)
         real :: xpd, ypd, dang, ang
-        integer :: win(2,2), lims(2,3), i, k, l, m, pf, iwinsz, wdim
+        integer :: win(2,2), lims(2,3), i, k, l, m, pf, wdim
         pf = OSMPL_PAD_FAC
         if( allocated(mem_polweights_mat) ) deallocate(mem_polweights_mat)
         if( allocated(mem_polcyc1_mat)    ) deallocate(mem_polcyc1_mat)
@@ -71,7 +71,6 @@ contains
         ! KB kernel for padded-grid interpolation
         kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         wdim   = kbwin%get_wdim()
-        iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         mem_polwdim = wdim
         mem_polwlen = wdim*wdim
         allocate( mem_polcyc1_mat(  1:wdim,        1:mem_poldim(1), mem_poldim(2):mem_poldim(3)), &

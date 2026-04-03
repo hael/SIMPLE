@@ -61,7 +61,7 @@ type :: polarft_calc
     real(dp),    allocatable :: wsqsums_ptcls(:)         !< memoized square sums weighted by k and  sigmas^2 (taken from kfromto(1):kfromto(2))
     real(sp),    allocatable :: angtab(:)                !< table of in-plane angles (in degrees)
     real(dp),    allocatable :: argtransf(:,:)           !< argument transfer constants for shifting the references
-    real(sp),    allocatable :: polar(:,:)               !< table of polar coordinates (in Cartesian coordinates)
+    real(sp),    allocatable :: polar(:,:,:)             !< table of polar coordinates (2,k,irot): polar(1,k,irot)=h, polar(2,k,irot)=kc
     real(sp),    allocatable :: ctfmats(:,:,:)           !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),    allocatable :: argtransf_shellone(:)    !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp), allocatable :: pfts_refs_even(:,:,:)    !< 3D complex matrix of polar reference sections (pftsz,nk,nrefs), even

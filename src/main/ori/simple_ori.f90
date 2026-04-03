@@ -1705,6 +1705,4 @@ contains
         endif
     end subroutine kill
 
-    
-
 end module simple_ori
