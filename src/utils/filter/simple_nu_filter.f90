@@ -3,14 +3,17 @@ module simple_nu_filter
 use simple_core_module_api
 use simple_image, only: image
 use simple_butterworth
+use simple_tent_smooth, only: tent_smooth_3d
 implicit none
 #include "simple_local_flags.inc"
 
 public :: write_filtered_vols, setup_dmats
 private
 
-real, parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
-real, allocatable :: dmats(:,:,:,:)
+real,    parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
+integer, parameter   :: WINSZ_TENT = 1
+real,    allocatable :: dmats(:,:,:,:)
+real,    allocatable :: bwfilters(:,:)
 
 contains
 
@@ -92,16 +95,14 @@ contains
         type(image) :: vol_even_copy_cmat, vol_odd_copy_cmat
         type(image) :: vol_even_filt, vol_odd_filt
         integer, allocatable :: cutoff_finds(:)
-        real,    allocatable :: cur_fil(:)
+        real,    allocatable :: dmat_tmp(:,:,:)
         integer :: ldim(3), box, winsz, i
         real    :: smpd, edge_mean, x
-
         ldim  = vol_even%get_ldim()
         smpd  = vol_even%get_smpd()
         box   = ldim(1)
         winsz = nint(COSMSKHALFWIDTH)
-        allocate(cur_fil(box), source=0.)
-
+        
         ! prep cmat copies
         call vol_even_copy_cmat%copy(vol_even)
         call vol_odd_copy_cmat%copy(vol_odd)
@@ -121,19 +122,20 @@ contains
         call vol_odd_filt%set_wthreads(.true.)
 
         cutoff_finds = gen_lp_cutoff_finds( box, smpd )
-
+        allocate(bwfilters(box,size(cutoff_finds)),                 source=0.)
         allocate(dmats(ldim(1),ldim(2),ldim(3),size(cutoff_finds)), source=huge(x))
+        allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),                 source=0.)
 
         do i = 1, size(cutoff_finds)
             call vol_even_filt%copy_fast(vol_even_copy_cmat)
             call vol_odd_filt%copy_fast(vol_odd_copy_cmat)
-            call butterworth_filter(vol_even_filt, cutoff_finds(i), cur_fil)
-            call butterworth_filter(vol_odd_filt,  cutoff_finds(i), cur_fil)
+            call butterworth_filter(vol_even_filt, cutoff_finds(i), bwfilters(:,i))
+            call vol_odd_filt%apply_filter(bwfilters(:,i))
             call vol_even_filt%ifft
             call vol_odd_filt%ifft
             call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmats(:,:,:,i))
+            call tent_smooth_3d(dmats(:,:,:,i), dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
         end do
     end subroutine setup_dmats
-
 
 end module simple_nu_filter

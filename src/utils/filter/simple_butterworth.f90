@@ -5,7 +5,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 interface butterworth_filter
-    module procedure butterworth_filter_1, butterworth_filter_2, butterworth_filter_3, butterworth_filter_4
+    module procedure butterworth_filter_1, butterworth_filter_2, butterworth_filter_3, butterworth_filter_4, butterworth_filter_5
 end interface butterworth_filter
 
 integer, parameter :: BW_ORDER = 8
@@ -91,5 +91,17 @@ contains
             cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cutoff_find))
         enddo
     end subroutine butterworth_filter_4
+
+    subroutine butterworth_filter_5(img1, img2, cutoff_find, cur_fil)
+        use simple_image, only: image
+        class(image), intent(inout) :: img1, img2
+        integer,      intent(in)    :: cutoff_find
+        real,         intent(inout) :: cur_fil(:)
+        integer :: freq_val
+        do freq_val = 1, size(cur_fil)
+            cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cutoff_find))
+        enddo
+        call img1%apply_filter(img2, cur_fil)
+    end subroutine butterworth_filter_5
 
 end module simple_butterworth

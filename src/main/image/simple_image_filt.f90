@@ -626,6 +626,49 @@ contains
         if( didft ) call self%ifft()
     end subroutine apply_filter
 
+    module subroutine apply_filter_2( self, self2, filter )
+        class(image), intent(inout) :: self, self2
+        real,         intent(in)    :: filter(:)
+        integer :: nyq, sh, logi(3), a, b, c
+        logical :: didft_self, didft_self2
+        real    :: fwght, wzero
+        if( .not.(self.eqdims.self2) ) THROW_HARD('images to be filtered need to have same dimensions; apply_filter_2')
+        nyq = size(filter)
+        didft_self  = .false.
+        didft_self2 = .false.
+        if( .not. self%ft )then
+            call self%fft()
+            didft_self = .true.
+        endif
+        if( .not. self2%ft )then
+            call self2%fft()
+            didft_self2 = .true.
+        endif
+        wzero = maxval(filter)
+        !$omp parallel do collapse(3) default(shared) private(logi,a,b,c,sh,fwght)&
+        !$omp schedule(static) proc_bind(close)
+        do c = 1,self%array_shape(3)
+            do b = 1,self%array_shape(2)
+                do a = 1,self%array_shape(1)
+                    logi = self%fit%comp_addr_logi(a,b,c)
+                    sh   = nint(sqrt(real(dot_product(logi,logi))))
+                    if( sh > nyq )then
+                        fwght = 0.
+                    else if( sh == 0 )then
+                        fwght = wzero
+                    else
+                        fwght = filter(sh)
+                    endif
+                    self%cmat(a,b,c)  = fwght * self%cmat(a,b,c)
+                    self2%cmat(a,b,c) = fwght * self2%cmat(a,b,c)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        if( didft_self )  call self%ifft()
+        if( didft_self2 ) call self2%ifft()
+    end subroutine apply_filter_2
+
     module subroutine apply_filter_serial( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)

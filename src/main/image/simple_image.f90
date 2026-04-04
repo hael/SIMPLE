@@ -198,7 +198,10 @@ contains
     procedure          :: real_space_filter
     procedure          :: hannw
     procedure          :: apply_bfac
-    procedure          :: apply_filter, apply_filter_serial
+    procedure, private :: apply_filter_1 => apply_filter
+    procedure, private :: apply_filter_2
+    generic            :: apply_filter => apply_filter_1, apply_filter_2
+    procedure          :: apply_filter_serial
     procedure          :: NLmean2D, NLmean2D_eo, NLmean3D, NLmean3D_eo
     procedure          :: ICM2D, ICM2D_eo, ICM3D, ICM3D_eo
     procedure          :: GLCM
@@ -1302,6 +1305,11 @@ interface
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
     end subroutine apply_filter
+
+    module subroutine apply_filter_2( self, self2, filter )
+        class(image), intent(inout) :: self, self2
+        real,         intent(in)    :: filter(:)
+    end subroutine apply_filter_2
 
     module subroutine apply_filter_serial( self, filter )
         class(image), intent(inout) :: self
