@@ -1618,8 +1618,10 @@ contains
         nx = even_raw%ldim(1)
         ny = even_raw%ldim(2)
         nz = even_raw%ldim(3)
+        !$omp workshare
         diff = abs(even_raw%rmat(:nx,:ny,:nz) - odd_filt%rmat(:nx,:ny,:nz)) +&
               &abs(even_filt%rmat(:nx,:ny,:nz) - odd_raw%rmat(:nx,:ny,:nz))
+        !$omp end workshare
     end subroutine nu_objective
 
     module function euclid_norm( self1, self2 ) result( r )
