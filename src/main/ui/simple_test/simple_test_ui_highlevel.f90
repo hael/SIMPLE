@@ -5,20 +5,26 @@ implicit none
 
 type(ui_program), target :: mini_stream
 type(ui_program), target :: simulated_workflow
+type(ui_program), target :: simulate_particles
+type(ui_program), target :: subproject_distr
 
 contains
 
     subroutine construct_test_highlevel_programs( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         call new_mini_stream(tsttab)
+        call new_simulate_particles(tsttab)
         call new_simulated_workflow(tsttab)
+        call new_subproject_distr(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('HIGH-LEVEL:', C_UNDERLINED)
         write(logfhandle,'(A)') mini_stream%name%to_char()
+        write(logfhandle,'(A)') simulate_particles%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
+        write(logfhandle,'(A)') subproject_distr%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -50,6 +56,19 @@ contains
         call add_ui_program('mini_stream', mini_stream, tsttab)
     end subroutine new_mini_stream
 
+    subroutine new_simulate_particles( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call simulate_particles%new(&
+        &'simulate_particles',&                     ! name
+        &'simulate_particles',&                     ! descr_short
+        &'is a test program for simulate_particles',&
+        &'simple_test_exec',&                       ! executable
+        &.false.)                                   ! requires sp_project
+        ! add to ui_hash
+        call add_ui_program('simulate_particles', simulate_particles, tsttab)
+    end subroutine new_simulate_particles
+
     subroutine new_simulated_workflow( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
@@ -77,5 +96,18 @@ contains
         ! add to ui_hash
         call add_ui_program('simulated_workflow', simulated_workflow, tsttab)
     end subroutine new_simulated_workflow
+
+    subroutine new_subproject_distr( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call subproject_distr%new(&
+        &'subproject_distr',&                                      ! name
+        &'test subproject split, parallel exec & merge',&          ! descr_short
+        &'Integration test: split project into subprojects, run in parallel via generate_scripts_subprojects, merge back',&
+        &'simple_test_exec',&                                      ! executable
+        &.true.)                                                   ! requires sp_project
+        ! add to ui_hash
+        call add_ui_program('subproject_distr', subproject_distr, tsttab)
+    end subroutine new_subproject_distr
 
 end module simple_test_ui_highlevel

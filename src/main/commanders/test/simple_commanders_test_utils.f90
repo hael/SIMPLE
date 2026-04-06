@@ -259,25 +259,138 @@ subroutine exec_test_pdb2mrc( self, cline )
     use simple_image,         only : image
     use simple_atoms,         only : atoms
     use simple_molecule_data, only : molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+    use simple_imghead,       only : find_ldim_nptcls
     class(commander_test_pdb2mrc), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
-    type(string)        :: pdb_file, vol_file
+    type(string)        :: pdb_file, vol_file, default_vol
     type(atoms)         :: molecule
     type(molecule_data) :: mol
     real, parameter     :: smpd = 1.3
+    integer             :: ldim(3), nptcls
+    real                :: smpd_out
+    logical             :: all_ok
+    all_ok = .true.
+    ! ---- Test 1: mol-only input (6VXX) ----
+    write(logfhandle,'(a)') '>>> Test 1: pdb2mrc with 6VXX mol data (default filenames)'
     mol = sars_cov2_spkgp_6vxx()
+    write(logfhandle,'(a,i8)') '    molecule atom count: ', mol%n
+    if( mol%n < 1 )then
+        write(logfhandle,'(a)') '    FAIL: 6VXX molecule data has no atoms'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: 6VXX molecule data loaded'
+    endif
     call molecule%pdb2mrc(smpd=smpd, mol=mol)
+    default_vol = 'molecule.mrc'
+    if( .not. file_exists(default_vol) )then
+        write(logfhandle,'(a)') '    FAIL: '//default_vol%to_char()//' not created'
+        all_ok = .false.
+    else
+        call find_ldim_nptcls(default_vol, ldim, nptcls, smpd_out)
+        write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
+            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_out
+        if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
+            write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: volume dimensions valid'
+        endif
+        if( abs(smpd_out - smpd) > 0.01 )then
+            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', smpd, ' got ', smpd_out
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: sampling distance matches'
+        endif
+    endif
+    ! ---- Test 2: mol-only input (1JYX) ----
+    write(logfhandle,'(a)') '>>> Test 2: pdb2mrc with 1JYX mol data (default filenames)'
     mol = betagal_1jyx()
+    write(logfhandle,'(a,i8)') '    molecule atom count: ', mol%n
+    if( mol%n < 1 )then
+        write(logfhandle,'(a)') '    FAIL: 1JYX molecule data has no atoms'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: 1JYX molecule data loaded'
+    endif
     call molecule%pdb2mrc(smpd=smpd, mol=mol)
+    if( .not. file_exists(default_vol) )then
+        write(logfhandle,'(a)') '    FAIL: '//default_vol%to_char()//' not created'
+        all_ok = .false.
+    else
+        call find_ldim_nptcls(default_vol, ldim, nptcls, smpd_out)
+        write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
+            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_out
+        if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
+            write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: volume dimensions valid'
+        endif
+        if( abs(smpd_out - smpd) > 0.01 )then
+            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', smpd, ' got ', smpd_out
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: sampling distance matches'
+        endif
+    endif
+    ! ---- Test 3: explicit filenames (6VXX) ----
+    write(logfhandle,'(a)') '>>> Test 3: pdb2mrc with 6VXX mol data + explicit pdb/vol filenames'
     pdb_file = '6VXX.pdb'
     vol_file = '6VXX.mrc'
     mol = sars_cov2_spkgp_6vxx()
     call molecule%pdb2mrc(pdbfile=pdb_file, volfile=vol_file, smpd=smpd, mol=mol)
-    pdb_file = '1JXY.pdb'
-    vol_file = '1JXY.mrc'
+    if( .not. file_exists(vol_file) )then
+        write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not created'
+        all_ok = .false.
+    else
+        call find_ldim_nptcls(vol_file, ldim, nptcls, smpd_out)
+        write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
+            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_out
+        if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
+            write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: 6VXX volume dimensions valid'
+        endif
+        if( abs(smpd_out - smpd) > 0.01 )then
+            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', smpd, ' got ', smpd_out
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: 6VXX sampling distance matches'
+        endif
+    endif
+    ! ---- Test 4: explicit filenames (1JYX) ----
+    write(logfhandle,'(a)') '>>> Test 4: pdb2mrc with 1JYX mol data + explicit pdb/vol filenames'
+    pdb_file = '1JYX.pdb'
+    vol_file = '1JYX.mrc'
     mol      = betagal_1jyx()
     call molecule%pdb2mrc(pdbfile=pdb_file, volfile=vol_file, smpd=smpd, mol=mol)
-    call simple_end('**** SIMPLE_TEST_PDB2MRC_WORKFLOW NORMAL STOP ****')
+    if( .not. file_exists(vol_file) )then
+        write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not created'
+        all_ok = .false.
+    else
+        call find_ldim_nptcls(vol_file, ldim, nptcls, smpd_out)
+        write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
+            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_out
+        if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
+            write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: 1JYX volume dimensions valid'
+        endif
+        if( abs(smpd_out - smpd) > 0.01 )then
+            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', smpd, ' got ', smpd_out
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: 1JYX sampling distance matches'
+        endif
+    endif
+    ! ---- Final verdict ----
+    if( all_ok )then
+        call simple_end('**** SIMPLE_TEST_PDB2MRC NORMAL STOP ****')
+    else
+        THROW_HARD('TEST_PDB2MRC FAILED')
+    endif
 end subroutine exec_test_pdb2mrc
 
 subroutine exec_test_serialize( self, cline )

@@ -51,6 +51,7 @@ type qsys_ctrl
     procedure          :: clear_stack
     ! SCRIPT GENERATORS
     procedure          :: generate_scripts
+    procedure          :: generate_scripts_subprojects
     procedure          :: generate_array_script
     procedure, private :: generate_script_1, generate_script_2, generate_script_3, generate_script_4
     generic            :: generate_script => generate_script_2, generate_script_3, generate_script_4
@@ -196,6 +197,83 @@ contains
     end subroutine clear_stack
 
     ! SCRIPT GENERATORS
+
+    !>  \brief  Generate one script per subproject for qsys-agnostic parallel execution.
+    !  Each subproject receives its own bash script (indexed by the partition range).
+    !  After calling this routine, invoke schedule_jobs() to submit them in parallel
+    !  respecting ncomputing_units concurrency.  Works with local, SLURM, LSF, PBS
+    !  and SGE — the polymorphic qsys object handles the dispatch details.
+    !  Usage:
+    !    call qctrl%generate_script_subprojects(jobs_descr, q_descr)
+    !    call qctrl%schedule_jobs
+    subroutine generate_scripts_subprojects( self, jobs_descr, q_descr, exec_bin, subproj_dirs )
+        class(qsys_ctrl),        intent(inout) :: self
+        type(chash),             intent(in)    :: jobs_descr(:)   !< one job description per subproject
+        class(chash),            intent(in)    :: q_descr         !< queue system description
+        class(string), optional, intent(in)    :: exec_bin        !< override executable binary
+        class(string), optional, intent(in)    :: subproj_dirs(:) !< per-subproject working directories
+        character(len=512) :: io_msg
+        type(string)       :: job_str, execution_binary
+        integer            :: isub, ios, funit, nsub
+        ! nsub is defined by the input array — each element IS a subproject
+        nsub = size(jobs_descr)
+        if( nsub < 1 )then
+            THROW_HARD('need at least 1 subproject; generate_scripts_subprojects')
+        endif
+        if( present(subproj_dirs) )then
+            if( size(subproj_dirs) /= nsub )then
+                THROW_HARD('# subproject directories must match # subprojects; generate_scripts_subprojects')
+            endif
+        endif
+        if( present(exec_bin) )then
+            execution_binary = exec_bin
+        else
+            execution_binary = self%exec_binary
+        endif
+        do isub = 1, nsub
+            call fopen(funit, file=self%script_names(isub), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
+            call fileiochk('simple_qsys_ctrl :: generate_scripts_subprojects; Error when opening file for writing: '&
+                &//self%script_names(isub)%to_char()//' ; '//trim(io_msg), ios)
+            ! specify shell
+            write(funit,'(a)') '#!/bin/bash'
+            ! write qsys-specific instructions (run-time polymorphic)
+            if( q_descr%get('qsys_name') .ne. 'local' )then
+                call self%myqsys%write_instr(q_descr, fhandle=funit)
+            else
+                call self%myqsys%write_instr(jobs_descr(isub), fhandle=funit)
+            endif
+            ! change to subproject directory if provided, otherwise use global CWD
+            if( present(subproj_dirs) )then
+                write(funit,'(a)') 'cd '//subproj_dirs(isub)%to_char()
+            else
+                write(funit,'(a)') 'cd '//trim(CWD_GLOB)
+            endif
+            write(funit,'(a)') ''
+            ! compose the command line from the subproject's job description
+            job_str = jobs_descr(isub)%chash2str()
+            write(funit,'(a)',advance='no') execution_binary%to_char()//' '//job_str%to_char()
+            ! direct output
+            write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
+            ! exit shell when done
+            write(funit,'(a)') ''
+            write(funit,'(a)') 'exit'
+            call fclose(funit)
+            if( q_descr%get('qsys_name') .eq. 'local' )then
+                ios = simple_chmod(self%script_names(isub), '+x')
+                if( ios /= 0 )then
+                    write(logfhandle,'(a)',advance='no') 'simple_qsys_ctrl :: generate_scripts_subprojects; Error '
+                    write(logfhandle,'(a)') 'chmoding submit script '//self%script_names(isub)%to_char()
+                    stop
+                endif
+            endif
+            ! reset job tracking flags for this subproject
+            self%jobs_done(isub)      = .false.
+            self%jobs_submitted(isub) = .false.
+            call wait_for_closure(self%script_names(isub))
+        end do
+        ! reset available computing units
+        if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
+    end subroutine generate_scripts_subprojects
 
     ! generate scripts for the range of partitions defined by fromto_part, using the job description and qsys description provided. 
     !├── generate_scripts() [PUBLIC] (LOOP)

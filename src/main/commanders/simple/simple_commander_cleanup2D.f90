@@ -51,9 +51,7 @@ contains
         call cline_coarse_abinitio2D%printline
         call xabinitio2D%execute(cline_coarse_abinitio2D)
         call spproj%read(params%projfile)
-
         print *, 'read projfile: ', params%projfile%to_char()
-
         ! estimate per coarse-class mask diameters
         cavgs_coarse = read_cavgs_into_imgarr(spproj)
         call automask2D(params, cavgs_coarse, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
@@ -67,9 +65,7 @@ contains
             box_coarse  = round2even(diams(icls_coarse) / params%smpd + 2. * COSMSKHALFWIDTH)
             moldiam_sub = params%smpd * real(box_coarse) 
             mskdiam_sub = moldiam_sub * MSK_EXP_FAC
-
             print *, 'coarse class index: ', icls_coarse, ' estimated mask diameter: ', mskdiam_sub
-            
             ! (2) extract subproject from coarse clustering (class index)
             projname_sub = 'subproj'//int2str_pad(icls_coarse,2)
             projfile_sub = 'subproj'//int2str_pad(icls_coarse,2)//'.simple'
@@ -97,19 +93,11 @@ contains
             deallocate(state_labels)
             ! write subproject file
             call spproj_sub%write 
-
-
-
             ! (3) execute distributed ab initio 2D on subproject with dynamically estimated ncls
-
             nptcls_sub = spproj_sub%get_nptcls()
-
             print *, 'nptcls_sub: ', nptcls_sub
-
             ncls_sub   = max(NCLS_FINE_MIN, min(NCLS_FINE_MAX, nint(real(nptcls_sub) / real(params%nptcls_per_cls))))
-            
             print *, 'ncls_sub: ', ncls_sub
-
             ! setup command line
             cline_subproj_abinitio2D = cline
             call cline_subproj_abinitio2D%set('prg',      'abinitio2D')
@@ -119,14 +107,11 @@ contains
             call cline_subproj_abinitio2D%set('center',          'yes')
             call cline_subproj_abinitio2D%set('cls_init',       'rand')
             call cline_subproj_abinitio2D%set('mkdir',           'yes')
-
             call cline_subproj_abinitio2D%printline
-
             call xabinitio2D%execute(cline_subproj_abinitio2D)
             call spproj_sub%kill
             call simple_chdir('../')
         end do
-
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****', print_simple = .false.)
     end subroutine exec_cleanup2D
 

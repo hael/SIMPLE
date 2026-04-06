@@ -13,6 +13,8 @@ use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_cluster2D,    only: commander_cluster2D
 use simple_micproc,                 only: sample_filetab
 use simple_commanders_validate,     only: commander_mini_stream
+use simple_qsys_env,                only: qsys_env
+use simple_projfile_utils,          only: merge_chunk_projfiles
 implicit none
 #include "simple_local_flags.inc"
 
@@ -21,10 +23,20 @@ type, extends(commander_base) :: commander_test_mini_stream
     procedure :: execute      => exec_test_mini_stream
 end type commander_test_mini_stream
 
+type, extends(commander_base) :: commander_test_simulate_particles
+  contains
+    procedure :: execute      => exec_test_simulate_particles
+end type commander_test_simulate_particles
+
 type, extends(commander_base) :: commander_test_simulated_workflow
   contains
     procedure :: execute      => exec_test_simulated_workflow
 end type commander_test_simulated_workflow
+
+type, extends(commander_base) :: commander_test_subproject_distr
+  contains
+    procedure :: execute      => exec_test_subproject_distr
+end type commander_test_subproject_distr
 
 contains
 
@@ -178,6 +190,113 @@ subroutine exec_test_mini_stream( self, cline )
     enddo
     call simple_end('**** SIMPLE_TEST_MINI_STREAM_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_mini_stream
+
+subroutine exec_test_simulate_particles( self, cline )
+    use simple_atoms,         only: atoms
+    use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
+    use simple_imghead,       only: find_ldim_nptcls
+    class(commander_test_simulate_particles), intent(inout) :: self
+    class(cmdline),                           intent(inout) :: cline
+    type(cmdline)                       :: cline_sim
+    type(parameters)                    :: params
+    type(commander_simulate_particles)  :: xsim_ptcls
+    type(atoms)                         :: molecule
+    real, parameter                     :: smpd = 1.3
+    type(molecule_data)                 :: mol
+    integer, parameter                  :: NPTCLS_SIM = 200
+    type(string)                        :: outstk, outfile, vol_file
+    integer                             :: ldim(3), nptcls_stk, nlines_ori
+    real                                :: smpd_stk
+    logical                             :: all_ok
+    mol = sars_cov2_spkgp_6vxx()
+    call molecule%pdb2mrc(smpd=smpd, mol=mol)
+    call params%new(cline)
+    all_ok = .true.
+    ! ---- simulate particles ----
+    write(logfhandle,'(a)') '>>> TEST_SIMULATE_PARTICLES:'
+    call cline_sim%set('prg',      'simulate_particles')
+    call cline_sim%set('vol1',               '6VXX.mrc')
+    call cline_sim%set('smpd',                     smpd)
+    call cline_sim%set('mskdiam',                   180)
+    call cline_sim%set('nthr',                       16)
+    call cline_sim%set('nptcls',             NPTCLS_SIM)
+    call cline_sim%set('pgrp',                     'c1')
+    call cline_sim%set('snr',                      0.01)
+    call cline_sim%set('ctf',                     'yes')
+    call xsim_ptcls%execute(cline_sim)
+    ! ---- define expected output file names ----
+    vol_file = '6VXX.mrc'
+    outstk   = 'simulated_particles.mrc'
+    outfile  = 'simulated_oris'//trim(TXT_EXT)
+    ! ---- check volume was generated ----
+    write(logfhandle,'(a)') '>>> CHECK: volume file exists'
+    if( .not. file_exists(vol_file) )then
+        write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not found'
+        THROW_HARD('TEST_SIMULATE_PARTICLES FAILED: volume not generated')
+    else
+        call find_ldim_nptcls(vol_file, ldim, nptcls_stk, smpd_stk)
+        write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    PASS: volume dims = [', &
+            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_stk
+        if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
+            write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
+            all_ok = .false.
+        endif
+        if( abs(smpd_stk - smpd) > 0.01 )then
+            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', smpd, ' got ', smpd_stk
+            all_ok = .false.
+        endif
+    endif
+    ! ---- validate output stack ----
+    write(logfhandle,'(a)') '>>> CHECK: output particle stack'
+    if( .not. file_exists(outstk) )then
+        write(logfhandle,'(a)') '    FAIL: '//outstk%to_char()//' not found'
+        all_ok = .false.
+    else
+        call find_ldim_nptcls(outstk, ldim, nptcls_stk, smpd_stk)
+        write(logfhandle,'(a,i6)')  '    particles in stack: ', nptcls_stk
+        write(logfhandle,'(a,i4,a,i4)') '    box size:           ', ldim(1), ' x ', ldim(2)
+        write(logfhandle,'(a,f6.2)')    '    smpd:               ', smpd_stk
+        if( nptcls_stk /= NPTCLS_SIM )then
+            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', NPTCLS_SIM, ' particles, got ', nptcls_stk
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: particle count matches'
+        endif
+        if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
+            write(logfhandle,'(a)') '    FAIL: invalid box dimensions'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: box dimensions valid'
+        endif
+        if( abs(smpd_stk - smpd) > 0.01 )then
+            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', smpd, ' got ', smpd_stk
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: sampling distance matches'
+        endif
+    endif
+    ! ---- validate orientations file ----
+    write(logfhandle,'(a)') '>>> CHECK: orientations file'
+    if( .not. file_exists(outfile) )then
+        write(logfhandle,'(a)') '    FAIL: '//outfile%to_char()//' not found'
+        all_ok = .false.
+    else
+        nlines_ori = nlines(outfile)
+        write(logfhandle,'(a,i6)') '    orientation records: ', nlines_ori
+        if( nlines_ori /= NPTCLS_SIM )then
+            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', NPTCLS_SIM, ' records, got ', nlines_ori
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: orientation count matches'
+        endif
+    endif
+    ! ---- final verdict ----
+    if( all_ok )then
+        call simple_end('**** SIMPLE_TEST_SIMULATE_PARTICLES NORMAL STOP ****')
+    else
+        THROW_HARD('TEST_SIMULATE_PARTICLES FAILED')
+    endif
+end subroutine exec_test_simulate_particles
 
 subroutine exec_test_simulated_workflow( self, cline )
     class(commander_test_simulated_workflow), intent(inout) :: self
@@ -339,5 +458,140 @@ subroutine exec_test_simulated_workflow( self, cline )
     call cline_cluster2D%kill()
     call simple_end('**** SIMPLE_TEST_SIMULATED_WORKFLOW_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_simulated_workflow
+
+!>  \brief  Integration test: split project into subprojects, run in parallel, merge back.
+!  This test exercises the new generate_scripts_subprojects / gen_subproject_scripts_and_schedule
+!  machinery end-to-end.  It:
+!    1. Simulates particles and runs coarse abinitio2D to obtain class labels
+!    2. Splits the project into per-class subprojects (extract_subproj pattern)
+!    3. Runs a program on each subproject in parallel via generate_scripts_subprojects
+!    4. Merges all subproject results with merge_chunk_projfiles
+!    5. Validates that particle count is preserved
+subroutine exec_test_subproject_distr( self, cline )
+    use simple_atoms,         only: atoms
+    use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
+    use simple_imghead,       only: find_ldim_nptcls
+    class(commander_test_subproject_distr), intent(inout) :: self
+    class(cmdline),                         intent(inout) :: cline
+    integer, parameter :: NPTCLS_SIM  = 50  ! particles to simulate
+    integer, parameter :: NCLS_COARSE = 5   ! coarse classes
+    integer, parameter :: MAXKEYS     = 20  ! chash capacity
+    real,    parameter :: SMPD        = 1.3
+    type(parameters)                    :: params
+    type(sp_project)                    :: spproj, spproj_sub, spproj_merged
+    type(commander_simulate_particles)  :: xsim_ptcls
+    type(commander_abinitio2D)          :: xabinitio2D
+    type(cmdline)                       :: cline_sim, cline_2D, cline_sub
+    type(qsys_env)                      :: qenv
+    type(chash), allocatable            :: jobs_descr(:)
+    type(string), allocatable           :: subproj_fnames(:), subproj_dirs(:)
+    integer, allocatable                :: class_labels(:)
+    real,    allocatable                :: state_labels(:)
+    type(string)                        :: projname_sub, projfile_sub, cwd_root
+    type(molecule_data)                 :: mol
+    type(atoms)                         :: molecule
+    integer :: icls, nsub, isub, nptcls_sub, nptcls_merged, nptcls_orig
+    logical :: all_ok
+    call params%new(cline)
+    call simple_getcwd(cwd_root)
+    ! 1. Simulate particles
+    write(logfhandle,'(a)') '>>> Step 1: simulate particles'
+    mol = sars_cov2_spkgp_6vxx()
+    call molecule%pdb2mrc(smpd=SMPD, mol=mol)
+    call cline_sim%set('prg',      'simulate_particles')
+    call cline_sim%set('vol1',               '6VXX.mrc')
+    call cline_sim%set('smpd',                     SMPD)
+    call cline_sim%set('mskdiam',                   180)
+    call cline_sim%set('nthr',                       16)
+    call cline_sim%set('nptcls',             NPTCLS_SIM)
+    call cline_sim%set('pgrp',                     'c1')
+    call cline_sim%set('snr',                      0.01)
+    call cline_sim%set('ctf',                     'yes')
+    call xsim_ptcls%execute(cline_sim)
+    ! 2. Coarse abinitio2D to get class labels
+    write(logfhandle,'(a)') '>>> Step 2: coarse abinitio2D'
+    cline_2D = cline
+    call params%new(cline_2D)
+    call cline_2D%set('prg',     'abinitio2D')
+    call cline_2D%set('ncls',    NCLS_COARSE)
+    call cline_2D%set('mkdir',          'no')
+    call xabinitio2D%execute(cline_2D)
+    ! 3. Read project and split into subprojects by class 
+    write(logfhandle,'(a)') '>>> Step 3: splitting into subprojects'
+    call spproj%read(params%projfile)
+    nptcls_orig  = spproj%get_nptcls()
+    class_labels = spproj%os_ptcl2D%get_all_asint('class')
+    nsub         = NCLS_COARSE
+    allocate(jobs_descr(nsub), subproj_fnames(nsub), subproj_dirs(nsub))
+    do icls = 1, nsub
+        projname_sub = 'subproj_'//int2str_pad(icls, 2)
+        projfile_sub = projname_sub%to_char()//'.simple'
+        ! create subproject directory
+        call simple_mkdir(projname_sub)
+        subproj_dirs(icls) = cwd_root%to_char()//'/'//projname_sub%to_char()
+        ! build subproject: copy parent, keep only particles in this class
+        spproj_sub = spproj 
+        ! set state labels: 1 for particles in this class, 0 otherwise
+        allocate(state_labels(size(class_labels)))
+        where(class_labels == icls)
+            state_labels = 1.0
+        elsewhere
+            state_labels = 0.0
+        endwhere
+        call spproj_sub%os_ptcl2D%set_all('state', state_labels)
+        call spproj_sub%os_ptcl3D%set_all('state', state_labels)
+        call spproj_sub%prune_particles
+        deallocate(state_labels)
+        nptcls_sub = spproj_sub%get_nptcls()
+        write(logfhandle,'(a,i2,a,i6,a)') '    subproject ', icls, ': ', nptcls_sub, ' particles'
+        ! update project info & write into subproject directory
+        call cline_sub%set('projname', projname_sub)
+        call spproj_sub%update_projinfo(cline_sub)
+        call spproj_sub%write(string(subproj_dirs(icls)%to_char()//'/'//projfile_sub%to_char()))
+        subproj_fnames(icls) = subproj_dirs(icls)%to_char()//'/'//projfile_sub%to_char()
+        ! build job description for this subproject
+        call jobs_descr(icls)%new(MAXKEYS)
+        call jobs_descr(icls)%set('prg',      'cluster2D')
+        call jobs_descr(icls)%set('projfile', projfile_sub%to_char())
+        call jobs_descr(icls)%set('ncls',     int2str(max(2, nptcls_sub/50)))
+        call jobs_descr(icls)%set('nthr',     int2str(params%nthr))
+        call jobs_descr(icls)%set('mskdiam',  real2str(params%mskdiam))
+        call jobs_descr(icls)%set('mkdir',    'no')
+        call spproj_sub%kill
+    end do
+    ! 4. Generate scripts and execute subprojects in parallel ----
+    write(logfhandle,'(a)') '>>> Step 4: parallel execution of subprojects'
+    call qenv%new(params, nsub)
+    call qenv%gen_subproject_scripts_and_schedule(jobs_descr, subproj_dirs=subproj_dirs)
+    write(logfhandle,'(a)') '    all subprojects completed'
+    ! 5. Merge subproject results
+    write(logfhandle,'(a)') '>>> Step 5: merging subproject results'
+    call merge_chunk_projfiles(subproj_fnames, cwd_root, spproj_merged)
+    nptcls_merged = spproj_merged%get_nptcls()
+    ! 6. Validate
+    write(logfhandle,'(a)') '>>> Step 6: validation'
+    all_ok = .true.
+    write(logfhandle,'(a,i6)') '    original particles:  ', nptcls_orig
+    write(logfhandle,'(a,i6)') '    merged particles:    ', nptcls_merged
+    if( nptcls_merged /= nptcls_orig )then
+        write(logfhandle,'(a)') '    FAIL: particle count mismatch after merge!'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: particle count preserved'
+    endif
+    ! 7.Cleanup
+    do isub = 1, nsub
+        call jobs_descr(isub)%kill
+    end do
+    deallocate(jobs_descr, subproj_fnames, subproj_dirs)
+    call spproj%kill
+    call spproj_merged%kill
+    call qenv%kill
+    if( all_ok )then
+        call simple_end('**** TEST_SUBPROJECT_DISTR NORMAL STOP ****')
+    else
+        THROW_HARD('TEST_SUBPROJECT_DISTR FAILED')
+    endif
+end subroutine exec_test_subproject_distr
 
 end module simple_commanders_test_highlevel
