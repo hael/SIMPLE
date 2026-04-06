@@ -32,7 +32,7 @@ contains
         type(multi_dendro)              :: block_tree
         type(image),        allocatable :: cavg_imgs(:)
         type(string)                    :: refs_fname, blocktree_fname, projfile, projfile_pruned
-        integer                         :: nptcls_tot, nran, nrefs
+        integer                         :: nptcls_tot, nran, nrefs, i
         real                            :: smpd
 
         call params%new(cline)
@@ -63,31 +63,31 @@ contains
         else
             params%blocktree = 'pool_block_tree.bin'
         endif
-
+        ! update project file 
         call spproj%read(params%projfile)
         call spproj%get_cavgs_stk(refs_fname, nrefs, smpd, imgkind='cavg')
         cavg_imgs = read_cavgs_into_imgarr(spproj)
+
         cline_blocktree = cline_abinitio2D
-        call cline_blocktree%set('projfile', projfile_pruned)
         call cline_blocktree%set('trs',    5.)
         call cline_blocktree%set('objfun', 'cc')
         call params_blocktree%new(cline_blocktree)
-        ! need a cleaning step to remove any empty cavgs if any end up with zero particles 
         block_tree = gen_corr_block_tree_hac(cavg_imgs, params_blocktree, params%ncls_sub)
         call write_block_tree(block_tree, params%blocktree)
         call block_tree%kill
         call dealloc_imgarr(cavg_imgs)
-        call spproj%kill
-
+        
         cline_abinitio2D_full = cline
-        call cline_abinitio2D_full%set('mkdir',     'no')
+        ! call cline_abinitio2D_full%set('mkdir',     'no')
         call cline_abinitio2D_full%set('refine',    'snhc_ptree')
         call cline_abinitio2D_full%set('oritype',   'ptcl2D')
         call cline_abinitio2D_full%set('ncls',      params%ncls)
         call cline_abinitio2D_full%set('projfile',  projfile)
-        ! set references from previous abinitio2D run
-        ! call cline_abinitio2D_full%set('refs',      refs_fname)
+        ! set references/tree from previous abinitio2D run
+        call cline_abinitio2D_full%set('refs',      refs_fname)
         call cline_abinitio2D_full%set('blocktree', params%blocktree)
         call xabinitio2D%execute(cline_abinitio2D_full)
+        call spproj%kill
+        call simple_end('**** POOL2D_TREE NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_pool2D_tree
 end module simple_commanders_pool2D_tree

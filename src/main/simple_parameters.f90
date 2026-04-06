@@ -465,7 +465,7 @@ type :: parameters
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
-    real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejectionboxfile
+    real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence

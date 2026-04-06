@@ -834,8 +834,9 @@ contains
     end subroutine exec_shape_rank_cavgs
 
     subroutine exec_tree_rank_cavgs( self, cline )
-        use simple_block_tree, only: gen_single_block_index_tree, gen_multi_block_index_tree
-        use simple_multi_dendro, only: multi_dendro
+        use simple_block_tree,    only: gen_single_block_index_tree, gen_multi_block_index_tree
+        use simple_multi_dendro,  only: multi_dendro
+        use simple_block_tree_io, only: read_block_tree
         class(commander_tree_rank_cavgs), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(sp_project)         :: spproj
@@ -848,9 +849,13 @@ contains
         call params%new(cline)
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
-        ncls_sub = min(round2even(0.025* real(ncls)), 10) ! capped at 10
-        ncls_sub = max(ncls_sub, 10)                      ! floored at 10
-        block_tree = gen_multi_block_index_tree(ncls, ncls_sub)
+        if( cline%defined('blocktree') )then
+            call read_block_tree(block_tree, params%blocktree)
+        else
+            ncls_sub = min(round2even(0.025* real(ncls)), 10) ! capped at 10
+            ncls_sub = max(ncls_sub, 10)                      ! floored at 10
+            block_tree = gen_multi_block_index_tree(ncls, ncls_sub)
+        end if
         ntrees = block_tree%get_n_trees()
         full2sub_map = block_tree%get_full2sub_map()
         ! extract cavgs from project
@@ -868,7 +873,7 @@ contains
         if( allocated(full2sub_map) ) deallocate(full2sub_map)
         call spproj%kill
         call block_tree%kill
-        call simple_end('exec_tree_rank_cavgs normal completion', print_simple=.false.)
+        call simple_end('**** SIMPLE_TREE_RANK_CAVGS NORMAL STOP ****')
     end subroutine exec_tree_rank_cavgs
 
 end module simple_commanders_cavgs

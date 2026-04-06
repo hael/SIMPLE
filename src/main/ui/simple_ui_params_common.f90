@@ -11,6 +11,7 @@ type(ui_param) :: astigtol
 type(ui_param) :: automsk
 type(ui_param) :: backgr_subtr
 type(ui_param) :: bfac
+type(ui_param) :: blocktree
 type(ui_param) :: box
 type(ui_param) :: box_extract
 type(ui_param) :: center_pdb
@@ -194,6 +195,10 @@ subroutine set_ui_params
     call bfac%set_param(           'bfac',            'num',    'B-factor for sharpening', &
                                    'B-factor for sharpening in Angstroms^2', &
                                    'B-factor in Angstroms^2', .false., 200.)
+
+    call blocktree%set_param(      'blocktree',       'file',   'Block tree binary file', &
+                                   'Pre-computed block tree binary file (.bin) for tree_rank_cavgs', &
+                                   'e.g. pool_block_tree.bin', .false., '')
 
     call box%set_param(            'box',             'num',    'Particle box size', &
                                    'Particle box size(in pixels)', &

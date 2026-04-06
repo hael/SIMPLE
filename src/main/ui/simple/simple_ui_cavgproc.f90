@@ -230,6 +230,8 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! parameter input/output
         call tree_rank_cavgs%add_input(UI_PARM, projfile)
+        ! optional pre-computed block tree
+        call tree_rank_cavgs%add_input(UI_PARM, blocktree)
         ! add to ui_hash
         call add_ui_program('tree_rank_cavgs', tree_rank_cavgs, prgtab)
     end subroutine new_tree_rank_cavgs
