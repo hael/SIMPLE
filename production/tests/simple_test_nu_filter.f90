@@ -1,7 +1,7 @@
 program simple_test_nu_filter
 use simple_core_module_api
 use simple_image,     only: image
-use simple_nu_filter, only: setup_dmats, optimize_cutoff_finds, nonuniform_filter_vol
+use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)         :: even_file, odd_file, out_even_file, out_odd_file
@@ -47,10 +47,9 @@ call vol_odd%read(string(trim(odd_file)))
 call vol_even%set_smpd(smpd)
 call vol_odd%set_smpd(smpd)
 call cpu_time(t_start)
-call setup_dmats(vol_even, vol_odd)
-call optimize_cutoff_finds()
-call nonuniform_filter_vol(vol_even, vol_even_nu)
-call nonuniform_filter_vol(vol_odd,  vol_odd_nu)
+call setup_nu_dmats(vol_even, vol_odd)
+call optimize_nu_cutoff_finds()
+call nu_filter_vols(vol_even_nu, vol_odd_nu)
 call cpu_time(t_end)
 call vol_even_nu%write(string(trim(out_even_file)))
 call vol_odd_nu%write(string(trim(out_odd_file)))
@@ -61,4 +60,5 @@ call vol_even_nu%kill
 call vol_odd_nu%kill
 call vol_even%kill
 call vol_odd%kill
+call cleanup_nu_filter()
 end program simple_test_nu_filter
