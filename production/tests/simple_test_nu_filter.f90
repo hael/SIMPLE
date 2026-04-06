@@ -1,7 +1,8 @@
 program simple_test_nu_filter
 use simple_core_module_api
 use simple_image,     only: image
-use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter
+use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, print_filtmap_lowpass_stats,&
+&print_filtmap_lowpass_histogram
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)         :: even_file, odd_file, out_even_file, out_odd_file
@@ -51,6 +52,9 @@ call setup_nu_dmats(vol_even, vol_odd)
 call optimize_nu_cutoff_finds()
 call nu_filter_vols(vol_even_nu, vol_odd_nu)
 call cpu_time(t_end)
+
+call print_filtmap_lowpass_stats
+
 call vol_even_nu%write(string(trim(out_even_file)))
 call vol_odd_nu%write(string(trim(out_odd_file)))
 write(logfhandle,'(a,f10.3,a)') 'nonuniform filtering elapsed CPU time: ', t_end - t_start, ' s'
