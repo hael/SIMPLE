@@ -581,38 +581,42 @@ end subroutine exec_test_simulated_workflow
 !    4. Merges all subproject results with merge_chunk_projfiles
 !    5. Validates that particle count is preserved
 subroutine exec_test_subproject_distr( self, cline )
-    use simple_atoms,         only: atoms
-    use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
-    use simple_imghead,       only: find_ldim_nptcls
+    use simple_atoms,                   only: atoms
+    use simple_molecule_data,           only: molecule_data, sars_cov2_spkgp_6vxx
+    use simple_imghead,                 only: find_ldim_nptcls
+    use simple_commanders_project_ptcl, only: commander_import_particles
     class(commander_test_subproject_distr), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    integer, parameter :: NPTCLS_SIM  = 50  ! particles to simulate
-    integer, parameter :: NCLS_COARSE = 5   ! coarse classes
-    integer, parameter :: MAXKEYS     = 20  ! chash capacity
+    integer, parameter :: NPTCLS_SIM  = 5000   ! particles to simulate
+    integer, parameter :: NCLS_COARSE = 50     ! coarse classes
+    integer, parameter :: MAXKEYS     = 20     ! chash capacity
     real,    parameter :: SMPD        = 1.3
+    character(len=*), parameter :: PROJNAME = 'test_subproj_distr'
     type(parameters)                    :: params
     type(sp_project)                    :: spproj, spproj_sub, spproj_merged
     type(commander_simulate_particles)  :: xsim_ptcls
+    type(commander_new_project)         :: xnew_project
+    type(commander_import_particles)    :: ximport_particles
     type(commander_abinitio2D)          :: xabinitio2D
-    type(cmdline)                       :: cline_sim, cline_2D, cline_sub
+    type(cmdline)                       :: cline_sim, cline_new_proj, cline_import, cline_2D, cline_sub
     type(qsys_env)                      :: qenv
-    type(chash), allocatable            :: jobs_descr(:)
+    type(chash),  allocatable           :: jobs_descr(:)
     type(string), allocatable           :: subproj_fnames(:), subproj_dirs(:)
-    integer, allocatable                :: class_labels(:)
-    real,    allocatable                :: state_labels(:)
-    type(string)                        :: projname_sub, projfile_sub, cwd_root
+    integer,      allocatable           :: class_labels(:)
+    real,         allocatable           :: state_labels(:)
+    type(string)                        :: projname_sub, projfile_sub, cwd_root, sim_stk, sim_oris
     type(molecule_data)                 :: mol
     type(atoms)                         :: molecule
     integer :: icls, nsub, isub, nptcls_sub, nptcls_merged, nptcls_orig
     logical :: all_ok
     call params%new(cline)
     call simple_getcwd(cwd_root)
-    ! 1. Simulate particles
-    write(logfhandle,'(a)') '>>> Step 1: simulate particles'
+    ! 1. Simulate particles and populate project
+    write(logfhandle,'(a)') '>>> Step 1: simulate particles from 6VXX.pdb'
     mol = sars_cov2_spkgp_6vxx()
     call molecule%pdb2mrc(smpd=SMPD, mol=mol)
     call cline_sim%set('prg',      'simulate_particles')
-    call cline_sim%set('vol1',               '6VXX.mrc')
+    call cline_sim%set('vol1',           'molecule.mrc')
     call cline_sim%set('smpd',                     SMPD)
     call cline_sim%set('mskdiam',                   180)
     call cline_sim%set('nthr',                       16)
@@ -620,18 +624,49 @@ subroutine exec_test_subproject_distr( self, cline )
     call cline_sim%set('pgrp',                     'c1')
     call cline_sim%set('snr',                      0.01)
     call cline_sim%set('ctf',                     'yes')
+    call params%new(cline_sim)
     call xsim_ptcls%execute(cline_sim)
+    call cline_sim%kill()
+    ! store paths to simulated output (relative to cwd_root)
+    sim_stk  = 'simulated_particles.mrc'
+    sim_oris = 'simulated_oris'//trim(TXT_EXT)
+    ! 1b. Create project and import simulated particles
+    write(logfhandle,'(a)') '>>> Step 1b: create project & import particles'
+    call cline_new_proj%set('projname', PROJNAME)
+    call xnew_project%execute(cline_new_proj)
+    call cline_new_proj%kill()
+    ! import_particles (new_project changed cwd into project dir)
+    call cline_import%set('prg',             'import_particles')
+    call cline_import%set('mkdir',                         'no')
+    call cline_import%set('projfile',       PROJNAME//'.simple')
+    call cline_import%set('stk',       '../'//sim_stk%to_char())
+    call cline_import%set('deftab',   '../'//sim_oris%to_char())
+    call cline_import%set('smpd',                          SMPD)
+    call cline_import%set('kv',                           300.0)
+    call cline_import%set('cs',                             2.7)
+    call cline_import%set('fraca',                          0.1)
+    call cline_import%set('ctf',                          'yes')
+    call params%new(cline_import)
+    call ximport_particles%execute(cline_import)
+    call cline_import%kill()
+    write(logfhandle,'(a)') '    project populated with '//int2str(NPTCLS_SIM)//' particles'
+    ! update cwd_root to project directory (new_project changed cwd)
+    call simple_getcwd(cwd_root)
     ! 2. Coarse abinitio2D to get class labels
+    ! (cwd is now inside project dir after new_project)
     write(logfhandle,'(a)') '>>> Step 2: coarse abinitio2D'
-    cline_2D = cline
+    call cline_2D%set('prg',             'abinitio2D')
+    call cline_2D%set('projfile', PROJNAME//'.simple')
+    call cline_2D%set('ncls',             NCLS_COARSE)
+    call cline_2D%set('mkdir',                   'no')
+    call cline_2D%set('mskdiam',                  180)
+    call cline_2D%set('smpd',                    SMPD)
+    call cline_2D%set('nthr',                      16)
     call params%new(cline_2D)
-    call cline_2D%set('prg',     'abinitio2D')
-    call cline_2D%set('ncls',    NCLS_COARSE)
-    call cline_2D%set('mkdir',          'no')
     call xabinitio2D%execute(cline_2D)
     ! 3. Read project and split into subprojects by class 
     write(logfhandle,'(a)') '>>> Step 3: splitting into subprojects'
-    call spproj%read(params%projfile)
+    call spproj%read(string(PROJNAME//'.simple'))
     nptcls_orig  = spproj%get_nptcls()
     class_labels = spproj%os_ptcl2D%get_all_asint('class')
     nsub         = NCLS_COARSE
@@ -655,6 +690,10 @@ subroutine exec_test_subproject_distr( self, cline )
         call spproj_sub%os_ptcl3D%set_all('state', state_labels)
         call spproj_sub%prune_particles
         deallocate(state_labels)
+        ! reset 2D clustering so cluster2D starts fresh (avoids early return
+        ! in prep_strategy2D_glob that skips class_space_corrs allocation)
+        call spproj_sub%os_ptcl2D%delete_2Dclustering
+        call spproj_sub%os_cls2D%new(0, is_ptcl=.false.)
         nptcls_sub = spproj_sub%get_nptcls()
         write(logfhandle,'(a,i2,a,i6,a)') '    subproject ', icls, ': ', nptcls_sub, ' particles'
         ! update project info & write into subproject directory
@@ -662,18 +701,24 @@ subroutine exec_test_subproject_distr( self, cline )
         call spproj_sub%update_projinfo(cline_sub)
         call spproj_sub%write(string(subproj_dirs(icls)%to_char()//'/'//projfile_sub%to_char()))
         subproj_fnames(icls) = subproj_dirs(icls)%to_char()//'/'//projfile_sub%to_char()
-        ! build job description for this subproject
+        ! build job description for this subproject (no nparts => shared-memory execution)
         call jobs_descr(icls)%new(MAXKEYS)
-        call jobs_descr(icls)%set('prg',      'cluster2D')
-        call jobs_descr(icls)%set('projfile', projfile_sub%to_char())
+        call jobs_descr(icls)%set('prg',                   'cluster2D_distr')
+        call jobs_descr(icls)%set('projfile',         projfile_sub%to_char())
         call jobs_descr(icls)%set('ncls',     int2str(max(2, nptcls_sub/50)))
-        call jobs_descr(icls)%set('nthr',     int2str(params%nthr))
-        call jobs_descr(icls)%set('mskdiam',  real2str(params%mskdiam))
-        call jobs_descr(icls)%set('mkdir',    'no')
+        call jobs_descr(icls)%set('nthr',               int2str(params%nthr))
+        call jobs_descr(icls)%set('mskdiam',        real2str(params%mskdiam))
+        call jobs_descr(icls)%set('mkdir',                              'no')
+        call jobs_descr(icls)%set('objfun',                             'cc')
         call spproj_sub%kill
     end do
     ! 4. Generate scripts and execute subprojects in parallel ----
     write(logfhandle,'(a)') '>>> Step 4: parallel execution of subprojects'
+    call cline%set('projfile', PROJNAME//'.simple')
+    call cline%set('mskdiam',                 180.)
+    call cline%set('smpd',                    SMPD)
+    call cline%set('nthr',                     16.)
+    call params%new(cline)
     call qenv%new(params, nsub)
     call qenv%gen_subproject_scripts_and_schedule(jobs_descr, subproj_dirs=subproj_dirs)
     write(logfhandle,'(a)') '    all subprojects completed'
