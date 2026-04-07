@@ -217,6 +217,65 @@ contains
         endif
     end subroutine loc_var3D
 
+    ! Compute mean local variance separately over foreground (bin_mask /= 0)
+    ! and background (bin_mask == 0) pixels using a square (2*hwin+1)^2 kernel.
+    !
+    ! Uses summed-area tables (SAT) for O(1) per-pixel box queries, reducing
+    ! overall complexity from O(N^2 * hwin^2) to O(N^2).
+    !
+    ! Variance formula (Bessel-corrected, numerically stable in dp):
+    !   var = (S2 - S^2/n) / (n-1)   where S = box sum, S2 = box sum-of-squares
+    subroutine loc_var_masked( self, bin_mask, hwin, var_fg, var_bg )
+        class(image), intent(in)  :: self
+        real,         intent(in)  :: bin_mask(:,:)  ! 0=background, /=0=foreground
+        integer,      intent(in)  :: hwin           ! kernel half-width (pixels)
+        real,         intent(out) :: var_fg         ! mean local variance over foreground
+        real,         intent(out) :: var_bg         ! mean local variance over background
+        ! SAT indexed 0:nr, 0:nc so that border queries at i0-1=0 need no guard
+        real(8), allocatable :: sat(:,:), sat2(:,:)
+        real    :: rmat(self%ldim(1), self%ldim(2), 1)
+        real(8) :: v, s, s2, bvar, acc_fg, acc_bg
+        integer :: nr, nc, hw, i, j, i0, i1, j0, j1, n, n_fg, n_bg
+        nr = self%ldim(1)
+        nc = self%ldim(2)
+        if (size(bin_mask,1) /= nr .or. size(bin_mask,2) /= nc) &
+            error stop 'loc_var_masked: bin_mask size mismatch'
+        hw = max(1, hwin)
+        ! Build SATs: sat(i,j) = sum of rmat(1:i, 1:j); border row/col = 0
+        allocate(sat (0:nr, 0:nc), source=0.0d0)
+        allocate(sat2(0:nr, 0:nc), source=0.0d0)
+        call self%get_rmat_sub(rmat)
+        do j = 1, nc
+            do i = 1, nr
+                v         = real(rmat(i,j,1), 8)
+                sat (i,j) = v   + sat (i-1,j) + sat (i,j-1) - sat (i-1,j-1)
+                sat2(i,j) = v*v + sat2(i-1,j) + sat2(i,j-1) - sat2(i-1,j-1)
+            end do
+        end do
+        ! Accumulate per-pixel local variances into fg/bg buckets
+        acc_fg = 0.0d0;  n_fg = 0
+        acc_bg = 0.0d0;  n_bg = 0
+        do j = 1, nc
+            j0 = max(1,  j - hw);  j1 = min(nc, j + hw)
+            do i = 1, nr
+                i0 = max(1,  i - hw);  i1 = min(nr, i + hw)
+                n  = (i1 - i0 + 1) * (j1 - j0 + 1)
+                ! O(1) box sum / sum-of-squares via four SAT corners
+                s  = sat (i1,j1) - sat (i0-1,j1) - sat (i1,j0-1) + sat (i0-1,j0-1)
+                s2 = sat2(i1,j1) - sat2(i0-1,j1) - sat2(i1,j0-1) + sat2(i0-1,j0-1)
+                bvar = merge((s2 - s*s/real(n,8)) / real(n-1,8), 0.0d0, n > 1)
+                if (bin_mask(i,j) /= 0.0) then
+                    acc_fg = acc_fg + bvar;  n_fg = n_fg + 1
+                else
+                    acc_bg = acc_bg + bvar;  n_bg = n_bg + 1
+                end if
+            end do
+        end do
+        var_fg = real(merge(acc_fg / real(n_fg,8), 0.0d0, n_fg > 0), 4)
+        var_bg = real(merge(acc_bg / real(n_bg,8), 0.0d0, n_bg > 0), 4)
+        deallocate(sat, sat2)
+    end subroutine loc_var_masked
+
     module subroutine rmsd( self, dev, mean )
         class(image),   intent(inout) :: self
         real,           intent(out)   :: dev

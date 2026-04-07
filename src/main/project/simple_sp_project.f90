@@ -507,11 +507,12 @@ interface
         integer, optional,    intent(in)    :: mskdiam_px
     end subroutine shape_ranked_cavgs2jpg
 
-    module subroutine cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles )
+    module subroutine cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles, ignore_states, invert_states )
         class(sp_project),    intent(inout) :: self
         integer, allocatable, intent(inout) :: cavg_inds(:)
         class(string),        intent(in)    :: jpgname
         integer,              intent(out)   :: xtiles, ytiles
+        logical, optional,    intent(in)    :: ignore_states, invert_states
     end subroutine cavgs2jpg
 
     module subroutine cavgs2mrc( self )

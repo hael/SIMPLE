@@ -230,7 +230,7 @@ contains
     procedure          :: minmax
     procedure          :: loc_sdev
     procedure          :: avg_loc_sdev
-    procedure          :: loc_var, loc_var3D
+    procedure          :: loc_var, loc_var3D, loc_var_masked
     procedure          :: presence
     procedure          :: rmsd
     procedure          :: snr
@@ -1507,6 +1507,13 @@ interface
         class(image),   intent(inout) :: varimg
         real, optional, intent(inout) :: avar
     end subroutine loc_var3D
+
+    module subroutine loc_var_masked( self, bin_mask, hwin, var_fg, var_bg )
+        class(image), intent(in)  :: self
+        real,         intent(in)  :: bin_mask(:,:)
+        integer,      intent(in)  :: hwin
+        real,         intent(out) :: var_fg, var_bg
+    end subroutine loc_var_masked
 
     module subroutine rmsd( self, dev, mean )
         class(image),   intent(inout) :: self

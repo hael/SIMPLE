@@ -71,17 +71,21 @@ contains
         call jpegimg%kill
     end subroutine shape_ranked_cavgs2jpg
 
-    module subroutine cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles )
+    module subroutine cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles, ignore_states, invert_states )
         class(sp_project),    intent(inout) :: self
         integer, allocatable, intent(inout) :: cavg_inds(:)
         class(string),        intent(in)    :: jpgname
         integer,              intent(out)   :: xtiles, ytiles
+        logical, optional,    intent(in)    :: ignore_states, invert_states
         logical, allocatable       :: cls_mask(:)
         type(string)   :: cavgsstk
         type(image)    :: img, jpegimg
         type(stack_io) :: stkio_r
         integer        :: icls, isel, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
+        logical        :: l_ignore_states = .true., l_invert_states = .false.
         real           :: smpd
+        if( present(ignore_states) ) l_ignore_states = ignore_states
+        if( present(invert_states) ) l_invert_states = invert_states
         ncls = self%os_cls2D%get_noris()
         if( ncls == 0 ) return
         if( allocated(cavg_inds) ) deallocate(cavg_inds)
@@ -96,6 +100,19 @@ contains
                 cls_mask(icls)  = .false.
                 cavg_inds(icls) = 0
             endif
+            if(.not. ignore_states ) then
+                if( l_invert_states ) then
+                    if( self%os_cls2D%get_state(icls) /= 0 ) then
+                        cls_mask(icls)  = .false.
+                        cavg_inds(icls) = 0
+                    end if
+                else
+                    if( self%os_cls2D%get_state(icls) == 0 ) then
+                        cls_mask(icls)  = .false.
+                        cavg_inds(icls) = 0
+                    end if
+                end if
+            end if
         enddo
         ncls_sel = count(cls_mask)
         if( ncls_sel == 0 ) return

@@ -1281,10 +1281,8 @@ contains
             call spproj%cavgs2jpg(self%match_jpeg_inds, self%match_jpeg, self%match_jpeg_xtiles, self%match_jpeg_ytiles)
             self%match_jpeg_pops = spproj%os_cls2D%get_all_asint('pop')
             self%match_jpeg_res  = spproj%os_cls2D%get_all('res')
-            allocate(cls_msk(size(self%match_jpeg_inds)), source=.false.)
-            do j=1, size(self%match_jpeg_inds)
-              cls_msk(self%match_jpeg_inds(j)) = .true.
-            end do
+            allocate(cls_msk, source=self%match_jpeg_inds /= 0)
+            self%match_jpeg_inds = pack(self%match_jpeg_inds, cls_msk)
             self%match_jpeg_pops = pack(self%match_jpeg_pops, cls_msk)
             self%match_jpeg_res  = pack(self%match_jpeg_res,  cls_msk)
             call spproj%kill()
