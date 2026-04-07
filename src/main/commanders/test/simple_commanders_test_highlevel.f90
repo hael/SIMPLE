@@ -28,6 +28,11 @@ type, extends(commander_base) :: commander_test_simulate_particles
     procedure :: execute      => exec_test_simulate_particles
 end type commander_test_simulate_particles
 
+type, extends(commander_base) :: commander_test_reproject
+  contains
+    procedure :: execute      => exec_test_reproject
+end type commander_test_reproject
+
 type, extends(commander_base) :: commander_test_simulated_workflow
   contains
     procedure :: execute      => exec_test_simulated_workflow
@@ -298,6 +303,114 @@ subroutine exec_test_simulate_particles( self, cline )
     endif
 end subroutine exec_test_simulate_particles
 
+subroutine exec_test_reproject( self, cline )
+    use simple_atoms,         only: atoms
+    use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
+    use simple_imghead,       only: find_ldim_nptcls
+    class(commander_test_reproject), intent(inout) :: self
+    class(cmdline),                  intent(inout) :: cline
+    integer, parameter              :: NSPACE = 100
+    real,    parameter              :: SMPD   = 1.3
+    type(cmdline)                   :: cline_reproj
+    type(parameters)                :: params
+    type(commander_reproject)       :: xreproject
+    type(atoms)                     :: molecule
+    type(molecule_data)             :: mol
+    type(string)                    :: vol_file, outstk, outori
+    integer                         :: ldim(3), nptcls_stk, nlines_ori
+    real                            :: smpd_stk
+    logical                         :: all_ok
+    ! ---- generate 6VXX volume from built-in molecule data ----
+    write(logfhandle,'(a)') '>>> TEST_REPROJECT: generating 6VXX.mrc volume'
+    mol = sars_cov2_spkgp_6vxx()
+    call molecule%pdb2mrc(smpd=SMPD, mol=mol)
+    call params%new(cline)
+    all_ok = .true.
+    ! ---- define expected output file names ----
+    vol_file = '6VXX.mrc'
+    outstk   = 'reprojs.mrcs'
+    outori   = 'reproject_oris'//trim(TXT_EXT)
+    ! ---- check volume was generated ----
+    write(logfhandle,'(a)') '>>> CHECK: volume file exists'
+    if( .not. file_exists(vol_file) )then
+        write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not found'
+        THROW_HARD('TEST_REPROJECT FAILED: volume not generated')
+    else
+        call find_ldim_nptcls(vol_file, ldim, nptcls_stk, smpd_stk)
+        write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    PASS: volume dims = [', &
+            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_stk
+        if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
+            write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
+            all_ok = .false.
+        endif
+        if( abs(smpd_stk - SMPD) > 0.01 )then
+            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', SMPD, ' got ', smpd_stk
+            all_ok = .false.
+        endif
+    endif
+    ! ---- run reproject ----
+    write(logfhandle,'(a)') '>>> TEST_REPROJECT: generating reprojections'
+    call cline_reproj%set('prg',               'reproject')
+    call cline_reproj%set('vol1',              '6VXX.mrc')
+    call cline_reproj%set('smpd',                    SMPD)
+    call cline_reproj%set('pgrp',                    'c1')
+    call cline_reproj%set('mskdiam',                 180.)
+    call cline_reproj%set('nspace',           real(NSPACE))
+    call cline_reproj%set('nthr',                     16.)
+    call xreproject%execute(cline_reproj)
+    call cline_reproj%kill()
+    ! ---- validate output stack ----
+    write(logfhandle,'(a)') '>>> CHECK: output reprojection stack'
+    if( .not. file_exists(outstk) )then
+        write(logfhandle,'(a)') '    FAIL: '//outstk%to_char()//' not found'
+        all_ok = .false.
+    else
+        call find_ldim_nptcls(outstk, ldim, nptcls_stk, smpd_stk)
+        write(logfhandle,'(a,i6)')       '    projections in stack: ', nptcls_stk
+        write(logfhandle,'(a,i4,a,i4)')  '    box size:             ', ldim(1), ' x ', ldim(2)
+        write(logfhandle,'(a,f6.2)')     '    smpd:                 ', smpd_stk
+        if( nptcls_stk /= NSPACE )then
+            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', NSPACE, ' projections, got ', nptcls_stk
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: projection count matches'
+        endif
+        if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
+            write(logfhandle,'(a)') '    FAIL: invalid box dimensions'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: box dimensions valid'
+        endif
+        if( abs(smpd_stk - SMPD) > 0.01 )then
+            write(logfhandle,'(a,f6.2,a,f6.2)') '    FAIL: smpd mismatch, expected ', SMPD, ' got ', smpd_stk
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: sampling distance matches'
+        endif
+    endif
+    ! ---- validate orientations file ----
+    write(logfhandle,'(a)') '>>> CHECK: orientations file'
+    if( .not. file_exists(outori) )then
+        write(logfhandle,'(a)') '    FAIL: '//outori%to_char()//' not found'
+        all_ok = .false.
+    else
+        nlines_ori = nlines(outori)
+        write(logfhandle,'(a,i6)') '    orientation records: ', nlines_ori
+        if( nlines_ori /= NSPACE )then
+            write(logfhandle,'(a,i6,a,i6)') '    FAIL: expected ', NSPACE, ' records, got ', nlines_ori
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: orientation count matches'
+        endif
+    endif
+    ! ---- final verdict ----
+    if( all_ok )then
+        call simple_end('**** SIMPLE_TEST_REPROJECT NORMAL STOP ****')
+    else
+        THROW_HARD('TEST_REPROJECT FAILED')
+    endif
+end subroutine exec_test_reproject
+
 subroutine exec_test_simulated_workflow( self, cline )
     class(commander_test_simulated_workflow), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
@@ -461,7 +574,7 @@ end subroutine exec_test_simulated_workflow
 
 !>  \brief  Integration test: split project into subprojects, run in parallel, merge back.
 !  This test exercises the new generate_scripts_subprojects / gen_subproject_scripts_and_schedule
-!  machinery end-to-end.  It:
+!  machinery end-to-end.
 !    1. Simulates particles and runs coarse abinitio2D to obtain class labels
 !    2. Splits the project into per-class subprojects (extract_subproj pattern)
 !    3. Runs a program on each subproject in parallel via generate_scripts_subprojects

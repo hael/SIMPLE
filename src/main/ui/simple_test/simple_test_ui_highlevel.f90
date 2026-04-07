@@ -6,6 +6,7 @@ implicit none
 type(ui_program), target :: mini_stream
 type(ui_program), target :: simulated_workflow
 type(ui_program), target :: simulate_particles
+type(ui_program), target :: reproject
 type(ui_program), target :: subproject_distr
 
 contains
@@ -15,6 +16,7 @@ contains
         call new_mini_stream(tsttab)
         call new_simulate_particles(tsttab)
         call new_simulated_workflow(tsttab)
+        call new_reproject(tsttab)
         call new_subproject_distr(tsttab)
     end subroutine construct_test_highlevel_programs
 
@@ -24,6 +26,7 @@ contains
         write(logfhandle,'(A)') mini_stream%name%to_char()
         write(logfhandle,'(A)') simulate_particles%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
+        write(logfhandle,'(A)') reproject%name%to_char()
         write(logfhandle,'(A)') subproject_distr%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
@@ -55,6 +58,19 @@ contains
         ! add to ui_hash
         call add_ui_program('mini_stream', mini_stream, tsttab)
     end subroutine new_mini_stream
+
+    subroutine new_reproject( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call reproject%new(&
+        &'reproject',&                              ! name
+        &'reproject',&                              ! descr_short
+        &'is a test program for reproject',&
+        &'simple_test_exec',&                       ! executable
+        &.false.)                                   ! requires sp_project
+        ! add to ui_hash
+        call add_ui_program('reproject', reproject, tsttab)
+    end subroutine new_reproject
 
     subroutine new_simulate_particles( tsttab )
         class(ui_hash), intent(inout) :: tsttab
