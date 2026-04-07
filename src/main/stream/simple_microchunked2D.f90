@@ -109,6 +109,7 @@ module simple_microchunked2D
   use simple_string_utils, only: int2str
   use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr
   use simple_projfile_utils,          only: merge_chunk_projfiles
+  use simple_cluster2D_rejector,      only: cluster2D_rejector
   use simple_stream_microchunk_utils, only: calc_rejection_score, reject_outliers, reject_auto, reject_basic
 
   implicit none
@@ -1351,6 +1352,7 @@ contains
     type(image), allocatable :: cavg_imgs(:)
     logical,     allocatable :: l_rejected(:)
     integer,     allocatable :: states(:), ptcl_states(:)
+    type(cluster2D_rejector) :: rejector
     type(sp_project)         :: spproj
     type(string)             :: stkname
     integer(timer_int_kind)  :: t0
@@ -1377,19 +1379,30 @@ contains
     mskrad    = min(real(ldim(1) / 2) - COSMSKHALFWIDTH - 1., 0.5 * self%mskdiam / smpd)
     allocate(l_rejected(ncls), source=.false.)
 
-    ! Outlier rejection applied at every tier
-    call reject_outliers(cavg_imgs, mskrad, l_rejected)
-    call write_cavgs(stkname, string('_rejected_outliers.mrc'), selected=.false.)
+    ! ! Outlier rejection applied at every tier
+    ! call reject_outliers(cavg_imgs, mskrad, l_rejected)
+    ! call write_cavgs(stkname, string('_rejected_outliers.mrc'), selected=.false.)
 
-    ! Pass-1 uses auto rejection; all other tiers use basic rejection
-    if( label == string(LABEL_PASS_1) ) then
-      call reject_auto(cavg_imgs, l_rejected)
-      call write_cavgs(stkname, string('_rejected_auto.mrc'),  selected=.false.)
-    else
-      call reject_basic(spproj%os_cls2D, l_rejected)
-      call write_cavgs(stkname, string('_rejected_basic.mrc'), selected=.false.)
-    end if
-    call write_cavgs(stkname, string('_selected.mrc'), selected=.true.)
+    ! ! Pass-1 uses auto rejection; all other tiers use basic rejection
+    ! if( label == string(LABEL_PASS_1) ) then
+    !   call reject_auto(cavg_imgs, l_rejected)
+    !   call write_cavgs(stkname, string('_rejected_auto.mrc'),  selected=.false.)
+    ! else
+    !   call reject_basic(spproj%os_cls2D, l_rejected)
+    !   call write_cavgs(stkname, string('_rejected_basic.mrc'), selected=.false.)
+    ! end if
+    ! call write_cavgs(stkname, string('_selected.mrc'), selected=.true.)
+
+    call rejector%new(cavg_imgs, self%mskdiam)
+    call rejector%reject_pop(spproj%os_cls2D)
+    call rejector%reject_res(spproj%os_cls2D)
+    call rejector%reject_mask()
+    call rejector%reject_brightness()
+    call rejector%reject_local_variance()
+    l_rejected = rejector%get_rejected()
+    call write_cavgs(stkname, string('_rejected.mrc'), selected=.false.)
+    call write_cavgs(stkname, string('_selected.mrc'),  selected=.true.)
+    call rejector%kill()
 
     ! Capture refs and box from the refchunk for use in match chunk generation
     if( label == string(LABEL_REF) ) then
