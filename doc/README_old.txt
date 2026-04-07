@@ -172,7 +172,7 @@ $git clone https://github.com/hael/SIMPLE.git
 $cd SIMPLE
 $mkdir build
 $cd build
-$cmake -D NICE=yes ..
+$cmake -D NICE=on ..
 $make -j install
 $cat add2.bashrc >> ~/.zshrc
 	5.	Start the SERVER – username and password are in the log to window

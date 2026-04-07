@@ -128,7 +128,7 @@ cmake .. \
 | `USE_MPI` | OFF | MPI support |
 | `BUILD_TESTS` | ON | Build test executables |
 | `BUILD_DOCS` | OFF | Build documentation |
-| `INSTALL_GUI` | ON | Install GUI components |
+| `NICE` | ON | Install GUI components |
 
 ## Testing the Build
 

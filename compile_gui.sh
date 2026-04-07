@@ -5,5 +5,5 @@ chmod u+rwx -R $TMPDIR
 rm -rf build
 mkdir build
 cd build
-cmake .. -D NICE=YES -D GUI=OFF
+cmake .. -D NICE=ON
 make -j install

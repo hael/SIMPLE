@@ -2,7 +2,7 @@
 rm -rf build
 mkdir build
 cd build
-cmake .. -DGUI=off
+cmake .. 
 make -j install
 #exit
 
