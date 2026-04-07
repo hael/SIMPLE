@@ -4,7 +4,7 @@ use simple_builder,              only: builder
 use simple_parameters,           only: parameters
 use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
-use simple_strategy2D3D_common,  only: calc_3Drec, calc_polar_refs
+use simple_strategy2D3D_common,  only: calc_3Drec
 use simple_commanders_rec_distr, only: commander_volassemble
 implicit none
 
@@ -149,11 +149,7 @@ contains
             call build%esig%read_groups(build%spproj_field)
         endif
         ! Reconstruction kernel
-        if( params%l_polar )then
-            call calc_polar_refs( params, build, cline, nptcls2update, pinds )
-        else
-            call calc_3Drec( params, build, cline, nptcls2update, pinds )
-        endif
+        call calc_3Drec( params, build, cline, nptcls2update, pinds )
         if( allocated(pinds) ) deallocate(pinds)
         if( params%l_ml_reg ) call fname%kill
     end subroutine inmem_execute
