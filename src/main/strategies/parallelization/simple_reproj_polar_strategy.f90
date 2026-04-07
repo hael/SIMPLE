@@ -189,8 +189,12 @@ contains
         type(builder),                   intent(inout) :: build
         class(cmdline),                  intent(inout) :: cline
         call set_master_num_threads(self%nthr_master, string('reproject'))
-        ! Parse parameters and read the project (no particle stacking needed).
-        call build%init_params_and_build_spproj(cline, params)
+        ! Parse parameters and build the in-memory project representation.
+        ! Unlike refinement/reconstruction workflows, reproj_polar can operate
+        ! directly from volumes and does not inherently require an on-disk
+        ! project file.
+        call params%new(cline)
+        call build%build_spproj(params, cline)
         ! Ensure worker scripts get explicit orientation range metadata and do not
         ! fall back to default nspace values.
         call cline%set('nspace', params%nspace)
@@ -200,7 +204,9 @@ contains
         ! Partition nspace orientations across nparts workers: fromp/top will be
         ! projection-direction indices (1..nspace), not particle indices.
         call self%qenv%new(params, params%nparts, nptcls=params%nspace)
-        call cline%gen_job_descr(self%job_descr)
+        call cline%gen_job_descr(self%job_descr, string('reproj_polar'))
+        call self%job_descr%delete('test')
+        call self%job_descr%move_key_to_front('prg')
     end subroutine distr_initialize
 
     subroutine distr_execute(self, params, build, cline)

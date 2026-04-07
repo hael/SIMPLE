@@ -44,6 +44,45 @@ end type qsys_env
 
 contains
 
+    subroutine init_qdescr_from_runtime( qdescr, params, qsys_name, qsys_partition )
+        type(chash),               intent(inout) :: qdescr
+        class(parameters),         intent(in)    :: params
+        class(string), optional,   intent(in)    :: qsys_name
+        class(string), optional,   intent(in)    :: qsys_partition
+        type(string)          :: env_var, qsys_name_here, job_name
+        integer               :: iostat
+        call qdescr%set('simple_path', simple_getenv('SIMPLE_PATH', iostat))
+        if( iostat /= 0 ) THROW_HARD('SIMPLE_PATH is not defined in your environment; qsys_env::init_qdescr_from_runtime')
+        if( present(qsys_name) ) then
+            qsys_name_here = qsys_name
+        else
+            qsys_name_here = string(trim(params%qsys_name))
+            if( qsys_name_here%strlen_trim() == 0 ) then
+                env_var = simple_getenv('SIMPLE_QSYS', iostat)
+                if( iostat /= 0 ) THROW_HARD('SIMPLE_QSYS is not defined in your environment; qsys_env::init_qdescr_from_runtime')
+                qsys_name_here = env_var
+            end if
+        end if
+        call qdescr%set('qsys_name', qsys_name_here)
+        env_var = simple_getenv('SIMPLE_EMAIL', iostat)
+        if( iostat /= 0 ) env_var = 'my.name@uni.edu'
+        call qdescr%set('user_email', env_var)
+        call qdescr%set('time_per_image', string(TIME_PER_IMAGE_DEFAULT))
+        call qdescr%set('walltime', string(params%walltime))
+        if( present(qsys_partition) ) then
+            call qdescr%set('qsys_partition', qsys_partition)
+        else
+            env_var = simple_getenv('SIMPLE_QSYS_PARTITION', iostat)
+            if( iostat == 0 ) call qdescr%set('qsys_partition', env_var)
+        end if
+        job_name = 'simple_'//params%prg%to_char()
+        call qdescr%set('job_name', job_name)
+        call qdescr%set('job_memory_per_task', string(JOB_MEMORY_PER_TASK_DEFAULT))
+        call job_name%kill
+        call qsys_name_here%kill
+        call env_var%kill
+    end subroutine init_qdescr_from_runtime
+
     subroutine new( self, params, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition )
         use simple_sp_project, only: sp_project
         class(qsys_env),         intent(inout) :: self
@@ -84,11 +123,16 @@ contains
             case DEFAULT
                 THROW_HARD('split_mode: '//trim(params%split_mode)//' is unsupported; new')
         end select
-        ! retrieve environment variables from file
+        ! Retrieve queue metadata from project compenv when available, otherwise
+        ! synthesize it directly from runtime parameters and shell environment.
         call self%qdescr%new(MAXENVKEYS)
-        call spproj%read_segment('compenv', params%projfile)
-        call spproj%compenv%get_ori(1, compenv_o)
-        self%qdescr = compenv_o%ori2chash()
+        if( params%projfile /= '' ) then
+            call spproj%read_segment('compenv', params%projfile)
+            call spproj%compenv%get_ori(1, compenv_o)
+            self%qdescr = compenv_o%ori2chash()
+        else
+            call init_qdescr_from_runtime(self%qdescr, params, qsys_name, qsys_partition)
+        end if
         ! deal with time
         call get_environment_variable(SIMPLE_DEFAULT_PARTITION_TIME, default_time_env, envlen)
         if( envlen > 0 .and. trim(default_time_env) .eq. "true" ) then
@@ -132,7 +176,7 @@ contains
         if(present(qsys_partition)) call self%qdescr%set('qsys_partition', qsys_partition) ! overrides env file and params
         call self%qdescr%set('job_nparts', int2str(params%nparts))                         ! overrides env file
         call qsnam%kill
-        call compenv_o%kill
+        if( params%projfile /= '' ) call compenv_o%kill
         call spproj%kill
         self%existence = .true.
     end subroutine new

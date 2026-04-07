@@ -20,6 +20,7 @@ contains
         call test_isthere_lookup_reverse()
         call test_get_by_key_and_index()
         call test_chash2str_and_strlen()
+        call test_move_key_to_front()
         call test_sort()
         ! call report_summary()
     end subroutine run_all_chash_tests
@@ -168,6 +169,27 @@ contains
         s = h%chash2str()
         call assert_string_eq('x=1 y=2 z=3', s, 'chash2str for 3 entries')
     end subroutine test_chash2str_and_strlen
+
+    !---------------- move_key_to_front ----------------
+
+    subroutine test_move_key_to_front()
+        type(chash)  :: h
+        type(string) :: s
+        write(*,'(A)') 'test_move_key_to_front'
+        h = chash()
+        call h%set('x', '1')
+        call h%set('y', '2')
+        call h%set('z', '3')
+        call h%move_key_to_front('z')
+        s = h%chash2str()
+        call assert_string_eq('z=3 x=1 y=2', s, 'move_key_to_front moves key to first position')
+        call h%move_key_to_front('x')
+        s = h%chash2str()
+        call assert_string_eq('x=1 z=3 y=2', s, 'move_key_to_front preserves relative order of preceding entries')
+        call h%move_key_to_front('does_not_exist')
+        s = h%chash2str()
+        call assert_string_eq('x=1 z=3 y=2', s, 'move_key_to_front missing key leaves hash unchanged')
+    end subroutine test_move_key_to_front
 
     !---------------- sort ----------------
 

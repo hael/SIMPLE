@@ -45,6 +45,8 @@ type :: chash
     procedure, private :: set_1, set_2, set_3
     generic            :: set => set_1, set_2, set_3
     procedure          :: delete
+    procedure, private :: move_key_to_front_1, move_key_to_front_2
+    generic            :: move_key_to_front => move_key_to_front_1, move_key_to_front_2
     !< GETTERS
     procedure          :: isthere
     procedure          :: lookup
@@ -334,6 +336,34 @@ contains
         ! decrement index
         self%chash_index = self%chash_index - 1
     end subroutine delete
+
+    !>  \brief  moves an existing key-value pair to the front of the hash
+    subroutine move_key_to_front_1( self, key )
+        class(chash),     intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        type(string) :: key_tmp, val_tmp
+        integer      :: i, ind
+        if( .not. self%exists ) return
+        ind = self%lookup(key)
+        if( ind <= 1 ) return
+        key_tmp = self%keys(ind)
+        val_tmp = self%values(ind)
+        do i = ind, 2, -1
+            self%keys(i)   = self%keys(i - 1)
+            self%values(i) = self%values(i - 1)
+        end do
+        self%keys(1)   = key_tmp
+        self%values(1) = val_tmp
+        call key_tmp%kill
+        call val_tmp%kill
+    end subroutine move_key_to_front_1
+
+    !>  \brief  moves an existing key-value pair to the front of the hash
+    subroutine move_key_to_front_2( self, key )
+        class(chash),  intent(inout) :: self
+        class(string), intent(in)    :: key
+        call self%move_key_to_front_1(key%to_char())
+    end subroutine move_key_to_front_2
 
     ! GETTERS
 
