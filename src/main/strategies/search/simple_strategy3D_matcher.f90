@@ -140,7 +140,7 @@ contains
             t_prep_reproj_refvols     = tic()
         endif
         if( .not. do_polar_prepare )then
-            call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
+            call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max, use_distr_strategy=.false.)
             call build%vol%kill
             call build%vol_odd%kill
             call build%vol2%kill

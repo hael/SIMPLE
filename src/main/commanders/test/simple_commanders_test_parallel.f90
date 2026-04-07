@@ -290,11 +290,10 @@ subroutine exec_test_reproj_polar_distr( self, cline )
     end select
     call strategy%initialize(params_distr, build_distr, cline_distr)
     call strategy%execute(params_distr, build_distr, cline_distr)
-    call strategy%finalize_run(params_distr, build_distr, cline_distr)
     cline_ref = cline_distr
     call cline_ref%delete('nparts')
     call build_ref%init_params_and_build_general_tbox(cline_ref, params_ref)
-    call read_mask_filter_reproject_refvols(params_ref, build_ref, cline_ref, batchsz_ref)
+    call read_mask_filter_reproject_refvols(params_ref, build_ref, cline_ref, batchsz_ref, use_distr_strategy=.false.)
     nrefs         = build_distr%pftc%get_nrefs()
     pftsz         = build_distr%pftc%get_pftsz()
     kfromto_distr = build_distr%pftc%get_kfromto()

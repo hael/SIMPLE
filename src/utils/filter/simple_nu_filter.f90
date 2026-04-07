@@ -6,6 +6,15 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
+! Updated call sequence with refinement (idea)
+!    call setup_nu_dmats(vol_even, vol_odd)
+!    call optimize_nu_cutoff_finds()
+!    call extend_nu_filter_highres_iterative(vol_even, vol_odd)  ! optional
+!    call nu_filter_vols(vol_even_filt, vol_odd_filt)
+!    call cleanup_nu_filter()
+!
+! need to implement support for adding extra volumes to the filter bank
+!
 module simple_nu_filter
 use simple_core_module_api
 use simple_image, only: image
@@ -16,10 +25,11 @@ implicit none
 
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
-          print_filtmap_lowpass_histogram
+          print_filtmap_lowpass_histogram, extend_nu_filter_highres, extend_nu_filter_highres_iterative
 private
 
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
+real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
 integer,          parameter   :: WINSZ_TENT = 1
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD  = 'nu_filter_cache_odd'
@@ -27,10 +37,18 @@ real,             allocatable :: dmats(:,:,:,:)
 real,             allocatable :: bwfilters(:,:)
 integer,          allocatable :: filtmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
+real,             allocatable :: dmat_finest_cached(:,:,:)
 integer :: ldim(3), box
 real    :: smpd
 
 contains
+
+    real function cutoff_find_to_lowpass_limit( icut )
+        integer, intent(in) :: icut
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; cutoff_find_to_lowpass_limit')
+        if( icut < 1 .or. icut > size(cutoff_finds) ) THROW_HARD('cutoff index out of range; cutoff_find_to_lowpass_limit')
+        cutoff_find_to_lowpass_limit = calc_lowpass_lim(cutoff_finds(icut), box, smpd)
+    end function cutoff_find_to_lowpass_limit
 
     subroutine init_nu_filter( vol_even, vol_odd )
         class(image), intent(in) :: vol_even, vol_odd
@@ -40,6 +58,7 @@ contains
         box  = ldim(1)
         if( any(vol_odd%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; init_nu_filter')
         if( abs(vol_odd%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; init_nu_filter')
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(cutoff_finds) ) deallocate(cutoff_finds)
         allocate(cutoff_finds(size(lowpass_limits)))
         do i = 1, size(lowpass_limits)
@@ -89,20 +108,24 @@ contains
         if( allocated(bwfilters) )    deallocate(bwfilters)
         if( allocated(filtmap) )      deallocate(filtmap)
         if( allocated(cutoff_finds) ) deallocate(cutoff_finds)
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         ldim = 0
         box  = 0
         smpd = 0.
     end subroutine cleanup_nu_filter
 
-    subroutine cache_filtered_vols( vol_even, vol_odd )
+    subroutine cache_filtered_vols( vol_even, vol_odd, initialized )
         class(image), intent(in) :: vol_even, vol_odd
+        logical, optional, intent(in) :: initialized
         type(image) :: vol_even_filt, vol_odd_filt
         type(image) :: vol_even_copy_cmat, vol_odd_copy_cmat
         type(string) :: even_cache_fname, odd_cache_fname
         integer :: i, winsz
         real    :: edge_mean
-        logical :: even_cached, odd_cached
-        call init_nu_filter(vol_even, vol_odd)
+        logical :: even_cached, odd_cached, l_initialized
+        l_initialized = .false.
+        if( present(initialized) ) l_initialized = initialized
+        if( .not. l_initialized ) call init_nu_filter(vol_even, vol_odd)
         winsz = nint(COSMSKHALFWIDTH)
         even_cached = filtered_vols_cached(string(NU_FILTER_CACHE_EVEN))
         odd_cached  = filtered_vols_cached(string(NU_FILTER_CACHE_ODD))
@@ -139,6 +162,47 @@ contains
         call vol_odd_filt%kill
     end subroutine cache_filtered_vols
 
+    subroutine generate_single_filtered_pair( vol_even, vol_odd, cutoff_find, even_cache_fname, odd_cache_fname )
+        class(image), intent(in) :: vol_even, vol_odd
+        integer,      intent(in) :: cutoff_find
+        class(string), intent(in) :: even_cache_fname, odd_cache_fname
+        type(image) :: vol_even_filt, vol_odd_filt
+        type(image) :: vol_even_copy_cmat, vol_odd_copy_cmat
+        integer :: winsz
+        real    :: edge_mean
+        real, allocatable :: bwfilter(:)
+        if( .not.allocated(cutoff_finds) ) call init_nu_filter(vol_even, vol_odd)
+        winsz = nint(COSMSKHALFWIDTH)
+        call vol_even_copy_cmat%copy(vol_even)
+        call vol_odd_copy_cmat%copy(vol_odd)
+        call vol_even_copy_cmat%set_wthreads(.true.)
+        call vol_odd_copy_cmat%set_wthreads(.true.)
+        call vol_even_copy_cmat%taper_edges_vol(winsz, edge_mean)
+        call vol_odd_copy_cmat%taper_edges_vol(winsz, edge_mean)
+        call vol_even_copy_cmat%fft
+        call vol_odd_copy_cmat%fft
+        allocate(bwfilter(box), source=0.)
+        call butterworth_filter(cutoff_find, bwfilter)
+        call vol_even_filt%new(ldim, smpd)
+        call vol_odd_filt%new(ldim, smpd)
+        call vol_even_filt%set_ft(.true.)
+        call vol_odd_filt%set_ft(.true.)
+        call vol_even_filt%set_wthreads(.true.)
+        call vol_odd_filt%set_wthreads(.true.)
+        call vol_even_filt%copy_fast(vol_even_copy_cmat)
+        call vol_odd_filt%copy_fast(vol_odd_copy_cmat)
+        call vol_even_filt%apply_filter(vol_odd_filt, bwfilter)
+        call vol_even_filt%ifft
+        call vol_odd_filt%ifft
+        call vol_even_filt%write(even_cache_fname, del_if_exists=.true.)
+        call vol_odd_filt%write(odd_cache_fname,  del_if_exists=.true.)
+        call vol_even_copy_cmat%kill
+        call vol_odd_copy_cmat%kill
+        call vol_even_filt%kill
+        call vol_odd_filt%kill
+        deallocate(bwfilter)
+    end subroutine generate_single_filtered_pair
+
     subroutine setup_nu_dmats( vol_even, vol_odd )
         class(image),  intent(in) :: vol_even, vol_odd
         type(image) :: vol_even_filt, vol_odd_filt
@@ -149,7 +213,7 @@ contains
         call init_nu_filter(vol_even, vol_odd)
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
-        call cache_filtered_vols(vol_even, vol_odd)
+        call cache_filtered_vols(vol_even, vol_odd, initialized=.true.)
         if( allocated(dmats) ) deallocate(dmats)
         allocate(dmats(ldim(1),ldim(2),ldim(3),size(cutoff_finds)), source=huge(x))
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),                 source=0.)
@@ -162,6 +226,7 @@ contains
             call vol_odd_filt%read(odd_cache_fname)
             call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmats(:,:,:,i))
             call tent_smooth_3d(dmats(:,:,:,i), dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+            ! dmat_tmp is never just a temporary buffer, the result is in dmats(:,:,:,i)
         end do
         call vol_even_filt%kill
         call vol_odd_filt%kill
@@ -195,9 +260,120 @@ contains
             end do
         end do
         !$omp end parallel do
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
+        allocate(dmat_finest_cached(nx,ny,nz), source=dmats(:,:,:,sz))
         ! this is the big memory consumer, so deallocate it here
         if( allocated(dmats) ) deallocate(dmats)
     end subroutine optimize_nu_cutoff_finds
+
+    subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit )
+        class(image), intent(in) :: vol_even, vol_odd
+        real,         intent(in) :: threshold_pct   ! e.g. 10.0
+        real,         intent(in) :: new_limit        ! e.g. 3.5 Angstroms
+        type(image)       :: vol_even_filt_new, vol_odd_filt_new
+        type(string)      :: even_cache_fname, odd_cache_fname
+        real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest(:,:,:)
+        integer, allocatable :: cutoff_finds_new(:)
+        integer           :: new_find, n_finest, n_total, n_extended, sz_old
+        real              :: pct_finest, x
+        logical, allocatable :: extend_mask(:,:,:)
+        integer           :: i, j, k
+        if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds first')
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated')
+        sz_old    = size(cutoff_finds)
+        n_total   = size(filtmap)
+        n_finest  = count(filtmap == sz_old)
+        pct_finest = 100. * real(n_finest) / real(n_total)
+        if( pct_finest < threshold_pct ) return   ! trigger not met, nothing to do
+        new_find = calc_fourier_index(new_limit, box, smpd)
+        if( new_find <= cutoff_finds(sz_old) ) return
+        if( any(cutoff_finds == new_find) ) return
+        write(logfhandle,'(A,F6.2,A)') '>>> Extending NU filter to ', new_limit, ' A'
+        ! --- build the new Butterworth filter and cache filtered vols ---
+        even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), new_find)
+        odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  new_find)
+        if( .not.file_exists(even_cache_fname) .or. .not.file_exists(odd_cache_fname) ) then
+            ! generate just this one new filtered pair — cheap, one FFT+filter+IFFT pass
+            call generate_single_filtered_pair(vol_even, vol_odd, new_find, even_cache_fname, odd_cache_fname)
+        end if
+        ! --- build the extend mask: voxels currently at the finest limit ---
+        allocate(extend_mask(ldim(1),ldim(2),ldim(3)), source=.false.)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k)
+        do k = 1, ldim(3)
+        do j = 1, ldim(2)
+            do i = 1, ldim(1)
+                extend_mask(i,j,k) = (filtmap(i,j,k) == sz_old)
+            end do
+        end do
+        end do
+        !$omp end parallel do
+        ! --- evaluate the new objective only within the mask ---
+        allocate(dmat_new(ldim(1),ldim(2),ldim(3)), source=huge(x))
+        allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)), source=0.)
+        call vol_even_filt_new%new(ldim, smpd)
+        call vol_odd_filt_new%new(ldim, smpd)
+        call vol_even_filt_new%read(even_cache_fname)
+        call vol_odd_filt_new%read(odd_cache_fname)
+        call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new)
+        call tent_smooth_3d(dmat_new, dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+        ! dmat_tmp is never just a temporary buffer, the result is in dmats(:,:,:,i)
+        allocate(dmat_finest(ldim(1),ldim(2),ldim(3)), source=huge(x))
+        if( allocated(dmat_finest_cached) ) then
+            if( all(shape(dmat_finest_cached) == ldim) ) then
+                dmat_finest = dmat_finest_cached
+            else
+                call vol_even_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(sz_old)))
+                call vol_odd_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(sz_old)))
+                call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest)
+                call tent_smooth_3d(dmat_finest, dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+            end if
+        else
+            call vol_even_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(sz_old)))
+            call vol_odd_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(sz_old)))
+            call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest)
+            call tent_smooth_3d(dmat_finest, dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+        end if
+        ! --- update filtmap in place for the masked voxels ---
+        n_extended = 0
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:n_extended)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.extend_mask(i,j,k) ) cycle
+                    if( dmat_new(i,j,k) < dmat_finest(i,j,k) ) then
+                        filtmap(i,j,k) = sz_old + 1   ! new extended index
+                        n_extended = n_extended + 1
+                    end if
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        if( n_extended == 0 ) then
+            call vol_even_filt_new%kill
+            call vol_odd_filt_new%kill
+            deallocate(extend_mask, dmat_new, dmat_finest, dmat_tmp)
+            return
+        end if
+        ! --- grow cutoff_finds to include the new level ---
+        allocate(cutoff_finds_new(sz_old + 1))
+        cutoff_finds_new(:sz_old)  = cutoff_finds
+        cutoff_finds_new(sz_old+1) = new_find
+        call move_alloc(cutoff_finds_new, cutoff_finds)
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
+        allocate(dmat_finest_cached(ldim(1),ldim(2),ldim(3)), source=dmat_new)
+        write(logfhandle,'(A,I0,A,F6.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
+        call vol_even_filt_new%kill
+        call vol_odd_filt_new%kill
+        deallocate(extend_mask, dmat_new, dmat_finest, dmat_tmp)
+    end subroutine extend_nu_filter_highres
+
+    subroutine extend_nu_filter_highres_iterative( vol_even, vol_odd )
+        class(image), intent(in) :: vol_even, vol_odd
+        integer :: i
+        do i = 1, size(EXTRA_LIMITS)
+            call extend_nu_filter_highres(vol_even, vol_odd, 10.0, EXTRA_LIMITS(i))
+        end do
+    end subroutine extend_nu_filter_highres_iterative
 
     subroutine nu_filter_vols( vol_even, vol_odd )
         class(image), intent(out) :: vol_even, vol_odd
@@ -270,7 +446,7 @@ contains
                         if( .not.mask(i,j,k) ) cycle
                     end if
                     ival = ival + 1
-                    lowpass_vals(ival) = lowpass_limits(filtmap(i,j,k))
+                    lowpass_vals(ival) = cutoff_find_to_lowpass_limit(filtmap(i,j,k))
                 end do
             end do
         end do
@@ -293,8 +469,9 @@ contains
         logical, optional, intent(in) :: mask(:,:,:)
         integer :: icut, nselected
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_histogram')
-        if( size(counts) /= size(lowpass_limits) ) THROW_HARD('counts size mismatch in calc_filtmap_lowpass_histogram')
-        if( size(percentages) /= size(lowpass_limits) ) THROW_HARD('percentages size mismatch in calc_filtmap_lowpass_histogram')
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before calc_filtmap_lowpass_histogram')
+        if( size(counts) /= size(cutoff_finds) ) THROW_HARD('counts size mismatch in calc_filtmap_lowpass_histogram')
+        if( size(percentages) /= size(cutoff_finds) ) THROW_HARD('percentages size mismatch in calc_filtmap_lowpass_histogram')
         if( present(mask) ) then
             if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in calc_filtmap_lowpass_histogram')
             nselected = count(mask)
@@ -304,7 +481,7 @@ contains
         if( nselected == 0 ) THROW_HARD('No local resolution values selected in calc_filtmap_lowpass_histogram')
         counts       = 0
         percentages  = 0.
-        do icut = 1, size(lowpass_limits)
+        do icut = 1, size(cutoff_finds)
             if( present(mask) ) then
                 counts(icut) = count(filtmap == icut .and. mask)
             else
@@ -317,17 +494,21 @@ contains
     subroutine print_filtmap_lowpass_histogram( mask, title )
         logical,          optional, intent(in) :: mask(:,:,:)
         character(len=*), optional, intent(in) :: title
-        integer :: counts(size(lowpass_limits)), icut
-        real    :: percentages(size(lowpass_limits))
+        integer, allocatable :: counts(:)
+        real,    allocatable :: percentages(:)
+        integer :: icut
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before print_filtmap_lowpass_histogram')
+        allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
         if( present(title) ) then
             write(logfhandle,'(A)') trim(title)
         else
             write(logfhandle,'(A)') '>>> LOCAL RESOLUTION HISTOGRAM'
         end if
-        do icut = 1, size(lowpass_limits)
-            write(logfhandle,'(F8.3,A,I12,A,F8.3,A)') lowpass_limits(icut), ' A : ', counts(icut), ' voxels, ', percentages(icut), '%'
+        do icut = 1, size(cutoff_finds)
+            write(logfhandle,'(F8.3,A,I12,A,F8.3,A)') cutoff_find_to_lowpass_limit(icut), ' A : ', counts(icut), ' voxels, ', percentages(icut), '%'
         end do
+        deallocate(counts, percentages)
     end subroutine print_filtmap_lowpass_histogram
 
     subroutine print_filtmap_lowpass_stats( mask, title )
