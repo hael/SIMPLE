@@ -100,7 +100,7 @@ contains
                 cls_mask(icls)  = .false.
                 cavg_inds(icls) = 0
             endif
-            if(.not. ignore_states ) then
+            if(.not. l_ignore_states ) then
                 if( l_invert_states ) then
                     if( self%os_cls2D%get_state(icls) /= 0 ) then
                         cls_mask(icls)  = .false.
