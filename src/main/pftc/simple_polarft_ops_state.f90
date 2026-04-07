@@ -226,7 +226,7 @@ contains
         nullify(spproj_field)
     end subroutine polar_cavger_update_sums
 
-    module subroutine polar_cavger_insert_comlins_oversamp( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+    module subroutine polar_cavger_insert_ptcls_oversamp( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
         use simple_math_ft,    only: fplane_get_cmplx, fplane_get_ctfsq
         use simple_kbinterpol, only: kbinterpol, kb_windim
         class(polarft_calc),        intent(inout) :: self
@@ -236,33 +236,274 @@ contains
         integer,                    intent(in)    :: nptcls, pinds(nptcls)
         class(fplane_type), target, intent(inout) :: fpls(nptcls)
         real,     parameter   :: zvec(3) = [0.,0.,1.]                   ! normal vector
-        real,     parameter   :: T       = 0.5                          ! distance threshold
+        real,     parameter   :: DT      = 0.5                          ! distance threshold
         real(dp), parameter   :: PF2     = real(OSMPL_PAD_FAC**2,dp)    ! Oversampling factor
         logical,  parameter   :: FAST    = .true.
         type(kbinterpol)      :: kb
-        complex(dp) :: fcomp
-        real(dp)    :: wms(kb_windim(KBWINSZ)), pw, ctfsq, w, wl, wsum, wmssum,weight, dkb03
+        complex(dp) :: rot_ptcl(self%pftsz, self%kfromto(1):self%interpklim),fcomp
+        real(dp)    :: rot_ctfsq(self%pftsz, self%kfromto(1):self%interpklim)
+        real(dp)    :: wzs(kb_windim(KBWINSZ),kb_windim(KBWINSZ)), wms(kb_windim(KBWINSZ))
+        real(dp)    :: pw, ctfsq, w, wl, wsum
+        real        :: all_Rs(3,3,nptcls), all_euls(3,nptcls)
         real        :: proj_cl_addr(2,self%kfromto(1):self%interpklim), Rproj(3,3), tRproj(3,3)
-        real        :: R(3,3), Rptcl(3,3), R2d(2,2), pol2cart(2), hk(2), proj_euls(3), ptcl_euls(3)
-        real        :: normal_proj(3), normal_ptcl(3), rhk(2), euls(3), phi, theta, psi, sin_theta
-        real        :: dang, sin_dang, dCL, dz, winsz
+        real        :: Rsym(3,3), R(3,3), Rptcl(3,3), R2d(2,2), pol2cart(2), hk(2), proj_euls(3)
+        real        :: ptcl_euls(3), normal_proj(3), normal_ptcl(3), rhk(2), euls(3), phi, theta
+        real        :: dang, sin_dang, dCL, dz, winsz, psi, sin_theta, dhsq
         integer     :: kcycs(kb_windim(KBWINSZ)), flims(2,3), win(2,2), nsym, iproj, i, iptcl
-        integer     :: hcyc, wdim, hh, kk, l, m, nrefs, sh, irot
-        logical     :: l_even
-        nsym = symop%get_nsym()
-        if( nsym > 1 ) THROW_HARD('Symmetry not supported yet!')
+        integer     :: hcyc, wdim, hh, kk, l, m, nrefs, sh, irot, isym, jrot,drot
+        logical     :: l_even, l_self
+        if( FAST )then
+            call nn_insert_ptcls_oversamp( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+        else
+            ! Interpolation parameters
+            winsz = KBWINSZ
+            kb    = kbinterpol(winsz, KBALPHA)
+            wdim  = kb%get_wdim()
+            flims = transpose(fpls(1)%frlims)
+            nrefs = eulspace%get_noris()
+            ! geometric precomputations
+            !$omp  parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+            do i = 1,nptcls
+                iptcl = pinds(i)
+                if( ptcl_field%get_state(iptcl) == 0 )   cycle
+                if( ptcl_field%get(iptcl, 'w') < 1.e-6 ) cycle
+                all_euls(:,i) = ptcl_field%get_euler(iptcl)
+                all_Rs(:,:,i) = euler2m(all_euls(:,i))
+            enddo
+            ! Main loop
+            nsym = symop%get_nsym()
+            do isym = 1,nsym
+                call symop%get_sym_rmat(isym, Rsym)
+                !$omp  parallel do default(shared) private(iproj,proj_euls,Rproj,tRproj,normal_proj)&
+                !$omp& private(i,iptcl,pw,ptcl_euls,Rptcl,normal_ptcl,R,euls,psi,phi,pol2cart)&
+                !$omp& private(sh,irot,R2D,hk,rhk,w,wl,wsum,hh,kk,l,m,ctfsq,fcomp,win,hcyc,kcycs)&
+                !$omp& private(proj_cl_addr,theta,sin_theta,dang,dCL,sin_dang,rot_ptcl,rot_ctfsq)&
+                !$omp& private(dz,l_even,wms,dhsq,wzs,l_self,jrot,drot)&
+                !$omp& schedule(static) proc_bind(close)
+                do iproj = 1,nrefs
+                    ! Retrieves projection rotation matrix
+                    proj_euls   = eulspace%get_euler(iproj)
+                    Rproj       = euler2m(proj_euls)
+                    tRproj      = transpose(Rproj)
+                    normal_proj = matmul(zvec, Rproj)
+                    ! loop over particles
+                    do i = 1,nptcls
+                        iptcl = pinds(i)
+                        if( ptcl_field%get_state(iptcl) == 0 )cycle
+                        ! particle weight
+                        pw = real(ptcl_field%get(iptcl, 'w'), dp)
+                        if( pw < 1.d-6 ) cycle
+                        ! e/o flag
+                        l_even = ptcl_field%get_eo(iptcl) == 0
+                        ! particle euler angles & rotation matrix
+                        ptcl_euls = all_euls(:,i)
+                        Rptcl     = all_Rs(:,:,i)
+                        ! Symmetry & interpolation fork
+                        if( isym == 1 )then
+                            l_self = ptcl_field%get(iptcl, 'proj') == iproj
+                        else
+                            Rptcl       = matmul(Rptcl, Rsym)
+                            normal_ptcl = matmul(zvec, Rptcl)
+                            l_self      = myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4
+                            ptcl_euls   = m2euler(Rptcl)    ! update after symmetry
+                        endif
+                        if( l_self )then
+                            ! PARTICLE INSERTION INTO SLICE
+                            ! in-plane rotation index offset
+                            psi  = ptcl_euls(3)
+                            drot = self%get_roind_fast(psi)-1
+                            ! Loop over the PFT and interpolate
+                            do irot = 1, self%pftsz
+                                jrot = irot - drot
+                                if( jrot < 1 ) jrot = jrot + self%nrots
+                                do sh = self%kfromto(1), self%interpklim
+                                    ! Particle coordinate
+                                    rhk(:) = real(OSMPL_PAD_FAC) * self%polar(:,sh,jrot)
+                                    ! 2D KB interpolation
+                                    call sqwin_2d(rhk(1), rhk(2), winsz, win)
+                                    ! along k: weights & address precompute
+                                    do m = 1,wdim
+                                        kk       = win(2,1) - 1 + m
+                                        wms(m)   = real(kb%apod(real(kk) - rhk(2)),dp)
+                                        kcycs(m) = cyci_1d(flims(:,2), kk)
+                                    enddo
+                                    ! Weighted accumulation
+                                    fcomp = DCMPLX_ZERO
+                                    ctfsq = 0.d0
+                                    wsum  = 0.d0
+                                    do l = 1,wdim
+                                        hh   = win(1,1) - 1 + l
+                                        wl   = real(kb%apod(real(hh) - rhk(1)), dp)
+                                        hcyc = cyci_1d(flims(:,1), hh)
+                                        do m = 1,wdim
+                                            w     = wl * wms(m)
+                                            wsum  = wsum  + w
+                                            fcomp = fcomp + w * cmplx(fplane_get_cmplx(fpls(i), hcyc, kcycs(m)), kind=dp)
+                                            ctfsq = ctfsq + w * real(fplane_get_ctfsq(fpls(i), hcyc, kcycs(m)), dp)
+                                        enddo
+                                    enddo
+                                    w = pw / wsum
+                                    if( w > DTINY )then
+                                        rot_ptcl(irot,sh)  = PF2 * w * fcomp
+                                        rot_ctfsq(irot,sh) =       w * ctfsq
+                                    else
+                                        rot_ptcl(irot,sh)  = DCMPLX_ZERO
+                                        rot_ctfsq(irot,sh) = 0.d0
+                                    endif
+                                enddo
+                            enddo
+                            if( l_even )then
+                                self%pfts_even(:,:,iproj) = self%pfts_even(:,:,iproj) + rot_ptcl
+                                self%ctf2_even(:,:,iproj) = self%ctf2_even(:,:,iproj) + rot_ctfsq
+                            else
+                                self%pfts_odd(:,:,iproj)  = self%pfts_odd(:,:,iproj)  + rot_ptcl
+                                self%ctf2_odd(:,:,iproj)  = self%ctf2_odd(:,:,iproj)  + rot_ctfsq
+                            endif
+                        else
+                            ! Rotation of both planes by transpose of Rproj => the reference is on the hk-plane
+                            R = matmul(Rptcl, tRproj)
+                            ! Euler triplet identification
+                            euls = m2euler(R)
+                            ! In-plane angle of the particle CL
+                            psi = 180.0 - euls(3)
+                            ! in-plane angle of the reprojection CL
+                            phi = euls(1)
+                            if( phi > 180.0 )then
+                                ! because we update only the [0;180[ range
+                                phi = phi - 180.0
+                                psi = psi + 180.0
+                            else if( phi < 0.0 )then
+                                phi = phi + 180.0
+                                psi = psi - 180.0
+                            endif
+                            ! angle between the particle and reprojection slices
+                            theta     = euls(2)
+                            sin_theta = sin(deg2rad(theta))
+                            ! CL logical coordinates on padded reprojection
+                            pol2cart = [sin(deg2rad(phi)), -cos(deg2rad(phi))]
+                            do sh = self%kfromto(1), self%interpklim
+                                proj_cl_addr(:,sh) = real(sh*OSMPL_PAD_FAC) * pol2cart
+                            enddo
+                            ! In-plane rotation for mapping reprojection coordinates in particle-space
+                            call rotmat2d(180.0+psi-phi, R2D)
+                            ! Loop over the PFT and interpolate relevant components
+                            do irot = 1, self%pftsz
+                                ! angle between CL and current reprojection line
+                                dang     = modulo(abs(self%angtab(irot) - phi), 180.0)
+                                sin_dang = sin(deg2rad(dang))
+                                ! dz increases with sh, so if the first shell fails the slab test, all shells are too far
+                                if( abs(sin_theta * sin_dang) * real(self%kfromto(1)*OSMPL_PAD_FAC) > DT ) cycle
+                                do sh = self%kfromto(1), self%interpklim
+                                    ! rejects polar points too far from CL
+                                    hk(1) = real(OSMPL_PAD_FAC) * self%polar(1,sh,irot)
+                                    if( abs(proj_cl_addr(1,sh) - hk(1)) > DT ) exit
+                                    hk(2) = real(OSMPL_PAD_FAC) * self%polar(2,sh,irot)
+                                    if( abs(proj_cl_addr(2,sh) - hk(2)) > DT ) exit
+                                    ! distance from point to common line
+                                    ! dCL = sin_dang * sqrt(sum(hk**2)) simplifies to:
+                                    dCL = sin_dang * real(sh*OSMPL_PAD_FAC)
+                                    ! relative altitude of the point to slice
+                                    dz  = sin_theta * dCL
+                                    ! rejects out-of-plane point
+                                    if( abs(dz) > DT ) exit
+                                    ! 2D mapping
+                                    rhk = matmul(hk, R2D)
+                                    ! 3D KB interpolation
+                                    fcomp = DCMPLX_ZERO
+                                    ctfsq = 0.d0
+                                    call sqwin_2d(rhk(1), rhk(2), winsz, win)
+                                    ! along k: weights & address precompute
+                                    do m = 1,wdim
+                                        kk       = win(2,1) - 1 +m
+                                        wms(m)   = real(kb%apod(real(kk) - rhk(2)),dp)
+                                        kcycs(m) = cyci_1d(flims(:,2), kk)
+                                    enddo
+                                    ! Altitude weights
+                                    do l = 1,wdim
+                                        hh   = win(1,1) - 1 + l
+                                        dhsq = (real(hh)-rhk(1))**2 ! distance along h-axis
+                                        do m = 1,wdim
+                                            kk = win(2,1) - 1 + m
+                                            ! 2D distance between source and destination of interpolation 
+                                            dz = sqrt(dhsq + (real(kk)-rhk(2))**2)
+                                            ! 3D distance, no worry about small sin_theta since both planes are not parallel
+                                            dz = dz * sin_theta
+                                            ! Altitude KB-weight
+                                            wzs(m,l) = real(kb%apod(dz), dp)
+                                        enddo
+                                    enddo
+                                    ! Weighted accumulation
+                                    wsum = 0.d0
+                                    do l = 1,wdim
+                                        hh   = win(1,1) - 1 + l
+                                        wl   = real(kb%apod(real(hh) - rhk(1)), dp)
+                                        hcyc = cyci_1d(flims(:,1), hh)
+                                        do m = 1,wdim
+                                            w     = wl * wms(m) * wzs(m,l)
+                                            wsum  = wsum  + w
+                                            fcomp = fcomp + w * cmplx(fplane_get_cmplx(fpls(i), hcyc, kcycs(m)), kind=dp)
+                                            ctfsq = ctfsq + w * real(fplane_get_ctfsq(fpls(i), hcyc, kcycs(m)), dp)
+                                        enddo
+                                    enddo
+                                    ! particle & kernel weight
+                                    w = pw / wsum
+                                    if( w < DTINY ) cycle
+                                    ! accumulation
+                                    if( l_even )then
+                                        self%pfts_even(irot,sh,iproj) = self%pfts_even(irot,sh,iproj) + PF2 * w * fcomp
+                                        self%ctf2_even(irot,sh,iproj) = self%ctf2_even(irot,sh,iproj) +       w * ctfsq
+                                    else
+                                        self%pfts_odd(irot,sh,iproj)  = self%pfts_odd(irot,sh,iproj)  + PF2 * w * fcomp
+                                        self%ctf2_odd(irot,sh,iproj)  = self%ctf2_odd(irot,sh,iproj)  +       w * ctfsq
+                                    endif
+                                enddo   ! shell
+                            enddo       ! rotation
+                        endif           ! self
+                    enddo               ! particle
+                enddo                   ! slice
+                !$omp end parallel do
+            enddo                       ! symmetry
+        endif
+    end subroutine polar_cavger_insert_ptcls_oversamp
+
+    ! Local private interpolation routine
+    module subroutine nn_insert_ptcls_oversamp( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+        use simple_math_ft,    only: fplane_get_cmplx, fplane_get_ctfsq
+        class(polarft_calc),        intent(inout) :: self
+        class(oris),                intent(in)    :: eulspace
+        class(oris), pointer,       intent(inout) :: ptcl_field
+        class(sym),                 intent(in)    :: symop
+        integer,                    intent(in)    :: nptcls, pinds(nptcls)
+        class(fplane_type), target, intent(inout) :: fpls(nptcls)
+        real,     parameter   :: zvec(3) = [0.,0.,1.]                   ! normal vector
+        real,     parameter   :: DT      = 0.5                          ! distance threshold
+        real(dp), parameter   :: PF2     = real(OSMPL_PAD_FAC**2,dp)    ! Oversampling factor
+        type(kbinterpol)      :: kb
+        complex(dp) :: rot_ptcl(self%pftsz, self%kfromto(1):self%interpklim), fcomp
+        real(dp)    :: rot_ctfsq(self%pftsz, self%kfromto(1):self%interpklim)
+        real(dp)    :: pw, ctfsq, w, dkb02, dkb03
+        real        :: proj_cl_addr(2,self%kfromto(1):self%interpklim), Rproj(3,3), tRproj(3,3)
+        real        :: Rsym(3,3), R(3,3), Rptcl(3,3), R2d(2,2), pol2cart(2), hk(2), proj_euls(3)
+        real        :: ptcl_euls(3), normal_proj(3), normal_ptcl(3), rhk(2), euls(3), phi, theta
+        real        :: dang, sin_dang, dCL, dz, psi, sin_theta
+        integer     :: flims(2,3), nsym, iproj, i, iptcl, hh, kk, nrefs, sh, irot, jrot, drot, isym
+        logical     :: l_even, l_self
         ! Interpolation parameters
-        winsz = KBWINSZ
-        kb    = kbinterpol(winsz, KBALPHA)
-        wdim  = kb%get_wdim()
+        kb    = kbinterpol(KBWINSZ, KBALPHA)
         flims = transpose(fpls(1)%frlims)
         nrefs = eulspace%get_noris()
-        if( FAST )then
-            dkb03 = real(kb%apod(0.0),dp)**3  / 2.d0
+        ! To avoid sum overflow, not for normalization
+        dkb02 = real(kb%apod(0.),dp)**2
+        dkb03 = real(kb%apod(0.),dp)**3
+        ! Main loop
+        nsym = symop%get_nsym()
+        do isym = 1,nsym
+            call symop%get_sym_rmat(isym, Rsym)
             !$omp parallel do default(shared) private(iproj,proj_euls,Rproj,tRproj,normal_proj)&
             !$omp& private(i,iptcl,pw,ptcl_euls,Rptcl,normal_ptcl,R,euls,psi,phi,pol2cart)&
-            !$omp& private(sh,irot,R2D,hk,rhk,w,ctfsq,fcomp,hh,kk,theta,sin_theta,dang,dCL)&
-            !$omp& private(sin_dang,dz,l_even,proj_cl_addr) schedule(static)
+            !$omp& private(sh,irot,jrot,R2d,hk,rhk,w,ctfsq,fcomp,hh,kk,theta,sin_theta,dang,dCL)&
+            !$omp& private(sin_dang,dz,l_even,proj_cl_addr,rot_ptcl,rot_ctfsq,drot,l_self)&
+            !$omp& proc_bind(close) schedule(static)
             do iproj = 1,nrefs
                 ! Retrieves projection rotation matrix
                 proj_euls   = eulspace%get_euler(iproj)
@@ -272,205 +513,136 @@ contains
                 ! loop over particles
                 do i = 1,nptcls
                     iptcl = pinds(i)
-                    if( ptcl_field%get_state(iptcl) == 0 )       cycle
-                    ! rejects self
-                    if( ptcl_field%get(iptcl, 'proj') == iproj ) cycle
-                    ! retrieves particle weight
+                    if( ptcl_field%get_state(iptcl) == 0 )cycle
+                    ! particle weight
                     pw = real(ptcl_field%get(iptcl, 'w'), dp)
-                    if( pw < 1.d-8 ) cycle
+                    if( pw < 1.d-6 ) cycle
+                    ! e/o flag
                     l_even = ptcl_field%get_eo(iptcl) == 0
-                    ! rejects when too close, considered the same slice
-                    ptcl_euls   = ptcl_field%get_euler(iptcl)
-                    Rptcl       = euler2m(ptcl_euls)
-                    normal_ptcl = matmul(zvec, Rptcl)
-                    if( myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4 ) cycle
-                    ! Rotation of both planes by transpose of Rproj => the reference is on the hk-plane
-                    R = matmul(Rptcl, tRproj)
-                    ! Euler triplet identification
-                    euls = m2euler(R)
-                    ! In-plane angle of the particle CL
-                    psi = 180.0 - euls(3)
-                    ! in-plane angle of the reprojection CL
-                    phi = euls(1)
-                    if( phi > 180.0 )then
-                        ! because we update only the [0;180[ range
-                        phi = phi - 180.0
-                        psi = psi + 180.0
-                    else if( phi < 0.0 )then
-                        phi = phi + 180.0
-                        psi = psi - 180.0
+                    ! particle euler angles & rotation matrix
+                    ptcl_euls = ptcl_field%get_euler(iptcl)
+                    Rptcl     = euler2m(ptcl_euls)
+                    ! Symmetry & interpolation fork
+                    if( isym == 1 )then
+                        l_self = ptcl_field%get(iptcl, 'proj') == iproj
+                    else
+                        Rptcl       = matmul(Rptcl, Rsym)
+                        normal_ptcl = matmul(zvec, Rptcl)
+                        l_self      = myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4
+                        ptcl_euls   = m2euler(Rptcl)    ! update after symmetry
                     endif
-                    ! angle between the particle and reprojection slices
-                    theta     = euls(2)
-                    sin_theta = sin(deg2rad(theta))
-                    ! CL logical coordinates on padded reprojection
-                    pol2cart = [sin(deg2rad(phi)), -cos(deg2rad(phi))]
-                    do sh = self%kfromto(1), self%interpklim
-                        proj_cl_addr(:,sh) = real(sh*OSMPL_PAD_FAC) * pol2cart
-                    enddo
-                    ! In-plane rotation for mapping reprojection coordinates in particle-space
-                    call rotmat2d(180.0+psi-phi, R2D)
-                    ! Loop over the PFT and interpolate relevant components
-                    do irot = 1, self%pftsz
-                        ! angle betwen CL an current reprojection line
-                        dang     = modulo(abs(self%angtab(irot) - phi), 180.0)
-                        sin_dang = sin(deg2rad(dang))
-                        ! dz increases with sh, so if the first shell is too far, all shells are too far
-                        if( abs(sin_theta) * sin_dang * real(self%kfromto(1)*OSMPL_PAD_FAC) > T ) cycle
-                        do sh = self%kfromto(1), self%interpklim
-                            ! rejects polar points to far from CL
-                            hk(1) = real(OSMPL_PAD_FAC) * self%polar(1,sh,irot)
-                            hk(2) = real(OSMPL_PAD_FAC) * self%polar(2,sh,irot)
-                            if( abs(proj_cl_addr(1,sh) - hk(1)) > T ) exit
-                            if( abs(proj_cl_addr(2,sh) - hk(2)) > T ) exit
-                            ! distance from point to common line
-                            ! dCL = sin_dang * sqrt(sum(hk**2)) simplifies to:
-                            dCL = sin_dang * real(sh*OSMPL_PAD_FAC)
-                            ! relative altitude of the point to slice
-                            dz  = sin_theta * dCL
-                            ! rejects out-of-plane point
-                            if( abs(dz) > T ) exit
-                            ! 2D mapping
-                            rhk = matmul(hk, R2D)
-                            ! NN - Interpolation with KB weight
-                            hh    = nint(rhk(1))
-                            kk    = nint(rhk(2))
-                            w     = real(kb%apod(rhk(1)-real(hh)),dp)
-                            w     = w * real(kb%apod(rhk(2)-real(kk)),dp)
-                            w     = w * real(kb%apod(dz),dp)
-                            w     = pw * max(0.d0, w/ dkb03)
-                            if( w < DTINY ) cycle
-                            hh    = cyci_1d(flims(:,1), hh)
-                            kk    = cyci_1d(flims(:,2), kk)
-                            fcomp = cmplx(fplane_get_cmplx(fpls(i), hh,kk), kind=dp)
-                            ctfsq = real(fplane_get_ctfsq(fpls(i),  hh,kk), dp)
-                            if( l_even )then
-                                self%pfts_even(irot,sh,iproj) = self%pfts_even(irot,sh,iproj) + PF2 * w * fcomp
-                                self%ctf2_even(irot,sh,iproj) = self%ctf2_even(irot,sh,iproj) +       w * ctfsq
-                            else
-                                self%pfts_odd(irot,sh,iproj)  = self%pfts_odd(irot,sh,iproj)  + PF2 * w * fcomp
-                                self%ctf2_odd(irot,sh,iproj)  = self%ctf2_odd(irot,sh,iproj)  +     w * ctfsq
-                            endif
-                        enddo
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do default(shared) private(iproj,proj_euls,Rproj,tRproj,normal_proj)&
-            !$omp& private(i,iptcl,pw,ptcl_euls,Rptcl,normal_ptcl,R,euls,psi,phi,pol2cart,proj_cl_addr)&
-            !$omp& private(sh,irot,R2D,hk,rhk,w,wl,wsum,hh,kk,l,m,ctfsq,fcomp,win,hcyc,kcycs)&
-            !$omp& private(theta,sin_theta,dang,dCL,sin_dang,dz,wmssum,l_even,wms,weight) schedule(static)
-            do iproj = 1,nrefs
-                ! Retrieves projection rotation matrix
-                proj_euls   = eulspace%get_euler(iproj)
-                Rproj       = euler2m(proj_euls)
-                tRproj      = transpose(Rproj)
-                normal_proj = matmul(zvec, Rproj)
-                ! loop over particles
-                do i = 1,nptcls
-                    iptcl = pinds(i)
-                    if( ptcl_field%get_state(iptcl) == 0 )       cycle
-                    ! rejects self
-                    if( ptcl_field%get(iptcl, 'proj') == iproj ) cycle
-                    ! retrieves particle weight
-                    pw = real(ptcl_field%get(iptcl, 'w'), dp)
-                    if( pw < 1.d-8 ) cycle
-                    l_even = ptcl_field%get_eo(iptcl) == 0
-                    ! rejects too close, considered the same slice
-                    ptcl_euls   = ptcl_field%get_euler(iptcl)
-                    Rptcl       = euler2m(ptcl_euls)
-                    normal_ptcl = matmul(zvec, Rptcl)
-                    if( myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4 ) cycle
-                    ! Rotation of both planes by transpose of Rproj => the reference is on the hk-plane
-                    R = matmul(Rptcl, tRproj)
-                    ! Euler triplet identification
-                    euls = m2euler(R)
-                    ! In-plane angle of the particle CL
-                    psi = 180.0 - euls(3)
-                    ! in-plane angle of the reprojection CL
-                    phi = euls(1)
-                    if( phi > 180.0 )then
-                        ! because we update only the [0;180[ range
-                        phi = phi - 180.0
-                        psi = psi + 180.0
-                    else if( phi < 0.0 )then
-                        phi = phi + 180.0
-                        psi = psi - 180.0
-                    endif
-                    ! angle between the particle and reprojection slices
-                    theta     = euls(2)
-                    sin_theta = sin(deg2rad(theta))
-                    ! CL logical coordinates on padded reprojection
-                    pol2cart = [sin(deg2rad(phi)), -cos(deg2rad(phi))]
-                    do sh = self%kfromto(1), self%interpklim
-                        proj_cl_addr(:,sh) = real(sh*OSMPL_PAD_FAC) * pol2cart
-                    enddo
-                    ! In-plane rotation for mapping reprojection coordinates in particle-space
-                    call rotmat2d(180.0+psi-phi, R2D)
-                    ! Loop over the PFT and interpolate relevant components
-                    do irot = 1, self%pftsz
-                        ! angle betwen CL an current reprojection line
-                        dang     = modulo(abs(self%angtab(irot) - phi), 180.0)
-                        sin_dang = sin(deg2rad(dang))
-                        ! dz increases with sh, so if the first shell fails the slab test, all shells are too far
-                        if( abs(sin_theta) * sin_dang * real(self%kfromto(1)*OSMPL_PAD_FAC) > T ) cycle
-                        do sh = self%kfromto(1), self%interpklim
-                            ! rejects polar points to far from CL
-                            hk(1) = real(OSMPL_PAD_FAC) * self%polar(1,sh,irot)
-                            hk(2) = real(OSMPL_PAD_FAC) * self%polar(2,sh,irot)
-                            if( abs(proj_cl_addr(1,sh) - hk(1)) > T ) exit
-                            if( abs(proj_cl_addr(2,sh) - hk(2)) > T ) exit
-                            ! distance from point to common line
-                            ! dCL = sin_dang * sqrt(sum(hk**2)) simplifies to:
-                            dCL = sin_dang * real(sh*OSMPL_PAD_FAC)
-                            ! relative altitude of the point to slice
-                            dz  = sin_theta * dCL
-                            ! rejects out-of-plane point
-                            if( abs(dz) > T ) exit
-                            ! 2D mapping
-                            rhk = matmul(hk, R2D)
-                            !  2.5D KB interpolation
-                            fcomp = DCMPLX_ZERO
-                            ctfsq = 0.d0
-                            call sqwin_2d(rhk(1), rhk(2), winsz, win)
-                            ! some weights & address precompute
-                            wmssum = 0.d0
-                            do m = 1,wdim
-                                kk       = win(2,1)-1+m
-                                wms(m)   = real(kb%apod(real(kk) - rhk(2)),dp)
-                                wmssum   = wmssum + wms(m)
-                                kcycs(m) = cyci_1d(flims(:,2), kk)
+                    if( l_self )then
+                        ! PARTICLE INSERTION INTO SLICE
+                        ! in-plane rotation index offset
+                        psi  = ptcl_euls(3)
+                        drot = self%get_roind_fast(psi)-1
+                        ! Loop over the PFT and interpolate
+                        do irot = 1, self%pftsz
+                            jrot = irot - drot
+                            if( jrot < 1 ) jrot = jrot + self%nrots
+                            do sh = self%kfromto(1), self%interpklim
+                                ! Particle coordinate
+                                rhk(:) = real(OSMPL_PAD_FAC) * self%polar(:,sh,jrot)
+                                ! NN interpolation with KB weight
+                                hh = nint(rhk(1))
+                                kk = nint(rhk(2))
+                                w  = real(kb%apod(rhk(1)-real(hh)),dp) * real(kb%apod(rhk(2)-real(kk)),dp)
+                                w  = pw * max(0.d0, w/dkb02)
+                                if( w > DTINY )then
+                                    hh = cyci_1d(flims(:,1), hh)
+                                    kk = cyci_1d(flims(:,2), kk)
+                                    rot_ptcl(irot,sh)  = PF2 * w * cmplx(fplane_get_cmplx(fpls(i), hh,kk), kind=dp)
+                                    rot_ctfsq(irot,sh) =       w * real(fplane_get_ctfsq(fpls(i), hh,kk), dp)
+                                else
+                                    rot_ptcl(irot,sh)  = DCMPLX_ZERO
+                                    rot_ctfsq(irot,sh) = 0.d0
+                                endif
                             enddo
-                            ! Weighted accumulation
-                            wsum = 0.d0
-                            hh   = win(1,1) - 1
-                            do l = 1,wdim
-                                hh   = hh + 1
-                                wl   = real(kb%apod(real(hh) - rhk(1)), dp)
-                                hcyc = cyci_1d(flims(:,1), hh)
-                                do m = 1,wdim
-                                    w     = wl * wms(m)
-                                    fcomp = fcomp + w * cmplx(fplane_get_cmplx(fpls(i), hcyc, kcycs(m)), kind=dp)
-                                    ctfsq = ctfsq + w * real(fplane_get_ctfsq(fpls(i), hcyc, kcycs(m)), kind=dp)
-                                enddo
-                                wsum = wsum + wl * wmssum
-                            enddo
-                            weight = pw / wsum
-                            if( l_even )then
-                                self%pfts_even(irot,sh,iproj) = self%pfts_even(irot,sh,iproj) + PF2 * weight * fcomp
-                                self%ctf2_even(irot,sh,iproj) = self%ctf2_even(irot,sh,iproj) +       weight * ctfsq
-                            else
-                                self%pfts_odd(irot,sh,iproj)  = self%pfts_odd(irot,sh,iproj)  + PF2 * weight * fcomp
-                                self%ctf2_odd(irot,sh,iproj)  = self%ctf2_odd(irot,sh,iproj)  +       weight * ctfsq
-                            endif
                         enddo
-                    enddo
-                enddo
-            enddo
+                        if( l_even )then
+                            self%pfts_even(:,:,iproj) = self%pfts_even(:,:,iproj) + rot_ptcl
+                            self%ctf2_even(:,:,iproj) = self%ctf2_even(:,:,iproj) + rot_ctfsq
+                        else
+                            self%pfts_odd(:,:,iproj)  = self%pfts_odd(:,:,iproj)  + rot_ptcl
+                            self%ctf2_odd(:,:,iproj)  = self%ctf2_odd(:,:,iproj)  + rot_ctfsq
+                        endif
+                    else
+                        ! COMMON LINES
+                        ! Rotation of both planes by transpose of Rproj => the reference is on the hk-plane
+                        R = matmul(Rptcl, tRproj)
+                        ! Euler triplet identification
+                        euls = m2euler(R)
+                        ! In-plane angle of the particle CL
+                        psi = 180.0 - euls(3)
+                        ! in-plane angle of the reprojection CL
+                        phi = euls(1)
+                        if( phi > 180.0 )then
+                            ! because we update only the [0;180[ range
+                            phi = phi - 180.0
+                            psi = psi + 180.0
+                        else if( phi < 0.0 )then
+                            phi = phi + 180.0
+                            psi = psi - 180.0
+                        endif
+                        ! angle between the particle and reprojection slices
+                        theta     = euls(2)
+                        sin_theta = sin(deg2rad(theta))
+                        ! CL logical coordinates on padded reprojection
+                        pol2cart = [sin(deg2rad(phi)), -cos(deg2rad(phi))]
+                        do sh = self%kfromto(1), self%interpklim
+                            proj_cl_addr(:,sh) = real(sh*OSMPL_PAD_FAC) * pol2cart
+                        enddo
+                        ! In-plane rotation for mapping reprojection coordinates in particle-space
+                        call rotmat2d(180.0+psi-phi, R2D)
+                        ! Loop over the PFT and interpolate relevant components
+                        do irot = 1, self%pftsz
+                            ! angle betwen CL an current reprojection line
+                            dang     = modulo(abs(self%angtab(irot) - phi), 180.0)
+                            sin_dang = sin(deg2rad(dang))
+                            ! dz increases with sh, so if the first shell is too far, all shells are too far
+                            if( abs(sin_theta * sin_dang) * real(self%kfromto(1)*OSMPL_PAD_FAC) > DT ) cycle
+                            do sh = self%kfromto(1), self%interpklim
+                                ! rejects polar points to far from CL
+                                hk(1) = real(OSMPL_PAD_FAC) * self%polar(1,sh,irot)
+                                if( abs(proj_cl_addr(1,sh) - hk(1)) > DT ) exit
+                                hk(2) = real(OSMPL_PAD_FAC) * self%polar(2,sh,irot)
+                                if( abs(proj_cl_addr(2,sh) - hk(2)) > DT ) exit
+                                ! distance from point to common line
+                                ! dCL = sin_dang * sqrt(sum(hk**2)) simplifies to:
+                                dCL = sin_dang * real(sh*OSMPL_PAD_FAC)
+                                ! relative altitude of the point to slice
+                                dz  = sin_theta * dCL
+                                ! rejects out-of-plane point
+                                if( abs(dz) > DT ) exit
+                                ! 2D mapping
+                                rhk = matmul(hk, R2D)
+                                ! NN interpolation with KB weight
+                                hh    = nint(rhk(1))
+                                kk    = nint(rhk(2))
+                                w     = real(kb%apod(rhk(1)-real(hh)),dp) * real(kb%apod(rhk(2)-real(kk)),dp)
+                                w     = w * real(kb%apod(dz),dp)
+                                w     = pw * max(0.d0, w/dkb03)
+                                if( w < DTINY ) cycle
+                                hh    = cyci_1d(flims(:,1), hh)
+                                kk    = cyci_1d(flims(:,2), kk)
+                                fcomp = PF2 * w * cmplx(fplane_get_cmplx(fpls(i), hh,kk), kind=dp)
+                                ctfsq =       w *real(fplane_get_ctfsq(fpls(i),  hh,kk), dp)
+                                if( l_even )then
+                                    self%pfts_even(irot,sh,iproj) = self%pfts_even(irot,sh,iproj) + fcomp
+                                    self%ctf2_even(irot,sh,iproj) = self%ctf2_even(irot,sh,iproj) + ctfsq
+                                else
+                                    self%pfts_odd(irot,sh,iproj)  = self%pfts_odd(irot,sh,iproj)  + fcomp
+                                    self%ctf2_odd(irot,sh,iproj)  = self%ctf2_odd(irot,sh,iproj)  + ctfsq
+                                endif
+                            enddo   ! shell
+                        enddo       ! rotation
+                    endif           ! self
+                enddo               ! particle
+            enddo                   ! slice
             !$omp end parallel do
-        endif
-    end subroutine polar_cavger_insert_comlins_oversamp
+        enddo                       ! symmetry
+    end subroutine nn_insert_ptcls_oversamp
+
 
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self
@@ -510,161 +682,5 @@ contains
         enddo
         !$omp end parallel do
     end subroutine center_3Dpolar_refs
-
-    ! suggested from particle polar cavg generation routines
-
-    subroutine gather_fplane_to_polar(self, fpl, ang_lims, ishift, pw, rptcl, rctf2)
-        use simple_math_ft,    only: fplane_get_cmplx, fplane_get_ctfsq
-        use simple_kbinterpol, only: kbinterpol, kb_windim
-        class(polarft_calc), intent(in)  :: self
-        type(fplane_type),   intent(in)  :: fpl
-        integer,             intent(in)  :: ang_lims(2)
-        integer,             intent(in)  :: ishift
-        real,                intent(in)  :: pw
-        complex(sp),         intent(out) :: rptcl(self%pftsz,self%kfromto(1):self%interpklim)
-        real(dp),            intent(out) :: rctf2(self%pftsz,self%kfromto(1):self%interpklim)
-        type(kbinterpol) :: kb
-        complex(dp) :: acc, fcomp
-        real(dp)    :: acc2, wsum, wmssum, w, wl
-        real(dp)    :: wms(kb_windim(KBWINSZ)), pol_scale
-        real        :: hk(2)
-        integer     :: ia, jsrc, k, l, m
-        integer     :: hh, kk, hcyc, flims(2,3), wdim
-        integer     :: kcycs(kb_windim(KBWINSZ)), win(2,2)
-        kb        = kbinterpol(KBWINSZ, KBALPHA)
-        wdim      = kb%get_wdim()
-        flims     = transpose(fpl%frlims)
-        pol_scale = real(OSMPL_PAD_FAC**2, dp)
-        do k = self%kfromto(1), self%interpklim
-            do ia = 1, self%pftsz
-                ! Map target class angle back into the particle frame.
-                ! Use the same sign convention as rotate_ptcl
-                jsrc = cyci_1d(ang_lims, ia - ishift)
-                hk(1) = real(OSMPL_PAD_FAC) * self%polar(1,k,jsrc)
-                hk(2) = real(OSMPL_PAD_FAC) * self%polar(2,k,jsrc)
-                call sqwin_2d(hk(1), hk(2), KBWINSZ, win)
-                acc  = DCMPLX_ZERO
-                acc2 = 0.0_dp
-                wmssum = 0.0_dp
-                do m = 1, wdim
-                    kk       = win(2,1)-1+m
-                    wms(m)   = real(kb%apod(real(kk) - hk(2)), dp)
-                    wmssum   = wmssum + wms(m)
-                    kcycs(m) = cyci_1d(flims(:,2), kk)
-                enddo
-                wsum = 0.0_dp
-                hh   = win(1,1) - 1
-                do l = 1, wdim
-                    hh   = hh + 1
-                    wl   = real(kb%apod(real(hh) - hk(1)), dp)
-                    hcyc = cyci_1d(flims(:,1), hh)
-                    do m = 1, wdim
-                        w     = wl * wms(m)
-                        fcomp = cmplx(fplane_get_cmplx(fpl, hcyc, kcycs(m)), kind=dp)
-                        acc   = acc   + w * fcomp
-                        acc2  = acc2  + w * real(fplane_get_ctfsq(fpl, hcyc, kcycs(m)), dp)
-                    enddo
-                    wsum = wsum + wl * wmssum
-                enddo
-                if( wsum > DTINY )then
-                    acc  = acc  / wsum
-                    acc2 = acc2 / wsum
-                endif
-                ! Numerator: apply the polar FT scaling here.
-                rptcl(ia,k) = pw * real(pol_scale, sp) * cmplx(acc, kind=sp)
-                ! Denominator: mirror cavger_update_sums and only apply particle weight.
-                ! ctfsq_plane already carries the CTF / ML-reg content from gen_fplane4rec.
-                rctf2(ia,k) = real(pw,dp) * acc2
-            enddo
-        enddo
-    end subroutine gather_fplane_to_polar
-
-    module subroutine polar_cavger_update_sums_from_imgs(self, nptcls, pinds, ptcl_imgs, spproj, lmsk, ctfflag, sigma2_noise, is3D)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: nptcls
-        integer,             intent(in)    :: pinds(nptcls)
-        class(image),        intent(inout) :: ptcl_imgs(nptcls)
-        class(sp_project),   intent(inout) :: spproj
-        logical,             intent(in)    :: lmsk(:,:,:)
-        integer,             intent(in)    :: ctfflag
-        real,      optional, intent(in)    :: sigma2_noise(:,:)
-        logical,   optional, intent(in)    :: is3D
-        class(oris), pointer :: spproj_field
-        type(image), allocatable :: tmp_pad_imgs(:)
-        type(ctfparams) :: ctfparms
-        type(fplane_type) :: fplanes(nthr_glob)
-        complex(sp)       :: rptcl(self%pftsz,self%kfromto(1):self%interpklim)
-        real(dp)          :: rctf2(self%pftsz,self%kfromto(1):self%interpklim), pw
-        real              :: shift(2)
-        integer           :: eopops(2,self%ncls)
-        integer           :: ldim_pd(3), sigma2_kfromto(2), ang_lims(2)
-        integer           :: i, iptcl, ithr, icls, irot, ishift
-        logical           :: l_even, l_3D
-        l_3D = .false.
-        if( present(is3D) ) l_3D = is3D
-        ldim_pd = [self%p_ptr%boxpd, self%p_ptr%boxpd, 1]
-        call alloc_imgarr(nthr_glob, ldim_pd, self%p_ptr%smpd, tmp_pad_imgs)
-        call memoize_ft_maps(ldim_pd(1:2), self%p_ptr%smpd)
-        ang_lims = [1, self%pftsz]
-        sigma2_kfromto = [1, self%interpklim]
-        if( self%p_ptr%l_ml_reg )then
-            if( .not.present(sigma2_noise) )then
-                THROW_HARD('sigma2_noise is required when l_ml_reg=true in polar_cavger_update_sums_from_imgs')
-            endif
-            sigma2_kfromto(1) = lbound(sigma2_noise,1)
-            sigma2_kfromto(2) = ubound(sigma2_noise,1)
-        endif
-        call spproj%ptr2oritype(self%p_ptr%oritype, spproj_field)
-        eopops = 0
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) reduction(+:eopops) &
-        !$omp private(i,iptcl,ithr,icls,irot,ishift,l_even,rptcl,rctf2,ctfparms,pw,shift)
-        do i = 1, nptcls
-            iptcl = pinds(i)
-            if( iptcl == 0 ) cycle
-            if( spproj_field%get_state(iptcl) == 0 ) cycle
-            pw = real(spproj_field%get(iptcl,'w'), dp)
-            if( pw < DSMALL ) cycle
-            ithr = omp_get_thread_num() + 1
-            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(lmsk, tmp_pad_imgs(ithr))
-            ctfparms = spproj%get_ctfparams(self%p_ptr%oritype, iptcl)
-            ctfparms%ctfflag = ctfflag
-            shift = spproj_field%get_2Dshift(iptcl)
-            if( self%p_ptr%l_ml_reg )then
-                call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, self%p_ptr%smpd_crop, &
-                    ctfparms, shift, fplanes(ithr), sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl) )
-            else
-                call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, self%p_ptr%smpd_crop, &
-                    ctfparms, shift, fplanes(ithr) )
-            endif
-            if( l_3D )then
-                icls = spproj_field%get_proj(iptcl)
-            else
-                icls = spproj_field%get_class(iptcl)
-            endif
-            l_even = spproj_field%get_eo(iptcl) == 0
-            ! Turn in-plane rotation into a polar angular shift.
-            ! If get_roind_fast returns a 1-based bin index, subtract 1 for a shift count.
-            irot   = self%get_roind_fast(spproj_field%e3get(iptcl))
-            ishift = irot - 1
-            call gather_fplane_to_polar(self, fplanes(ithr), ang_lims, ishift, real(pw), rptcl, rctf2)
-            if( l_even )then
-                !$omp critical
-                self%pfts_even(:,:,icls) = self%pfts_even(:,:,icls) + cmplx(rptcl,kind=dp)
-                self%ctf2_even(:,:,icls) = self%ctf2_even(:,:,icls) + rctf2
-                !$omp end critical
-                eopops(1,icls) = eopops(1,icls) + 1
-            else
-                !$omp critical
-                self%pfts_odd(:,:,icls)  = self%pfts_odd(:,:,icls)  + cmplx(rptcl,kind=dp)
-                self%ctf2_odd(:,:,icls)  = self%ctf2_odd(:,:,icls)  + rctf2
-                !$omp end critical
-                eopops(2,icls) = eopops(2,icls) + 1
-            endif
-        enddo
-        !$omp end parallel do
-        self%eo_pops = self%eo_pops + eopops
-        nullify(spproj_field)
-        call dealloc_imgarr(tmp_pad_imgs)
-    end subroutine polar_cavger_update_sums_from_imgs
 
 end submodule simple_polarft_ops_state
