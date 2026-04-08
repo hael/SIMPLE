@@ -21,7 +21,7 @@ public :: sample_ptcls4update, sample_ptcls4fillin
 ! Particle image processing for alignment
 public :: prepimg4align, prepimg4align_bench, build_batch_particles
 ! Reference processing for alignment
-public :: prep2Dref, prepare_refs_sigmas_ptcls, calc_2Dref_offset
+public :: prep2Dref, prep_pftc_polar_mode, prep_sigmas_alloc_ptcl_imgs, calc_2Dref_offset
 ! Offline reconstruction
 public :: calc_3Drec, calc_polar_refs
 ! Online reconstruction
@@ -1135,66 +1135,68 @@ contains
         endif
     end subroutine calc_polar_refs
 
-    subroutine prepare_refs_sigmas_ptcls( params, build, cline, ptcl_imgs, ptcl_imgs_pad, batchsz, do_polar )
+    subroutine prep_pftc_polar_mode( params, build, cline, batchsz )
         class(parameters),        intent(inout) :: params
         class(builder),           intent(inout) :: build
         class(cmdline),           intent(in)    :: cline !< command line
+        integer,                  intent(in)    :: batchsz
+        real, allocatable :: gaufilter(:)
+        integer           :: iproj, nrefs, filtsz, state
+        logical           :: l_filtrefs
+        ! Resolution limit estimation
+        call report_resolution(params, build, state)
+        if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+            call estimate_lp_refvols(params, build, cline, params%lpstart, params%lpstop, state)
+        endif
+        ! Calculator init
+        nrefs = params%nspace * params%nstates
+        call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+        ! Read polar references
+        call build%pftc%polar_cavger_new(.true.)
+        call build%pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
+        call build%clsfrcs%read(string(FRCS_FILE))
+        ! prepare filter
+        l_filtrefs = .false.
+        if(trim(params%gauref).eq.'yes')then
+            l_filtrefs = .true.
+            filtsz = build%clsfrcs%get_filtsz()
+            allocate(gaufilter(filtsz),source=0.)
+            call gaussian_filter(params%gaufreq, params%smpd, params%box, gaufilter)
+        endif
+        ! PREPARATION OF REFERENCES IN pftc
+        !$omp parallel do default(shared) private(iproj)&
+        !$omp schedule(static) proc_bind(close)
+        do iproj = 1,params%nspace
+            if( l_filtrefs ) call build%pftc%polar_filterrefs(iproj, gaufilter)
+            ! transfer to pftc
+            if( params%l_lpset )then
+                ! put the merged class average in both even and odd positions
+                call build%pftc%polar_cavger_set_ref_pft(iproj, 'merged')
+                call build%pftc%cp_even2odd_ref(iproj)
+            else
+                ! transfer e/o refs to pftc
+                call build%pftc%polar_cavger_set_ref_pft(iproj, 'even')
+                call build%pftc%polar_cavger_set_ref_pft(iproj, 'odd')
+            endif
+        end do
+        !$omp end parallel do
+        ! Center prior to memoization
+        ! if( (trim(params%center)=='yes')   .and. (trim(params%center_type)=='params') .and.&
+        !         &(params%pgrp(:2).eq.'c1') .and. (.not.params%l_update_frac)          .and.&
+        !         &(params%nstates==1)       .and.       params%l_doshift )then
+        !     call build%pftc%center_3Dpolar_refs(build%spproj_field, build%eulspace)
+        ! endif
+        if( allocated(gaufilter) ) deallocate(gaufilter)
+    end subroutine prep_pftc_polar_mode
+
+    subroutine prep_sigmas_alloc_ptcl_imgs( params, build, ptcl_imgs, ptcl_imgs_pad, batchsz )
+        class(parameters),        intent(inout) :: params
+        class(builder),           intent(inout) :: build
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
         type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
         integer,                  intent(in)    :: batchsz
-        logical,     optional,    intent(in)    :: do_polar
-        real, allocatable :: gaufilter(:)
         type(string)      :: fname
-        integer           :: ithr, iproj, nrefs, filtsz, state
-        logical           :: l_polar, l_filtrefs
-        l_polar = .false.
-        if( present(do_polar) ) l_polar = do_polar
-        ! PREPARATION OF pftc AND REFERENCES
-        if( l_polar )then
-            ! Resolution limit estimation
-            call report_resolution(params, build, state)
-            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                call estimate_lp_refvols(params, build, cline, params%lpstart, params%lpstop, state)
-            endif
-            ! Calculator init
-            nrefs = params%nspace * params%nstates
-            call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
-            ! Read polar references
-            call build%pftc%polar_cavger_new(.true.)
-            call build%pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
-            call build%clsfrcs%read(string(FRCS_FILE))
-            ! prepare filter
-            l_filtrefs = .false.
-            if(trim(params%gauref).eq.'yes')then
-                l_filtrefs = .true.
-                filtsz = build%clsfrcs%get_filtsz()
-                allocate(gaufilter(filtsz),source=0.)
-                call gaussian_filter(params%gaufreq, params%smpd, params%box, gaufilter)
-            endif
-            ! PREPARATION OF REFERENCES IN pftc
-            !$omp parallel do default(shared) private(iproj)&
-            !$omp schedule(static) proc_bind(close)
-            do iproj = 1,params%nspace
-                if( l_filtrefs ) call build%pftc%polar_filterrefs(iproj, gaufilter)
-                ! transfer to pftc
-                if( params%l_lpset )then
-                    ! put the merged class average in both even and odd positions
-                    call build%pftc%polar_cavger_set_ref_pft(iproj, 'merged')
-                    call build%pftc%cp_even2odd_ref(iproj)
-                else
-                    ! transfer e/o refs to pftc
-                    call build%pftc%polar_cavger_set_ref_pft(iproj, 'even')
-                    call build%pftc%polar_cavger_set_ref_pft(iproj, 'odd')
-                endif
-            end do
-            !$omp end parallel do
-            ! Center prior to memoization
-            ! if( (trim(params%center)=='yes')   .and. (trim(params%center_type)=='params') .and.&
-            !         &(params%pgrp(:2).eq.'c1') .and. (.not.params%l_update_frac)          .and.&
-            !         &(params%nstates==1)       .and.       params%l_doshift )then
-            !     call build%pftc%center_3Dpolar_refs(build%spproj_field, build%eulspace)
-            ! endif
-        endif
+        integer           :: ithr
         ! PREPARATION OF SIGMAS
         if( params%cc_objfun == OBJFUN_EUCLID )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
@@ -1211,8 +1213,7 @@ contains
             call ptcl_imgs_pad(ithr)%new([params%box_croppd,params%box_croppd,1], params%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
-        if( allocated(gaufilter) ) deallocate(gaufilter)
-    end subroutine prepare_refs_sigmas_ptcls
+    end subroutine prep_sigmas_alloc_ptcl_imgs
 
     subroutine read_mask_filter_reproject_refvols( params, build, cline, batchsz, use_distr_strategy )
         class(parameters), intent(inout) :: params

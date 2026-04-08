@@ -63,10 +63,13 @@ contains
         endif
         do_polar_prepare = (params%l_polar .and. (.not.cline%defined('vol1')))
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls,&
-                                        do_polar=do_polar_prepare )
+        if( do_polar_prepare ) then
+            call prep_pftc_polar_mode( params, build, cline, nptcls )
+        endif
+        call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
         if( .not. do_polar_prepare )then
-            call read_mask_filter_reproject_refvols(params, build, cline, nptcls, use_distr_strategy=.false.)
+            call read_mask_filter_reproject_refvols(params, build, cline, nptcls, &
+                &use_distr_strategy=(.not. params%l_distr_worker) .and. (params%nspace >= 2000))
             call build%vol%kill
             call build%vol_odd%kill
             call build%vol2%kill
@@ -119,10 +122,13 @@ contains
         endif
         do_polar_prepare = (params%l_polar .and. (.not.cline%defined('vol1')))
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call prepare_refs_sigmas_ptcls( params, build, cline, tmp_imgs, tmp_imgs_pad, nptcls,&
-                                        do_polar=do_polar_prepare )
+        if( do_polar_prepare ) then
+            call prep_pftc_polar_mode( params, build, cline, nptcls )
+        endif
+        call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
         if( .not. do_polar_prepare )then
-            call read_mask_filter_reproject_refvols(params, build, cline, nptcls, use_distr_strategy=.false.)
+            call read_mask_filter_reproject_refvols(params, build, cline, nptcls, &
+                &use_distr_strategy=(.not. params%l_distr_worker) .and. (params%nspace >= 2000))
             call build%vol%kill
             call build%vol_odd%kill
             call build%vol2%kill

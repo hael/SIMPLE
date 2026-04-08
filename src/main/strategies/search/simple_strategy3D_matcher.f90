@@ -133,8 +133,10 @@ contains
             t_prep_refs_sigmas_ptcls = tic()
         endif
         do_polar_prepare = (p_ptr%l_polar .and. .not.cline%defined('vol1'))
-        call prepare_refs_sigmas_ptcls( p_ptr, b_ptr, cline, ptcl_match_imgs, ptcl_match_imgs_pad,&
-                                        &batchsz_max, do_polar=do_polar_prepare )
+        if( do_polar_prepare ) then
+            call prep_pftc_polar_mode( p_ptr, b_ptr, cline, batchsz_max )
+        endif
+        call prep_sigmas_alloc_ptcl_imgs( p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max )
         if( L_BENCH_GLOB )then
             rt_prep_refs_sigmas_ptcls = toc(t_prep_refs_sigmas_ptcls)
             t_prep_reproj_refvols     = tic()
@@ -145,6 +147,8 @@ contains
             nrefs = p_ptr%nspace * p_ptr%nstates
             call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
         else if( .not. do_polar_prepare )then
+            ! Must stay in-memory here: refine3D distributed workers must not schedule
+            ! nested distributed reprojection jobs.
             call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max, use_distr_strategy=.false.)
         endif
         ! remove dead weight
