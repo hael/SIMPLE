@@ -44,7 +44,7 @@ type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_pos
 real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
 integer          :: nstates_glob = 1, nptcls_eff = 0, nsample_minmax(2), maxits_dyn=0
 
-! In submodule: simple_abinitio_utils_refine3D.f90
+! In submodule: simple_abinitio_controller.f90
 interface
     module subroutine set_cline_refine3D( params, istage, l_cavgs )
         class(parameters), intent(in) :: params

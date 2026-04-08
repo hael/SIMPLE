@@ -3,7 +3,7 @@ module simple_commanders_abinitio2D
 use simple_commanders_api
 use simple_commanders_cavgs
 use simple_commanders_cluster2D
-use simple_abinitio2D_utils_cluster2D 
+use simple_abinitio2D_controller 
 implicit none
 
 public :: commander_abinitio2D

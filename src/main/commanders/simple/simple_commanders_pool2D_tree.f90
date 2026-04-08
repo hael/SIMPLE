@@ -7,7 +7,7 @@ use simple_imgarr_utils,            only: read_cavgs_into_imgarr, dealloc_imgarr
 use simple_block_tree_corr,         only: gen_corr_block_tree_hac
 use simple_block_tree_io,           only: write_block_tree
 use simple_multi_dendro,            only: multi_dendro
-use simple_abinitio2D_utils_cluster2D 
+use simple_abinitio2D_controller 
 implicit none
 
 public :: commander_pool2D_tree
