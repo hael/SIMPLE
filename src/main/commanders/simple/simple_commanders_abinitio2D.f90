@@ -333,8 +333,8 @@ contains
             call cline_rank_cavgs%set('stk',      finalcavgs)
             call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
             call xrank_cavgs%execute( cline_rank_cavgs )
-            ! write tree-based sets for snhc-ptree refinements
-            if( trim(params%refine) .eq. 'snhc_ptree' )then
+            ! write tree-based sets for tree-based refinements
+            if( trim(params%refine) .eq. 'snhc_ptree' .or. trim(params%refine) .eq. 'greedy_tree' )then
                 cline_tree_ranked = cline_rank_cavgs
                 call cline_tree_ranked%set('oritype', 'cls2D')
                 call cline_tree_ranked%set('refine',  trim(params%refine))

@@ -1793,7 +1793,7 @@ contains
                 self%l_prob_inpl = .true.
             endif
             select case(trim(self%refine))
-                case('snhc_ptree')
+                case('greedy_tree','snhc_ptree')
                     if( .not. cline%defined('ncls_sub') )then
                         self%ncls_sub = min(round2even(0.025* real(self%ncls)), 10) ! capped at 10
                         self%ncls_sub = max(self%ncls_sub, 10)                      ! floored at 10
@@ -1818,7 +1818,7 @@ contains
         ! -- shift defaults
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('snhc','snhc_smpl','snhc_ptree','single_ptree')
+                case('snhc','snhc_smpl','greedy_tree','snhc_ptree','single_ptree')
                     self%trs = 0.
                 case DEFAULT
                     self%trs = MINSHIFT

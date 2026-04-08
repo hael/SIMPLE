@@ -10,6 +10,7 @@ use simple_qsys_funs,               only: qsys_job_finished
 use simple_strategy2D,              only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D3D_common,     only: set_bp_range2d, prepimgbatch, killimgbatch
 use simple_strategy2D_greedy,       only: strategy2D_greedy
+use simple_strategy2D_greedy_tree,  only: strategy2D_greedy_tree
 use simple_strategy2D_greedy_smpl,  only: strategy2D_greedy_smpl
 use simple_strategy2D_inpl,         only: strategy2D_inpl
 use simple_strategy2D_inpl_smpl,    only: strategy2D_inpl_smpl
@@ -245,6 +246,8 @@ contains
                         select case(trim(refine_flag))
                             case('greedy')
                                 allocate(strategy2D_greedy        :: strategy2Dsrch(iptcl_batch)%ptr)
+                            case('greedy_tree')
+                                allocate(strategy2D_greedy_tree   :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('greedy_smpl')
                                 allocate(strategy2D_greedy_smpl   :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('snhc_ptree')
@@ -274,6 +277,8 @@ contains
                             endif
                         else
                             select case(trim(refine_flag))
+                            case('greedy_tree')
+                                allocate(strategy2D_greedy_tree :: strategy2Dsrch(iptcl_batch)%ptr)
                             case('greedy_smpl')
                                 allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
                             case DEFAULT ! is refine=greedy

@@ -276,7 +276,7 @@ contains
                     if( size(self%subspace_full2sub_map) /= params%ncls )then
                         THROW_HARD('Loaded block tree incompatible with NCLS; build_general_tbox')
                     endif
-                case('snhc_ptree')
+                case('greedy_tree','snhc_ptree')
                     if( cline%defined('blocktree') )then
                         call read_block_tree(self%block_tree, params%blocktree)
                     else
