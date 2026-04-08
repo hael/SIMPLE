@@ -1231,60 +1231,6 @@ contains
         cline_strategy = cline
         call run_reproj_polar_with_strategy(params, build, cline_strategy, .true., use_distr_strategy)
         call cline_strategy%kill
-
-        ! ! pftc
-        ! nrefs = params%nspace * params%nstates
-        ! call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
-        ! select case(trim(params%refine))
-        !     case('prob','prob_state','prob_neigh')
-        !         l_prob_align_mode = .true.
-        !     case DEFAULT
-        !         l_prob_align_mode = .false.
-        ! end select
-        ! ! read reference volumes and create polar projections
-        ! do s=1,params%nstates
-        !     if( l_prob_align_mode )then
-        !         ! already mapping shifts in prob_tab with shared-memory execution
-        !         call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), do_center, xyz, map_shift=l_distr_worker_glob)
-        !     else
-        !         call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), do_center, xyz, map_shift=.true.)
-        !     endif
-        !     call read_mask_filter_refvols(params, build, s)
-        !     ! PREPARE E/O VOLUMES
-        !     ! do even/odd in separate passes to reduce memory usage when padding is large (2X)
-        !     ! PREPARE EVEN REFERENCES
-        !     call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd],&
-        !     &params%smpd_crop, wthreads=.true.)
-        !     if( do_center )then
-        !         call build%vol%fft()
-        !         call build%vol%shift([xyz(1),xyz(2),xyz(3)])
-        !     endif
-        !     ! back to real space
-        !     call build%vol%ifft()
-        !     ! FT volume
-        !     call build%vol%pad_fft(build%vol_pad)
-        !     ! expand for fast interpolation & correct for norm when clipped
-        !     call build%vol_pad%expand_cmat(params%box)
-        !     call vol_pad2ref_pfts(build%pftc, build%vol_pad, build%eulspace, s, .true., build%l_resmsk)
-        !     call build%vol_pad%kill
-        !     call build%vol_pad%kill_expanded
-        !     ! PREPARE ODD REFERENCES
-        !     call build%vol_odd_pad%new([params%box_croppd, params%box_croppd, params%box_croppd],&
-        !     &params%smpd_crop, wthreads=.true.)
-        !     if( do_center )then
-        !         call build%vol_odd%fft()
-        !         call build%vol_odd%shift([xyz(1),xyz(2),xyz(3)])
-        !     endif
-        !     ! back to real space
-        !     call build%vol_odd%ifft()
-        !     ! FT volume
-        !     call build%vol_odd%pad_fft(build%vol_odd_pad)
-        !     ! expand for fast interpolation & correct for norm when clipped
-        !     call build%vol_odd_pad%expand_cmat(params%box)
-        !     call vol_pad2ref_pfts(build%pftc, build%vol_odd_pad, build%eulspace, s, .false., build%l_resmsk)
-        !     call build%vol_odd_pad%kill
-        !     call build%vol_odd_pad%kill_expanded
-        ! end do
     end subroutine read_mask_filter_reproject_refvols
 
     subroutine build_batch_particles( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, imgs4rec )

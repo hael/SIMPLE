@@ -56,7 +56,7 @@ contains
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_greedy
-        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
+        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, nrefs
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical :: doprint, l_restore, l_prob_align_mode, has_been_searched, do_polar_prepare
         ! benchmarking
@@ -139,12 +139,18 @@ contains
             rt_prep_refs_sigmas_ptcls = toc(t_prep_refs_sigmas_ptcls)
             t_prep_reproj_refvols     = tic()
         endif
-        if( .not. do_polar_prepare )then
+        if( l_prob_align_mode )then
+            ! Assignment-only in probabilistic modes: no reference reprojection needed.
+            ! Keep pftc initialized for shared batch/particle preparation flow.
+            nrefs = p_ptr%nspace * p_ptr%nstates
+            call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
+        else if( .not. do_polar_prepare )then
             call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max, use_distr_strategy=.false.)
-            call build%vol%kill
-            call build%vol_odd%kill
-            call build%vol2%kill
         endif
+        ! remove dead weight
+        call build%vol%kill
+        call build%vol_odd%kill
+        call build%vol2%kill
         if( L_BENCH_GLOB )then
             rt_prep_reproj_refvols = toc(t_prep_reproj_refvols)
             t_prep_polar_refs      = tic()
@@ -171,10 +177,10 @@ contains
         endif
 
         ! memoize references in pftc
-        call build%pftc%memoize_refs
+        if( .not. l_prob_align_mode ) call build%pftc%memoize_refs
         if( L_BENCH_GLOB )then
             rt_memoize_refs = toc(t_memoize_refs)
-             t_prep_orisrch  = tic()
+            t_prep_orisrch  = tic()
         endif
 
         ! PREPARE STRATEGY3D
