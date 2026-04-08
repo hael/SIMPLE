@@ -587,9 +587,11 @@ subroutine exec_test_subproject_distr( self, cline )
     use simple_commanders_project_ptcl, only: commander_import_particles
     class(commander_test_subproject_distr), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    integer, parameter :: NPTCLS_SIM  = 5000   ! particles to simulate
-    integer, parameter :: NCLS_COARSE = 50     ! coarse classes
-    integer, parameter :: MAXKEYS     = 20     ! chash capacity
+    ! integer, parameter :: NPTCLS_SIM  = 5000   ! particles to simulate
+    ! integer, parameter :: NCLS_COARSE = 50     ! coarse classes
+    integer, parameter :: NPTCLS_SIM  = 500      ! particles to simulate
+    integer, parameter :: NCLS_COARSE = 2        ! coarse classes
+    integer, parameter :: MAXKEYS     = 20       ! chash capacity
     real,    parameter :: SMPD        = 1.3
     character(len=*), parameter :: PROJNAME = 'test_subproj_distr'
     type(parameters)                    :: params
@@ -612,7 +614,7 @@ subroutine exec_test_subproject_distr( self, cline )
     call params%new(cline)
     call simple_getcwd(cwd_root)
     ! 1. Simulate particles and populate project
-    write(logfhandle,'(a)') '>>> Step 1: simulate particles from 6VXX.pdb'
+    write(logfhandle,'(a)') '>>> Step 1: simulate particles from 6VXX molecule data'
     mol = sars_cov2_spkgp_6vxx()
     call molecule%pdb2mrc(smpd=SMPD, mol=mol)
     call cline_sim%set('prg',      'simulate_particles')

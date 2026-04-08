@@ -110,6 +110,7 @@ type :: atoms
     procedure          :: cif2pdb
     procedure          :: cif2mrc
     procedure          :: convolve
+    procedure          :: fit_5gauss
     procedure          :: find_masscen
     procedure          :: geometry_analysis_pdb
     procedure          :: get_geom_center
@@ -128,6 +129,16 @@ type :: atoms
     ! DESTRUCTOR
     procedure          :: kill
 end type atoms
+
+! module-level data for fit_5gauss cost function (shared with fit_5gauss_cost)
+real,    allocatable, private :: fit5g_residual(:,:,:) !< target density extracted from MRC volume
+real,    private              :: fit5g_atom_xyz(3)     !< position of the atom being fitted
+real,    private              :: fit5g_smpd            !< sampling distance
+real,    private              :: fit5g_bfac            !< B-factor = (4*lp)^2
+real,    private              :: fit5g_cutoffsq        !< cutoff^2
+integer, private              :: fit5g_ldim(3)         !< volume dimensions
+integer, private              :: fit5g_icutoff          !< cutoff in pixels
+integer, private              :: fit5g_bbox(3,2)        !< bounding box for current atom
 
 contains
 
@@ -874,7 +885,7 @@ contains
     end subroutine writepdb
 
     ! Write a pdb file with ANISOU format for the input anisotropic B Factor matrices aniso.
-    subroutine writepdb_aniso( self, fname, aniso)
+    subroutine writepdb_aniso( self, fname, aniso )
         class(atoms),  intent(in) :: self
         class(string), intent(in) :: fname
         real,          intent(in) :: aniso(3, 3, self%n) ! Each matrix is 3x3 real symmetric
@@ -955,6 +966,110 @@ contains
         center(2) = sum(self%xyz(:,2)) / real(self%n)
         center(3) = sum(self%xyz(:,3)) / real(self%n)
     end function get_geom_center
+
+    !> Fit isotropic Gaussian displacement parameters (amplitude, variance) independently
+    !  for every atom in the molecule, using the approach from calc_isotropic_disp.
+    !  Each atom's sub-volume is extracted from the upscaled MRC volume, and a
+    !  weighted linear least-squares fit of log(intensity) vs r^2 is performed.
+    !  Results are written to logfhandle.
+    subroutine fit_5gauss( self, volfile, smpd_target, lp )
+        use simple_image,        only: image
+        class(atoms),        intent(in) :: self
+        character(len=*),    intent(in) :: volfile       !< target volume filename
+        real,                intent(in) :: smpd_target   !< target sampling distance for upscaling (Angstrom)
+        real,                intent(in) :: lp            !< low-pass filter (Angstrom)
+        type(image)       :: vol, atom_vol
+        real    :: smpd_here, smpd_new, upscaling_factor
+        real    :: atom_coord(3), atom_center(3), r, intens
+        real    :: XTWX(2,2), XTWX_inv(2,2), XTWY(2,1), B(2,1)
+        real    :: amp, var
+        real    :: amp_all(self%n), var_all(self%n)
+        integer :: iatom, ldim(3), ifoo, errflg
+        integer :: box, box_new, ldim_new(3), atom_box, center(3)
+        integer :: i, j, k
+        logical :: outside
+        character(len=256) :: atom_volfile
+        if( self%n < 1 ) THROW_HARD('No atoms; fit_5gauss')
+        ! --- read and upscale volume from file ---
+        call find_ldim_nptcls(string(volfile), ldim, ifoo, smpd=smpd_here)
+        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd_here, ' Angstrom'
+        box              = ldim(1)
+        upscaling_factor = smpd_here / smpd_target
+        box_new          = round2even(real(box) * upscaling_factor)
+        ldim_new(:)      = box_new
+        upscaling_factor = real(box_new) / real(box)
+        smpd_new         = smpd_here / upscaling_factor
+        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions   (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
+        call vol%read_and_crop(string(volfile), smpd_here, box_new, smpd_new)
+        if( .not. vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space 3D volumes; fit_5gauss')
+        ! --- initialise results ---
+        amp_all = 0.
+        var_all = 0.
+        ! --- fit each atom ---
+        write(logfhandle,'(A)') '>>> FIT_5GAUSS: fitting isotropic Gaussian per atom (WLS on log-intensity)'
+        do iatom = 1, self%n
+            ! 1. Extract atom sub-volume (same as atom_validate)
+            atom_box = round2even(2 * ((self%radius(iatom))*1.5)/smpd_new)
+            if( atom_box <= 2 ) atom_box = 4
+            atom_coord    = self%xyz(iatom,:)
+            center(:)     = ang2vox(atom_coord(:), smpd_new) - atom_box/2
+            call atom_vol%new([atom_box, atom_box, atom_box], smpd_new)
+            call vol%window_slim(center, atom_box, atom_vol, outside)
+            if( outside )then
+                write(logfhandle,'(A,I6,A)') 'WARNING: atom ', iatom, ' sub-volume outside bounds, skipping'
+                call atom_vol%kill
+                cycle
+            endif
+            ! DEBUG: write extracted atom density to MRC file
+            write(atom_volfile,'(A,I0.4,A)') 'atom_density_', iatom, '.mrc'
+            call atom_vol%write(string(trim(atom_volfile)))
+            ! 2. Fit isotropic Gaussian using WLS (same as calc_isotropic_disp)
+            !    Model: intensity(r) = amp * exp(-0.5 * r^2 / var)
+            !    log(intensity) = log(amp) - 0.5 * r^2 / var
+            !    Linear system: log(I) = B(1) + B(2) * r^2
+            !    with weights = intensity (WLS)
+            atom_center = real(atom_box)/2.  ! center of sub-volume in voxels (1-indexed)
+            XTWX = 0.
+            XTWY = 0.
+            do k = 1, atom_box
+                do j = 1, atom_box
+                    do i = 1, atom_box
+                        r = euclid(real((/i, j, k/)), atom_center)
+                        intens = atom_vol%get_rmat_at(i, j, k)
+                        if( intens > 0. )then
+                            XTWX(1,1) = XTWX(1,1) + intens
+                            XTWX(1,2) = XTWX(1,2) + r**2 * intens
+                            XTWX(2,2) = XTWX(2,2) + r**4 * intens
+                            XTWY(1,1) = XTWY(1,1) + intens * log(intens)
+                            XTWY(2,1) = XTWY(2,1) + r**2 * intens * log(intens)
+                        endif
+                    end do
+                end do
+            end do
+            XTWX(2,1) = XTWX(1,2)
+            call matinv(XTWX, XTWX_inv, 2, errflg)
+            if( errflg /= 0 )then
+                write(logfhandle,'(A,I6,A)') 'WARNING: atom ', iatom, ' matrix inversion failed, skipping'
+                call atom_vol%kill
+                cycle
+            endif
+            B   = matmul(XTWX_inv, XTWY)
+            amp = exp(B(1,1))    ! best-fit peak amplitude
+            var = -0.5 / B(2,1)  ! best-fit variance (in voxels^2)
+            amp_all(iatom) = amp
+            var_all(iatom) = var * smpd_new**2  ! convert to Angstrom^2
+            call atom_vol%kill
+        end do
+        ! --- write results ---
+        write(logfhandle,'(A)') '>>> FIT_5GAUSS results (isotropic Gaussian per atom):'
+        write(logfhandle,'(A)') '  atom  element     amplitude    variance(A^2)'
+        do iatom = 1, self%n
+            write(logfhandle,'(I6,2X,A2,2X,2ES14.6)') iatom, self%element(iatom), &
+                amp_all(iatom), var_all(iatom)
+        end do
+        ! cleanup
+        call vol%kill
+    end subroutine fit_5gauss
 
     ! simulate electrostatic potential from elastic scattering
     ! Using 5-gaussian atomic scattering factors from Rullgard et al, J of Microscopy, 2011
@@ -1085,7 +1200,7 @@ contains
             case(33) ! AS
                 a = [0.4517, 1.2229, 1.5852, 2.7958, 1.2638]
                 b = [0.2493, 1.6436, 6.8154, 22.3681, 62.0390]
-            case(34) ! Se
+            case(34) ! SE
                 a = [0.4477, 1.1678, 1.5843, 2.8087, 1.1956]
                 b = [0.2405, 1.5442, 6.3231, 19.4610, 52.0233]
             case(35) ! BR

@@ -106,10 +106,10 @@ end subroutine batch_gauss2Dfit_2
 ! the center of mass and the covariance matrix.  Outputs the 
 ! estimated center and cov matrix, the correlation corr between
 ! the ref image and the fit image, and the fit image.
-subroutine gauss2Dfit(ref, center, cov, corr, fit)
-    type(image), intent(inout)   :: ref
-    type(image), intent(out)     :: fit  
-    real,        intent(out)     :: center(2), cov(2,2), corr
+subroutine gauss2Dfit( ref, center, cov, corr, fit )
+    type(image), intent(inout) :: ref
+    type(image), intent(out)   :: fit  
+    real,        intent(out)   :: center(2), cov(2,2), corr
     real, pointer       :: rmat(:,:,:)
     real, allocatable   :: rmat_fit(:,:,:)
     real    :: cov_inv(2,2), displ(2,1), displ_T(1,2), lambda(1,1)

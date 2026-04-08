@@ -236,6 +236,7 @@ contains
                 &//self%script_names(isub)%to_char()//' ; '//trim(io_msg), ios)
             ! specify shell
             write(funit,'(a)') '#!/bin/bash'
+            stop
             ! write qsys-specific instructions (run-time polymorphic)
             if( q_descr%get('qsys_name') .ne. 'local' )then
                 call self%myqsys%write_instr(q_descr, fhandle=funit)

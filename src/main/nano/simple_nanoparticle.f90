@@ -301,19 +301,19 @@ contains
         endif
     end function get_valid_corrs
 
-    subroutine get_img(self, img)
+    subroutine get_img( self, img )
         class(nanoparticle), intent(in)  :: self
         type(image),         intent(out) :: img
         img = self%img
     end subroutine get_img
 
-    subroutine get_img_raw(self, raw_img)
+    subroutine get_img_raw( self, raw_img )
         class(nanoparticle), intent(in)  :: self
         type(image),         intent(out) :: raw_img
         raw_img = self%img_raw
     end subroutine get_img_raw
 
-    subroutine set_ncc(self, ncc)
+    subroutine set_ncc( self, ncc )
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: ncc
         self%n_cc = ncc
@@ -361,7 +361,7 @@ contains
     end subroutine set_atomic_coords_from_xyz
 
     ! sets the atom positions to be the ones in the inputted PDB file.
-    subroutine set_atomic_coords_from_pdb( self, pdb_file)
+    subroutine set_atomic_coords_from_pdb( self, pdb_file )
         class(nanoparticle),     intent(inout) :: self
         class(string),           intent(in)    :: pdb_file
         type(atoms) :: a
