@@ -139,10 +139,11 @@ contains
         complex(dp), allocatable :: cmat_thr_sum(:,:,:)
         complex,     allocatable :: cmat_sum(:,:,:)
         integer,     allocatable :: pinds(:)
-        real,        allocatable :: sigma2(:,:)
+        real,        allocatable :: sigma2(:,:), sigma2_batch(:,:)
         integer :: batchlims(2), kfromto(2)
         integer :: i, iptcl, imatch, nyq, nptcls_part_sel, batchsz_max, nbatch
         logical :: l_scale_update_frac
+        real    :: sig2_mul
         ! Sampling
         ! Because this is always run prior to reconstruction/search, sampling is not always informed
         ! or may change with workflows. Instead of setting a sampling for the following operations when
@@ -151,8 +152,10 @@ contains
         if( params%l_update_frac )then
             call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, nptcls_part_sel, pinds, .false. )
             l_scale_update_frac = .true.
+            sig2_mul = 1.0 / (2.0 * params%update_frac)
         else
             call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, .false.)
+            sig2_mul = 0.5
         endif
         ! Init
         nyq = build%img%get_nyq()
@@ -163,31 +166,34 @@ contains
         call sum_img%zero_and_flag_ft
         cmat_sum = sum_img%allocate_cmat()
         allocate(cmat_thr_sum(size(cmat_sum,dim=1), size(cmat_sum,dim=2), 1))
+        allocate(sigma2_batch(nyq,batchsz_max), source=0.)
         ! mask memoization
         call build%imgbatch(1)%memoize_mask_coords
         do i = 1, nptcls_part_sel, batchsz_max
             batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
             nbatch    = batchlims(2) - batchlims(1) + 1
             call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
+            ! allocate contigous local sigma2 array for optimal caching in parallell loop
             cmat_thr_sum = dcmplx(0.d0, 0.d0)
             !$omp parallel do default(shared) private(iptcl,imatch)&
             !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum)
-            do imatch = 1, nbatch
+             do imatch = 1, nbatch
                 iptcl = pinds(batchlims(1) + imatch - 1)
-                call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2(:,iptcl))
-                if( l_scale_update_frac )then
-                    ! To account for spectra not included in sampling and yield the correct average
-                    sigma2(:,iptcl) = sigma2(:,iptcl) / (2.0 * params%update_frac)
-                else
-                    sigma2(:,iptcl) = sigma2(:,iptcl) / 2.0
-                endif
+                call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2_batch(:,imatch))
+                sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul
                 ! thread average
                 call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:))
             end do
             !$omp end parallel do
             ! global average
             cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmplx(cmat_thr_sum(:,:,:), kind=sp)
+            ! update non-contiguous sigma2 array to provide the correct geometry on disk
+            do imatch = 1, nbatch
+                iptcl = pinds(batchlims(1) + imatch - 1)
+                sigma2(:,iptcl) = sigma2_batch(:,imatch)
+            end do
         end do
+        deallocate(sigma2_batch)
         call sum_img%set_cmat(cmat_sum)
         call sum_img%write(string('sum_img_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char())
         ! write sigma2 to disk
