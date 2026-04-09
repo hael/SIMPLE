@@ -1,7 +1,7 @@
 !@descr: high-level search routines for the refine3D application
 module simple_strategy3D_matcher
 use simple_pftc_srch_api
-use simple_strategy3D_alloc,            only: clean_strategy3D, prep_strategy3D, s3D
+use simple_strategy3D_alloc,              only: clean_strategy3D, prep_strategy3D, s3D
 use simple_binoris_io,                    only: binwrite_oritab
 use simple_builder,                       only: builder
 use simple_convergence,                   only: convergence
@@ -64,13 +64,15 @@ contains
         real    :: frac_greedy
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, nrefs
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
-        logical :: doprint, l_restore, l_prob_align_mode, has_been_searched, do_polar_prepare
+        logical :: doprint, l_restore, has_been_searched, do_polar_prepare
         ! benchmarking
         type(string)            :: benchfname
-        integer(timer_int_kind) :: t_init, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
-        integer(timer_int_kind) :: t_prep_refs_sigmas_ptcls, t_prep_reproj_refvols, t_prep_polar_refs, t_memoize_refs
-        real(timer_int_kind)    :: rt_init, rt_build_batch_ptcls, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
-        real(timer_int_kind)    :: rt_prep_refs_sigmas_ptcls, rt_prep_reproj_refvols, rt_prep_polar_refs, rt_memoize_refs
+        integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
+        integer(timer_int_kind) :: t_prep_pftc_polar_mode, t_prep_sigmas_alloc_ptcl_imgs
+        integer(timer_int_kind) :: t_prep_reproj_refvols, t_memoize_refs
+        real(timer_int_kind)    :: rt_startup, rt_build_batch_ptcls, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
+        real(timer_int_kind)    :: rt_prep_pftc_polar_mode, rt_prep_sigmas_alloc_ptcl_imgs
+        real(timer_int_kind)    :: rt_prep_reproj_refvols, rt_memoize_refs
 
         ! assign parameters pointer
         p_ptr => params
@@ -78,15 +80,9 @@ contains
         b_ptr => build
         
         if( L_BENCH_GLOB )then
-            t_init = tic()
-            t_tot  = t_init
+            t_startup = tic()
+            t_tot     = t_startup
         endif
-        select case(trim(p_ptr%refine))
-            case('prob','prob_state','prob_neigh')
-                l_prob_align_mode = .true.
-            case DEFAULT
-                l_prob_align_mode = .false.
-        end select
         select case(trim(p_ptr%refine))
             case('eval','sigma')
                 l_restore = .false.
@@ -115,7 +111,7 @@ contains
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) ) deallocate(pinds)
 
-        if( l_prob_align_mode )then
+        if( p_ptr%l_prob_align_mode )then
             ! generation of random sample and incr of updatecnts delegated to prob_align
             call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds )
         else
@@ -135,34 +131,35 @@ contains
 
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, POLARIZER, PTCLS
         if( L_BENCH_GLOB )then
-            rt_init = toc(t_init)
-            t_prep_refs_sigmas_ptcls = tic()
+            rt_startup                     = toc(t_startup)
+            rt_prep_pftc_polar_mode        = 0.
+            rt_prep_sigmas_alloc_ptcl_imgs = 0.
+            rt_prep_reproj_refvols         = 0.
         endif
         do_polar_prepare = (p_ptr%l_polar .and. .not.cline%defined('vol1'))
-        if( do_polar_prepare ) then
-            call prep_pftc_polar_mode( p_ptr, b_ptr, cline, batchsz_max )
-        endif
-        call prep_sigmas_alloc_ptcl_imgs( p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max )
-        if( L_BENCH_GLOB )then
-            rt_prep_refs_sigmas_ptcls = toc(t_prep_refs_sigmas_ptcls)
-            t_prep_reproj_refvols     = tic()
-        endif
-        if( l_prob_align_mode )then
+        if( p_ptr%l_prob_align_mode .and. (.not. do_polar_prepare) )then
             ! Assignment-only in probabilistic modes: no reference reprojection needed.
-            ! Keep pftc initialized for shared batch/particle preparation flow.
+            ! Initialize pftc here so sigma pointers are bound to the active pftc object.
             nrefs = p_ptr%nspace * p_ptr%nstates
             call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
-        else if( .not. do_polar_prepare )then
+        endif
+        if( do_polar_prepare ) then
+            if( L_BENCH_GLOB ) t_prep_pftc_polar_mode = tic()
+            call prep_pftc_polar_mode( p_ptr, b_ptr, cline, batchsz_max )
+            if( L_BENCH_GLOB ) rt_prep_pftc_polar_mode = toc(t_prep_pftc_polar_mode)
+        endif
+        if( L_BENCH_GLOB ) t_prep_sigmas_alloc_ptcl_imgs = tic()
+        call prep_sigmas_alloc_ptcl_imgs( p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max )
+        if( L_BENCH_GLOB ) rt_prep_sigmas_alloc_ptcl_imgs = toc(t_prep_sigmas_alloc_ptcl_imgs)
+        if( (.not. p_ptr%l_prob_align_mode) .and. (.not. do_polar_prepare) )then
+            if( L_BENCH_GLOB ) t_prep_reproj_refvols = tic()
             call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
+            if( L_BENCH_GLOB ) rt_prep_reproj_refvols = toc(t_prep_reproj_refvols)
         endif
         ! remove dead weight
         call build%vol%kill
         call build%vol_odd%kill
         call build%vol2%kill
-        if( L_BENCH_GLOB )then
-            rt_prep_reproj_refvols = toc(t_prep_reproj_refvols)
-            t_prep_polar_refs      = tic()
-        endif
         if( p_ptr%l_polar .and. l_restore )then
             ! for restoration
             if( cline%defined('vol1') )then
@@ -179,13 +176,10 @@ contains
                 call b_ptr%clsfrcs%new(p_ptr%nspace, p_ptr%box_crop, p_ptr%smpd_crop, p_ptr%nstates)
             endif
         endif
-        if( L_BENCH_GLOB )then
-            rt_prep_polar_refs = toc(t_prep_polar_refs)
-            t_memoize_refs     = tic()
-        endif
-
+        
+        if( L_BENCH_GLOB ) t_memoize_refs = tic()
         ! memoize references in pftc
-        if( .not. l_prob_align_mode ) call build%pftc%memoize_refs
+        if( .not. p_ptr%l_prob_align_mode ) call build%pftc%memoize_refs
         if( L_BENCH_GLOB )then
             rt_memoize_refs = toc(t_memoize_refs)
             t_prep_orisrch  = tic()
@@ -196,7 +190,7 @@ contains
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
 
         ! READING THE ASSIGNMENT FOR PROB MODE
-        if( l_prob_align_mode )then
+        if( p_ptr%l_prob_align_mode )then
             call eulprob_obj_part%new(p_ptr, b_ptr, pinds)
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
         end if
@@ -222,9 +216,8 @@ contains
         endif
 
         ! BATCH LOOP
-        ! write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
-        allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0)
-        allocate(incr_shifts(2,batchsz_max),source=0.)
+        allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0 ) 
+        allocate(incr_shifts(2,batchsz_max),                  source=0.)
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
@@ -314,7 +307,7 @@ contains
                 end select
                 strategy3Dspecs(iptcl_batch)%iptcl     = iptcl
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
-                if( l_prob_align_mode ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
+                if( p_ptr%l_prob_align_mode ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
                 ! search
                 if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
                     ! instance & search
@@ -461,11 +454,11 @@ contains
                 benchfname = 'REFINE3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation            : ', rt_init
+                write(fnr,'(a,1x,f9.2)') 'startup_overhead          : ', rt_startup
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D   : ', rt_build_batch_ptcls
-                write(fnr,'(a,1x,f9.2)') 'prepare_refs_sigmas_ptcls : ', rt_prep_refs_sigmas_ptcls
+                write(fnr,'(a,1x,f9.2)') 'prep_pftc_polar_mode      : ', rt_prep_pftc_polar_mode
+                write(fnr,'(a,1x,f9.2)') 'prep_sigmas_alloc_ptcls   : ', rt_prep_sigmas_alloc_ptcl_imgs
                 write(fnr,'(a,1x,f9.2)') 'prepare_reproject_refvols : ', rt_prep_reproj_refvols
-                write(fnr,'(a,1x,f9.2)') 'prepare_polar_references  : ', rt_prep_polar_refs
                 write(fnr,'(a,1x,f9.2)') 'memoize_refs              : ', rt_memoize_refs
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation     : ', rt_prep_orisrch
                 write(fnr,'(a,1x,f9.2)') '3D alignment              : ', rt_align
@@ -474,19 +467,20 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'total time                : ', rt_tot
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation            : ', (rt_init/rt_tot)                   * 100.
+                write(fnr,'(a,1x,f9.2)') 'startup_overhead          : ', (rt_startup/rt_tot)                * 100.
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D   : ', (rt_build_batch_ptcls/rt_tot)      * 100.
-                write(fnr,'(a,1x,f9.2)') 'prepare_refs_sigmas_ptcls : ', (rt_prep_refs_sigmas_ptcls/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'prep_pftc_polar_mode      : ', (rt_prep_pftc_polar_mode/rt_tot)   * 100.
+                write(fnr,'(a,1x,f9.2)') 'prep_sigmas_alloc_ptcls   : ', (rt_prep_sigmas_alloc_ptcl_imgs/rt_tot) * 100.
                 write(fnr,'(a,1x,f9.2)') 'prepare_reproject_refvols : ', (rt_prep_reproj_refvols/rt_tot)    * 100.
-                write(fnr,'(a,1x,f9.2)') 'prepare_polar_references  : ', (rt_prep_polar_refs/rt_tot)        * 100.
                 write(fnr,'(a,1x,f9.2)') 'memoize_refs              : ', (rt_memoize_refs/rt_tot)           * 100.
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation     : ', (rt_prep_orisrch/rt_tot)           * 100.
                 write(fnr,'(a,1x,f9.2)') '3D alignment              : ', (rt_align/rt_tot)                  * 100.
                 write(fnr,'(a,1x,f9.2)') 'project file I/O          : ', (rt_projio/rt_tot)                 * 100.
                 write(fnr,'(a,1x,f9.2)') 'reconstruction            : ', (rt_rec/rt_tot)                    * 100.
                 write(fnr,'(a,1x,f9.2)') '% accounted for           : ',&
-                    &((rt_init+rt_build_batch_ptcls+rt_prep_refs_sigmas_ptcls+rt_prep_reproj_refvols+&
-                    &rt_prep_polar_refs+rt_memoize_refs+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
+                    &((rt_startup+rt_build_batch_ptcls+rt_prep_pftc_polar_mode+rt_prep_sigmas_alloc_ptcl_imgs+&
+                    &rt_prep_reproj_refvols+rt_memoize_refs+rt_prep_orisrch+&
+                    &rt_align+rt_projio+rt_rec)/rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif

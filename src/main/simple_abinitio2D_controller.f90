@@ -148,7 +148,7 @@ contains
         else
             call cline_cluster2D%delete('gaufreq')
         endif
-        if( trim(params%refine) == 'prob' )then
+        if( params%l_prob_align_mode )then
             if( istage < PROBREFINE_STAGE )then
                 refine = 'snhc_smpl'
             else

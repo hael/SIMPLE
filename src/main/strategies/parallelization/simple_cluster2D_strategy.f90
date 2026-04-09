@@ -145,18 +145,11 @@ contains
         type(commander_prob_align2D)      :: xprob_align2D
         type(starproject) :: starproj
         type(cmdline)     :: cline_prob_align
-        logical           :: l_prob_align_mode
         call self%conv%print_iteration(params%which_iter)
         call cline%set('startit',    params%which_iter)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
-        select case(trim(params%refine))
-            case('prob')
-                l_prob_align_mode = .true.
-            case DEFAULT
-                l_prob_align_mode = .false.
-        end select
-        if( l_prob_align_mode )then
+        if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
@@ -255,7 +248,6 @@ contains
         type(cmdline)                     :: cline_cavgassemble, cline_calc_sigma, cline_prob_align
         type(string)                      :: str_iter
         real                              :: frac_srch_space
-        logical                           :: l_prob_align_mode
         call self%conv%print_iteration(params%which_iter)
         ! Update job description
         call cline%set('nparts',     params%nparts)
@@ -268,13 +260,7 @@ contains
         call self%job_descr%set('which_iter', int2str(params%which_iter))
         call self%job_descr%set('extr_iter',  int2str(params%extr_iter))
         call self%job_descr%set('frcs',       FRCS_FILE)
-        select case(trim(params%refine))
-            case('prob')
-                l_prob_align_mode = .true.
-            case DEFAULT
-                l_prob_align_mode = .false.
-        end select
-        if( l_prob_align_mode )then
+        if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)

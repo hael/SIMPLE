@@ -502,37 +502,38 @@ type :: parameters
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in (roughly) ascending alphabetical order
-    logical :: l_autoscale    = .false.
-    logical :: l_bfac         = .false.
-    logical :: l_corrw        = .false.
-    logical :: l_distr_worker = .false.
-    logical :: l_dose_weight  = .false.
-    logical :: l_doshift      = .false.
-    logical :: l_eer_fraction = .false.
-    logical :: l_envfsc       = .false.
-    logical :: l_filemsk      = .false.
-    logical :: l_fillin       = .false.
-    logical :: l_greedy_smpl  = .true.
-    logical :: l_frac_best    = .false.
-    logical :: l_frac_worst   = .false.
-    logical :: l_update_frac  = .false.
-    logical :: l_gauref       = .false.
-    logical :: l_graphene     = .false.
-    logical :: l_icm          = .false.
-    logical :: l_incrreslim   = .false.
-    logical :: l_lam_anneal   = .false.
-    logical :: l_lpauto       = .false.
-    logical :: l_lpset        = .false.
-    logical :: l_ml_reg       = .true.
-    logical :: l_noise_reg    = .false.
-    logical :: l_neigh        = .false.
-    logical :: l_phaseplate   = .false.
-    logical :: l_polar        = .false. 
-    logical :: l_prob_inpl    = .false.
-    logical :: l_sigma_glob   = .false.
-    logical :: l_trail_rec    = .false.
-    logical :: l_remap_cls    = .false.
-    logical :: sp_required    = .false.
+    logical :: l_autoscale       = .false.
+    logical :: l_bfac            = .false.
+    logical :: l_corrw           = .false.
+    logical :: l_distr_worker    = .false.
+    logical :: l_dose_weight     = .false.
+    logical :: l_doshift         = .false.
+    logical :: l_eer_fraction    = .false.
+    logical :: l_envfsc          = .false.
+    logical :: l_filemsk         = .false.
+    logical :: l_fillin          = .false.
+    logical :: l_greedy_smpl     = .true.
+    logical :: l_frac_best       = .false.
+    logical :: l_frac_worst      = .false.
+    logical :: l_update_frac     = .false.
+    logical :: l_gauref          = .false.
+    logical :: l_graphene        = .false.
+    logical :: l_icm             = .false.
+    logical :: l_incrreslim      = .false.
+    logical :: l_lam_anneal      = .false.
+    logical :: l_lpauto          = .false.
+    logical :: l_lpset           = .false.
+    logical :: l_ml_reg          = .true.
+    logical :: l_noise_reg       = .false.
+    logical :: l_neigh           = .false.
+    logical :: l_phaseplate      = .false.
+    logical :: l_polar           = .false. 
+    logical :: l_prob_align_mode = .false.
+    logical :: l_prob_inpl       = .false.
+    logical :: l_sigma_glob      = .false.
+    logical :: l_trail_rec       = .false.
+    logical :: l_remap_cls       = .false.
+    logical :: sp_required       = .false.
     contains
     procedure, private :: init_strings
     procedure          :: new
@@ -1783,6 +1784,13 @@ contains
                 THROW_HARD('unsupported imgkind; new')
         end select
         ! refine flag dependent things
+        self%l_prob_align_mode = .false.
+        select case(trim(self%refine))
+            case('prob','prob_state','prob_neigh')
+                self%l_prob_align_mode = .true.
+            case DEFAULT
+                ! no-op
+        end select
         ! -- neigh defaults
         self%l_neigh = .false.
         l_tree = str_has_substr(self%refine, 'tree')

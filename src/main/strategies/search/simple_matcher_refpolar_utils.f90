@@ -2,7 +2,7 @@
 module simple_matcher_refpolar_utils
 use simple_pftc_srch_api
 use simple_builder,              only: builder
-use simple_matcher_refvol_utils, only: report_resolution, estimate_lp_refvols3D
+use simple_matcher_refvol_utils, only: report_resolution, estimate_lp_from_refs
 implicit none
 
 public :: prep_pftc_polar_mode
@@ -22,7 +22,7 @@ contains
         ! Resolution limit estimation
         call report_resolution(params, build, state)
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-            call estimate_lp_refvols3D(params, build, cline, params%lpstart, params%lpstop, state)
+            call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
         endif
         ! Calculator init
         nrefs = params%nspace * params%nstates

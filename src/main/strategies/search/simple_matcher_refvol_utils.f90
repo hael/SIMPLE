@@ -7,8 +7,8 @@ use simple_cmdline,    only: cmdline
 use simple_image,      only: image
 implicit none
 
-public :: read_mask_filter_refvols, calcrefvolshift_and_mapshifts2ptcls, read_mask_filter_reproject_refvols
-public :: report_resolution, estimate_lp_refvols3D
+public :: read_mask_filter_reproject_refvols
+public :: report_resolution, estimate_lp_from_refs
 private
 #include "simple_local_flags.inc"
 
@@ -184,7 +184,7 @@ contains
         call build%spproj_field%set_all2single('res', res_fsc0143)
     end subroutine report_resolution
 
-    subroutine estimate_lp_refvols3D( params, build, cline, lpstart, lpstop, state )
+    subroutine estimate_lp_from_refs( params, build, cline, lpstart, lpstop, state )
         use simple_opt_filter,   only: estimate_lplim3D
         use simple_polarft_calc, only: polarft_estimate_lplim3D
         class(parameters), intent(inout) :: params
@@ -222,7 +222,7 @@ contains
             call build%spproj_field%set_all2single('lp',params%lp)
         endif
         call mskvol%kill
-    end subroutine estimate_lp_refvols3D
+    end subroutine estimate_lp_from_refs
 
     subroutine read_mask_filter_reproject_refvols( params, build, cline, batchsz )
         use simple_polarft_calc, only: vol_pad2ref_pfts
@@ -232,21 +232,15 @@ contains
         integer,           intent(in)    :: batchsz
         real      :: xyz(3)
         integer   :: s, nrefs, state
-        logical   :: do_center, l_prob_align_mode
+        logical   :: do_center
         call report_resolution(params, build, state)
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-            call estimate_lp_refvols3D(params, build, cline, params%lpstart, params%lpstop, state)
+            call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
         endif
         nrefs = params%nspace * params%nstates
         call build%pftc%new(params, nrefs, [1, 1], params%kfromto)
-        select case(trim(params%refine))
-            case('prob','prob_state','prob_neigh')
-                l_prob_align_mode = .true.
-            case DEFAULT
-                l_prob_align_mode = .false.
-        end select
         do s = 1, params%nstates
-            if( l_prob_align_mode )then
+            if( params%l_prob_align_mode )then
                 call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
                     & do_center, xyz, map_shift=l_distr_worker_glob)
             else

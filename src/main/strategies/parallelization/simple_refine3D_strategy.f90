@@ -149,21 +149,17 @@ contains
         type(commander_calc_pspec)            :: xcalc_pspec
         type(cmdline)                         :: cline_calc_pspec
         integer                               :: startit
-        logical                               :: l_prob_align_mode
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! startit
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
         ! Some refine modes manage sampling/updatecnt internally
-        select case(trim(params%refine))
-            case('prob', 'prob_state', 'prob_neigh')
-                l_prob_align_mode = .true.
-                ! random sampling and updatecnt dealt with in prob_align
-            case DEFAULT
-                l_prob_align_mode = .false.
-                if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        end select
+        if( params%l_prob_align_mode )then
+            ! random sampling and updatecnt dealt with in prob_align
+        else
+            if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
         if( trim(params%continue) == 'yes' )then
             THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
         endif
@@ -231,7 +227,7 @@ contains
         type(commander_prob_align_neigh)  :: xprob_align_neigh
         type(cmdline)                     :: cline_prob_align
         integer                           :: state
-        logical                           :: l_prob_align_mode, l_prob_state_mode
+        logical                           :: l_prob_state_mode
         601 format(A,1X,F12.3)
         call self%conv%print_iteration(params%which_iter)
         ! communicate iteration counters
@@ -252,15 +248,9 @@ contains
             call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
         endif
-        select case(trim(params%refine))
-            case('prob','prob_state','prob_neigh')
-                l_prob_align_mode = .true.
-            case DEFAULT
-                l_prob_align_mode = .false.
-        end select
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         ! refine=prob* pre-step (except ptree, which runs direct tree-guided search)
-        if( l_prob_align_mode )then
+        if( params%l_prob_align_mode )then
             cline_prob_align = cline
             if( params%l_neigh .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
@@ -604,7 +594,7 @@ contains
         integer, allocatable :: state_pops(:)
         real    :: smpd
         integer :: state, iter, box
-        logical :: do_automsk, l_prob_align_mode, l_prob_state_mode
+        logical :: do_automsk, l_prob_state_mode
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = tic()
@@ -636,14 +626,8 @@ contains
             rt_init = toc(t_init)
             t_prob = tic()
         endif
-        select case(trim(params%refine))
-            case('prob','prob_state','prob_neigh')
-                l_prob_align_mode = .true.
-            case DEFAULT
-                l_prob_align_mode = .false.
-        end select
         l_prob_state_mode = trim(params%refine) == 'prob_state'
-        if( l_prob_align_mode )then
+        if( params%l_prob_align_mode )then
             cline_prob_align = cline
             if( params%l_neigh .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
