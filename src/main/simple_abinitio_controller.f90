@@ -152,7 +152,7 @@ contains
         if( is_tree_route(route) )then
             if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_ptree'
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
-            if( istage >  PHASES(2)        ) cfg%refine = 'ptree_neigh'
+            if( istage >  PHASES(2)        ) cfg%refine = 'ptree'
         else
             if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_smpl'
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
