@@ -241,7 +241,7 @@ contains
                         call self%b_ptr%pftc%gen_objfun_vals(full_ref_subspace_loc, iptcl_loc, [0.,0.], dists_inpl(:,ithr_loc))
                     endif
                     dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
-                    irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc), inpl_athres(prev_state_loc), self%p_ptr%prob_athres)
+                    irot_loc = minloc(dists_inpl(:,ithr_loc), dim=1)
                     coarse_ws%best_subspace_dist(isub_loc,ithr_loc) = dists_inpl(irot_loc,ithr_loc)
                     ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace_loc)
                     if( ri_loc > 0 )then
