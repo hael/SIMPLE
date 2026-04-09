@@ -40,13 +40,14 @@ contains
     end subroutine new_ptree
 
     subroutine srch_ptree( self, os, ithr )
+        use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy3D_ptree), intent(inout) :: self
         class(oris),             intent(inout) :: os
         integer,                 intent(in)    :: ithr
         type(peak_tree_selection) :: peak_sel
         integer :: npeak_trees, ntrees, nrefs_coarse, nrefs_tree
-        integer :: isample, iref, itree, npeak_target, loc(1)
-        real    :: inpl_corrs(self%s%nrots), corr_best
+        integer :: isample, iref, itree, npeak_target, loc(1), inds(self%s%nrots)
+        real    :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots), corr_best
         if( os%get_state(self%s%iptcl) <= 0 )then
             call os%reject(self%s%iptcl)
             return
@@ -80,7 +81,8 @@ contains
             else
                 call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
             endif
-            loc       = maxloc(inpl_corrs)
+            loc = angle_sampling( eulprob_dist_switch(inpl_corrs, self%s%p_ptr%cc_objfun), &
+                &sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres )
             corr_best = inpl_corrs(loc(1))
             call self%s%store_solution(iref, loc(1), corr_best)
             nrefs_coarse = nrefs_coarse + 1

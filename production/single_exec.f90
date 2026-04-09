@@ -49,7 +49,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('c1cd11af')
+    call simple_print_git_version('9e260c55')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
