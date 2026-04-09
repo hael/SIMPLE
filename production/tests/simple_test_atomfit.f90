@@ -6,5 +6,5 @@ implicit none
 type(atoms)         :: molecule
 real, parameter     :: smpd = 0.4
 call molecule%pdb2mrc(pdbfile=string('CdSe_wurtzite_2nm_centered.pdb'),smpd=smpd)
-call molecule%fit_5gauss( volfile='molecule.mrc', smpd_target=0.1, lp=2.)
+call molecule%fit_5gauss( volfile='molecule.mrc', smpd_target=0.05 )
 end program simple_test_atomfit

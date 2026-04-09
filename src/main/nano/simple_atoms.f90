@@ -970,21 +970,21 @@ contains
     !> Fit isotropic Gaussian displacement parameters (amplitude, variance) independently
     !  for every atom in the molecule, using the approach from calc_isotropic_disp.
     !  Each atom's sub-volume is extracted from the upscaled MRC volume, and a
-    !  weighted linear least-squares fit of log(intensity) vs r^2 is performed.
+    !  weighted linear least-squares fit of log(intensity) vs r^2 is performed
+    !  within a sphere to avoid neighboring atom contributions.
     !  Results are written to logfhandle.
-    subroutine fit_5gauss( self, volfile, smpd_target, lp )
+    subroutine fit_5gauss( self, volfile, smpd_target )
         use simple_image,        only: image
         class(atoms),        intent(in) :: self
         character(len=*),    intent(in) :: volfile       !< target volume filename
         real,                intent(in) :: smpd_target   !< target sampling distance for upscaling (Angstrom)
-        real,                intent(in) :: lp            !< low-pass filter (Angstrom)
         type(image)       :: vol, atom_vol
         real    :: smpd_here, smpd_new, upscaling_factor
-        real    :: atom_coord(3), atom_center(3), r, intens
+        real    :: atom_coord(3), atom_center(3), r, intens, fit_rad
         real    :: XTWX(2,2), XTWX_inv(2,2), XTWY(2,1), B(2,1)
-        real    :: amp, var
+        real    :: amp, var, det
         real    :: amp_all(self%n), var_all(self%n)
-        integer :: iatom, ldim(3), ifoo, errflg
+        integer :: iatom, ldim(3), ifoo, errflg, nvox
         integer :: box, box_new, ldim_new(3), atom_box, center(3)
         integer :: i, j, k
         logical :: outside
@@ -1009,7 +1009,8 @@ contains
         write(logfhandle,'(A)') '>>> FIT_5GAUSS: fitting isotropic Gaussian per atom (WLS on log-intensity)'
         do iatom = 1, self%n
             ! 1. Extract atom sub-volume (same as atom_validate)
-            atom_box = round2even(2 * ((self%radius(iatom))*1.5)/smpd_new)
+            atom_box = round2even(2 * ((3.*1.5)/smpd_new))
+            ! atom_box = round2even(2 * ((self%radius(iatom))*1.5)/smpd_new)
             if( atom_box <= 2 ) atom_box = 4
             atom_coord    = self%xyz(iatom,:)
             center(:)     = ang2vox(atom_coord(:), smpd_new) - atom_box/2
@@ -1028,15 +1029,23 @@ contains
             !    log(intensity) = log(amp) - 0.5 * r^2 / var
             !    Linear system: log(I) = B(1) + B(2) * r^2
             !    with weights = intensity (WLS)
-            atom_center = real(atom_box)/2.  ! center of sub-volume in voxels (1-indexed)
-            XTWX = 0.
-            XTWY = 0.
+            !    Use 0.75 * half-box as fit radius to avoid neighboring atom tails
+            atom_center(1) = real(atom_box + 1) / 2.  ! true center for 1-indexed grid
+            atom_center(2) = atom_center(1)
+            atom_center(3) = atom_center(1)
+            fit_rad = 0.75 * real(atom_box) / 2.  ! reduced radius to avoid neighbors
+            XTWX     = 0.
+            XTWX_inv = 0.
+            XTWY     = 0.
+            nvox     = 0
             do k = 1, atom_box
                 do j = 1, atom_box
                     do i = 1, atom_box
                         r = euclid(real((/i, j, k/)), atom_center)
+                        if( r >= fit_rad ) cycle  ! only use voxels inside the sphere
                         intens = atom_vol%get_rmat_at(i, j, k)
                         if( intens > 0. )then
+                            nvox = nvox + 1
                             XTWX(1,1) = XTWX(1,1) + intens
                             XTWX(1,2) = XTWX(1,2) + r**2 * intens
                             XTWX(2,2) = XTWX(2,2) + r**4 * intens
@@ -1047,13 +1056,40 @@ contains
                 end do
             end do
             XTWX(2,1) = XTWX(1,2)
+            ! check we have enough data points
+            if( nvox < 4 )then
+                write(logfhandle,'(A,I6,A,I4,A)') 'WARNING: atom ', iatom, &
+                    ' only ', nvox, ' positive voxels in sphere, skipping'
+                call atom_vol%kill
+                cycle
+            endif
+            ! check matrix conditioning: det(XTWX) should be well away from zero
+            det = XTWX(1,1)*XTWX(2,2) - XTWX(1,2)*XTWX(2,1)
+            if( abs(det) < 1.0e-30 )then
+                write(logfhandle,'(A,I6,A)') 'WARNING: atom ', iatom, &
+                    ' singular normal matrix, skipping'
+                call atom_vol%kill
+                cycle
+            endif
             call matinv(XTWX, XTWX_inv, 2, errflg)
             if( errflg /= 0 )then
                 write(logfhandle,'(A,I6,A)') 'WARNING: atom ', iatom, ' matrix inversion failed, skipping'
                 call atom_vol%kill
                 cycle
             endif
-            B   = matmul(XTWX_inv, XTWY)
+            B = matmul(XTWX_inv, XTWY)
+            ! sanity checks on the fit parameters
+            ! B(2,1) must be negative for a decaying Gaussian; B(1,1) must be reasonable
+            if( B(2,1) >= 0. )then
+                write(logfhandle,'(A,I6,A)') 'WARNING: atom ', iatom, &
+                    ' non-decaying fit (B2 >= 0), skipping'
+                call atom_vol%kill
+                cycle
+            endif
+            if( abs(B(1,1)) > 50. )then
+                write(logfhandle,'(A,I6,A,ES12.4)') 'WARNING: atom ', iatom, &
+                    ' extreme intercept B1=', B(1,1)
+            endif
             amp = exp(B(1,1))    ! best-fit peak amplitude
             var = -0.5 / B(2,1)  ! best-fit variance (in voxels^2)
             amp_all(iatom) = amp
@@ -1064,8 +1100,8 @@ contains
         write(logfhandle,'(A)') '>>> FIT_5GAUSS results (isotropic Gaussian per atom):'
         write(logfhandle,'(A)') '  atom  element     amplitude    variance(A^2)'
         do iatom = 1, self%n
-            write(logfhandle,'(I6,2X,A2,2X,2ES14.6)') iatom, self%element(iatom), &
-                amp_all(iatom), var_all(iatom)
+            write(logfhandle,'(I6,2X,2ES14.6,2X,A2)') iatom, &
+                amp_all(iatom), var_all(iatom), self%element(iatom)
         end do
         ! cleanup
         call vol%kill
