@@ -152,11 +152,11 @@ contains
         if( is_tree_route(route) )then
             if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_ptree'
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
-            if( istage >  PHASES(2)        ) cfg%refine = 'prob_neigh'
+            if( istage >  PHASES(2)        ) cfg%refine = 'ptree_neigh'
         else
             if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_smpl'
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
-            if( istage >  PHASES(2)        ) cfg%refine = 'prob_neigh'
+            if( istage >  PHASES(2)        ) cfg%refine = 'prob'
         endif
         if( trim(params%multivol_mode).eq.'input_oris_fixed' )then
             cfg%refine = 'prob_state'
