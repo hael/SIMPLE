@@ -154,9 +154,9 @@ contains
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
             if( istage >  PHASES(2)        ) cfg%refine = 'ptree'
         else
-            if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_smpl'
+            if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_ptree'
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
-            if( istage >  PHASES(2)        ) cfg%refine = 'prob'
+            if( istage >  PHASES(2)        ) cfg%refine = 'prob_neigh'
         endif
         if( trim(params%multivol_mode).eq.'input_oris_fixed' )then
             cfg%refine = 'prob_state'
