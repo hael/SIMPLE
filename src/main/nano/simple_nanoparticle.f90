@@ -1432,7 +1432,7 @@ contains
         real,                intent(in)    :: a(3)
         character(len=2) :: el_ucase
         character(len=8) :: crystal_system
-        real             :: a0, foo, d
+        real             :: a0, foo(3), d
         integer          :: i
         a0 = sum(a)/real(size(a)) ! alrithmetic mean of fitted lattice parameters
         ! identify nearest neighbors

@@ -398,9 +398,10 @@ contains
         type(atoms)      :: atoms_obj
         character(len=2) :: el1, el2, el_ucase
         character(len=8) :: crystal_system
-        real             :: center(3),ha,x,x1,x2,x3,y,y1,y2,y3,z,z1,z2,z3,msksq,cutoff
-        real             :: a ! lattice parameter
-        integer          :: i, j, k, n, ncubes
+        real             :: center(3), ha, hc, x, x1, x2, x3, y, y1, y2, y3, z, z1, z2, z3, msksq, cutoff
+        real             :: a(3) ! lattice parameters
+        real             :: pos(3), u_wz, bw1(3), bw2(3), bw3(3), bw4(3)
+        integer          :: i, j, k, n, ncubes, ncubes_c, ncubes_a
         if( .not. cline%defined('pdbout') ) call cline%set('pdbout', 'simatms.pdb')
         call params%new(cline)
         if( .not.is_even(params%box) ) THROW_HARD('BOX must be even')
@@ -417,8 +418,9 @@ contains
             msksq    = (params%moldiam / 2.)**2.
             el_ucase = uppercase(trim(adjustl(params%element)))
             call get_lattice_params(el_ucase, crystal_system, a)
-            ha       = a / 2.
-            ncubes   = floor(real(params%box) * params%smpd / a)
+            ha       = a(1) / 2.; hc = a(3) / 2.
+            ncubes   = floor(real(params%box) * params%smpd / a(1))
+            ncubes_c = floor(real(params%box) * params%smpd / a(3))
             ! atoms at edges
             n = 0
             center = (real([params%box,params%box,params%box]/2 + 1) - 1.) * params%smpd
@@ -426,13 +428,13 @@ contains
                 case('fcc')
                     ! count
                     do i = 1, ncubes
-                        x  = real(i - 1) * a
+                        x  = real(i - 1) * a(1)
                         x1 = x + ha; x2 = x; x3 = x + ha
                         do j = 1, ncubes
-                            y  = real(j - 1) * a
+                            y  = real(j - 1) * a(1)
                             y1 = y + ha; y2 = y + ha; y3 = y
                             do k = 1, ncubes
-                                z  = real(k - 1) * a
+                                z  = real(k - 1) * a(1)
                                 z1 = z; z2 = z + ha; z3 = z + ha
                                 ! edge
                                 if( sum(([x ,y ,z ] - center)**2.) <= msksq ) n = n+1
@@ -452,11 +454,11 @@ contains
                     ! generate all coordinates
                     n = 0
                     do i = 1, ncubes
-                        x  = real(i - 1) * a ;x1 = x + ha; x2 = x; x3 = x + ha
+                        x  = real(i - 1) * a(1); x1 = x + ha; x2 = x; x3 = x + ha
                         do j = 1, ncubes
-                            y  = real(j - 1) * a; y1 = y + ha; y2 = y + ha; y3 = y
+                            y  = real(j - 1) * a(1); y1 = y + ha; y2 = y + ha; y3 = y
                             do k = 1, ncubes
-                                z  = real(k - 1) * a; z1 = z; z2 = z + ha; z3 = z + ha
+                                z  = real(k - 1) * a(1); z1 = z; z2 = z + ha; z3 = z + ha
                                 ! edge
                                 if( sum(([x ,y ,z ] - center)**2.) <= msksq )then
                                      n = n + 1; call atoms_obj%set_coord(n, [x,y,z])
@@ -477,11 +479,11 @@ contains
                 case('bcc')
                     ! count
                     do i = 1, ncubes
-                        x  = real(i - 1) * a; x1 = x + ha
+                        x  = real(i - 1) * a(1); x1 = x + ha
                         do j = 1, ncubes
-                            y  = real(j - 1) * a; y1 = y + ha
+                            y  = real(j - 1) * a(1); y1 = y + ha
                             do k= 1, ncubes
-                                z  = real(k - 1) * a; z1 = z + ha
+                                z  = real(k - 1) * a(1) ; z1 = z + ha
                                 ! edge
                                 if( sum(([x ,y ,z ] - center)**2.) <= msksq ) n = n + 1
                                 ! body-centered
@@ -498,11 +500,11 @@ contains
                     ! generate all coordinates
                     n = 0
                     do i = 1, ncubes
-                        x  = real(i - 1) * a; x1 = x + ha
+                        x  = real(i - 1) * a(1); x1 = x + ha
                         do j = 1, ncubes
-                            y  = real(j - 1) * a; y1 = y + ha
+                            y  = real(j - 1) * a(1); y1 = y + ha
                             do k = 1, ncubes
-                                z  = real(k - 1) * a; z1 = z + ha
+                                z  = real(k - 1) * a(1); z1 = z + ha
                                 if( sum(([x ,y ,z ] - center)**2.) <= msksq )then
                                     n = n + 1; call atoms_obj%set_coord(n, [x,y,z])
                                 endif
@@ -515,11 +517,11 @@ contains
                 case('rocksalt')
                     ! count
                     do i = 1, ncubes
-                        x  = real(i - 1) * a; x1 = x + ha
+                        x  = real(i - 1) * a(1); x1 = x + ha
                         do j = 1, ncubes
-                            y  = real(j - 1) * a; y1 = y + ha
-                            do k=1,ncubes
-                                z  = real(k - 1) * a; z1 = z + ha
+                            y  = real(j - 1) * a(1); y1 = y + ha
+                            do k = 1, ncubes
+                                z  = real(k - 1) * a(1); z1 = z + ha
                                 if( sum(([x ,y ,z ] - center)**2.) <= msksq ) n = n + 1
                                 if( sum(([x1,y1,z ] - center)**2.) <= msksq ) n = n + 1
                                 if( sum(([x ,y1,z1] - center)**2.) <= msksq ) n = n + 1
@@ -535,11 +537,11 @@ contains
                     call atoms_obj%new(n)
                     n = 0
                     do i = 1, ncubes
-                        x  = real(i - 1) * a; x1 = x + ha
+                        x  = real(i - 1) * a(1); x1 = x + ha
                         do j = 1, ncubes
-                            y  = real(j - 1) * a; y1 = y + ha
+                            y  = real(j - 1) * a(1); y1 = y + ha
                             do k = 1, ncubes
-                                z  = real(k - 1) * a; z1 = z + ha
+                                z  = real(k - 1) * a(1); z1 = z + ha
                                 ! element 1
                                 if( sum(([x ,y ,z ] - center)**2.) <= msksq )then
                                     n = n + 1
@@ -593,6 +595,93 @@ contains
                             enddo
                         enddo
                     enddo
+                case('wurtzite')
+                    ! Wurtzite structure (hexagonal, space group P6_3mc, #186)
+                    ! Lattice vectors (Cartesian):
+                    !   a1 = ( a,       0,           0 )
+                    !   a2 = (-a/2,     a*sqrt(3)/2, 0 )
+                    !   a3 = ( 0,       0,           c )
+                    ! Basis atoms in fractional coords (2 of each element per cell):
+                    !   el1: (1/3, 2/3, 0  )  and  (2/3, 1/3, 1/2  )
+                    !   el2: (1/3, 2/3, u  )  and  (2/3, 1/3, 1/2+u)
+                    !   with u = 3/8 (ideal wurtzite internal parameter)
+                    ! Cartesian offsets from cell origin:
+                    !   bw1 = (0,   a*sqrt(3)/3,  0          )  [el1]
+                    !   bw2 = (a/2, a*sqrt(3)/6,  c/2        )  [el1]
+                    !   bw3 = (0,   a*sqrt(3)/3,  u*c        )  [el2]
+                    !   bw4 = (a/2, a*sqrt(3)/6,  (1/2+u)*c  )  [el2]
+                    u_wz = 3. / 8.
+                    bw1  = [0.,        a(1)*sqrt(3.)/3.,  0.                    ]
+                    bw2  = [a(1)/2.,   a(1)*sqrt(3.)/6.,  a(3)/2.               ]
+                    bw3  = [0.,        a(1)*sqrt(3.)/3.,  u_wz*a(3)             ]
+                    bw4  = [a(1)/2.,   a(1)*sqrt(3.)/6.,  (0.5 + u_wz)*a(3)     ]
+                    ! Loop bounds for hexagonal grid
+                    ! j covers y in steps of a*sqrt(3)/2
+                    ! i covers x in steps of a, but shifted by -a/2 per j-row (shear)
+                    ! k covers z in steps of c
+                    ncubes   = ceiling(real(params%box)*params%smpd / (a(1)*sqrt(3.)/2.)) + 1
+                    ncubes_a = ceiling(real(params%box)*params%smpd / a(1)) + ncubes/2 + 2
+                    ncubes_c = ceiling(real(params%box)*params%smpd / a(3)) + 1
+                    ! count atoms inside spherical mask
+                    do i = 1, ncubes_a
+                        do j = 1, ncubes
+                            x = real(i-1)*a(1) + real(j-1)*(-a(1)/2.)
+                            y = real(j-1)*(a(1)*sqrt(3.)/2.)
+                            do k = 1, ncubes_c
+                                z = real(k-1)*a(3)
+                                pos = [x,y,z] + bw1; if( sum((pos-center)**2.) <= msksq ) n = n+1
+                                pos = [x,y,z] + bw2; if( sum((pos-center)**2.) <= msksq ) n = n+1
+                                pos = [x,y,z] + bw3; if( sum((pos-center)**2.) <= msksq ) n = n+1
+                                pos = [x,y,z] + bw4; if( sum((pos-center)**2.) <= msksq ) n = n+1
+                            enddo
+                        enddo
+                    enddo
+                    ! generate atoms
+                    call atoms_obj%new(n)
+                    n = 0
+                    do i = 1, ncubes_a
+                        do j = 1, ncubes
+                            x = real(i-1)*a(1) + real(j-1)*(-a(1)/2.)
+                            y = real(j-1)*(a(1)*sqrt(3.)/2.)
+                            do k = 1, ncubes_c
+                                z = real(k-1)*a(3)
+                                ! el1 atom 1
+                                pos = [x,y,z] + bw1
+                                if( sum((pos-center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el1//'  ')
+                                    call atoms_obj%set_element(n, el1)
+                                endif
+                                ! el1 atom 2
+                                pos = [x,y,z] + bw2
+                                if( sum((pos-center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el1//'  ')
+                                    call atoms_obj%set_element(n, el1)
+                                endif
+                                ! el2 atom 1
+                                pos = [x,y,z] + bw3
+                                if( sum((pos-center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el2//'  ')
+                                    call atoms_obj%set_element(n, el2)
+                                endif
+                                ! el2 atom 2
+                                pos = [x,y,z] + bw4
+                                if( sum((pos-center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el2//'  ')
+                                    call atoms_obj%set_element(n, el2)
+                                endif
+                            enddo
+                        enddo
+                    enddo
+                case default
+                    THROW_HARD('Unsupported crystal system: '//trim(crystal_system))
             end select
             ! write PDB
             do i=1,n
@@ -602,23 +691,23 @@ contains
                 call atoms_obj%set_occupancy(i,1.)
             enddo
             ! for convolution
-            cutoff = 3.*a
+            cutoff = 3.*a(3) ! takes the biggest lattice parameter as cutoff for convolution
         else
             THROW_HARD('A PDB file or ELEMENT & MOLDIAM must be defined!')
         endif
         call atoms_obj%writePDB(params%pdbout)
         if( cline%defined('lp') )then
             cutoff = max(cutoff,4.*params%lp)
-            call atoms_obj%convolve(vol,cutoff,lp=params%lp)
+            call atoms_obj%convolve(vol, cutoff, lp=params%lp)
         else
-            call atoms_obj%convolve(vol,cutoff)
+            call atoms_obj%convolve(vol, cutoff)
         endif
         call vol%write(params%outvol)
         ! cleanup
         call atoms_obj%kill
         call vol%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_SIMULATE_FCC NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SIMULATE_ATOMS NORMAL STOP ****')
     end subroutine exec_simulate_atoms
 
 end module simple_commanders_sim

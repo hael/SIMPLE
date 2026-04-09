@@ -110,7 +110,7 @@ type :: atoms
     procedure          :: cif2pdb
     procedure          :: cif2mrc
     procedure          :: convolve
-    procedure          :: fit_5gauss
+    procedure          :: fit_bfactors
     procedure          :: find_masscen
     procedure          :: geometry_analysis_pdb
     procedure          :: get_geom_center
@@ -130,7 +130,7 @@ type :: atoms
     procedure          :: kill
 end type atoms
 
-! module-level data for fit_5gauss cost function (shared with fit_5gauss_cost)
+! module-level data for fit_bfactors cost function
 real,    allocatable, private :: fit5g_residual(:,:,:) !< target density extracted from MRC volume
 real,    private              :: fit5g_atom_xyz(3)     !< position of the atom being fitted
 real,    private              :: fit5g_smpd            !< sampling distance
@@ -637,14 +637,34 @@ contains
         character(len=*), intent(in)    :: element
         select case(len_trim(element))
         case(1)
-            element_exists = exists(element(1:1)//' ')
+            element_exists = exists(element(1:1)//' ')                                                            !'C '
         case(2)
-            element_exists = exists(element(1:2))
+            element_exists = exists(element(1:2))                                                                 !'PD'
         case(3)
-            element_exists = exists(element(1:1)//' ').and.exists(element(2:3))
-            if( .not.element_exists ) element_exists = exists(element(2:3)).and.exists(element(3:3)//' ')
+            ! one element compound
+            element_exists = exists(element(1:1)//' ')                                                            !'C  '
+            if( .not.element_exists ) element_exists = exists(element(2:2)//' ')                                  !' C '
+            if( .not.element_exists ) element_exists = exists(element(3:3)//' ')                                  !'  C'
+            if( .not.element_exists ) element_exists = exists(element(1:2))                                       !'PD '
+            if( .not.element_exists ) element_exists = exists(element(2:3))                                       !' PD'
+            ! two element compound
+            if( .not.element_exists ) element_exists = exists(element(1:1)//' ') .and. exists(element(3:3)//' ')  !'C S'
+            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:3)//' ')  !'CDS'
+            if( .not.element_exists ) element_exists = exists(element(1:1)//' ') .and. exists(element(2:3))       !'SCD'
         case(4)
-            element_exists = exists(element(1:2)).and.exists(element(3:4))
+            ! one element compound
+            element_exists = exists(element(1:1)//' ')                                                            !'C   '
+            if( .not.element_exists ) element_exists = exists(element(2:2)//' ')                                  !' C  '
+            if( .not.element_exists ) element_exists = exists(element(3:3)//' ')                                  !'  C '
+            if( .not.element_exists ) element_exists = exists(element(4:4)//' ')                                  !'   C'
+            if( .not.element_exists ) element_exists = exists(element(1:2))                                       !'PD  '
+            if( .not.element_exists ) element_exists = exists(element(2:3))                                       !' PD '
+            if( .not.element_exists ) element_exists = exists(element(3:4))                                       !'  PD'
+            ! two element compound
+            if( .not.element_exists ) element_exists = exists(element(1:1)//' ') .and. exists(element(3:3)//' ')  !'C S '
+            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:3)//' ')  !'PDS '
+            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(4:4)//' ')  !'CD S'
+            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:4)//' ')  !'CDSE'
         case DEFAULT
             element_exists = .false.
             THROW_WARN('Non complying format; atoms%element_exists : '//trim(element))
@@ -973,7 +993,7 @@ contains
     !  weighted linear least-squares fit of log(intensity) vs r^2 is performed
     !  within a sphere to avoid neighboring atom contributions.
     !  Results are written to logfhandle.
-    subroutine fit_5gauss( self, volfile, smpd_target )
+    subroutine fit_bfactors( self, volfile, smpd_target )
         use simple_image,        only: image
         class(atoms),        intent(in) :: self
         character(len=*),    intent(in) :: volfile       !< target volume filename
@@ -989,7 +1009,7 @@ contains
         integer :: i, j, k
         logical :: outside
         character(len=256) :: atom_volfile
-        if( self%n < 1 ) THROW_HARD('No atoms; fit_5gauss')
+        if( self%n < 1 ) THROW_HARD('No atoms; fit_bfactors')
         ! --- read and upscale volume from file ---
         call find_ldim_nptcls(string(volfile), ldim, ifoo, smpd=smpd_here)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd_here, ' Angstrom'
@@ -1001,12 +1021,12 @@ contains
         smpd_new         = smpd_here / upscaling_factor
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions   (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
         call vol%read_and_crop(string(volfile), smpd_here, box_new, smpd_new)
-        if( .not. vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space 3D volumes; fit_5gauss')
+        if( .not. vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space 3D volumes; fit_bfactors')
         ! --- initialise results ---
         amp_all = 0.
         var_all = 0.
         ! --- fit each atom ---
-        write(logfhandle,'(A)') '>>> FIT_5GAUSS: fitting isotropic Gaussian per atom (WLS on log-intensity)'
+        write(logfhandle,'(A)') '>>> FIT_BFACTORS: fitting isotropic Gaussian per atom (WLS on log-intensity)'
         do iatom = 1, self%n
             ! 1. Extract atom sub-volume (same as atom_validate)
             atom_box = round2even(2 * ((3.*1.5)/smpd_new))
@@ -1097,7 +1117,7 @@ contains
             call atom_vol%kill
         end do
         ! --- write results ---
-        write(logfhandle,'(A)') '>>> FIT_5GAUSS results (isotropic Gaussian per atom):'
+        write(logfhandle,'(A)') '>>> FIT_BFACTORS results (isotropic Gaussian per atom):'
         write(logfhandle,'(A)') '  atom  element     amplitude    variance(A^2)'
         do iatom = 1, self%n
             write(logfhandle,'(I6,2X,2ES14.6,2X,A2)') iatom, &
@@ -1105,7 +1125,7 @@ contains
         end do
         ! cleanup
         call vol%kill
-    end subroutine fit_5gauss
+    end subroutine fit_bfactors
 
     ! simulate electrostatic potential from elastic scattering
     ! Using 5-gaussian atomic scattering factors from Rullgard et al, J of Microscopy, 2011

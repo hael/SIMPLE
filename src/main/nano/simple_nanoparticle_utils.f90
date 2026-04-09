@@ -245,7 +245,7 @@ contains
         character(len=2) :: el_ucase
         character(len=8) :: crystal_system
         real, parameter  :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
-        real    :: a_0, rMax, r, err
+        real    :: a_0(3), rMax, r, err
         integer :: Z
         el_ucase = uppercase(element)
         call get_lattice_params(el_ucase, crystal_system, a_0)
@@ -254,11 +254,13 @@ contains
         err = FRAC_ERR * r
         select case(trim(adjustl(crystal_system)))
             case('rocksalt')
-                rMax = a_0 * ((1. / 2. + 1. / sqrt(2.)) / 2.) + err
+                rMax = a_0(1) * ((1. / 2. + 1. / sqrt(2.)) / 2.) + err
             case('bcc')
-                rMax = a_0 * ((1. + sqrt(3.) / 2.) / 2.)      + err
+                rMax = a_0(1) * ((1. + sqrt(3.) / 2.) / 2.)      + err
+            case('wurtzite')
+                rMax = a_0(1) * ((1. + sqrt(3.) / 2. / 2.))      + err
             case DEFAULT ! FCC by default
-                rMax = a_0 * ((1. + 1. / sqrt(2.)) / 2.)      + err
+                rMax = a_0(1) * ((1. + 1. / sqrt(2.)) / 2.)      + err
         end select
         write(logfhandle,*) 'rMax identified as ', rMax
     end function find_rMax
@@ -488,7 +490,7 @@ contains
         character(len=2) :: el_ucase
         character(len=8) :: crystal_system
         integer :: natoms, iatom, jatom, cnt, cn_max(size(model,2))
-        real    :: dist, d, a0, foo
+        real    :: dist, d, a0, foo(3)
         ! Identify the bound for defining the neighbourhood
         a0 = sum(a)/real(size(a)) ! geometric mean of fitted lattice parameters
         el_ucase = uppercase(trim(adjustl(element)))
@@ -564,7 +566,7 @@ contains
         real         :: Uy_plusx_local, Uy_minusx_local, Uy_plusy_local, Uy_minusy_local, Uy_plusz_local, Uy_minusz_local
         real         :: Uz_plusx_local, Uz_minusx_local, Uz_plusy_local, Uz_minusy_local, Uz_plusz_local, Uz_minusz_local
         real         :: UR_plusR_local, UR_minusR_local, Ut_plusR_local, Ut_minusR_local, Up_plusR_local, Up_minusR_local
-        real         :: K1, K2, K3, K4, K5, K6, dR, dR_final, atm_a
+        real         :: K1, K2, K3, K4, K5, K6, dR, dR_final, atm_a(3)
         integer      :: natoms,iatom,centerAtom,i,ii,filnum,n,io_stat
         logical      :: areNearest(size(model,dim=2))
         logical      :: plusx_surface, minusx_surface, plusy_surface, minusy_surface, plusz_surface, minusz_surface
@@ -638,9 +640,9 @@ contains
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, atm_a)
         uvwN0      = 0.
-        uvwN0(1,1) = atm_a/2.
-        uvwN0(2,2) = atm_a/2.
-        uvwN0(3,3) = atm_a/2.
+        uvwN0(1,1) = atm_a(1)/2.
+        uvwN0(2,2) = atm_a(2)/2.
+        uvwN0(3,3) = atm_a(3)/2.
         allocate( modelFromABC(natoms,3), modelC(natoms,3), modelCS(natoms,3), modelU(natoms,3) )
         ! use perfect Pt FCC lattice and remove bad points
         modelFromABC = matmul(transpose(nint(abc)), uvwN0) ! create real positions from the fit; centered at the center atom

@@ -221,7 +221,7 @@ contains
     subroutine get_lattice_params( element_ucase, crystal_system, a )
         character(len=2), intent(in)    :: element_ucase
         character(len=8), intent(inout) :: crystal_system
-        real,             intent(inout) :: a
+        real,             intent(inout) :: a(3)
         crystal_system = 'fcc     ' ! default
         select case( element_ucase )
             case('C')
@@ -247,13 +247,16 @@ contains
             case('PB')
                 a = 4.920
             case('FE')
-                a = 2.856; crystal_system = 'bcc     '
+                a = 2.856;                                   crystal_system = 'bcc     '
             case('MO')
-                a = 3.142; crystal_system = 'bcc     '
+                a = 3.142;                                   crystal_system = 'bcc     '
             case('W')
-                a = 3.155; crystal_system = 'bcc     '
+                a = 3.155;                                   crystal_system = 'bcc     '
             case('PBSE')
-                a = 6.12;  crystal_system = 'rocksalt'
+                a = 6.12;                                    crystal_system = 'rocksalt'
+            case('CDSE')
+                ! Xu, Y.-N. 1993, Phys. Rev. 48; 4335-4351
+                a(1) = 4.2985; a(2) = 4.2985; a(3) = 7.0152; crystal_system = 'wurtzite'
             case DEFAULT
                 a = 3.76
         end select

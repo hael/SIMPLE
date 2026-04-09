@@ -1767,7 +1767,7 @@ contains
         endif
         ! resolution limit
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
-        ! B-facor
+        ! B-factor
         self%l_bfac = cline%defined('bfac')
         ! atoms
         if( cline%defined('element') )then
