@@ -639,32 +639,33 @@ contains
         case(1)
             element_exists = exists(element(1:1)//' ')                                                            !'C '
         case(2)
-            element_exists = exists(element(1:2))                                                                 !'PD'
+            element_exists = exists(element(1:2))                                                                 !'Pd'
         case(3)
             ! one element compound
             element_exists = exists(element(1:1)//' ')                                                            !'C  '
             if( .not.element_exists ) element_exists = exists(element(2:2)//' ')                                  !' C '
             if( .not.element_exists ) element_exists = exists(element(3:3)//' ')                                  !'  C'
-            if( .not.element_exists ) element_exists = exists(element(1:2))                                       !'PD '
-            if( .not.element_exists ) element_exists = exists(element(2:3))                                       !' PD'
+            if( .not.element_exists ) element_exists = exists(element(1:2))                                       !'Pd '
+            if( .not.element_exists ) element_exists = exists(element(2:3))                                       !' Pd'
             ! two element compound
             if( .not.element_exists ) element_exists = exists(element(1:1)//' ') .and. exists(element(3:3)//' ')  !'C S'
-            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:3)//' ')  !'CDS'
-            if( .not.element_exists ) element_exists = exists(element(1:1)//' ') .and. exists(element(2:3))       !'SCD'
+            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:3)//' ')  !'CdS'
+            if( .not.element_exists ) element_exists = exists(element(1:1)//' ') .and. exists(element(2:3))       !'SCd'
         case(4)
             ! one element compound
             element_exists = exists(element(1:1)//' ')                                                            !'C   '
             if( .not.element_exists ) element_exists = exists(element(2:2)//' ')                                  !' C  '
             if( .not.element_exists ) element_exists = exists(element(3:3)//' ')                                  !'  C '
             if( .not.element_exists ) element_exists = exists(element(4:4)//' ')                                  !'   C'
-            if( .not.element_exists ) element_exists = exists(element(1:2))                                       !'PD  '
-            if( .not.element_exists ) element_exists = exists(element(2:3))                                       !' PD '
-            if( .not.element_exists ) element_exists = exists(element(3:4))                                       !'  PD'
+            if( .not.element_exists ) element_exists = exists(element(1:2))                                       !'Pd  '
+            if( .not.element_exists ) element_exists = exists(element(2:3))                                       !' Pd '
+            if( .not.element_exists ) element_exists = exists(element(3:4))                                       !'  Pd'
             ! two element compound
             if( .not.element_exists ) element_exists = exists(element(1:1)//' ') .and. exists(element(3:3)//' ')  !'C S '
-            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:3)//' ')  !'PDS '
-            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(4:4)//' ')  !'CD S'
-            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:4)//' ')  !'CDSE'
+            if( .not.element_exists ) element_exists = exists(element(1:1)//' ') .and. exists(element(3:4))       !'C Pd'
+            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:3)//' ')  !'PdS '
+            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(4:4)//' ')  !'Cd S'
+            if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:4))       !'CdSe'
         case DEFAULT
             element_exists = .false.
             THROW_WARN('Non complying format; atoms%element_exists : '//trim(element))
