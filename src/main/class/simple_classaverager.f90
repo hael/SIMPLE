@@ -309,7 +309,7 @@ interface
     end subroutine cavger_update_sums
 
     module subroutine cavger_assemble_sums( do_frac_update )
-        use simple_strategy2D3D_common, only: prepimgbatch
+        use simple_matcher_ptcl_io, only: prepimgbatch
         logical,           intent(in)    :: do_frac_update
     end subroutine cavger_assemble_sums
 
@@ -357,7 +357,7 @@ interface
 
     module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project
-        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
+        use simple_matcher_ptcl_io,      only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
         class(parameters),                  intent(in)    :: params
         class(builder),             target, intent(inout) :: build

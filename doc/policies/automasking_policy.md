@@ -98,6 +98,6 @@ This is the effective precedence in `reconstructor_eo` FSC generation.
 - `src/main/simple_abinitio_config.f90`
 - `src/main/simple_abinitio_utils.f90`
 - `src/main/commanders/simple_commanders_abinitio.f90`
-- `src/main/strategies/simple_strategy2D3D_common.f90`
+- `src/main/strategies/simple_matcher_2Dprep.f90`
 - `src/main/commanders/simple_commanders_resolest.f90`
 - `src/defs/simple_defs_fname.f90`

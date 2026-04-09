@@ -98,8 +98,8 @@ end subroutine new
   - `prep_strategy2D_glob(p_ptr, spproj, nrots, neigh_frac)` - added `nrots` parameter
   - `prep_strategy2D_batch(p_ptr, spproj, which_iter, ...)` - removed `pftc` parameter
   - `build_batch_particles2D(nptcls_here, pinds_here, ...)` - removed `pftc` parameter
-  - `preppftc4align2D(batchsz_max, which_iter, l_stream)` - removed `pftc` parameter
-  - `prep_polar_pftc4align2D(batchsz_max, which_iter, l_stream)` - removed `pftc` parameter
+  - `prep_pftc4align2D(batchsz_max, which_iter, l_stream)` - removed `pftc` parameter
+  - `prep_pftc4align2D_polar(batchsz_max, which_iter, l_stream)` - removed `pftc` parameter
 
 **Method Implementations:**
 - All `pftc%method_name()` calls replaced with `b_ptr%pftc%method_name()`
@@ -114,7 +114,7 @@ end subroutine new
 - All `pftc%polar_cavger_*()` calls replaced with `b_ptr%pftc%polar_cavger_*()`
 - Sigma2 calculation now passes pftc: `call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')`
 
-#### 6. `simple_strategy2D3D_common.f90`
+#### 6. `simple_matcher_2Dprep.f90`
 **Changes:**
 - `prepare_refs_sigmas_ptcls` signature: removed `pftc` parameter, now uses `build%pftc` internally
 - `prepare_polar_references` signature: removed `pftc` parameter, now uses `build%pftc` internally
@@ -314,7 +314,7 @@ When adding new strategy implementations:
 - simple_strategy3D_alloc.f90
 
 **Common Utilities:**
-- simple_strategy2D3D_common.f90
+- simple_matcher_2Dprep.f90
 - simple_corrmat.f90
 
 **Total files modified: 36**

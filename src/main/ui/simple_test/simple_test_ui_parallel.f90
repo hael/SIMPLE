@@ -7,7 +7,6 @@ type(ui_program), target :: coarrays
 type(ui_program), target :: openacc
 type(ui_program), target :: openmp
 type(ui_program), target :: simd
-type(ui_program), target :: reproj_polar_distr
 
 contains
 
@@ -17,7 +16,6 @@ contains
         call new_openacc(tsttab)
         call new_openmp(tsttab)
         call new_simd(tsttab)
-        call new_reproj_polar_distr(tsttab)
     end subroutine construct_test_parallel_programs
 
     subroutine print_test_parallel_programs( logfhandle )
@@ -27,7 +25,6 @@ contains
         write(logfhandle,'(A)') openacc%name%to_char()
         write(logfhandle,'(A)') openmp%name%to_char()
         write(logfhandle,'(A)') simd%name%to_char()
-        write(logfhandle,'(A)') reproj_polar_distr%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_parallel_programs
 
@@ -142,24 +139,5 @@ contains
         ! add to ui_hash
         call add_ui_program('simd', simd, tsttab)
     end subroutine new_simd
-
-    subroutine new_reproj_polar_distr( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        call reproj_polar_distr%new(&
-        &'reproj_polar_distr',&
-        &'distributed reproj polar equivalence test',&
-        &'runs distributed reproj_polar and validates assembled pftc against read_mask_filter_reproject_refvols',&
-        &'simple_test_exec',&
-        &.false.)
-        call reproj_polar_distr%add_input(UI_IMG,  'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
-        call reproj_polar_distr%add_input(UI_PARM, smpd)
-        call reproj_polar_distr%add_input(UI_SRCH, nspace)
-        call reproj_polar_distr%add_input(UI_SRCH, pgrp)
-        call reproj_polar_distr%add_input(UI_MASK, mskdiam)
-        call reproj_polar_distr%add_input(UI_COMP, nparts)
-        call reproj_polar_distr%add_input(UI_COMP, nthr, required_override=.false.)
-        call reproj_polar_distr%add_input(UI_MASK, mskfile, required_override=.false.)
-        call add_ui_program('reproj_polar_distr', reproj_polar_distr, tsttab)
-    end subroutine new_reproj_polar_distr
 
 end module simple_test_ui_parallel

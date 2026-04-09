@@ -328,7 +328,7 @@ contains
 
     !>  \brief  is for generating class averages offline
     module subroutine cavger_assemble_sums( do_frac_update )
-        use simple_strategy2D3D_common, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
+        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
         logical,  intent(in) :: do_frac_update
         class(oris), pointer :: spproj_field
         type(string)         :: stk_fname
@@ -761,7 +761,7 @@ contains
 
     module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project
-        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
+        use simple_matcher_ptcl_io,     only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
         class(parameters),                  intent(in)    :: params
         class(builder),                     target, intent(inout) :: build

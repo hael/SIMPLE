@@ -4,7 +4,7 @@ use simple_builder,              only: builder
 use simple_parameters,           only: parameters
 use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
-use simple_strategy2D3D_common,  only: calc_3Drec
+use simple_matcher_3Drec,        only: calc_3Drec
 use simple_commanders_rec_distr, only: commander_volassemble
 implicit none
 

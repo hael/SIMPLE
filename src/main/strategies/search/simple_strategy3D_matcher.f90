@@ -1,28 +1,34 @@
 !@descr: high-level search routines for the refine3D application
 module simple_strategy3D_matcher
 use simple_pftc_srch_api
-use simple_strategy3D_alloc
-use simple_strategy2D3D_common
-use simple_binoris_io
+use simple_strategy3D_alloc,            only: clean_strategy3D, prep_strategy3D, s3D
+use simple_binoris_io,                    only: binwrite_oritab
 use simple_builder,                       only: builder
 use simple_convergence,                   only: convergence
 use simple_euclid_sigma2,                 only: euclid_sigma2
 use simple_eul_prob_tab,                  only: eul_prob_tab
+use simple_matcher_2Dprep,                only: prepimg4align, prepimg4align_bench
+use simple_matcher_3Drec,                 only: init_rec, prep_imgs4rec, update_rec, finalize_rec
+use simple_matcher_ptcl_batch,            only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
+use simple_matcher_ptcl_io,               only: killimgbatch
+use simple_matcher_refpolar_utils,        only: prep_pftc_polar_mode
+use simple_matcher_refvol_utils,          only: read_mask_filter_reproject_refvols
+use simple_matcher_smpl_and_lplims,       only: set_bp_range3D, sample_ptcls4fillin, sample_ptcls4update3D
 use simple_qsys_funs,                     only: qsys_job_finished
-use simple_strategy3D,                    only: strategy3D
 use simple_strategy3D_eval,               only: strategy3D_eval
-use simple_strategy3D_greedy,             only: strategy3D_greedy
 use simple_strategy3D_greedy_smpl,        only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,         only: strategy3D_greedy_sub
+use simple_strategy3D_greedy,             only: strategy3D_greedy
 use simple_strategy3D_prob,               only: strategy3D_prob
-use simple_strategy3D_ptree,              only: strategy3D_ptree
-use simple_strategy3D_ptree_neigh,        only: strategy3D_ptree_neigh
 use simple_strategy3D_ptree_neigh_states, only: strategy3D_ptree_neigh_states
-use simple_strategy3D_shc,                only: strategy3D_shc
+use simple_strategy3D_ptree_neigh,        only: strategy3D_ptree_neigh
+use simple_strategy3D_ptree,              only: strategy3D_ptree
 use simple_strategy3D_shc_ptree,          only: strategy3D_shc_ptree
 use simple_strategy3D_shc_smpl,           only: strategy3D_shc_smpl
+use simple_strategy3D_shc,                only: strategy3D_shc
 use simple_strategy3D_snhc_smpl,          only: strategy3D_snhc_smpl
 use simple_strategy3D_srch,               only: strategy3D_spec
+use simple_strategy3D,                    only: strategy3D
 implicit none
 
 public :: refine3D_exec
@@ -104,7 +110,7 @@ contains
         has_been_searched = .not.b_ptr%spproj%is_virgin_field(p_ptr%oritype)
 
         ! SET FOURIER INDEX RANGE
-        call set_bp_range(p_ptr, b_ptr, cline)
+        call set_bp_range3D(p_ptr, b_ptr, cline)
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) ) deallocate(pinds)
@@ -117,7 +123,7 @@ contains
             if( p_ptr%l_fillin .and. mod(which_iter,5) == 0 )then
                 call sample_ptcls4fillin(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
             else
-                call sample_ptcls4update(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
+                call sample_ptcls4update3D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
             endif
         end if
 
@@ -147,9 +153,7 @@ contains
             nrefs = p_ptr%nspace * p_ptr%nstates
             call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
         else if( .not. do_polar_prepare )then
-            ! Must stay in-memory here: refine3D distributed workers must not schedule
-            ! nested distributed reprojection jobs.
-            call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max, use_distr_strategy=.false.)
+            call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
         endif
         ! remove dead weight
         call build%vol%kill
@@ -230,18 +234,18 @@ contains
             if( p_ptr%l_polar )then
                 select case(trim(p_ptr%polar))
                 case('new')
-                    call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
+                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
                         &ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
                 case DEFAULT
-                    call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
+                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
                     &ptcl_match_imgs, ptcl_match_imgs_pad)
                 end select
             else
                 if( l_restore)then
-                    call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
+                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
                         &ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
                 else
-                    call build_batch_particles(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
+                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end),&
                         &ptcl_match_imgs, ptcl_match_imgs_pad)
                 endif
             endif
@@ -458,7 +462,7 @@ contains
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation            : ', rt_init
-                write(fnr,'(a,1x,f9.2)') 'build_batch_particles     : ', rt_build_batch_ptcls
+                write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D   : ', rt_build_batch_ptcls
                 write(fnr,'(a,1x,f9.2)') 'prepare_refs_sigmas_ptcls : ', rt_prep_refs_sigmas_ptcls
                 write(fnr,'(a,1x,f9.2)') 'prepare_reproject_refvols : ', rt_prep_reproj_refvols
                 write(fnr,'(a,1x,f9.2)') 'prepare_polar_references  : ', rt_prep_polar_refs
@@ -471,7 +475,7 @@ contains
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation            : ', (rt_init/rt_tot)                   * 100.
-                write(fnr,'(a,1x,f9.2)') 'build_batch_particles     : ', (rt_build_batch_ptcls/rt_tot)      * 100.
+                write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D   : ', (rt_build_batch_ptcls/rt_tot)      * 100.
                 write(fnr,'(a,1x,f9.2)') 'prepare_refs_sigmas_ptcls : ', (rt_prep_refs_sigmas_ptcls/rt_tot) * 100.
                 write(fnr,'(a,1x,f9.2)') 'prepare_reproject_refvols : ', (rt_prep_reproj_refvols/rt_tot)    * 100.
                 write(fnr,'(a,1x,f9.2)') 'prepare_polar_references  : ', (rt_prep_polar_refs/rt_tot)        * 100.

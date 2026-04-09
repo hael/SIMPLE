@@ -1,8 +1,8 @@
 !@descr: 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
 module simple_strategy3D_shc_smpl
 use simple_core_module_api
-use simple_strategy3D_alloc
-use simple_strategy3D_utils
+use simple_strategy3D_alloc, only: s3D
+use simple_strategy3D_utils, only: extract_peak_ori
 use simple_parameters,       only: parameters
 use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D

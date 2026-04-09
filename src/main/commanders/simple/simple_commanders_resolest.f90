@@ -99,7 +99,10 @@ contains
     end subroutine exec_fsc
 
     subroutine exec_clin_fsc( self, cline )
-        use simple_strategy2D3D_common
+        use simple_matcher_2Dprep
+        use simple_matcher_smpl_and_lplims, only: set_bp_range3D
+        use simple_matcher_ptcl_batch, only: build_batch_particles3D
+        use simple_matcher_ptcl_io, only: prepimgbatch, killimgbatch
         use simple_imgarr_utils, only: dealloc_imgarr, write_imgarr
         class(commander_clin_fsc), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -110,7 +113,7 @@ contains
         integer :: nptcls, ithr
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range( params, build, cline )
+        call set_bp_range3D( params, build, cline )
         call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, incr_sampled=.false.)
         ! PREPARATION OF PARTICLES
         call build%pftc%new(params, params%nspace, [1,nptcls], params%kfromto)
@@ -123,7 +126,7 @@ contains
         enddo
         !$omp end parallel do
         ! Build polar particle images
-        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Dealing with polar cavgs
         call build%pftc%polar_cavger_new(.true.)
         call build%pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, is3D=.true.)

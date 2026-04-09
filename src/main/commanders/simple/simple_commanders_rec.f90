@@ -1,7 +1,8 @@
 !@descr: 3D reconstruction and associated things
 module simple_commanders_rec
 use simple_commanders_api
-use simple_strategy2D3D_common
+use simple_matcher_2Dprep
+use simple_matcher_3Drec, only: calc_3Drec
 implicit none
 #include "simple_local_flags.inc"
 

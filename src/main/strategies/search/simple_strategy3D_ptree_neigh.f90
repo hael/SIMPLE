@@ -10,9 +10,9 @@
 ! a sparse reference graph.
 module simple_strategy3D_ptree_neigh
 use simple_core_module_api
-use simple_strategy3D_alloc
-use simple_strategy3D_utils
-use simple_strategy3D_tree_utils
+use simple_strategy3D_utils,      only: extract_peak_ori
+use simple_strategy3D_tree_utils, only: init_peak_tree_selection, peak_tree_selection, select_peak_trees, &
+    &descend_tree_prob_fixed_state
 use simple_strategy_tree_helpers, only: MAX_NTREES, MAX_NPEAKS
 use simple_parameters,            only: parameters
 use simple_oris,                  only: oris

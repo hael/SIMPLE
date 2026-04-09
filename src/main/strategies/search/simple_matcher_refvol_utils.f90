@@ -1,11 +1,14 @@
-!@descr: shared helpers for reading, masking and filtering reference volumes for reprojection
-module simple_reproj_refvol_utils
+!@descr: shared helpers for reading, masking and filtering reference volumes for matcher reprojection
+module simple_matcher_refvol_utils
 use simple_core_module_api
 use simple_builder,    only: builder
 use simple_parameters, only: parameters
+use simple_cmdline,    only: cmdline
+use simple_image,      only: image
 implicit none
 
-public :: read_mask_filter_refvols, calcrefvolshift_and_mapshifts2ptcls
+public :: read_mask_filter_refvols, calcrefvolshift_and_mapshifts2ptcls, read_mask_filter_reproject_refvols
+public :: report_resolution, estimate_lp_refvols3D
 private
 #include "simple_local_flags.inc"
 
@@ -163,4 +166,119 @@ contains
         endif
     end subroutine read_mask_filter_refvols
 
-end module simple_reproj_refvol_utils
+    subroutine report_resolution( params, build, state )
+        class(parameters), intent(in)  :: params
+        class(builder),    intent(in)  :: build
+        integer,           intent(out) :: state
+        real :: res_fsc05, res_fsc0143
+        real, allocatable  :: res(:)
+        integer :: s
+        real    :: lpest(params%nstates)
+        res = get_resarr(params%box_crop, params%smpd_crop)
+        do s = 1, params%nstates
+            call get_resolution_at_fsc(build%fsc(s,:), res, 0.5, lpest(s))
+        end do
+        state = minloc(lpest,dim=1)
+        call get_resolution_at_fsc(build%fsc(state,:), res, 0.50,  res_fsc05)
+        call get_resolution_at_fsc(build%fsc(state,:), res, 0.143, res_fsc0143)
+        call build%spproj_field%set_all2single('res', res_fsc0143)
+    end subroutine report_resolution
+
+    subroutine estimate_lp_refvols3D( params, build, cline, lpstart, lpstop, state )
+        use simple_opt_filter,   only: estimate_lplim3D
+        use simple_polarft_calc, only: polarft_estimate_lplim3D
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(in)    :: cline
+        real,              intent(in)    :: lpstart, lpstop
+        integer,           intent(in)    :: state
+        type(string)       :: vol_even, vol_odd
+        type(image) :: mskvol
+        integer     :: npix
+        real        :: lpopt
+        if( lpstart < lpstop )then
+            THROW_HARD('Invalid low-pass range ordering: lpstart must be >= lpstop')
+        endif
+        if( params%l_polar .and. (.not.cline%defined('vol1')) )then
+            call polarft_estimate_lplim3D(params%box_crop, params%smpd_crop, lpstart, lpstop, lpopt)
+        else
+            if( params%l_filemsk )then
+                call mskvol%read_and_crop(params%mskfile, params%smpd, params%box_crop, params%smpd_crop)
+                call mskvol%remove_edge
+            else
+                call mskvol%disc([params%box_crop,  params%box_crop, params%box_crop], params%smpd_crop,&
+                    &params%msk_crop, npix )
+            endif
+            vol_even = params%vols_even(state)
+            vol_odd  = params%vols_odd(state)
+            call build%vol%read_and_crop(    vol_even, params%smpd, params%box_crop, params%smpd_crop)
+            call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
+            call estimate_lplim3D(build%vol_odd, build%vol, mskvol, lpstart, lpstop, lpopt)
+        endif
+        call build%spproj_field%set_all2single('lp_est', lpopt)
+        if( params%l_lpauto )then
+            params%lp = lpopt
+            params%kfromto(2) = calc_fourier_index(params%lp, params%box_crop, params%smpd_crop)
+            call build%spproj_field%set_all2single('lp',params%lp)
+        endif
+        call mskvol%kill
+    end subroutine estimate_lp_refvols3D
+
+    subroutine read_mask_filter_reproject_refvols( params, build, cline, batchsz )
+        use simple_polarft_calc, only: vol_pad2ref_pfts
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(in)    :: cline
+        integer,           intent(in)    :: batchsz
+        real      :: xyz(3)
+        integer   :: s, nrefs, state
+        logical   :: do_center, l_prob_align_mode
+        call report_resolution(params, build, state)
+        if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+            call estimate_lp_refvols3D(params, build, cline, params%lpstart, params%lpstop, state)
+        endif
+        nrefs = params%nspace * params%nstates
+        call build%pftc%new(params, nrefs, [1, 1], params%kfromto)
+        select case(trim(params%refine))
+            case('prob','prob_state','prob_neigh')
+                l_prob_align_mode = .true.
+            case DEFAULT
+                l_prob_align_mode = .false.
+        end select
+        do s = 1, params%nstates
+            if( l_prob_align_mode )then
+                call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
+                    & do_center, xyz, map_shift=l_distr_worker_glob)
+            else
+                call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
+                    & do_center, xyz, map_shift=.true.)
+            endif
+            call read_mask_filter_refvols(params, build, s)
+            call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
+                & params%smpd_crop, wthreads=.true.)
+            if( do_center )then
+                call build%vol%fft()
+                call build%vol%shift(xyz)
+            endif
+            call build%vol%ifft()
+            call build%vol%pad_fft(build%vol_pad)
+            call build%vol_pad%expand_cmat(params%box)
+            call vol_pad2ref_pfts(build%pftc, build%vol_pad, build%eulspace, s, .true., build%l_resmsk)
+            call build%vol_pad%kill
+            call build%vol_pad%kill_expanded
+            call build%vol_odd_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
+                & params%smpd_crop, wthreads=.true.)
+            if( do_center )then
+                call build%vol_odd%fft()
+                call build%vol_odd%shift(xyz)
+            endif
+            call build%vol_odd%ifft()
+            call build%vol_odd%pad_fft(build%vol_odd_pad)
+            call build%vol_odd_pad%expand_cmat(params%box)
+            call vol_pad2ref_pfts(build%pftc, build%vol_odd_pad, build%eulspace, s, .false., build%l_resmsk)
+            call build%vol_odd_pad%kill
+            call build%vol_odd_pad%kill_expanded
+        end do
+    end subroutine read_mask_filter_reproject_refvols
+
+end module simple_matcher_refvol_utils

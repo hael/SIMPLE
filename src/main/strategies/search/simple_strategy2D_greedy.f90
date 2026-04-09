@@ -1,7 +1,7 @@
 !@descr: 2D strategy for exhaustive projection matching with greedy in-plane search
 module simple_strategy2D_greedy
 use simple_pftc_srch_api
-use simple_strategy2D_alloc
+use simple_strategy2D_alloc, only: s2D
 use simple_parameters,       only: parameters
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec

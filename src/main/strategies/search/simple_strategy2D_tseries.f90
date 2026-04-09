@@ -1,7 +1,7 @@
 !@descr: 2D strategy for time-restrained search, used in SINGLE
 module simple_strategy2D_tseries
 use simple_pftc_srch_api
-use simple_strategy2D_alloc
+use simple_strategy2D_alloc, only: s2D
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: builder

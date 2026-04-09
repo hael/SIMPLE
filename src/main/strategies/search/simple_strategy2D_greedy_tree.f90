@@ -1,7 +1,7 @@
 !@descr: greedy block search + greedy tree descent strategy for 2D classification
 module simple_strategy2D_greedy_tree
 use simple_pftc_srch_api
-use simple_strategy2D_alloc
+use simple_strategy2D_alloc,      only: s2D
 use simple_strategy2D_tree_utils, only: descend_tree_greedy, get_tree_for_ref
 use simple_strategy2D,            only: strategy2D
 use simple_strategy2D_srch,       only: strategy2D_spec

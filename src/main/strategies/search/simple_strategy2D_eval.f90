@@ -1,7 +1,6 @@
 !@descr: 2D strategy for objective function evaluation
 module simple_strategy2D_eval
 use simple_core_module_api
-use simple_strategy2D_alloc
 use simple_parameters,       only: parameters
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec

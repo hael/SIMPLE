@@ -2,8 +2,8 @@
 module simple_strategy2D_tree_utils
 use simple_core_module_api
 use simple_stat, only: power_sampling
-use simple_strategy_tree_helpers
-use simple_strategy2D_alloc
+use simple_strategy_tree_helpers, only: INVALID_CORR, MAX_NPEAKS, MAX_NTREES, choose_next_child_greedy, choose_next_child_prob, is_invalid_corr
+use simple_strategy2D_alloc, only: s2D
 use simple_strategy2D_srch, only: strategy2D_srch
 implicit none
 

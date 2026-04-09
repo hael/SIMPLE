@@ -13,8 +13,8 @@
 ! A tree_neigh_states_greedy using descend_tree_greedy instead of descend_tree_prob. Use this after the classes are already fairly stable.
 module simple_strategy3D_tree_utils
 use simple_core_module_api
-use simple_strategy_tree_helpers
-use simple_strategy3D_alloc
+use simple_strategy_tree_helpers, only: INVALID_CORR, MAX_NPEAKS, MAX_NTREES, choose_next_child_greedy, choose_next_child_prob, is_invalid_corr
+use simple_strategy3D_alloc,      only: s3D
 use simple_multi_dendro,    only: multi_dendro
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none

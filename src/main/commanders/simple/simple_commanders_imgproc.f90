@@ -61,7 +61,7 @@ contains
     end subroutine exec_ctfops
 
     subroutine exec_ctf_phaseflip( self, cline )
-        use simple_strategy2D3D_common, only: read_imgbatch
+        use simple_matcher_ptcl_io,     only: read_imgbatch
         use simple_ori,                 only: ori
         use simple_ctf,                 only: ctf
         use simple_memoize_ft_maps,     only: memoize_ft_maps, forget_ft_maps

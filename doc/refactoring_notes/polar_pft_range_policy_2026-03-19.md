@@ -33,7 +33,7 @@ This note captures the refactor decisions and code changes made to separate:
 
 ### Averaging/Restoration Paths (Interpolation Range)
 - 3D particle build path memoizes oversampled polarization with interpolation dims.
-- `src/main/strategies/search/simple_strategy2D3D_common.f90`
+- `src/main/strategies/search/simple_matcher_2Dprep.f90`
 - `build_batch_particles`: `memoize4polarize_oversamp(build%pftc%get_pdim_interp())`
 
 - 2D update path that feeds `polar_cavger_update_sums` now memoizes with interpolation dims.
@@ -52,7 +52,7 @@ This note captures the refactor decisions and code changes made to separate:
 - In-plane matching and scoring utilities remain search-bound.
 - `src/main/strategies/search/simple_strategy2D_utils.f90`
 - `src/utils/simple_corrmat.f90`
-- Matching-only setup in `src/main/strategies/search/simple_strategy2D_matcher.f90` (`preppftc4align2D`) remains `get_pdim_srch()` by design.
+- Matching-only setup in `src/main/strategies/search/simple_strategy2D_matcher.f90` (`prep_pftc4align2D`) remains `get_pdim_srch()` by design.
 
 ## Partial Sum I/O Confirmation
 `polar_cavger_readwrite_partial_sums('write')` writes arrays that are interpolation-range class sums (`pfts_even/odd`, `ctf2_even/odd`) and not raw matching buffers.
@@ -84,7 +84,7 @@ When touching any code that calls `memoize4polarize` or `memoize4polarize_oversa
 - `src/main/pftc/simple_polarft_ops_state.f90`
 - `src/main/pftc/simple_polarft_ops_restore.f90`
 - `src/main/pftc/simple_polarft_ops_io.f90`
-- `src/main/strategies/search/simple_strategy2D3D_common.f90`
+- `src/main/strategies/search/simple_matcher_2Dprep.f90`
 - `src/main/strategies/search/simple_strategy2D_matcher.f90`
 - `src/main/strategies/search/simple_strategy2D_utils.f90`
 

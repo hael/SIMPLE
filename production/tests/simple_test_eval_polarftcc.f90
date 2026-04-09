@@ -1,6 +1,6 @@
 program simple_test_eval_polarftcc
 use simple_pftc_srch_api
-use simple_strategy2D3D_common, only: set_bp_range
+use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_builder,             only: builder
 use simple_pftc_shsrch_grad,    only: pftc_shsrch_grad
 use simple_projector_pft,       only: fproject_polar
@@ -28,7 +28,7 @@ call cline%set('nptcls',1.0)
 call cline%set('ctf','no')
 call cline%check
 call b%init_params_and_build_strategy3D_tbox(cline,p)
-call set_bp_range(p, b, cline)
+call set_bp_range3D(p, b, cline)
 
 ang_err   = 16.
 shift_err = 8.

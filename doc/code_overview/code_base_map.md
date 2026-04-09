@@ -391,7 +391,7 @@
           - `simple_refine3D_strategy.f90`
         - **search/** — home of strategies for 2D and 3D orientation search
           - `simple_strategy2D.f90` — abstract base class defining the common strategy2D interface
-          - `simple_strategy2D3D_common.f90` — common routines used by the high-level strategy 2D and 3D matchers
+          - `simple_matcher_2Dprep.f90` — common routines used by the high-level strategy 2D and 3D matchers
           - `simple_strategy2D_alloc.f90` — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
           - `simple_strategy2D_eval.f90` — 2D strategy for objective function evaluation
           - `simple_strategy2D_greedy.f90` — 2D strategy for exhaustive projection matching with greedy in-plane search

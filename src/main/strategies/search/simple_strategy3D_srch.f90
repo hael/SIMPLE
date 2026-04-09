@@ -1,7 +1,7 @@
 !@descr: common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
 use simple_core_module_api
-use simple_strategy3D_alloc
+use simple_strategy3D_alloc, only: prep_strategy3D_thread, s3D
 use simple_builder,          only: builder
 use simple_eul_prob_tab,     only: eul_prob_tab
 use simple_parameters,       only: parameters

@@ -126,7 +126,7 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, build, cline)
-        use simple_strategy2D3D_common,     only: prepimgbatch, discrete_read_imgbatch
+        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch
         use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(calc_pspec_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
@@ -219,7 +219,7 @@ contains
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, build, cline)
-        use simple_strategy2D3D_common, only: killimgbatch
+        use simple_matcher_ptcl_io, only: killimgbatch
         class(calc_pspec_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(in)    :: params
         type(builder),                    intent(inout) :: build

@@ -1,7 +1,6 @@
 !@descr: 2D strategy for in-plane refinement
 module simple_strategy2D_inpl
 use simple_pftc_srch_api
-use simple_strategy2D_alloc
 use simple_strategy2D,      only: strategy2D
 use simple_strategy2D_srch, only: strategy2D_spec
 use simple_builder,         only: builder

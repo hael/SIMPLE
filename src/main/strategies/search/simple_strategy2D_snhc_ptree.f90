@@ -1,7 +1,7 @@
 !@descr: 2D hybrid strategy: SNHC coarse class selection followed by probabilistic tree descent
 module simple_strategy2D_snhc_ptree
 use simple_pftc_srch_api
-use simple_strategy2D_alloc
+use simple_strategy2D_alloc,      only: s2D
 use simple_strategy2D_tree_utils, only: descend_tree_prob, get_tree_for_ref
 use simple_strategy2D,            only: strategy2D
 use simple_strategy2D_srch,       only: strategy2D_spec

@@ -1,7 +1,6 @@
 !@descr: 2D strategy for probabilistic class assignment (precomputed by prob_align2D/prob_tab2D)
 module simple_strategy2D_prob
 use simple_pftc_srch_api
-use simple_strategy2D_alloc
 use simple_eul_prob_tab,     only: eulprob_corr_switch
 use simple_parameters,       only: parameters
 use simple_strategy2D,       only: strategy2D

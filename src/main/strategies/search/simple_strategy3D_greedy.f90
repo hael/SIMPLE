@@ -1,8 +1,8 @@
 !@descr: 3D strategy for exhaustive projection matching
 module simple_strategy3D_greedy
 use simple_core_module_api
-use simple_strategy3D_alloc
-use simple_strategy3D_utils
+use simple_strategy3D_alloc, only: s3D
+use simple_strategy3D_utils, only: extract_peak_ori
 use simple_parameters,       only: parameters
 use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D

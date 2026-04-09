@@ -53,9 +53,6 @@ use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
 use simple_commanders_rec,        only: commander_rec3D_worker
 use simple_commanders_rec_distr,  only: commander_volassemble
 
-! reproject commanders, for reprojection of 3D volumes and associated operations
-use simple_commanders_reproject,  only: commander_reproj_polar
-
 ! check commanders, check number of and dimensions of images
 use simple_commanders_checks, only: commander_check_box, commander_check_nptcls, commander_check_stoch_update,&
 commander_check_update_frac

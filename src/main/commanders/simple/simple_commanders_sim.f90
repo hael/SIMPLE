@@ -60,7 +60,7 @@ contains
 
     subroutine exec_simulate_particles( self, cline )
         use simple_projector,           only: projector
-        use simple_strategy2D3D_common, only: prepimgbatch, killimgbatch
+        use simple_matcher_ptcl_io,     only: prepimgbatch, killimgbatch
         use simple_memoize_ft_maps,     only: memoize_ft_maps
         class(commander_simulate_particles), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline

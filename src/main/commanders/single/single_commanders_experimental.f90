@@ -218,7 +218,7 @@ contains
     end subroutine exec_cavgseoproc_nano
 
     subroutine exec_ptclsproc_nano( self, cline )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, discrete_read_imgbatch
+        use simple_matcher_ptcl_io,     only: read_imgbatch, prepimgbatch, discrete_read_imgbatch
         class(commander_ptclsproc_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,       allocatable :: pinds(:)
@@ -347,7 +347,8 @@ contains
     end subroutine exec_tsegmaps_core_finder
 
     subroutine exec_trajectory_make_projavgs( self, cline )
-        use simple_strategy2D3D_common
+        use simple_matcher_2Dprep
+        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch
         class(commander_trajectory_make_projavgs), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)               :: params

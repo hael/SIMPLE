@@ -37,9 +37,14 @@ end type commander_prob_align2D
 contains
 
     subroutine exec_prob_tab( self, cline )
-        use simple_strategy2D3D_common
-        use simple_eul_prob_tab, only: eul_prob_tab
-        use simple_imgarr_utils, only: dealloc_imgarr
+        use simple_matcher_2Dprep
+        use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols
+        use simple_matcher_smpl_and_lplims, only: set_bp_range3D
+        use simple_matcher_refpolar_utils,  only: prep_pftc_polar_mode
+        use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
+        use simple_matcher_ptcl_io,         only: killimgbatch
+        use simple_eul_prob_tab,            only: eul_prob_tab
+        use simple_imgarr_utils,            only: dealloc_imgarr
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -52,7 +57,7 @@ contains
         logical :: do_polar_prepare
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range( params, build, cline )
+        call set_bp_range3D( params, build, cline )
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
@@ -68,15 +73,14 @@ contains
         endif
         call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
         if( .not. do_polar_prepare )then
-            call read_mask_filter_reproject_refvols(params, build, cline, nptcls, &
-                &use_distr_strategy=(.not. params%l_distr_worker) .and. (params%nspace >= 2000))
+            call read_mask_filter_reproject_refvols(params, build, cline, nptcls)
             call build%vol%kill
             call build%vol_odd%kill
             call build%vol2%kill
         endif
         call build%pftc%memoize_refs
         ! Build polar particle images
-        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
         call eulprob_obj_part%new(params, build, pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
@@ -98,9 +102,14 @@ contains
     end subroutine exec_prob_tab
 
     subroutine exec_prob_tab_neigh( self, cline )
-        use simple_strategy2D3D_common
-        use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
-        use simple_imgarr_utils,       only: dealloc_imgarr
+        use simple_matcher_2Dprep
+        use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols
+        use simple_matcher_smpl_and_lplims, only: set_bp_range3D
+        use simple_matcher_refpolar_utils,  only: prep_pftc_polar_mode
+        use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
+        use simple_matcher_ptcl_io,         only: killimgbatch
+        use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
+        use simple_imgarr_utils,            only: dealloc_imgarr
         class(commander_prob_tab_neigh), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -113,7 +122,7 @@ contains
         logical :: do_polar_prepare
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range( params, build, cline )
+        call set_bp_range3D( params, build, cline )
         ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
@@ -127,15 +136,14 @@ contains
         endif
         call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
         if( .not. do_polar_prepare )then
-            call read_mask_filter_reproject_refvols(params, build, cline, nptcls, &
-                &use_distr_strategy=(.not. params%l_distr_worker) .and. (params%nspace >= 2000))
+            call read_mask_filter_reproject_refvols(params, build, cline, nptcls)
             call build%vol%kill
             call build%vol_odd%kill
             call build%vol2%kill
         endif
         call build%pftc%memoize_refs
         ! Build polar particle images
-        call build_batch_particles(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
+        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         call eulprob_obj_part_neigh%new_neigh(params, build, pinds)
         call eulprob_obj_part_neigh%fill_tab
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
@@ -151,9 +159,9 @@ contains
     end subroutine exec_prob_tab_neigh
 
     subroutine exec_prob_align( self, cline )
-        use simple_eul_prob_tab,        only: eul_prob_tab
-        use simple_strategy2D3D_common, only: sample_ptcls4fillin, sample_ptcls4update
-        use simple_builder,             only: builder
+        use simple_eul_prob_tab,            only: eul_prob_tab
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
+        use simple_builder,                 only: builder
         class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -174,7 +182,7 @@ contains
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
             call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
         else
-            call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
+            call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
@@ -222,9 +230,9 @@ contains
     end subroutine exec_prob_align
 
     subroutine exec_prob_align_neigh( self, cline )
-        use simple_eul_prob_tab_neigh,  only: eul_prob_tab_neigh
-        use simple_strategy2D3D_common, only: sample_ptcls4fillin, sample_ptcls4update
-        use simple_builder,             only: builder
+        use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
+        use simple_builder,                 only: builder
         class(commander_prob_align_neigh), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         integer,           allocatable :: pinds(:)
@@ -244,7 +252,7 @@ contains
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
             call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
         else
-            call sample_ptcls4update(params, build, [1,params%nptcls], .true., nptcls, pinds)
+            call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         call build%spproj%write_segment_inside(params%oritype)
         ! Global object only needs sampled-set maps before reading partition sparse tables.
@@ -276,9 +284,10 @@ contains
     end subroutine exec_prob_align_neigh
 
     subroutine exec_prob_tab2D( self, cline )
-        use simple_strategy2D3D_common, only: set_bp_range2D
-        use simple_strategy2D_matcher,  only: set_b_p_ptrs2D, prep_batch_particles2D, preppftc4align2D, prep_polar_pftc4align2D, &
-                                              build_batch_particles2D, clean_batch_particles2D
+        use simple_matcher_smpl_and_lplims, only: set_bp_range2D
+        use simple_strategy2D_matcher,  only: set_b_p_ptrs2D, prep_pftc4align2D, prep_pftc4align2D_polar, &
+                                              ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
+        use simple_matcher_ptcl_batch,  only: prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
         use simple_classaverager,       only: cavger_new, cavger_read_all, cavger_kill
         use simple_eul_prob_tab2D,      only: eul_prob_tab2D
         class(commander_prob_tab2D), intent(inout) :: self
@@ -307,26 +316,26 @@ contains
             THROW_HARD('exec_prob_tab2D requires prior particle sampling (in exec_prob_align2D)')
         endif
         call set_b_p_ptrs2D(params, build)
-        call prep_batch_particles2D(nptcls)
+        call prep_batch_particles2D(params, build, nptcls, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         ! mirror cluster2D_exec reference setup: polar refs only for polar=yes and iter>1
         if( l_use_polar_refs )then
-            call prep_polar_pftc4align2D(nptcls, params%which_iter, .false.)
+            call prep_pftc4align2D_polar(nptcls, params%which_iter, .false.)
         else
             l_alloc_read_cavgs = l_distr_worker_glob .or. (params%which_iter==1)
             call cavger_new(params, build, alloccavgs=l_alloc_read_cavgs)
             if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
             call cavger_read_all
-            call preppftc4align2D(nptcls, params%which_iter, .false.)
+            call prep_pftc4align2D(nptcls, params%which_iter, .false.)
         endif
         ! build polar particle images
-        call build_batch_particles2D(nptcls, pinds)
+        call build_batch_particles2D(params, build, nptcls, pinds, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         ! fill and write the 2D probability table
         call eulprob_obj_part%new(params, build, pinds)
         call eulprob_obj_part%fill_tab
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
-        call clean_batch_particles2D
+        call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         if( (.not.l_use_polar_refs).and.l_distr_worker_glob ) call cavger_kill
         call build%pftc%kill
         call build%kill_general_tbox
@@ -335,9 +344,10 @@ contains
     end subroutine exec_prob_tab2D
 
     subroutine exec_prob_align2D( self, cline )
-        use simple_eul_prob_tab2D,       only: eul_prob_tab2D
-        use simple_strategy2D_matcher,   only: set_b_p_ptrs2D, sample_ptcls4update2D
-        use simple_builder,              only: builder
+        use simple_eul_prob_tab2D,          only: eul_prob_tab2D
+        use simple_strategy2D_matcher,      only: set_b_p_ptrs2D
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4update2D
+        use simple_builder,                 only: builder
         class(commander_prob_align2D), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         integer,       allocatable :: pinds(:)
@@ -360,7 +370,7 @@ contains
         endif
         if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sample particles for this iteration
-        call sample_ptcls4update2D([params%fromp,params%top], params%l_update_frac, nptcls, pinds)
+        call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
         ! write sampling to project
         call build%spproj%write_segment_inside(params%oritype)
         ! build the global prob table (nclasses x nptcls)

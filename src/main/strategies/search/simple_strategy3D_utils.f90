@@ -1,7 +1,7 @@
 !@descr: utility routines for 3D strategies
 module simple_strategy3D_utils
 use simple_core_module_api
-use simple_strategy3D_alloc
+use simple_strategy3D_alloc, only: s3D
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
 

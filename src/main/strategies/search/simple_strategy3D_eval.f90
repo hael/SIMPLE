@@ -1,8 +1,7 @@
 !@descr: 3D strategy for objective function evaluation
 module simple_strategy3D_eval
 use simple_core_module_api
-use simple_strategy3D_utils
-use simple_strategy3D_alloc
+use simple_strategy3D_utils, only: extract_peak_ori
 use simple_parameters,      only: parameters
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_spec

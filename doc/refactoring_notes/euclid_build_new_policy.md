@@ -33,7 +33,7 @@ The key architectural decision is:
 - Representative updates:
   - `src/main/strategies/simple_strategy2D_matcher.f90`
   - `src/main/strategies/simple_strategy3D_matcher.f90`
-  - `src/main/strategies/simple_strategy2D3D_common.f90`
+  - `src/main/strategies/simple_matcher_2Dprep.f90`
   - `src/main/commanders/simple_commanders_rec.f90`
   - `src/main/commanders/simple_commanders_refine3D.f90`
   - `src/main/commanders/simple_commanders_refine3D_inmem.f90`

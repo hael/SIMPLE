@@ -746,23 +746,7 @@ contains
         ! optional keys
         call private_prgs(26)%push_opt_key('nthr')
 
-        ! REPROJ_POLAR, in-memory worker for polar reprojection strategy
-        call private_prgs(27)%set_name('reproj_polar')
-        ! required keys
-        call private_prgs(27)%push_req_key('smpd')
-        call private_prgs(27)%push_req_key('vol1')
-        call private_prgs(27)%push_req_key('nspace')
-        call private_prgs(27)%push_req_key('pgrp')
-        call private_prgs(27)%push_req_key('mskdiam')
-        call private_prgs(27)%push_req_key('fromp')
-        call private_prgs(27)%push_req_key('top')
-        ! optional keys
-        call private_prgs(27)%push_opt_key('nthr')
-        call private_prgs(27)%push_opt_key('mskfile')
-        call private_prgs(27)%push_opt_key('oritype')
-        call private_prgs(27)%push_opt_key('projfile')
-
-        n_private_prgs = 27
+        n_private_prgs = 26
     end subroutine new_private_prgs
 
 end module simple_private_prgs
