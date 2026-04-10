@@ -150,11 +150,11 @@ contains
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
         if( is_tree_route(route) )then
-            if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_smpl'
+            if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_ptree'
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
             if( istage >  PHASES(2)        ) cfg%refine = 'ptree'
         else
-            if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_smpl'
+            if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_ptree'
             if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
             if( istage >  PHASES(2)        ) cfg%refine = 'prob_neigh'
         endif
@@ -312,7 +312,7 @@ contains
                 else
                     cfg%frac_best = 0.85
                 endif
-                cfg%overlap       = 0.9
+                cfg%overlap       = 0.95 ! early stopping
                 cfg%fracsrch      = 90.
                 cfg%snr_noise_reg = 6.0
         end select
