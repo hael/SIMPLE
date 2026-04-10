@@ -439,17 +439,15 @@ contains
         real,     allocatable :: sig2(:), tau2(:), ssnr(:)
         integer,  allocatable :: cnt(:)
         real(dp), allocatable :: rsum(:)
-        real              :: fudge, cc, scale, pad_factor, invtau2
+        real              :: fudge, cc, invtau2
         integer           :: h, k, m, sh, phys(3), sz, reslim_ind
         sz = size(fsc)
         allocate(ssnr(0:sz), rsum(0:sz), cnt(0:sz), tau2(0:sz), sig2(0:sz))
-        rsum = 0.d0
-        cnt  = 0
-        ssnr = 0.0
-        tau2 = 0.0
-        sig2 = 0.0
-        scale = real(self%p_ptr %box_crop) / real(self%p_ptr %box_croppd)
-        pad_factor = 1.0 / scale**3
+        rsum  = 0.d0
+        cnt   = 0
+        ssnr  = 0.0
+        tau2  = 0.0
+        sig2  = 0.0
         fudge = self%p_ptr %tau
         ! SSNR
         do k = 1,sz
@@ -463,7 +461,7 @@ contains
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
-                    sh = nint(scale * sqrt(real(h*h + k*k + m*m)))
+                    sh = nint(sqrt(real(h*h + k*k + m*m)))
                     if( sh > sz ) cycle
                     phys     = self%comp_addr_phys(h, k, m)
                     cnt(sh)  = cnt(sh) + 1
@@ -472,7 +470,6 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        rsum = rsum * pad_factor
         where( rsum > 1.d-10 )
             sig2 = real(real(cnt,dp) / rsum)
         else where
@@ -488,11 +485,11 @@ contains
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
-                    sh = nint(scale*sqrt(real(h*h + k*k + m*m)))
+                    sh = nint(sqrt(real(h*h + k*k + m*m)))
                     if( (sh < reslim_ind) .or. (sh > sz) ) cycle
                     phys = self%comp_addr_phys(h, k, m)
                     if( tau2(sh) > TINY)then
-                        invtau2 = 1.0/(pad_factor*fudge*tau2(sh))
+                        invtau2 = 1.0/(fudge*tau2(sh))
                     else
                         invtau2 = min(1.e3, 1.e3 * self%rho(phys(1),phys(2),phys(3)))
                     endif
