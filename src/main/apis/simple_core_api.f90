@@ -50,7 +50,7 @@ use simple_stat,            only: avg_sdev, moment, skewness, kurtosis, pearsn, 
                                  &avg_frac_smallest, pearsn_serial, std_mean_diff, calc_stats, corrs2weights, kstwo, analyze_smat,&
                                  &dmat2smat, smat2dmat, scores2scores_percen, dists2scores_percen, merge_smats, medoid_from_smat,&
                                  &medoid_from_dmat, median, median_nocopy, conv2rank_weights, rank_sum_weights, rank_centroid_weights,&
-                                 &rank_exponent_weights, rank_inverse_weights, z_scores, mad_gau, robust_scaling
+                                 &rank_exponent_weights, rank_inverse_weights, z_scores, mad_gau, robust_scaling, prepare_tree_sub_distmat
 use simple_string,          only: string
 use simple_string_utils,    only: str2format, str2int, str2real, real2str, findloc_str, spaces, char_is_a_letter, char_is_a_number,&
                                &str_has_substr, list_of_ints2arr, int2str, int2str_pad, map_str_nrs, to_cstring, lex_sort, upperCase,&
