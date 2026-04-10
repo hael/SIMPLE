@@ -9,7 +9,7 @@ type(ui_program), target :: atoms_stats
 type(ui_program), target :: core_atoms_analysis
 type(ui_program), target :: crys_score
 type(ui_program), target :: detect_atoms
-type(ui_program), target :: simulate_atoms
+type(ui_program), target :: simulate_nanoparticle
 
 contains
 
@@ -21,7 +21,7 @@ contains
         call new_core_atoms_analysis(prgtab)
         call new_crys_score(prgtab)
         call new_detect_atoms(prgtab)
-        call new_simulate_atoms(prgtab)
+        call new_simulate_nanoparticle(prgtab)
     end subroutine construct_single_atom_programs
 
     subroutine print_single_atom_programs(logfhandle)
@@ -33,7 +33,7 @@ contains
         write(logfhandle,'(A)') core_atoms_analysis%name%to_char()
         write(logfhandle,'(A)') crys_score%name%to_char()
         write(logfhandle,'(A)') detect_atoms%name%to_char()
-        write(logfhandle,'(A)') simulate_atoms%name%to_char()
+        write(logfhandle,'(A)') simulate_nanoparticle%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_single_atom_programs
 
@@ -201,8 +201,6 @@ contains
         ! image input/output
         call detect_atoms%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
         & 'input volume e.g. vol.mrc', .true., '')
-        call detect_atoms%add_input(UI_IMG, 'vol2', 'file', 'Volume', 'Nanoparticle volume to use for lattice fitting', &
-        & 'input volume 4 lattice fit e.g. vol2.mrc', .false., '')
         ! parameter input/output
         call detect_atoms%add_input(UI_PARM, smpd)
         ! alternative inputs
@@ -219,24 +217,24 @@ contains
         call add_ui_program('detect_atoms', detect_atoms, prgtab) 
     end subroutine new_detect_atoms
 
-    subroutine new_simulate_atoms( prgtab )
+    subroutine new_simulate_nanoparticle( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call simulate_atoms%new(&
-        &'simulate_atoms',&                                              ! name
-        &'Simulate atoms for lattice density',&                          ! descr_short
-        &'is a program for simulation of atoms for lattice density',&    ! descr_long
-        &'single_exec',&                                                 ! executable
-        &.false., gui_advanced=.false.)                                  ! requires sp_project
+        call simulate_nanoparticle%new(&
+        &'simulate_nanoparticle',&                                              ! name
+        &'Simulate nanoparticle for lattice density',&                          ! descr_short
+        &'is a program for simulation of nanoparticle for lattice density',&    ! descr_long
+        &'single_exec',&                                                        ! executable
+        &.false., gui_advanced=.false.)                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call simulate_atoms%add_input(UI_IMG, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '')
-        call simulate_atoms%add_input(UI_IMG, outvol)
+        call simulate_nanoparticle%add_input(UI_IMG, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '')
+        call simulate_nanoparticle%add_input(UI_IMG, outvol)
         ! parameter input/output
-        call simulate_atoms%add_input(UI_PARM, smpd)
-        call simulate_atoms%add_input(UI_PARM, box)
-        call simulate_atoms%add_input(UI_PARM, element, required_override=.false.)
-        call simulate_atoms%add_input(UI_PARM, moldiam)
+        call simulate_nanoparticle%add_input(UI_PARM, smpd)
+        call simulate_nanoparticle%add_input(UI_PARM, box)
+        call simulate_nanoparticle%add_input(UI_PARM, element, required_override=.false.)
+        call simulate_nanoparticle%add_input(UI_PARM, moldiam)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -245,10 +243,10 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call simulate_atoms%add_input(UI_COMP, nthr)
+        call simulate_nanoparticle%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('simulate_atoms', simulate_atoms, prgtab) 
-    end subroutine new_simulate_atoms
+        call add_ui_program('simulate_nanoparticle', simulate_nanoparticle, prgtab) 
+    end subroutine new_simulate_nanoparticle
 
 
 end module single_ui_atom

@@ -184,7 +184,7 @@ type :: nanoparticle
     type(atom_stats), allocatable :: atominfo(:)
     real,             allocatable :: coords4stats(:,:)
     ! OTHER
-    character(len=4)      :: element   = ' '
+    character(len=4)      :: element   = '    '
     character(len=4)      :: atom_name = '    '
     type(string)          :: npname
     type(string)          :: fbody
@@ -562,10 +562,15 @@ contains
         call simatms%kill
     end subroutine identify_lattice_params
 
-    subroutine identify_atomic_pos( self, a, l_fit_lattice, l_atom_thres, split_fname, l_print )
+    ! 1. take different position along the mrc volume and compute bfactors for the peaks
+    ! 2. do a clutering in two classes, expecte for Cd and Se
+    ! 3. simulate atomic model based on those positions and b-factors-fit_bfactors
+    ! 4. compute correlation of each atom with the simulated density
+    ! 5. discard atoms with low correlation and split atoms with high correlation but large volumes (i.e. likely to be two merged atoms)
+
+    subroutine identify_atomic_pos( self, a, l_atom_thres, split_fname, l_print )
         class(nanoparticle),     intent(inout) :: self
         real,                    intent(inout) :: a(3)                ! lattice parameters
-        logical,                 intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
         logical,                 intent(in)    :: l_atom_thres        ! do atomic thresholding or not
         class(string), optional, intent(in)    :: split_fname
         logical,       optional, intent(in)    :: l_print
@@ -575,16 +580,6 @@ contains
         if( present( l_print) ) ll_print = l_print
         ! MODEL BUILDING
         ! Phase correlation approach
-
-
-        ! 1. take different position along the mrc volume and compute bfactors for the peaks
-        ! 2. do a clutering in two classes, expecte for Cd and Se
-        ! 3. simulate atomic model based on those positions and b-factors-fit_bfactors
-        ! 4. compute correlation of each atom with the simulated density
-        ! 5. discard atoms with low correlation and split atoms with high correlation but large volumes (i.e. likely to be two merged atoms)
-
-
-
         call phasecorr_one_atom(self%img, self%element)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers(l_print=ll_print)

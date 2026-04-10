@@ -135,19 +135,19 @@ contains
 
     subroutine exec_analysis2D_nano( self, cline )
         use simple_commanders_imgproc, only: commander_estimate_diam
-        use simple_commanders_sim,     only: commander_simulate_atoms
+        use simple_commanders_sim,     only: commander_simulate_nanoparticle
         class(commander_analysis2D_nano), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
         type(commander_center2D_nano)  :: xcenter2D
         type(commander_cluster2D_nano) :: xcluster2D
         type(commander_estimate_diam)  :: xest_diam
-        type(commander_simulate_atoms) :: xsim_atms
+        type(commander_simulate_nanoparticle) :: xsim_np
         ! other variables
         type(simple_nice_comm)      :: nice_comm
         type(parameters)            :: params
         type(sp_project)            :: spproj
-        type(cmdline)               :: cline_est_diam, cline_sim_atms, cline_copy
+        type(cmdline)               :: cline_est_diam, cline_sim_nanoparticle, cline_copy
         type(string)                :: stkname
         character(len=*), parameter :: STARTVOL    = 'startvol.mrc'
         real,             parameter :: LP_EST_DIAM = 3.
@@ -188,13 +188,13 @@ contains
         write(logfhandle,'(A,2F6.1)') '>>> MASK DIAMETER (MSKDIAM) (IN A): ', mskdiam
         ! make a starting volume for initialization of 3D refinement
         call find_ldim_nptcls(stkname, ldim, nptcls)
-        call cline_sim_atms%set('outvol',  STARTVOL)
-        call cline_sim_atms%set('smpd',    params%smpd)
-        call cline_sim_atms%set('element', params%element)
-        call cline_sim_atms%set('moldiam', diam_min)
-        call cline_sim_atms%set('box',     ldim(1))
-        call cline_sim_atms%set('nthr',    params%nthr)
-        call xsim_atms%execute(cline_sim_atms)
+        call cline_sim_nanoparticle%set('outvol',  STARTVOL)
+        call cline_sim_nanoparticle%set('smpd',    params%smpd)
+        call cline_sim_nanoparticle%set('element', params%element)
+        call cline_sim_nanoparticle%set('moldiam', diam_min)
+        call cline_sim_nanoparticle%set('box',     ldim(1))
+        call cline_sim_nanoparticle%set('nthr',    params%nthr)
+        call xsim_np%execute(cline_sim_nanoparticle)
         ! run final 2D analysis
         cline = cline_copy
         call exec_cmdline('rm -rf cavgs* clusters2D*star *_FINISHED start2Drefs* frcs*')

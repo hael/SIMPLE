@@ -3,19 +3,19 @@ module single_exec_atom
 use simple_cmdline,          only: cmdline
 use simple_commanders_atoms, only: commander_conv_atom_denoise, commander_atoms_stats, commander_atoms_register,&
 commander_crys_score, commander_atoms_rmsd, commander_core_atoms_analysis, commander_detect_atoms
-use simple_commanders_sim,   only: commander_simulate_atoms
+use simple_commanders_sim,   only: commander_simulate_nanoparticle
 implicit none
 
 public :: exec_atom_commander
 private
 
-type(commander_atoms_register)      :: xatoms_register
-type(commander_atoms_rmsd)          :: xatoms_rmsd
-type(commander_atoms_stats)         :: xatoms_stats
-type(commander_core_atoms_analysis) :: xcore_atoms_analysis
-type(commander_crys_score)          :: xcrys_score
-type(commander_detect_atoms)        :: xdetect_atoms
-type(commander_simulate_atoms)      :: xsimulate_atoms
+type(commander_atoms_register)        :: xatoms_register
+type(commander_atoms_rmsd)            :: xatoms_rmsd
+type(commander_atoms_stats)           :: xatoms_stats
+type(commander_core_atoms_analysis)   :: xcore_atoms_analysis
+type(commander_crys_score)            :: xcrys_score
+type(commander_detect_atoms)          :: xdetect_atoms
+type(commander_simulate_nanoparticle) :: xsimulate_nanoparticle
 
 contains
 
@@ -44,9 +44,9 @@ contains
             case( 'detect_atoms' )
                 call cline%set('mkdir', 'no')
                 call xdetect_atoms%execute(cline)
-            case( 'simulate_atoms' )
+            case( 'simulate_nanoparticle' )
                 call cline%set('mkdir', 'no')
-                call xsimulate_atoms%execute(cline)
+                call xsimulate_nanoparticle%execute(cline)
             case default
                 l_did_execute = .false.
         end select

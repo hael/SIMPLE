@@ -27,10 +27,10 @@ type, extends(commander_base) :: commander_simulate_subtomogram
     procedure :: execute      => exec_simulate_subtomogram
 end type commander_simulate_subtomogram
 
-type, extends(commander_base) :: commander_simulate_atoms
+type, extends(commander_base) :: commander_simulate_nanoparticle
   contains
-    procedure :: execute      => exec_simulate_atoms
-end type commander_simulate_atoms
+    procedure :: execute      => exec_simulate_nanoparticle
+end type commander_simulate_nanoparticle
 
 contains
 
@@ -388,9 +388,9 @@ contains
         call simple_end('**** SIMPLE_SIMULATE_SUBTOMOGRAM NORMAL STOP ****')
     end subroutine exec_simulate_subtomogram
 
-    subroutine exec_simulate_atoms( self, cline )
+    subroutine exec_simulate_nanoparticle( self, cline )
         use simple_atoms, only: atoms
-        class(commander_simulate_atoms), intent(inout) :: self
+        class(commander_simulate_nanoparticle), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         real, parameter  :: NPIX_CUTOFF = 12.
         type(parameters) :: params
@@ -708,7 +708,7 @@ contains
         call atoms_obj%kill
         call vol%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_SIMULATE_ATOMS NORMAL STOP ****')
-    end subroutine exec_simulate_atoms
+        call simple_end('**** SIMPLE_SIMULATE_NANOPARTICLE NORMAL STOP ****')
+    end subroutine exec_simulate_nanoparticle
 
 end module simple_commanders_sim

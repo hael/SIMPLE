@@ -183,7 +183,7 @@ contains
             if( io_stat .ne. 0 )num = str2int(elevenfirst(6:11), io_stat)
             if( io_stat .ne. 0 )then
                 num = str2int(elevenfirst(5:11), io_stat)
-                if( io_stat .eq. 0) self%is_xpdb = .true.
+                if( io_stat .eq. 0 ) self%is_xpdb = .true.
             endif
             if( io_stat .ne. 0 )cycle
             num = str2int(twentyseven, io_stat)

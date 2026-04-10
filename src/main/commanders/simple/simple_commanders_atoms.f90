@@ -218,14 +218,14 @@ contains
     end subroutine exec_cif2pdb
 
     subroutine exec_crys_score( self, cline )
-        use simple_commanders_sim, only: commander_simulate_atoms
+        use simple_commanders_sim, only: commander_simulate_nanoparticle
         class(commander_crys_score), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(string),                allocatable   :: pdbfnames(:)
         real,                        allocatable   :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:)
         integer,                     allocatable   :: cnts(:)
         logical,                     allocatable   :: l_dists(:)
-        type(commander_simulate_atoms) :: xsim_atoms
+        type(commander_simulate_nanoparticle) :: xsim_nanoparticle
         type(parameters)               :: p
         type(cmdline)                  :: cline_sim_atoms
         integer :: npdbs, ipdb, Natoms, cnt, i, j, nclus
@@ -253,7 +253,7 @@ contains
             call cline_sim_atoms%set('moldiam', moldiam)
             call cline_sim_atoms%set('box',     p%box)
             call cline_sim_atoms%set('nthr',    real(p%nthr))
-            call xsim_atoms%execute(cline_sim_atoms)
+            call xsim_nanoparticle%execute(cline_sim_atoms)
             ! generating stats for the reference lattice
             call read_pdb2matrix(string('tmp.pdb'), mat )
             Natoms = size(mat,2)
@@ -403,26 +403,12 @@ contains
         type(nanoparticle) :: nano
         real               :: a(3) ! lattice parameters
         logical            :: prefit_lattice
-        prefit_lattice = cline%defined('vol2')
         call params%new(cline)
-        if( prefit_lattice )then
-            call nano%new(params, params%vols(2))
-            ! execute
-            call nano%identify_lattice_params(a)
-            ! kill
-            call nano%kill
-            call nano%new(params, params%vols(1))
-            ! execute
-            call nano%identify_atomic_pos(a, l_fit_lattice=.false., l_atom_thres=trim(params%atom_thres).eq.'yes')
-            ! kill
-            call nano%kill
-        else
-            call nano%new(params, params%vols(1))
-            ! execute
-            call nano%identify_atomic_pos(a, l_fit_lattice=.true., l_atom_thres=trim(params%atom_thres).eq.'yes')
-            ! kill
-            call nano%kill
-        endif
+        call nano%new(params, params%vols(1))
+        ! execute
+        call nano%identify_atomic_pos(a, l_atom_thres=trim(params%atom_thres).eq.'yes')
+        ! kill
+        call nano%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
