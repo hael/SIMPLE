@@ -80,7 +80,7 @@ contains
         call cline%set('refs', refs_prep)
         call cline%set('blocktree', params%blocktree)
         call cline%set('box_crop', params%box_crop)
-        call cline%set('refine', 'greedy_tree')
+        call cline%set('refine', 'snhc_ptree')
         call xcluster2D%execute(cline)
         ! cleanup
         call spproj%kill
