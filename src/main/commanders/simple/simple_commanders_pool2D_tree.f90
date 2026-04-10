@@ -4,7 +4,7 @@ use simple_commanders_api
 use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_cluster2D,    only: commander_cluster2D
 use simple_commanders_project_core, only: commander_selection
-use simple_imgarr_utils,            only: dealloc_imgarr
+use simple_imgarr_utils,            only: dealloc_imgarr, write_imgarr
 use simple_block_tree_corr,         only: gen_corr_block_tree_hac
 use simple_block_tree_io,           only: write_block_tree
 use simple_multi_dendro,            only: multi_dendro
@@ -26,73 +26,63 @@ contains
         class(commander_pool2D_tree), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         real, parameter            :: FRAC_SEL = 0.2
-        type(parameters)           :: params, params_blocktree
-        type(sp_project)           :: spproj
-        type(cmdline)              :: cline_selection, cline_abinitio2D, cline_cluster2D_full, cline_blocktree
+        type(parameters)           :: params
+        type(sp_project)           :: spproj, spproj2
         type(commander_selection)  :: xselection
         type(commander_abinitio2D) :: xabinitio2D
         type(commander_cluster2D)  :: xcluster2D
         type(multi_dendro)         :: block_tree
-        type(string)               :: refs_fname, blocktree_fname, projfile, projfile_pruned
+        type(string)               :: refs_prep, blocktree_fname
         type(image),   allocatable :: cavg_imgs(:)
         logical,       allocatable :: l_non_junk(:)
         integer,       allocatable :: clsinds(:), clspops(:)
         real,          allocatable :: mm(:,:)
-        integer                    :: nptcls_tot, nran, nrefs, i
-        real                       :: smpd
+        integer                    :: nptcls_tot, nran, nrefs_non_junk
         ! select FRAC_SEL particles for tree construction
         call params%new(cline)
-        projfile        = params%projfile
-        projfile_pruned = 'pool2D_tree_pruned.simple'
-        call simple_copy_file(projfile, projfile_pruned)
         call spproj%read(params%projfile)
+        call spproj2%copy(spproj)
         nptcls_tot = spproj%os_ptcl2D%get_noris()
-        nran = nint(FRAC_SEL * real(nptcls_tot))
-        cline_selection = cline
-        call cline_selection%set('projfile', projfile_pruned)
-        call cline_selection%set('prune',   'yes')
-        call cline_selection%set('oritype', 'ptcl2D')
-        call cline_selection%set('nran',    nran)
-        call xselection%execute(cline_selection)
+        nran = nint(FRAC_SEL * nptcls_tot)
+        call cline%set('projfile', params%projfile)
+        call cline%set('prune',   'no')
+        call cline%set('oritype', 'ptcl2D')
+        call cline%set('nran',    nran)
+        call xselection%execute(cline)
         ! generate class averages for tree construction
-        cline_abinitio2D = cline
-        call cline_abinitio2D%set('projfile', projfile_pruned)
-        call cline_abinitio2D%set('mkdir', 'no')
-        call cline_abinitio2D%set('ncls', params%ncls)
-        call xabinitio2D%execute(cline_abinitio2D)
-        ! prep for block-tree generation
-        call params%new(cline_abinitio2D)
+        call cline%set('ncls', params%ncls)
+        call cline%set('mkdir', 'no')
+        call xabinitio2D%execute(cline)
+        ! prep for block-tree generation    
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        call id_junk_and_prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+        nrefs_non_junk = size(cavg_imgs)
+        refs_prep = 'pool2D_tree_refs.mrc'
+        call write_imgarr(cavg_imgs, refs_prep)
+        call cline%set('trs',    5.)
+        call cline%set('objfun', 'cc')
+        call params%new(cline)
         if( cline%defined('blocktree') )then
             blocktree_fname = params%blocktree
         else
             params%blocktree = 'pool_block_tree.bin'
         endif
-        ! update project file 
-        call spproj%read(params%projfile)
-        call spproj%get_cavgs_stk(refs_fname, nrefs, smpd, imgkind='cavg')
-        ! prep class average stack
-        call id_junk_and_prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
-        ! generate block tree
-        cline_blocktree = cline_abinitio2D
-        call cline_blocktree%set('trs',    5.)
-        call cline_blocktree%set('objfun', 'cc')
-        call params_blocktree%new(cline_blocktree)
-        block_tree = gen_corr_block_tree_hac(cavg_imgs, params_blocktree, params%ncls_sub)
+        block_tree = gen_corr_block_tree_hac(cavg_imgs, params, params%ncls_sub)
         call write_block_tree(block_tree, params%blocktree)
         call block_tree%kill
+        call spproj2%write(params%projfile)
         ! run greedy tree-based search on all particles
-        cline_cluster2D_full = cline
-        call cline_cluster2D_full%set('refine',    'greedy_tree')
-        call cline_cluster2D_full%set('oritype',   'ptcl2D')
-        call cline_cluster2D_full%set('ncls',      size(cavg_imgs))
-        call cline_cluster2D_full%set('projfile',  projfile)
-        call cline_cluster2D_full%set('refs',      refs_fname)
-        call cline_cluster2D_full%set('blocktree', params%blocktree)
-        call cline_cluster2D_full%set('lp',        6.0)  ! this needs to be dealt with better
-        call cline_cluster2D_full%set('box_crop',  128) ! 4 now
-        call cline_cluster2D_full%set('trs',       5.)       ! 4 now
-        call cline_cluster2D_full%set('maxits',    1)
-        call xcluster2D%execute(cline_cluster2D_full)
+        call cline%set('trs', 5.)
+        call cline%set('lp', 6.0)
+        call cline%set('maxits', 1)
+        call cline%set('ncls', nrefs_non_junk)
+        call cline%set('refs', refs_prep)
+        call cline%set('blocktree', params%blocktree)
+        call cline%set('box_crop', params%box_crop)
+        call cline%set('refine', 'greedy_tree')
+        call xcluster2D%execute(cline)
+        ! cleanup
         call spproj%kill
         call dealloc_imgarr(cavg_imgs)
         call simple_end('**** POOL2D_TREE NORMAL STOP ****', print_simple=.false.)
