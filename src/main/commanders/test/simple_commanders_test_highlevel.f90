@@ -241,7 +241,7 @@ subroutine exec_test_simulate_particles( self, cline )
     else
         call find_ldim_nptcls(vol_file, ldim, nptcls_stk, smpd_stk)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    PASS: volume dims = [', &
-            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_stk
+            ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_stk
         if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
             write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
             all_ok = .false.
@@ -338,7 +338,7 @@ subroutine exec_test_reproject( self, cline )
     else
         call find_ldim_nptcls(vol_file, ldim, nptcls_stk, smpd_stk)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    PASS: volume dims = [', &
-            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_stk
+            ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_stk
         if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
             write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
             all_ok = .false.

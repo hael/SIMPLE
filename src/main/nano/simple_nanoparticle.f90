@@ -575,6 +575,16 @@ contains
         if( present( l_print) ) ll_print = l_print
         ! MODEL BUILDING
         ! Phase correlation approach
+
+
+        ! 1. take different position along the mrc volume and compute bfactors for the peaks
+        ! 2. do a clutering in two classes, expecte for Cd and Se
+        ! 3. simulate atomic model based on those positions and b-factors-fit_bfactors
+        ! 4. compute correlation of each atom with the simulated density
+        ! 5. discard atoms with low correlation and split atoms with high correlation but large volumes (i.e. likely to be two merged atoms)
+
+
+
         call phasecorr_one_atom(self%img, self%element)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers(l_print=ll_print)
@@ -1430,7 +1440,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: cc
         real,                intent(in)    :: a(3)
-        character(len=2) :: el_ucase
+        character(len=4) :: el_ucase
         character(len=8) :: crystal_system
         real             :: a0, foo(3), d
         integer          :: i

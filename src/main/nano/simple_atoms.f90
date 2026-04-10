@@ -1760,13 +1760,13 @@ contains
         call self%kill()
         if( present(pdbfile) )then
             pdb_file = pdbfile
+            vol_file = get_fbody(pdbfile,string('pdb'))//'.mrc'
         else 
             pdb_file = 'molecule.pdb'
+            vol_file = 'molecule.mrc'
         endif
         if( present(volfile) )then
             vol_file = volfile
-        else
-            vol_file = 'molecule.mrc'
         endif
         if( present(center_pdb) )then
             if( center_pdb ) use_center = .true.

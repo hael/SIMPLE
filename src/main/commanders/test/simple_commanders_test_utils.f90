@@ -288,7 +288,7 @@ subroutine exec_test_pdb2mrc( self, cline )
     else
         call find_ldim_nptcls(default_vol, ldim, nptcls, smpd_out)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
-            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_out
+            ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_out
         if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
             write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
             all_ok = .false.
@@ -319,7 +319,7 @@ subroutine exec_test_pdb2mrc( self, cline )
     else
         call find_ldim_nptcls(default_vol, ldim, nptcls, smpd_out)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
-            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_out
+            ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_out
         if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
             write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
             all_ok = .false.
@@ -345,7 +345,7 @@ subroutine exec_test_pdb2mrc( self, cline )
     else
         call find_ldim_nptcls(vol_file, ldim, nptcls, smpd_out)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
-            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_out
+            ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_out
         if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
             write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
             all_ok = .false.
@@ -371,7 +371,7 @@ subroutine exec_test_pdb2mrc( self, cline )
     else
         call find_ldim_nptcls(vol_file, ldim, nptcls, smpd_out)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
-            ldim(1),',',ldim(2),',',ldim(3),'], smpd = ', smpd_out
+            ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_out
         if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
             write(logfhandle,'(a)') '    FAIL: volume has invalid dimensions'
             all_ok = .false.

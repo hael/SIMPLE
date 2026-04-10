@@ -224,8 +224,8 @@ contains
         ! PROGRAM SPECIFICATION
         call simulate_atoms%new(&
         &'simulate_atoms',&                                              ! name
-        &'Simulate atoms or FCC lattice density',&                       ! descr_short
-        &'is a program for simulation of atoms or FCC lattice density',& ! descr_long
+        &'Simulate atoms for lattice density',&                          ! descr_short
+        &'is a program for simulation of atoms for lattice density',&    ! descr_long
         &'single_exec',&                                                 ! executable
         &.false., gui_advanced=.false.)                                  ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

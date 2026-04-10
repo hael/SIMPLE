@@ -200,7 +200,7 @@ contains
             didft = .true.
         endif
         call img_copy%copy(img)
-        call one_atom%new(ldim,smpd)
+        call one_atom%new(ldim, smpd)
         cutoff = 8.*smpd
         call atom%new(1)
         call atom%set_element(1,element)
@@ -242,12 +242,13 @@ contains
     ! fit_lattice and strain_analysis routines below
     function find_rMax( element ) result( rMax )
         character(len=2), intent(in) :: element
-        character(len=2) :: el_ucase
+        character(len=4) :: el_ucase
         character(len=8) :: crystal_system
         real, parameter  :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
         real    :: a_0(3), rMax, r, err
         integer :: Z
-        el_ucase = uppercase(element)
+        !el_ucase = uppercase(element)
+        el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, a_0)
         call get_element_Z_and_radius(el_ucase, Z, r)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
@@ -487,7 +488,7 @@ contains
         real,              intent(in)    :: a(3) ! lattice parameters
         integer,           intent(inout) :: coord_nums_std(size(model,2))
         real,              intent(inout) :: coord_nums_gen(size(model,2))
-        character(len=2) :: el_ucase
+        character(len=4) :: el_ucase
         character(len=8) :: crystal_system
         integer :: natoms, iatom, jatom, cnt, cn_max(size(model,2))
         real    :: dist, d, a0, foo(3)
@@ -573,7 +574,7 @@ contains
         type(atoms)  :: Exx_strain,Eyy_strain,Ezz_strain,Exy_strain,Eyz_strain,Exz_strain, Err_strain
         type(atoms)  :: Ux_atoms, Uy_atoms, Uz_atoms
         real(kind=8) :: p0(3, size(model,dim=2))
-        character(len=2) :: el_ucase
+        character(len=4) :: el_ucase
         character(len=4) :: atom_name
         character(len=8) :: crystal_system
         write(logfhandle, '(A)') '>>> STRAIN ANALYSIS'

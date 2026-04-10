@@ -396,7 +396,8 @@ contains
         type(parameters) :: params
         type(image)      :: vol
         type(atoms)      :: atoms_obj
-        character(len=2) :: el1, el2, el_ucase
+        character(len=2) :: el1, el2
+        character(len=4) :: el_ucase
         character(len=8) :: crystal_system
         real             :: center(3), ha, hc, x, x1, x2, x3, y, y1, y2, y3, z, z1, z2, z3, msksq, cutoff
         real             :: a(3) ! lattice parameters
@@ -411,7 +412,7 @@ contains
             call atoms_obj%new(params%pdbfile)
             cutoff = NPIX_CUTOFF * params%smpd
         else if( cline%defined('element') )then
-            if( .not. cline%defined('moldiam') ) THROW_HARD('MOLDIAM must be provided for FCC lattice!')
+            if( .not. cline%defined('moldiam') ) THROW_HARD('MOLDIAM must be provided for lattice!')
             if( .not. atoms_obj%element_exists(params%element) ) THROW_HARD('Unsupported element for now')
             el1      = params%element(1:2)
             el2      = params%element(3:4)
