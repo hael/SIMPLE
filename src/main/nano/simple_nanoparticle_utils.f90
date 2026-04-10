@@ -247,7 +247,6 @@ contains
         real, parameter  :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
         real    :: a_0(3), rMax, r, err
         integer :: Z
-        !el_ucase = uppercase(element)
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, a_0)
         call get_element_Z_and_radius(el_ucase, Z, r)
@@ -259,7 +258,7 @@ contains
             case('bcc')
                 rMax = a_0(1) * ((1. + sqrt(3.) / 2.) / 2.)      + err
             case('wurtzite')
-                rMax = a_0(1) * ((1. + sqrt(3.) / 2. / 2.))      + err
+                rMax = a_0(1) * ((1. + sqrt(8. / 3.)) / 2.)      + err
             case DEFAULT ! FCC by default
                 rMax = a_0(1) * ((1. + 1. / sqrt(2.)) / 2.)      + err
         end select
@@ -499,6 +498,8 @@ contains
         select case(trim(adjustl(crystal_system)))
             case('rocksalt')
                 d = a0 * ((1. / 2. + 1. / sqrt(2.)) / 2.)
+            case('wurtzite')
+                d = a(1) * ((1. + sqrt(8. / 3.)) / 2.)  ! for wurtzite, we use the a lattice parameter since the c lattice parameter is not relevant for defining the neighborhood in the basal plane
             case('bcc')
                 d = a0 * ((1. + sqrt(3.) / 2.) / 2.)
             case DEFAULT ! FCC by default

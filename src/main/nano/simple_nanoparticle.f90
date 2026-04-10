@@ -184,7 +184,7 @@ type :: nanoparticle
     type(atom_stats), allocatable :: atominfo(:)
     real,             allocatable :: coords4stats(:,:)
     ! OTHER
-    character(len=2)      :: element   = ' '
+    character(len=4)      :: element   = ' '
     character(len=4)      :: atom_name = '    '
     type(string)          :: npname
     type(string)          :: fbody
@@ -1013,10 +1013,20 @@ contains
         logical, allocatable :: atom_del_mask(:)
         integer              :: cscore_thres
         type(stats_struct)   :: cscore_stats
-        real    :: percen, cendist_thres
-        integer :: cc, cn, n_discard, cnt_discard
+        real    :: percen, cendist_thres, foo(3)
+        integer :: cc, cn, n_discard, cnt_discard, it_contact_score
         logical :: ll_print
+        character(len=4)     :: el_ucase
+        character(len=8)     :: crystal_system
         ll_print = .true.
+        el_ucase = uppercase(trim(adjustl(self%element)))
+        call get_lattice_params(el_ucase, crystal_system, foo)
+        select case( crystal_system )
+            case('wurtzite')
+                it_contact_score = 4
+            case default !fcc bcc rocksalt
+                it_contact_score = 12
+        end select
         if( present(l_print) ) ll_print = l_print
         if( ll_print ) write(logfhandle, '(A)') '>>> DISCARDING ATOMS'
         ! calculate contact scores
@@ -1038,7 +1048,7 @@ contains
         elsewhere
             atom_del_mask = .false.
         endwhere
-        do cn = 1,12
+        do cn = 1,it_contact_score
             percen = (real(count(cscores >= cn)) / real(self%n_cc)) * 100.
             if( ll_print ) write(logfhandle,*) 'percen atoms with contact score > '//int2str(cn)//':', percen
             if( percen <= 95. )then
@@ -1046,7 +1056,7 @@ contains
                 exit
             endif
         end do
-        if( cscore_thres > 6 ) cscore_thres = 6
+        if( cscore_thres > it_contact_score/2 ) cscore_thres = it_contact_score/2
         if( ll_print ) write(logfhandle,*) 'contact score threshold: ', cscore_thres
         ! get connected components and binary matrices
         call self%img_cc%get_imat(imat_cc)
@@ -1451,6 +1461,8 @@ contains
         select case(trim(adjustl(crystal_system)))
             case('rocksalt')
                 d = a0 * ((1. / 2. + 1. / sqrt(2.)) / 2.)
+            case('wurtzite')
+                d = a(1) * ((1. + sqrt(8. / 3.) )/ 2.) 
             case('bcc')
                 d = a0 * ((1. + sqrt(3.) / 2.) / 2.)
             case DEFAULT ! FCC by default
