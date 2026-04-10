@@ -114,6 +114,7 @@ type :: parameters
     character(len=3)          :: stream2d='no'        !< indicates streaming 2D clustering(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
+    character(len=3)          :: tester='no'          !< write periodic tester-mode tracking outputs(yes|no){no}
     character(len=3)          :: test_tree='no'       !< test tree-based search(yes|no){no}
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)          :: trail_rec='no'       !< trailing (weighted average) reconstruction when update_frac=yes 
@@ -826,6 +827,7 @@ contains
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
+        call check_carg('tester',         self%tester)
         call check_carg('test_tree',      self%test_tree)
         call check_carg('tophat',         self%tophat)
         call check_carg('trail_rec',      self%trail_rec)

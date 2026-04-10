@@ -46,6 +46,8 @@ contains
         call track_particles%add_input(UI_PARM, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
         call track_particles%add_input(UI_PARM, neg)
+        call track_particles%add_input(UI_PARM, 'tester', 'multi', 'Write periodic tester-mode outputs',&
+        &'Periodically write masked reference images and registered particle chunks for debugging(no|yes){no}', '(no|yes){no}', .false., 'no')
         call track_particles%add_input(UI_PARM, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0.)
         ! alternative inputs
         ! <empty>

@@ -1,5 +1,5 @@
 !@descr: time series tracker intended for movies of nanoparticles spinning in solution
-module simple_track_trajectory
+module single_tseries_tracker
 use simple_core_module_api
 use simple_parameters, only: parameters
 use simple_image,      only: image
@@ -15,6 +15,7 @@ real,    parameter :: SPECW    = 0.0001
 real,    parameter :: TVLAMBDA = 10.
 real,    parameter :: BFACTOR  = 5.
 integer, parameter :: NNN      = 8
+integer, parameter :: TESTER_WRITE_MULT = 5
 
 type(image),       allocatable :: ptcls(:), ptcls_saved(:)
 type(tvfilter),    allocatable :: tv(:)
@@ -24,7 +25,7 @@ type(string),      pointer     :: intg_names(:), frame_names(:)
 type(string)                   :: dir, fbody, fbody_raw
 type(image)                    :: frame_img      ! individual frame image
 type(image)                    :: frame_avg      ! average over time window
-type(image)                    :: reference, ptcl_target, pspec, pspec_nn
+type(image)                    :: reference, ptcl_target, pspec, pspec_nn, tester_img
 type(image)                    :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN)
 type(string)                   :: neighstknames(NNN), stkname, stkframes_name
 real                           :: msk
@@ -81,6 +82,7 @@ contains
         call ptcl_target%new([p_ptr%box,p_ptr%box,1], p_ptr%smpd)
         call pspec%new([p_ptr%box,p_ptr%box,1], p_ptr%smpd)
         call pspec_nn%new([p_ptr%box,p_ptr%box,1], p_ptr%smpd)
+        call tester_img%new([p_ptr%box,p_ptr%box,1], p_ptr%smpd, wthreads=.false.)
         do i=1,NNN
             call neigh_imgs(i)%new([p_ptr%box,p_ptr%box,1], p_ptr%smpd,wthreads=.false.)
             call backgr_imgs(i)%new([p_ptr%box,p_ptr%box,1], p_ptr%smpd,wthreads=.false.)
@@ -185,6 +187,7 @@ contains
             call reference%shift(xyz)
             call reference%ifft
             call reference%mask2D_soft(msk)
+            call write_tester_dump(iframe, fstart, nrange)
             call reference%fft
             ! updates shifts
             pos = particle_locations(iframe,:)
@@ -281,6 +284,25 @@ contains
         enddo
         call frame_avg%write(string(dir%to_char()//'/'//fbody%to_char()//'_trajectory.mrc'))
     end subroutine write_trajectory
+
+    subroutine write_tester_dump( iframe, fstart, nrange )
+        integer, intent(in) :: iframe, fstart, nrange
+        type(string) :: ref_name, stk_name
+        integer :: i
+        if( trim(p_ptr%tester) .ne. 'yes' ) return
+        if( iframe /= fstart )then
+            if( mod(iframe-fstart, TESTER_WRITE_MULT*track_freq) /= 0 .and. iframe+nrange-1 < nframes ) return
+        endif
+        ref_name = string(dir%to_char()//'/'//fbody%to_char()//'_tester_ref_from'//int2str(iframe)//'.mrc')
+        stk_name = string(dir%to_char()//'/'//fbody%to_char()//'_tester_registered_from'//int2str(iframe)//'.mrc')
+        call reference%write(ref_name)
+        do i=1,nrange
+            call tester_img%copy(ptcls_saved(i))
+            call tester_img%ifft
+            call tester_img%write(stk_name, i)
+        enddo
+        write(logfhandle,'(A,I6,A)') '>>> tester dump written for frame chunk starting at ', iframe, ' '
+    end subroutine write_tester_dump
 
     subroutine update_background_pspec( iframe, pos )
         integer, intent(in) :: iframe, pos(2)
@@ -445,6 +467,7 @@ contains
         call ptcl_target%kill
         call pspec%kill
         call pspec_nn%kill
+        call tester_img%kill
     end subroutine kill_tracker
 
-end module simple_track_trajectory
+end module single_tseries_tracker

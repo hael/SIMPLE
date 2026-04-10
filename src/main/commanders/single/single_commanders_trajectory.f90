@@ -111,11 +111,11 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR, extra_params=params)
         call qsys_cleanup(params)
         ! end gracefully
-        call simple_end('**** SIMPLE_track_trajectory NORMAL STOP ****')
+        call simple_end('**** single_tseries_tracker NORMAL STOP ****')
     end subroutine exec_track_particles_distr
 
     subroutine exec_track_particles( self, cline )
-        use simple_track_trajectory
+        use single_tseries_tracker
         class(commander_track_particles), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         type(sp_project)          :: spproj
@@ -177,7 +177,7 @@ contains
         ! end gracefully
         call qsys_job_finished(params, string('single_commanders_trajectory :: exec_track_particles'))
         call spproj%kill
-        call simple_end('**** SIMPLE_track_trajectory NORMAL STOP ****')
+        call simple_end('**** single_tseries_tracker NORMAL STOP ****')
     end subroutine exec_track_particles
 
     subroutine exec_trajectory_backgr_subtr( self, cline )
