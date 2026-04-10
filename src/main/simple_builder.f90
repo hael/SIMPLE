@@ -263,7 +263,7 @@ contains
             endif
         endif
         ! generate discrete projection direction spaces
-        if( ddo3d .or. str_has_substr(params%refine, 'tree') )then
+        if( ddo3d .or. params%l_tree_refine )then
             select case(trim(params%refine))
                 case('single_ptree')
                     if( cline%defined('blocktree') )then
@@ -314,7 +314,7 @@ contains
                         call o%kill
                         call o_sub%kill
                         call osym%kill
-                        if( str_has_substr(params%refine, 'tree') )then
+                        if( params%l_tree_refine )then
                             self%block_tree = &
                             &gen_eulspace_block_tree_map(self%eulspace%get_noris(), self%eulspace,&
                             &self%subspace_full2sub_map, self%pgrpsyms)

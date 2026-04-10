@@ -19,6 +19,58 @@ logical, parameter :: DEBUG = .false.
 
 contains
 
+    subroutine prepare_tree_sub_distmat(context, sub_distmat)
+        character(len=*), intent(in)    :: context
+        real,             intent(inout) :: sub_distmat(:,:)
+        integer :: nrefs, i, j
+        real    :: vij, vji, vsym, tol, smin, smax, delta
+        nrefs = size(sub_distmat, 1)
+        if( size(sub_distmat, 2) /= nrefs ) then
+            THROW_HARD(trim(context)//': sub_distmat must be square')
+        end if
+        if( nrefs <= 1 ) then
+            if( nrefs == 1 ) sub_distmat(1,1) = 0.0
+            return
+        end if
+        do i = 1, nrefs
+            sub_distmat(i,i) = 0.0
+        end do
+        do i = 1, nrefs - 1
+            do j = i + 1, nrefs
+                vij = sub_distmat(i,j)
+                vji = sub_distmat(j,i)
+                if( vij /= vij .or. vji /= vji ) then
+                    THROW_HARD(trim(context)//': sub_distmat contains NaN')
+                end if
+                if( abs(vij) > huge(1.0) .or. abs(vji) > huge(1.0) ) then
+                    THROW_HARD(trim(context)//': sub_distmat contains non-finite values')
+                end if
+                tol = 100.0 * epsilon(1.0) * max(1.0, max(abs(vij), abs(vji)))
+                if( abs(vij - vji) > tol ) then
+                    THROW_HARD(trim(context)//': sub_distmat must be symmetric')
+                end if
+                vsym = 0.5 * (vij + vji)
+                if( vsym < 0.0 ) then
+                    if( abs(vsym) > tol ) THROW_HARD(trim(context)//': sub_distmat contains negative distances')
+                    vsym = 0.0
+                end if
+                sub_distmat(i,j) = vsym
+                sub_distmat(j,i) = vsym
+            end do
+        end do
+        smin  = minval(sub_distmat)
+        smax  = maxval(sub_distmat)
+        delta = smax - smin
+        if( delta <= epsilon(max(1.0, smax)) ) then
+            sub_distmat = 0.0
+            return
+        end if
+        sub_distmat = (sub_distmat - smin) / delta
+        do i = 1, nrefs
+            sub_distmat(i,i) = 0.0
+        end do
+    end subroutine prepare_tree_sub_distmat
+
     function gen_eulspace_block_tree(eulspace, eulspace_sub, pgrpsym) result(block_tree)
         use simple_eulspace_neigh_map, only: eulspace_neigh_map
         class(oris), intent(in)    :: eulspace, eulspace_sub
@@ -54,7 +106,7 @@ contains
                     sub_distmat(j,i) = dtmp
                 end do
             end do
-            call normalize_minmax(sub_distmat)
+            call prepare_tree_sub_distmat('gen_eulspace_block_tree', sub_distmat)
             call block_tree%build_tree_from_subdistmat(itree, refs, sub_distmat, LINK_AVERAGE)
             deallocate(sub_distmat)
             deallocate(refs)
@@ -76,6 +128,7 @@ contains
         real,    allocatable       :: sub_distmat(:,:)
         integer                    :: i, j, ntrees, itree, nrefs
         real                       :: inplrotdist, dtmp
+        if( neulspace <= 0 ) THROW_HARD('gen_eulspace_block_tree_map: neulspace must be > 0')
         call block_tree%new(subspace_full2sub_map)
         ntrees = block_tree%get_n_trees()
         if(DEBUG)write(*,'(a,1x,i0)') 'NUMBER OF TREES :', ntrees
@@ -98,7 +151,7 @@ contains
                     sub_distmat(j,i) = dtmp
                 end do
             end do
-            call normalize_minmax(sub_distmat)
+            call prepare_tree_sub_distmat('gen_eulspace_block_tree_map', sub_distmat)
             call block_tree%build_tree_from_subdistmat(itree, refs, sub_distmat, LINK_AVERAGE)
             deallocate(sub_distmat)
             deallocate(refs)

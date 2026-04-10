@@ -528,8 +528,9 @@ type :: parameters
     logical :: l_neigh           = .false.
     logical :: l_phaseplate      = .false.
     logical :: l_polar           = .false. 
-    logical :: l_prob_align_mode = .false.
     logical :: l_prob_inpl       = .false.
+    logical :: l_prob_align_mode = .false.
+    logical :: l_tree_refine     = .false.
     logical :: l_sigma_glob      = .false.
     logical :: l_trail_rec       = .false.
     logical :: l_remap_cls       = .false.
@@ -541,6 +542,16 @@ type :: parameters
 end type parameters
 
 contains
+
+    pure logical function is_tree_refine_mode(refine_mode)
+        character(len=*), intent(in) :: refine_mode
+        select case(trim(refine_mode))
+            case('ptree', 'tree_neigh', 'tree_neigh_states', 'shc_ptree', 'snhc_ptree', 'single_ptree')
+                is_tree_refine_mode = .true.
+            case DEFAULT
+                is_tree_refine_mode = .false.
+        end select
+    end function is_tree_refine_mode
 
     subroutine init_strings( self )
         class(parameters), intent(inout) :: self
@@ -1793,7 +1804,8 @@ contains
         end select
         ! -- neigh defaults
         self%l_neigh = .false.
-        l_tree = str_has_substr(self%refine, 'tree')
+        self%l_tree_refine = is_tree_refine_mode(self%refine)
+        l_tree = self%l_tree_refine
         if( str_has_substr(self%refine, 'neigh') .or. l_tree )then
             ! we always do probabilistic in-plane sampling for tree-based approaches
             if( l_tree )then
@@ -1809,7 +1821,7 @@ contains
                 case('shc_ptree')
                     if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 50
                     if( .not. cline%defined('nspace')     ) self%nspace     = 2000
-                case('tree_neigh','tree_neigh_states')
+                case('ptree','tree_neigh','tree_neigh_states')
                     if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 126 ! no odd numbers (previously 125)
                     if( .not. cline%defined('nspace')     ) self%nspace     = 5000
                 case DEFAULT
