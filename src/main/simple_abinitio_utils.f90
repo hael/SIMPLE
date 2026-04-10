@@ -152,7 +152,7 @@ contains
         allocate(lpinfo(NSTAGES))
         lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
         lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
-        if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
+        if( present(lpstop) ) lpfinal = min(lpstop,lpfinal)
         if( present(lpstart) )then
             call lpstages(params%box, NSTAGES, frcs_avg, params%smpd,&
             &lpstart, lpstart, lpfinal, lpinfo, l_cavgs, verbose=.true.)

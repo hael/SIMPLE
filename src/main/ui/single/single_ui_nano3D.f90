@@ -5,11 +5,13 @@ implicit none
 
 type(ui_program), target :: autorefine3D_nano
 type(ui_program), target :: refine3D_nano
+type(ui_program), target :: abinitio3D_nano
 
 contains
 
     subroutine construct_single_nano3D_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
+        call new_abinitio3D_nano(prgtab)
         call new_autorefine3D_nano(prgtab)
         call new_refine3D_nano(prgtab)
     end subroutine construct_single_nano3D_programs
@@ -17,10 +19,39 @@ contains
     subroutine print_single_nano3D_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('3D RECONSTRUCTION:', C_UNDERLINED)
+        write(logfhandle,'(A)') abinitio3D_nano%name%to_char()
         write(logfhandle,'(A)') autorefine3D_nano%name%to_char()
         write(logfhandle,'(A)') refine3D_nano%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_single_nano3D_programs
+
+    subroutine new_abinitio3D_nano( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call abinitio3D_nano%new(&
+        &'abinitio3D_nano',&                                                                               ! name
+        &'ab initio 3D (nano defaults)',&                                                                  ! descr_short
+        &'is a wrapper around abinitio3D that applies nanoparticle-oriented defaults while allowing overrides',& ! descr_long
+        &'single_exec',&                                                                                   ! executable
+        &.true., gui_advanced=.false.)                                                                     ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! search controls
+        call abinitio3D_nano%add_input(UI_SRCH, nsample, required_override=.false.)
+        ! filter controls
+        call abinitio3D_nano%add_input(UI_FILT, hp, required_override=.false.)
+        call abinitio3D_nano%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{5}', .false., 5.)
+        call abinitio3D_nano%add_input(UI_FILT, 'lpstart', 'num', 'Starting low-pass limit', 'Starting low-pass limit', 'low-pass limit in Angstroms{3}', .false., 3.)
+        call abinitio3D_nano%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit', 'low-pass limit in Angstroms{1}', .false., 1.)
+        ! mask controls
+        call abinitio3D_nano%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call abinitio3D_nano%add_input(UI_COMP, nparts, required_override=.false.)
+        call abinitio3D_nano%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('abinitio3D_nano', abinitio3D_nano, prgtab)
+    end subroutine new_abinitio3D_nano
 
     subroutine new_autorefine3D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab

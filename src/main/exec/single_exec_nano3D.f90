@@ -1,7 +1,7 @@
 module single_exec_nano3D
 use simple_string,            only: string
 use simple_cmdline,           only: cmdline
-use single_commanders_nano3D, only: commander_refine3D_nano, commander_autorefine3D_nano
+use single_commanders_nano3D, only: commander_refine3D_nano, commander_autorefine3D_nano, commander_abinitio3D_nano
 use simple_exec_helpers,      only: restarted_exec
 implicit none
 
@@ -10,6 +10,7 @@ private
 
 type(commander_autorefine3D_nano) :: xautorefine3D_nano
 type(commander_refine3D_nano)     :: xrefine3D_nano
+type(commander_abinitio3D_nano)   :: xabinitio3D_nano
 
 contains
 
@@ -22,6 +23,8 @@ contains
         l_silent      = .false.
         l_did_execute = .true.
         select case(trim(which))
+            case( 'abinitio3D_nano' )
+                call xabinitio3D_nano%execute(cline)
             case( 'autorefine3D_nano' )
                 if( cline%defined('nrestarts') )then
                     call restarted_exec(cline, string('autorefine3D_nano'), string('single_exec'))

@@ -19,12 +19,33 @@ type, extends(commander_base) :: commander_refine3D_nano
     procedure :: execute      => exec_refine3D_nano
 end type commander_refine3D_nano
 
+type, extends(commander_base) :: commander_abinitio3D_nano
+    contains
+        procedure :: execute      => exec_abinitio3D_nano
+end type commander_abinitio3D_nano
+
 type, extends(commander_base) :: commander_trajectory_reconstruct3D_distr
   contains
     procedure :: execute      => exec_commander_trajectory_reconstruct3D_distr
 end type commander_trajectory_reconstruct3D_distr
 
 contains
+
+    subroutine exec_abinitio3D_nano( self, cline )
+        use simple_commanders_abinitio, only: commander_abinitio3D
+        class(commander_abinitio3D_nano), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(commander_abinitio3D) :: xabinitio3D
+        call cline%set('prg', 'abinitio3D')
+        call cline%set('objfun',      'cc')
+        call cline%set('pgrp',        'c1')
+        if( .not. cline%defined('nsample') ) call cline%set('nsample', 5000)
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',     5.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',        5.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   3.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    1.)
+        call xabinitio3D%execute(cline)
+    end subroutine exec_abinitio3D_nano
 
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commanders_atoms, only: commander_detect_atoms
