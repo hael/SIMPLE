@@ -11,6 +11,7 @@ use simple_test_ui_network,  only: construct_test_network_programs,  print_test_
 use simple_test_ui_numerics, only: construct_test_numerics_programs, print_test_numerics_programs
 use simple_test_ui_optimize, only: construct_test_optimize_programs, print_test_optimize_programs
 use simple_test_ui_parallel, only: construct_test_parallel_programs, print_test_parallel_programs
+use simple_test_ui_single,   only: construct_test_single_programs,   print_test_single_programs
 use simple_test_ui_stats,    only: construct_test_stats_programs,    print_test_stats_programs
 use simple_test_ui_utils,    only: construct_test_utils_programs,    print_test_utils_programs
 implicit none
@@ -32,6 +33,7 @@ contains
         call construct_test_numerics_programs(tsttab)
         call construct_test_optimize_programs(tsttab)
         call construct_test_parallel_programs(tsttab)
+        call construct_test_single_programs(tsttab)
         call construct_test_stats_programs(tsttab)
         call construct_test_utils_programs(tsttab)
     end subroutine add_test_programs
@@ -48,6 +50,7 @@ contains
         call print_test_numerics_programs(logfhandle)
         call print_test_optimize_programs(logfhandle)
         call print_test_parallel_programs(logfhandle)
+        call print_test_single_programs(logfhandle)
         call print_test_stats_programs(logfhandle)
         call print_test_utils_programs(logfhandle)
     end subroutine print_test_programs
