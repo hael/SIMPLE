@@ -1,5 +1,5 @@
 !@descr: neighborhood extension of probabilistic 3D search table.
-! The sparse neighborhood is not just geometrically sparse, it is also state-sparse around the previous assignment only.
+! The sparse neighborhood is geometrically sparse and searched independently per state.
 module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
 use simple_builder,            only: builder
@@ -41,8 +41,8 @@ contains
         if( nsubs < 1 )then
             THROW_HARD('simple_eul_prob_tab_neigh::new_neigh; empty subspace indices')
         endif
-        ! State-sparse support cannot exceed the number of projections in one state.
-        self%eval_max_touched = max(1, self%p_ptr%nspace)
+        ! Sparse support now spans neighborhoods across all active states.
+        self%eval_max_touched = max(1, self%nrefs)
         allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
         allocate(self%eval_touched_counts(self%nptcls),                     source=0)
     end subroutine new_neigh
@@ -50,19 +50,19 @@ contains
     subroutine fill_tab_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
         ! Per particle:
-        ! 1) get previous-state context
-        ! 2) coarse-score one representative per subspace in previous state
-        ! 3) pick top subspaces and pool their neighborhoods
-        ! 4) evaluate all refs in pooled neighborhood (previous state only)
+        ! 1) get previous-state context and estimate one shift seed
+        ! 2) coarse-score one representative per subspace for every active state
+        ! 3) pick top subspaces per state and pool neighborhoods per state
+        ! 4) evaluate all refs whose projection falls in each state's pooled neighborhood
         ! 5) optionally refine the best evaluated refs with shift search
 
         type :: coarse_search_ws
-            real,    allocatable :: best_subspace_dist(:,:)
-            real,    allocatable :: best_subspace_dist_work(:,:)
-            integer, allocatable :: peak_subspace_inds(:,:)
-            integer, allocatable :: peak_subspace_count(:)
-            integer, allocatable :: pooled_sub_inds(:,:)
-            logical, allocatable :: neigh_proj_mask(:,:)
+            real,    allocatable :: best_subspace_dist(:,:,:)
+            real,    allocatable :: best_subspace_dist_work(:,:,:)
+            integer, allocatable :: peak_subspace_inds(:,:,:)
+            integer, allocatable :: peak_subspace_count(:,:)
+            integer, allocatable :: pooled_sub_inds(:,:,:)
+            logical, allocatable :: neigh_proj_mask(:,:,:)
         end type coarse_search_ws
 
         type :: eval_ws
@@ -79,10 +79,9 @@ contains
         type(eval_ws)            :: eval_work
         integer, allocatable     :: inds_sorted(:,:)
         real,    allocatable     :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:)
-        integer :: i, ri, iproj, isub, irot, istate, prev_state, ithr, max_refs_to_refine, j
-        integer :: neval, nrefs_to_refine, eval_slot, iref_start, iptcl, nsubs, npeak_target
-        integer :: npeak_found, n, si, k, ipeak, coarse_proj, full_ref_subspace, iref_full
-        real    :: rotmat(2,2), lims(2,2), lims_init(2,2), shift_seed(3), refined_shift(3), rotated_shift(2)
+        integer :: i, ri, istate, ithr, max_refs_to_refine
+        integer :: iptcl, nsubs, npeak_target, n, si, iref_full
+        real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         call seed_rnd
         nsubs = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
@@ -110,13 +109,13 @@ contains
             iref_full = (self%sinds(ri)-1)*self%p_ptr%nspace + self%jinds(ri)
             if( iref_full >= 1 .and. iref_full <= size(eval_work%fullref_to_sparse_ref) ) eval_work%fullref_to_sparse_ref(iref_full) = ri
         enddo
-        allocate(coarse_ws%neigh_proj_mask(self%p_ptr%nspace,nthr_glob), source=.false.)
-        allocate(eval_work%evaluated_ref_dists(self%nrefs,nthr_glob),    source=huge(1.0))
-        allocate(coarse_ws%best_subspace_dist(nsubs,nthr_glob),          source=huge(1.0))
-        allocate(coarse_ws%best_subspace_dist_work(nsubs,nthr_glob),     source=huge(1.0))
-        allocate(coarse_ws%peak_subspace_inds(nsubs,nthr_glob),          source=0)
-        allocate(coarse_ws%pooled_sub_inds(npeak_target,nthr_glob),      source=0)
-        allocate(coarse_ws%peak_subspace_count(nthr_glob),               source=0)
+        allocate(coarse_ws%neigh_proj_mask(self%p_ptr%nspace,self%p_ptr%nstates,nthr_glob), source=.false.)
+        allocate(eval_work%evaluated_ref_dists(self%nrefs,nthr_glob),                   source=huge(1.0))
+        allocate(coarse_ws%best_subspace_dist(nsubs,self%p_ptr%nstates,nthr_glob),      source=huge(1.0))
+        allocate(coarse_ws%best_subspace_dist_work(nsubs,self%p_ptr%nstates,nthr_glob), source=huge(1.0))
+        allocate(coarse_ws%peak_subspace_inds(nsubs,self%p_ptr%nstates,nthr_glob),      source=0)
+        allocate(coarse_ws%pooled_sub_inds(npeak_target,self%p_ptr%nstates,nthr_glob),  source=0)
+        allocate(coarse_ws%peak_subspace_count(self%p_ptr%nstates,nthr_glob),           source=0)
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -self%p_ptr%trs
@@ -180,14 +179,13 @@ contains
             logical, intent(in)    :: l_with_shift
             real,    intent(inout) :: shift_seed_loc(3)
             type(ori) :: o_prev_loc
-            integer :: prev_state_loc, prev_proj_loc, npeak_found_loc
-            integer :: neval_loc, seln_loc
+            integer :: prev_state_loc, prev_proj_loc
+            integer :: neval_loc
             call get_particle_context(iptcl_loc, o_prev_loc, prev_state_loc, prev_proj_loc)
             call estimate_shift_seed(ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc, o_prev_loc, l_with_shift, shift_seed_loc)
-            call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, prev_state_loc, shift_seed_loc, l_with_shift)
-            npeak_found_loc = coarse_ws%peak_subspace_count(ithr_loc)
-            call build_pooled_neighborhood(ithr_loc, npeak_found_loc, prev_proj_loc)
-            call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, prev_state_loc, shift_seed_loc, l_with_shift, neval_loc)
+            call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
+            call build_pooled_neighborhood(ithr_loc, prev_proj_loc)
+            call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval_loc)
             call refine_best_neighbors(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval_loc, l_with_shift)
             call o_prev_loc%kill
         end subroutine process_particle
@@ -222,19 +220,21 @@ contains
             endif
         end subroutine estimate_shift_seed
 
-        subroutine find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, prev_state_loc, shift_seed_loc, l_with_shift)
-            integer, intent(in) :: i_loc, ithr_loc, iptcl_loc, prev_state_loc
+        subroutine find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
+            integer, intent(in) :: i_loc, ithr_loc, iptcl_loc
             real,    intent(in) :: shift_seed_loc(3)
             logical, intent(in) :: l_with_shift
-            integer :: isub_loc, full_ref_subspace_loc, irot_loc, ri_loc, ipeak_loc, coarse_proj_loc
+            integer :: si_loc, istate_loc, isub_loc, full_ref_subspace_loc, irot_loc, ri_loc, ipeak_loc, coarse_proj_loc
             real    :: rotmat_loc(2,2), rotated_shift_loc(2)
-            coarse_ws%best_subspace_dist(:,ithr_loc) = huge(1.0)
-            coarse_ws%peak_subspace_count(ithr_loc)  = 0
-            if( self%state_exists(prev_state_loc) )then
+            coarse_ws%best_subspace_dist(:,:,ithr_loc) = huge(1.0)
+            coarse_ws%peak_subspace_count(:,ithr_loc)  = 0
+            do si_loc = 1, self%nstates
+                istate_loc = self%ssinds(si_loc)
+                if( .not. self%state_exists(istate_loc) ) cycle
                 do isub_loc = 1, nsubs
                     coarse_proj_loc = self%b_ptr%subspace_inds(isub_loc)
-                    if( .not. self%proj_exists(coarse_proj_loc, prev_state_loc) ) cycle
-                    full_ref_subspace_loc = (prev_state_loc-1)*self%p_ptr%nspace + coarse_proj_loc
+                    if( .not. self%proj_exists(coarse_proj_loc, istate_loc) ) cycle
+                    full_ref_subspace_loc = (istate_loc-1)*self%p_ptr%nspace + coarse_proj_loc
                     if( l_with_shift )then
                         call self%b_ptr%pftc%gen_objfun_vals(full_ref_subspace_loc, iptcl_loc, shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
                     else
@@ -242,7 +242,7 @@ contains
                     endif
                     dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
                     irot_loc = minloc(dists_inpl(:,ithr_loc), dim=1)
-                    coarse_ws%best_subspace_dist(isub_loc,ithr_loc) = dists_inpl(irot_loc,ithr_loc)
+                    coarse_ws%best_subspace_dist(isub_loc,istate_loc,ithr_loc) = dists_inpl(irot_loc,ithr_loc)
                     ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace_loc)
                     if( ri_loc > 0 )then
                         if( l_with_shift )then
@@ -254,37 +254,51 @@ contains
                         endif
                     endif
                 enddo
-                coarse_ws%best_subspace_dist_work(:,ithr_loc) = coarse_ws%best_subspace_dist(:,ithr_loc)
+                coarse_ws%best_subspace_dist_work(:,istate_loc,ithr_loc) = coarse_ws%best_subspace_dist(:,istate_loc,ithr_loc)
                 do ipeak_loc = 1, npeak_target
-                    coarse_ws%peak_subspace_inds(ipeak_loc,ithr_loc) = minloc(coarse_ws%best_subspace_dist_work(:,ithr_loc), dim=1)
-                    isub_loc = coarse_ws%peak_subspace_inds(ipeak_loc,ithr_loc)
-                    if( coarse_ws%best_subspace_dist_work(isub_loc,ithr_loc) >= huge(1.0) )then
-                        coarse_ws%peak_subspace_inds(ipeak_loc,ithr_loc) = 0
+                    coarse_ws%peak_subspace_inds(ipeak_loc,istate_loc,ithr_loc) = minloc(coarse_ws%best_subspace_dist_work(:,istate_loc,ithr_loc), dim=1)
+                    isub_loc = coarse_ws%peak_subspace_inds(ipeak_loc,istate_loc,ithr_loc)
+                    if( coarse_ws%best_subspace_dist_work(isub_loc,istate_loc,ithr_loc) >= huge(1.0) )then
+                        coarse_ws%peak_subspace_inds(ipeak_loc,istate_loc,ithr_loc) = 0
                         exit
                     endif
-                    coarse_ws%best_subspace_dist_work(isub_loc,ithr_loc) = huge(1.0)
-                    coarse_ws%peak_subspace_count(ithr_loc) = coarse_ws%peak_subspace_count(ithr_loc) + 1
+                    coarse_ws%best_subspace_dist_work(isub_loc,istate_loc,ithr_loc) = huge(1.0)
+                    coarse_ws%peak_subspace_count(istate_loc,ithr_loc) = coarse_ws%peak_subspace_count(istate_loc,ithr_loc) + 1
                 enddo
-            endif
+            enddo
         end subroutine find_peak_subspaces
 
-        subroutine build_pooled_neighborhood(ithr_loc, npeak_found_loc, prev_proj_loc)
-            integer, intent(in) :: ithr_loc, npeak_found_loc, prev_proj_loc
-            integer :: isub_loc, coarse_proj_loc
-            coarse_ws%neigh_proj_mask(:,ithr_loc) = .false.
-            if( npeak_found_loc > 0 )then
-                coarse_ws%pooled_sub_inds(1:npeak_found_loc,ithr_loc) = coarse_ws%peak_subspace_inds(1:npeak_found_loc,ithr_loc)
-                call neigh_map%get_neighbors_mask_pooled(coarse_ws%pooled_sub_inds(1:npeak_found_loc,ithr_loc), coarse_ws%neigh_proj_mask(:,ithr_loc))
-            else
-                coarse_proj_loc = max(1, min(self%p_ptr%nspace, prev_proj_loc))
-                isub_loc = self%b_ptr%subspace_full2sub_map(coarse_proj_loc)
-                if( isub_loc < 1 .or. isub_loc > nsubs ) isub_loc = 1
-                call neigh_map%get_neighbors_mask(isub_loc, coarse_ws%neigh_proj_mask(:,ithr_loc))
-            endif
+        subroutine build_pooled_neighborhood(ithr_loc, prev_proj_loc)
+            integer, intent(in) :: ithr_loc, prev_proj_loc
+            integer :: si_loc, istate_loc, npeak_found_loc, isub_loc, coarse_proj_loc, iproj_loc
+            coarse_ws%neigh_proj_mask(:,:,ithr_loc) = .false.
+            do si_loc = 1, self%nstates
+                istate_loc = self%ssinds(si_loc)
+                npeak_found_loc = coarse_ws%peak_subspace_count(istate_loc,ithr_loc)
+                if( npeak_found_loc > 0 )then
+                    coarse_ws%pooled_sub_inds(1:npeak_found_loc,istate_loc,ithr_loc) = coarse_ws%peak_subspace_inds(1:npeak_found_loc,istate_loc,ithr_loc)
+                    call neigh_map%get_neighbors_mask_pooled(coarse_ws%pooled_sub_inds(1:npeak_found_loc,istate_loc,ithr_loc), coarse_ws%neigh_proj_mask(:,istate_loc,ithr_loc))
+                else
+                    coarse_proj_loc = max(1, min(self%p_ptr%nspace, prev_proj_loc))
+                    if( .not. self%proj_exists(coarse_proj_loc,istate_loc) )then
+                        coarse_proj_loc = 0
+                        do iproj_loc = 1, self%p_ptr%nspace
+                            if( self%proj_exists(iproj_loc,istate_loc) )then
+                                coarse_proj_loc = iproj_loc
+                                exit
+                            endif
+                        enddo
+                    endif
+                    if( coarse_proj_loc < 1 ) cycle
+                    isub_loc = self%b_ptr%subspace_full2sub_map(coarse_proj_loc)
+                    if( isub_loc < 1 .or. isub_loc > nsubs ) isub_loc = 1
+                    call neigh_map%get_neighbors_mask(isub_loc, coarse_ws%neigh_proj_mask(:,istate_loc,ithr_loc))
+                endif
+            enddo
         end subroutine build_pooled_neighborhood
 
-        subroutine evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, prev_state_loc, shift_seed_loc, l_with_shift, neval_loc)
-            integer, intent(in) :: i_loc, ithr_loc, iptcl_loc, prev_state_loc
+        subroutine evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval_loc)
+            integer, intent(in) :: i_loc, ithr_loc, iptcl_loc
             real,    intent(in) :: shift_seed_loc(3)
             logical, intent(in) :: l_with_shift
             integer, intent(out) :: neval_loc
@@ -293,9 +307,8 @@ contains
             neval_loc = 0
             do ri_loc = 1, self%nrefs
                 istate_loc = self%sinds(ri_loc)
-                if( istate_loc /= prev_state_loc ) cycle
                 iproj_loc  = self%jinds(ri_loc)
-                if( .not. coarse_ws%neigh_proj_mask(iproj_loc,ithr_loc) ) cycle
+                if( .not. coarse_ws%neigh_proj_mask(iproj_loc,istate_loc,ithr_loc) ) cycle
                 iref_loc = (istate_loc-1)*self%p_ptr%nspace + iproj_loc
                 if( l_with_shift )then
                     call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc, shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
