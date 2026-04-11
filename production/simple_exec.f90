@@ -7,6 +7,7 @@ implicit none
 character(len=STDLEN)      :: xarg, prg
 character(len=XLONGSTRLEN) :: entire_line
 type(cmdline)              :: cline
+type(ui_program), pointer  :: ptr2prg
 integer                    :: cmdstat, cmdlen, pos
 integer(timer_int_kind)    :: t0
 real(timer_int_kind)       :: rt_exec
@@ -24,6 +25,12 @@ call make_ui
 if( str_has_substr(entire_line, 'prg=list') )then
     call list_simple_prgs_in_ui
     stop
+endif
+! validate program name before parsing (gives a friendly error for typos)
+ptr2prg => null()
+call get_prg_ptr(string(trim(prg)), ptr2prg)
+if( .not. associated(ptr2prg) )then
+    THROW_HARD('Program "'//trim(prg)//'" not recognized. Use prg=list to see available programs.')
 endif
 ! parse command line into cline object
 call cline%parse
@@ -58,7 +65,7 @@ if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('8f6e54f0')
+    call simple_print_git_version('a228d1a5')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

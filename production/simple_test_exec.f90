@@ -7,6 +7,7 @@ implicit none
 character(len=STDLEN)             :: xarg, prg
 character(len=XLONGSTRLEN)        :: entire_line
 type(cmdline)                     :: cline
+type(ui_program), pointer         :: ptr2prg
 integer                           :: cmdstat, cmdlen, pos
 integer(timer_int_kind)           :: t0
 real(timer_int_kind)              :: rt_exec
@@ -25,6 +26,12 @@ if( str_has_substr(entire_line, 'test=list') )then
     call list_simple_test_prgs_in_ui
     stop
 endif
+! validate program name before parsing (gives a friendly error for typos)
+ptr2prg => null()
+call get_test_prg_ptr(string(trim(prg)), ptr2prg)
+if( .not. associated(ptr2prg) )then
+    THROW_HARD('Program test "'//trim(prg)//'" not recognized. Use test=list to see available programs.')
+endif
 ! parse command line into cline object
 call cline%parse
 ! generate script for queue submission?
@@ -41,10 +48,11 @@ call exec_test_network_commander(  trim(prg), cline, l_silent, l_did_execute)
 call exec_test_numerics_commander( trim(prg), cline, l_silent, l_did_execute)
 call exec_test_optimize_commander( trim(prg), cline, l_silent, l_did_execute)
 call exec_test_parallel_commander( trim(prg), cline, l_silent, l_did_execute)
+call exec_test_single_commander(   trim(prg), cline, l_silent, l_did_execute)
 call exec_test_stats_commander(    trim(prg), cline, l_silent, l_did_execute)
 call exec_test_utils_commander(    trim(prg), cline, l_silent, l_did_execute)
 if( .not. l_did_execute )then
-    THROW_HARD('Program test "'//trim(prg)//'" not recognized. Use prg=list to see available programs.')
+    THROW_HARD('Program test "'//trim(prg)//'" not recognized. Use test=list to see available programs.')
 endif
 call update_job_descriptions_in_project(string('simple_test_exec'), string(trim(prg)), cline)
 ! close log file
