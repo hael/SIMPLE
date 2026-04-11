@@ -53,15 +53,15 @@ contains
         ! <empty>
         ! search controls
         call track_particles%add_input(UI_SRCH, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
-        'e.g. pixels window halfwidth', .false., 10.)
-        call track_particles%add_input(UI_SRCH, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{30}', '{30}', .false., 30.)
+        'e.g. pixels window halfwidth', .false., 30.)
+        call track_particles%add_input(UI_SRCH, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{50}', '{50}', .false., 50.)
         ! <empty>
         ! filter controls
         call track_particles%add_input(UI_FILT, lp_track)
         call track_particles%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
         call track_particles%add_input(UI_FILT, 'filter', 'multi','Alternative filter for particle tracking',&
-            &'Alternative filter for particle tracking(no|tv|nlmean){tv}', '(no|tv|nlmean){tv}', .false., 'tv')
+            &'Alternative filter for particle tracking(no|tv|nlmean){nlmean}', '(no|tv|nlmean){nlmean}', .false., 'nlmean')
         call track_particles%add_input(UI_FILT, hp)
         ! mask controls
         ! <empty>
@@ -116,7 +116,7 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_make_pickavg%add_input(UI_PARM, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{10}', '{10}', .false., 10.)
+        call tseries_make_pickavg%add_input(UI_PARM, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{100}', '{100}', .false., 100.)
         call tseries_make_pickavg%add_input(UI_PARM, 'fromf',      'num', 'Frame to start averaging from', 'Frame to start averaging from', 'frame index', .false., 0.)
         ! alternative inputs
         ! <empty>

@@ -48,7 +48,7 @@ contains
 
     subroutine exec_track_particles_distr( self, cline )
         class(commander_track_particles_distr), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
+        class(cmdline),                         intent(inout) :: cline
         type(parameters)              :: params
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
@@ -56,12 +56,12 @@ contains
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
         integer :: ndatlines, numlen, j, orig_box, ipart
-        if( .not. cline%defined('neg')       ) call cline%set('neg',      'yes')
-        if( .not. cline%defined('lp')        ) call cline%set('lp',         2.3)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      5.0)
-        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp',  30)
-        if( .not. cline%defined('filter'))     call cline%set('filter',    'tv')
-        if( .not. cline%defined('offset'))     call cline%set('offset',     10.)
+        if( .not. cline%defined('neg')       ) call cline%set('neg',       'yes')
+        if( .not. cline%defined('lp')        ) call cline%set('lp',          2.3)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       5.0)
+        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp',   50)
+        if( .not. cline%defined('filter'))     call cline%set('filter', 'nlmean')
+        if( .not. cline%defined('offset'))     call cline%set('offset',      20.)
         call cline%set('oritype','mic')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
@@ -117,7 +117,7 @@ contains
     subroutine exec_track_particles( self, cline )
         use single_tseries_tracker
         class(commander_track_particles), intent(inout) :: self
-        class(cmdline),                           intent(inout) :: cline
+        class(cmdline),                   intent(inout) :: cline
         type(sp_project)          :: spproj
         type(parameters)          :: params
         type(string)              :: dir, forctf
@@ -185,7 +185,7 @@ contains
         ! peaks @ 2.14 A and @ 1.23 A. This is done by band-pass filtering the background image,
         ! recommended (and default settings) are hp=5.0 lp=1.1 and width=5.0.
         class(commander_trajectory_backgr_subtr), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
+        class(cmdline),                           intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         type(image)      :: img_backgr, ave_img

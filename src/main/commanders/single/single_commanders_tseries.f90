@@ -215,11 +215,11 @@ contains
         type(image)               :: img_intg
         integer                   :: istart, istop
         integer :: i, nframes, frame_counter, ldim(3), ifoo, cnt
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',     10)
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    100)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',     'yes')
         if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',         3)
         if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',         3)
-        if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
+        if( .not. cline%defined('trs')        ) call cline%set('trs',           20.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         3.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',           5.)
