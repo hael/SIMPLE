@@ -257,7 +257,7 @@ contains
         self%npname    = fname
         self%fbody     = get_fbody(basename(fname), fname2ext(fname))
         self%smpd      = params%smpd
-        self%atom_name = ' '//params%element
+        self%atom_name = params%element
         self%element   = params%element
         el_ucase       = upperCase(params%element)
         call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
