@@ -916,15 +916,15 @@ contains
         call fileiochk('writepdb; simple_atoms opening '//fname%to_char(), io_stat)
         do i = 1, self%n
             if(self%het(i))then
-                write(funit,pdbfmt)'HETATM',self%num(i),self%name(i),self%altloc(i),&
+                write(funit,pdbfmt_write)'HETATM',self%num(i),self%name(i),self%altloc(i),&
                     self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-                    self%occupancy(i), self%beta(i),' '
+                    self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
             else
-                write(funit,pdbfmt)'ATOM  ',self%num(i),self%name(i),self%altloc(i),&
+                write(funit,pdbfmt_write)'ATOM  ',self%num(i),self%name(i),self%altloc(i),&
                     self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-                    self%occupancy(i), self%beta(i), self%element(i)
+                    self%occupancy(i), self%beta(i), self%element(i), self%charge(i)
             endif
-            ! ANISOU Format has each matrix component multipled by 10**4 and written as an intenger
+            ! ANISOU Format has each matrix component multipled by 10**4 and written as an integer
             aniso_out = nint(aniso(:,:,i)*10**4)
             write(funit, pdbfmt_anisou)'ANISOU', self%num(i),self%name(i),self%altloc(i),&
                 self%resname(i),self%chain(i), self%resnum(i), self%icode(i), aniso_out(1,1),&
