@@ -214,13 +214,13 @@ subroutine exec_test_simulate_particles( self, cline )
     real                                :: smpd_stk
     logical                             :: all_ok
     mol = sars_cov2_spkgp_6vxx()
-    call molecule%pdb2mrc(smpd=smpd, mol=mol)
+    call molecule%pdb2mrc(smpd=smpd, mol=mol, center_pdb=.true.)
     call params%new(cline)
     all_ok = .true.
     ! ---- simulate particles ----
     write(logfhandle,'(a)') '>>> TEST_SIMULATE_PARTICLES:'
     call cline_sim%set('prg',      'simulate_particles')
-    call cline_sim%set('vol1',               '6VXX.mrc')
+    call cline_sim%set('vol1',           'molecule.mrc')
     call cline_sim%set('smpd',                     smpd)
     call cline_sim%set('mskdiam',                   180)
     call cline_sim%set('nthr',                       16)
@@ -228,9 +228,11 @@ subroutine exec_test_simulate_particles( self, cline )
     call cline_sim%set('pgrp',                     'c1')
     call cline_sim%set('snr',                      0.01)
     call cline_sim%set('ctf',                     'yes')
+    call cline_sim%set('sherr',                     0.0)
+    call cline_sim%set('even',                     'on')
     call xsim_ptcls%execute(cline_sim)
     ! ---- define expected output file names ----
-    vol_file = '6VXX.mrc'
+    vol_file = 'molecule.mrc'
     outstk   = 'simulated_particles.mrc'
     outfile  = 'simulated_oris'//trim(TXT_EXT)
     ! ---- check volume was generated ----
