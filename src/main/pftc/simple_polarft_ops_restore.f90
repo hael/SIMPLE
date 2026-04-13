@@ -88,27 +88,27 @@ contains
                 self%pfts_odd(:,:,icls)  = DCMPLX_ZERO
                 self%ctf2_even(:,:,icls) = 0.d0
                 self%ctf2_odd(:,:,icls)  = 0.d0
+                call clsfrcs%set_frc(icls, frc, 1)
             else
                 ! e/o Normalization
-                if( eo_pop(1) > 1) call self%safe_norm(self%pfts_even(:,:,icls), self%ctf2_even(:,:,icls), even)
-                if( eo_pop(2) > 1) call self%safe_norm(self%pfts_odd(:,:,icls),  self%ctf2_odd(:,:,icls),  odd)
+                call self%safe_norm(self%pfts_even(:,:,icls), self%ctf2_even(:,:,icls), even)
+                call self%safe_norm(self%pfts_odd(:,:,icls),  self%ctf2_odd(:,:,icls),  odd)
                 ! FRC
                 call self%polar_cavger_calc_frc(even, odd, filtsz, frc)
+                call clsfrcs%set_frc(icls, frc, 1)
                 ! Regularization
                 if( self%p_ptr%l_ml_reg )then                    
                     if( pop > 1 )then
                         call add_invtausq2rho(frc(self%kfromto(1):self%interpklim), self%ctf2_even(:,:,icls), self%ctf2_odd(:,:,icls))
                     endif
                     ! e/o re-normalization
-                    if( eo_pop(1) > 1) call self%safe_norm(self%pfts_even(:,:,icls), self%ctf2_even(:,:,icls), even)
-                    if( eo_pop(2) > 1) call self%safe_norm(self%pfts_odd(:,:,icls),  self%ctf2_odd(:,:,icls),  odd)
+                    call self%safe_norm(self%pfts_even(:,:,icls), self%ctf2_even(:,:,icls), even)
+                    call self%safe_norm(self%pfts_odd(:,:,icls),  self%ctf2_odd(:,:,icls),  odd)
                 endif
                 ! merged class
-                if(pop > 1)then
-                    pft  = self%pfts_even(:,:,icls) + self%pfts_odd(:,:,icls)
-                    ctf2 = self%ctf2_even(:,:,icls) + self%ctf2_odd(:,:,icls)
-                    call self%safe_norm(pft, ctf2, self%pfts_merg(:,:,icls))
-                endif
+                pft  = self%pfts_even(:,:,icls) + self%pfts_odd(:,:,icls)
+                ctf2 = self%ctf2_even(:,:,icls) + self%ctf2_odd(:,:,icls)
+                call self%safe_norm(pft, ctf2, self%pfts_merg(:,:,icls))
                 ! average low-resolution info between eo pairs to keep things in register
                 find = min(self%interpklim, clsfrcs%estimate_find_for_eoavg(icls, 1))
                 if( find >= self%kfromto(1) )then
@@ -119,8 +119,6 @@ contains
                 self%pfts_even(:,:,icls) = even
                 self%pfts_odd(:,:,icls)  = odd
             endif
-            ! store FRC
-            call clsfrcs%set_frc(icls, frc, 1)
         end do
         !$omp end parallel do
         ! Write FRCs
@@ -149,13 +147,13 @@ contains
                     ssnr(k) = fudge * cc / (1.d0 - cc)
                 enddo
                 where( sig2e > DTINY )
-                    sig2e = real(self%ncls*self%pftsz,dp) / sig2e
+                    sig2e = real(self%pftsz,dp) / sig2e
                 elsewhere
                     sig2e = 0.d0
                 end where
                 tau2e = ssnr * sig2e
                 where( sig2o > DTINY )
-                    sig2o = real(self%ncls*self%pftsz,dp) / sig2o
+                    sig2o = real(self%pftsz,dp) / sig2o
                 elsewhere
                     sig2o = 0.d0
                 end where
@@ -347,19 +345,34 @@ contains
         endif
     end subroutine polar_cavger_merge_eos_and_norm
 
-    module subroutine polar_cavger_merge_eos_and_norm_new( self, reforis, symop, cline, update_frac )
+    module subroutine polar_cavger_merge_eos_and_norm_new( self, reforis, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
-        type(sym),           intent(in)    :: symop
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
-        real(dp)    :: fsc(self%kfromto(1):self%interpklim), ufrac_trec
+        real(dp)    :: fsc(self%kfromto(1):self%interpklim), ufrac_trec, scale
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
-        integer     :: find4eoavg, i
+        real        :: polar_count, cart_count
+        integer     :: find4eoavg, i,k
         ! Mirror Fourier & CTF2 slices
-        call self%mirror_slices( reforis )
+        call mirror_slices_new( self, reforis )
+        ! Scale arrays to reproduce cartesian lattice behaviour after mirroring
+        do k = self%kfromto(1),self%interpklim
+            ! ~average number of points per shell in polar representation
+            polar_count = rad2deg(atan(KBWINSZ / (KBALPHA*real(k)))) / 360.0
+            ! ~average number of points per shell in cartesian representation
+            cart_count  = 1.0 / real(4*k)
+            ! polar to cartesian scaling (both depend linearly on # ptcls, so it cancels out)
+            scale = real(cart_count / polar_count,dp)
+            !$omp parallel workshare proc_bind(close)
+            self%pfts_even(:,k,:) = scale * self%pfts_even(:,k,:)
+            self%pfts_odd(:, k,:) = scale * self%pfts_odd(:, k,:)
+            self%ctf2_even(:,k,:) = scale * self%ctf2_even(:,k,:)
+            self%ctf2_odd(:, k,:) = scale * self%ctf2_odd(:, k,:)
+            !$omp end parallel workshare
+        enddo
         ! e/o trailing reconstruction part 1
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
@@ -548,17 +561,50 @@ contains
         !$omp end parallel do
     end subroutine mirror_slices
 
+    ! Mirrors the un-mirrored slices, no sum performed
+    module subroutine mirror_slices_new( self, ref_space )
+        class(polarft_calc), intent(inout) :: self
+        type(oris),          intent(in)    :: ref_space
+        complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
+        real        :: psi
+        integer     :: iref, m
+        logical     :: l_rotm
+        if( .not.ref_space%isthere('mirr') )then
+            THROW_HARD('Mirror index missing in reference search space')
+        endif
+        !$omp parallel do default(shared) proc_bind(close) private(iref,m,pft,psi,l_rotm)
+        do iref = 1,self%ncls/2
+            m      = ref_space%get_int(iref,'mirr')
+            psi    = abs(ref_space%get(m, 'psi'))
+            l_rotm = (psi > 0.1) .and. (psi < 359.9)
+            ! Fourier components
+            if( l_rotm )then
+                call self%mirror_pft(self%pfts_even(:,:,iref), pft)
+                self%pfts_even(:,:,m) = conjg(pft)
+                call self%mirror_pft(self%pfts_odd(:,:,iref), pft)
+                self%pfts_odd(:,:,m)  = conjg(pft)
+            else
+                call self%mirror_pft(self%pfts_even(:,:,iref), self%pfts_even(:,:,m))
+                call self%mirror_pft(self%pfts_odd(:,:,iref),  self%pfts_odd(:,:,m))
+            endif
+            ! CTF
+            call self%mirror_ctf2(self%ctf2_even(:,:,iref), self%ctf2_even(:,:,m))
+            call self%mirror_ctf2(self%ctf2_odd(:,:,iref),  self%ctf2_odd(:,:,m))
+        enddo
+        !$omp end parallel do
+    end subroutine mirror_slices_new
+
     ! Calculate global FSC within [self%kfromto(1);self%interpklim]
     module subroutine calc_fsc( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc, ufrac_trec, prev_even, prev_odd )
-        class(polarft_calc),   intent(inout) :: self
-        complex(dp),           intent(in)    :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        complex(dp),           intent(in)    :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        real(dp),              intent(in)    :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        real(dp),              intent(in)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        real(dp),              intent(out)   :: fsc(self%kfromto(1):self%interpklim)
-        real(dp),    optional, intent(in)    :: ufrac_trec
-        complex(dp), optional, intent(in)    :: prev_even(:,:,:)
-        complex(dp), optional, intent(in)    :: prev_odd(:,:,:)
+        class(polarft_calc),   intent(in)  :: self
+        complex(dp),           intent(in)  :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp),           intent(in)  :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(in)  :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(in)  :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(out) :: fsc(self%kfromto(1):self%interpklim)
+        real(dp),    optional, intent(in)  :: ufrac_trec
+        complex(dp), optional, intent(in)  :: prev_even(:,:,:)
+        complex(dp), optional, intent(in)  :: prev_odd(:,:,:)
         complex(dp) :: even(self%pftsz,self%kfromto(1):self%interpklim)
         complex(dp) :: odd(self%pftsz,self%kfromto(1):self%interpklim)
         complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
@@ -576,7 +622,7 @@ contains
         fsc  = 0.d0; vare = 0.d0; varo = 0.d0
         !$omp parallel do default(shared) schedule(static) proc_bind(close)&
         !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo)
-        do icls = 1,self%ncls/2
+        do icls = 1,self%ncls
             ! e/o restoration
             pft  = pfts_even(:,:,icls)
             ctf2 = ctf2_even(:,:,icls)
@@ -615,15 +661,12 @@ contains
         real(dp) :: sig2e(self%kfromto(1):self%interpklim), sig2o(self%kfromto(1):self%interpklim)
         real(dp) :: ssnr(self%kfromto(1):self%interpklim), tau2(self%kfromto(1):self%interpklim)
         real(dp) :: cc, fudge, invtau2
-        integer  :: icls, k, kstart, p, nhalf
-        nhalf = self%ncls/2
+        integer  :: icls, k, kstart, p
         ! Radial CTF2 sum
-        sig2e = 0.d0; sig2o = 0.d0
-        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-        !$omp private(k) reduction(+:sig2e,sig2o)
+        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k)
         do k = self%kfromto(1),self%interpklim
-            sig2e(k) = sig2e(k) + sum(ctf2_even(:,k,1:nhalf))
-            sig2o(k) = sig2o(k) + sum(ctf2_odd(:,k,1:nhalf))
+            sig2e(k) = sum(ctf2_even(:,k,:))
+            sig2o(k) = sum(ctf2_odd(:,k,:))
         enddo
         !$omp end parallel do
         ! SSNR

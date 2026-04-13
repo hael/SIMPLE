@@ -10,7 +10,7 @@ use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
 implicit none
 
-public :: init_rec, prep_imgs4rec, update_rec, finalize_rec, calc_3Drec
+public :: init_rec, prep_imgs4rec, update_rec, finalize_rec, calc_3Drec, calc_polar_refs
 private
 #include "simple_local_flags.inc"
 
@@ -153,13 +153,18 @@ contains
         integer   :: iptcl, i, ithr, kfromto(2)
         ! logical/physical adress mapping because overwritten by polarize
         call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
+        if( params%l_polar ) call ptcl_imgs(1)%memoize_mask_coords()
         ! gridding batch loop
         kfromto = build%esig%get_kfromto()
         !$omp parallel do default(shared) private(i,ithr,iptcl,shift) schedule(static) proc_bind(close)
         do i = 1,nptcls
             ithr   = omp_get_thread_num() + 1
             iptcl  = pinds(i)
-            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+            if( params%l_polar )then
+                call ptcl_imgs(i)%norm_noise_taper_edge_mask_pad_fft(build%lmsk, params%msk, build%img_pad_heap(ithr))
+            else
+                call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+            endif
             ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
             shift = build%spproj_field%get_2Dshift(iptcl)
             if( params%l_ml_reg )then
@@ -341,5 +346,85 @@ contains
         call build%vol2%kill
         call gridcorr_img%kill
     end subroutine norm_struct_facts
+
+    ! generate polar references, for testing only
+    subroutine calc_polar_refs( params, build, cline, nptcls, pinds )
+        use simple_image,        only: image
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: nptcls
+        integer,           intent(in)    :: pinds(nptcls)
+        type(fplane_type), allocatable   :: fpls(:)
+        type(image),       allocatable   :: cavgs(:)
+        integer :: batchlims(2), ibatch, batchsz, i, maxbatchsz
+        logical :: DEBUG = .true.
+        integer(timer_int_kind) :: t, t0
+        real(timer_int_kind)    :: t_init, t_read, t_prep, t_grid, t_tot
+        if( DEBUG ) t0 = tic()
+        ! Initialize objects for recontruction
+        if( DEBUG ) t = tic()
+        maxbatchsz = MAXIMGBATCHSZ
+        call init_rec(params, build, maxbatchsz, fpls)
+        ! Prep batch image objects
+        call prepimgbatch(params, build, maxbatchsz)
+        if( DEBUG ) t_init = toc(t)
+        ! gridding batch loop
+        if( DEBUG ) then
+            t_read = 0.d0
+            t_prep = 0.d0
+            t_grid = 0.d0
+        endif
+        call build%pftc%new(params, params%nspace, [1,1], [2,5])
+        call build%pftc%polar_cavger_new(.true.)
+        call build%pftc%polar_cavger_zero_pft_refs
+        do ibatch = 1,nptcls,maxbatchsz
+            batchlims = [ibatch, min(nptcls, ibatch+maxbatchsz-1)]
+            batchsz   = batchlims(2) - batchlims(1) + 1
+            ! read images
+            if( DEBUG ) t = tic()
+            call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+            if( DEBUG ) t_read = t_read + toc(t)
+            ! preprocess images into padded objects
+            if( DEBUG ) t = tic()
+            call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz),&
+                               &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+            if( DEBUG ) t_prep = t_prep + toc(t)
+            ! insert padded slices into lattice
+            if( DEBUG ) t = tic()
+            call build%pftc%polar_cavger_insert_ptcls_oversamp(build%eulspace, build%spproj_field, &
+                        & build%pgrpsyms, batchsz, pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+            if( DEBUG ) t_grid = t_grid + toc(t)
+        end do
+        ! Normalize polar references
+        call build%pftc%polar_cavger_merge_eos_and_norm_new(build%eulspace, cline, params%update_frac)
+        if( DEBUG )t_tot = toc(t0)
+        ! Write
+        call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+        ! Crude visualization
+        allocate(cavgs(params%nspace))
+        call build%pftc%polar_cavger_refs2cartesian( cavgs, 'merged' )
+        do i = 1,params%nspace
+            call cavgs(i)%write(string('prefs_merged.mrc'),i)
+            call cavgs(i)%kill
+        enddo
+        deallocate(cavgs)
+        ! deallocate convenience objects
+        do i = 1,size(fpls)
+            if( allocated(fpls(i)%cmplx_plane) ) deallocate(fpls(i)%cmplx_plane)
+            if( allocated(fpls(i)%ctfsq_plane) ) deallocate(fpls(i)%ctfsq_plane)
+        end do
+        deallocate(fpls)
+        call dealloc_imgarr(build%img_pad_heap)
+        call forget_ft_maps
+        if( DEBUG .and. (params%part==1) )then
+            print *,'Init          : ', t_init
+            print *,'Read          : ', t_read
+            print *,'Prep          : ', t_prep
+            print *,'Grid          : ', t_grid
+            print *,'Total rec time: ', t_tot
+        endif
+    end subroutine calc_polar_refs
 
 end module simple_matcher_3Drec

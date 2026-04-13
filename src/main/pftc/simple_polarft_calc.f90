@@ -760,10 +760,9 @@ interface
         real,                intent(in)    :: update_frac
     end subroutine polar_cavger_merge_eos_and_norm
 
-    module subroutine polar_cavger_merge_eos_and_norm_new( self, reforis, symop, cline, update_frac )
+    module subroutine polar_cavger_merge_eos_and_norm_new( self, reforis, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
-        type(sym),           intent(in)    :: symop
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
     end subroutine polar_cavger_merge_eos_and_norm_new
@@ -781,15 +780,15 @@ interface
     end subroutine mirror_slices
 
     module subroutine calc_fsc( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc, ufrac_trec, prev_even, prev_odd )
-        class(polarft_calc),   intent(inout) :: self
-        complex(dp),           intent(in)    :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        complex(dp),           intent(in)    :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        real(dp),              intent(in)    :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        real(dp),              intent(in)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        real(dp),              intent(out)   :: fsc(self%kfromto(1):self%interpklim)
-        real(dp),    optional, intent(in)    :: ufrac_trec
-        complex(dp), optional, intent(in)    :: prev_even(:,:,:)
-        complex(dp), optional, intent(in)    :: prev_odd(:,:,:)
+        class(polarft_calc),   intent(in)  :: self
+        complex(dp),           intent(in)  :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp),           intent(in)  :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(in)  :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(in)  :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(out) :: fsc(self%kfromto(1):self%interpklim)
+        real(dp),    optional, intent(in)  :: ufrac_trec
+        complex(dp), optional, intent(in)  :: prev_even(:,:,:)
+        complex(dp), optional, intent(in)  :: prev_odd(:,:,:)
     end subroutine calc_fsc
 
     module subroutine add_invtausq2rho( self, ctf2_even, ctf2_odd, fsc )

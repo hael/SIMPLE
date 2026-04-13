@@ -253,17 +253,14 @@ contains
         end do
     end subroutine memoize_mask_coords
 
-    module subroutine mask2D_soft(self, mskrad, width, backgr)
+    module subroutine mask2D_soft(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: width, backgr
-        real     :: wwidth,  r2, e, cjs2
+        real, optional,   intent(in)    :: backgr
+        real     :: r2, e, cjs2
         integer  :: minlen,  i, j, ir, jr, n1, n2, n3, h1, h2
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
         if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
-        ! width
-        wwidth = 10.0
-        if (present(width)) wwidth = width
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)
@@ -296,23 +293,19 @@ contains
         end do
     end subroutine mask2D_soft
 
-    module subroutine mask2D_softavg(self, mskrad, width, backgr)
+    module subroutine mask2D_softavg(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: width, backgr
+        real, optional,   intent(in)    :: backgr
         real(dp) :: sumv, sv
-        real     :: wwidth, rad_sq, ave, r2, e, cjs2
+        real     :: rad_sq, ave, r2, e, cjs2
         integer  :: minlen, npix, i, j, np, n1l, n2l
-        integer  :: n1, n2, n3
+        integer  :: n1, n2
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
         if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
-        ! width
-        wwidth = 10.0
-        if (present(width)) wwidth = width
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)
-        n3 = 1
         ! minlen
         minlen = minval(self%ldim(1:2))
         minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
@@ -320,12 +313,11 @@ contains
         rad_sq     = mskrad * mskrad
         sumv       = 0.0_dp
         npix       = 0            
-        n1l = n1; n2l = n2
         sv = 0.0_dp; np = 0
         ! avg outside radius
-        do j = 1, n2l
+        do j = 1, n2
             cjs2 = mem_msk_cs2(j)
-            do i = 1, n1l
+            do i = 1, n1
                 r2 = mem_msk_cs2(i) + cjs2 
                 if (r2 > rad_sq) then
                     np = np + 1
@@ -336,9 +328,9 @@ contains
         if (np <= 0) return
         ave = real(sv / real(np, dp))
         ! apply (j,i with i contiguous)
-        do j = 1, n2l
+        do j = 1, n2
             cjs2 = mem_msk_cs2(j)
-            do i = 1, n1l
+            do i = 1, n1
                 r2 = mem_msk_cs2(i) + cjs2 
                 e  = cosedge_r2_2d(r2, minlen, mskrad)
                 if (e < 0.0001) then
@@ -379,11 +371,11 @@ contains
         end do
     end subroutine mask2D_hard
 
-    module subroutine mask3D_soft(self, mskrad, width, backgr)
+    module subroutine mask3D_soft(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: width, backgr
-        real     :: wwidth, r2, e, cjs2, cks2
+        real, optional,   intent(in)    :: backgr
+        real     :: r2, e, cjs2, cks2
         integer  :: minlen, n1, n2, n3, i, j, k, ir, jr, kr, h1, h2, h3
         if( self%ldim(3) == 1 ) THROW_HARD('not for 2D')
         if( self%ldim(1) /= mem_msk_box  )then
@@ -393,9 +385,6 @@ contains
                 call memoize_mask_coords(self)
             endif
         endif
-        ! width
-        wwidth = 10.0
-        if (present(width)) wwidth = width
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)
@@ -436,12 +425,12 @@ contains
         end do
     end subroutine mask3D_soft
 
-    module subroutine mask3D_softavg(self, mskrad, width, backgr)
+    module subroutine mask3D_softavg(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: width, backgr
+        real, optional,   intent(in)    :: backgr
         real(dp) :: sumv, sv
-        real     :: wwidth, rad_sq, ave, r2, e, cjs2, cks2
+        real     :: rad_sq, ave, r2, e, cjs2, cks2
         integer  :: minlen, npix,  i, j, k, n1, n2, n3, np, n1l, n2l, n3l
         if( self%ldim(3) == 1 ) THROW_HARD('not for 2D')
         if( self%ldim(1) /= mem_msk_box  )then
@@ -451,9 +440,6 @@ contains
                 call memoize_mask_coords(self)
             endif
         endif
-        ! width
-        wwidth = 10.0
-        if (present(width)) wwidth = width
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)

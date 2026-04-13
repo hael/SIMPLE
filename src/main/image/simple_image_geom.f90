@@ -1291,4 +1291,90 @@ contains
         if( self%ldim(3) == 1 ) xyz(3) = 0.
     end subroutine masscen
 
+    !>  Per frame real space polynomial interpolation (type-bound, pointer-free)
+    module subroutine micrograph_interp( self, interp_fixed_frame, fixed_frame, nframes, frames, &
+            &weights, poly_coeffs_dim, poly_coeffs )
+        class(image),  intent(inout) :: self
+        integer,       intent(in)    :: interp_fixed_frame, fixed_frame, nframes, poly_coeffs_dim
+        type(image),   intent(inout) :: frames(nframes)
+        real,          intent(in)    :: weights(nframes)
+        real(dp),      intent(in)    :: poly_coeffs(poly_coeffs_dim,2)
+        real(dp) :: dtvec(3), t, ti, dt, dt2, dt3
+        real(dp) :: A1_c0, A1_c1, A1_c2, A2_c0, A2_c1, A2_c2
+        real(dp) :: B1x, B1x2, B1xy, B2x, B2x2, B2xy
+        real(dp) :: A1, A2, D1, D2, x, y, inv_nx, inv_ny
+        integer  :: ldim(3), i, j, iframe
+        real     :: w, pixx, pixy
+        ldim   = frames(1)%ldim
+        inv_nx = 1.0_dp / real(ldim(1)-1, dp)
+        inv_ny = 1.0_dp / real(ldim(2)-1, dp)
+        call self%zero_and_unflag_ft
+        ti = real(interp_fixed_frame-fixed_frame, dp)
+        do iframe = 1,nframes
+            w = weights(iframe)
+            if( abs(w) < TINY ) cycle          ! skip zero-weight frames
+            t      = real(iframe-fixed_frame, dp)
+            dt     = ti - t
+            dt2    = ti*ti - t*t
+            dt3    = ti*ti*ti - t*t*t
+            dtvec  = [dt, dt2, dt3]
+            A1_c0 = dot_product(poly_coeffs( 1:3, 1), dtvec)  ! constant y-term for A1
+            B1x   = dot_product(poly_coeffs( 4:6, 1), dtvec)
+            B1x2  = dot_product(poly_coeffs( 7:9, 1), dtvec)
+            A1_c1 = dot_product(poly_coeffs(10:12,1), dtvec)  ! linear y-term for A1
+            A1_c2 = dot_product(poly_coeffs(13:15,1), dtvec)  ! quadratic y-term for A1
+            B1xy  = dot_product(poly_coeffs(16:18,1), dtvec)
+            A2_c0 = dot_product(poly_coeffs( 1:3, 2), dtvec)  ! constant y-term for A2
+            B2x   = dot_product(poly_coeffs( 4:6, 2), dtvec)
+            B2x2  = dot_product(poly_coeffs( 7:9, 2), dtvec)
+            A2_c1 = dot_product(poly_coeffs(10:12,2), dtvec)  ! linear y-term for A2
+            A2_c2 = dot_product(poly_coeffs(13:15,2), dtvec)  ! quadratic y-term for A2
+            B2xy  = dot_product(poly_coeffs(16:18,2), dtvec)
+            !$omp parallel do default(shared) private(i,j,x,y,A1,A2,D1,D2,pixx,pixy)&
+            !$omp proc_bind(close) schedule(static)
+            do j = 1, ldim(2)
+                y  = real(j-1,dp) * inv_ny - 0.5_dp
+                ! Horner on y: A = c0 + y*(c1 + y*c2)
+                A1 = A1_c0 + y*(A1_c1 + y*A1_c2)
+                A2 = A2_c0 + y*(A2_c1 + y*A2_c2)
+                ! Fold B*xy term into row-level constant; Horner on x becomes x*(D + Bx2*x)
+                D1 = B1x + B1xy*y
+                D2 = B2x + B2xy*y
+                do i = 1, ldim(1)
+                    x    = real(i-1,dp) * inv_nx - 0.5_dp
+                    ! Horner on x: eliminates x2 and xy; 2 mults instead of 5
+                    pixx = real(i) + real(A1 + x*(D1 + B1x2*x))
+                    pixy = real(j) + real(A2 + x*(D2 + B2x2*x))
+                    self%rmat(i,j,1) = self%rmat(i,j,1) + w*interp_bilin(pixx,pixy)
+                end do
+            end do
+            !$omp end parallel do
+        enddo
+        contains
+
+            pure real function interp_bilin( xval, yval )
+                real, intent(in) :: xval, yval
+                integer :: x1_h, x2_h, y1_h, y2_h
+                real    :: t, u, t1, u1
+                x1_h = floor(xval)
+                y1_h = floor(yval)
+                x2_h = x1_h + 1
+                y2_h = y1_h + 1
+                if( x1_h < 1 .or. x2_h > ldim(1) .or. y1_h < 1 .or. y2_h > ldim(2) )then
+                    interp_bilin = frames(iframe)%rmat(max(1, min(ldim(1), x1_h)), &
+                        &                              max(1, min(ldim(2), y1_h)), 1)
+                    return
+                endif
+                t  = xval - real(x1_h)
+                u  = yval - real(y1_h)
+                t1 = 1. - t
+                u1 = 1. - u
+                interp_bilin = t1*u1 * frames(iframe)%rmat(x1_h, y1_h, 1) + &
+                    &          t*u1  * frames(iframe)%rmat(x2_h, y1_h, 1) + &
+                    &          t*u   * frames(iframe)%rmat(x2_h, y2_h, 1) + &
+                    &          t1*u  * frames(iframe)%rmat(x1_h, y2_h, 1)
+            end function interp_bilin
+
+    end subroutine micrograph_interp
+
 end submodule simple_image_geom

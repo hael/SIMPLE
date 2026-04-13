@@ -309,7 +309,8 @@ contains
 
             subroutine rndstart( cline )
                 class(cmdline), intent(inout) :: cline
-                type(string) :: src, dest
+                type(string)  :: src, dest
+                type(cmdline) :: local_cline_rec
                 character(len=:), allocatable :: state
                 integer :: s
                 call work_proj%os_ptcl3D%rnd_oris
@@ -318,15 +319,17 @@ contains
                     call gen_labelling(work_proj%os_ptcl3D, params%nstates, 'uniform')
                 endif
                 call work_proj%write_segment_inside('ptcl3D', work_projfile)
-                call cline%set('mkdir', 'no') ! to avoid nested dirs
-                call cline%set('objfun', 'cc')
-                call xrec3D%execute(cline)
-                call cline%set('objfun', trim(params%objfun))
+                local_cline_rec = cline
+                call local_cline_rec%set('mkdir', 'no') ! to avoid nested dirs
+                call local_cline_rec%set('objfun', 'cc')
+                call local_cline_rec%set('polar',  'no')
+                call xrec3D%execute(local_cline_rec)
                 do s = 1,params%nstates
                     state = int2str_pad(s,2)
                     src   = VOL_FBODY//state//'.mrc'
                     dest  = STARTVOL_FBODY//state//'.mrc'
                     call simple_rename(src, dest)
+                    ! updates refine3D command line with new volume
                     call cline%set('vol'//int2str(s), dest)
                     src   = VOL_FBODY//state//'_even.mrc'
                     dest  = STARTVOL_FBODY//state//'_even_unfil.mrc'
@@ -339,6 +342,7 @@ contains
                     dest  = STARTVOL_FBODY//state//'_odd.mrc'
                     call simple_rename(src, dest)
                 enddo
+                call local_cline_rec%kill
             end subroutine rndstart
 
             subroutine conv_eo( os )

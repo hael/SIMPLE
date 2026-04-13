@@ -109,6 +109,7 @@ contains
     procedure          :: pad_fft
     procedure          :: norm_noise_fft
     procedure          :: norm_noise_taper_edge_pad_fft
+    procedure          :: norm_noise_taper_edge_mask_pad_fft
     procedure          :: norm_noise_fft_clip_shift
     procedure          :: norm_noise_fft_clip_shift_ctf_flip
     procedure          :: norm_noise_mask_fft_powspec
@@ -275,6 +276,7 @@ contains
     procedure          :: weighted_sqsum, masked_sqsum
     procedure          :: weighted_subtr_sqsum, masked_subtr_sqsum
     procedure          :: weighted_subtr_corr, masked_subtr_corr
+    procedure          :: frame_ref_phase_correlation
     ! cost / shift
     procedure, private :: oshift_1, oshift_2
     generic            :: oshift => oshift_1, oshift_2
@@ -398,6 +400,7 @@ contains
     generic            :: shift2Dserial => shift2Dserial_1, shift2Dserial_2
     procedure          :: shift2D_demoivre
     procedure          :: masscen
+    procedure          :: micrograph_interp
     ! NORMALIZE, file: simple_image_norm.f90
     procedure          :: scale_pixels
     procedure          :: norm
@@ -820,6 +823,13 @@ interface
         logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
         class(image), intent(inout) :: self_out
     end subroutine norm_noise_taper_edge_pad_fft
+
+    module subroutine norm_noise_taper_edge_mask_pad_fft(self, lmsk, mskrad, self_out)
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        real,         intent(in)    :: mskrad
+        class(image), intent(inout) :: self_out
+    end subroutine norm_noise_taper_edge_mask_pad_fft
 
     module subroutine norm_noise_fft_clip_shift_ctf_flip( self, lmsk, self_out, shvec, tfun, ctfparms )
         class(image),    intent(inout) :: self
@@ -1782,6 +1792,16 @@ interface
         real,         intent(in) :: frame_weight
     end function weighted_subtr_sqsum
 
+    module subroutine frame_ref_phase_correlation( self_ref, self_frame, weights, frame_weight, trs, corr, dshift, allok)
+        class(image), intent(inout) :: self_frame
+        class(image), intent(in)    :: self_ref
+        real,         intent(in)    :: weights(self_ref%array_shape(1), self_ref%array_shape(2))
+        real,         intent(in)    :: frame_weight
+        integer,      intent(in)    :: trs
+        real,         intent(out)   :: corr, dshift(2)
+        logical,      intent(out)   :: allok
+    end subroutine frame_ref_phase_correlation
+
     module real function masked_subtr_sqsum( self_ref, self_frame, mask )
         class(image), intent(in) :: self_ref, self_frame
         logical,      intent(in) :: mask(self_ref%array_shape(1), self_ref%array_shape(2), self_ref%array_shape(3))
@@ -1942,16 +1962,16 @@ interface
         integer, optional, intent(in) :: box
     end subroutine memoize_mask_coords
 
-    module subroutine mask2D_soft(self, mskrad, width, backgr)
+    module subroutine mask2D_soft(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: width, backgr
+        real, optional,   intent(in)    :: backgr
     end subroutine mask2D_soft
 
-    module subroutine mask2D_softavg(self, mskrad, width, backgr)
+    module subroutine mask2D_softavg(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: width, backgr
+        real, optional,   intent(in)    :: backgr
     end subroutine mask2D_softavg
 
     module subroutine mask2D_hard(self, mskrad)
@@ -1959,16 +1979,16 @@ interface
         real,             intent(in)    :: mskrad
     end subroutine mask2D_hard
 
-    module subroutine mask3D_soft(self, mskrad, width, backgr)
+    module subroutine mask3D_soft(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: width, backgr
+        real, optional,   intent(in)    :: backgr
     end subroutine mask3D_soft
 
-    module subroutine mask3D_softavg(self, mskrad, width, backgr)
+    module subroutine mask3D_softavg(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: width, backgr
+        real, optional,   intent(in)    :: backgr
     end subroutine mask3D_softavg
 
     module subroutine mask3D_hard(self, mskrad)
@@ -2434,6 +2454,15 @@ interface
         real        ,      intent(out)   :: xyz(3)
         logical, optional, intent(in)    :: mask_in(:,:,:)
     end subroutine masscen
+
+    module subroutine micrograph_interp( self, interp_fixed_frame, fixed_frame, nframes, frames, &
+            &weights, poly_coeffs_dim, poly_coeffs )
+        class(image),  intent(inout) :: self
+        integer,       intent(in)    :: interp_fixed_frame, fixed_frame, nframes, poly_coeffs_dim
+        type(image),   intent(inout) :: frames(nframes)
+        real,          intent(in)    :: weights(nframes)
+        real(dp),      intent(in)    :: poly_coeffs(poly_coeffs_dim,2)
+    end subroutine micrograph_interp
 
     ! ===== normalization procedure interfaces =====
 

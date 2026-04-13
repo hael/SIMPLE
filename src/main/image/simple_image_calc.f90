@@ -1716,6 +1716,95 @@ contains
                              &sum(weights(2:,:) * csq_fast(self_ref%cmat(2:,:,1) - frame_weight * self_frame%cmat(2:,:,1)))
     end function weighted_subtr_sqsum
 
+    ! Weighted variance of the frame subtracted reference
+    module subroutine frame_ref_phase_correlation( self_ref, self_frame, weights, frame_weight, trs, corr, dshift, allok)
+        class(image), intent(inout) :: self_frame
+        class(image), intent(in)    :: self_ref
+        real,         intent(in)    :: weights(self_ref%array_shape(1), self_ref%array_shape(2))
+        real,         intent(in)    :: frame_weight
+        integer,      intent(in)    :: trs
+        real,         intent(out)   :: corr, dshift(2)
+        logical,      intent(out)   :: allok
+        complex  :: cref, cframe
+        real     :: sqsum_ref, sqsum_frame, alpha, beta, gamma, w
+        integer  :: pos(2), center(2), i,j
+        allok       = .true.
+        sqsum_frame = 0.0
+        sqsum_ref   = 0.0
+        do j = 1, self_frame%array_shape(2)
+            do i = 2, self_frame%array_shape(1)
+                ! Fourier pixel weight
+                w = weights(i,j)
+                if( w < TINY )then
+                    self_frame%cmat(i,j,1) = CMPLX_ZERO
+                    cycle
+                endif
+                ! frame pixel
+                cframe = self_frame%cmat(i,j,1)
+                ! (ref - weighted frame) pixel
+                cref = self_ref%cmat(i,j,1) - frame_weight * cframe
+                ! denominator:variances
+                sqsum_frame = sqsum_frame + w * real(cframe * conjg(cframe))
+                sqsum_ref   = sqsum_ref   + w * real(cref * conjg(cref))
+                ! numerator : (ref - weighted frame) * conjg(frame)
+                self_frame%cmat(i,j,1) = w * cref * conjg(cframe)
+            enddo
+        enddo
+        ! Because we only looped over half the Fourier plane, we need to double the sums
+        sqsum_frame = 2.0*sqsum_frame
+        sqsum_ref   = 2.0*sqsum_ref
+        ! i=1 <=> h=0, we do not double the contribution of the h=0 line
+        do j = 1, self_frame%array_shape(2)
+            w = weights(1,j)
+            if( w < TINY )then
+                self_frame%cmat(1,j,1) = CMPLX_ZERO
+                cycle
+            endif
+            cframe = self_frame%cmat(1,j,1)
+            cref   = self_ref%cmat(1,j,1) - frame_weight * cframe
+            sqsum_frame = sqsum_frame + w * real(cframe * conjg(cframe))
+            sqsum_ref   = sqsum_ref   + w * real(cref * conjg(cref))
+            self_frame%cmat(1,j,1) = w * cref * conjg(cframe)
+        enddo
+        ! safeguard
+        if( sqsum_frame < TINY .or. sqsum_ref < TINY )then
+            allok  = .false.
+            corr   = 0.0
+            dshift = 0.0
+            call self_frame%zero_and_flag_ft
+            return
+        endif
+        ! Backwards FFT
+        call self_frame%ifft
+        ! Find peak
+        center = self_frame%ldim(1:2)/2+1
+        pos    = maxloc(self_frame%rmat(center(1)-trs:center(1)+trs, center(2)-trs:center(2)+trs, 1))-trs-1
+        corr   = maxval(self_frame%rmat(center(1)-trs:center(1)+trs, center(2)-trs:center(2)+trs, 1))
+        corr = corr / sqrt(sqsum_frame*sqsum_ref)   ! normalization
+        dshift = real(pos)
+        ! interpolate
+        pos   = pos + center
+        beta  = self_frame%rmat(pos(1),   pos(2), 1)
+        alpha = self_frame%rmat(pos(1)-1, pos(2), 1)
+        gamma = self_frame%rmat(pos(1)+1, pos(2), 1)
+        if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + interp_peak()
+        alpha = self_frame%rmat(pos(1), pos(2)-1, 1)
+        gamma = self_frame%rmat(pos(1), pos(2)+1, 1)
+        if( alpha<beta .and. gamma<beta ) dshift(2) = dshift(2) + interp_peak()
+        ! cleanup
+        call self_frame%zero_and_flag_ft
+        contains
+
+            real function interp_peak()
+                real :: denom
+                interp_peak = 0.
+                denom = alpha+gamma-2.*beta
+                if( abs(denom) < TINY )return
+                interp_peak = 0.5 * (alpha-gamma) / denom
+            end function interp_peak
+
+    end subroutine frame_ref_phase_correlation
+
     ! Masked variance of the frame subtracted reference
     module real function masked_subtr_sqsum( self_ref, self_frame, mask)
         class(image), intent(in) :: self_ref, self_frame
