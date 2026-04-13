@@ -419,6 +419,8 @@ contains
             msksq    = (params%moldiam / 2.)**2.
             el_ucase = uppercase(trim(adjustl(params%element)))
             call get_lattice_params(el_ucase, crystal_system, a)
+            write(logfhandle,'(a)') '>>> CRYSTAL SYSTEM: '//crystal_system
+            write(logfhandle,'(a)') '>>> ELEMENT: '//el_ucase
             ha       = a(1) / 2.; hc = a(3) / 2.
             ncubes   = floor(real(params%box) * params%smpd / a(1))
             ncubes_c = floor(real(params%box) * params%smpd / a(3))

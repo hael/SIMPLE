@@ -13,10 +13,10 @@ type, extends(commander_base) :: commander_test_detect_atoms
     procedure :: execute      => exec_test_detect_atoms
 end type commander_test_detect_atoms
 
-type, extends(commander_base) :: commander_test_simulate_nanoprticle
+type, extends(commander_base) :: commander_test_simulate_nanoparticle
   contains
-    procedure :: execute      => exec_test_simulate_nanoprticle
-end type commander_test_simulate_nanoprticle
+    procedure :: execute      => exec_test_simulate_nanoparticle
+end type commander_test_simulate_nanoparticle
 
 type, extends(commander_base) :: commander_test_single_workflow
   contains
@@ -32,16 +32,54 @@ subroutine exec_test_atoms_stats( self, cline )
 end subroutine exec_test_atoms_stats
 
 subroutine exec_test_detect_atoms( self, cline )
+    use simple_commanders_atoms, only: commander_detect_atoms
+    use simple_commanders_sim,   only: commander_simulate_nanoparticle
     class(commander_test_detect_atoms), intent(inout) :: self
-    class(cmdline),                    intent(inout) :: cline
+    class(cmdline),                     intent(inout) :: cline
+    ! single_exec prg=detect_atoms vol1=outvol.mrc smpd=0.3 element=CDSE nthr=12
+    type(cmdline)                         :: cline_sim, cline_detat
+    type(parameters)                      :: params
+    type(commander_simulate_nanoparticle) :: xsim_nptcl
+    type(commander_detect_atoms)          :: xdetat
+    real, parameter                       :: smpd = 0.3
+    write(logfhandle,'(a)') '>>> TEST_DETECT_ATOMS:'
+    call params%new(cline_sim)
+    call cline_sim%set('prg',      'simulate_nanoparticle')
+    call cline_sim%set('box',                          160)
+    call cline_sim%set('smpd',                        smpd)
+    call cline_sim%set('moldiam',                       25)
+    call cline_sim%set('element',                     "Pt")
+    call cline_sim%set('nthr',                          12)
+    call xsim_nptcl%execute(cline_sim)
+    call params%new(cline_detat)
+    call cline_detat%set('prg',             'detect_atoms')
+    call cline_detat%set('vol1',              'outvol.mrc')
+    call cline_detat%set('smpd',                      smpd)
+    call cline_detat%set('element',                   "Pt")
+    call cline_detat%set('nthr',                        12)
+    call xdetat%execute(cline_detat)
     call simple_end('**** SIMPLE_TEST_DETECT_ATOMS NORMAL STOP ****')
 end subroutine exec_test_detect_atoms
 
-subroutine exec_test_simulate_nanoprticle( self, cline )
-    class(commander_test_simulate_nanoprticle), intent(inout) :: self
-    class(cmdline),                            intent(inout) :: cline
+subroutine exec_test_simulate_nanoparticle( self, cline )
+    use simple_commanders_sim, only: commander_simulate_nanoparticle
+    class(commander_test_simulate_nanoparticle), intent(inout) :: self
+    class(cmdline),                              intent(inout) :: cline
+    type(cmdline)                         :: cline_sim
+    type(parameters)                      :: params
+    type(commander_simulate_nanoparticle) :: xsim_nptcl
+    real, parameter                       :: smpd = 0.3
+    write(logfhandle,'(a)') '>>> TEST_SIMULATE_NANOPARTICLE:'
+    call params%new(cline)
+    call cline_sim%set('prg',      'simulate_nanoparticle')
+    call cline_sim%set('box',                          160)
+    call cline_sim%set('smpd',                        smpd)
+    call cline_sim%set('moldiam',                       25)
+    call cline_sim%set('element',                     "Pt")
+    call cline_sim%set('nthr',                          12)
+    call xsim_nptcl%execute(cline_sim)
     call simple_end('**** SIMPLE_TEST_SIMULATE_NANOPARTICLE NORMAL STOP ****')
-end subroutine exec_test_simulate_nanoprticle
+end subroutine exec_test_simulate_nanoparticle
 
 subroutine exec_test_single_workflow( self, cline )
     class(commander_test_single_workflow), intent(inout) :: self

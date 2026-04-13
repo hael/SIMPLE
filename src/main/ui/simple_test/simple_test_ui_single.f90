@@ -5,7 +5,7 @@ implicit none
 
 type(ui_program), target :: atoms_stats
 type(ui_program), target :: detect_atoms
-type(ui_program), target :: simulate_nanoprticle
+type(ui_program), target :: simulate_nanoparticle
 type(ui_program), target :: single_workflow 
 
 contains
@@ -14,7 +14,7 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call new_atoms_stats(tsttab)
         call new_detect_atoms(tsttab)
-        call new_simulate_nanoprticle(tsttab)
+        call new_simulate_nanoparticle(tsttab)
         call new_single_workflow(tsttab)
     end subroutine construct_test_single_programs
 
@@ -23,7 +23,7 @@ contains
         write(logfhandle,'(A)') format_str('SINGLE:', C_UNDERLINED)
         write(logfhandle,'(A)') atoms_stats%name%to_char()
         write(logfhandle,'(A)') detect_atoms%name%to_char()
-        write(logfhandle,'(A)') simulate_nanoprticle%name%to_char()
+        write(logfhandle,'(A)') simulate_nanoparticle%name%to_char()
         write(logfhandle,'(A)') single_workflow%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_single_programs
@@ -84,33 +84,33 @@ contains
         call add_ui_program('detect_atoms', detect_atoms, tsttab)
     end subroutine new_detect_atoms
 
-    subroutine new_simulate_nanoprticle( tsttab )
+    subroutine new_simulate_nanoparticle( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
-        call simulate_nanoprticle%new(&
-        &'simulate_nanoprticle',&                            ! name
+        call simulate_nanoparticle%new(&
+        &'simulate_nanoparticle',&                            ! name
         &'test program for simulating nanoparticle',&
         &'is a test program for simulating nanoparticle',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !call simulate_nanoprticle%add_input(UI_IO, )
+        !call simulate_nanoparticle%add_input(UI_IO, )
         ! parameter input/output
-        !call simulate_nanoprticle%add_input(UI_IMG, )
+        !call simulate_nanoparticle%add_input(UI_IMG, )
         ! alternative inputs
-        !call simulate_nanoprticle%add_input(UI_PARM, )
+        !call simulate_nanoparticle%add_input(UI_PARM, )
         ! search controls
-        !call simulate_nanoprticle%add_input(UI_SRCH, )
+        !call simulate_nanoparticle%add_input(UI_SRCH, )
         ! filter controls
-        !call simulate_nanoprticle%add_input(UI_FILT, )
+        !call simulate_nanoparticle%add_input(UI_FILT, )
         ! mask controls
-        !call simulate_nanoprticle%add_input(UI_MASK, )
+        !call simulate_nanoparticle%add_input(UI_MASK, )
         ! computer controls
-        !call simulate_nanoprticle%add_input(UI_COMP, )
+        !call simulate_nanoparticle%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simulate_nanoprticle', simulate_nanoprticle, tsttab)
-    end subroutine new_simulate_nanoprticle
+        call add_ui_program('simulate_nanoparticle', simulate_nanoparticle, tsttab)
+    end subroutine new_simulate_nanoparticle
 
     subroutine new_single_workflow( tsttab )
         class(ui_hash), intent(inout) :: tsttab
