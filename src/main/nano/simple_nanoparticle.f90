@@ -1011,7 +1011,7 @@ contains
         real    :: percen, cendist_thres, foo(3)
         integer :: cc, cn, n_discard, cnt_discard, it_contact_score
         logical :: ll_print
-        character(len=4)     :: el_ucase
+        character(len=5)     :: el_ucase
         character(len=10)    :: crystal_system
         ll_print = .true.
         el_ucase = uppercase(trim(adjustl(self%element)))
@@ -1445,7 +1445,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: cc
         real,                intent(in)    :: a(3)
-        character(len=4)  :: el_ucase
+        character(len=5)  :: el_ucase
         character(len=10) :: crystal_system
         real              :: a0, foo(3), d
         integer           :: i

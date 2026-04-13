@@ -224,7 +224,7 @@ contains
         character(len=5),  intent(in)    :: element_ucase
         character(len=10), intent(inout) :: crystal_system
         real,              intent(inout) :: a(3)
-        crystal_system = 'fcc     ' ! default
+        crystal_system = 'fcc       ' ! default
         select case( element_ucase )
             case('C    ')
                 a = 3.567 ! diamond
