@@ -666,6 +666,8 @@ contains
             if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:3)//' ')  !'PdS '
             if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(4:4)//' ')  !'Cd S'
             if( .not.element_exists ) element_exists = exists(element(1:2))      .and. exists(element(3:4))       !'CdSe'
+        case(5)
+            element_exists = exists(element(1:2)) .and. exists(element(3:4))                                      !'CdSeW'  'CdSeZ'
         case DEFAULT
             element_exists = .false.
             THROW_WARN('Non complying format; atoms%element_exists : '//trim(element))

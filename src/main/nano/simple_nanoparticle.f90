@@ -184,7 +184,7 @@ type :: nanoparticle
     type(atom_stats), allocatable :: atominfo(:)
     real,             allocatable :: coords4stats(:,:)
     ! OTHER
-    character(len=4)      :: element   = '    '
+    character(len=5)      :: element   = '     '
     character(len=4)      :: atom_name = '    '
     type(string)          :: npname
     type(string)          :: fbody
@@ -1012,12 +1012,12 @@ contains
         integer :: cc, cn, n_discard, cnt_discard, it_contact_score
         logical :: ll_print
         character(len=4)     :: el_ucase
-        character(len=8)     :: crystal_system
+        character(len=10)    :: crystal_system
         ll_print = .true.
         el_ucase = uppercase(trim(adjustl(self%element)))
         call get_lattice_params(el_ucase, crystal_system, foo)
         select case( crystal_system )
-            case('wurtzite')
+            case('wurtzite', 'zincblende')
                 it_contact_score = 4
             case default !fcc bcc rocksalt
                 it_contact_score = 12
@@ -1445,10 +1445,10 @@ contains
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: cc
         real,                intent(in)    :: a(3)
-        character(len=4) :: el_ucase
-        character(len=8) :: crystal_system
-        real             :: a0, foo(3), d
-        integer          :: i
+        character(len=4)  :: el_ucase
+        character(len=10) :: crystal_system
+        real              :: a0, foo(3), d
+        integer           :: i
         a0 = sum(a)/real(size(a)) ! alrithmetic mean of fitted lattice parameters
         ! identify nearest neighbors
         el_ucase = uppercase(trim(adjustl(self%element)))

@@ -242,9 +242,9 @@ contains
     ! fit_lattice and strain_analysis routines below
     function find_rMax( element ) result( rMax )
         character(len=2), intent(in) :: element
-        character(len=4) :: el_ucase
-        character(len=8) :: crystal_system
-        real, parameter  :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
+        character(len=4)  :: el_ucase
+        character(len=10) :: crystal_system
+        real, parameter   :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
         real    :: a_0(3), rMax, r, err
         integer :: Z
         el_ucase = uppercase(trim(adjustl(element)))
@@ -259,6 +259,8 @@ contains
                 rMax = a_0(1) * ((1. + sqrt(3.) / 2.) / 2.)      + err
             case('wurtzite')
                 rMax = a_0(1) * ((1. + sqrt(8. / 3.)) / 2.)      + err
+            case('zincblende')
+                rMax = a_0(1) * ((sqrt(3.)/4 + 1/sqrt(2.)) / 2.) + err
             case DEFAULT ! FCC by default
                 rMax = a_0(1) * ((1. + 1. / sqrt(2.)) / 2.)      + err
         end select
@@ -491,7 +493,7 @@ contains
         character(len=8) :: crystal_system
         integer :: natoms, iatom, jatom, cnt, cn_max(size(model,2))
         real    :: dist, d, a0, foo(3)
-        ! Identify the bound for defining the neighbourhood
+        ! Identify the bound for defining the neighborhood
         a0 = sum(a)/real(size(a)) ! geometric mean of fitted lattice parameters
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, foo)
@@ -500,6 +502,8 @@ contains
                 d = a0 * ((1. / 2. + 1. / sqrt(2.)) / 2.)
             case('wurtzite')
                 d = a(1) * ((1. + sqrt(8. / 3.)) / 2.)  ! for wurtzite, we use the a lattice parameter since the c lattice parameter is not relevant for defining the neighborhood in the basal plane
+            case('zincblende')
+                d = (( sqrt( 1 + 2 * a0)) / 4 + 1 / sqrt(2.) ) / 2.
             case('bcc')
                 d = a0 * ((1. + sqrt(3.) / 2.) / 2.)
             case DEFAULT ! FCC by default

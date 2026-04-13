@@ -392,17 +392,17 @@ contains
         use simple_atoms, only: atoms
         class(commander_simulate_nanoparticle), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        real, parameter  :: NPIX_CUTOFF = 12.
-        type(parameters) :: params
-        type(image)      :: vol
-        type(atoms)      :: atoms_obj
-        character(len=2) :: el1, el2
-        character(len=4) :: el_ucase
-        character(len=8) :: crystal_system
-        real             :: center(3), ha, hc, x, x1, x2, x3, y, y1, y2, y3, z, z1, z2, z3, msksq, cutoff
-        real             :: a(3) ! lattice parameters
-        real             :: pos(3), u_wz, bw1(3), bw2(3), bw3(3), bw4(3)
-        integer          :: i, j, k, n, ncubes, ncubes_c, ncubes_a
+        real, parameter   :: NPIX_CUTOFF = 12.
+        type(parameters)  :: params
+        type(image)       :: vol
+        type(atoms)       :: atoms_obj
+        character(len=2)  :: el1, el2
+        character(len=5)  :: el_ucase
+        character(len=10) :: crystal_system
+        real              :: center(3), ha, hc, x, x1, x2, x3, y, y1, y2, y3, z, z1, z2, z3, msksq, cutoff
+        real              :: a(3) ! lattice parameters
+        real              :: pos(3), u_wz, bw1(3), bw2(3), bw3(3), bw4(3)
+        integer           :: i, j, k, n, ncubes, ncubes_c, ncubes_a
         if( .not. cline%defined('pdbout') ) call cline%set('pdbout', 'simatms.pdb')
         call params%new(cline)
         if( .not.is_even(params%box) ) THROW_HARD('BOX must be even')
@@ -419,8 +419,8 @@ contains
             msksq    = (params%moldiam / 2.)**2.
             el_ucase = uppercase(trim(adjustl(params%element)))
             call get_lattice_params(el_ucase, crystal_system, a)
-            write(logfhandle,'(a)') '>>> CRYSTAL SYSTEM: '//crystal_system
             write(logfhandle,'(a)') '>>> ELEMENT: '//el_ucase
+            write(logfhandle,'(a)') '>>> CRYSTAL SYSTEM: '//crystal_system
             ha       = a(1) / 2.; hc = a(3) / 2.
             ncubes   = floor(real(params%box) * params%smpd / a(1))
             ncubes_c = floor(real(params%box) * params%smpd / a(3))
@@ -675,6 +675,107 @@ contains
                                 ! el2 atom 2
                                 pos = [x,y,z] + bw4
                                 if( sum((pos-center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el2//'  ')
+                                    call atoms_obj%set_element(n, el2)
+                                endif
+                            enddo
+                        enddo
+                    enddo
+                case('zincblende')
+                    ! Zincblende structure (cubic, space group F-43m, #216)
+                    ! FCC lattice with two-atom basis:
+                    !   el1 at each FCC site: (0,0,0), (a/2,a/2,0), (a/2,0,a/2), (0,a/2,a/2)
+                    !   el2 offset by (a/4,a/4,a/4) from each FCC site
+                    ! count atoms inside spherical mask
+                    do i = 1, ncubes
+                        x = real(i-1)*a(1)
+                        do j = 1, ncubes
+                            y = real(j-1)*a(1)
+                            do k = 1, ncubes
+                                z = real(k-1)*a(1)
+                                ! 4 FCC positions for el1
+                                if( sum(([x,      y,      z      ] - center)**2.) <= msksq ) n = n+1
+                                if( sum(([x+ha,   y+ha,   z      ] - center)**2.) <= msksq ) n = n+1
+                                if( sum(([x+ha,   y,      z+ha   ] - center)**2.) <= msksq ) n = n+1
+                                if( sum(([x,      y+ha,   z+ha   ] - center)**2.) <= msksq ) n = n+1
+                                ! 4 FCC positions for el2, offset by (a/4,a/4,a/4)
+                                if( sum(([x+a(1)/4.,   y+a(1)/4.,   z+a(1)/4.   ] - center)**2.) <= msksq ) n = n+1
+                                if( sum(([x+3.*a(1)/4.,y+3.*a(1)/4.,z+a(1)/4.   ] - center)**2.) <= msksq ) n = n+1
+                                if( sum(([x+3.*a(1)/4.,y+a(1)/4.,   z+3.*a(1)/4.] - center)**2.) <= msksq ) n = n+1
+                                if( sum(([x+a(1)/4.,   y+3.*a(1)/4.,z+3.*a(1)/4.] - center)**2.) <= msksq ) n = n+1
+                            enddo
+                        enddo
+                    enddo
+                    ! generate atoms
+                    call atoms_obj%new(n)
+                    n = 0
+                    do i = 1, ncubes
+                        x = real(i-1)*a(1)
+                        do j = 1, ncubes
+                            y = real(j-1)*a(1)
+                            do k = 1, ncubes
+                                z = real(k-1)*a(1)
+                                ! el1 at FCC corner
+                                pos = [x, y, z]
+                                if( sum((pos - center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el1//'  ')
+                                    call atoms_obj%set_element(n, el1)
+                                endif
+                                ! el1 at face (xy)
+                                pos = [x+ha, y+ha, z]
+                                if( sum((pos - center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el1//'  ')
+                                    call atoms_obj%set_element(n, el1)
+                                endif
+                                ! el1 at face (xz)
+                                pos = [x+ha, y, z+ha]
+                                if( sum((pos - center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el1//'  ')
+                                    call atoms_obj%set_element(n, el1)
+                                endif
+                                ! el1 at face (yz)
+                                pos = [x, y+ha, z+ha]
+                                if( sum((pos - center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el1//'  ')
+                                    call atoms_obj%set_element(n, el1)
+                                endif
+                                ! el2 at (a/4,a/4,a/4) from corner
+                                pos = [x+a(1)/4., y+a(1)/4., z+a(1)/4.]
+                                if( sum((pos - center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el2//'  ')
+                                    call atoms_obj%set_element(n, el2)
+                                endif
+                                ! el2 at (a/4,a/4,a/4) from face (xy)
+                                pos = [x+3.*a(1)/4., y+3.*a(1)/4., z+a(1)/4.]
+                                if( sum((pos - center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el2//'  ')
+                                    call atoms_obj%set_element(n, el2)
+                                endif
+                                ! el2 at (a/4,a/4,a/4) from face (xz)
+                                pos = [x+3.*a(1)/4., y+a(1)/4., z+3.*a(1)/4.]
+                                if( sum((pos - center)**2.) <= msksq )then
+                                    n = n + 1
+                                    call atoms_obj%set_coord(n, pos)
+                                    call atoms_obj%set_name(n, el2//'  ')
+                                    call atoms_obj%set_element(n, el2)
+                                endif
+                                ! el2 at (a/4,a/4,a/4) from face (yz)
+                                pos = [x+a(1)/4., y+3.*a(1)/4., z+3.*a(1)/4.]
+                                if( sum((pos - center)**2.) <= msksq )then
                                     n = n + 1
                                     call atoms_obj%set_coord(n, pos)
                                     call atoms_obj%set_name(n, el2//'  ')

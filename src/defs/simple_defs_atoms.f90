@@ -221,44 +221,47 @@ contains
 
     ! From Wheeler, D, 1925, Physical Review. 25 (6): 753–761, FCC & BCC only.
     subroutine get_lattice_params( element_ucase, crystal_system, a )
-        character(len=4), intent(in)    :: element_ucase
-        character(len=8), intent(inout) :: crystal_system
-        real,             intent(inout) :: a(3)
+        character(len=5),  intent(in)    :: element_ucase
+        character(len=10), intent(inout) :: crystal_system
+        real,              intent(inout) :: a(3)
         crystal_system = 'fcc     ' ! default
         select case( element_ucase )
-            case('C   ')
+            case('C    ')
                 a = 3.567 ! diamond
-            case('SI  ')
+            case('SI   ')
                 a = 5.431020511
-            case('GE  ')
+            case('GE   ')
                 a = 5.658
-            case('AL  ')
+            case('AL   ')
                 a = 4.046
-            case('NI  ')
+            case('NI   ')
                 a = 3.499
-            case('CU  ')
+            case('CU   ')
                 a = 3.597
-            case('PT  ')
+            case('PT   ')
                 a = 3.912
-            case('AU  ')
+            case('AU   ')
                 a = 4.065
-            case('AG  ')
+            case('AG   ')
                 a = 4.079
-            case('PD  ')
+            case('PD   ')
                 a = 3.859
-            case('PB  ')
+            case('PB   ')
                 a = 4.920
-            case('FE  ')
-                a = 2.856;                                   crystal_system = 'bcc     '
-            case('MO  ')
-                a = 3.142;                                   crystal_system = 'bcc     '
-            case('W   ')
-                a = 3.155;                                   crystal_system = 'bcc     '
-            case('PBSE')
-                a = 6.12;                                    crystal_system = 'rocksalt'
-            case('CDSE')
+            case('FE   ')
+                a = 2.856;                                   crystal_system = 'bcc       '
+            case('MO   ')
+                a = 3.142;                                   crystal_system = 'bcc       '
+            case('W    ')
+                a = 3.155;                                   crystal_system = 'bcc       '
+            case('PBSE ')
+                a = 6.12;                                    crystal_system = 'rocksalt  '
+            case('CDSEW')
                 ! Xu, Y.-N. 1993, Phys. Rev. 48; 4335-4351
-                a(1) = 4.2985; a(2) = 4.2985; a(3) = 7.0152; crystal_system = 'wurtzite'
+                a(1) = 4.2985; a(2) = 4.2985; a(3) = 7.0152; crystal_system = 'wurtzite  '
+            case('CDSEZ')
+                ! Samarth, N. 1989, Appl. Phys. Lett. 54; 2680-2682
+                a = 6.077;                                   crystal_system = 'zincblende'
             case DEFAULT
                 a = 3.76
         end select
