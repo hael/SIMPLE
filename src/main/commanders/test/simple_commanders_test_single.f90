@@ -38,7 +38,7 @@ subroutine exec_test_atoms_stats( self, cline )
     type(commander_atoms_stats)           :: xatstats
     real, parameter                       :: smpd = 0.3
     !single_exec prg=atoms_stats vol1=rec_merged.mrc vol2=rec_merged_CC.mrc pdbfile=rec_merged_ATMS.pdb smpd=0.358 element=Pt mskdiam=32 nthr=8 > ATMS_STAT
-    write(logfhandle,'(a)') '>>> TEST_DETECT_ATOMS:'
+    write(logfhandle,'(a)') '>>> TEST_ATOMS_STATS:'
     call params%new(cline_sim)
     call cline_sim%set('prg',      'simulate_nanoparticle')
     call cline_sim%set('box',                          160)
@@ -117,6 +117,11 @@ subroutine exec_test_simulate_nanoparticle( self, cline )
 end subroutine exec_test_simulate_nanoparticle
 
 subroutine exec_test_single_workflow( self, cline )
+    use single_commanders_nano2D,       only: commander_analysis2D_nano
+    use simple_commanders_sim,          only: commander_simulate_nanoparticle, commander_simulate_particles
+    use simple_commanders_project_ptcl, only: commander_import_particles
+    use simple_commanders_project_core, only: commander_new_project
+    use single_commanders_nano3D,       only: commander_autorefine3D_nano
     class(commander_test_single_workflow), intent(inout) :: self
     class(cmdline),                        intent(inout) :: cline
     ! single_exec prg=tseries_import filetab=filetab.txt cs=0 fraca=0.3 kv=300 smpd=0.358
@@ -126,6 +131,68 @@ subroutine exec_test_single_workflow( self, cline )
     ! single_exec prg=analysis2D_nano element=Pt nthr=16
     ! single_exec prg=map_cavgs_selection stk2=2_analysis2D_nano/selected.spi prune=yes
     ! nohup single_exec prg=autorefine3D_nano vol1=startvol.mrc element=Pt smpd=0.358 pgrp=c1 lp=1.5 mskdiam=50 nthr=16 projfile=3_selection/reproc.simple > AUTOREFINE &
+    type(cmdline)                         :: cline_sim, cline_simptcls, cline_nproj,cline_imptcls, cline_an2Dnano, cline_aref3Dnano
+    type(parameters)                      :: params
+    type(commander_simulate_nanoparticle) :: xsim_nptcl
+    type(commander_simulate_particles)    :: xsim_ptcls
+    type(commander_import_particles)      :: ximptcls
+    type(commander_analysis2D_nano)       :: xan2Dnano
+    type(commander_new_project)           :: xnproj
+    type(commander_autorefine3D_nano)     :: xaref3Dnano
+    type(string)                          :: projname, projfile
+    real, parameter                       :: smpd = 0.3
+    integer, parameter                    :: NPTCLS_SIM = 200
+    write(logfhandle,'(a)') '>>> TEST_SINGLE_WORKFLOW:'
+    projname='test_single_workflow'
+    call params%new(cline_sim)
+    call cline_sim%set('prg',               'simulate_nanoparticle')
+    call cline_sim%set('box',                                   160)
+    call cline_sim%set('smpd',                                 smpd)
+    call cline_sim%set('moldiam',                                25)
+    call cline_sim%set('element',                              "Pt")
+    call cline_sim%set('nthr',                                   12)
+    call xsim_nptcl%execute(cline_sim)
+    call cline_simptcls%set('prg',             'simulate_particles')
+    call cline_simptcls%set('vol1',                    'outvol.mrc')
+    call cline_simptcls%set('smpd',                            smpd)
+    !call cline_simptcls%set('mskdiam',                         180)
+    call cline_simptcls%set('nthr',                              12)
+    call cline_simptcls%set('nptcls',                    NPTCLS_SIM)
+    call cline_simptcls%set('pgrp',                            'c1')
+    call cline_simptcls%set('snr',                               1.)
+    call cline_simptcls%set('ctf',                             'no')
+    call cline_simptcls%set('sherr',                            0.0)
+    call cline_simptcls%set('even',                            'on')
+    call cline_simptcls%set('defocus',                        0.001)
+    call xsim_ptcls%execute(cline_simptcls)
+    projfile = projname%to_char()//'.simple'
+    call params%new(cline_nproj)
+    call cline_nproj%set('prg',                       'new_project')
+    call cline_nproj%set('projname',             projname%to_char())
+    call xnproj%execute(cline_nproj)
+    call params%new(cline_imptcls)
+    call cline_imptcls%set('prg',                'import_particles')
+    call cline_imptcls%set('projfile',           projfile%to_char())
+    call cline_imptcls%set('stk',      '../simulated_particles.mrc')
+    call cline_imptcls%set('smpd',                             smpd)
+    call cline_imptcls%set('cs  ',                            -0.01)
+    call cline_imptcls%set('fraca',                             0.4)
+    call cline_imptcls%set('kv',                                300)
+    call cline_imptcls%set('ctf',                              'no')
+    call ximptcls%execute(cline_imptcls)
+    call params%new(cline_an2Dnano)
+    call cline_an2Dnano%set('prg',                'analysis2D_nano')
+    call cline_an2Dnano%set('projfile',          projfile%to_char())
+    call cline_an2Dnano%set('element',                         "Pt")
+    call cline_an2Dnano%set('nthr',                              12)
+    call xan2Dnano%execute(cline_an2Dnano)
+    call params%new(cline_aref3Dnano)
+    call cline_aref3Dnano%set('prg',            'autorefine3D_nano')
+    call cline_aref3Dnano%set('projfile',        projfile%to_char())
+    call cline_aref3Dnano%set('vol1',               '../outvol.mrc')
+    call cline_aref3Dnano%set('element',                       "Pt")
+    call cline_aref3Dnano%set('nthr',                            12)
+    call xaref3Dnano%execute(cline_aref3Dnano)
     call simple_end('**** SIMPLE_TEST_SINGLE_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_single_workflow
 
