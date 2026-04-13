@@ -31,6 +31,7 @@ type, extends(image) :: image_bin
     procedure          :: write_bimg
     ! CONNECTED COMPONENTS
     procedure          :: diameter_cc
+    procedure          :: elim_cc
     procedure          :: elim_ccs
     procedure          :: elim_largestcc
     procedure          :: set_largestcc2background
@@ -319,6 +320,33 @@ contains
         call self%update_img_rmat
     end subroutine elim_largestcc
 
+    ! Removes a single connected component (CC) from the binary image by label index.
+    ! The target label is zeroed in bimat; remaining CCs are then re-labelled
+    ! 1..nccs-1 and the real-valued rmat is synchronised.
+    ! Pass update=.false. when eliminating multiple CCs in a loop to defer re-labelling
+    ! to the final call, avoiding O(n²) reordering overhead. In that case the caller
+    ! must invoke order_ccs() and update_img_rmat() manually afterwards.
+    subroutine elim_cc( self, n_cc, update )
+        class(image_bin),  intent(inout) :: self
+        integer,           intent(in)    :: n_cc   ! 1-based label of the CC to remove
+        logical, optional, intent(in)    :: update ! re-label and sync rmat (default .true.)
+        integer, allocatable :: bimat_copy(:,:,:)
+        logical :: l_update
+        l_update = .true.
+        if( present(update) ) l_update = update
+        if( n_cc < 1 .or. n_cc > self%nccs ) then
+            THROW_WARN('Invalid cc index in elim_cc')
+            return
+        end if
+        allocate(bimat_copy, source=self%bimat)
+        where( bimat_copy == n_cc ) bimat_copy = 0
+        call self%set_imat(bimat_copy)
+        if( l_update ) then
+            call self%order_ccs()       ! re-label remaining CCs contiguously and update nccs
+            call self%update_img_rmat() ! sync real-valued rmat with the updated bimat
+        end if
+    end subroutine elim_cc
+
     ! This subroutine takes in input a connected component (cc) image
     ! and sets to 0 the cc which has size (# pixels) smaller than minmaxsz(1)
     ! or bigger than minmaxsz(2).
@@ -383,6 +411,7 @@ contains
         enddo
         deallocate(imat_aux)
         call self%update_img_rmat
+        self%nccs = maxval(self%bimat)
     end subroutine order_ccs
 
     ! This subroutine takes in input a connected components (cc)

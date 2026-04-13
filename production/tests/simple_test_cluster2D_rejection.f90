@@ -23,7 +23,7 @@ program main
   
   type(image), allocatable :: cavg_imgs(:)
   integer,     allocatable :: states(:), cavg_inds(:)
-  type(test_sample)        :: test_samples(13)
+  type(test_sample)        :: test_samples(15)
   type(sp_project)         :: spproj
   type(cluster2D_rejector) :: rejector
   type(string)             :: jpeg_out
@@ -81,6 +81,14 @@ program main
   test_samples(13)%stkfile  = 'rejection_benchmarks/MotAB/microchunk_pass_1_1.mrc'
   test_samples(13)%msk      = 250
 
+  test_samples(14)%projfile = 'rejection_benchmarks/CLC/microchunk_pass_1_1.simple'
+  test_samples(14)%stkfile  = 'rejection_benchmarks/CLC/microchunk_pass_1_1.mrc'
+  test_samples(14)%msk      = 209
+
+  test_samples(15)%projfile = 'rejection_benchmarks/CLC/microchunk_pass_1_2.simple'
+  test_samples(15)%stkfile  = 'rejection_benchmarks/CLC/microchunk_pass_1_2.mrc'
+  test_samples(15)%msk      = 209
+
   do isample=1, size(test_samples)
     write(*,*) test_samples(isample)%projfile%to_char()
     call spproj%read(test_samples(isample)%projfile)
@@ -109,13 +117,6 @@ program main
     call spproj%cavgs2jpg(cavg_inds, jpeg_out, xtiles, ytiles, ignore_states=.false., invert_states=.true.)
     
     call rejector%new(cavg_imgs, real(test_samples(isample)%msk))
-    call rejector%reject_brightness()
-    states = rejector%get_states()
-    call spproj%os_cls2D%set_all('state', states)
-    jpeg_out = swap_suffix(test_samples(isample)%stkfile, string('_brightness_rejected.jpg'), string(MRC_EXT))
-    call spproj%cavgs2jpg(cavg_inds, jpeg_out, xtiles, ytiles, ignore_states=.false., invert_states=.true.)
-
-    call rejector%new(cavg_imgs, real(test_samples(isample)%msk))
     call rejector%reject_local_variance()
     states = rejector%get_states()
     call spproj%os_cls2D%set_all('state', states)
@@ -127,7 +128,6 @@ program main
     call rejector%reject_pop(spproj%os_cls2D)
     call rejector%reject_res(spproj%os_cls2D)
     call rejector%reject_mask()
-    call rejector%reject_brightness()
     call rejector%reject_local_variance()
     states = rejector%get_states()
     call spproj%os_cls2D%set_all('state', states)
@@ -137,6 +137,7 @@ program main
     call rejector%kill()
     call spproj%kill()
     call dealloc_imgarr(cavg_imgs)
+
   end do
 
 end program main

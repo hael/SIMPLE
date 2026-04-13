@@ -279,7 +279,6 @@ contains
                     call spprojs(iset)%read_segment('mic',    crec%projfile)
                     call spprojs(iset)%read_segment('stk',    crec%projfile)
                     call spprojs(iset)%read_segment('ptcl2D', crec%projfile)
-                    call spprojs(iset)%read_segment('out',    crec%projfile)
                     nmics2import  = nmics2import  + spprojs(iset)%os_mic%get_noris()
                     nptcls2import = nptcls2import + spprojs(iset)%os_ptcl2D%get_noris()
                     call it%next()
@@ -362,6 +361,7 @@ contains
                     i         = i+1
                     ind       = crec%id
                     if(SIGMAS_IN_PROJECT) then
+                        call spprojs(iset)%read_segment('out', crec%projfile)
                         call spprojs(iset)%get_sigma2(sigmas(i))
                     else
                         sigmas(i) = params%dir_target//'/set_'//int2str(ind)//'/set_'//int2str(ind)//STAR_EXT

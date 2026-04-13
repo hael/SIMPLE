@@ -8,7 +8,6 @@
 !   reject_pop            — removes under-populated classes (< POP_PERCENT_THRESHOLD of total)
 !   reject_res            — removes classes with poor FSC resolution (> RES_THRESHOLD Å)
 !   reject_mask           — removes classes with Otsu foreground signal outside the mask disc
-!   reject_brightness     — removes classes with abnormally high mean signal (contaminants)
 !   reject_local_variance — removes structurally flat classes with low fg/bg local variance
 !
 ! Typical usage:
@@ -23,7 +22,9 @@ module simple_cluster2D_rejector
   use simple_oris,          only: oris
   use simple_image,         only: image
   use simple_stat,          only: robust_z_scores
-  use simple_segmentation
+  use simple_image_msk,     only: density_inoutside_mask
+  use simple_image_bin,     only: image_bin
+  use simple_segmentation,  only: otsu_img
 
   implicit none
   private
@@ -36,9 +37,7 @@ module simple_cluster2D_rejector
   ! Reject classes whose FSC resolution estimate is worse (higher Angstrom value) than this.
   real, parameter :: RES_THRESHOLD         = 40.0
   ! Reject classes where the number of foreground pixels outside the mask disc exceeds this.
-  real, parameter :: MASK_THRESHOLD   = 10.0
-  ! Reject classes whose foreground brightness robust z-score exceeds this.
-  real, parameter :: BRIGHTNESS_ZSCORE_THRESH = 2.5
+  real, parameter :: MASK_THRESHOLD        = 10.0
   ! Reject classes where local variance z-scores are below these thresholds in both regions.
   real, parameter :: LOCVAR_STRONG_THRESH  = -0.5
   real, parameter :: LOCVAR_WEAK_THRESH    = -0.1
@@ -56,7 +55,6 @@ module simple_cluster2D_rejector
     procedure :: reject_pop
     procedure :: reject_res
     procedure :: reject_mask
-    procedure :: reject_brightness
     procedure :: reject_local_variance
   end type cluster2D_rejector
 
@@ -153,84 +151,84 @@ contains
     call timer_stop(t0, string('reject_res'))
   end subroutine reject_res
 
-  ! Rejects classes that have significant Otsu-thresholded signal outside the mask disc,
-  ! indicating ice contamination, carbon edge, or other non-particle artefacts.
+  ! Rejects classes where the largest Otsu-thresholded connected component (CC) either
+  ! has its mass centre outside the mask disc, or has more than MASK_THRESHOLD pixels
+  ! extending beyond it — indicating artefact signal (carbon edge, ice, detector glow).
+  ! CCs spanning the full image dimension are first pruned as spurious background blobs.
   subroutine reject_mask( self )
     class(cluster2D_rejector), intent(inout) :: self
-    real, allocatable       :: rmat(:,:,:)
-    logical, allocatable    :: l_mask(:,:,:)
-    type(image)             :: mask, img
-    integer                 :: i, noris, nrejected, ldim(3)
-    integer(timer_int_kind) :: t0
-    real                    :: mskrad_px, smpd
+    real,    allocatable                     :: ccsizes(:), rmat_cc(:,:,:), rmat_msk(:,:,:)
+    type(image_bin)                          :: img_bin, cc_img, img_mask
+    integer                                  :: i, j, noris, nrejected
+    integer                                  :: ldim(3), loc, nccs, nccs_updated
+    integer(timer_int_kind)                  :: t0
+    real                                     :: smpd, cc_diam, rad_px, xy(2)
+    logical                                  :: l_rejected
     t0 = timer_start()
     noris = size(self%imgs)
     if( noris /= size(self%l_rejected) ) THROW_HARD("number cls oris does not match rejected")
     if( noris == 0 ) return
     ldim      = self%imgs(1)%get_ldim()
     smpd      = self%imgs(1)%get_smpd()
-    mskrad_px = (self%mskdiam / smpd) / 2.0
-    allocate(rmat(ldim(1), ldim(2), ldim(3)))
-    call mask%disc(ldim, smpd, mskrad_px)
-    l_mask = mask%get_rmat() == 0.0   ! true outside the disc
-    call mask%kill()
+    rad_px    = (self%mskdiam / smpd) / 2.0
     nrejected = 0
+    ! construct image buffers once; img_bin%copy reinitialises content each iteration
+    call img_bin%new_bimg(ldim, smpd, wthreads=.false.)
+    call cc_img%new_bimg(ldim,  smpd, wthreads=.false.)
+    call img_mask%disc(ldim,    smpd, rad_px)
+    ! pre-allocate rmat buffers; avoids two heap allocations per iteration from get_rmat()
+    allocate(rmat_cc(ldim(1), ldim(2), ldim(3)), rmat_msk(ldim(1), ldim(2), ldim(3)))
+    call img_mask%get_rmat_sub(rmat_msk)
     do i = 1, noris
-      img = self%imgs(i)
-      call img%bp(0., 10.)
-      call otsu_img(img)
-      call img%get_rmat_sub(rmat)
-      call img%kill()
-      if( sum(rmat, mask=l_mask) > MASK_THRESHOLD ) then
+      call img_bin%copy(self%imgs(i))
+      call img_bin%zero_edgeavg()
+      call img_bin%bp(0., 30.0)
+      call otsu_img(img_bin)
+      call img_bin%set_imat()
+      call img_bin%find_ccs(cc_img)
+      call cc_img%get_nccs(nccs)
+      ! prune CCs whose diameter spans the full image — these are background blobs,
+      ! not particles; labels are stable across calls because update=.false. defers reordering
+      nccs_updated = nccs
+      do j = 1, nccs
+        call cc_img%diameter_cc(j, cc_diam)
+        if( cc_diam > ldim(1) ) then
+          call cc_img%elim_cc(j, update=.false.)
+          nccs_updated = nccs_updated - 1
+        end if
+      end do
+      ! default to rejected; only keep if the largest surviving CC fits within the mask
+      if( nccs_updated > 0 ) then
+        l_rejected = .false.
+        call cc_img%order_ccs()
+        call cc_img%update_img_rmat()
+        call cc_img%get_nccs(nccs)
+        do j = 1, nccs
+          call cc_img%masscen_cc(j, xy)
+          if( sqrt(xy(1)**2 + xy(2)**2) > rad_px ) l_rejected = .true.
+        end do
+        ccsizes = cc_img%size_ccs()
+        loc     = maxloc(ccsizes, dim=1)
+        deallocate(ccsizes)   ! done with sizes; deallocate here, not conditionally after the loop
+        call cc_img%cc2bin(loc)
+        call cc_img%get_rmat_sub(rmat_cc)
+        if( count(rmat_cc - rmat_msk > 0.0) > MASK_THRESHOLD ) l_rejected = .true.
+      else
+        l_rejected = .true.
+      end if
+      if( l_rejected ) then
         self%l_rejected(i) = .true.
         nrejected = nrejected + 1
         if( DEBUG ) write(logfhandle,'(A,I4)') '>>> MASK REJECTION OF CLASS :', i
       end if
     end do
-    if( DEBUG ) write(logfhandle,'(A,I4)') '>>> # CLASSES REJECTED ON MASK :', nrejected
-    deallocate(rmat, l_mask)
+    call img_bin%kill_bimg()
+    call cc_img%kill_bimg()
+    call img_mask%kill_bimg()
+    deallocate(rmat_cc, rmat_msk)
+    if( DEBUG ) write(logfhandle,'(A,I8)') '>>> # CLASSES REJECTED ON MASK :', nrejected
     call timer_stop(t0, string('reject_mask'))
   end subroutine reject_mask
-
-  ! Rejects classes whose mean signal inside the Otsu foreground mask is a positive
-  ! outlier (robust z-score > 2.5), flagging abnormally bright classes caused by gold
-  ! beads, crystalline ice, or other high-contrast contaminants.
-  subroutine reject_brightness( self )
-    class(cluster2D_rejector), intent(inout) :: self
-    real, allocatable       :: scores(:), zscores(:)
-    real, allocatable       :: rmat(:,:,:), rmat_bin(:,:,:)
-    type(image)             :: img
-    integer                 :: i, noris, nrejected, ldim(3)
-    integer(timer_int_kind) :: t0
-    t0 = timer_start()
-    noris = size(self%imgs)
-    if( noris /= size(self%l_rejected) ) THROW_HARD("number cls oris does not match rejected")
-    if( noris == 0 ) return
-    ldim = self%imgs(1)%get_ldim()
-    allocate(rmat(ldim(1), ldim(2), ldim(3)), rmat_bin(ldim(1), ldim(2), ldim(3)))
-    allocate(scores(noris))
-    do i = 1, noris
-      img = self%imgs(i)
-      call img%get_rmat_sub(rmat)      ! original signal, captured before filtering
-      call img%bp(0., 30.)
-      call otsu_img(img)
-      call img%get_rmat_sub(rmat_bin)  ! binary foreground mask
-      call img%kill()
-      scores(i) = sum(rmat, mask=(rmat_bin > 0.5))
-    end do
-    zscores = robust_z_scores(scores)
-    nrejected = 0
-    do i = 1, noris
-      if( zscores(i) > BRIGHTNESS_ZSCORE_THRESH ) then
-        self%l_rejected(i) = .true.
-        nrejected = nrejected + 1
-        if( DEBUG ) write(logfhandle,'(A,I4,F8.4)') '>>> BRIGHTNESS REJECTION OF CLASS :', i, zscores(i)
-      end if
-    end do
-    if( DEBUG ) write(logfhandle,'(A,I4)') '>>> # CLASSES REJECTED ON BRIGHTNESS :', nrejected
-    deallocate(rmat, rmat_bin, scores, zscores)
-    call timer_stop(t0, string('reject_brightness'))
-  end subroutine reject_brightness
 
   ! Rejects classes where local variance is anomalously low in both the foreground and
   ! background simultaneously, indicating a structurally flat class average with no real
@@ -253,6 +251,7 @@ contains
     allocate(scores_inside(noris), scores_outside(noris))
     do i = 1, noris
       img  = self%imgs(i)
+      call img%zero_edgeavg()
       call img%bp(0., 10.)
       img1 = img
       call otsu_img(img1)
@@ -265,7 +264,6 @@ contains
     zscores_outside = robust_z_scores(scores_outside)
     nrejected = 0
     do i = 1, noris
-      write(*,*) i, zscores_inside(i), zscores_outside(i)
       if( (zscores_inside(i) < LOCVAR_STRONG_THRESH .and. zscores_outside(i) < LOCVAR_WEAK_THRESH) .or. &
           (zscores_inside(i) < LOCVAR_WEAK_THRESH   .and. zscores_outside(i) < LOCVAR_STRONG_THRESH) ) then
         self%l_rejected(i) = .true.

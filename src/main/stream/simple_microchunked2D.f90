@@ -1397,7 +1397,7 @@ contains
     call rejector%reject_pop(spproj%os_cls2D)
     call rejector%reject_res(spproj%os_cls2D)
     call rejector%reject_mask()
-    call rejector%reject_brightness()
+  !  call rejector%reject_brightness()! doesnt add anything
     call rejector%reject_local_variance()
     l_rejected = rejector%get_rejected()
     call write_cavgs(stkname, string('_rejected.mrc'), selected=.false.)
