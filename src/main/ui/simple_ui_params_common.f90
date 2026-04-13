@@ -747,9 +747,9 @@ subroutine set_ui_params
                                    'Maximum half-width for bund-constrained search of rotational origin shifts', &
                                    'max shift per iteration in pixels{5}', .false., 5.0)
 
-    call trs_mc%set_param(         'trs_mc',           'num',    'Max shift per iter in pixels{10.}', &
+    call trs_mc%set_param(         'trs',           'num',    'Max shift per iter in pixels{10.}', &
                                    'Maximum half-width for bund-constrained search of movie frame shifts', &
-                                   'max shift per iter in pixels{10}', .false., 5.0)
+                                   'max shift per iter in pixels{10}', .false., 10.0)
 
     call tseries%set_param(        'tseries',         'binary', 'Stack is time-series', &
                                    'Stack is time-series(yes|no){no}', &

@@ -114,7 +114,7 @@ contains
         type(string)              :: frames2align
         type(image)               :: img
         type(sp_project)          :: spproj
-        type(parameters)          :: params
+        type(parameters)          :: params, params_mc
         type(cmdline)             :: cline_mcorr
         type(motion_correct_iter) :: mciter
         type(ctfparams)           :: ctfvars
@@ -196,25 +196,25 @@ contains
     end subroutine exec_tseries_motion_correct
 
     subroutine exec_tseries_make_pickavg( self, cline )
-        use simple_commanders_stkops,   only: commander_stack
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_tvfilter,            only: tvfilter
         class(commander_tseries_make_pickavg), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         real, parameter :: LAM_TV = 1.5
         type(string), allocatable :: framenames(:)
-        type(string)              :: filetabname
         type(sp_project)          :: spproj
-        type(parameters)          :: params
-        type(cmdline)             :: cline_stack, cline_mcorr
-        type(commander_stack)     :: xstack
+        type(parameters)          :: params, params_mc
+        type(cmdline)             :: cline_mcorr
         type(motion_correct_iter) :: mciter
         type(ctfparams)           :: ctfvars
         type(ori)                 :: o
         type(tvfilter)            :: tvfilt
-        type(image)               :: img_intg
-        integer                   :: istart, istop
-        integer :: i, nframes, frame_counter, ldim(3), ifoo, cnt
+        type(image)               :: img_intg, img_frame
+        integer                   :: istart, istop, period, win_start, win_stop, nwin, win_nframes
+        integer                   :: i, nframes, frame_counter, ldim(3), ifoo, cnt, numlen_nframes, iwin
+        real                      :: smpd_win
+        logical                   :: l_periodic
+        type(string)              :: stkname, fname_intg, fname_denoised, fbody_mc
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    100)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',     'yes')
         if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',         3)
@@ -229,56 +229,130 @@ contains
         call params%new(cline)
         call spproj%read(params%projfile)
         nframes  = spproj%get_nframes()
-        allocate(framenames(params%nframesgrp))
+        if( params%nframesgrp < 1 ) THROW_HARD('nframesgrp must be >= 1; exec_tseries_make_pickavg')
+        numlen_nframes = len(int2str(nframes))
         istart = 1
         if( cline%defined('fromf') ) istart = params%fromf
-        istop  = istart + params%nframesgrp - 1
-        cnt    = 0
-        do i = istart,istop
-            if( spproj%os_mic%isthere(i,'frame') )then
-                cnt = cnt + 1
-                framenames(cnt) = spproj%os_mic%get_str(i,'frame')
-                params%smpd     = spproj%os_mic%get(i,'smpd')
-            endif
-        enddo
-        call cline%set('smpd', params%smpd)
-        filetabname = 'filetab_first'//int2str(params%nframesgrp)//'frames.txt'
-        call write_filetable(filetabname, framenames)
-        ! prepare stack command
-        call cline_stack%set('mkdir',   'no')
-        call cline_stack%set('filetab', filetabname)
-        call cline_stack%set('outstk',  'frames2align.mrc')
-        call cline_stack%set('smpd',    params%smpd)
-        call cline_stack%set('nthr',    1)
-        ! execute stack commander
-        call xstack%execute(cline_stack)
-        ! prepare 4 motion_correct
-        cline_mcorr = cline
-        call cline_mcorr%delete('nframesgrp')
-        params%nframesgrp = 0
-        call cline_mcorr%set('prg', 'motion_correct')
-        call cline_mcorr%set('mkdir', 'no')
-        call o%new(is_ptcl=.false.)
-        ctfvars%smpd  = params%smpd
-        frame_counter = 0
-        ! motion corr
-        if( cline%defined('gainref') )then
-            call mciter%iterate(params, cline_mcorr, ctfvars, o, string('frames2align'), frame_counter,&
-                &string('frames2align.mrc'), string('./'), gainref_fname=params%gainref, tseries='yes')
+        if( istart < 1 .or. istart > nframes ) THROW_HARD('fromf is outside available frame range; exec_tseries_make_pickavg')
+        period = 0
+        if( cline%defined('period') ) period = params%period
+        if( period < 0 ) THROW_HARD('period must be >= 0; exec_tseries_make_pickavg')
+        l_periodic = period > 0
+        nwin = 0
+        if( l_periodic )then
+            do win_start = istart, nframes, period
+                win_stop = win_start + params%nframesgrp - 1
+                if( win_stop > nframes ) exit
+                nwin = nwin + 1
+                win_nframes = win_stop - win_start + 1
+                allocate(framenames(win_nframes))
+                do i = win_start,win_stop
+                    if( spproj%os_mic%isthere(i,'frame') )then
+                        iwin = i - win_start + 1
+                        framenames(iwin) = spproj%os_mic%get_str(i,'frame')
+                        smpd_win         = spproj%os_mic%get(i,'smpd')
+                    else
+                        THROW_HARD('Missing frame entry in periodic make_pickavg window')
+                    endif
+                enddo
+                call cline%set('smpd', smpd_win)
+                stkname  = 'frames2align_from'//int2str_pad(win_start,numlen_nframes)//'.mrc'
+                fbody_mc = 'frames2align_from'//int2str_pad(win_start,numlen_nframes)
+                ! build temporary stack directly from selected frames
+                call find_ldim_nptcls(framenames(1),ldim,ifoo)
+                call img_frame%new([ldim(1),ldim(2),1], smpd_win)
+                do i=1,win_nframes
+                    call img_frame%read(framenames(i))
+                    call img_frame%write(stkname, i)
+                enddo
+                call img_frame%kill
+                ! prepare and execute motion correction
+                cline_mcorr = cline
+                call cline_mcorr%delete('nframesgrp')
+                params_mc = params
+                params_mc%nframesgrp = 0
+                params_mc%smpd = smpd_win
+                call cline_mcorr%set('prg', 'motion_correct')
+                call cline_mcorr%set('mkdir', 'no')
+                call o%new(is_ptcl=.false.)
+                ctfvars%smpd  = smpd_win
+                frame_counter = 0
+                if( cline%defined('gainref') )then
+                    call mciter%iterate(params_mc, cline_mcorr, ctfvars, o, fbody_mc, frame_counter, stkname, string('./'),&
+                        &gainref_fname=params%gainref, tseries='yes')
+                else
+                    call mciter%iterate(params_mc, cline_mcorr, ctfvars, o, fbody_mc, frame_counter, stkname, string('./'), tseries='yes')
+                endif
+                call o%kill
+                ! apply TV filter for de-noising
+                fname_intg = fbody_mc//'_intg.mrc'
+                call find_ldim_nptcls(fname_intg,ldim,ifoo)
+                call img_intg%new(ldim, smpd_win)
+                call img_intg%read(fname_intg,1)
+                call tvfilt%new
+                call tvfilt%apply_filter(img_intg, LAM_TV)
+                call tvfilt%kill
+                fname_denoised = fbody_mc//'_intg_denoised.mrc'
+                call img_intg%write(fname_denoised)
+                call img_intg%kill
+                call del_file(stkname)
+                deallocate(framenames)
+            enddo
+            if( nwin == 0 ) THROW_HARD('No complete window found for periodic make_pickavg')
         else
-            call mciter%iterate(params, cline_mcorr, ctfvars, o, string('frames2align'), frame_counter,&
-                &string('frames2align.mrc'), string('./'), tseries='yes')
+            istop  = min(nframes, istart + params%nframesgrp - 1)
+            win_nframes = istop - istart + 1
+            allocate(framenames(win_nframes))
+            do i = istart,istop
+                if( spproj%os_mic%isthere(i,'frame') )then
+                    iwin = i - istart + 1
+                    framenames(iwin) = spproj%os_mic%get_str(i,'frame')
+                    smpd_win        = spproj%os_mic%get(i,'smpd')
+                else
+                    THROW_HARD('Missing frame entry in make_pickavg window')
+                endif
+            enddo
+            call cline%set('smpd', smpd_win)
+            stkname  = 'frames2align.mrc'
+            fbody_mc = 'frames2align'
+            ! build temporary stack directly from selected frames
+            call find_ldim_nptcls(framenames(1),ldim,ifoo)
+            call img_frame%new([ldim(1),ldim(2),1], smpd_win)
+            do i=1,win_nframes
+                call img_frame%read(framenames(i))
+                call img_frame%write(stkname, i)
+            enddo
+            call img_frame%kill
+            ! prepare and execute motion correction
+            cline_mcorr = cline
+            call cline_mcorr%delete('nframesgrp')
+            params_mc = params
+            params_mc%nframesgrp = 0
+            params_mc%smpd = smpd_win
+            call cline_mcorr%set('prg', 'motion_correct')
+            call cline_mcorr%set('mkdir', 'no')
+            call o%new(is_ptcl=.false.)
+            ctfvars%smpd  = smpd_win
+            frame_counter = 0
+            if( cline%defined('gainref') )then
+                call mciter%iterate(params_mc, cline_mcorr, ctfvars, o, fbody_mc, frame_counter, stkname, string('./'),&
+                    &gainref_fname=params%gainref, tseries='yes')
+            else
+                call mciter%iterate(params_mc, cline_mcorr, ctfvars, o, fbody_mc, frame_counter, stkname, string('./'), tseries='yes')
+            endif
+            call o%kill
+            ! apply TV filter for de-noising
+            call find_ldim_nptcls(string('frames2align_intg.mrc'),ldim,ifoo)
+            call img_intg%new(ldim, smpd_win)
+            call img_intg%read(string('frames2align_intg.mrc'),1)
+            call tvfilt%new
+            call tvfilt%apply_filter(img_intg, LAM_TV)
+            call tvfilt%kill
+            call img_intg%write(string('frames2align_intg_denoised.mrc'))
+            call img_intg%kill
+            call del_file(stkname)
+            deallocate(framenames)
         endif
-        call o%kill
-        ! apply TV filter for de-noising
-        call find_ldim_nptcls(string('frames2align_intg.mrc'),ldim,ifoo)
-        call img_intg%new(ldim, params%smpd)
-        call img_intg%read(string('frames2align_intg.mrc'),1)
-        call tvfilt%new
-        call tvfilt%apply_filter(img_intg, LAM_TV)
-        call tvfilt%kill
-        call img_intg%write(string('frames2align_intg_denoised.mrc'))
-        call img_intg%kill
         call simple_end('**** SIMPLE_TSERIES_MAKE_PICKAVG NORMAL STOP ****')
     end subroutine exec_tseries_make_pickavg
 

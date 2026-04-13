@@ -365,6 +365,7 @@ type :: parameters
     integer :: offset=20           !< pixels offset{20}
     integer :: optics_offset=0
     integer :: part=1
+    integer :: period=0           !< periodic window step in frames (0 means disabled)
     integer :: pid=0               !< process ID
     integer :: pftsz=0             !< Desired size of polarft_calc object (half the # of rotations)
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
@@ -975,6 +976,7 @@ contains
         call check_iarg('offset',         self%offset)
         call check_iarg('optics_offset',  self%optics_offset)
         call check_iarg('part',           self%part)
+        call check_iarg('period',         self%period)
         call check_iarg('pftsz',          self%pftsz)
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('ref_ind',        self%ref_ind)

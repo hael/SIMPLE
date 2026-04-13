@@ -118,6 +118,7 @@ contains
         ! parameter input/output
         call tseries_make_pickavg%add_input(UI_PARM, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{100}', '{100}', .false., 100.)
         call tseries_make_pickavg%add_input(UI_PARM, 'fromf',      'num', 'Frame to start averaging from', 'Frame to start averaging from', 'frame index', .false., 0.)
+        call tseries_make_pickavg%add_input(UI_PARM, 'period',     'num', 'Period for repeated averaging windows', 'If > 0, run align+denoise for a nframesgrp-sized window every period frames{0}', 'period in frames{0}', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
