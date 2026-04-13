@@ -60,18 +60,16 @@ contains
                 ! the ==ncls is to be able to restart after having run cleanup with fewer classes
                 if( zero_oris )then
                     call spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', maxn=params%ncls)
-                    return
-                endif
-                if( ncls_diff )then
+                else
                     allocate(s2D%cls_pops(params%ncls), source=MINCLSPOPLIM+1)
-                    return
                 endif
+            else
+                s2D%cls_pops = nint(spproj%os_cls2D%get_all('pop'))
+                where(s2D%cls_pops < 2 )
+                    ! ignoring classes with one particle
+                    s2D%cls_pops = 0
+                end where
             endif
-            s2D%cls_pops = nint(spproj%os_cls2D%get_all('pop'))
-            where(s2D%cls_pops < 2 )
-                ! ignoring classes with one particle
-                s2D%cls_pops = 0
-            end where
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params%ncls), source=MINCLSPOPLIM+1)
@@ -146,6 +144,12 @@ contains
     !> init thread-specific class-space search arrays (call per-particle before searching)
     subroutine prep_strategy2D_thread( ithr )
         integer, intent(in) :: ithr
+        if( .not.allocated(s2D%class_space_corrs) .or. .not.allocated(s2D%class_space_e3s) .or. .not.allocated(s2D%class_space_inplinds) )then
+            THROW_HARD('prep_strategy2D_thread called before class-space arrays were allocated')
+        endif
+        if( ithr < 1 .or. ithr > size(s2D%class_space_corrs,2) )then
+            THROW_HARD('prep_strategy2D_thread received invalid thread index')
+        endif
         s2D%class_space_corrs(   :,ithr) = -huge(1.0)
         s2D%class_space_e3s(     :,ithr) = 0.
         s2D%class_space_inplinds(:,ithr) = 0

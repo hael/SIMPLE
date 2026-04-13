@@ -1766,9 +1766,10 @@ interface
         real :: r
     end function sqeuclid
 
-    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff )
-        class(image), intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
-        real,         intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff, l_mask )
+        class(image),  intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
+        real,          intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+        logical,       intent(in)  :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
     end subroutine nu_objective
 
     module function euclid_norm( self1, self2 ) result( r )

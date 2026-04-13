@@ -13,22 +13,26 @@ contains
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_gridding,         only: prep3D_inv_instrfun4mul
+        use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
+                                         &cleanup_nu_filter, print_nu_filtmap_lowpass_stats
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
         type(image)                   :: vol_prev_even, vol_prev_odd, gridcorr_img
+        type(image)                   :: vol_even_nu, vol_odd_nu, vol_msk
         type(string)                  :: recname, volname, volname_prev, fsc_txt_file
         type(string)                  :: volname_prev_even, volname_prev_odd, str_state, str_iter
-        type(string)                  :: eonames(2), benchfname
+        type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname
+        logical, allocatable          :: l_mask(:,:,:)
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
-        real                          :: weight_prev, update_frac_trail_rec
+        real                          :: weight_prev, update_frac_trail_rec, mskrad_px
         integer                       :: part, state, find4eoavg, fnr, ldim(3), ldim_pd(3)
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
-        integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
+        integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_nonuniform, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
-        real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_tot
+        real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_nonuniform, rt_tot
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -50,6 +54,7 @@ contains
             rt_sampl_dens_correct_eos  = 0.
             rt_sampl_dens_correct_sum  = 0.
             rt_eoavg                   = 0.
+            rt_nonuniform              = 0.
         endif
         ! read in previous reconstruction when trail_rec==yes
         update_frac_trail_rec = 1.0
@@ -164,6 +169,37 @@ contains
                 call vol_prev_odd%kill
             endif
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
+            if( params%l_nonuniform )then
+                if( L_BENCH_GLOB ) t_nonuniform = tic()
+                if( allocated(l_mask) ) deallocate(l_mask)
+                mskrad_px = 0.5 * params%mskdiam / params%smpd_crop
+                call vol_msk%disc(ldim, params%smpd_crop, mskrad_px, l_mask)
+                ! After trailed update, build%vol/build%vol2 already hold even/odd in memory.
+                ! Otherwise, reload the eo pair because build%vol may hold merged recvol.
+                if( .not.(params%l_trail_rec .and. update_frac_trail_rec < 0.99) )then
+                    call build%vol%read(eonames(1))
+                    call build%vol2%read(eonames(2))
+                endif
+                call setup_nu_dmats(build%vol, build%vol2, l_mask)
+                call optimize_nu_cutoff_finds()
+                call nu_filter_vols(vol_even_nu, vol_odd_nu)
+                call print_nu_filtmap_lowpass_stats(l_mask)
+                eonames_nu(1) = add2fbody(eonames(1), params%ext, NUFILT_SUFFIX)
+                eonames_nu(2) = add2fbody(eonames(2), params%ext, NUFILT_SUFFIX)
+                volname_nu    = add2fbody(volname,    params%ext, NUFILT_SUFFIX)
+                call vol_even_nu%write(eonames_nu(1), del_if_exists=.true.)
+                call vol_odd_nu%write(eonames_nu(2), del_if_exists=.true.)
+                call vol_even_nu%add(vol_odd_nu)
+                call vol_even_nu%mul(0.5)
+                call vol_even_nu%write(volname_nu, del_if_exists=.true.)
+                call wait_for_closure(volname_nu)
+                call vol_even_nu%kill
+                call vol_odd_nu%kill
+                call vol_msk%kill
+                deallocate(l_mask)
+                call cleanup_nu_filter()
+                if( L_BENCH_GLOB ) rt_nonuniform = rt_nonuniform + toc(t_nonuniform)
+            endif
             call recname%kill
             call volname%kill
         end do
@@ -175,6 +211,8 @@ contains
         call eorecvol_read%kill
         call vol_prev_even%kill
         call vol_prev_odd%kill
+        if( allocated(l_mask) ) deallocate(l_mask)
+        call cleanup_nu_filter()
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
@@ -191,6 +229,7 @@ contains
             write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', rt_sampl_dens_correct_eos
             write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', rt_sampl_dens_correct_sum
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', rt_eoavg
+            write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', rt_nonuniform
             write(fnr,'(a,1x,f9.2)') 'total time               : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
@@ -201,8 +240,9 @@ contains
             write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', (rt_sampl_dens_correct_eos/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', (rt_sampl_dens_correct_sum/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
+            write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', (rt_nonuniform/rt_tot)            * 100.
             write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
-            &((rt_init+rt_read+rt_sum_reduce+rt_sum_eos+rt_sampl_dens_correct_eos+rt_sampl_dens_correct_sum+rt_eoavg)/rt_tot) * 100.
+            &((rt_init+rt_read+rt_sum_reduce+rt_sum_eos+rt_sampl_dens_correct_eos+rt_sampl_dens_correct_sum+rt_eoavg+rt_nonuniform)/rt_tot) * 100.
             call fclose(fnr)
         endif
     end subroutine exec_volassemble

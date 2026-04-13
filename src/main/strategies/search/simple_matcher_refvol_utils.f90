@@ -65,20 +65,29 @@ contains
         integer :: filtsz
         logical :: have_even, have_odd
         ! READ
-        vol_even = params%vols_even(s)
-        vol_odd  = params%vols_odd(s)
-        vol_avg  = params%vols(s)
-        have_even = file_exists(vol_even)
-        have_odd  = file_exists(vol_odd)
-        if( have_even .and. have_odd )then
+        if( params%l_nonuniform )then
+            vol_even = add2fbody(params%vols_even(s), params%ext, NUFILT_SUFFIX)
+            vol_odd  = add2fbody(params%vols_odd(s),  params%ext, NUFILT_SUFFIX)
+            if( .not.file_exists(vol_even) ) THROW_HARD('Missing nonuniform even reference for state='//int2str(s)//' : '//vol_even%to_char())
+            if( .not.file_exists(vol_odd)  ) THROW_HARD('Missing nonuniform odd reference for state='//int2str(s)//' : '//vol_odd%to_char())
             call build%vol%read_and_crop(   vol_even, params%smpd, params%box_crop, params%smpd_crop)
             call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
         else
-            if( .not. file_exists(vol_avg) )then
-                THROW_HARD('No usable reference volume inputs for state='//int2str(s)//'; need vol1 or vol_even/vol_odd')
+            vol_even = params%vols_even(s)
+            vol_odd  = params%vols_odd(s)
+            vol_avg  = params%vols(s)
+            have_even = file_exists(vol_even)
+            have_odd  = file_exists(vol_odd)
+            if( have_even .and. have_odd )then
+                call build%vol%read_and_crop(   vol_even, params%smpd, params%box_crop, params%smpd_crop)
+                call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
+            else
+                if( .not. file_exists(vol_avg) )then
+                    THROW_HARD('No usable reference volume inputs for state='//int2str(s)//'; need vol1 or vol_even/vol_odd')
+                endif
+                call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
+                call build%vol_odd%copy_fast(build%vol)
             endif
-            call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
-            call build%vol_odd%copy_fast(build%vol)
         endif
         if( s == 1 .and. params%l_filemsk )then
             ! read 3D envelope mask
@@ -117,7 +126,7 @@ contains
             ! FT
             call build%vol%fft
             call build%vol_odd%fft
-        else if( params%l_lpset )then
+        else if( params%l_lpset .and. .not. params%l_nonuniform )then
             ! read average volume that will occupy both even and odd
             call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
             ! noise regularization
@@ -141,7 +150,7 @@ contains
             call build%vol%fft
             call build%vol_odd%fft
         endif
-        if( params%l_ml_reg )then
+        if( params%l_ml_reg .or. params%l_nonuniform )then
             ! filtering done when volumes are assembled
         else if( params%l_icm )then
             ! filtering done above

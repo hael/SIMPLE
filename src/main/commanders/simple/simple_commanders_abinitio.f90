@@ -54,7 +54,7 @@ contains
         type(sp_project)              :: spproj, work_proj
         type(image)                   :: img
         type(stack_io)                :: stkio_r, stkio_r2, stkio_w
-        type(string)                  :: final_vol, work_projfile
+        type(string)                  :: final_vol, work_projfile, filtering_mode
         integer                       :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
         if( cline%defined('nparts') ) THROW_HARD('abinitio3D_cavgs does not support distributed execution, remove nparts from command line')
         call cline%set('sigma_est', 'global') ! obviously
@@ -68,12 +68,20 @@ contains
         if( .not. cline%defined('cenlp')            ) call cline%set('cenlp',                 CENLP_DEFAULT)
         if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',                      'cavg')
         if( .not. cline%defined('lp_auto')          ) call cline%set('lp_auto',                        'no')
+        if( .not. cline%defined('nonuniform')       ) call cline%set('nonuniform',                     'no')
         if( .not. cline%defined('noise_norm')       ) call cline%set('noise_norm',                     'no')
         if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',                          'no')
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',               LPSTART_INI3D)
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',                 LPSTOP_INI3D)
         if( .not. cline%defined('ref_type')         ) call cline%set('ref_type',                   'comlin')
         if( .not. cline%defined('gauref')           ) call cline%set('gauref',                        'yes')
+        if( cline%defined('lp_auto') )then
+            filtering_mode = cline%get_carg('lp_auto')
+            if( trim(filtering_mode%to_char()) .eq. 'nonuniform' )then
+                call cline%set('lp_auto',    'no')
+                call cline%set('nonuniform', 'yes')
+            endif
+        endif
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
@@ -82,6 +90,7 @@ contains
         work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
         ! set class global lp_auto flag for low-pass limit estimation
         params%l_lpauto = .false.; l_lpauto=.false. ! global parameter for low-pass limit estimation
+        l_nonuniform = .false.
         ! Polar representation
         if( params%l_polar )then
             if( trim(params%multivol_mode).ne.'single' )then
@@ -495,6 +504,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(simple_nice_comm)          :: nice_comm
+        type(string)                    :: filtering_mode
         integer :: istage, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -509,10 +519,18 @@ contains
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
         if( .not. cline%defined('lp_auto')             ) call cline%set('lp_auto',                        'no')
+        if( .not. cline%defined('nonuniform')          ) call cline%set('nonuniform',                     'no')
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                   'comlin')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                        'yes')
+        if( cline%defined('lp_auto') )then
+            filtering_mode = cline%get_carg('lp_auto')
+            if( trim(filtering_mode%to_char()) .eq. 'nonuniform' )then
+                call cline%set('lp_auto',    'no')
+                call cline%set('nonuniform', 'yes')
+            endif
+        endif
         ! splitting stage
         split_stage = HET_DOCKED_STAGE
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
@@ -595,6 +613,12 @@ contains
         ! set class global lp_auto flag for low-pass limit estimation
         l_lpauto = .false.
         if( cline%defined('lp_auto') ) l_lpauto = params%l_lpauto
+        ! set class global nonuniform flag for staged activation
+        l_nonuniform = .false.
+        if( cline%defined('nonuniform') ) l_nonuniform = params%l_nonuniform
+        if( l_lpauto .and. l_nonuniform )then
+            THROW_HARD('lp_auto=yes and nonuniform=yes are mutually exclusive in abinitio3D')
+        endif
         ! set class global automasking flag
         l_automsk = .false.
         if( cline%defined('automsk') )then

@@ -76,6 +76,7 @@ type :: parameters
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)          :: neigs_per='no'       !< using neigs as percentage of the total dimension(yes|no){no}
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
+    character(len=3)          :: nonuniform='no'      !< apply nonuniform filtering to eo volumes in volassemble(yes|no){no}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
@@ -527,6 +528,7 @@ type :: parameters
     logical :: l_lpset           = .false.
     logical :: l_ml_reg          = .true.
     logical :: l_noise_reg       = .false.
+    logical :: l_nonuniform      = .false.
     logical :: l_neigh           = .false.
     logical :: l_phaseplate      = .false.
     logical :: l_polar           = .false. 
@@ -744,6 +746,7 @@ contains
         call check_carg('neigs_per',      self%neigs_per)
         call check_carg('niceserver',     self%niceserver)
         call check_carg('noise_norm',     self%noise_norm)
+        call check_carg('nonuniform',     self%nonuniform)
         call check_carg('norm',           self%norm)
         call check_carg('objfun',         self%objfun)
         call check_carg('omit_neg',       self%omit_neg)
@@ -1499,6 +1502,8 @@ contains
         self%l_frac_worst = self%frac_worst <= 0.99
         ! set greedy sampling flag
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
+        ! set nonuniform filtering flag
+        self%l_nonuniform = trim(self%nonuniform).eq.'yes'
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts

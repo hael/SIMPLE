@@ -1,13 +1,13 @@
 !@descr: nonuniform filtering of even/odd volumes
 !
 ! A typical call sequence would be:
-!    call setup_nu_dmats(vol_even, vol_odd)
+!    call setup_nu_dmats(vol_even, vol_odd, l_mask)
 !    call optimize_nu_cutoff_finds()
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
 ! Updated call sequence with refinement (idea)
-!    call setup_nu_dmats(vol_even, vol_odd)
+!    call setup_nu_dmats(vol_even, vol_odd, l_mask)
 !    call optimize_nu_cutoff_finds()
 !    call extend_nu_filter_highres_iterative(vol_even, vol_odd)  ! optional
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
@@ -24,7 +24,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, pack_filtmap_lowpass_limits,&
-          calc_filtmap_lowpass_stats, print_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
+          calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, extend_nu_filter_highres, extend_nu_filter_highres_iterative
 private
 
@@ -38,6 +38,7 @@ real,             allocatable :: bwfilters(:,:)
 integer,          allocatable :: filtmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
 real,             allocatable :: dmat_finest_cached(:,:,:)
+logical,          allocatable :: nu_lmask(:,:,:)
 integer :: ldim(3), box
 real    :: smpd
 
@@ -109,6 +110,7 @@ contains
         if( allocated(filtmap) )      deallocate(filtmap)
         if( allocated(cutoff_finds) ) deallocate(cutoff_finds)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
+        if( allocated(nu_lmask) )     deallocate(nu_lmask)
         ldim = 0
         box  = 0
         smpd = 0.
@@ -203,14 +205,19 @@ contains
         deallocate(bwfilter)
     end subroutine generate_single_filtered_pair
 
-    subroutine setup_nu_dmats( vol_even, vol_odd )
-        class(image),  intent(in) :: vol_even, vol_odd
+    subroutine setup_nu_dmats( vol_even, vol_odd, l_mask )
+        class(image), intent(in) :: vol_even, vol_odd
+        logical,      intent(in) :: l_mask(:,:,:)
         type(image) :: vol_even_filt, vol_odd_filt
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:)
         integer :: i
         real    :: x
         call init_nu_filter(vol_even, vol_odd)
+        if( any(shape(l_mask) /= ldim) ) THROW_HARD('l_mask shape mismatch in setup_nu_dmats')
+        if( allocated(nu_lmask) ) deallocate(nu_lmask)
+        allocate(nu_lmask(ldim(1),ldim(2),ldim(3)), source=l_mask)
+        if( .not. any(nu_lmask) ) THROW_HARD('l_mask has no true voxels in setup_nu_dmats')
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd, initialized=.true.)
@@ -224,7 +231,7 @@ contains
             if( .not.file_exists(odd_cache_fname)  ) THROW_HARD('Missing filtered volume cache: '//odd_cache_fname%to_char())
             call vol_even_filt%read(even_cache_fname)
             call vol_odd_filt%read(odd_cache_fname)
-            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmats(:,:,:,i))
+            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmats(:,:,:,i), nu_lmask)
             call tent_smooth_3d(dmats(:,:,:,i), dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
             ! dmat_tmp is never just a temporary buffer, the result is in dmats(:,:,:,i)
         end do
@@ -237,6 +244,7 @@ contains
         integer :: nx, ny, nz, i, j, k, icut, best_icut, sz
         real    :: best_dmat
         if( .not.allocated(dmats) ) THROW_HARD('dmats not allocated; run setup_nu_dmats before nonuniform_filter_vol')
+        if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         nx = ldim(1)
         ny = ldim(2)
         nz = ldim(3)
@@ -247,6 +255,10 @@ contains
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
+                    if( .not. nu_lmask(i,j,k) )then
+                        filtmap(i,j,k) = 1
+                        cycle
+                    endif
                     best_icut = 1
                     best_dmat = dmats(i,j,k,1)
                     do icut = 2, sz
@@ -314,7 +326,7 @@ contains
         call vol_odd_filt_new%new(ldim, smpd)
         call vol_even_filt_new%read(even_cache_fname)
         call vol_odd_filt_new%read(odd_cache_fname)
-        call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new)
+        call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new, nu_lmask)
         call tent_smooth_3d(dmat_new, dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
         ! dmat_tmp is never just a temporary buffer, the result is in dmats(:,:,:,i)
         allocate(dmat_finest(ldim(1),ldim(2),ldim(3)), source=huge(x))
@@ -324,13 +336,13 @@ contains
             else
                 call vol_even_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(sz_old)))
                 call vol_odd_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(sz_old)))
-                call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest)
+                call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest, nu_lmask)
                 call tent_smooth_3d(dmat_finest, dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
             end if
         else
             call vol_even_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(sz_old)))
             call vol_odd_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(sz_old)))
-            call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest)
+            call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest, nu_lmask)
             call tent_smooth_3d(dmat_finest, dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
         end if
         ! --- update filtmap in place for the masked voxels ---
@@ -432,6 +444,9 @@ contains
             if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in pack_filtmap_lowpass_limits')
             nvals = count(mask)
             l_mask_present = .true.
+        else if( allocated(nu_lmask) ) then
+            nvals = count(nu_lmask)
+            l_mask_present = .true.
         else
             nvals = size(filtmap)
             l_mask_present = .false.
@@ -443,7 +458,11 @@ contains
             do j = 1, ldim(2)
                 do i = 1, ldim(1)
                     if( l_mask_present ) then
-                        if( .not.mask(i,j,k) ) cycle
+                        if( present(mask) ) then
+                            if( .not.mask(i,j,k) ) cycle
+                        else
+                            if( .not.nu_lmask(i,j,k) ) cycle
+                        end if
                     end if
                     ival = ival + 1
                     lowpass_vals(ival) = cutoff_find_to_lowpass_limit(filtmap(i,j,k))
@@ -475,6 +494,8 @@ contains
         if( present(mask) ) then
             if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in calc_filtmap_lowpass_histogram')
             nselected = count(mask)
+        else if( allocated(nu_lmask) ) then
+            nselected = count(nu_lmask)
         else
             nselected = size(filtmap)
         end if
@@ -484,6 +505,8 @@ contains
         do icut = 1, size(cutoff_finds)
             if( present(mask) ) then
                 counts(icut) = count(filtmap == icut .and. mask)
+            else if( allocated(nu_lmask) ) then
+                counts(icut) = count(filtmap == icut .and. nu_lmask)
             else
                 counts(icut) = count(filtmap == icut)
             end if
@@ -511,7 +534,7 @@ contains
         deallocate(counts, percentages)
     end subroutine print_filtmap_lowpass_histogram
 
-    subroutine print_filtmap_lowpass_stats( mask, title )
+    subroutine print_nu_filtmap_lowpass_stats( mask, title )
         logical, optional, intent(in) :: mask(:,:,:)
         character(len=*), optional, intent(in) :: title
         type(stats_struct) :: statvars
@@ -527,6 +550,6 @@ contains
         write(logfhandle,'(A,F8.4)') 'Max    : ', statvars%maxv
         write(logfhandle,'(A,F8.4)') 'Min    : ', statvars%minv
         call print_filtmap_lowpass_histogram(mask, '>>> LOCAL RESOLUTION HISTOGRAM')
-    end subroutine print_filtmap_lowpass_stats
+    end subroutine print_nu_filtmap_lowpass_stats
 
 end module simple_nu_filter

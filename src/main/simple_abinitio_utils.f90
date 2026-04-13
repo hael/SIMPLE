@@ -40,6 +40,7 @@ logical          :: l_srch4symaxis    = .false., l_symran        = .false., l_tr
 logical          :: l_update_frac_dyn = .false., l_polar         = .false., l_ini3D              = .false.
 logical          :: l_lpauto          = .false., l_nsample_given = .false., l_nsample_stop_given = .false.
 logical          :: l_automsk         = .false.
+logical          :: l_nonuniform      = .false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac  = 1.0, update_frac_dyn  = 1.0

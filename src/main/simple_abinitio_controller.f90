@@ -17,7 +17,7 @@ integer, parameter :: NEIGH_NSPACES(2)                = [126,5000]
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
-    type(string) :: refine, trail_rec, pgrp, balance, lp_auto, automsk
+    type(string) :: refine, trail_rec, pgrp, balance, lp_auto, nonuniform, automsk
     integer :: iter, inspace, inspace_sub, imaxits, nsample_dyn, ipftsz
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
@@ -63,7 +63,7 @@ contains
         call set_refine3D_balance_policy( cfg )
         call set_refine3D_gauref_policy( cfg, params, istage )
         call set_refine3D_trailrec_policy( cfg, params, istage )
-        call set_refine3D_lp_auto_policy( cfg, params, istage )
+        call set_refine3D_filtering_policy( cfg, params, istage )
         call set_refine3D_automsk_policy( cfg, istage, route )
         call set_refine3D_stage_controls( cfg, params, istage )
         call apply_refine3D_route_overrides( cfg, params, istage, route )
@@ -171,13 +171,14 @@ contains
         end select
     end subroutine set_refine3D_trailrec_policy
 
-    subroutine set_refine3D_lp_auto_policy( cfg, params, istage )
+    subroutine set_refine3D_filtering_policy( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        cfg%lp_auto = 'no'
-        cfg%lpstart = 0.
-        cfg%lpstop  = 0.
+        cfg%lp_auto    = 'no'
+        cfg%nonuniform = 'no'
+        cfg%lpstart    = 0.
+        cfg%lpstop     = 0.
         if( istage >= LPAUTO_STAGE .and. l_lpauto )then
             cfg%lp_auto = trim(params%lp_auto)
             cfg%lpstart = lpinfo(istage - 1)%lp
@@ -186,8 +187,10 @@ contains
             else
                 cfg%lpstop = lpinfo(istage + 1)%lp
             endif
+        else if( istage >= LPAUTO_STAGE .and. l_nonuniform )then
+            cfg%nonuniform = trim(params%nonuniform)
         endif
-    end subroutine set_refine3D_lp_auto_policy
+    end subroutine set_refine3D_filtering_policy
 
     subroutine set_refine3D_automsk_policy( cfg, istage, route )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -307,6 +310,7 @@ contains
         call cline_refine3D%set('balance',                cfg%balance)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('lp_auto',                cfg%lp_auto)
+        call cline_refine3D%set('nonuniform',             cfg%nonuniform)
         if( cfg%lp_auto.eq.'yes' )then
             call cline_refine3D%set('lpstart',            cfg%lpstart)
             call cline_refine3D%set('lpstop',             cfg%lpstop)

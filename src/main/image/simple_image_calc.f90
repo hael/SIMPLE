@@ -1670,17 +1670,24 @@ contains
         endif
     end function sqeuclid
 
-    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff )
-        class(image), intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
-        real,         intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
-        integer :: nx, ny, nz
+    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff, l_mask )
+        class(image),  intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
+        real,          intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+        logical,       intent(in)  :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+        integer :: nx, ny, nz, i, j, k
         nx = even_raw%ldim(1)
         ny = even_raw%ldim(2)
         nz = even_raw%ldim(3)
-        !$omp workshare
-        diff = abs(even_raw%rmat(:nx,:ny,:nz) - odd_filt%rmat(:nx,:ny,:nz)) +&
-              &abs(even_filt%rmat(:nx,:ny,:nz) - odd_raw%rmat(:nx,:ny,:nz))
-        !$omp end workshare
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+        do k = 1, nz
+            do j = 1, ny
+                do i = 1, nx
+                    diff(i,j,k) = abs(even_raw%rmat(i,j,k) - odd_filt%rmat(i,j,k)) +&
+                                 &abs(even_filt%rmat(i,j,k) - odd_raw%rmat(i,j,k))
+                end do
+            end do
+        end do
+        !$omp end parallel do
     end subroutine nu_objective
 
     module function euclid_norm( self1, self2 ) result( r )
