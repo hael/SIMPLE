@@ -362,7 +362,7 @@ type :: parameters
     integer :: numlen=0            !< length of number string
     integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correction{5}
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
-    integer :: offset=30           !< pixels offset{30}
+    integer :: offset=20           !< pixels offset{20}
     integer :: optics_offset=0
     integer :: part=1
     integer :: pid=0               !< process ID

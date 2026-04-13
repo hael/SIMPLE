@@ -53,7 +53,7 @@ contains
         ! <empty>
         ! search controls
         call track_particles%add_input(UI_SRCH, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
-        'e.g. pixels window halfwidth', .false., 30.)
+        'pixels window halfwidth{20}', .false., 20.)
         call track_particles%add_input(UI_SRCH, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{50}', '{50}', .false., 50.)
         ! <empty>
         ! filter controls
