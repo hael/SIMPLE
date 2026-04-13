@@ -279,8 +279,8 @@ def pick_particles_with_input() -> None:
         box_size = 64
 
     try:
-        with mrcfile.open(file_path, mode="r") as mrc:
-            data = mrc.data
+        with mrcfile.open(file_path, mode="r", permissive=True) as mrc:
+            data = mrc.data.copy()
             if data.ndim == 3:
                 img = data[data.shape[0] // 2]
             else:
