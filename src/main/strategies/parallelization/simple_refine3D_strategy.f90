@@ -227,7 +227,7 @@ contains
         type(commander_prob_align_neigh)  :: xprob_align_neigh
         type(cmdline)                     :: cline_prob_align
         integer                           :: state
-        logical                           :: l_prob_state_mode
+        logical                           :: l_prob_state_mode, l_prob_neigh_mode
         601 format(A,1X,F12.3)
         call self%conv%print_iteration(params%which_iter)
         ! communicate iteration counters
@@ -249,10 +249,11 @@ contains
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
+        l_prob_neigh_mode = (trim(params%refine) == 'prob_neigh') .or. (trim(params%refine) == 'prob_tree')
         ! refine=prob* pre-step (except ptree, which runs direct tree-guided search)
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
-            if( params%l_neigh .and. (.not. l_prob_state_mode) )then
+            if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else
                 call cline_prob_align%set('prg', 'prob_align')
@@ -265,7 +266,7 @@ contains
             endif
             ! communicate changes to probabilistic alignment
             call build%spproj%write_segment_inside(params%oritype)
-            if( params%l_neigh .and. (.not. l_prob_state_mode) )then
+            if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
                 call xprob_align_neigh%execute( cline_prob_align )
             else
                 call xprob_align%execute( cline_prob_align )
@@ -369,7 +370,7 @@ contains
         integer, allocatable :: state_pops(:)
         real    :: smpd
         integer :: state, box, nfiles, i
-        logical :: err, fall_over, vol_defined
+        logical :: err, fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
@@ -422,7 +423,9 @@ contains
         self%cline_calc_group_sigmas   = cline
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
-        if( params%l_neigh .and. (.not. str_has_substr(params%refine, 'prob_state')) )then
+        l_prob_state_mode = trim(params%refine) == 'prob_state'
+        l_prob_neigh_mode = (trim(params%refine) == 'prob_neigh') .or. (trim(params%refine) == 'prob_tree')
+        if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
             call self%cline_prob_align_distr%set( 'prg', 'prob_align_neigh' )
         else
             call self%cline_prob_align_distr%set( 'prg', 'prob_align' )
@@ -594,7 +597,7 @@ contains
         integer, allocatable :: state_pops(:)
         real    :: smpd
         integer :: state, iter, box
-        logical :: do_automsk, l_prob_state_mode
+        logical :: do_automsk, l_prob_state_mode, l_prob_neigh_mode
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = tic()
@@ -627,9 +630,10 @@ contains
             t_prob = tic()
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
+        l_prob_neigh_mode = (trim(params%refine) == 'prob_neigh') .or. (trim(params%refine) == 'prob_tree')
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
-            if( params%l_neigh .and. (.not. l_prob_state_mode) )then
+            if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else
                 call cline_prob_align%set('prg', 'prob_align')
@@ -637,7 +641,7 @@ contains
             call cline_prob_align%set('which_iter', iter)
             call cline_prob_align%set('startit',    iter)
             call build%spproj%write_segment_inside(params%oritype)
-            if( params%l_neigh .and. (.not. l_prob_state_mode) )then
+            if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
                 call xprob_align_neigh_distr%execute( cline_prob_align )
             else
                 call xprob_align_distr%execute( cline_prob_align )

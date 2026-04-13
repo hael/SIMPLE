@@ -146,7 +146,7 @@ contains
             else if( istage < PROB_NEIGH_REFINE_STAGE )then
                 cfg%refine = 'prob'
             else
-                cfg%refine = 'prob_neigh'
+                cfg%refine = 'prob_tree'
             endif
         else
             if( istage <  PROB_REFINE_STAGE )then
@@ -300,7 +300,7 @@ contains
                 endif
         end select
         select case(cfg%refine%to_char())
-            case('prob_neigh')
+            case('prob_neigh','prob_tree')
                 cfg%inspace_sub = NEIGH_NSPACES(1)
                 cfg%inspace     = NEIGH_NSPACES(2)
         end select
@@ -308,7 +308,7 @@ contains
         ! a cartesian reconstruction that cannot happen with trail_rec=yes for now
         if( params%l_polar )then
             select case(cfg%refine%to_char())
-                case('prob_neigh')
+                case('prob_neigh','prob_tree')
                     cfg%inspace = NSPACE(NSTAGES)
             end select
         endif

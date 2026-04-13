@@ -252,7 +252,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs|lsf)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree|tree_neigh_states|shc_ptree){shc}
+    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|prob_tree|ptree|tree_neigh_states|shc_ptree){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: ref_type='comlin'    !< polar reference type(polar_cavg|comlin){comlin}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
@@ -543,16 +543,6 @@ type :: parameters
 end type parameters
 
 contains
-
-    pure logical function is_tree_refine_mode(refine_mode)
-        character(len=*), intent(in) :: refine_mode
-        select case(trim(refine_mode))
-            case('ptree', 'tree_neigh', 'tree_neigh_states', 'shc_ptree', 'snhc_ptree', 'single_ptree')
-                is_tree_refine_mode = .true.
-            case DEFAULT
-                is_tree_refine_mode = .false.
-        end select
-    end function is_tree_refine_mode
 
     subroutine init_strings( self )
         class(parameters), intent(inout) :: self
@@ -1799,14 +1789,19 @@ contains
         ! refine flag dependent things
         self%l_prob_align_mode = .false.
         select case(trim(self%refine))
-            case('prob','prob_state','prob_neigh')
+            case('prob','prob_state','prob_neigh','prob_tree')
                 self%l_prob_align_mode = .true.
             case DEFAULT
                 ! no-op
         end select
         ! -- neigh defaults
         self%l_neigh = .false.
-        self%l_tree_refine = is_tree_refine_mode(self%refine)
+        select case(trim(self%refine))
+            case('ptree', 'tree_neigh', 'tree_neigh_states', 'shc_ptree', 'snhc_ptree', 'single_ptree', 'prob_tree')
+                self%l_tree_refine = .true.
+            case DEFAULT
+                self%l_tree_refine = .false.
+        end select
         l_tree = self%l_tree_refine
         if( str_has_substr(self%refine, 'neigh') .or. l_tree )then
             ! we always do probabilistic in-plane sampling for tree-based approaches
@@ -1823,7 +1818,7 @@ contains
                 case('shc_ptree')
                     if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 50
                     if( .not. cline%defined('nspace')     ) self%nspace     = 2000
-                case('ptree','tree_neigh','tree_neigh_states')
+                case('ptree','tree_neigh','tree_neigh_states','prob_tree')
                     if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 126 ! no odd numbers (previously 125)
                     if( .not. cline%defined('nspace')     ) self%nspace     = 5000
                 case DEFAULT
