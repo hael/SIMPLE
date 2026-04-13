@@ -13,10 +13,6 @@ integer, parameter :: REFINE3D_ROUTE_STD              = 1
 integer, parameter :: REFINE3D_ROUTE_CAVGS            = 2
 integer, parameter :: REFINE3D_ROUTE_POLAR            = 3
 integer, parameter :: REFINE3D_ROUTE_POLAR_CAVGS      = 4
-integer, parameter :: REFINE3D_ROUTE_TREE_STD         = 5
-integer, parameter :: REFINE3D_ROUTE_TREE_CAVGS       = 6
-integer, parameter :: REFINE3D_ROUTE_TREE_POLAR       = 7
-integer, parameter :: REFINE3D_ROUTE_TREE_POLAR_CAVGS = 8
 integer, parameter :: NEIGH_NSPACES(2)                = [126,5000]
 
 type :: refine3D_stage_cfg
@@ -33,31 +29,15 @@ contains
         logical, intent(in) :: l_cavgs
         if( l_polar )then
             if( l_cavgs )then
-                if( l_tree )then
-                    route = REFINE3D_ROUTE_TREE_POLAR_CAVGS
-                else
-                    route = REFINE3D_ROUTE_POLAR_CAVGS
-                endif
+                route = REFINE3D_ROUTE_POLAR_CAVGS
             else
-                if( l_tree )then
-                    route = REFINE3D_ROUTE_TREE_POLAR
-                else
-                    route = REFINE3D_ROUTE_POLAR
-                endif
+                route = REFINE3D_ROUTE_POLAR
             endif
         else
             if( l_cavgs )then
-                if( l_tree )then
-                    route = REFINE3D_ROUTE_TREE_CAVGS
-                else
-                    route = REFINE3D_ROUTE_CAVGS
-                endif
+                route = REFINE3D_ROUTE_CAVGS
             else
-                if( l_tree )then
-                    route = REFINE3D_ROUTE_TREE_STD
-                else
-                    route = REFINE3D_ROUTE_STD
-                endif
+                route = REFINE3D_ROUTE_STD
             endif
         endif
     end function classify_refine3D_route
@@ -139,23 +119,12 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
-        if( is_tree_route(route) )then
-            ! this is identical for now, we will have to see what the tree can do in prob-style refinement
-            if( istage <  PROB_REFINE_STAGE )then
-                cfg%refine = 'shc_smpl'
-            else if( istage < PROB_NEIGH_REFINE_STAGE )then
-                cfg%refine = 'prob'
-            else
-                cfg%refine = 'prob_tree'
-            endif
+        if( istage <  PROB_REFINE_STAGE )then
+            cfg%refine = 'shc_smpl'
+        else if( istage < PROB_NEIGH_REFINE_STAGE )then
+            cfg%refine = 'prob'
         else
-            if( istage <  PROB_REFINE_STAGE )then
-                cfg%refine = 'shc_smpl'
-            else if( istage < PROB_NEIGH_REFINE_STAGE )then
-                cfg%refine = 'prob'
-            else
-                cfg%refine = 'prob_neigh'
-            endif
+            cfg%refine = 'prob_neigh'
         endif
         if( trim(params%multivol_mode).eq.'input_oris_fixed' )then
             cfg%refine = 'prob_state'
@@ -225,7 +194,7 @@ contains
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
         cfg%automsk = 'no'
-        if( route == REFINE3D_ROUTE_STD .or. route == REFINE3D_ROUTE_TREE_STD )then
+        if( route == REFINE3D_ROUTE_STD )then
             if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = 'yes'
         endif
     end subroutine set_refine3D_automsk_policy
@@ -287,7 +256,7 @@ contains
         select case(route)
             case(REFINE3D_ROUTE_STD, REFINE3D_ROUTE_CAVGS)
                 ! nothing to override for standard and cavgs routes
-            case(REFINE3D_ROUTE_POLAR, REFINE3D_ROUTE_POLAR_CAVGS, REFINE3D_ROUTE_TREE_POLAR, REFINE3D_ROUTE_TREE_POLAR_CAVGS)
+            case(REFINE3D_ROUTE_POLAR, REFINE3D_ROUTE_POLAR_CAVGS)
                 if( trim(params%gauref).eq.'no' ) cfg%gaufreq = -1.
                 if( cfg%ml_reg.eq.'yes' )         cfg%gaufreq = -1.
                 if( cfg%trail_rec=='yes' )then
@@ -300,7 +269,7 @@ contains
                 endif
         end select
         select case(cfg%refine%to_char())
-            case('prob_neigh','prob_tree')
+            case('prob_neigh')
                 cfg%inspace_sub = NEIGH_NSPACES(1)
                 cfg%inspace     = NEIGH_NSPACES(2)
         end select
@@ -308,7 +277,7 @@ contains
         ! a cartesian reconstruction that cannot happen with trail_rec=yes for now
         if( params%l_polar )then
             select case(cfg%refine%to_char())
-                case('prob_neigh','prob_tree')
+                case('prob_neigh')
                     cfg%inspace = NSPACE(NSTAGES)
             end select
         endif
@@ -373,18 +342,12 @@ contains
         endif
         call cline_refine3D%delete('ipftsz')
         select case(route)
-            case(REFINE3D_ROUTE_POLAR, REFINE3D_ROUTE_POLAR_CAVGS, REFINE3D_ROUTE_TREE_POLAR, REFINE3D_ROUTE_TREE_POLAR_CAVGS)
+            case(REFINE3D_ROUTE_POLAR, REFINE3D_ROUTE_POLAR_CAVGS)
                 call cline_refine3D%set('center_type',    'params')
                 if( cfg%ipftsz > 0 )then
                     call cline_refine3D%set('pftsz',      cfg%ipftsz)
                 endif
         end select
     end subroutine emit_refine3D_stage_cfg
-
-    logical function is_tree_route( route )
-        integer, intent(in) :: route
-        is_tree_route = route == REFINE3D_ROUTE_TREE_STD .or. route == REFINE3D_ROUTE_TREE_CAVGS .or. &
-                        route == REFINE3D_ROUTE_TREE_POLAR .or. route == REFINE3D_ROUTE_TREE_POLAR_CAVGS
-    end function is_tree_route
 
 end submodule simple_abinitio_controller

@@ -7,7 +7,6 @@ use simple_eul_prob_tab,       only: eul_prob_tab, angle_sampling, calc_num2samp
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
 use simple_eulspace_neigh_map, only: eulspace_neigh_map
-use simple_strategy_tree_helpers, only: choose_next_child_prob, INVALID_CORR
 implicit none
 
 public :: eul_prob_tab_neigh
@@ -71,13 +70,6 @@ contains
             integer, allocatable :: best_eval_locs(:,:)
             integer, allocatable :: fullref_to_sparse_ref(:)
             real,    allocatable :: evaluated_ref_dists(:,:)
-            integer, allocatable :: cand_ref_ids(:,:)
-            integer, allocatable :: cand_inpl(:,:)
-            integer, allocatable :: cand_counts(:)
-            real,    allocatable :: cand_dists(:,:)
-            real,    allocatable :: cand_x(:,:)
-            real,    allocatable :: cand_y(:,:)
-            logical, allocatable :: cand_has_sh(:,:)
         end type eval_ws
 
         type(eulspace_neigh_map) :: neigh_map
@@ -90,11 +82,9 @@ contains
         integer :: i, ri, istate, ithr, max_refs_to_refine
         integer :: iptcl, nsubs, npeak_target, n, si, iref_full
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        logical :: l_use_tree_descent
         call seed_rnd
         nsubs = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
-        l_use_tree_descent = trim(self%p_ptr%refine) == 'prob_tree'
         call neigh_map%new(self%b_ptr%subspace_full2sub_map, nsubs)
         if( self%eval_max_touched < 1 ) self%eval_max_touched = 1
         if( .not. allocated(self%eval_touched_refs)   ) allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
@@ -126,13 +116,6 @@ contains
         allocate(coarse_ws%peak_subspace_inds(nsubs,self%p_ptr%nstates,nthr_glob),      source=0)
         allocate(coarse_ws%pooled_sub_inds(npeak_target,self%p_ptr%nstates,nthr_glob),  source=0)
         allocate(coarse_ws%peak_subspace_count(self%p_ptr%nstates,nthr_glob),           source=0)
-        allocate(eval_work%cand_ref_ids(self%nrefs,nthr_glob), source=0)
-        allocate(eval_work%cand_inpl(self%nrefs,nthr_glob),    source=0)
-        allocate(eval_work%cand_counts(nthr_glob),             source=0)
-        allocate(eval_work%cand_dists(self%nrefs,nthr_glob),   source=huge(1.0))
-        allocate(eval_work%cand_x(self%nrefs,nthr_glob),       source=0.)
-        allocate(eval_work%cand_y(self%nrefs,nthr_glob),       source=0.)
-        allocate(eval_work%cand_has_sh(self%nrefs,nthr_glob),  source=.false.)
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -self%p_ptr%trs
@@ -168,8 +151,6 @@ contains
         deallocate(coarse_ws%peak_subspace_count, coarse_ws%pooled_sub_inds, coarse_ws%peak_subspace_inds,&
         &coarse_ws%best_subspace_dist_work, coarse_ws%best_subspace_dist, eval_work%evaluated_ref_dists,&
         &eval_work%evaluated_ref_ids, coarse_ws%neigh_proj_mask, eval_work%best_eval_locs, eval_work%fullref_to_sparse_ref,&
-        &eval_work%cand_ref_ids, eval_work%cand_inpl, eval_work%cand_counts, eval_work%cand_dists, eval_work%cand_x,&
-        &eval_work%cand_y, eval_work%cand_has_sh,&
         &inds_sorted, dists_inpl_sorted, dists_inpl, inpl_athres)
 
     contains
@@ -203,127 +184,11 @@ contains
             call get_particle_context(iptcl_loc, o_prev_loc, prev_state_loc, prev_proj_loc)
             call estimate_shift_seed(ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc, o_prev_loc, l_with_shift, shift_seed_loc)
             call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
-            if( l_use_tree_descent )then
-                call evaluate_tree_descent_or_fallback(i_loc, ithr_loc, iptcl_loc, prev_proj_loc, shift_seed_loc, l_with_shift, neval_loc)
-            else
-                call build_pooled_neighborhood(ithr_loc, prev_proj_loc)
-                call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval_loc)
-            endif
+            call build_pooled_neighborhood(ithr_loc, prev_proj_loc)
+            call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval_loc)
             call refine_best_neighbors(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval_loc, l_with_shift)
             call o_prev_loc%kill
         end subroutine process_particle
-
-        subroutine evaluate_tree_descent_or_fallback(i_loc, ithr_loc, iptcl_loc, prev_proj_loc, shift_seed_loc, l_with_shift, neval_loc)
-            integer, intent(in)  :: i_loc, ithr_loc, iptcl_loc, prev_proj_loc
-            real,    intent(in)  :: shift_seed_loc(3)
-            logical, intent(in)  :: l_with_shift
-            integer, intent(out) :: neval_loc
-            call clear_candidate_store(ithr_loc)
-            call evaluate_tree_descent(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval_loc)
-            if( neval_loc > 0 )then
-                call flush_candidate_store(i_loc, ithr_loc, neval_loc)
-            else
-                call build_pooled_neighborhood(ithr_loc, prev_proj_loc)
-                call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval_loc)
-            endif
-        end subroutine evaluate_tree_descent_or_fallback
-
-        subroutine evaluate_tree_descent(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval_loc)
-            use simple_binary_tree, only: bt_node
-            integer, intent(in)  :: i_loc, ithr_loc, iptcl_loc
-            real,    intent(in)  :: shift_seed_loc(3)
-            logical, intent(in)  :: l_with_shift
-            integer, intent(out) :: neval_loc
-            type(bt_node) :: node_cur, node_root
-            logical, allocatable :: tree_seen(:)
-            integer :: si_loc, istate_loc, ntrees_loc, ipeak_loc, isub_loc, iproj_loc, itree_loc
-            integer :: inode_loc, inode_next_loc
-            real    :: score_root, score_l, score_r
-            ntrees_loc = self%b_ptr%block_tree%get_n_trees()
-            if( ntrees_loc <= 0 )then
-                neval_loc = 0
-                return
-            endif
-            allocate(tree_seen(ntrees_loc), source=.false.)
-            do si_loc = 1, self%nstates
-                istate_loc = self%ssinds(si_loc)
-                if( .not. self%state_exists(istate_loc) ) cycle
-                tree_seen = .false.
-                do ipeak_loc = 1, coarse_ws%peak_subspace_count(istate_loc,ithr_loc)
-                    isub_loc = coarse_ws%peak_subspace_inds(ipeak_loc,istate_loc,ithr_loc)
-                    if( isub_loc < 1 .or. isub_loc > nsubs ) cycle
-                    iproj_loc = self%b_ptr%subspace_inds(isub_loc)
-                    if( iproj_loc < 1 .or. iproj_loc > self%p_ptr%nspace ) cycle
-                    itree_loc = self%b_ptr%subspace_full2sub_map(iproj_loc)
-                    if( itree_loc < 1 .or. itree_loc > ntrees_loc ) cycle
-                    if( tree_seen(itree_loc) ) cycle
-                    tree_seen(itree_loc) = .true.
-                    node_root = self%b_ptr%block_tree%get_root_node(itree_loc)
-                    call eval_tree_ref_fixed_state_local(node_root%ref_idx, istate_loc, i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, score_root)
-                    inode_loc = node_root%node_idx
-                    do
-                        if( inode_loc == 0 ) exit
-                        if( self%b_ptr%block_tree%is_leaf(itree_loc, inode_loc) ) exit
-                        node_cur = self%b_ptr%block_tree%get_node(itree_loc, inode_loc)
-                        if( node_cur%left_idx == 0 .and. node_cur%right_idx == 0 ) exit
-                        call eval_child_fixed_state_local(itree_loc, node_cur%left_idx, istate_loc, i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, score_l)
-                        call eval_child_fixed_state_local(itree_loc, node_cur%right_idx, istate_loc, i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, score_r)
-                        inode_next_loc = choose_next_child_prob(node_cur%left_idx, node_cur%right_idx, score_l, score_r)
-                        if( inode_next_loc == 0 ) exit
-                        inode_loc = inode_next_loc
-                    enddo
-                enddo
-            enddo
-            neval_loc = eval_work%cand_counts(ithr_loc)
-            deallocate(tree_seen)
-        end subroutine evaluate_tree_descent
-
-        subroutine eval_child_fixed_state_local(itree_loc, child_idx_loc, istate_loc, i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, score_loc)
-            use simple_binary_tree, only: bt_node
-            integer, intent(in) :: itree_loc, child_idx_loc, istate_loc, i_loc, ithr_loc, iptcl_loc
-            real,    intent(in) :: shift_seed_loc(3)
-            logical, intent(in) :: l_with_shift
-            real,    intent(out) :: score_loc
-            type(bt_node) :: node_child
-            score_loc = INVALID_CORR
-            if( child_idx_loc == 0 ) return
-            node_child = self%b_ptr%block_tree%get_node(itree_loc, child_idx_loc)
-            if( node_child%ref_idx == 0 ) return
-            call eval_tree_ref_fixed_state_local(node_child%ref_idx, istate_loc, i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, score_loc)
-        end subroutine eval_child_fixed_state_local
-
-        subroutine eval_tree_ref_fixed_state_local(ref_idx_loc, istate_loc, i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, score_loc)
-            integer, intent(in) :: ref_idx_loc, istate_loc, i_loc, ithr_loc, iptcl_loc
-            real,    intent(in) :: shift_seed_loc(3)
-            logical, intent(in) :: l_with_shift
-            real,    intent(out) :: score_loc
-            integer :: iref_full_loc, irot_loc, ri_loc
-            real    :: rotmat_loc(2,2), rotated_shift_loc(2), dist_best
-            score_loc = INVALID_CORR
-            if( ref_idx_loc < 1 .or. ref_idx_loc > self%p_ptr%nspace ) return
-            if( .not. self%state_exists(istate_loc) ) return
-            if( .not. self%proj_exists(ref_idx_loc,istate_loc) ) return
-            iref_full_loc = (istate_loc-1)*self%p_ptr%nspace + ref_idx_loc
-            if( l_with_shift )then
-                call self%b_ptr%pftc%gen_objfun_vals(iref_full_loc, iptcl_loc, shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
-            else
-                call self%b_ptr%pftc%gen_objfun_vals(iref_full_loc, iptcl_loc, [0.,0.], dists_inpl(:,ithr_loc))
-            endif
-            dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
-            irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc), inpl_athres(istate_loc), self%p_ptr%prob_athres)
-            dist_best = dists_inpl(irot_loc,ithr_loc)
-            ri_loc = eval_work%fullref_to_sparse_ref(iref_full_loc)
-            if( ri_loc > 0 )then
-                if( l_with_shift )then
-                    call rotmat2d(self%b_ptr%pftc%get_rot(irot_loc), rotmat_loc)
-                    rotated_shift_loc = matmul(shift_seed_loc(2:3), rotmat_loc)
-                    call store_solution_local(ithr_loc, ri_loc, dist_best, irot_loc, rotated_shift_loc(1), rotated_shift_loc(2), .true.)
-                else
-                    call store_solution_local(ithr_loc, ri_loc, dist_best, irot_loc, 0., 0., .false.)
-                endif
-            endif
-            score_loc = -dist_best
-        end subroutine eval_tree_ref_fixed_state_local
 
         subroutine get_particle_context(iptcl_loc, o_prev_loc, prev_state_loc, prev_proj_loc)
             integer,   intent(in)    :: iptcl_loc
@@ -439,7 +304,7 @@ contains
             integer, intent(out) :: neval_loc
             integer :: ri_loc, istate_loc, iproj_loc, irot_loc, iref_loc
             real    :: rotmat_loc(2,2), rotated_shift_loc(2)
-            call clear_candidate_store(ithr_loc)
+            neval_loc = 0
             do ri_loc = 1, self%nrefs
                 istate_loc = self%sinds(ri_loc)
                 iproj_loc  = self%jinds(ri_loc)
@@ -455,65 +320,15 @@ contains
                 if( l_with_shift )then
                     call rotmat2d(self%b_ptr%pftc%get_rot(irot_loc), rotmat_loc)
                     rotated_shift_loc = matmul(shift_seed_loc(2:3), rotmat_loc)
-                    call store_solution_local(ithr_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, rotated_shift_loc(1), rotated_shift_loc(2), .true.)
+                    call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, rotated_shift_loc(1), rotated_shift_loc(2), .true.)
                 else
-                    call store_solution_local(ithr_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
+                    call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
                 endif
+                neval_loc = neval_loc + 1
+                eval_work%evaluated_ref_ids(neval_loc,ithr_loc)  = ri_loc
+                eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dists_inpl(irot_loc,ithr_loc)
             enddo
-            call flush_candidate_store(i_loc, ithr_loc, neval_loc)
         end subroutine evaluate_neighborhood
-
-        subroutine clear_candidate_store(ithr_loc)
-            integer, intent(in) :: ithr_loc
-            eval_work%cand_counts(ithr_loc) = 0
-        end subroutine clear_candidate_store
-
-        subroutine store_solution_local(ithr_loc, ri_loc, dist_loc, irot_loc, x_loc, y_loc, has_sh_loc)
-            integer, intent(in) :: ithr_loc, ri_loc, irot_loc
-            real,    intent(in) :: dist_loc, x_loc, y_loc
-            logical, intent(in) :: has_sh_loc
-            integer :: j_loc, nloc
-            nloc = eval_work%cand_counts(ithr_loc)
-            do j_loc = 1, nloc
-                if( eval_work%cand_ref_ids(j_loc,ithr_loc) /= ri_loc ) cycle
-                if( dist_loc >= eval_work%cand_dists(j_loc,ithr_loc) ) return
-                eval_work%cand_dists(j_loc,ithr_loc)  = dist_loc
-                eval_work%cand_inpl(j_loc,ithr_loc)   = irot_loc
-                eval_work%cand_x(j_loc,ithr_loc)      = x_loc
-                eval_work%cand_y(j_loc,ithr_loc)      = y_loc
-                eval_work%cand_has_sh(j_loc,ithr_loc) = has_sh_loc
-                return
-            enddo
-            nloc = nloc + 1
-            if( nloc > self%nrefs )then
-                THROW_HARD('simple_eul_prob_tab_neigh::fill_tab_neigh; local candidate overflow')
-            endif
-            eval_work%cand_counts(ithr_loc)         = nloc
-            eval_work%cand_ref_ids(nloc,ithr_loc)   = ri_loc
-            eval_work%cand_dists(nloc,ithr_loc)     = dist_loc
-            eval_work%cand_inpl(nloc,ithr_loc)      = irot_loc
-            eval_work%cand_x(nloc,ithr_loc)         = x_loc
-            eval_work%cand_y(nloc,ithr_loc)         = y_loc
-            eval_work%cand_has_sh(nloc,ithr_loc)    = has_sh_loc
-        end subroutine store_solution_local
-
-        subroutine flush_candidate_store(i_loc, ithr_loc, neval_loc)
-            integer, intent(in)  :: i_loc, ithr_loc
-            integer, intent(out) :: neval_loc
-            integer :: j_loc, ri_loc
-            neval_loc = eval_work%cand_counts(ithr_loc)
-            do j_loc = 1, neval_loc
-                ri_loc = eval_work%cand_ref_ids(j_loc,ithr_loc)
-                call record_sparse_eval(i_loc, ri_loc, eval_work%cand_dists(j_loc,ithr_loc), eval_work%cand_inpl(j_loc,ithr_loc),&
-                &eval_work%cand_x(j_loc,ithr_loc), eval_work%cand_y(j_loc,ithr_loc), eval_work%cand_has_sh(j_loc,ithr_loc))
-                eval_work%evaluated_ref_ids(j_loc,ithr_loc)   = ri_loc
-                eval_work%evaluated_ref_dists(j_loc,ithr_loc) = eval_work%cand_dists(j_loc,ithr_loc)
-            enddo
-            if( neval_loc < self%nrefs )then
-                eval_work%evaluated_ref_ids(neval_loc+1:self%nrefs,ithr_loc)   = 0
-                eval_work%evaluated_ref_dists(neval_loc+1:self%nrefs,ithr_loc) = huge(1.0)
-            endif
-        end subroutine flush_candidate_store
 
         subroutine refine_best_neighbors(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval_loc, l_with_shift)
             integer, intent(in) :: i_loc, ithr_loc, iptcl_loc, neval_loc

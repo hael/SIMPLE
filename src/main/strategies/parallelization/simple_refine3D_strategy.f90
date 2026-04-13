@@ -249,7 +249,7 @@ contains
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
-        l_prob_neigh_mode = (trim(params%refine) == 'prob_neigh') .or. (trim(params%refine) == 'prob_tree')
+        l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         ! refine=prob* pre-step (except ptree, which runs direct tree-guided search)
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
@@ -424,7 +424,7 @@ contains
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         l_prob_state_mode = trim(params%refine) == 'prob_state'
-        l_prob_neigh_mode = (trim(params%refine) == 'prob_neigh') .or. (trim(params%refine) == 'prob_tree')
+        l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
             call self%cline_prob_align_distr%set( 'prg', 'prob_align_neigh' )
         else
@@ -630,7 +630,7 @@ contains
             t_prob = tic()
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
-        l_prob_neigh_mode = (trim(params%refine) == 'prob_neigh') .or. (trim(params%refine) == 'prob_tree')
+        l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then

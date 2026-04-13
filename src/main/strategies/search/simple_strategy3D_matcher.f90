@@ -411,7 +411,7 @@ contains
                 allocate(strategy3D_greedy_sub :: strategy3Dsrch(iptcl_batch)%ptr)
             case('greedy')
                 allocate(strategy3D_greedy :: strategy3Dsrch(iptcl_batch)%ptr)
-            case('prob','prob_state','prob_neigh','prob_tree')
+            case('prob','prob_state','prob_neigh')
                 allocate(strategy3D_prob :: strategy3Dsrch(iptcl_batch)%ptr)
             case('ptree')
                 allocate(strategy3D_ptree :: strategy3Dsrch(iptcl_batch)%ptr)
