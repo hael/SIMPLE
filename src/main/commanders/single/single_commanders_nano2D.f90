@@ -74,6 +74,7 @@ contains
         call cline_cluster2D_nano%set('prg',     'cluster2D_nano')
         call cline_cluster2D_nano%set('mskdiam',  0.)
         call cline_cluster2D_nano%set('refine',  'inpl')
+        call cline_cluster2D_nano%set('mkdir',   'no')
         call cline_cluster2D_nano%set('projfile', params%projfile)
         call xcluster2D_nano%execute(cline_cluster2D_nano)        
         last_iter_stage2 = cline_cluster2D_nano%get_iarg('endit')
@@ -98,13 +99,24 @@ contains
         class(cmdline),                  intent(inout) :: cline
         ! commander
         type(commander_cluster2D) :: xcluster2D ! shared-memory
-        type(string) :: str_refine
+        type(parameters)          :: params
+        type(string) :: str_refine, mkdir_flag
         ! static parameters
         call cline%delete('nparts') ! always shared-memory
-        call cline%set('prg',           'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
         call cline%set('autoscale',            'no')
-        if( .not. cline%defined('tseries') ) call cline%set('tseries', 'yes')
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',    'yes')
+        mkdir_flag = cline%get_carg('mkdir')
+        if( trim(mkdir_flag%to_char()) .eq. 'yes' )then
+            ! create execution directory in the single_exec context
+            call params%new(cline)
+            params%mkdir = 'no'
+            ! avoid nested execution directory creation in inner cluster2D
+            call cline%set('mkdir', 'no')
+            call cline%set('projfile', params%projfile)
+        endif
+        call cline%set('prg',           'cluster2D')
+        if( .not. cline%defined('tseries') ) call cline%set('tseries',  'yes')
         if( .not. cline%defined('refine')  ) call cline%set('refine','greedy')
         str_refine = cline%get_carg('refine')
         select case(str_refine%to_char())
@@ -125,9 +137,7 @@ contains
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc') ! best objfun
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',        'no') ! ml_reg=yes -> too few atoms 
-        if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
+        if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')       
         call xcluster2D%execute(cline)
         call str_refine%kill
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
@@ -199,6 +209,7 @@ contains
         cline = cline_copy
         call exec_cmdline('rm -rf cavgs* clusters2D*star *_FINISHED start2Drefs* frcs*')
         call cline%set('center', 'no')
+        call cline%set('mkdir',  'no')
         call xcluster2D%execute(cline)
         ! end gracefully
         call nice_comm%terminate()
