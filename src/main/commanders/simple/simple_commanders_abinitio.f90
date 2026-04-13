@@ -73,7 +73,6 @@ contains
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',               LPSTART_INI3D)
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',                 LPSTOP_INI3D)
         if( .not. cline%defined('ref_type')         ) call cline%set('ref_type',                   'comlin')
-        if( .not. cline%defined('gauref_last_stage')) call cline%set('gauref_last_stage', GAUREF_LAST_STAGE)
         if( .not. cline%defined('gauref')           ) call cline%set('gauref',                        'yes')
         ! make master parameters
         call params%new(cline)
@@ -509,7 +508,6 @@ contains
         if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                   'comlin')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
-        if( .not. cline%defined('gauref_last_stage')   ) call cline%set('gauref_last_stage', GAUREF_LAST_STAGE)
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                        'yes')
         ! splitting stage
         split_stage = HET_DOCKED_STAGE

@@ -27,6 +27,7 @@ integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,17,15,30]
 integer,          parameter :: MAXITS_GLOB           = SUM(MAXITS(1:7))     ! the last stage is omitted in this estimate since the sampling method changes
 integer,          parameter :: SYMSRCH_STAGE         = 3
 integer,          parameter :: TRAILREC_STAGE_SINGLE = 5                    ! first stage where trail_rec behavior changes
+integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES              ! first stage where trail_rec is enabled for independent mode
 integer,          parameter :: AUTOMSK_STAGE         = 6                    ! swith on automasking when lpauto is switched on
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed

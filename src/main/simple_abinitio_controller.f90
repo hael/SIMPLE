@@ -3,17 +3,12 @@ implicit none
 #include "simple_local_flags.inc"
 
 real,    parameter :: UPDATE_FRAC_MIN                 = 0.1                  ! 10% of the particles updated each iteration
-integer, parameter :: PHASES(3)                       = [2,6,NSTAGES]
-integer, parameter :: MAXITS(8)                       = [20,20,17,17,17,17,15,30]
-integer, parameter :: MAXITS_GLOB                     = SUM(MAXITS(1:7))     ! the last 30 iterations are not included in this estimate since the sampling method changes
-integer, parameter :: NSPACE(3)                       = [500,2500,2500]
-integer, parameter :: PROBREFINE_STAGE                = 5
-integer, parameter :: ICM_STAGE                       = PROBREFINE_STAGE     ! we switch from ML regularization when prob is switched on
-integer, parameter :: STOCH_SAMPL_STAGE               = PROBREFINE_STAGE     ! we switch from greedy to stochastic balanced class sampling when prob is switched on
-integer, parameter :: TRAILREC_STAGE_SINGLE           = STOCH_SAMPL_STAGE    ! we start trailing when we start sampling particles randomly
-integer, parameter :: TRAILREC_STAGE_MULTI            = NSTAGES              ! we start trailing in the last stage
-integer, parameter :: LPAUTO_STAGE                    = PROBREFINE_STAGE + 1 ! we switch on automatic low-pass limit estimation after one prob stage, but only if lp_auto is switched on by user
-integer, parameter :: CAVGWEIGHTS_STAGE               = 3                    ! when to activate optional cavg weighing in abinitio3D_cavgs/cavgs_fast
+integer, parameter :: NSPACE(8)                       = [500,500,1000,1000,2500,2500,5000,5000]
+integer, parameter :: SHC_REFINE_STAGE                = 1                    ! shc-style refinement stages 1-4
+integer, parameter :: PROB_REFINE_STAGE               = 5                    ! prob refinement stages 5-6
+integer, parameter :: PROB_NEIGH_REFINE_STAGE         = 7                    ! prob_neigh refinement stages 7-8
+integer, parameter :: STOCH_SAMPL_STAGE               = PROB_REFINE_STAGE    ! we switch from greedy to stochastic balanced class sampling when prob is switched on
+integer, parameter :: LPAUTO_STAGE                    = PROB_REFINE_STAGE + 1 ! we switch on automatic low-pass limit estimation after one prob stage, but only if lp_auto is switched on by user
 integer, parameter :: REFINE3D_ROUTE_STD              = 1
 integer, parameter :: REFINE3D_ROUTE_CAVGS            = 2
 integer, parameter :: REFINE3D_ROUTE_POLAR            = 3
@@ -22,13 +17,12 @@ integer, parameter :: REFINE3D_ROUTE_TREE_STD         = 5
 integer, parameter :: REFINE3D_ROUTE_TREE_CAVGS       = 6
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR       = 7
 integer, parameter :: REFINE3D_ROUTE_TREE_POLAR_CAVGS = 8
-integer, parameter :: SHC_PTREE_NSPACES(2)            = [50,2000]
 integer, parameter :: NEIGH_NSPACES(2)                = [126,5000]
 
 type :: refine3D_stage_cfg
-    type(string) :: ml_reg, fillin, cavgw
-    type(string) :: refine, icm, trail_rec, pgrp, balance, lp_auto, automsk
-    integer :: iphase, iter, inspace, inspace_sub, imaxits, nsample_dyn, ipftsz
+    type(string) :: ml_reg, fillin
+    type(string) :: refine, trail_rec, pgrp, balance, lp_auto, automsk
+    integer :: iter, inspace, inspace_sub, imaxits, nsample_dyn, ipftsz
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
 end type refine3D_stage_cfg
@@ -86,17 +80,13 @@ contains
         call set_refine3D_update_policy( cfg, params, istage )
         call set_refine3D_symmetry_policy( cfg, params, istage )
         call set_refine3D_mode_policy( cfg, params, istage, route )
-        call set_refine3D_icm_policy( cfg, params, istage )
         call set_refine3D_balance_policy( cfg )
         call set_refine3D_gauref_policy( cfg, params, istage )
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_lp_auto_policy( cfg, params, istage )
         call set_refine3D_automsk_policy( cfg, istage, route )
-        call set_refine3D_cavgw_policy( cfg, params, istage, l_cavgs )
-        call set_refine3D_phase_index( cfg, istage )
-        call set_refine3D_phase_controls( cfg, params, istage )
+        call set_refine3D_stage_controls( cfg, params, istage )
         call apply_refine3D_route_overrides( cfg, params, istage, route )
-        call normalize_refine3D_stage_cfg( cfg )
     end subroutine build_refine3D_stage_cfg
 
     subroutine init_refine3D_iteration( cfg )
@@ -150,29 +140,27 @@ contains
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
         if( is_tree_route(route) )then
-            if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_ptree'
-            if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
-            if( istage >  PHASES(2)        ) cfg%refine = 'ptree'
+            ! this is identical for now, we will have to see what the tree can do in prob-style refinement
+            if( istage <  PROB_REFINE_STAGE )then
+                cfg%refine = 'shc_smpl'
+            else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                cfg%refine = 'prob'
+            else
+                cfg%refine = 'prob_neigh'
+            endif
         else
-            if( istage <  PROBREFINE_STAGE ) cfg%refine = 'shc_ptree'
-            if( istage >= PROBREFINE_STAGE ) cfg%refine = 'prob'
-            if( istage >  PHASES(2)        ) cfg%refine = 'prob_neigh'
+            if( istage <  PROB_REFINE_STAGE )then
+                cfg%refine = 'shc_smpl'
+            else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                cfg%refine = 'prob'
+            else
+                cfg%refine = 'prob_neigh'
+            endif
         endif
         if( trim(params%multivol_mode).eq.'input_oris_fixed' )then
             cfg%refine = 'prob_state'
         endif  
     end subroutine set_refine3D_mode_policy
-
-    subroutine set_refine3D_icm_policy( cfg, params, istage )
-        type(refine3D_stage_cfg), intent(inout) :: cfg
-        class(parameters),        intent(in)    :: params
-        integer,                  intent(in)    :: istage
-        cfg%icm = 'no'
-        if( istage >= ICM_STAGE ) cfg%icm = 'yes'
-        if( cline_refine3D%defined('icm') )then
-            if( trim(params%icm).eq.'no' ) cfg%icm = 'no'
-        endif
-    end subroutine set_refine3D_icm_policy
 
     subroutine set_refine3D_balance_policy( cfg )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -184,7 +172,7 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         cfg%gaufreq = -1.
-        if( istage <= params%gauref_last_stage )then
+        if( istage <= GAUREF_LAST_STAGE )then
             cfg%gaufreq = lpinfo(istage)%lp
         endif
     end subroutine set_refine3D_gauref_policy
@@ -242,41 +230,13 @@ contains
         endif
     end subroutine set_refine3D_automsk_policy
 
-    subroutine set_refine3D_cavgw_policy( cfg, params, istage, l_cavgs )
+    subroutine set_refine3D_stage_controls( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        logical,                  intent(in)    :: l_cavgs
-        cfg%cavgw = 'no'
-        if( l_cavgs )then
-            if( (trim(params%cavgw).eq.'yes') .and. (istage>=CAVGWEIGHTS_STAGE) )then
-                cfg%cavgw = 'yes'
-            endif
-        endif
-    end subroutine set_refine3D_cavgw_policy
-
-    subroutine set_refine3D_phase_index( cfg, istage )
-        type(refine3D_stage_cfg), intent(inout) :: cfg
-        integer,                  intent(in)    :: istage
-        cfg%iphase = 0
-        if(      istage <= PHASES(1) )then
-            cfg%iphase = 1
-        else if( istage <= PHASES(2) )then
-            cfg%iphase = 2
-        else if( istage <= PHASES(3) )then
-            cfg%iphase = 3
-        else
-            THROW_HARD('Invalid istage index')
-        endif
-    end subroutine set_refine3D_phase_index
-
-    subroutine set_refine3D_phase_controls( cfg, params, istage )
-        type(refine3D_stage_cfg), intent(inout) :: cfg
-        class(parameters),        intent(in)    :: params
-        integer,                  intent(in)    :: istage
-        select case(cfg%iphase)
-            case(1)
-                cfg%inspace       = NSPACE(1)
+        cfg%inspace = NSPACE(istage)
+        select case(istage)
+            case(1,2)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = 0.
                 cfg%ml_reg        = 'no'
@@ -284,8 +244,7 @@ contains
                 cfg%overlap       = 0.99
                 cfg%fracsrch      = 99.
                 cfg%snr_noise_reg = 2.0
-            case(2)
-                cfg%inspace       = NSPACE(2)
+            case(3,4,5,6)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
@@ -296,14 +255,13 @@ contains
                 endif
                 if( istage > SYMSRCH_STAGE )then
                     cfg%overlap  = 0.9
-                    cfg%fracsrch = 90.
+                    cfg%fracsrch = 90. ! early stopping
                 else
                     cfg%overlap  = 0.99
                     cfg%fracsrch = 99.
                 endif
                 cfg%snr_noise_reg = 4.0
-            case(3)
-                cfg%inspace       = NSPACE(3)
+            case(7,8)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
@@ -315,9 +273,10 @@ contains
                 cfg%overlap       = 0.95 ! early stopping
                 cfg%fracsrch      = 90.
                 cfg%snr_noise_reg = 6.0
+            case default
+                THROW_HARD('Invalid istage index in set_refine3D_stage_controls')
         end select
-        
-    end subroutine set_refine3D_phase_controls
+    end subroutine set_refine3D_stage_controls
 
     subroutine apply_refine3D_route_overrides( cfg, params, istage, route )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -329,7 +288,6 @@ contains
             case(REFINE3D_ROUTE_STD, REFINE3D_ROUTE_CAVGS)
                 ! nothing to override for standard and cavgs routes
             case(REFINE3D_ROUTE_POLAR, REFINE3D_ROUTE_POLAR_CAVGS, REFINE3D_ROUTE_TREE_POLAR, REFINE3D_ROUTE_TREE_POLAR_CAVGS)
-                cfg%icm = 'no'
                 if( trim(params%gauref).eq.'no' ) cfg%gaufreq = -1.
                 if( cfg%ml_reg.eq.'yes' )         cfg%gaufreq = -1.
                 if( cfg%trail_rec=='yes' )then
@@ -338,14 +296,11 @@ contains
                     else
                         cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(NSTAGES)%box_crop)
                     endif
-                    cfg%inspace = NSPACE(3)
+                    cfg%inspace = NSPACE(NSTAGES)
                 endif
         end select
         select case(cfg%refine%to_char())
-            case('shc_ptree')
-                cfg%inspace_sub = SHC_PTREE_NSPACES(1)
-                cfg%inspace     = SHC_PTREE_NSPACES(2)
-            case('tree_neigh','prob_neigh')
+            case('prob_neigh')
                 cfg%inspace_sub = NEIGH_NSPACES(1)
                 cfg%inspace     = NEIGH_NSPACES(2)
         end select
@@ -353,16 +308,11 @@ contains
         ! a cartesian reconstruction that cannot happen with trail_rec=yes for now
         if( params%l_polar )then
             select case(cfg%refine%to_char())
-            case('tree_neigh','prob_neigh')
-                cfg%inspace = NSPACE(3)
+                case('prob_neigh')
+                    cfg%inspace = NSPACE(NSTAGES)
             end select
         endif
     end subroutine apply_refine3D_route_overrides
-
-    subroutine normalize_refine3D_stage_cfg( cfg )
-        type(refine3D_stage_cfg), intent(inout) :: cfg
-        if( cfg%icm.eq.'yes' ) cfg%ml_reg = 'no'
-    end subroutine normalize_refine3D_stage_cfg
 
     subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, route )
         type(refine3D_stage_cfg), intent(in) :: cfg
@@ -396,9 +346,6 @@ contains
             call cline_refine3D%delete('lpstop')
         endif
         call cline_refine3D%set('automsk',                cfg%automsk)
-        if( l_cavgs )then
-            call cline_refine3D%set('cavgw',              cfg%cavgw)
-        endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
         if( cfg%inspace_sub > 0 )then
             call cline_refine3D%set('nspace_sub',         cfg%inspace_sub)
@@ -408,7 +355,6 @@ contains
         call cline_refine3D%set('maxits',                 cfg%imaxits)
         call cline_refine3D%set('trs',                    cfg%trs)
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
-        call cline_refine3D%set('icm',                    cfg%icm)
         call cline_refine3D%set('frac_best',              cfg%frac_best)
         call cline_refine3D%set('overlap',                cfg%overlap)
         call cline_refine3D%set('fracsrch',               cfg%fracsrch)
