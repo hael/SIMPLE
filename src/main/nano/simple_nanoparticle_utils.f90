@@ -489,8 +489,8 @@ contains
         real,              intent(in)    :: a(3) ! lattice parameters
         integer,           intent(inout) :: coord_nums_std(size(model,2))
         real,              intent(inout) :: coord_nums_gen(size(model,2))
-        character(len=5) :: el_ucase
-        character(len=8) :: crystal_system
+        character(len=5)  :: el_ucase
+        character(len=10) :: crystal_system
         integer :: natoms, iatom, jatom, cnt, cn_max(size(model,2))
         real    :: dist, d, a0, foo(3)
         ! Identify the bound for defining the neighborhood
@@ -579,9 +579,9 @@ contains
         type(atoms)  :: Exx_strain,Eyy_strain,Ezz_strain,Exy_strain,Eyz_strain,Exz_strain, Err_strain
         type(atoms)  :: Ux_atoms, Uy_atoms, Uz_atoms
         real(kind=8) :: p0(3, size(model,dim=2))
-        character(len=5) :: el_ucase
-        character(len=4) :: atom_name
-        character(len=8) :: crystal_system
+        character(len=5)  :: el_ucase
+        character(len=4)  :: atom_name
+        character(len=10) :: crystal_system
         write(logfhandle, '(A)') '>>> STRAIN ANALYSIS'
         ! sanity check
         if( size(model,dim=1 ) /= 3 ) THROW_HARD('Wrong input coordinates! strain_analysis')

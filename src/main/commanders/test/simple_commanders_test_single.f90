@@ -26,8 +26,43 @@ end type commander_test_single_workflow
 contains
 
 subroutine exec_test_atoms_stats( self, cline )
+    use simple_commanders_atoms, only: commander_detect_atoms
+    use simple_commanders_sim,   only: commander_simulate_nanoparticle
+    use simple_commanders_atoms, only: commander_atoms_stats
     class(commander_test_atoms_stats), intent(inout) :: self
     class(cmdline),                    intent(inout) :: cline
+    type(cmdline)                         :: cline_sim, cline_detat, cline_atstats
+    type(parameters)                      :: params
+    type(commander_simulate_nanoparticle) :: xsim_nptcl
+    type(commander_detect_atoms)          :: xdetat
+    type(commander_atoms_stats)           :: xatstats
+    real, parameter                       :: smpd = 0.3
+    !single_exec prg=atoms_stats vol1=rec_merged.mrc vol2=rec_merged_CC.mrc pdbfile=rec_merged_ATMS.pdb smpd=0.358 element=Pt mskdiam=32 nthr=8 > ATMS_STAT
+    write(logfhandle,'(a)') '>>> TEST_DETECT_ATOMS:'
+    call params%new(cline_sim)
+    call cline_sim%set('prg',      'simulate_nanoparticle')
+    call cline_sim%set('box',                          160)
+    call cline_sim%set('smpd',                        smpd)
+    call cline_sim%set('moldiam',                       25)
+    call cline_sim%set('element',                     "Pt")
+    call cline_sim%set('nthr',                          12)
+    call xsim_nptcl%execute(cline_sim)
+    call params%new(cline_detat)
+    call cline_detat%set('prg',             'detect_atoms')
+    call cline_detat%set('vol1',              'outvol.mrc')
+    call cline_detat%set('smpd',                      smpd)
+    call cline_detat%set('element',                   "Pt")
+    call cline_detat%set('nthr',                        12)
+    call xdetat%execute(cline_detat)
+    call params%new(cline_atstats)
+    call cline_atstats%set('prg',             'atoms_stats')
+    call cline_atstats%set('vol1',             'outvol.mrc')
+    call cline_atstats%set('vol2',          'outvol_CC.mrc')
+    call cline_atstats%set('pdbfile',     'outvol_ATMS.pdb')
+    call cline_atstats%set('smpd',                     smpd)
+    call cline_atstats%set('element',                  "Pt")
+    call cline_atstats%set('nthr',                       12)
+    call xatstats%execute(cline_atstats)
     call simple_end('**** SIMPLE_TEST_ATOMS_STATS NORMAL STOP ****')
 end subroutine exec_test_atoms_stats
 
@@ -36,12 +71,12 @@ subroutine exec_test_detect_atoms( self, cline )
     use simple_commanders_sim,   only: commander_simulate_nanoparticle
     class(commander_test_detect_atoms), intent(inout) :: self
     class(cmdline),                     intent(inout) :: cline
-    ! single_exec prg=detect_atoms vol1=outvol.mrc smpd=0.3 element=CDSE nthr=12
     type(cmdline)                         :: cline_sim, cline_detat
     type(parameters)                      :: params
     type(commander_simulate_nanoparticle) :: xsim_nptcl
     type(commander_detect_atoms)          :: xdetat
     real, parameter                       :: smpd = 0.3
+    !single_exec prg=detect_atoms vol1=rec_merged.mrc smpd=0.358 element=Pt mskdiam=32 nthr=30 corr_thres=0.2 cs_thres=4 > DET_ATMS
     write(logfhandle,'(a)') '>>> TEST_DETECT_ATOMS:'
     call params%new(cline_sim)
     call cline_sim%set('prg',      'simulate_nanoparticle')
