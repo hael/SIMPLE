@@ -663,7 +663,7 @@ contains
                 self%originy = 0
                 self%originz = 0
                 self%map     = 'MAP '
-                self%machst  = 0
+                self%machst  = int(Z'4444')
                 self%rms     = 1.0
                 self%nlabl   = 0
                 do i=1,NLABL
