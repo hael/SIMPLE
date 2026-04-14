@@ -87,6 +87,7 @@ contains
         call autorefine3D_nano%add_input(UI_FILT, 'lp', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms{1.5}', .true., 1.5)
         ! mask controls
         call autorefine3D_nano%add_input(UI_MASK, mskdiam)
+        call autorefine3D_nano%add_input(UI_MASK, 'mskdiam_detect', 'num', 'Detect-atoms mask diameter', 'Optional mask diameter in Angstroms passed only to detect_atoms', 'mask diameter in Angstroms{0}', .false., 0.)
         ! computer controls
         call autorefine3D_nano%add_input(UI_COMP, nthr)
         call autorefine3D_nano%add_input(UI_COMP, script)

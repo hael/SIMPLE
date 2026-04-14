@@ -77,7 +77,7 @@ contains
         ! filter controls
         !call detect_atoms%add_input(UI_FILT, )
         ! mask controls
-        !call detect_atoms%add_input(UI_MASK, )
+        call detect_atoms%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         !call detect_atoms%add_input(UI_COMP, )
         ! add to ui_hash

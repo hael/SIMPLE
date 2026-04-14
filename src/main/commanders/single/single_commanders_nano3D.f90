@@ -93,6 +93,7 @@ contains
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
+        if( cline%defined('mskdiam_detect') ) call cline%delete('mskdiam_detect')
         ! read the project file
         call spproj%read(params%projfile)
         call spproj%write_segment_inside('projinfo')
@@ -116,6 +117,7 @@ contains
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
         call cline_detect_atms%set('vol1', RECVOL)               ! this is ALWYAS going to be the input volume to detect_atoms
+        if( params%mskdiam_detect > 0. ) call cline_detect_atms%set('mskdiam', params%mskdiam_detect)
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user

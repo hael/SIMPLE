@@ -210,7 +210,7 @@ contains
         ! filter controls
         call detect_atoms%add_input(UI_FILT, element)
         ! mask controls
-        ! <empty>
+        call detect_atoms%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call detect_atoms%add_input(UI_COMP, nthr)
         ! add to ui_hash

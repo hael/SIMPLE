@@ -402,9 +402,12 @@ contains
         type(parameters)   :: params
         type(nanoparticle) :: nano
         real               :: a(3) ! lattice parameters
-        logical            :: prefit_lattice
         call params%new(cline)
-        call nano%new(params, params%vols(1))
+        if( cline%defined('mskdiam') )then
+            call nano%new(params, params%vols(1), msk=params%msk)
+        else
+            call nano%new(params, params%vols(1))
+        endif
         ! execute
         call nano%identify_atomic_pos(a, l_atom_thres=trim(params%atom_thres).eq.'yes')
         ! kill

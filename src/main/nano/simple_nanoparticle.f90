@@ -16,10 +16,12 @@ public :: nanoparticle
 private
 #include "simple_local_flags.inc"
 
+logical :: DEBUG = .true.
+
 ! module global constants
 integer,          parameter :: NBIN_THRESH         = 20      ! number of thresholds for binarization
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
-logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
+logical,          parameter :: WRITE_OUTPUT        = .true.  ! for figures generation
 logical,          parameter :: ATOMS_STATS_OMIT    = .false. ! omit = shorter atoms stats output
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: CNMIN               = 3
@@ -274,6 +276,7 @@ contains
             call self%img%mask3D_soft(msk_in_pix)
             call mskvol%kill
         endif
+        if( DEBUG ) call self%img%write(string('masked_input_vol.mrc'))
         call self%img_raw%copy(self%img)
         call self%img_raw%stats(self%map_stats%avg, self%map_stats%sdev, self%map_stats%maxv, self%map_stats%minv)
     end subroutine new
@@ -581,6 +584,7 @@ contains
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%element)
+        if( DEBUG ) call self%img%write(string('after_phasecorr.mrc'))
         ! Nanoparticle binarization
         call self%binarize_and_find_centers(l_print=ll_print)
         ! discard small connected components
@@ -632,7 +636,7 @@ contains
         logical, parameter   :: L_BENCH = .false.
         logical :: ll_print
         real    :: ts(NBIN_THRESH)
-        integer :: fnr, low, high, mid
+        integer :: fnr, low, high, mid, ithres
         real    :: corr, max_corr, thresh_opt
         real(timer_int_kind)    :: rt_find_ccs, rt_find_centers, rt_gen_sim, rt_real_corr, rt_tot
         integer(timer_int_kind) ::  t_find_ccs,  t_find_centers,  t_gen_sim,  t_real_corr,  t_tot
@@ -648,22 +652,34 @@ contains
         rt_real_corr    =  0.
         t_tot           =  tic()
         call thres_detect_conv_atom_denoised(self%img, NBIN_THRESH, ts)
-        low        = 1
-        high       = NBIN_THRESH
         thresh_opt = ts(1)
         max_corr   = t2c(thresh_opt)
-        do while( low <= high ) 
-            mid  = (low + high) / 2
-            corr = t2c(ts(mid))
-            if( ll_print ) write(logfhandle,*) 'threshold: ', ts(mid) , 'corr: ', corr
-            if( corr > max_corr )then
-                max_corr   = corr
-                thresh_opt = ts(mid)
-                low        = mid + 1
-            else
-                high       = mid - 1
-            endif
-        enddo
+        ! if( DEBUG )then
+        !     ! exhaustive evaluation of all thresholds for debugging
+        !     do ithres = 2, NBIN_THRESH
+        !         corr = t2c(ts(ithres))
+        !         if( ll_print ) write(logfhandle,*) 'threshold: ', ts(ithres), 'corr: ', corr
+        !         if( corr > max_corr )then
+        !             max_corr   = corr
+        !             thresh_opt = ts(ithres)
+        !         endif
+        !     enddo
+        ! else
+            low  = 1
+            high = NBIN_THRESH
+            do while( low <= high )
+                mid  = (low + high) / 2
+                corr = t2c(ts(mid))
+                if( ll_print ) write(logfhandle,*) 'threshold: ', ts(mid), 'corr: ', corr
+                if( corr > max_corr )then
+                    max_corr   = corr
+                    thresh_opt = ts(mid)
+                    low        = mid + 1
+                else
+                    high       = mid - 1
+                endif
+            enddo
+        ! endif
         rt_tot = toc(t_tot)
         if( L_BENCH )then
             call fopen(fnr, FILE=string('BINARIZE_AND_FIND_CENTERS_BENCH.txt'), STATUS='REPLACE', action='WRITE')
