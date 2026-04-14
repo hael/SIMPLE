@@ -186,35 +186,23 @@ contains
     pure function interp_fcomp_oversamp( self, loc ) result( comp )
         class(projector), intent(in) :: self
         real,             intent(in) :: loc(3)     ! ORIGINAL logical Fourier coords
+        integer, parameter :: PAD_FAC         = OSMPL_PAD_FAC
+        real,    parameter :: PAD_FAC_SCALING = real(PAD_FAC**3)
         complex :: comp
-        integer :: pad_fac
-        real    :: locpd(3), padding_factor_scaling
-        integer :: win0p(3), i0p(3)
-        integer :: iw, jw, kw
-        integer :: hp, kp, mp
+        real    :: locpd(3)
         real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
-        pad_fac = OSMPL_PAD_FAC
-        padding_factor_scaling = real(pad_fac**3)
+        integer :: i0p(3)
         ! Work in PADDED logical coordinates
-        locpd = loc * real(pad_fac)
+        locpd = loc * real(PAD_FAC)
         ! Window geometry on PADDED lattice
-        win0p = nint(locpd)
-        i0p   = win0p - self%iwinsz
+        i0p = nint(locpd) - self%iwinsz
         ! KB weights evaluated in PADDED coordinates
-        ! (MUST feed locpd here, not loc.)
         call self%kbwin%apod_mat_3d(locpd, self%iwinsz, self%wdim, w)
-        comp = CMPLX_ZERO
-        do kw = 1, self%wdim
-            mp = i0p(3) + (kw-1)
-            do jw = 1, self%wdim
-                kp = i0p(2) + (jw-1)
-                do iw = 1, self%wdim
-                    hp = i0p(1) + (iw-1)
-                    comp = comp + w(iw,jw,kw) * self%cmat_exp(hp, kp, mp)
-                end do
-            end do
-        end do
-        comp = comp * padding_factor_scaling
+        ! SUM( kernel x components )
+        comp = sum(w * self%cmat_exp(i0p(1):i0p(1)+self%wdim-1, &
+                                     i0p(2):i0p(2)+self%wdim-1, &
+                                     i0p(3):i0p(3)+self%wdim-1) )
+        comp = comp * PAD_FAC_SCALING
     end function interp_fcomp_oversamp
 
     !>  \brief is to interpolate from the expanded complex matrix

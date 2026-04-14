@@ -87,7 +87,7 @@ contains
         call cline_reconstruct3D%set('pgrp',             params%pgrp)
         call cline_reconstruct3D%set('ml_reg',                  'no')
         call cline_reconstruct3D%set('objfun',                  'cc')
-        call cline_reconstruct3D%delete('polar')
+        call cline_reconstruct3D%set('polar',                   'no')
         ! no fractional update
         call cline_reconstruct3D%delete('update_frac')
         ! postprocess volume

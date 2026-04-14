@@ -115,12 +115,17 @@ contains
         base   = real(win_lo, sp) - loc
         ! 1D weights along each axis (self%apod is pure elemental)
         do i = 1, wdim
-            ww      = self%apod(base + real(i-1, sp)) ! length-2 vector -> length-2 weights
+            ww      = self%apod(base + real(i-1)) ! length-2 vector -> length-2 weights
             wrow(i) = ww(1)
             wcol(i) = ww(2)
         end do
+        ! weights normalization
+        wrow = wrow * (1.0_sp / sum(wrow))
+        wcol = wcol * (1.0_sp / sum(wcol))
         ! Separable 2D outer product: kbw(i,j) = wrow(i) * wcol(j)
-        kbw = spread(wrow, dim=2, ncopies=wdim) * spread(wcol, dim=1, ncopies=wdim)
+        do i = 1, wdim
+            kbw(:,i) = wrow * wcol(i)
+        end do
         ! Always normalize
         recip = 1.0_sp / sum(kbw)
         kbw   = kbw * recip
@@ -135,21 +140,26 @@ contains
         real(sp) :: base(3), ww(3)
         real(sp) :: wx(wdim), wy(wdim), wz(wdim)
         real(sp) :: recip
-        integer  :: i
+        integer  :: i, j
         ! Window lower corner
         win_lo = nint(loc) - iwinsz
         base   = real(win_lo, sp) - loc
         ! 1D weights along each axis (self%apod is pure elemental)
         do i = 1, wdim
-            ww    = self%apod(base + real(i-1, sp)) ! length-3 vector -> length-3 weights
+            ww    = self%apod(base + real(i-1)) ! length-3 vector -> length-3 weights
             wx(i) = ww(1)
             wy(i) = ww(2)
             wz(i) = ww(3)
         end do
         ! Separable 3D outer product: kbw(i,j,k) = wx(i) * wy(j) * wz(k)
-        kbw = spread(spread(wx, dim=2, ncopies=wdim), dim=3, ncopies=wdim) &
-            * spread(spread(wy, dim=1, ncopies=wdim), dim=3, ncopies=wdim) &
-            * spread(spread(wz, dim=1, ncopies=wdim), dim=2, ncopies=wdim)
+        wx = wx * (1.0_sp / sum(wx))
+        wy = wy * (1.0_sp / sum(wy))
+        wz = wz * (1.0_sp / sum(wz))
+        do j = 1, wdim
+            do i = 1, wdim
+                kbw(:,i,j) = wx(:) * (wy(i) * wz(j))
+            end do
+        end do
         ! Always normalize
         recip = 1.0_sp / sum(kbw)
         kbw   = kbw * recip

@@ -140,27 +140,25 @@ contains
     end subroutine shift_ref
 
     ! mirror pft about h (mirror about y of cartesian image)
-    module subroutine mirror_ref_pft( self, iref )
-        class(polarft_calc), target, intent(in) :: self
-        integer,                     intent(in) :: iref
+    module pure subroutine mirror_ref_pft( self, pft, pftm )
+        class(polarft_calc), intent(in)  :: self
+        complex(sp),         intent(in)  :: pft(1:self%pftsz, self%kfromto(1):self%interpklim)
+        complex(sp),         intent(out) :: pftm(1:self%pftsz, self%kfromto(1):self%interpklim)
         integer :: i,j
-        complex(sp), pointer :: pft(:,:) => null(), pftmirr(:,:) => null()
-        pft     => self%pfts_refs_even(:,:,iref)
-        pftmirr => self%pfts_refs_odd(:,:,iref)
-        pftmirr(1,:) = conjg(pft(1,:))
+        pftm(1,:) = conjg(pft(1,:))
         if( is_even(self%pftsz) )then
             do i = 2,self%pftsz/2
                 j = self%pftsz-i+2
-                pftmirr(i,:) = pft(j,:)
-                pftmirr(j,:) = pft(i,:)
+                pftm(i,:) = pft(j,:)
+                pftm(j,:) = pft(i,:)
             enddo
             i = self%pftsz/2 + 1
-            pftmirr(i,:) = pft(i,:)
+            pftm(i,:) = pft(i,:)
         else
             do i = 2,(self%pftsz+1)/2
                 j = self%pftsz-i+2
-                pftmirr(i,:) = pft(j,:)
-                pftmirr(j,:) = pft(i,:)
+                pftm(i,:) = pft(j,:)
+                pftm(j,:) = pft(i,:)
             enddo
         endif
     end subroutine mirror_ref_pft
