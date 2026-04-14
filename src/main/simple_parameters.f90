@@ -69,6 +69,7 @@ type :: parameters
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
     character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
+    character(len=3)          :: mirr_proj='no'       !< mirror projections(no|x|y){no}
     character(len=3)          :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
     character(len=3)          :: ml_reg='yes'         !< apply ML regularization to class averages or volume
     character(len=3)          :: ml_reg_chunk='no'    !< apply ML regularization to class averages or volume in chunks
@@ -735,6 +736,7 @@ contains
         call check_carg('mcpatch',        self%mcpatch)
         call check_carg('mcpatch_thres',  self%mcpatch_thres)
         call check_carg('mirr',           self%mirr)
+        call check_carg('mirr_proj',      self%mirr_proj)
         call check_carg('mkdir',          self%mkdir)
         call check_carg('ml_reg',         self%ml_reg)
         call check_carg('ml_reg_chunk',   self%ml_reg_chunk)

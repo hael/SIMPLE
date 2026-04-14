@@ -276,7 +276,7 @@ contains
 
     module subroutine vol_pad2ref_pfts(self, vol_pad, eulspace, state, iseven, mask)
         use simple_projector,           only: projector
-        use simple_projector_pft_batch, only: fproject_polar_batch
+        use simple_projector_pft_batch, only: fproject_polar_batch, fproject_polar_batch_mirr
         class(polarft_calc), intent(inout) :: self
         class(projector),    intent(in)    :: vol_pad
         class(oris),         intent(inout) :: eulspace
@@ -291,12 +291,24 @@ contains
         iref_to   = iref_from + self%p_ptr%nspace - 1
         hcoords   = transpose(self%polar(1, self%kfromto(1):self%kfromto(2), 1:self%pftsz))
         kcoords   = transpose(self%polar(2, self%kfromto(1):self%kfromto(2), 1:self%pftsz))
-        if( iseven )then
-            call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
-            &hcoords, kcoords, self%pfts_refs_even(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+        if( trim(self%p_ptr%mirr_proj).ne.'yes' )then
+            ! extract all the slices
+            if( iseven )then
+                call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
+                &hcoords, kcoords, self%pfts_refs_even(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+            else
+                call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
+                &hcoords, kcoords, self%pfts_refs_odd(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+            endif
         else
-            call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
-            &hcoords, kcoords, self%pfts_refs_odd(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+            ! extract half the slices and generate the other half by mirroring
+            if( iseven )then
+                call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
+                &hcoords, kcoords, self%pfts_refs_even(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+            else
+                call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, mask,&
+                &hcoords, kcoords, self%pfts_refs_odd(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+            endif
         endif
     end subroutine vol_pad2ref_pfts
 

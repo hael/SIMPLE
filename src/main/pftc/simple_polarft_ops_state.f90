@@ -246,7 +246,7 @@ contains
         real,     parameter   :: zvec(3) = [0.,0.,1.]                   ! normal vector
         real,     parameter   :: DT      = KBWINSZ                      ! distance threshold
         real(dp), parameter   :: PF2     = real(OSMPL_PAD_FAC**2,dp)    ! Oversampling factor
-        real(dp), parameter   :: SELFW   = 1.d-7                        ! Weights atributed to self
+        real(dp), parameter   :: SELFW   = 1.d0                         ! Weights atributed to self
         type(kbinterpol)      :: kb
         complex(dp) :: rot_ptcl(self%pftsz, self%kfromto(1):self%interpklim), fcomp
         real(dp)    :: rot_ctfsq(self%pftsz, self%kfromto(1):self%interpklim)
@@ -430,7 +430,7 @@ contains
         real,     parameter   :: zvec(3) = [0.,0.,1.]                   ! normal vector
         real,     parameter   :: DT      = 0.5                          ! distance threshold
         real(dp), parameter   :: PF2     = real(OSMPL_PAD_FAC**2,dp)    ! Oversampling factor
-        real(dp), parameter   :: SELFW   = 1.d-7                        ! Weights atributed to self
+        real(dp), parameter   :: SELFW   = 1.d0                         ! Weights atributed to self
         type(kbinterpol)      :: kb
         complex(dp) :: rot_ptcl(self%pftsz, self%kfromto(1):self%interpklim),fcomp
         real(dp)    :: rot_ctfsq(self%pftsz, self%kfromto(1):self%interpklim)

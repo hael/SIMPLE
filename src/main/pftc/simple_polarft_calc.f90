@@ -3,7 +3,8 @@ module simple_polarft_calc
 use simple_pftc_api
 implicit none
 
-public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D, vol_pad2ref_pfts, vol_pad2ref_pfts_write_range
+public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D
+public :: vol_pad2ref_pfts, vol_pad2ref_pfts_write_range
 private
 #include "simple_local_flags.inc"
 
@@ -485,9 +486,10 @@ interface
         real(sp),            intent(in)    :: shvec(2)
     end subroutine shift_ref
 
-    module subroutine mirror_ref_pft( self, iref )
-        class(polarft_calc), target, intent(in) :: self
-        integer,                     intent(in) :: iref
+    module pure subroutine mirror_ref_pft( self, pft, pftm )
+        class(polarft_calc), intent(in)  :: self
+        complex(sp),         intent(in)  :: pft(1:self%pftsz, self%kfromto(1):self%interpklim)
+        complex(sp),         intent(out) :: pftm(1:self%pftsz, self%kfromto(1):self%interpklim)
     end subroutine mirror_ref_pft
 
     module subroutine rotate_ref_8(self, pft, irot, pft_rot)
