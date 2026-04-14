@@ -34,8 +34,10 @@ contains
         type(json_core)                       :: json
         type(rec_list)                        :: setslist
         type(stream_watcher)                  :: project_buff
-        type(sp_project)                      :: spproj_glob
+        type(sp_project)                      :: spproj_glob, spproj_tmp
         type(oris)                            :: moldiamori
+        type(chunk_rec)                       :: crec_mskdiam
+        type(rec_iterator)                    :: it_mskdiam
         type(gui_metadata_cavg2D)             :: meta_cavg2D        
         type(gui_metadata_stream_pool2D)      :: meta_pool2D
         character(kind=CK,len=:), allocatable :: snapshot_filename
@@ -45,8 +47,10 @@ contains
         integer(kind=dp) :: time_last_import, time_last_iter
         integer :: i, iter, nprojects, nimported, nptcls_glob=0, nsets_imported, pool_iter, iter_last_import
         integer :: xtile, ytile, mskdiam_update, extra_pause_iters, last_sent_iter
-        logical :: l_pause, l_params_updated, found, l_terminate=.false.
+        logical :: l_pause, l_params_updated, found, l_terminate, l_once
         real    :: mskdiam
+        l_once      = .true.
+        l_terminate = .false.
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -85,23 +89,6 @@ contains
         call send_meta(string('waiting on particle sieving'))
         call wait_for_folder2(params%dir_target)
         call wait_for_folder2(params%dir_target//'/spprojs_completed')
-        ! wait for and retrieve mskdiam from sieving
-        if( .not. cline%defined('mskdiam') )then
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//STREAM_MOLDIAM
-            do i=1, 8640
-                if(file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) exit
-                call sleep(10)
-            end do
-            if( .not. file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) THROW_HARD('either mskdiam must be given or '// STREAM_MOLDIAM // ' exists in target_dir')
-            ! read mskdiam from file
-            call moldiamori%new(1, .false.)
-            call moldiamori%read( params%dir_target//'/'//STREAM_MOLDIAM )
-            if( .not. moldiamori%isthere(1, "mskdiam") ) THROW_HARD('mskdiam missing from '//params%dir_target%to_char()//'/'//STREAM_MOLDIAM)
-            mskdiam = moldiamori%get(1, "mskdiam")
-            params%mskdiam = mskdiam
-            call cline%set('mskdiam', params%mskdiam)
-            write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
-        endif
         ! master project file
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
@@ -135,6 +122,18 @@ contains
                     call setslist%push2chunk_list(projects(i), setslist%size() + 1, .true.)
                 enddo
             endif
+            if( l_once ) then
+                if( setslist%size() > 0 ) then
+                    it_mskdiam = setslist%begin()
+                    call it_mskdiam%get(crec_mskdiam)
+                    call spproj_tmp%read_segment('out', crec_mskdiam%projfile)
+                    call spproj_tmp%get_mskdiam('cavg', params%mskdiam)
+                    call cline%set('mskdiam', params%mskdiam)
+                    write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', params%mskdiam
+                    call spproj_tmp%kill()
+                    l_once = .false.
+                end if 
+            end if
             ! check on progress, updates particles & alignment parameters
             ! TODO: class remapping
             if( l_pause )then
@@ -429,9 +428,9 @@ contains
                 iteration          = last_complete_iter,          &
                 particles_imported = nptcls_glob,                 &
                 particles_accepted = get_pool_assigned(),         &
-                particles_rejected = get_pool_rejected())
-                ! call json%add(template, "mskdiam",  nint(params%mskdiam))
-               ! call json%add(template, "mskscale", dble(params%box * params%smpd))
+                particles_rejected = get_pool_rejected(),         &
+                mskdiam            = nint(params%mskdiam),        &
+                mskscale           = params%box * params%smpd)
                 if( meta_pool2D%assigned() .and. mq_stream_master_in%is_active() ) then
                     call meta_pool2D%serialise(meta_buffer)
                     call mq_stream_master_in%send(meta_buffer)

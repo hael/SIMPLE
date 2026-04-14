@@ -71,7 +71,12 @@ contains
     call test_set_get_stream_opening2D()
     call test_serialise_stream_opening2D()
     call test_jsonise_stream_opening2D()
-    !// TODO  - add tests for particle sieving and pool2D
+    call test_set_get_stream_particle_sieving()
+    call test_serialise_stream_particle_sieving()
+    call test_jsonise_stream_particle_sieving()
+    call test_set_get_stream_pool2D()
+    call test_serialise_stream_pool2D()
+    call test_jsonise_stream_pool2D()
   end subroutine run_all_gui_metadata_tests
 
   !---------------- base ----------------
@@ -1011,5 +1016,181 @@ contains
     call assert_true(.not.json%failed(), 'json destroyed')
     deallocate(buffer)
   end subroutine test_jsonise_stream_opening2D
+
+  !---------------- stream particle sieving ----------------
+
+  ! Verify that all particle-sieving fields round-trip through set/get,
+  ! including the separately set user_input flag and the ref-selection array.
+  subroutine test_set_get_stream_particle_sieving()
+    type(gui_metadata_stream_particle_sieving) :: meta
+    type(string) :: stage
+    integer      :: particles_imported, particles_accepted, particles_rejected, last_import_time
+    logical      :: user_input
+    write(*,'(A)') 'test_set_get_stream_particle_sieving'
+    call meta%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE, 'type is set correctly')
+    call meta%set(stage=string('sieving'), particles_imported=10000, &
+                  particles_accepted=8000, particles_rejected=2000)
+    call meta%set_user_input(.true.)
+    call meta%set_initial_ref_selection(3)
+    call meta%set_initial_ref_selection(7)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call assert_true(meta%get(stage=stage, particles_imported=particles_imported,     &
+                              particles_accepted=particles_accepted,                  &
+                              particles_rejected=particles_rejected,                  &
+                              last_import_time=last_import_time,                      &
+                              user_input=user_input), 'metadata retrieved')
+    call assert_char(stage%to_char(), 'sieving', 'stage set/get correctly')
+    call assert_int(particles_imported,  10000,  'particles_imported set/get correctly')
+    call assert_int(particles_accepted,   8000,  'particles_accepted set/get correctly')
+    call assert_int(particles_rejected,   2000,  'particles_rejected set/get correctly')
+    call assert_true(last_import_time > 0,       'last_import_time is set')
+    call assert_true(user_input,                 'user_input set/get correctly')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_set_get_stream_particle_sieving
+
+  ! Verify that the particle-sieving serialise buffer is the expected size.
+  subroutine test_serialise_stream_particle_sieving()
+    character(len=:),                          allocatable :: buffer
+    type(gui_metadata_stream_particle_sieving)             :: meta
+    write(*,'(A)') 'test_serialise_stream_particle_sieving'
+    call meta%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE, 'type is set correctly')
+    call meta%set(stage=string('sieving'), particles_imported=10000, &
+                  particles_accepted=8000, particles_rejected=2000)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call meta%serialise(buffer=buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    deallocate(buffer)
+  end subroutine test_serialise_stream_particle_sieving
+
+  ! jsonise embeds last_import_time (live Unix timestamp) so the timestamp
+  ! field is zeroed before hashing.
+  subroutine test_jsonise_stream_particle_sieving()
+    character(kind=CK, len=:),                 allocatable :: buffer
+    type(gui_metadata_stream_particle_sieving)             :: meta
+    type(json_core)                                        :: json
+    type(json_value),                          pointer     :: json_ptr
+    type(string)                                           :: json_str, json_hash
+    logical                                                :: found
+    write(*,'(A)') 'test_jsonise_stream_particle_sieving'
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    call meta%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call meta%set(stage=string('sieving'), particles_imported=10000, &
+                  particles_accepted=8000, particles_rejected=2000)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    json_ptr => meta%jsonise()
+    call assert_true(associated(json_ptr), 'json pointer is associated')
+    call json%update(json_ptr, 'last_import_time', 0, found)
+    call json%print_to_string(json_ptr, buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_true(len(buffer) > 0, 'json output is non-empty')
+    json_str = buffer
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), '743600493199B0C3', 'json is stable')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    call json%destroy(json_ptr)
+    call assert_true(.not.json%failed(), 'json destroyed')
+    deallocate(buffer)
+  end subroutine test_jsonise_stream_particle_sieving
+
+  !---------------- stream pool2D ----------------
+
+  ! Verify that all pool-2D fields round-trip through set/get,
+  ! including iteration, mask geometry, and the user_input flag.
+  subroutine test_set_get_stream_pool2D()
+    type(gui_metadata_stream_pool2D) :: meta
+    type(string) :: stage
+    integer      :: iteration, particles_imported, particles_accepted, particles_rejected
+    integer      :: last_import_time, mskdiam
+    real         :: mskscale
+    logical      :: user_input
+    write(*,'(A)') 'test_set_get_stream_pool2D'
+    call meta%new(GUI_METADATA_STREAM_POOL2D_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_POOL2D_TYPE, 'type is set correctly')
+    call meta%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
+                  particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5)
+    call meta%set_user_input(.true.)
+    call meta%set_initial_ref_selection(2)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call assert_true(meta%get(stage=stage, iteration=iteration,                      &
+                              particles_imported=particles_imported,                  &
+                              particles_accepted=particles_accepted,                  &
+                              particles_rejected=particles_rejected,                  &
+                              last_import_time=last_import_time,                      &
+                              user_input=user_input, mskdiam=mskdiam,                &
+                              mskscale=mskscale), 'metadata retrieved')
+    call assert_char(stage%to_char(), 'pool2D', 'stage set/get correctly')
+    call assert_int(iteration,            3,     'iteration set/get correctly')
+    call assert_int(particles_imported,  20000,  'particles_imported set/get correctly')
+    call assert_int(particles_accepted,  16000,  'particles_accepted set/get correctly')
+    call assert_int(particles_rejected,   4000,  'particles_rejected set/get correctly')
+    call assert_true(last_import_time > 0,       'last_import_time is set')
+    call assert_true(user_input,                 'user_input set/get correctly')
+    call assert_int(mskdiam,              180,   'mskdiam set/get correctly')
+    call assert_true(mskscale == 0.5,            'mskscale set/get correctly')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_set_get_stream_pool2D
+
+  ! Verify that the pool-2D serialise buffer is the expected size.
+  subroutine test_serialise_stream_pool2D()
+    character(len=:),              allocatable :: buffer
+    type(gui_metadata_stream_pool2D)           :: meta
+    write(*,'(A)') 'test_serialise_stream_pool2D'
+    call meta%new(GUI_METADATA_STREAM_POOL2D_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_POOL2D_TYPE, 'type is set correctly')
+    call meta%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
+                  particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call meta%serialise(buffer=buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    deallocate(buffer)
+  end subroutine test_serialise_stream_pool2D
+
+  ! jsonise embeds last_import_time (live Unix timestamp) so the timestamp
+  ! field is zeroed before hashing.
+  subroutine test_jsonise_stream_pool2D()
+    character(kind=CK, len=:),     allocatable :: buffer
+    type(gui_metadata_stream_pool2D)           :: meta
+    type(json_core)                            :: json
+    type(json_value),              pointer     :: json_ptr
+    type(string)                               :: json_str, json_hash
+    logical                                    :: found
+    write(*,'(A)') 'test_jsonise_stream_pool2D'
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    call meta%new(GUI_METADATA_STREAM_POOL2D_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call meta%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
+                  particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    json_ptr => meta%jsonise()
+    call assert_true(associated(json_ptr), 'json pointer is associated')
+    call json%update(json_ptr, 'last_import_time', 0, found)
+    call json%print_to_string(json_ptr, buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_true(len(buffer) > 0, 'json output is non-empty')
+    json_str = buffer
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), '6504A9531CD8C97D', 'json is stable')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    call json%destroy(json_ptr)
+    call assert_true(.not.json%failed(), 'json destroyed')
+    deallocate(buffer)
+  end subroutine test_jsonise_stream_pool2D
 
 end module simple_gui_metadata_tester

@@ -58,6 +58,7 @@ contains
         integer,                   parameter   :: NTHUMB_MAX = 20
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
         character(len=:),          allocatable :: meta_buffer            ! serialised GUI metadata message
+        type(oris)                             :: pickrefsoris
         type(rec_list)                         :: project_list
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs, cline_pick_extract
@@ -74,12 +75,13 @@ contains
         real                                   :: pickrefs_thumbnail_scale
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i, i_ori
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
-        integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
+        integer                                :: cnt, n_imported, n_imported_iter, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
         integer                                :: n_pickrefs, xtiles, ytiles
         logical                                :: l_projects_left, l_haschanged, l_once
-        logical                                :: l_restart, l_terminate=.false.
+        logical                                :: l_restart, l_terminate
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
+        l_terminate = .false.
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'yes')
@@ -111,7 +113,6 @@ contains
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
                 str_dir = cline%get_carg('dir_exec')
                 THROW_HARD('Previous directory does not exists: '//str_dir%to_char())
-                call str_dir%kill
             endif
             l_restart = .true.
         endif
@@ -146,12 +147,9 @@ contains
             call cline%delete('moldiam')
             write(logfhandle,'(A)') '>>> MOLDIAM IGNORED'
         endif
-        write(logfhandle, *) "DONE", params%pickrefs%to_char()
-        call flush(logfhandle)
-        ! copy STREAM_NMICS from pickrefs folder if present
+        ! copy STREAM_NMICS from pickrefs folder if present //TODO- store nmics in db instead
         str_dir = stemname(params%pickrefs)//'/'//STREAM_NMICS
         if( file_exists(str_dir) ) call simple_copy_file(str_dir, string(STREAM_NMICS))
-
         ! master project file
         call spproj%read( params%projfile )
         if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('stream_pick_extract must start from an empty project (eg from root project folder)')
@@ -201,12 +199,12 @@ contains
         call cline_pick_extract%set('prg','pick_extract')
         call cline_pick_extract%set('dir', PATH_PARENT)
         call cline_pick_extract%set('extract','yes')
-
         ! Infinite loop
         last_injection  = simple_gettime()
         prev_stacksz    = 0
         iter            = 0
-        n_imported      = 0   ! global number of imported processed micrographs
+        n_imported      = 0   ! total imported micrographs (cumulative)
+        n_imported_iter = 0   ! newly imported this iteration
         n_failed_jobs   = 0
         n_added         = 0   ! global number of micrographs added to processing stack
         l_projects_left = .false.
@@ -236,6 +234,12 @@ contains
                         call cline_make_pickrefs%set('smpd',  params%smpd)
                         call xmake_pickrefs%execute(cline_make_pickrefs)
                         call cline_pick_extract%set('pickrefs', '../'//PICKREFS_FBODY//params%ext%to_char())
+                        ! populate pickrefsoris
+                        call pickrefsoris%new(1, .false.)
+                        call pickrefsoris%read(string(STREAM_MOLDIAM))
+                        call pickrefsoris%set(1, 'imgkind', 'pickrefs')
+                        call pickrefsoris%set(1, 'stk', cwd_job//'/'//PICKREFS_FBODY//params%ext%to_char())
+                        ! create pickrefs jpeg
                         call mrc2jpeg_tiled(string(PICKREFS_FBODY)//params%ext, string(PICKREFS_FBODY)//".jpeg",&
                         &scale=pickrefs_thumbnail_scale, ntiles=n_pickrefs, n_xtiles=xtiles, n_ytiles=ytiles)
                         call send_pickrefs(cwd_job//'/'//PICKREFS_FBODY//'.jpeg', n_pickrefs)
@@ -273,11 +277,11 @@ contains
             ! fetch completed jobs list & updates
             if( qenv%qscripts%get_done_stacksz() > 0 )then
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                call update_projects_list( project_list, n_imported )
+                call update_projects_list( project_list, n_imported_iter )
                 call completed_jobs_clines(:)%kill
                 deallocate(completed_jobs_clines)
             else
-                n_imported = 0 ! newly imported
+                n_imported_iter = 0
             endif
             ! failed jobs
             if( qenv%qscripts%get_failed_stacksz() > 0 )then
@@ -289,7 +293,7 @@ contains
                 endif
             endif
             ! project update
-            if( n_imported > 0 )then
+            if( n_imported_iter > 0 )then
                 n_imported = spproj%os_mic%get_noris()
                 write(logfhandle,'(A,I8)') '>>> # MICROGRAPHS PROCESSED & IMPORTED  : ',n_imported
                 write(logfhandle,'(A,I8)') '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
@@ -335,7 +339,7 @@ contains
         ! termination
 
         call write_project
-        ! write star files (just in case you want ot import these particles/micrographs elsewhere)
+        ! write star files (just in case you want to import these particles/micrographs elsewhere)
         call spproj%write_mics_star(string("micrographs.star"))
         call spproj%write_ptcl2D_star(string("particles.star"))
         ! cleanup
@@ -475,6 +479,10 @@ contains
                 do iproj = 1,n_spprojs
                     fname = filepath(odir, completed_jobs_clines(iproj)%get_carg('projfile'))
                     call tmpproj%read_segment('projinfo', fname)
+                    ! add pickrefs to out section
+                    call tmpproj%read_segment('out', fname)
+                    call tmpproj%os_out%append(pickrefsoris)
+                    call tmpproj%write_segment_inside('out')
                     call spprojs(iproj)%read_segment('mic', fname)
                     nmics = nmics + spprojs(iproj)%os_mic%get_noris()
                 enddo
@@ -616,7 +624,7 @@ contains
                 logical, allocatable :: mics_mask(:)
                 type(project_rec) :: prec
                 type(string)      :: fname
-                integer           :: n_spprojs, iproj, nmics, imic, jmic, iostat,id, nsel_mics, irec
+                integer           :: n_spprojs, iproj, nmics, imic, jmic, iostat, id, nsel_mics, irec
                 pick_extract_set_counter = 0
                 ! previously completed projects
                 call simple_list_files_regexp(odir_completed, '\.simple$', completed_fnames)
@@ -680,14 +688,12 @@ contains
                             call project_list%push_back(prec)
                         endif
                     enddo
-                    call spprojs(iproj)%kill
-                enddo
-                ! update global set counter
-                do iproj = 1,n_spprojs
+                    ! update global set counter from project filename
                     fname = basename(completed_fnames(iproj))
-                    fname = get_fbody(fname,METADATA_EXT,separator=.false.)
+                    fname = get_fbody(fname, METADATA_EXT, separator=.false.)
                     id    = str2int(fname, iostat)
                     if( iostat==0 ) pick_extract_set_counter = max(pick_extract_set_counter, id)
+                    call spprojs(iproj)%kill
                 enddo
                 nmics_rejected_glob = nmics - nsel_mics
                 ! add previous projects to history
@@ -781,11 +787,11 @@ contains
             subroutine send_pickrefs( my_path, n )
                 type(string), intent(in) :: my_path
                 integer,      intent(in) :: n
-                integer                  :: my_xtile, my_ytile
+                integer                  :: my_i, my_xtile, my_ytile
                 my_xtile = 0
                 my_ytile = 0
-                do i = 1, n
-                    call send_cavg2D_meta(my_path, i, n, my_xtile, my_ytile)
+                do my_i = 1, n
+                    call send_cavg2D_meta(my_path, my_i, n, my_xtile, my_ytile)
                     my_xtile = my_xtile + 1
                     if( my_xtile == xtiles ) then
                         my_xtile = 0

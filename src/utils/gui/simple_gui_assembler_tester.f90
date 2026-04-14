@@ -6,7 +6,8 @@
 !   Exercises gui_assembler through a set of unit tests covering object
 !   lifecycle (new/kill/reuse/set_stoptime), hash-based change suppression
 !   (clear_hashes), and JSON assembly for the stream-preprocess,
-!   optics-assignment, initial-picking, reference-picking, and opening-2D stages.
+!   optics-assignment, initial-picking, reference-picking, opening-2D,
+!   particle-sieving, and pool-2D stages.
 !   Where the assembled JSON is fully deterministic (no live timestamps) the
 !   test verifies an FNV-1a hash of the serialised output; otherwise it checks
 !   only that the output is non-empty.
@@ -21,25 +22,32 @@
 !   simple_string
 !==============================================================================
 module simple_gui_assembler_tester
-  use simple_gui_metadata_api, only: gui_metadata_stream_preprocess,             &
-                                     gui_metadata_micrograph,                    &
-                                     gui_metadata_histogram,                     &
-                                     gui_metadata_timeplot,                      &
-                                     gui_metadata_stream_optics_assignment,      &
-                                     gui_metadata_optics_group,                  &
-                                     gui_metadata_stream_picking,        &
-                                     gui_metadata_stream_opening2D,              &
-                                     GUI_METADATA_STREAM_PREPROCESS_TYPE,        &
-                                     GUI_METADATA_MICROGRAPH_TYPE,               &
-                                     GUI_METADATA_HISTOGRAM_TYPE,                &
-                                     GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE, &
-                                     GUI_METADATA_OPTICS_GROUP_TYPE,             &
-                                     GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,   &
-                                     GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE,      &
-                                     GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE, &
-                                     GUI_METADATA_STREAM_OPENING2D_TYPE,              &
-                                     GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE,        &
-                                     gui_metadata_cavg2D,                        &
+  use simple_gui_metadata_api, only: gui_metadata_stream_preprocess,                      &
+                                     gui_metadata_micrograph,                             &
+                                     gui_metadata_histogram,                              &
+                                     gui_metadata_timeplot,                               &
+                                     gui_metadata_stream_optics_assignment,               &
+                                     gui_metadata_optics_group,                           &
+                                     gui_metadata_stream_picking,                         &
+                                     gui_metadata_stream_opening2D,                       &
+                                     gui_metadata_stream_particle_sieving,                &
+                                     gui_metadata_stream_pool2D,                          &
+                                     GUI_METADATA_STREAM_PREPROCESS_TYPE,                 &
+                                     GUI_METADATA_MICROGRAPH_TYPE,                        &
+                                     GUI_METADATA_HISTOGRAM_TYPE,                         &
+                                     GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE,          &
+                                     GUI_METADATA_OPTICS_GROUP_TYPE,                      &
+                                     GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,            &
+                                     GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE,          &
+                                     GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE,    &
+                                     GUI_METADATA_STREAM_OPENING2D_TYPE,                  &
+                                     GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE,            &
+                                     GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE,           &
+                                     GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE,     &
+                                     GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE, &
+                                     GUI_METADATA_STREAM_POOL2D_TYPE,                     &
+                                     GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE,               &
+                                     gui_metadata_cavg2D,                                 &
                                      sprite_sheet_pos
   use simple_gui_assembler,    only: gui_assembler
   use simple_test_utils,       only: assert_true, assert_char
@@ -64,7 +72,8 @@ contains
     call test_initial_picking()
     call test_reference_picking()
     call test_opening2D()
-    ! //  TODO - add test for particle sievig and pool2D
+    call test_particle_sieving()
+    call test_pool2D()
   end subroutine run_all_gui_assembler_tests
 
   !---------------- lifecycle ----------------
@@ -344,5 +353,88 @@ contains
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
     deallocate(meta_cavgs2D)
   end subroutine test_opening2D
+
+  !---------------- particle sieving assembly ----------------
+
+  ! Assemble a stream particle-sieving JSON payload from synthetic metadata and
+  ! verify the section is non-empty.  An exact hash comparison is not possible
+  ! because the section embeds a live Unix timestamp (last_import_time).
+  subroutine test_particle_sieving()
+    type(gui_assembler)                                          :: assembler
+    type(gui_metadata_stream_particle_sieving)                   :: meta_particle_sieving
+    type(gui_metadata_cavg2D),                       allocatable :: meta_ref_cavgs(:)
+    type(gui_metadata_cavg2D),                       allocatable :: meta_latest_cavgs2D(:)
+    type(string)                                                 :: json_str
+    integer                                                      :: i
+    write(*,'(A)') 'test_particle_sieving'
+    call meta_particle_sieving%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
+    call meta_particle_sieving%set(stage=string('sieving'), particles_imported=10000, &
+                                   particles_accepted=8000, particles_rejected=2000)
+    ! reference class averages
+    allocate(meta_ref_cavgs(3))
+    do i=1, size(meta_ref_cavgs)
+      call meta_ref_cavgs(i)%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE)
+    enddo
+    call meta_ref_cavgs(1)%set(path=string('/test/path/ref.jpeg'), mrcpath=string('/test/path/ref.mrc'), &
+                               idx=1, sprite=sprite_sheet_pos(x=0.0,  y=0.0, h=256, w=768), i=1, i_max=3)
+    call meta_ref_cavgs(2)%set(path=string('/test/path/ref.jpeg'), mrcpath=string('/test/path/ref.mrc'), &
+                               idx=2, sprite=sprite_sheet_pos(x=33.3, y=0.0, h=256, w=768), i=2, i_max=3)
+    call meta_ref_cavgs(3)%set(path=string('/test/path/ref.jpeg'), mrcpath=string('/test/path/ref.mrc'), &
+                               idx=3, sprite=sprite_sheet_pos(x=66.6, y=0.0, h=256, w=768), i=3, i_max=3)
+    ! latest class averages
+    allocate(meta_latest_cavgs2D(3))
+    do i=1, size(meta_latest_cavgs2D)
+      call meta_latest_cavgs2D(i)%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE)
+    enddo
+    call meta_latest_cavgs2D(1)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
+                                    idx=1, sprite=sprite_sheet_pos(x=0.0,  y=0.0, h=256, w=768), i=1, i_max=3)
+    call meta_latest_cavgs2D(2)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
+                                    idx=2, sprite=sprite_sheet_pos(x=33.3, y=0.0, h=256, w=768), i=2, i_max=3)
+    call meta_latest_cavgs2D(3)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
+                                    idx=3, sprite=sprite_sheet_pos(x=66.6, y=0.0, h=256, w=768), i=3, i_max=3)
+    call assembler%new(0)
+    call assert_true(assembler%is_associated(), 'assembler json associated')
+    call assembler%assemble_stream_particle_sieving(meta_particle_sieving, meta_latest_cavgs2D, meta_ref_cavgs)
+    json_str = assembler%to_string()
+    call assert_true(json_str%strlen() > 0, 'json length greater than 0')
+    call assembler%kill()
+    call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
+    deallocate(meta_ref_cavgs, meta_latest_cavgs2D)
+  end subroutine test_particle_sieving
+
+  !---------------- pool2D assembly ----------------
+
+  ! Assemble a stream pool-2D JSON payload from synthetic metadata and verify
+  ! the section is non-empty.  An exact hash comparison is not possible because
+  ! the section embeds a live Unix timestamp (last_import_time).
+  subroutine test_pool2D()
+    type(gui_assembler)                              :: assembler
+    type(gui_metadata_stream_pool2D)                 :: meta_pool2D
+    type(gui_metadata_cavg2D),           allocatable :: meta_latest_cavgs2D(:)
+    type(string)                                     :: json_str
+    integer                                          :: i
+    write(*,'(A)') 'test_pool2D'
+    call meta_pool2D%new(GUI_METADATA_STREAM_POOL2D_TYPE)
+    call meta_pool2D%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
+                         particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5)
+    allocate(meta_latest_cavgs2D(3))
+    do i=1, size(meta_latest_cavgs2D)
+      call meta_latest_cavgs2D(i)%new(GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE)
+    enddo
+    call meta_latest_cavgs2D(1)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
+                                    idx=1, sprite=sprite_sheet_pos(x=0.0,  y=0.0, h=256, w=768), i=1, i_max=3)
+    call meta_latest_cavgs2D(2)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
+                                    idx=2, sprite=sprite_sheet_pos(x=33.3, y=0.0, h=256, w=768), i=2, i_max=3)
+    call meta_latest_cavgs2D(3)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
+                                    idx=3, sprite=sprite_sheet_pos(x=66.6, y=0.0, h=256, w=768), i=3, i_max=3)
+    call assembler%new(0)
+    call assert_true(assembler%is_associated(), 'assembler json associated')
+    call assembler%assemble_stream_pool2D(meta_pool2D, meta_latest_cavgs2D)
+    json_str = assembler%to_string()
+    call assert_true(json_str%strlen() > 0, 'json length greater than 0')
+    call assembler%kill()
+    call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
+    deallocate(meta_latest_cavgs2D)
+  end subroutine test_pool2D
 
 end module simple_gui_assembler_tester

@@ -149,6 +149,7 @@ contains
     procedure          :: get_fsc
     procedure          :: get_frcs
     procedure          :: get_sigma2
+    procedure          :: get_mskdiam
     procedure          :: get_imginfo_from_osout
     procedure          :: get_imgdims_from_osout
 
@@ -606,12 +607,13 @@ interface
 
     ! OUT
 
-    module subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath )
+    module subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath, mskdiam )
         class(sp_project),          intent(inout) :: self
         class(string),              intent(in)    :: stk
         real,                       intent(in)    :: smpd
         character(len=*), optional, intent(in)    :: imgkind
         logical,          optional, intent(in)    :: clspath
+        real,             optional, intent(in)    :: mskdiam
     end subroutine add_cavgs2os_out
 
     module subroutine add_frcs2os_out( self, frc, which_imgkind )
@@ -708,6 +710,12 @@ interface
         class(sp_project), intent(in)    :: self
         class(string),     intent(inout) :: sigma2_fname
     end subroutine get_sigma2
+
+    module subroutine get_mskdiam( self, which_imgkind, mskdiam )
+        class(sp_project), intent(in)  :: self
+        character(len=*),  intent(in)  :: which_imgkind
+        real,              intent(out) :: mskdiam
+    end subroutine get_mskdiam
 
     module subroutine get_imginfo_from_osout( self, smpd, box, nptcls )
         class(sp_project), intent(inout) :: self

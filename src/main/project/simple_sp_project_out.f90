@@ -4,12 +4,13 @@ implicit none
 #include "simple_local_flags.inc"
 contains
 
-    module subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath )
+    module subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath, mskdiam )
         class(sp_project),          intent(inout) :: self
         class(string),              intent(in)    :: stk
         real,                       intent(in)    :: smpd ! sampling distance of images in stk
         character(len=*), optional, intent(in)    :: imgkind
         logical,          optional, intent(in)    :: clspath
+        real,             optional, intent(in)    :: mskdiam
         type(string) :: iimgkind, abspath
         integer      :: ldim(3), nptcls, ind
         if( present(imgkind) )then
@@ -33,6 +34,7 @@ contains
         call self%os_out%set(ind, 'stkkind', 'single')
         call self%os_out%set(ind, 'imgkind', iimgkind%to_char())
         call self%os_out%set(ind, 'ctf',     'no')
+        if( present(mskdiam) ) call self%os_out%set(ind, 'mskdiam', mskdiam)
         if( present(clspath) )then
             if( clspath ) call self%os_out%set(ind, 'stkpath', CWD_GLOB)
         else
@@ -494,6 +496,31 @@ contains
         call sigma2_fname%kill
         call self%os_out%getter(ind, 'sigma2', sigma2_fname)
     end subroutine get_sigma2
+
+    module subroutine get_mskdiam( self, which_imgkind, mskdiam )
+        class(sp_project), intent(in)  :: self
+        character(len=*),  intent(in)  :: which_imgkind
+        real,              intent(out) :: mskdiam
+        type(string)                   :: imgkind_here
+        integer :: i, ind, cnt
+        mskdiam = 0.0
+        ! fetch index
+        ind   = 0
+        cnt   = 0
+        do i=1,self%os_out%get_noris()
+            if( self%os_out%isthere(i,'imgkind') )then
+                call self%os_out%getter(i,'imgkind', imgkind_here)
+                if(imgkind_here%to_char().eq.which_imgkind)then
+                    ind = i
+                    cnt = cnt + 1
+                endif
+            endif
+        enddo
+        if( cnt == 0 )THROW_HARD('no os_out entry with imgkind='//which_imgkind//' identified, aborting...; get_mskdiam')
+        if( cnt > 1 ) THROW_HARD('multiple os_out entries with imgkind='//which_imgkind//', aborting...; get_mskdiam')
+        ! set output 
+        call self%os_out%getter(ind, 'mskdiam', mskdiam)
+    end subroutine get_mskdiam
 
     ! static for OpenMP safety
     module subroutine get_imginfo_from_osout( self, smpd, box, nptcls )

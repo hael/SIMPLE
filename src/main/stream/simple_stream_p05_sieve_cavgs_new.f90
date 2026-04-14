@@ -82,13 +82,17 @@ contains
         type(rec_list)                :: project_list
         type(parameters)              :: params
         type(qsys_env)                :: qenv
-        type(sp_project)              :: spproj_glob
+        type(sp_project)              :: spproj_glob, spproj_tmp
+        type(project_rec)             :: prec
+        type(rec_iterator)            :: it
         type(microchunked2D)          :: chunked_2D
         type(stream_watcher)          :: project_buff
         type(gui_metadata_cavg2D)                  :: meta_cavg2D
         type(gui_metadata_stream_particle_sieving) :: meta_particle_sieving
         integer :: nprojects, n_mics_imported, n_ptcls_imported, i, xtiles, ytiles
-        logical :: l_refs_complete, l_terminate=.false.
+        logical :: l_refs_complete, l_terminate, l_once
+        l_once      = .true.
+        l_terminate = .false.
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('mkdir',        'yes')
         ! Apply user-overridable defaults
@@ -115,26 +119,9 @@ contains
         call send_meta(string('waiting on reference picking'))
         call wait_for_folder2(params%dir_target)
         call wait_for_folder2(params%dir_target//'/spprojs_completed')
-        ! wait for and retrieve mskdiam from sieving
-        if( .not. cline%defined('mskdiam') )then
-            write(logfhandle,'(A,F8.2)')'>>> WAITING UP TO 24 HOURS FOR '//STREAM_MOLDIAM
-            do i=1, 8640
-                if(file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) exit
-                call sleep(10)
-            end do
-            if( .not. file_exists(params%dir_target//'/'//STREAM_MOLDIAM)) THROW_HARD('either mskdiam must be given or '// STREAM_MOLDIAM // ' exists in target_dir')
-            ! read mskdiam from file
-            call moldiamori%new(1, .false.)
-            call moldiamori%read( params%dir_target//'/'//STREAM_MOLDIAM )
-            if( .not. moldiamori%isthere(1, "mskdiam") ) THROW_HARD('mskdiam missing from '//params%dir_target%to_char()//'/'//STREAM_MOLDIAM)
-            params%mskdiam = moldiamori%get(1, "mskdiam")
-            call moldiamori%kill()
-            write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
-        endif
         ! Initialise the project watcher 
         project_buff = stream_watcher(LONGTIME, params%dir_target // '/' // DIR_STREAM_COMPLETED, &
         spproj=.true., nretries=10)
-        
         ! Restore previously imported project history to avoid re-importing on restart
         if( file_exists('imported_projects.txt') ) then
             call send_meta(string('importing previous run'))
@@ -145,10 +132,7 @@ contains
                 end do
                 deallocate(projects)
             endif
-        endif
-    
-        call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
-                
+        endif      
         ! Main processing loop — runs until a termination signal is detected
         do
             if( file_exists(TERM_STREAM) .or. l_terminate ) then
@@ -164,8 +148,23 @@ contains
                 write(logfhandle,'(A,I6,I9)') &
                 '>>> # MICROGRAPHS / PARTICLES IMPORTED : ', n_mics_imported, n_ptcls_imported
             end if
-            ! Drive the chunk pipeline for this cycle
-            call chunked_2D%cycle(project_list)
+            if( l_once ) then
+                if( project_list%size() > 0 ) then
+                    it = project_list%begin()
+                    call it%get(prec)
+                    call spproj_tmp%read_segment('out', prec%projname)
+                    call spproj_tmp%get_mskdiam('pickrefs', params%mskdiam)
+                    write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', params%mskdiam
+                    call spproj_tmp%kill()
+                    ! Initialise and drive the chunk pipeline for this first cycle
+                    call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
+                    call chunked_2D%cycle(project_list)
+                    l_once = .false.
+                end if 
+            else
+                ! Drive the chunk pipeline for this cycle
+                call chunked_2D%cycle(project_list)
+            end if
             if( n_ptcls_imported > 0) then
                 call send_meta(string('importing and sieving particles'))
             else
@@ -189,7 +188,7 @@ contains
             end if
             call sleep(WAITTIME)
         end do
-        !// TODO - cleanup and clean exit
+        ! TODO: kill spproj_glob, qenv, project_list, project_buff before exit
         call meta_particle_sieving%set_user_input(.false.)
         call send_meta(string('terminating'))
         call chunked_2D%kill()
@@ -213,6 +212,8 @@ contains
         end subroutine send_meta
 
         ! Serialise and broadcast a single class-average tile's metadata to the GUI.
+        ! Precondition: jpeg_inds, jpeg_pops, jpeg_res, xtiles, ytiles must have been
+        ! populated by a prior call to get_references() or get_latest_match().
         subroutine send_cavg2D_meta( my_path, my_stk, my_i, my_i_max, my_xtile, my_ytile )
             type(string), intent(in) :: my_path, my_stk
             integer,      intent(in) :: my_i, my_i_max, my_xtile, my_ytile
@@ -238,41 +239,36 @@ contains
         end subroutine send_cavg2D_meta
 
         ! Send a batch of cavg2D metadata to the GUI, resetting tile counters.
+        ! my_meta_type selects the GUI metadata subtype (ref or match).
         subroutine send_reference_cavgs2D( my_path, n )
             type(string), intent(in) :: my_path
             integer,      intent(in) :: n
-            integer                  :: my_xtile, my_ytile, my_i
-            call meta_cavg2D%kill()
-            call meta_cavg2D%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE)
-            my_xtile = 0
-            my_ytile = 0
-            do my_i = 1, n
-                call send_cavg2D_meta(my_path, refs_stk,  my_i, n, my_xtile, my_ytile)
-                my_xtile = my_xtile + 1
-                if( my_xtile == xtiles ) then
-                    my_xtile = 0
-                    my_ytile = my_ytile + 1
-                endif
-            end do
+            call send_cavgs2D_batch(my_path, refs_stk, n, GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE)
         end subroutine send_reference_cavgs2D
 
         subroutine send_matched_cavgs2D( my_path, n )
             type(string), intent(in) :: my_path
             integer,      intent(in) :: n
+            call send_cavgs2D_batch(my_path, match_stk, n, GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE)
+        end subroutine send_matched_cavgs2D
+
+        subroutine send_cavgs2D_batch( my_path, my_stk, n, meta_type )
+            type(string), intent(in) :: my_path, my_stk
+            integer,      intent(in) :: n, meta_type
             integer                  :: my_xtile, my_ytile, my_i
             call meta_cavg2D%kill()
-            call meta_cavg2D%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE)
+            call meta_cavg2D%new(meta_type)
             my_xtile = 0
             my_ytile = 0
             do my_i = 1, n
-                call send_cavg2D_meta(my_path, match_stk, my_i, n, my_xtile, my_ytile)
+                call send_cavg2D_meta(my_path, my_stk, my_i, n, my_xtile, my_ytile)
                 my_xtile = my_xtile + 1
                 if( my_xtile == xtiles ) then
                     my_xtile = 0
                     my_ytile = my_ytile + 1
                 endif
             end do
-        end subroutine send_matched_cavgs2D
+        end subroutine send_cavgs2D_batch
         
         ! Called asynchronously on SIGTERM. Exits immediately after logging.
         subroutine sigterm_handler()

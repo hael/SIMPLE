@@ -324,7 +324,7 @@ contains
             ! adding cavgs & FRCs to project
             call spproj%read_segment('out', params%projfile)
             call spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
-            call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg')
+            call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg', mskdiam=params%mskdiam)
             call spproj%add_sigma22os_out(sigma2_star_from_iter(iter))
             call spproj%write_segment_inside('out', params%projfile)
             ! rank based on gold-standard resolution estimates
