@@ -64,7 +64,7 @@ type :: parameters
     character(len=3)          :: lam_anneal='no'      !< anneal lambda parameter
     character(len=3)          :: linethres='no'       !< whether to consider angular threshold in common lines (yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
-    character(len=3)          :: lp_auto='no'         !< automatically estimate lp(yes|no){no}
+    character(len=10)         :: filt_mode='none'     !< filtering mode(none|uniform|fsc|nonuniform){none}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
@@ -77,7 +77,6 @@ type :: parameters
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)          :: neigs_per='no'       !< using neigs as percentage of the total dimension(yes|no){no}
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
-    character(len=3)          :: nonuniform='no'      !< apply nonuniform filtering to eo volumes in volassemble(yes|no){no}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
@@ -530,7 +529,6 @@ type :: parameters
     logical :: l_lpset           = .false.
     logical :: l_ml_reg          = .true.
     logical :: l_noise_reg       = .false.
-    logical :: l_nonuniform      = .false.
     logical :: l_neigh           = .false.
     logical :: l_phaseplate      = .false.
     logical :: l_polar           = .false. 
@@ -732,7 +730,7 @@ contains
         call check_carg('lam_anneal',     self%lam_anneal)
         call check_carg('linethres',      self%linethres)
         call check_carg('loc_sdev',       self%loc_sdev)
-        call check_carg('lp_auto',        self%lp_auto)
+        call check_carg('filt_mode',      self%filt_mode)
         call check_carg('makemovie',      self%makemovie)
         call check_carg('mcpatch',        self%mcpatch)
         call check_carg('mcpatch_thres',  self%mcpatch_thres)
@@ -749,7 +747,6 @@ contains
         call check_carg('neigs_per',      self%neigs_per)
         call check_carg('niceserver',     self%niceserver)
         call check_carg('noise_norm',     self%noise_norm)
-        call check_carg('nonuniform',     self%nonuniform)
         call check_carg('norm',           self%norm)
         call check_carg('objfun',         self%objfun)
         call check_carg('omit_neg',       self%omit_neg)
@@ -1506,8 +1503,6 @@ contains
         self%l_frac_worst = self%frac_worst <= 0.99
         ! set greedy sampling flag
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
-        ! set nonuniform filtering flag
-        self%l_nonuniform = trim(self%nonuniform).eq.'yes'
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
@@ -1765,19 +1760,23 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
-        ! automatically estimated lp
-        self%l_lpauto = trim(self%lp_auto).ne.'no'
-        select case(trim(self%lp_auto))
-            case('yes')
+        ! filter mode selection via filt_mode
+        self%l_lpauto = .false.
+        select case(trim(self%filt_mode))
+            case('none')
+                ! no automatic filtering mode requested
+            case('uniform')
                 ! this is an lpset mode (no eo alignment), so update flag
+                self%l_lpauto = .true.
                 self%l_lpset = .true.
-            case('no')
-                ! don't touch l_lpset flag
             case('fsc')
                 ! low-pass limit set from FSC (but no eo alignment)
+                self%l_lpauto = .true.
                 self%l_lpset = .true.
+            case('nonuniform')
+                ! staged nonuniform filtering mode
             case DEFAULT
-                THROW_HARD('unsupported lp_auto flag')
+                THROW_HARD('unsupported filt_mode flag')
         end select        
         ! reg options
         self%l_noise_reg = cline%defined('snr_noise_reg')

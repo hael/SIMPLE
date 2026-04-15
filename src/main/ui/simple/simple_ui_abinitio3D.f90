@@ -69,9 +69,9 @@ contains
             &'low-pass limit for the initial stage in Angstroms',  .false., 20., gui_submenu="filter")
         call abinitio3D%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the final stage in Angstroms',    .false., 8., gui_submenu="filter")
-        call abinitio3D%add_input(UI_FILT, 'lp_auto', 'multi', 'Filtering mode', &
-            &'Filtering mode(no|yes|fsc|nonuniform){no}; nonuniform applies staged nonuniform filtering and is mutually exclusive with yes/fsc', &
-            &'(no|yes|fsc|nonuniform){no}', .false., 'no', gui_submenu="filter", gui_advanced=.true.)
+        call abinitio3D%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
+            &'Filtering mode(none|uniform|fsc|nonuniform){none}; nonuniform applies staged nonuniform filtering', &
+            &'(none|uniform|fsc|nonuniform){none}', .false., 'none', gui_submenu="filter", gui_advanced=.true.)
         call abinitio3D%add_input(UI_FILT, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
             &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., gui_submenu="filter")
         call abinitio3D%add_input(UI_FILT, 'lpstop_ini3D',  'num', 'Final low-pass limit ini3D', 'Final low-pass limit ini3D',&

@@ -8,7 +8,7 @@ integer, parameter :: SHC_REFINE_STAGE                = 1                    ! s
 integer, parameter :: PROB_REFINE_STAGE               = 5                    ! prob refinement stages 5-6
 integer, parameter :: PROB_NEIGH_REFINE_STAGE         = 7                    ! prob_neigh refinement stages 7-8
 integer, parameter :: STOCH_SAMPL_STAGE               = PROB_REFINE_STAGE    ! we switch from greedy to stochastic balanced class sampling when prob is switched on
-integer, parameter :: LPAUTO_STAGE                    = PROB_REFINE_STAGE + 1 ! we switch on automatic low-pass limit estimation after one prob stage, but only if lp_auto is switched on by user
+integer, parameter :: LPAUTO_STAGE                    = PROB_REFINE_STAGE + 1 ! we switch on automatic low-pass limit estimation after one prob stage
 integer, parameter :: REFINE3D_ROUTE_STD              = 1
 integer, parameter :: REFINE3D_ROUTE_CAVGS            = 2
 integer, parameter :: REFINE3D_ROUTE_POLAR            = 3
@@ -17,7 +17,7 @@ integer, parameter :: NEIGH_NSPACES(2)                = [126,5000]
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
-    type(string) :: refine, trail_rec, pgrp, balance, lp_auto, nonuniform, automsk
+    type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk
     integer :: iter, inspace, inspace_sub, imaxits, nsample_dyn, ipftsz
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
@@ -175,20 +175,19 @@ contains
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        cfg%lp_auto    = 'no'
-        cfg%nonuniform = 'no'
+        cfg%filt_mode  = 'none'
         cfg%lpstart    = 0.
         cfg%lpstop     = 0.
-        if( istage >= LPAUTO_STAGE .and. l_lpauto )then
-            cfg%lp_auto = trim(params%lp_auto)
-            cfg%lpstart = lpinfo(istage - 1)%lp
-            if( istage == NSTAGES )then
-                cfg%lpstop = lpinfo(istage)%smpd_crop * 2.
-            else
-                cfg%lpstop = lpinfo(istage + 1)%lp
+        if( istage >= LPAUTO_STAGE .and. (l_lpauto .or. l_nonuniform) )then
+            cfg%filt_mode = trim(params%filt_mode)
+            if( cfg%filt_mode.eq.'uniform' )then
+                cfg%lpstart = lpinfo(istage - 1)%lp
+                if( istage == NSTAGES )then
+                    cfg%lpstop = lpinfo(istage)%smpd_crop * 2.
+                else
+                    cfg%lpstop = lpinfo(istage + 1)%lp
+                endif
             endif
-        else if( istage >= LPAUTO_STAGE .and. l_nonuniform )then
-            cfg%nonuniform = trim(params%nonuniform)
         endif
     end subroutine set_refine3D_filtering_policy
 
@@ -309,9 +308,8 @@ contains
         call cline_refine3D%set('refine',                 cfg%refine)
         call cline_refine3D%set('balance',                cfg%balance)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
-        call cline_refine3D%set('lp_auto',                cfg%lp_auto)
-        call cline_refine3D%set('nonuniform',             cfg%nonuniform)
-        if( cfg%lp_auto.eq.'yes' )then
+        call cline_refine3D%set('filt_mode',              cfg%filt_mode)
+        if( cfg%filt_mode.eq.'uniform' )then
             call cline_refine3D%set('lpstart',            cfg%lpstart)
             call cline_refine3D%set('lpstop',             cfg%lpstop)
         else

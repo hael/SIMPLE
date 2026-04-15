@@ -26,6 +26,7 @@ contains
         type(string)                  :: volname_prev_even, volname_prev_odd, str_state, str_iter
         type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname
         logical, allocatable          :: l_mask(:,:,:)
+        logical                       :: l_nonuniform_mode
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
         real                          :: weight_prev, update_frac_trail_rec, mskrad_px
         integer                       :: part, state, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part
@@ -41,6 +42,7 @@ contains
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
         call build%eorecvol%kill_exp         ! reduced memory usage
         numlen_part = max(1, params%numlen)
+        l_nonuniform_mode = trim(params%filt_mode).eq.'nonuniform'
         allocate(res05s(params%nstates), res0143s(params%nstates))
         res0143s = 0.
         res05s   = 0.
@@ -170,7 +172,7 @@ contains
                 call vol_prev_odd%kill
             endif
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
-            if( params%l_nonuniform )then
+            if( l_nonuniform_mode )then
                 if( L_BENCH_GLOB ) t_nonuniform = tic()
                 if( allocated(l_mask) ) deallocate(l_mask)
                 mskrad_px = 0.5 * params%mskdiam / params%smpd_crop
@@ -241,7 +243,7 @@ contains
             write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', (rt_sampl_dens_correct_eos/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', (rt_sampl_dens_correct_sum/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
-            write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', (rt_nonuniform/rt_tot)            * 100.
+            write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', (rt_nonuniform/rt_tot)             * 100.
             write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
             &((rt_init+rt_read+rt_sum_reduce+rt_sum_eos+rt_sampl_dens_correct_eos+rt_sampl_dens_correct_sum+rt_eoavg+rt_nonuniform)/rt_tot) * 100.
             call fclose(fnr)

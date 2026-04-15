@@ -87,7 +87,8 @@ contains
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',    'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map with ml_reg='yes'
-        if( .not. cline%defined('lp_auto')     ) call cline%set('lp_auto',       'no') ! works, should be considered if the defaults are not satisfactory
+        if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode',   'none')
+        ! works, should be considered if the defaults are not satisfactory
         if( .not. cline%defined('maxits')      ) call cline%set('maxits',          20) ! ~2 passes over particles, sufficient ?
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',       'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
@@ -140,7 +141,7 @@ contains
         call cline%set('prg',                'refine3D')
         call cline%set('ufrac_trec', params%update_frac)
         call cline%set('maxits',          maxits_phase1)
-        call cline%set('lp_auto',                 'yes')
+        call cline%set('filt_mode',           'uniform')
         call xrefine3D%execute(cline)
         ! iteration number bookkeeping
         iter = 0
@@ -157,7 +158,7 @@ contains
         params%mskfile = MSKVOL_FILE
         call cline%set('mskfile',    MSKVOL_FILE)
         call cline%set('maxits',   maxits_phase1)
-        call cline%set('lp_auto', params%lp_auto)
+        call cline%set('filt_mode', params%filt_mode)
         call cline%set('startit',           iter)
         call cline%set('which_iter',        iter)
         call xrefine3D%execute(cline)

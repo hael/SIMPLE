@@ -63,9 +63,10 @@ contains
         logical, allocatable :: l_msk(:,:,:)
         real    :: cur_fil(params%box_crop)
         integer :: filtsz
-        logical :: have_even, have_odd
+        logical :: have_even, have_odd, l_nonuniform_mode
+        l_nonuniform_mode = trim(params%filt_mode).eq.'nonuniform'
         ! READ
-        if( params%l_nonuniform )then
+        if( l_nonuniform_mode )then
             vol_even = add2fbody(params%vols_even(s), params%ext, NUFILT_SUFFIX)
             vol_odd  = add2fbody(params%vols_odd(s),  params%ext, NUFILT_SUFFIX)
             if( .not.file_exists(vol_even) ) THROW_HARD('Missing nonuniform even reference for state='//int2str(s)//' : '//vol_even%to_char())
@@ -126,7 +127,7 @@ contains
             ! FT
             call build%vol%fft
             call build%vol_odd%fft
-        else if( params%l_lpset .and. .not. params%l_nonuniform )then
+        else if( params%l_lpset .and. .not. l_nonuniform_mode )then
             ! read average volume that will occupy both even and odd
             call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
             ! noise regularization
@@ -150,7 +151,7 @@ contains
             call build%vol%fft
             call build%vol_odd%fft
         endif
-        if( params%l_ml_reg .or. params%l_nonuniform )then
+        if( params%l_ml_reg .or. l_nonuniform_mode )then
             ! filtering done when volumes are assembled
         else if( params%l_icm )then
             ! filtering done above
