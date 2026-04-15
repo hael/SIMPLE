@@ -68,19 +68,24 @@ contains
         else
             params%blocktree = 'pool_block_tree.bin'
         endif
+        ! if single_ptree then params%ncls_sub = 1 
         block_tree = gen_corr_block_tree_hac(cavg_imgs, params, params%ncls_sub)
+        print *, '>>> pool2D_tree: Generated block tree with ', block_tree%get_n_trees(), ' trees.'
         call write_block_tree(block_tree, params%blocktree)
         call block_tree%kill
+        call del_file(params%refs)  
         call spproj2%write(params%projfile)
         ! run greedy tree-based search on all particles
+        ! but it never hits it in builder... 
+        call cline%set('mkdir', 'yes')
         call cline%set('trs', 5.)
         call cline%set('lp', 6.0)
         call cline%set('maxits', 1)
         call cline%set('ncls', nrefs_non_junk)
+        call cline%set('ncls_sub', params%ncls_sub)
         call cline%set('refs', refs_prep)
         call cline%set('blocktree', params%blocktree)
-        call cline%set('box_crop', params%box_crop)
-        call cline%set('refine', 'snhc_ptree')
+        call cline%set('refine', 'greedy_tree')
         call xcluster2D%execute(cline)
         ! cleanup
         call spproj%kill

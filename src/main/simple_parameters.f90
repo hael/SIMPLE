@@ -1820,7 +1820,7 @@ contains
         ! -- neigh defaults
         self%l_neigh = .false.
         select case(trim(self%refine))
-            case('ptree', 'tree_neigh', 'tree_neigh_states', 'shc_ptree', 'snhc_ptree', 'single_ptree')
+            case('ptree', 'tree_neigh', 'tree_neigh_states',  'greedy_tree', 'shc_ptree', 'snhc_ptree', 'single_ptree')
                 self%l_tree_refine = .true.
             case DEFAULT
                 self%l_tree_refine = .false.
