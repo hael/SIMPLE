@@ -16,12 +16,12 @@ public :: nanoparticle
 private
 #include "simple_local_flags.inc"
 
-logical :: DEBUG = .true.
+logical :: DEBUG = .false.
 
 ! module global constants
 integer,          parameter :: NBIN_THRESH         = 20      ! number of thresholds for binarization
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
-logical,          parameter :: WRITE_OUTPUT        = .true.  ! for figures generation
+logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
 logical,          parameter :: ATOMS_STATS_OMIT    = .false. ! omit = shorter atoms stats output
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: CNMIN               = 3
