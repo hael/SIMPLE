@@ -4,6 +4,7 @@ import hashlib
 from django.shortcuts import render
 from django.http import HttpResponse
 
+from ..models                    import WorkspaceModel
 from ..helpers                   import *
 from ..data_structures.streamjob import StreamJob
 from ..data_structures.project   import Project
@@ -424,7 +425,7 @@ class StreamViewSieveParticles:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
     
 class StreamViewClassification2D:
 
@@ -492,23 +493,35 @@ class StreamViewClassification2D:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
     
 class StreamViewParticleSets:
 
     template        = "nice_stream/panelparticlesets.html"
     checksum_cookie = "panel_particlesets_checksum" 
+    jobmodel        = None
 
     def __init__(self, request, jobid):
         self.request = request
-        self.job     = Job(id=jobid)
+        if jobid is not None:
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         
     def render(self):
-        project = Project(project_id=self.job.dset.proj.id)
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
+        projectid       = self.jobmodel.dset.proj.id
+        workspacemodels = WorkspaceModel.objects.filter(proj=projectid)
+        workspaces = []
+        for workspacemodel in workspacemodels:
+            workspaces.append({
+                "id"   : workspacemodel.id, 
+                "name" : workspacemodel.name
+            })
         context = {
-            "jobid"      : self.job.id,
-            "jobstats"   : self.job.particle_sets_stats,
-            "workspaces" : project.workspaces_list
+            "jobid"      : self.jobmodel.id,
+            "jobstats"   : self.jobmodel.particle_sets_stats,
+            "workspaces" : workspaces
         }
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
@@ -518,4 +531,4 @@ class StreamViewParticleSets:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()

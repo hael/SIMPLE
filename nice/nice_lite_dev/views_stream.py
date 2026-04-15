@@ -306,29 +306,107 @@ def view_stream_particle_sets(request):
 
 @login_required(login_url="/login/")
 def regenerate_pickrefs(request):
-    jobid = get_job_id(request)
+    """Trigger regeneration of picking references using more micrographs."""
+    jobid     = get_job_id(request)
     streamjob = StreamJob(jobid)
     streamjob.update(increase_nmics=True)
-    response = redirect('nice_lite:view_stream', jobid=jobid)
-    return response
+    return redirect('nice_lite:view_stream', jobid=jobid)
 
 @login_required(login_url="/login/")
 def select_pickrefs(request):
-    jobid = get_job_id(request)
-    streamjob = StreamJob(jobid)
-    final_selection         = [int(numeric_string) for numeric_string in request.POST["final_selection"].split(',')]
-    streamjob.select_pickrefs(final_selection)
-    response = redirect('nice_lite:view_stream', jobid=jobid)
-    return response
+    """Store the user's picking-reference selection and redirect to the stream view."""
+    jobid         = get_job_id(request)
+    streamjob     = StreamJob(jobid)
+    raw_selection = request.POST.get("final_selection", "")
+    if not raw_selection:
+        print_error("select_pickrefs: final_selection missing")
+        return redirect('nice_lite:view_stream', jobid=jobid)
+    final_selection = [int(s) for s in raw_selection.split(',')]
+    if not streamjob.select_pickrefs(final_selection):
+        print_error(f"select_pickrefs: failed for job {jobid}")
+    return redirect('nice_lite:view_stream', jobid=jobid)
 
 @login_required(login_url="/login/")
 def select_stream_sieve_particles(request):
-    jobid = get_job_id(request)
-    streamjob = StreamJob(jobid)
-    accepted_cls2D = [int(numeric_string) for numeric_string in request.POST["accepted_cls2D"].split(',')]
-    streamjob.select_sieve_particles(accepted_cls2D)
+    """Store the user's accepted 2D class list for particle sieving and render the sieve view."""
+    jobid          = get_job_id(request)
+    streamjob      = StreamJob(jobid)
+    raw_accepted   = request.POST.get("accepted_cls2D", "")
+    if not raw_accepted:
+        print_error("select_stream_sieve_particles: accepted_cls2D missing")
+        streamviewsieveparticles = StreamViewSieveParticles(request, None, jobid)
+        return streamviewsieveparticles.render()
+    accepted_cls2D = [int(s) for s in raw_accepted.split(',')]
+    if not streamjob.select_sieve_particles(accepted_cls2D):
+        print_error(f"select_stream_sieve_particles: failed for job {jobid}")
     streamviewsieveparticles = StreamViewSieveParticles(request, None, jobid)
     return streamviewsieveparticles.render()
+
+@login_required(login_url="/login/")
+def update_classification_2D_mskdiam(request):
+    """Validate and store the mask diameter for 2D classification, then render the classification view."""
+    jobid     = get_job_id(request)
+    streamjob = StreamJob(jobid)
+    mskdiam   = get_float(request.POST, "mskdiam")
+    if mskdiam is None:
+        print_error("update_classification_2D_mskdiam: mskdiam missing or non-numeric")
+    elif mskdiam <= 0:
+        print_error(f"update_classification_2D_mskdiam: invalid mskdiam {mskdiam} (must be > 0)")
+    else:
+        if not streamjob.update_mskdiam(mskdiam):
+            print_error(f"update_classification_2D_mskdiam: update_mskdiam failed for job {jobid}")
+    streamviewclassification2D = StreamViewClassification2D(request, None, jobid)
+    return streamviewclassification2D.render()
+
+@login_required(login_url="/login/")
+def snapshot_stream_classification_2D(request):
+    """Record a 2D-classification snapshot particle set and redirect to the stream view."""
+    jobid              = get_job_id(request)
+    streamjob          = StreamJob(jobid)
+    raw_selection      = request.POST.get("snapshot_selection", "")
+    snapshot_iteration = get_integer(request.POST, "snapshot_iteration")
+    if not raw_selection:
+        print_error("snapshot_stream_classification_2D: snapshot_selection missing")
+        return redirect('nice_lite:view_stream', jobid=jobid)
+    if snapshot_iteration is None:
+        print_error("snapshot_stream_classification_2D: snapshot_iteration missing or non-integer")
+        return redirect('nice_lite:view_stream', jobid=jobid)
+    snapshot_selection = [int(s) for s in raw_selection.split(',')]
+    if not streamjob.snapshot_classification_2D(snapshot_selection, snapshot_iteration):
+        print_error(f"snapshot_stream_classification_2D: failed for job {jobid}")
+    return redirect('nice_lite:view_stream', jobid=jobid)
+
+@login_required(login_url="/login/")
+def select_stream_classification_2D(request):
+    """Record the final 2D-classification particle selection and redirect to the stream view."""
+    jobid                 = get_job_id(request)
+    streamjob             = StreamJob(jobid)
+    raw_deselection       = request.POST.get("final_deselection", "")
+    final_selection_ptcls = get_integer(request.POST, "final_selection_ptcls")
+    if not raw_deselection:
+        print_error("select_stream_classification_2D: final_deselection missing")
+        return redirect('nice_lite:view_stream', jobid=jobid)
+    if final_selection_ptcls is None:
+        print_error("select_stream_classification_2D: final_selection_ptcls missing or non-integer")
+        return redirect('nice_lite:view_stream', jobid=jobid)
+    final_deselection = [int(s) for s in raw_deselection.split(',')]
+    if not streamjob.selection_classification_2D(final_deselection, final_selection_ptcls):
+        print_error(f"select_stream_classification_2D: failed for job {jobid}")
+    return redirect('nice_lite:view_stream', jobid=jobid)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @login_required(login_url="/login/")
 def term_stream_preprocess(request, jobid):
@@ -478,28 +556,6 @@ def select_refs_stream_generate_pickrefs(request, jobid):
 
 
 
-@login_required(login_url="/login/")
-def snapshot_stream_classification_2D(request, jobid):
-    job = Job(id=jobid)
-    snapshot_selection  = [int(numeric_string) for numeric_string in request.POST["snapshot_selection"].split(',')]
-    snapshot_iteration = request.POST["snapshot_iteration"]
-    job.snapshot_classification_2D(snapshot_selection, snapshot_iteration)
-    response = redirect('nice_lite:view_stream', jobid=jobid)
-    time.sleep(2) #sleep for user to see message
-    return response
-
-@login_required(login_url="/login/")
-def select_stream_classification_2D(request, jobid):
-    project = Project(request=request)
-    dataset = Dataset(request=request)
-    job = Job(id=jobid)
-    final_deselection     = [int(numeric_string) for numeric_string in request.POST["final_deselection"].split(',')]
-    final_selection_ptcls = request.POST["final_selection_ptcls"]
-    job.selection_classification_2D(final_deselection, project, dataset, final_selection_ptcls)
-    response = redirect('nice_lite:view_stream', jobid=jobid)
-    time.sleep(2) #sleep for user to see message
-    return response
-
 
 
 @login_required(login_url="/login/")
@@ -610,14 +666,7 @@ def update_stream_parameters(request):
         streamjob.update(ctfres, astigmatism, icescore)
     return HttpResponse(status=204)
     
-@login_required(login_url="/login/")
-def update_classification_2D_mskdiam(request, jobid):
-    time.sleep(1) #sleep for user to see message
-    job = Job(id=jobid)
-    mskdiam = request.POST["mskdiam"]
-    job.update_mskdiam(mskdiam)
-    response = redirect('nice_lite:view_stream_classification_2D_zoom', jobidzoom=jobid)
-    return response
+
 
 @login_required(login_url="/login/")
 def link_stream_particle_set(request, jobid, setid, filename, type):

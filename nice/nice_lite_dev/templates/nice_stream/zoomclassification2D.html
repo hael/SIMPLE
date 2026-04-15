@@ -52,8 +52,9 @@
             {% if status == "running" %}
                 {% if jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
                     <div>
-                        <form class="flex flex-col" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' jobid %}>
+                        <form class="flex flex-col" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' %}>
                             {% csrf_token %}
+                            <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
                             <div class="font-bold text-[12px] ml-[10px]">mask diameter</div>
                             <div class="flex flex-row items-center justify-center">
                                 <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onmouseup="updateMskdiamSubmit(this)" ontouchend="updateMskdiamSubmit(this)"></input>
@@ -63,8 +64,9 @@
                         </form>
                     </div>
                     <div class="flex flex-row flex-1 justify-center items-center">
-                        <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:snapshot_stream_classification_2D' jobid %}>
+                        <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:snapshot_stream_classification_2D' %}>
                             {% csrf_token %}
+                            <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
                             <input type="hidden" id="snapshot_iteration" name="snapshot_iteration" value="{{ jobstats.iteration }}"/>
                             <input type="hidden" id="snapshot_selection" name="snapshot_selection" value=""/>
                             <button class="userbutton animate-bounce !text-[14px]" type="button" onclick="selectCls(this)">create snapshot particle set</button>
@@ -73,8 +75,9 @@
                 {% endif %}
             {% elif status == "finished" %}
                 <div class="flex flex-row flex-1 justify-center items-center">
-                    <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:select_stream_classification_2D' jobid %}>
+                    <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:select_stream_classification_2D' %}>
                         {% csrf_token %}
+                        <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
                         <input type="hidden" id="final_deselection"     name="final_deselection"     value=""/>
                         <input type="hidden" id="final_selection_ptcls" name="final_selection_ptcls" value=""/>
                         <button class="userbutton animate-bounce !text-[14px]" type="button" onclick="selectClsFinal(this)">create final particle set</button>
@@ -136,9 +139,9 @@
                                                 {{ cls2D.res|floatformat:1 }}Å
                                             </div>
                                         </div>
-                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.mrcidx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
                                             <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
-                                                <canvas class="mskcanvas z-1" height=100 width=100 data-mskscale="{{ cls2D.mskscale }}" data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
+                                                <canvas class="mskcanvas z-1" height=100 width=100 data-mskscale="{{ jobstats.mskscale }}" data-mskdiam="{{ jobstats.mskdiam }}"></canvas>
                                                 <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
                                                         <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
@@ -196,7 +199,7 @@
                                                 {{ cls2D.res|floatformat:1 }}Å
                                             </div>
                                         </div>
-                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.mrcidx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
                                             <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
                                                 <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">

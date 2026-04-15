@@ -17,4 +17,5 @@ module simple_gui_metadata_api
   use simple_gui_metadata_stream_opening2D,         only: gui_metadata_stream_opening2D
   use simple_gui_metadata_stream_particle_sieving,  only: gui_metadata_stream_particle_sieving
   use simple_gui_metadata_stream_pool2D,            only: gui_metadata_stream_pool2D
+  use simple_gui_metadata_stream_pool2D_snapshot,   only: gui_metadata_stream_pool2D_snapshot
 end module simple_gui_metadata_api

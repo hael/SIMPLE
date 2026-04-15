@@ -14,7 +14,9 @@
 !     gui_metadata_timeplot, gui_metadata_optics_group, gui_metadata_cavg2D,
 !     gui_metadata_stream_preprocess, gui_metadata_stream_optics_assignment,
 !     gui_metadata_stream_update, gui_metadata_stream_picking (initial and
-!     reference picking), gui_metadata_stream_opening2D
+!     reference picking), gui_metadata_stream_opening2D,
+!     gui_metadata_stream_particle_sieving, gui_metadata_stream_pool2D,
+!     gui_metadata_stream_pool2D_snapshot
 !
 ! ENTRY POINT:
 !   run_all_gui_metadata_tests() — run every test in this module
@@ -77,6 +79,9 @@ contains
     call test_set_get_stream_pool2D()
     call test_serialise_stream_pool2D()
     call test_jsonise_stream_pool2D()
+    call test_set_get_stream_pool2D_snapshot()
+    call test_serialise_stream_pool2D_snapshot()
+    call test_jsonise_stream_pool2D_snapshot()
   end subroutine run_all_gui_metadata_tests
 
   !---------------- base ----------------
@@ -695,9 +700,13 @@ contains
 
   !---------------- stream update ----------------
 
-  ! Verify that each stream-update threshold field can be set and retrieved independently.
+  ! Verify that each stream-update threshold field can be set and retrieved independently,
+  ! including the snapshot2D compound field.
   subroutine test_set_get_stream_update()
     type(gui_metadata_stream_update) :: meta
+    integer,          allocatable    :: sel_out(:)
+    type(string)                     :: fname_out
+    integer                          :: snap_id_out, iter_out
     write(*,'(A)') 'test_set_get_stream_update'
     call meta%new(GUI_METADATA_STREAM_UPDATE_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -709,11 +718,26 @@ contains
     call assert_true(meta%get_astigmatism_update() == 0.4, 'astigmatism_update set/get correctly')
     call meta%set_icescore_update(0.3)
     call assert_true(meta%get_icescore_update() == 0.3, 'icescore_update set/get correctly')
+    call meta%set_mskdiam2D_update(180.0)
+    call assert_true(meta%get_mskdiam2D_update() == 180.0, 'mskdiam2D_update set/get correctly')
+    call assert_true(.not.meta%has_snapshot2D_update(), 'has_snapshot2D_update false before set')
+    call meta%set_snapshot2D_update(snapshot_id=3, iteration=5, &
+                                    selection=[23,171,200,46,142], filename=string('snapshot_3.simple'))
+    call assert_true(meta%has_snapshot2D_update(), 'has_snapshot2D_update true after set')
+    call meta%get_snapshot2D_update(snap_id_out, iter_out, sel_out, fname_out)
+    call assert_int(snap_id_out,      3,                   'snapshot2D_id set/get correctly')
+    call assert_int(iter_out,         5,                   'snapshot2D_iteration set/get correctly')
+    call assert_int(size(sel_out),    5,                   'snapshot2D_selection size correct')
+    call assert_int(sel_out(1),       23,                  'snapshot2D_selection(1) correct')
+    call assert_int(sel_out(5),       142,                 'snapshot2D_selection(5) correct')
+    call assert_char(fname_out%to_char(),       'snapshot_3.simple', 'snapshot2D_filename set/get correctly')
+    deallocate(sel_out)
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_set_get_stream_update
 
-  ! Verify that the stream-update serialise buffer is the expected size.
+  ! Verify that the stream-update serialise buffer is the expected size, including
+  ! the snapshot2D fields.
   subroutine test_serialise_stream_update()
     character(len=:),                allocatable :: buffer
     type(gui_metadata_stream_update)             :: meta
@@ -724,6 +748,9 @@ contains
     call meta%set_ctfres_update(8.5)
     call meta%set_astigmatism_update(0.4)
     call meta%set_icescore_update(0.3)
+    call meta%set_mskdiam2D_update(180.0)
+    call meta%set_snapshot2D_update(snapshot_id=3, iteration=5, &
+                                    selection=[23,171,200,46,142], filename=string('snapshot_3.simple'))
     call assert_true(meta%assigned(), 'metadata object is set')
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
@@ -1192,5 +1219,77 @@ contains
     call assert_true(.not.json%failed(), 'json destroyed')
     deallocate(buffer)
   end subroutine test_jsonise_stream_pool2D
+
+  !---------------- stream pool2D snapshot ----------------
+
+  ! Verify that all pool-2D snapshot fields round-trip through set/get,
+  ! and that snapshot_time is populated automatically on set.
+  subroutine test_set_get_stream_pool2D_snapshot()
+    type(gui_metadata_stream_pool2D_snapshot) :: meta
+    type(string)                              :: fname_out
+    integer                                   :: id_out, nptcls_out, time_out
+    write(*,'(A)') 'test_set_get_stream_pool2D_snapshot'
+    call meta%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE, 'type is set correctly')
+    call meta%set(id=3, snapshot_filename=string('snapshot_3.simple'), snapshot_nptcls=12500)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call assert_true(meta%get(id_out, fname_out, nptcls_out, time_out), 'metadata retrieved')
+    call assert_int(id_out,       3,                  'id set/get correctly')
+    call assert_char(fname_out%to_char(),  'snapshot_3.simple', 'snapshot_filename set/get correctly')
+    call assert_int(nptcls_out,  12500,               'snapshot_nptcls set/get correctly')
+    call assert_true(time_out > 0,                    'snapshot_time is set automatically')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_set_get_stream_pool2D_snapshot
+
+  ! Verify that the pool-2D snapshot serialise buffer is the expected size.
+  subroutine test_serialise_stream_pool2D_snapshot()
+    character(len=:),                         allocatable :: buffer
+    type(gui_metadata_stream_pool2D_snapshot)             :: meta
+    write(*,'(A)') 'test_serialise_stream_pool2D_snapshot'
+    call meta%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE, 'type is set correctly')
+    call meta%set(id=3, snapshot_filename=string('snapshot_3.simple'), snapshot_nptcls=12500)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call meta%serialise(buffer=buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    deallocate(buffer)
+  end subroutine test_serialise_stream_pool2D_snapshot
+
+  ! jsonise embeds snapshot_time (live Unix timestamp) so the timestamp
+  ! field is zeroed before hashing to make the output deterministic.
+  subroutine test_jsonise_stream_pool2D_snapshot()
+    character(kind=CK, len=:),                allocatable :: buffer
+    type(gui_metadata_stream_pool2D_snapshot)             :: meta
+    type(json_core)                                       :: json
+    type(json_value),                         pointer     :: json_ptr
+    type(string)                                          :: json_str, json_hash
+    logical                                               :: found
+    write(*,'(A)') 'test_jsonise_stream_pool2D_snapshot'
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    call meta%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
+    call assert_true(meta%initialized(), 'type is initialised')
+    call meta%set(id=3, snapshot_filename=string('snapshot_3.simple'), snapshot_nptcls=12500)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    json_ptr => meta%jsonise()
+    call assert_true(associated(json_ptr), 'json pointer is associated')
+    call json%update(json_ptr, 'snapshot_time', 0, found)
+    call json%print_to_string(json_ptr, buffer)
+    call assert_true(allocated(buffer), 'buffer allocated')
+    call assert_true(len(buffer) > 0, 'json output is non-empty')
+    json_str = buffer
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), '7A42F85D4D807B14', 'json is stable')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+    call json%destroy(json_ptr)
+    call assert_true(.not.json%failed(), 'json destroyed')
+    deallocate(buffer)
+  end subroutine test_jsonise_stream_pool2D_snapshot
 
 end module simple_gui_metadata_tester

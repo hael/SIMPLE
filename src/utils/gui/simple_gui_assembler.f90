@@ -38,7 +38,7 @@ module simple_gui_assembler
                                      FORK_STATUS_STOPPED,   &
                                      FORK_STATUS_RESTARTING,&
                                      FORK_STATUS_SKIPPED
-  use simple_gui_metadata_api, only: CK,                                    &
+  use simple_gui_metadata_api, only: CK,                                     &
                                      json_core,                              &
                                      json_value,                             &
                                      gui_metadata_stream_preprocess,         &
@@ -50,8 +50,9 @@ module simple_gui_assembler
                                      gui_metadata_stream_picking,            &
                                      gui_metadata_cavg2D,                    &
                                      gui_metadata_stream_opening2D,          &
-                                     gui_metadata_stream_particle_sieving, &
-                                     gui_metadata_stream_pool2D
+                                     gui_metadata_stream_particle_sieving,   &
+                                     gui_metadata_stream_pool2D,             &
+                                     gui_metadata_stream_pool2D_snapshot
   implicit none
 
 public :: gui_assembler
@@ -505,19 +506,27 @@ contains
 
   ! Write the pool-2D section, including the latest class averages.
   ! The whole section is suppressed when its hash matches the previously sent hash.
-  subroutine assemble_stream_pool2D( self, meta_pool2D, meta_latest_cavgs2D )
-    class(gui_assembler),                   intent(inout) :: self
-    type(gui_metadata_cavg2D), allocatable, intent(inout) :: meta_latest_cavgs2D(:)
-    type(gui_metadata_stream_pool2D),       intent(inout) :: meta_pool2D
-    character(kind=CK,len=:),               allocatable   :: buffer
-    type(json_value),                       pointer       :: json_ptr => null(), json_cavgs2D_ptr => null()
-    type(string)                                          :: str, hash
-    logical                                               :: l_add
-    integer                                               :: i_cls2D
+  subroutine assemble_stream_pool2D( self, meta_pool2D, meta_latest_cavgs2D, meta_pool2D_snapshot )
+    class(gui_assembler),                      intent(inout) :: self
+    type(gui_metadata_cavg2D),   allocatable,  intent(inout) :: meta_latest_cavgs2D(:)
+    type(gui_metadata_stream_pool2D),          intent(inout) :: meta_pool2D
+    type(gui_metadata_stream_pool2D_snapshot), intent(inout) :: meta_pool2D_snapshot
+    character(kind=CK,len=:),                  allocatable   :: buffer
+    type(json_value),                          pointer       :: json_ptr => null(), json_cavgs2D_ptr => null(), json_snapshot_ptr => null()
+    type(string)                                             :: str, hash
+    logical                                                  :: l_add
+    integer                                                  :: i_cls2D
     call self%json%remove_if_present(self%json_root, 'pool2D')
     json_ptr => meta_pool2D%jsonise()
     if( .not. associated(json_ptr) ) return
     call self%json%rename(json_ptr, 'pool2D')
+    if( meta_pool2D_snapshot%assigned() ) then
+      json_snapshot_ptr => meta_pool2D_snapshot%jsonise()
+      if( associated(json_snapshot_ptr) ) then
+        call self%json%rename(json_snapshot_ptr, 'snapshot')
+        call self%json%add(json_ptr, json_snapshot_ptr)
+      end if
+    end if
     l_add = .false.
     if( allocated(meta_latest_cavgs2D) ) then
       call self%json%create_array(json_cavgs2D_ptr, 'latest_cls2D')

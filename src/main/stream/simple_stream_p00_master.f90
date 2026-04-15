@@ -132,6 +132,7 @@ contains
         type(gui_metadata_stream_picking)            :: meta_reference_picking
         type(gui_metadata_stream_particle_sieving)   :: meta_particle_sieving
         type(gui_metadata_stream_pool2D)             :: meta_pool2D
+        type(gui_metadata_stream_pool2D_snapshot)    :: meta_pool2D_snapshot
         type(gui_metadata_micrograph),   allocatable :: meta_preprocess_micrographs(:)
         type(gui_metadata_histogram),    allocatable :: meta_preprocess_histograms(:)
         type(gui_metadata_timeplot),     allocatable :: meta_preprocess_timeplots(:)
@@ -151,9 +152,11 @@ contains
         type(c_pthread_t)                          :: meta_listener_thread
         type(c_ptr)                                :: ptr
         character(len=:),              allocatable :: meta_buffer
+        character(kind=CK, len=:),     allocatable :: str_val
         integer,                       allocatable :: i_arr(:)
+        type(json_value),              pointer     :: json_child_ptr
         logical                                    :: l_terminate=.false., l_last_loop=.false., l_found, l_test=.false., l_terminate_loop=.false.
-        integer                                    :: stat, i, rc, max_msgsize, i_val
+        integer                                    :: stat, i, rc, max_msgsize, i_val, snapshot_id
         real(kind=dp)                              :: r_val
         ! init params
         call params%new(cline)
@@ -195,14 +198,14 @@ contains
      !   call fork_assign_optics%start(    name=string(OPTICS_JOB_NAME),    logfile=string(OPTICS_JOB_NAME//'.log'),    cline=cline_assign_optics,    restart=.true.)
      !   call fork_opening2D%start(        name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'), cline=cline_opening2D,        restart=.true.)
     !    call fork_reference_picking%start(name=string(REFPICK_JOB_NAME),   logfile=string(REFPICK_JOB_NAME//'.log'),   cline=cline_reference_picking,restart=.true.)
-        call fork_particle_sieving%start( name=string(SIEVING_JOB_NAME),   logfile=string(SIEVING_JOB_NAME//'.log'),   cline=cline_particle_sieving, restart=.true.)
+    !    call fork_particle_sieving%start( name=string(SIEVING_JOB_NAME),   logfile=string(SIEVING_JOB_NAME//'.log'),   cline=cline_particle_sieving, restart=.true.)
         call fork_pool2D%start( name=string(CLASS2D_JOB_NAME),   logfile=string(CLASS2D_JOB_NAME//'.log'),   cline=cline_pool2D, restart=.true.)
     !    
       !  if( fork_preprocess%status()        /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork preprocessing'    )
      !   if( fork_assign_optics%status()     /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork assign optics'    )
      !   if( fork_opening2D%status()         /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D'        )
-    !if( fork_reference_picking%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork reference picking')
-        if( fork_particle_sieving%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork particle sieving' )
+    !    if( fork_reference_picking%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork reference picking')
+    !    if( fork_particle_sieving%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork particle sieving' )
         if( fork_pool2D%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork pool2D' )
         ! attach signal handlers after fork else propagated to processes
         call signal(SIGTERM, sigterm_handler)
@@ -219,7 +222,7 @@ contains
             call assembler%assemble_stream_opening2D(meta_opening2D, meta_opening2D_cavgs2D, meta_opening2D_final_cavgs2D)
             call assembler%assemble_stream_reference_picking(meta_reference_picking, meta_reference_picking_micrographs, meta_reference_picking_cavgs2D)
             call assembler%assemble_stream_particle_sieving(meta_particle_sieving, meta_particle_sieving_cavgs2D, meta_particle_sieving_ref_cavgs2D)
-            call assembler%assemble_stream_pool2D(meta_pool2D, meta_pool2D_cavgs2D)
+            call assembler%assemble_stream_pool2D(meta_pool2D, meta_pool2D_cavgs2D, meta_pool2D_snapshot)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             ! stringify assembled json
             request = assembler%to_string()
@@ -311,6 +314,21 @@ contains
                         if(l_found) call meta_update%set_increase_nmics(i_val)
                         call json%get(json_response_ptr, 'pickrefs_selection', i_arr, l_found)
                         if(l_found) call meta_update%set_pickrefs_selection(i_arr)
+                        call json%get(json_response_ptr, 'mskdiam2D', r_val, l_found)
+                        if(l_found) call meta_update%set_mskdiam2D_update(real(r_val))
+                        nullify(json_child_ptr)
+                        call json%get(json_response_ptr, 'snapshot2D', json_child_ptr, l_found)
+                        if( l_found .and. associated(json_child_ptr) ) then
+                            call json%get(json_child_ptr, 'id',        snapshot_id, l_found)
+                            call json%get(json_child_ptr, 'iteration', i_val,       l_found)
+                            call json%get(json_child_ptr, 'selection', i_arr,       l_found)
+                            call json%get(json_child_ptr, 'filename',  str_val,     l_found)
+                            if( allocated(i_arr) .and. allocated(str_val) ) &
+                                call meta_update%set_snapshot2D_update(snapshot_id, i_val, i_arr, string(str_val))
+                            if( allocated(str_val) ) deallocate(str_val)
+                            if( allocated(i_arr)   ) deallocate(i_arr)
+                            nullify(json_child_ptr)
+                        end if
                         if( meta_update%assigned() .and. mq_stream_master_out%is_active() ) then
                             write(logfhandle, *) "SEND UPDATE"
                             call meta_update%serialise(meta_buffer)
@@ -432,7 +450,9 @@ contains
                                 case( GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE )
                                     meta_particle_sieving = transfer(my_buffer, meta_particle_sieving)    
                                 case( GUI_METADATA_STREAM_POOL2D_TYPE )
-                                    meta_pool2D = transfer(my_buffer, meta_pool2D)     
+                                    meta_pool2D = transfer(my_buffer, meta_pool2D)  
+                                case( GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE )
+                                    meta_pool2D_snapshot = transfer(my_buffer, meta_pool2D_snapshot)         
                                 case( GUI_METADATA_STREAM_PREPROCESS_MICROGRAPH_TYPE )
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of mic meta data
@@ -788,6 +808,8 @@ contains
             ! pool2D
             call meta_pool2D%new(GUI_METADATA_STREAM_POOL2D_TYPE)
             if( .not.meta_pool2D%initialized() ) THROW_HARD('failed to initialise pool2D metadata')
+            call meta_pool2D_snapshot%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
+            if( .not.meta_pool2D_snapshot%initialized() ) THROW_HARD('failed to initialise pool2D snapshot metadata')
         end subroutine init_metadata_pool2D
 
     end subroutine exec_stream_p00_master

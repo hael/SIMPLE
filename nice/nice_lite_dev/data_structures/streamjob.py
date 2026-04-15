@@ -2,6 +2,7 @@
 import os
 import copy
 import time
+from time import gmtime, strftime
 from django.utils import timezone
 
 # local imports
@@ -249,8 +250,6 @@ class StreamJob:
     # def select_refs_generate_pickrefs(self, final_selection, final_selection_source):
     # def snapshot_classification_2D(self, snapshot_selection, snapshot_iteration):
     # def selection_classification_2D(self, final_deselection, project, dataset, final_selection_ptcls):
-    # def select_sieve_particles(self, accepted_cls2D, rejected_cls2D):
-    # def update_mskdiam(self, mskdiam):
 
     # ------------------------------------------------------------------
     # Stage heartbeat / stats ingestion (called by the running job via API)
@@ -353,7 +352,16 @@ class StreamJob:
                 self.jobmodel.master_update["ref_selection"] = stats_json["particle_sieving"]["initial_ref_selection"]
         if "pool2D" in stats_json:
             updated = True
-            self.jobmodel.classification_2D_stats = stats_json["pool2D"]       
+            if "snapshot" in stats_json["pool2D"]:
+                snapshot    = stats_json["pool2D"]["snapshot"]
+                snapshot_id = snapshot["id"]
+                particle_set = next((x for x in self.jobmodel.particle_sets_stats["particle_sets"] if x["id"] == snapshot_id), None)
+                if particle_set is not None and "time" not in particle_set:
+                    particle_set["nptcls"]    = snapshot["snapshot_nptcls"]
+                    particle_set["time"]      = snapshot["snapshot_time"]
+                    particle_set["filename"]  = snapshot["snapshot_filename"]
+            pool2D_stats = {k: v for k, v in stats_json["pool2D"].items() if k != "snapshot"}
+            self.jobmodel.classification_2D_stats = pool2D_stats
         if updated:
             self.jobmodel.save()
         return True
@@ -421,7 +429,6 @@ class StreamJob:
     
     def select_sieve_particles(self, accepted_cls2D):
         """Store the user's 2D class selection for the particle-sieving stage.
-
         accepted_cls2D: list of class indices accepted by the user.
         Writes ref_selection into master_update so the stream picks it up.
         """
@@ -434,14 +441,86 @@ class StreamJob:
         self.jobmodel.save()
         return True
     
-    # UNUSED - called on Job, not StreamJob
-    # def terminate_initial_pick(self):
-    # def terminate_generate_pickrefs(self):
-    # def terminate_reference_picking(self):
-    # def terminate_sieve_particles(self):
-    # def terminate_classification_2D(self):
-    # def restart_initial_pick(self, project, dataset):
-    # def restart_generate_pickrefs(self, project, dataset):
-    # def restart_reference_picking(self, project, dataset):
-    # def restart_sieve_particles(self, project, dataset):
-    # def restart_classification_2D(self, project, dataset):
+    def update_mskdiam(self, mskdiam):
+        """Store the mask diameter for 2D classification.
+        Writes mskdiam2D into master_update so the stream picks it up.
+        """
+        if self.jobmodel is None:
+            print_error("jobmodel is none")
+            return False
+        master_update = self.jobmodel.master_update
+        master_update["mskdiam2D"] = mskdiam
+        self.jobmodel.master_update = master_update
+        self.jobmodel.save()
+        return True
+    
+    def snapshot_classification_2D(self, snapshot_selection, snapshot_iteration):
+        """Record a 2D-classification snapshot particle set and queue it for the stream.
+
+        Appends a new snapshot entry to particle_sets_stats and writes the
+        snapshot2D key into master_update so the stream picks it up on the
+        next cycle.
+
+        snapshot_selection: list of class indices included in the snapshot.
+        snapshot_iteration: the 2D classification iteration to snapshot.
+        """
+        if self.jobmodel is None:
+            print_error("jobmodel is none")
+            return False
+        master_update       = self.jobmodel.master_update
+        particle_sets_stats = self.jobmodel.particle_sets_stats
+        if not "particle_sets" in particle_sets_stats:
+            particle_sets_stats["particle_sets"] = []
+        setid    = len(particle_sets_stats["particle_sets"]) + 1
+        projfile = "snapshot_" + str(setid) + ".simple"
+        newset = {
+            "id"       : setid,
+            "name"     : "particle set " + str(setid),
+            "type"     : "snapshot",
+            "filename" : projfile
+        }
+        particle_sets_stats["particle_sets"].insert(0, newset)
+        master_update["snapshot2D"] = {
+            "id"        : setid,
+            "iteration" : snapshot_iteration,
+            "selection" : snapshot_selection,
+            "filename"  : projfile
+        }
+        self.jobmodel.master_update       = master_update
+        self.jobmodel.particle_sets_stats = particle_sets_stats
+        self.jobmodel.save()
+        return True
+    
+    def selection_classification_2D(self, final_deselection, final_selection_ptcls):
+        """Record the final 2D-classification particle selection and persist it to disk.
+
+        Appends a new final-selection entry to particle_sets_stats and writes
+        the deselected particle indices to a per-set text file under self.absdir.
+
+        final_deselection:     list of particle indices rejected by the user.
+        final_selection_ptcls: count of particles retained in the final selection.
+        """
+        if self.jobmodel is None:
+            print_error("jobmodel is none")
+            return False
+        particle_sets_stats = self.jobmodel.particle_sets_stats
+        if not "particle_sets" in particle_sets_stats:
+            particle_sets_stats["particle_sets"] = []
+        setid    = len(particle_sets_stats["particle_sets"]) + 1
+        deselfile = "particle_set_" + str(setid) + "_deselected.txt"
+        newset = {
+            "id"       : setid,
+            "name"     : "particle set " + str(setid),
+            "type"     : "final",
+            "filename" : deselfile,
+            "nptcls"   : final_selection_ptcls,
+            "ctime"    : strftime("%Y/%m/%d %H:%M", gmtime())
+        }
+        particle_sets_stats["particle_sets"].insert(0, newset)
+        with open(os.path.join(self.absdir, deselfile), "w") as f:
+            for deselected in final_deselection:
+                f.write(str(deselected) + '\n')
+        self.jobmodel.particle_sets_stats = particle_sets_stats 
+        self.jobmodel.save()
+        return True
+

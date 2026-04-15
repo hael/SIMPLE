@@ -1,5 +1,6 @@
 {% load static %}
 {% load humanize %}
+{% load timestamps %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -55,8 +56,8 @@
                             <div class="flex-1 font-bold">
                                 {{ particle_set.name }}
                             </div>
-                            {% if "ctime" in particle_set %}
-                                <div>{{ particle_set.ctime }}</div>
+                            {% if "time" in particle_set %}
+                                <div>{{ particle_set.time|print_timestamp }}</div>
                             {% else %}
                                 <div>running</div>
                             {% endif %}
@@ -71,7 +72,7 @@
                                 {% endif %}
                             </div>
                             <div class="flex flex-row">
-                                {% if "ctime" in particle_set %}
+                                {% if "time" in particle_set %}
                                     <div title="link to workspace" class="h-[16px] w-[16px] scale-75 text-nice4header cursor-pointer">
                                         {% if "filename" in particle_set and "id" in particle_set %}
                                             <form method="POST" action={% url 'nice_lite:link_stream_particle_set' jobid particle_set.id particle_set.filename particle_set.type %} target="_top">

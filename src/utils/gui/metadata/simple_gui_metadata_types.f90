@@ -58,6 +58,7 @@ enum, bind(c)
   ! pool 2D stage
   enumerator :: GUI_METADATA_STREAM_POOL2D_TYPE           ! 29
   enumerator :: GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE     ! 30
+  enumerator :: GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE  ! 31
 end enum
 
 end module simple_gui_metadata_types

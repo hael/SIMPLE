@@ -47,6 +47,8 @@ module simple_gui_assembler_tester
                                      GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE, &
                                      GUI_METADATA_STREAM_POOL2D_TYPE,                     &
                                      GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE,               &
+                                     gui_metadata_stream_pool2D_snapshot,                 &
+                                     GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE,            &
                                      gui_metadata_cavg2D,                                 &
                                      sprite_sheet_pos
   use simple_gui_assembler,    only: gui_assembler
@@ -410,6 +412,7 @@ contains
   subroutine test_pool2D()
     type(gui_assembler)                              :: assembler
     type(gui_metadata_stream_pool2D)                 :: meta_pool2D
+    type(gui_metadata_stream_pool2D_snapshot)        :: meta_snapshot
     type(gui_metadata_cavg2D),           allocatable :: meta_latest_cavgs2D(:)
     type(string)                                     :: json_str
     integer                                          :: i
@@ -417,6 +420,8 @@ contains
     call meta_pool2D%new(GUI_METADATA_STREAM_POOL2D_TYPE)
     call meta_pool2D%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
                          particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5)
+    call meta_snapshot%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
+    call meta_snapshot%set(id=3, snapshot_filename=string('snapshot_3.simple'), snapshot_nptcls=16000)
     allocate(meta_latest_cavgs2D(3))
     do i=1, size(meta_latest_cavgs2D)
       call meta_latest_cavgs2D(i)%new(GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE)
@@ -429,7 +434,7 @@ contains
                                     idx=3, sprite=sprite_sheet_pos(x=66.6, y=0.0, h=256, w=768), i=3, i_max=3)
     call assembler%new(0)
     call assert_true(assembler%is_associated(), 'assembler json associated')
-    call assembler%assemble_stream_pool2D(meta_pool2D, meta_latest_cavgs2D)
+    call assembler%assemble_stream_pool2D(meta_pool2D, meta_latest_cavgs2D, meta_snapshot)
     json_str = assembler%to_string()
     call assert_true(json_str%strlen() > 0, 'json length greater than 0')
     call assembler%kill()

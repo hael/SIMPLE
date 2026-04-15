@@ -603,15 +603,6 @@ contains
                 conv_score    = os%get(1,'SCORE')
                 ! new
                 last_complete_iter = it
-                if(allocated(pool_jpeg_map)) deallocate(pool_jpeg_map)
-                if(allocated(pool_jpeg_pop)) deallocate(pool_jpeg_pop)
-                if(allocated(pool_jpeg_res)) deallocate(pool_jpeg_res)
-                pool_jpeg_pop = pool_proj%os_cls2D%get_all_asint('pop')
-                pool_jpeg_res = pool_proj%os_cls2D%get_all('res')
-                allocate(pool_jpeg_map, mold=pool_jpeg_pop)
-                do i=1, size(pool_jpeg_map)
-                    pool_jpeg_map(i) = i
-                end do
                 current_jpeg = CAVGS_ITER_FBODY//int2str_pad(it, 3)//'.jpg'
                 current_jpeg_ntiles  = pool_proj%os_cls2D%get_noris()
                 current_jpeg_ntilesx = floor(sqrt(real(current_jpeg_ntiles)))
@@ -669,6 +660,17 @@ contains
                     ! sigma_est=global, nothing to do
                 endif
             endif
+            ! update thumbnail metadata
+            if(allocated(pool_jpeg_map)) deallocate(pool_jpeg_map)
+            if(allocated(pool_jpeg_pop)) deallocate(pool_jpeg_pop)
+            if(allocated(pool_jpeg_res)) deallocate(pool_jpeg_res)
+            pool_jpeg_pop = pool_proj%os_cls2D%get_all_asint('pop')
+            pool_jpeg_res = pool_proj%os_cls2D%get_all('res')
+            allocate(pool_jpeg_map, mold=pool_jpeg_pop)
+            do i=1, size(pool_jpeg_map)
+                pool_jpeg_map(i) = i
+            end do
+            ! estimate resolution
             call frcs%read(string(POOL_DIR)//FRCS_FILE)
             current_resolution = frcs%estimate_lp_for_align()
             write(logfhandle,'(A,F5.1)')'>>> CURRENT POOL RESOLUTION: ',current_resolution

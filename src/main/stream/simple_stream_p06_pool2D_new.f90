@@ -1,14 +1,48 @@
-!@descr: task 6 in the stream pipeline: global 2D refinement of pooled particles from the sieving
+!@descr: stream pipeline stage 6 — global 2D classification of pooled particles from sieving
+!==============================================================================
+! MODULE: simple_stream_p06_pool2D_new
+!
+! PURPOSE:
+!   Drives the continuous global 2D classification loop for the streaming
+!   pipeline.  Watches for completed particle-sieve sets, imports them into
+!   a growing pool, runs iterative 2D clustering, and broadcasts progress
+!   and class-average metadata to the GUI via the master message queue.
+!   Also responds to live GUI updates: mask-diameter changes and snapshot-2D
+!   write requests received from the stream master.
+!
+! ENTRY POINT:
+!   stream_p06_pool2D%execute(cline) — called by the stream master
+!
+! INTERNAL SUBROUTINES:
+!   unpause_pool          — clear the pause flag and log resumption
+!   import_sets_into_pool — read new sieve sets into the pool; initialise
+!                           clustering parameters on first import
+!   cleanup4restart       — remove stale files when restarting an existing job
+!   send_meta             — broadcast pool-2D progress metadata to the GUI
+!   send_meta_snapshot2D  — broadcast snapshot metadata to the GUI
+!   send_cavg2D_meta      — serialise and send one class-average sprite tile
+!   send_cavgs2D          — iterate all current class averages and send each
+!   sigterm_handler       — SIGTERM handler: sets l_terminate for graceful exit
+!
+! DEPENDENCIES:
+!   simple_stream_api, simple_stream2D_state, simple_stream_pool2D_utils,
+!   simple_stream_mq_defs, simple_gui_metadata_api, unix
+!==============================================================================
 module simple_stream_p06_pool2D_new
 use unix,                        only: SIGTERM
 use simple_stream_api
+use simple_stream2D_state,       only: snapshot_iteration, snapshot_selection, snapshot_last_nptcls
 use simple_stream_pool2D_utils
 use simple_stream_mq_defs,       only: mq_stream_master_in, mq_stream_master_out
-use simple_gui_metadata_api,     only: gui_metadata_cavg2D,                                    &
-                                       gui_metadata_stream_pool2D, &
-                                       sprite_sheet_pos, &
-                                       GUI_METADATA_STREAM_POOL2D_TYPE,              &
-                                       GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE
+use simple_gui_metadata_api,     only: gui_metadata_cavg2D,                      &
+                                       gui_metadata_stream_pool2D,               &
+                                       gui_metadata_stream_pool2D_snapshot,       &
+                                       gui_metadata_stream_update,               &
+                                       sprite_sheet_pos,                         &
+                                       GUI_METADATA_STREAM_POOL2D_TYPE,          &
+                                       GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE,    &
+                                       GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE, &
+                                       GUI_METADATA_STREAM_UPDATE_TYPE
 implicit none
 
 public :: stream_p06_pool2D
@@ -27,28 +61,25 @@ contains
     subroutine exec_stream_p06_pool2D( self, cline )
         class(stream_p06_pool2D), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        logical,                      parameter :: SIGMAS_IN_PROJECT = .true. ! temporary flag to turn on/off getting sigma file location friom project whilst in development
-        character(len=:),           allocatable :: meta_buffer
-        type(parameters)                      :: params
-        type(json_value), pointer             :: latest_cls2D
-        type(json_core)                       :: json
-        type(rec_list)                        :: setslist
-        type(stream_watcher)                  :: project_buff
-        type(sp_project)                      :: spproj_glob, spproj_tmp
-        type(oris)                            :: moldiamori
-        type(chunk_rec)                       :: crec_mskdiam
-        type(rec_iterator)                    :: it_mskdiam
-        type(gui_metadata_cavg2D)             :: meta_cavg2D        
-        type(gui_metadata_stream_pool2D)      :: meta_pool2D
-        character(kind=CK,len=:), allocatable :: snapshot_filename
-        type(string),             allocatable :: projects(:)
-        logical,                  allocatable :: l_imported(:)
-        type(string)                          :: str_avgs_jpeg, str_avgs_mrc
-        integer(kind=dp) :: time_last_import, time_last_iter
-        integer :: i, iter, nprojects, nimported, nptcls_glob=0, nsets_imported, pool_iter, iter_last_import
-        integer :: xtile, ytile, mskdiam_update, extra_pause_iters, last_sent_iter
-        logical :: l_pause, l_params_updated, found, l_terminate, l_once
-        real    :: mskdiam
+        character(len=:),           allocatable   :: meta_buffer
+        type(parameters)                          :: params
+        type(rec_list)                            :: setslist
+        type(stream_watcher)                      :: project_buff
+        type(sp_project)                          :: spproj_glob, spproj_tmp
+        type(chunk_rec)                           :: crec_mskdiam
+        type(rec_iterator)                        :: it_mskdiam
+        type(gui_metadata_stream_update)          :: meta_update
+        type(gui_metadata_cavg2D)                 :: meta_cavg2D
+        type(gui_metadata_stream_pool2D)          :: meta_pool2D
+        type(gui_metadata_stream_pool2D_snapshot) :: meta_snapshot
+        type(string),               allocatable   :: projects(:)
+        logical,                    allocatable   :: l_imported(:)
+        type(string)                              :: snapshot_filename, snapshot_dir
+        integer(kind=dp)                          :: time_last_import
+        integer                                   :: i, nprojects, nimported, nptcls_glob=0, pool_iter, iter_last_import
+        integer                                   :: mskdiam_update, extra_pause_iters, last_sent_iter
+        integer                                   :: snapshot_id, last_snapshot_id
+        logical                                   :: l_pause, l_terminate, l_once
         l_once      = .true.
         l_terminate = .false.
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
@@ -63,10 +94,9 @@ contains
         call cline%set('sigma_est',    'global')
         call cline%set('cls_init',     'rand')
         call cline%set('numlen',       5)
-        ! if( .not. cline%defined('walltime')  ) call cline%set('walltime',  29*60) ! 29 minutes
-        if( .not. cline%defined('dynreslim') ) call cline%set('dynreslim', 'yes')
-        if( .not.cline%defined('center')     ) call cline%set('center',    'yes')
-        if( .not.cline%defined('ncls')       ) call cline%set('ncls',       200)
+        if( .not.cline%defined('dynreslim') ) call cline%set('dynreslim', 'yes')
+        if( .not.cline%defined('center')    ) call cline%set('center',    'yes')
+        if( .not.cline%defined('ncls')      ) call cline%set('ncls',       200)
         ! restart
         call cleanup4restart
         ! generate own project file if projfile isnt set
@@ -78,8 +108,10 @@ contains
             call spproj_glob%write
         endif
         ! initialise metadata
+        call meta_update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
         call meta_pool2D%new(GUI_METADATA_STREAM_POOL2D_TYPE)
         call meta_cavg2D%new(GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE)
+        call meta_snapshot%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
         call send_meta(string('initialising'))
         call create_stream_project(spproj_glob, cline, string('pool2D'))
         ! master parameters
@@ -95,24 +127,22 @@ contains
         ! project watcher
         project_buff = stream_watcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         ! Infinite loop
-        iter              = 0
         last_sent_iter    = 0
         nprojects         = 0        ! # of projects per iteration
         nimported         = 0        ! # of sets per iteration
         nptcls_glob       = 0        ! global # of particles present in the pool
         l_pause           = .false.  ! pause clustering
-        nsets_imported    = 0        ! Global # of sets imported
         pool_iter         = 0
         time_last_import  = huge(time_last_import)
         iter_last_import  = -1       ! Pool iteration # when set(s) last imported
         extra_pause_iters = 0        ! extra iters before pause
+        last_snapshot_id  = 0
         do
             if( file_exists(TERM_STREAM) .or. l_terminate ) then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
-            iter = iter + 1
             ! detection of new projects
             call project_buff%watch(nprojects, projects)
             if( nprojects > 0 )then
@@ -132,7 +162,7 @@ contains
                     write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', params%mskdiam
                     call spproj_tmp%kill()
                     l_once = .false.
-                end if 
+                end if
             end if
             ! check on progress, updates particles & alignment parameters
             ! TODO: class remapping
@@ -153,9 +183,6 @@ contains
                 call unpause_pool
             endif
             l_imported = setslist%get_included_flags()
-            nsets_imported = count(l_imported)
-           ! call update_user_params2D(params, cline, l_params_updated, nice_comm%update_arguments)
-            if( l_params_updated ) call unpause_pool
             ! pause?
             if( (pool_iter >= iter_last_import+PAUSE_NITERS+extra_pause_iters) .or.&
                 & (time8()-time_last_import>PAUSE_TIMELIMIT) )then
@@ -175,10 +202,6 @@ contains
                 ! initiates new iteration
                 pool_iter = get_pool_iter()
                 call iterate_pool(params)
-                if( get_pool_iter() > pool_iter )then
-               !     nice_comm%stat_root%user_input = .true.
-                    time_last_iter = time8()
-                endif
                 call send_meta(string('finding and classifying particles'))
             endif
             ! http stats
@@ -189,36 +212,40 @@ contains
                     last_sent_iter = last_complete_iter
                 endif
             endif
-            !//TODO-snapshot generation and mask update
-            ! if( http_communicator%arg_associated() .and. last_complete_iter .gt. 0) then
-            !     ! project snapshot if requested
-            !     call http_communicator%get_json_arg("snapshot_iteration", snapshot_iteration, found) 
-            !     if(found) then
-            !         call http_communicator%get_json_arg("snapshot_selection", snapshot_selection, found)
-            !         if(found) then
-            !             call http_communicator%get_json_arg("snapshot_filename", snapshot_filename, found)
-            !             if(found) then
-            !                 call write_project_stream2D(params,&
-            !                     &snapshot_projfile=string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' //snapshot_filename,&
-            !                     &snapshot_starfile_base=string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // swap_suffix(snapshot_filename, "", ".simple") // '/' // swap_suffix(snapshot_filename, "", ".simple"),&
-            !                     &optics_dir=params%optics_dir)
-            !                 call http_communicator%add_to_json("snapshot_filename", snapshot_filename)
-            !                 call http_communicator%add_to_json("snapshot_nptcls",   snapshot_last_nptcls)
-            !                 call http_communicator%add_to_json("snapshot_time",     stream_datestr())
-            !             endif
-            !         endif
-            !     endif
-            !     ! update mskdiam if requested
-            !     call http_communicator%get_json_arg("mskdiam", mskdiam_update, found) 
-            !     if(found) then
-            !         call update_mskdiam(params, mskdiam_update)
-            !         if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
-            !         time_last_import = time8()
-            !         call unpause_pool()
-            !     endif
-            !     call http_communicator%destroy_arg()
-            ! endif
-         !   call http_communicator%send_jobstats()
+            ! update params
+            if( mq_stream_master_out%is_active() ) then
+                if( mq_stream_master_out%receive(meta_buffer) ) then
+                    if( allocated(meta_buffer) ) then
+                        ! add message back to queue for other processes
+                        call mq_stream_master_out%send(meta_buffer)
+                        ! deserialise buffer into meta_update
+                        meta_update    = transfer(meta_buffer, meta_update)
+                        mskdiam_update = nint(meta_update%get_mskdiam2D_update())
+                        if( mskdiam_update > 0 .and. mskdiam_update /= nint(params%mskdiam) ) then
+                            call update_mskdiam(params, mskdiam_update)
+                            if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
+                            time_last_import = time8()
+                            call unpause_pool()
+                        endif
+                        if( meta_update%has_snapshot2D_update() ) then
+                            call meta_update%get_snapshot2D_update(snapshot_id, snapshot_iteration, &
+                                                                   snapshot_selection, snapshot_filename)                                  
+                            if( snapshot_id > last_snapshot_id ) then
+                                ! build the snapshot directory path once
+                                snapshot_dir = string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // &
+                                              swap_suffix(snapshot_filename, "", ".simple")
+                                call write_project_stream2D(params,                                                          &
+                                    snapshot_projfile      = snapshot_dir // '/' // snapshot_filename,                       &
+                                    snapshot_starfile_base = snapshot_dir // '/' // swap_suffix(snapshot_filename, "", ".simple"), &
+                                    optics_dir             = params%optics_dir)
+                                last_snapshot_id = snapshot_id
+                                call send_meta_snapshot2D()
+                            end if
+                            if( allocated(snapshot_selection) ) deallocate(snapshot_selection)
+                        endif
+                    endif
+                endif
+            endif
             ! Wait
             call sleep(WAITTIME)
         enddo
@@ -249,15 +276,11 @@ contains
                 type(chunk_rec)                :: crec
                 logical, allocatable :: l_processed(:), l_imported(:)
                 integer :: nsets2import, iset, nptcls2import, nmics2import, nmics, nptcls
-                integer :: i, fromp, fromp_prev, imic, ind, iptcl, jptcl, jmic, nptcls_sel
+                integer :: i, fromp, imic, ind, iptcl, jptcl, jmic, nptcls_sel, nptcls_sel_tot
                 nimported = 0
                 if( setslist%size()== 0 ) return
-                if( nptcls_glob == 0 )then
-                    ! first import
-                else
-                    ! at other times only import when the pool is free
-                    if( .not.is_pool_available() ) return
-                endif
+                ! at other times only import when the pool is free
+                if( nptcls_glob > 0 .and. .not.is_pool_available() ) return
                 l_processed = setslist%get_processed_flags()
                 l_imported  = setslist%get_included_flags()
                 nsets2import = count(l_processed(:).and.(.not.l_imported(:)))
@@ -298,8 +321,9 @@ contains
                     fromp = pool%os_stk%get_top(nmics)+1
                 endif
                 ! parameters transfer
-                imic = nmics
-                it   = setslist%begin()
+                imic           = nmics
+                nptcls_sel_tot = 0
+                it             = setslist%begin()
                 do iset = 1,setslist%size()
                     call it%get(crec)
                     if( crec%included .or. (.not.crec%processed .or. crec%busy) )then
@@ -307,7 +331,6 @@ contains
                         call it%next()
                         cycle
                     endif
-                    fromp_prev = fromp
                     ind = 1
                     do jmic = 1,spprojs(iset)%os_mic%get_noris()
                         imic = imic + 1
@@ -334,7 +357,8 @@ contains
                         ind   = ind   + nptcls
                         fromp = fromp + nptcls
                     enddo
-                    nptcls_sel = spprojs(iset)%os_ptcl2D%get_noris(consider_state=.true.)
+                    nptcls_sel     = spprojs(iset)%os_ptcl2D%get_noris(consider_state=.true.)
+                    nptcls_sel_tot = nptcls_sel_tot + nptcls_sel
                     ! display
                     write(logfhandle,'(A,I6,A,I6)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM SET ',crec%id
                     call flush(logfhandle)
@@ -359,12 +383,8 @@ contains
                     endif
                     i         = i+1
                     ind       = crec%id
-                    if(SIGMAS_IN_PROJECT) then
-                        call spprojs(iset)%read_segment('out', crec%projfile)
-                        call spprojs(iset)%get_sigma2(sigmas(i))
-                    else
-                        sigmas(i) = params%dir_target//'/set_'//int2str(ind)//'/set_'//int2str(ind)//STAR_EXT
-                    endif
+                    call spprojs(iset)%read_segment('out', crec%projfile)
+                    call spprojs(iset)%get_sigma2(sigmas(i))
                     ! move iterator
                     call it%next()
                 enddo
@@ -382,7 +402,7 @@ contains
                     call init_pool_clustering(params, cline, spproj_glob, string(MICSPPROJ_FNAME), reference_generation=.false.)
                 endif
                 ! global count
-                nptcls_glob = nptcls_glob + nptcls_sel
+                nptcls_glob = nptcls_glob + nptcls_sel_tot
                 ! cleanup
                 do iset = 1,setslist%size()
                     call spprojs(iset)%kill
@@ -396,7 +416,7 @@ contains
             ! Remove previous files from folder to restart
             subroutine cleanup4restart
                 type(string) :: cwd_restart, str_dir
-                logical :: l_restart
+                logical      :: l_restart
                 call simple_getcwd(cwd_restart)
                 l_restart = .false.
                 if(cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir'))) then
@@ -407,12 +427,11 @@ contains
                     if( .not.file_exists(cline%get_carg('dir_exec')) )then
                         str_dir = cline%get_carg('dir_exec')
                         THROW_HARD('Previous directory does not exists: '//str_dir%to_char())
-                        call str_dir%kill
                     endif
                     l_restart = .true.
                 endif
                 if( l_restart ) then
-                    write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB", cwd_restart%to_char()
+                    write(logfhandle,'(A,A)') ">>> RESTARTING EXISTING JOB", cwd_restart%to_char()
                     if(cline%defined('dir_exec')) call cline%delete('dir_exec')
                     call del_file(micspproj_fname)
                     call cleanup_root_folder
@@ -437,6 +456,19 @@ contains
                 endif
             end subroutine send_meta
 
+            ! Broadcast snapshot metadata to the GUI after writing a classification snapshot.
+            subroutine send_meta_snapshot2D()
+                call meta_snapshot%set(                                           &
+                    id                = last_snapshot_id,                         &
+                    snapshot_filename = snapshot_dir // '/' // snapshot_filename, &
+                    snapshot_nptcls   = snapshot_last_nptcls)
+                if( meta_snapshot%assigned() .and. mq_stream_master_in%is_active() ) then
+                    call meta_snapshot%serialise(meta_buffer)
+                    call mq_stream_master_in%send(meta_buffer)
+                endif
+            end subroutine send_meta_snapshot2D
+
+            ! Serialise one class-average sprite tile and send it to the GUI.
             subroutine send_cavg2D_meta( my_path, my_stk, my_i, my_i_max, my_xtile, my_ytile )
                 type(string), intent(in) :: my_path, my_stk
                 integer,      intent(in) :: my_i, my_i_max, my_xtile, my_ytile
@@ -463,10 +495,10 @@ contains
                 endif
             end subroutine send_cavg2D_meta
 
+            ! Send metadata for every current class average to the GUI.
             subroutine send_cavgs2D()
                 type(string) :: my_path, my_stk, my_cwd
-                integer :: my_i, my_xtile, my_ytile, my_n
-                integer :: my_xtiles
+                integer      :: my_i, my_xtile, my_ytile, my_n, my_xtiles
                 call simple_getcwd(my_cwd)
                 my_xtiles = get_pool_cavgs_jpeg_ntilesx()
                 if(allocated(pool_jpeg_map)) then
@@ -484,14 +516,14 @@ contains
                         endif
                     end do
                 end if
-            end subroutine send_cavgs2D   
+            end subroutine send_cavgs2D
 
             ! Called asynchronously on SIGTERM. Exits immediately after logging.
             subroutine sigterm_handler()
                 write(logfhandle, '(A)') 'SIGTERM RECEIVED'
                 l_terminate = .true.
             end subroutine sigterm_handler
-            
+
     end subroutine exec_stream_p06_pool2D
 
 end module simple_stream_p06_pool2D_new
