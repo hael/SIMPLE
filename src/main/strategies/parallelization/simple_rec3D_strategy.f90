@@ -132,9 +132,12 @@ contains
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
+        type(commander_volassemble) :: xvolassemble
+        type(cmdline)               :: cline_volassemble
+        type(string)                :: volname, vol_in
         type(string)         :: fname
         integer, allocatable :: pinds(:)
-        integer              :: nptcls2update
+        integer              :: nptcls2update, state
         ! Sampling
         if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds)
@@ -152,7 +155,28 @@ contains
         if( params%l_polar) then
             call calc_polar_refs( params, build, cline, nptcls2update, pinds )
         else
+            call cline%set('force_volassemble', 'yes')
             call calc_3Drec( params, build, cline, nptcls2update, pinds )
+            cline_volassemble = cline
+            call cline_volassemble%set('prg',  'volassemble')
+            call cline_volassemble%set('nthr', params%nthr)
+            do state = 1, params%nstates
+                volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+                if( cline_volassemble%defined('vol'//int2str(state)) )then
+                    vol_in = cline_volassemble%get_carg('vol'//int2str(state))
+                    if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
+                        if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
+                    endif
+                endif
+            end do
+            call xvolassemble%execute(cline_volassemble)
+            do state = 1, params%nstates
+                volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+                params%vols(state) = volname
+                call cline%set('vol'//int2str(state), volname)
+            end do
+            call cline%delete('force_volassemble')
+            call cline_volassemble%kill
         endif
         if( allocated(pinds) ) deallocate(pinds)
         if( params%l_ml_reg ) call fname%kill
@@ -238,11 +262,22 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(commander_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
+        type(string)                :: volname, vol_in
+        integer                     :: state
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         ! Assemble volumes on master
         cline_volassemble = cline
         call cline_volassemble%set('prg',  'volassemble')
         call cline_volassemble%set('nthr', self%nthr_master)
+        do state = 1, params%nstates
+            volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+            if( cline_volassemble%defined('vol'//int2str(state)) )then
+                vol_in = cline_volassemble%get_carg('vol'//int2str(state))
+                if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
+                    if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
+                endif
+            endif
+        end do
         call xvolassemble%execute(cline_volassemble)
         call cline_volassemble%kill
     end subroutine distr_execute

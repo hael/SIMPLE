@@ -10,7 +10,7 @@ use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
 implicit none
 
-public :: init_rec, prep_imgs4rec, update_rec, finalize_rec, calc_3Drec, calc_polar_refs
+public :: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs, calc_3Drec, calc_polar_refs
 private
 #include "simple_local_flags.inc"
 
@@ -104,8 +104,9 @@ contains
             call update_rec(params, build, batchsz, pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
             if( DEBUG ) t_grid = t_grid + toc(t)
         end do
-        ! Normalize volumes and deallocate temporary objects
-        call finalize_rec(params, build, cline, fpls)
+        ! Write partial reconstructions and clean up reconstruction objects
+        call write_partial_recs(params, build, cline, fpls)
+        call finalize_rec_objs(params, build)
         if( DEBUG .and. (params%part==1) )then
             t_tot = toc(t0)
             print *,'Init          : ', t_init
@@ -199,13 +200,13 @@ contains
     end subroutine update_rec
 
     !> volumetric 3d reconstruction
-    subroutine finalize_rec( params, build, cline, fplanes )
+    subroutine write_partial_recs( params, build, cline, fplanes )
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters),              intent(inout) :: params
         class(builder),                 intent(inout) :: build
         class(cmdline),                 intent(inout) :: cline
         type(fplane_type), allocatable, intent(inout) :: fplanes(:)
-        integer :: i
+        integer :: i, s, numlen_part
         ! deallocate convenience objects
         do i = 1,size(fplanes)
             if( allocated(fplanes(i)%cmplx_plane) ) deallocate(fplanes(i)%cmplx_plane)
@@ -213,139 +214,28 @@ contains
         end do
         deallocate(fplanes)
         call dealloc_imgarr(build%img_pad_heap)
-        ! normalise structure factors
-        call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
-        call norm_struct_facts(params, build, cline)
-        ! destruct
-        call forget_ft_maps
-        call killrecvols(params, build)
-    end subroutine finalize_rec
-
-    subroutine norm_struct_facts( params, build, cline )
-        use simple_gridding, only: prep3D_inv_instrfun4mul
-        use simple_image,    only: image
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        class(cmdline),    intent(inout) :: cline
-        type(string) :: recname, volname, volname_prev, volname_prev_even
-        type(string) :: volname_prev_odd, str_state, str_iter, fsc_txt_file, eonames(2)
-        real, allocatable :: fsc(:)
-        type(image) :: vol_prev_even, vol_prev_odd, gridcorr_img
-        integer     :: s, find4eoavg, ldim_pd(3), ldim(3)
-        real        :: res05s(params%nstates), res0143s(params%nstates)
-        real        :: weight_prev, update_frac_trail_rec
-        ! init
-        ldim    = [params%box_crop,  params%box_crop,  params%box_crop]
-        ldim_pd = [params%box_croppd,params%box_croppd,params%box_croppd]
-        call build%vol%new(ldim,params%smpd_crop)
-        call build%vol2%new(ldim,params%smpd_crop)
-        res0143s = 0.
-        res05s   = 0.
-        ! read in previous reconstruction when trail_rec==yes
-        update_frac_trail_rec = 1.0
-        if( .not. params%l_distr_worker .and. params%l_trail_rec )then
-            if( cline%defined('ufrac_trec') )then
-                update_frac_trail_rec = params%ufrac_trec
-            else
-                update_frac_trail_rec = build%spproj_field%get_update_frac()
-            endif
-        endif
-        ! Prep for correction of the shape of the interpolator
-        gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params%smpd_crop)
-        ! cycle through states
+        ! write partial reconstructions for downstream volassemble
+        numlen_part = max(1, params%numlen)
         do s=1,params%nstates
             if( build%spproj_field%get_pop(s, 'state') == 0 )then
-                ! empty state
                 build%fsc(s,:) = 0.
                 cycle
             endif
             call build%eorecvols(s)%compress_exp
-            if( params%l_distr_worker )then
-                call build%eorecvols(s)%write_eos(string(VOL_FBODY)//int2str_pad(s,2)//'_part'//int2str_pad(params%part,params%numlen))
-            else
-                ! global volume name update
-                recname = VOL_FBODY//int2str_pad(s,2)
-                volname = recname//MRC_EXT
-                eonames(1) = recname//'_even'//MRC_EXT
-                eonames(2) = recname//'_odd'//MRC_EXT
-                if( params%l_ml_reg )then
-                    ! the sum is done after regularization
-                else
-                    call build%eorecvols(s)%sum_eos
-                endif
-                if( params%l_trail_rec )then
-                    if( .not. cline%defined('vol'//int2str(s)) ) THROW_HARD('vol'//int2str(s)//'required in norm_struct_facts cline when trail_rec==yes')
-                    volname_prev      = cline%get_carg('vol'//int2str(s))
-                    volname_prev_even = add2fbody(volname_prev, MRC_EXT, '_even')
-                    volname_prev_odd  = add2fbody(volname_prev, MRC_EXT, '_odd')
-                    if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//volname_prev_even%to_char()//' does not exist!')
-                    if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//volname_prev_odd%to_char()//' does not exist!')
-                    call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
-                    call vol_prev_odd %read_and_crop(volname_prev_odd,  params%smpd, params%box_crop, params%smpd_crop)
-                    if( allocated(fsc) ) deallocate(fsc)
-                    call build%eorecvols(s)%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
-                    call build%eorecvols(s)%sampl_dens_correct_eos(s, eonames(1), eonames(2), find4eoavg, fsc)
-                else 
-                    call build%eorecvols(s)%sampl_dens_correct_eos(s, eonames(1), eonames(2), find4eoavg)
-                endif
-                str_state = int2str_pad(s,2)
-                if( cline%defined('which_iter') )then
-                    str_iter     = int2str_pad(params%which_iter,3)
-                    fsc_txt_file = 'RESOLUTION_STATE'//str_state%to_char()//'_ITER'//str_iter%to_char()
-                else
-                    fsc_txt_file = 'RESOLUTION_STATE'//str_state%to_char()
-                endif
-                call build%eorecvols(s)%write_fsc2txt(fsc_txt_file)
-                if( params%l_ml_reg )then
-                    call build%eorecvols(s)%sum_eos
-                endif
-                call build%eorecvols(s)%get_res(res05s(s), res0143s(s))
-                call build%eorecvols(s)%sampl_dens_correct_sum(build%vol)
-                ! need to put the sum back at lowres for the eo pairs
-                call build%vol%fft
-                call build%vol2%zero_and_unflag_ft
-                call build%vol2%read(eonames(1))
-                call build%vol2%fft()
-                call build%vol2%insert_lowres(build%vol, find4eoavg)
-                call build%vol2%ifft()
-                call build%vol2%mul(gridcorr_img)
-                call build%vol2%write(eonames(1), del_if_exists=.true.)
-                call build%vol2%zero_and_unflag_ft
-                call build%vol2%read(eonames(2))
-                call build%vol2%fft()
-                call build%vol2%insert_lowres(build%vol, find4eoavg)
-                call build%vol2%ifft()
-                call build%vol2%mul(gridcorr_img)
-                call build%vol2%write(eonames(2), del_if_exists=.true.)
-                ! merged volume
-                call build%vol%ifft
-                call build%vol%mul(gridcorr_img)
-                call build%vol%write(volname, del_if_exists=.true.)
-                if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
-                    call build%vol%read(eonames(1))  ! even current
-                    call build%vol2%read(eonames(2)) ! odd current
-                    weight_prev = 1. - update_frac_trail_rec
-                    call vol_prev_even%mul(weight_prev)
-                    call vol_prev_odd%mul (weight_prev)
-                    call build%vol%mul(update_frac_trail_rec)
-                    call build%vol2%mul(update_frac_trail_rec)
-                    call build%vol%add(vol_prev_even)
-                    call build%vol2%add(vol_prev_odd)
-                    call build%vol%write(eonames(1))  ! even trailed
-                    call build%vol2%write(eonames(2)) ! odd trailed
-                    call vol_prev_even%kill
-                    call vol_prev_odd%kill
-                endif
-                call build%vol%fft()
-                call build%vol2%fft()
-                ! updating command-line and parameters objects accordingly (needed in multi-stage wflows)
-                params%vols(s) = volname
+            call build%eorecvols(s)%write_eos(string(VOL_FBODY)//int2str_pad(s,2)//'_part'//int2str_pad(params%part,numlen_part))
+            if( .not. cline%defined('force_volassemble') )then
+                params%vols(s) = string(VOL_FBODY)//int2str_pad(s,2)//MRC_EXT
                 call cline%set('vol'//int2str(s), params%vols(s))
             endif
         end do
-        call build%vol2%kill
-        call gridcorr_img%kill
-    end subroutine norm_struct_facts
+    end subroutine write_partial_recs
+
+    subroutine finalize_rec_objs( params, build )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        call forget_ft_maps
+        call killrecvols(params, build)
+    end subroutine finalize_rec_objs
 
     ! generate polar references, for testing only
     subroutine calc_polar_refs( params, build, cline, nptcls, pinds )

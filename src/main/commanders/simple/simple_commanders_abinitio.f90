@@ -878,6 +878,7 @@ contains
             ! update point-group symmetry
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
+            call prep_class_command_lines(params, cline, params%projfile)
             ! stash away files
             ! identfy files that stay
             allocate(files_that_stay(7))

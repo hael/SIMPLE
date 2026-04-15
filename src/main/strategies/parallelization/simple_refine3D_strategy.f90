@@ -217,6 +217,7 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         use simple_commanders_euclid,  only: commander_calc_group_sigmas
         use simple_commanders_prob,    only: commander_prob_align, commander_prob_align_neigh
+        use simple_commanders_rec_distr, only: commander_volassemble
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -225,9 +226,12 @@ contains
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_prob_align)        :: xprob_align
         type(commander_prob_align_neigh)  :: xprob_align_neigh
+        type(commander_volassemble)       :: xvolassemble
         type(cmdline)                     :: cline_prob_align
+        type(cmdline)                     :: cline_volassemble
         integer                           :: state
         logical                           :: l_prob_state_mode, l_prob_neigh_mode
+        type(string)                      :: volname, vol_in
         601 format(A,1X,F12.3)
         call self%conv%print_iteration(params%which_iter)
         ! communicate iteration counters
@@ -277,7 +281,31 @@ contains
             if( cline%defined('lp') ) params%lp = cline%get_rarg('lp')
         endif
         ! main refinement step
+        if( trim(params%volrec) .eq. 'yes' ) call cline%set('force_volassemble', 'yes')
         call refine3D_exec(params, build, cline, params%which_iter, converged)
+        if( trim(params%volrec) .eq. 'yes' )then
+            cline_volassemble = cline
+            call cline_volassemble%set('which_iter', params%which_iter)
+            call cline_volassemble%set('nthr',       params%nthr)
+            call cline_volassemble%set('combine_eo', params%combine_eo)
+            if( params%l_update_frac ) call cline_volassemble%set('update_frac', params%update_frac)
+            do state = 1, params%nstates
+                volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+                if( cline_volassemble%defined('vol'//int2str(state)) )then
+                    vol_in = cline_volassemble%get_carg('vol'//int2str(state))
+                    if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
+                        if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
+                    endif
+                endif
+            end do
+            call xvolassemble%execute(cline_volassemble)
+            do state = 1, params%nstates
+                volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+                params%vols(state) = volname
+                call cline%set('vol'//int2str(state), volname)
+            end do
+            call cline%delete('force_volassemble')
+        endif
         ! input volume should only be used once in polar mode
         if( params%l_polar ) call cline%delete('vol1')
     end subroutine inmem_execute_iteration
@@ -592,7 +620,7 @@ contains
         type(cmdline) :: cline_prob_align, cline_volassemble
         type(string)  :: str, str_iter, str_state
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
-        type(string)  :: fname_vol, fname_even, fname_odd, volpproc, vollp
+        type(string)  :: fname_vol, fname_even, fname_odd, volpproc, vollp, volname, vol_in
         real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:)
         real    :: smpd
@@ -688,6 +716,15 @@ contains
                     call cline_volassemble%set('nthr',       self%nthr_master)
                     call cline_volassemble%set('combine_eo', params%combine_eo)
                     if( params%l_update_frac ) call cline_volassemble%set('update_frac', params%update_frac)
+                    do state = 1, params%nstates
+                        volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+                        if( cline_volassemble%defined('vol'//int2str(state)) )then
+                            vol_in = cline_volassemble%get_carg('vol'//int2str(state))
+                            if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
+                                if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
+                            endif
+                        endif
+                    end do
                     call xvolassemble%execute(cline_volassemble)
                     ! rename & add volumes to project & update job_descr
                     call build%spproj_field%get_pops(state_pops, 'state')

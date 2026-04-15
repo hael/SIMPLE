@@ -7,7 +7,7 @@ use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
-use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, finalize_rec
+use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
 use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
 use simple_matcher_ptcl_io,         only: killimgbatch
 use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
@@ -201,7 +201,8 @@ contains
                     call b_ptr%pftc%polar_cavger_kill
                 endif
             else
-                call finalize_rec(params, build, cline, fpls)
+                call write_partial_recs(params, build, cline, fpls)
+                call finalize_rec_objs(params, build)
             endif
             if( ctrl%do_bench ) rt_rec = rt_rec + toc(t_rec)
         endif
@@ -356,12 +357,12 @@ contains
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
-                case('new')
-                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                        ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
-                case default
-                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                        ptcl_match_imgs, ptcl_match_imgs_pad)
+                    case('new')
+                        call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                            ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
+                    case default
+                        call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                            ptcl_match_imgs, ptcl_match_imgs_pad)
                 end select
             else
                 if( ctrl%do_restore )then
@@ -379,53 +380,53 @@ contains
             integer, intent(in) :: iptcl, iptcl_batch, iptcl_map, ithr
             logical, intent(in) :: has_been_searched
             select case(ctrl%refine_mode)
-            case('shc')
-                if( .not. has_been_searched )then
-                    allocate(strategy3D_greedy :: strategy3Dsrch(iptcl_batch)%ptr)
-                    cnt_greedy(ithr) = cnt_greedy(ithr) + 1
-                else
-                    if( ran3() < GREEDY_FREQ )then
+                case('shc')
+                    if( .not. has_been_searched )then
                         allocate(strategy3D_greedy :: strategy3Dsrch(iptcl_batch)%ptr)
                         cnt_greedy(ithr) = cnt_greedy(ithr) + 1
                     else
-                        allocate(strategy3D_shc :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( ran3() < GREEDY_FREQ )then
+                            allocate(strategy3D_greedy :: strategy3Dsrch(iptcl_batch)%ptr)
+                            cnt_greedy(ithr) = cnt_greedy(ithr) + 1
+                        else
+                            allocate(strategy3D_shc :: strategy3Dsrch(iptcl_batch)%ptr)
+                        endif
                     endif
-                endif
-            case('shc_smpl')
-                if( b_ptr%spproj_field%is_first_update(which_iter, iptcl) )then
-                    allocate(strategy3D_greedy_smpl :: strategy3Dsrch(iptcl_batch)%ptr)
-                    cnt_greedy(ithr) = cnt_greedy(ithr) + 1
-                else
-                    allocate(strategy3D_shc_smpl :: strategy3Dsrch(iptcl_batch)%ptr)
-                endif
-            case('snhc_smpl')
-                if( b_ptr%spproj_field%is_first_update(which_iter, iptcl) )then
-                    allocate(strategy3D_greedy_smpl :: strategy3Dsrch(iptcl_batch)%ptr)
-                    cnt_greedy(ithr) = cnt_greedy(ithr) + 1
-                else
-                    allocate(strategy3D_snhc_smpl :: strategy3Dsrch(iptcl_batch)%ptr)
-                endif
-            case('eval')
-                allocate(strategy3D_eval :: strategy3Dsrch(iptcl_batch)%ptr)
-            case('neigh')
-                allocate(strategy3D_greedy_sub :: strategy3Dsrch(iptcl_batch)%ptr)
-            case('greedy')
-                allocate(strategy3D_greedy :: strategy3Dsrch(iptcl_batch)%ptr)
-            case('prob','prob_state','prob_neigh')
-                allocate(strategy3D_prob :: strategy3Dsrch(iptcl_batch)%ptr)
-            case('ptree')
-                allocate(strategy3D_ptree :: strategy3Dsrch(iptcl_batch)%ptr)
-            case('ptree_neigh')
-                allocate(strategy3D_ptree_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
-            case('ptree_neigh_states')
-                allocate(strategy3D_ptree_neigh_states :: strategy3Dsrch(iptcl_batch)%ptr)
-            case('shc_ptree')
-                allocate(strategy3D_shc_ptree :: strategy3Dsrch(iptcl_batch)%ptr)
-            case('sigma')
-                call b_ptr%spproj_field%get_ori(iptcl, orientation)
-                call b_ptr%spproj_field%set(iptcl, 'proj', b_ptr%eulspace%find_closest_proj(orientation))
-            case default
-                THROW_HARD('refinement mode: '//trim(ctrl%refine_mode)//' unsupported')
+                case('shc_smpl')
+                    if( b_ptr%spproj_field%is_first_update(which_iter, iptcl) )then
+                        allocate(strategy3D_greedy_smpl    :: strategy3Dsrch(iptcl_batch)%ptr)
+                        cnt_greedy(ithr) = cnt_greedy(ithr) + 1
+                    else
+                        allocate(strategy3D_shc_smpl       :: strategy3Dsrch(iptcl_batch)%ptr)
+                    endif
+                case('snhc_smpl')
+                    if( b_ptr%spproj_field%is_first_update(which_iter, iptcl) )then
+                        allocate(strategy3D_greedy_smpl    :: strategy3Dsrch(iptcl_batch)%ptr)
+                        cnt_greedy(ithr) = cnt_greedy(ithr) + 1
+                    else
+                        allocate(strategy3D_snhc_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
+                    endif
+                case('eval')
+                    allocate(strategy3D_eval               :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('neigh')
+                    allocate(strategy3D_greedy_sub         :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('greedy')
+                    allocate(strategy3D_greedy             :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('prob','prob_state','prob_neigh')
+                    allocate(strategy3D_prob               :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('ptree')
+                    allocate(strategy3D_ptree              :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('ptree_neigh')
+                    allocate(strategy3D_ptree_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('ptree_neigh_states')
+                    allocate(strategy3D_ptree_neigh_states :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('shc_ptree')
+                    allocate(strategy3D_shc_ptree          :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('sigma')
+                    call b_ptr%spproj_field%get_ori(iptcl, orientation)
+                    call b_ptr%spproj_field%set(iptcl, 'proj', b_ptr%eulspace%find_closest_proj(orientation))
+                case default
+                    THROW_HARD('refinement mode: '//trim(ctrl%refine_mode)//' unsupported')
             end select
             if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
                 call strategy3Dsrch(iptcl_batch)%ptr%new(p_ptr, strategy3Dspecs(iptcl_batch), b_ptr)
@@ -441,14 +442,14 @@ contains
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
-                case('new')
-                    call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
-                        pinds(batch_start:batch_end), fpls(:batchsz))
-                    call b_ptr%pftc%polar_cavger_insert_ptcls_oversamp(b_ptr%eulspace, b_ptr%spproj_field, &
-                        b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
-                case default
-                    call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), &
-                        b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
+                    case('new')
+                        call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
+                            pinds(batch_start:batch_end), fpls(:batchsz))
+                        call b_ptr%pftc%polar_cavger_insert_ptcls_oversamp(b_ptr%eulspace, b_ptr%spproj_field, &
+                            b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
+                    case default
+                        call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), &
+                            b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
                 end select
             else
                 call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &

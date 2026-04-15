@@ -225,7 +225,7 @@ contains
                 if( .not.present(xrec3D) )then
                     THROW_HARD('Reconstructor required with polar=yes')
                 endif
-                cline_asymrec = cline_refine3D
+                cline_asymrec = cline_reconstruct3D
                 call cline_asymrec%set('prg',        'reconstruct3D')
                 call cline_asymrec%set('mkdir',      'no')
                 call cline_asymrec%set('projfile',   projfile)
@@ -260,7 +260,7 @@ contains
             call del_file('SYMAXIS_SEARCH_FINISHED')
             if( present(xrec3D) )then
                 ! symmetric reconstruction
-                cline_symrec = cline_refine3D
+                cline_symrec = cline_reconstruct3D
                 call cline_symrec%set('prg',        'reconstruct3D')
                 call cline_symrec%set('mkdir',      'no')
                 call cline_symrec%set('projfile',   projfile)
@@ -293,7 +293,7 @@ contains
         ! Reconstruction
         pgrp = trim(params%pgrp)
         if( istage <= SYMSRCH_STAGE ) pgrp = trim(params%pgrp_start)
-        cline_rec = cline_refine3D
+        cline_rec = cline_reconstruct3D
         call cline_rec%set('prg',       'reconstruct3D')
         call cline_rec%set('mkdir',     'no')
         call cline_rec%set('projfile',  projfile)
@@ -301,6 +301,9 @@ contains
         call cline_rec%set('box_crop',  lpinfo(istage)%box_crop)
         call cline_rec%set('trail_rec', 'no')
         if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
+        call cline_rec%delete('vol1')
+        call cline_rec%delete('vol_even')
+        call cline_rec%delete('vol_odd')
         call cline_rec%delete('update_frac')
         call cline_rec%delete('endit')
         call cline_rec%delete('automsk')

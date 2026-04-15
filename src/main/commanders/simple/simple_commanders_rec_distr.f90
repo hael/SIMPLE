@@ -28,7 +28,7 @@ contains
         logical, allocatable          :: l_mask(:,:,:)
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
         real                          :: weight_prev, update_frac_trail_rec, mskrad_px
-        integer                       :: part, state, find4eoavg, fnr, ldim(3), ldim_pd(3)
+        integer                       :: part, state, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_nonuniform, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
@@ -40,6 +40,7 @@ contains
         call build%init_params_and_build_general_tbox(cline,params)
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
         call build%eorecvol%kill_exp         ! reduced memory usage
+        numlen_part = max(1, params%numlen)
         allocate(res05s(params%nstates), res0143s(params%nstates))
         res0143s = 0.
         res05s   = 0.
@@ -76,7 +77,7 @@ contains
             ! assemble volumes
             do part=1,params%nparts
                 if( L_BENCH_GLOB ) t_read = tic()
-                call eorecvol_read%read_eos(string(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,params%numlen))
+                call eorecvol_read%read_eos(string(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,numlen_part))
                 ! sum the Fourier coefficients
                 if( L_BENCH_GLOB )then
                     rt_read       = rt_read + toc(t_read)

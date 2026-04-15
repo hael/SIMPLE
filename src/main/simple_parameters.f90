@@ -1657,6 +1657,19 @@ contains
                 write(logfhandle,*) 'file: ', self%mskfile%to_char()
                 THROW_HARD('input mask file not in cwd')
             endif
+            call find_ldim_nptcls(self%mskfile, lfoo, ifoo, smpd)
+            if( lfoo(1) /= self%box_crop .or. lfoo(2) /= self%box_crop .or. lfoo(3) /= self%box_crop .or. &
+            &abs(smpd - self%smpd_crop) > 1.e-6 )then
+                if( basename(self%mskfile) == MSKVOL_FILE )then
+                    write(logfhandle,'(a)') '>>> Auto mask file does not match current box/sampling; will regenerate automask'
+                    call cline%delete('mskfile')
+                    self%mskfile   = ''
+                    self%l_filemsk = .false.
+                else
+                    write(logfhandle,'(a,1x,a)') 'Input mask incompatible with current box/sampling:', self%mskfile%to_char()
+                    THROW_HARD('mask file dimensions/sampling do not match box_crop/smpd_crop')
+                endif
+            endif
         endif
         ! scaling stuff
         self%l_autoscale = .false.
