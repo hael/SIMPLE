@@ -12,11 +12,6 @@ type, extends(commander_base) :: commander_fsc
     procedure :: execute      => exec_fsc
 end type commander_fsc
 
-type, extends(commander_base) :: commander_clin_fsc
-  contains
-    procedure :: execute      => exec_clin_fsc
-end type commander_clin_fsc
-
 type, extends(commander_base) :: commander_uniform_filter2D
   contains
     procedure :: execute      => exec_uniform_filter2D
@@ -97,60 +92,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_FSC NORMAL STOP ****')
     end subroutine exec_fsc
-
-    subroutine exec_clin_fsc( self, cline )
-        use simple_matcher_2Dprep
-        use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_ptcl_batch, only: build_batch_particles3D
-        use simple_matcher_ptcl_io, only: prepimgbatch, killimgbatch
-        use simple_imgarr_utils, only: dealloc_imgarr, write_imgarr
-        class(commander_clin_fsc), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        integer,          allocatable :: pinds(:)
-        type(image),      allocatable :: tmp_imgs(:), cavgs(:), tmp_imgs_pad(:)
-        type(builder)                 :: build
-        type(parameters)              :: params
-        integer :: nptcls, ithr
-        call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range3D( params, build, cline )
-        call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, incr_sampled=.false.)
-        ! PREPARATION OF PARTICLES
-        call build%pftc%new(params, params%nspace, [1,nptcls], params%kfromto)
-        call prepimgbatch(params, build, nptcls)
-        allocate(tmp_imgs(nthr_glob), tmp_imgs_pad(nthr_glob))
-        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-        do ithr = 1,nthr_glob
-            call tmp_imgs(ithr)%new(    [params%box_crop,  params%box_crop,  1], params%smpd_crop, wthreads=.false.)
-            call tmp_imgs_pad(ithr)%new([params%box_croppd,params%box_croppd,1], params%smpd_crop, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        ! Build polar particle images
-        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
-        ! Dealing with polar cavgs
-        call build%pftc%polar_cavger_new(.true.)
-        call build%pftc%polar_cavger_update_sums(nptcls, pinds, build%spproj, is3D=.true.)
-        call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, build%spproj_field%get_update_frac())
-        ! write
-        allocate(cavgs(params%nspace))
-        call build%pftc%polar_cavger_write(string('cavgs_even.bin'), 'even')
-        call build%pftc%polar_cavger_write(string('cavgs_odd.bin'),   'odd')
-        call build%pftc%polar_cavger_write(string('cavgs.bin'),    'merged')
-        call build%pftc%polar_cavger_refs2cartesian(cavgs, 'even')
-        call write_imgarr(cavgs, string('cavgs_even.mrc'))
-        call build%pftc%polar_cavger_refs2cartesian(cavgs, 'odd')
-        call write_imgarr(cavgs, string('cavgs_odd.mrc'))
-        call build%pftc%polar_cavger_refs2cartesian(cavgs, 'merged')
-        call write_imgarr(cavgs, string('cavgs_merged.mrc'))
-        call build%pftc%polar_cavger_kill
-        call killimgbatch(build)
-        call build%pftc%kill
-        call build%kill_general_tbox
-        call dealloc_imgarr(tmp_imgs)
-        call dealloc_imgarr(tmp_imgs_pad)
-        ! end gracefully
-        call simple_end('**** SIMPLE_CLIN_FSC NORMAL STOP ****')
-    end subroutine exec_clin_fsc
 
     subroutine exec_uniform_filter3D(self, cline)
         use simple_opt_filter, only: estimate_lplim

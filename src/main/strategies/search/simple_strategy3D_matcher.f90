@@ -191,10 +191,10 @@ contains
                     p_ptr%refs = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//MRC_EXT
                     select case(ctrl%polar_mode)
                     case('new')
-                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm_new(b_ptr%eulspace,&
+                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm_direct(b_ptr%eulspace,&
                             &cline, b_ptr%spproj_field%get_update_frac())
                     case default
-                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm(b_ptr%eulspace, &
+                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm(b_ptr%eulspace,&
                             &b_ptr%pgrpsyms, cline, b_ptr%spproj_field%get_update_frac())
                     end select
                     call b_ptr%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))

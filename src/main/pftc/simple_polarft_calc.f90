@@ -185,7 +185,7 @@ type :: polarft_calc
     procedure, private :: polar_cavger_calc_frc
     procedure          :: polar_cavger_gen2Dclassdoc
     procedure          :: polar_cavger_merge_eos_and_norm
-    procedure          :: polar_cavger_merge_eos_and_norm_new
+    procedure          :: polar_cavger_merge_eos_and_norm_direct
     procedure, private :: finalize_trail_rec
     procedure, private :: mirror_slices
     procedure, private :: calc_fsc
@@ -762,12 +762,12 @@ interface
         real,                intent(in)    :: update_frac
     end subroutine polar_cavger_merge_eos_and_norm
 
-    module subroutine polar_cavger_merge_eos_and_norm_new( self, reforis, cline, update_frac )
+    module subroutine polar_cavger_merge_eos_and_norm_direct( self, reforis, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
-    end subroutine polar_cavger_merge_eos_and_norm_new
+    end subroutine polar_cavger_merge_eos_and_norm_direct
 
     module subroutine finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
         class(polarft_calc),      intent(inout) :: self

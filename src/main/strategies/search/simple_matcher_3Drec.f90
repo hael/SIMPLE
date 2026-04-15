@@ -288,7 +288,7 @@ contains
             if( DEBUG ) t_grid = t_grid + toc(t)
         end do
         ! Normalize polar references
-        call build%pftc%polar_cavger_merge_eos_and_norm_new(build%eulspace, cline, params%update_frac)
+        call build%pftc%polar_cavger_merge_eos_and_norm_direct(build%eulspace, cline, params%update_frac)
         if( DEBUG )t_tot = toc(t0)
         ! Write
         call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))

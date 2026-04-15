@@ -4,54 +4,20 @@ use simple_ui_modules
 implicit none
 
 type(ui_program), target :: fsc
-type(ui_program), target :: clin_fsc
 
 contains
 
     subroutine construct_res_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_fsc(prgtab)
-        call new_clin_fsc(prgtab)
     end subroutine construct_res_programs
 
     subroutine print_res_programs(logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('RESOLUTION ESTIMATION:', C_UNDERLINED)
         write(logfhandle,'(A)') fsc%name%to_char()
-        write(logfhandle,'(A)') clin_fsc%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_res_programs
-
-    subroutine new_clin_fsc( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call clin_fsc%new(&
-        &'clin_fsc', &                                                          ! name
-        &'Calculate FSC between the two input volumes using common lines',&     ! descr_short
-        &'is a program for calculating the FSC between the two input volumes',& ! descr_long
-        &'simple_exec',&                                                        ! executable
-        &.false.)                                                               ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call clin_fsc%add_input(UI_PARM, projfile)
-        call clin_fsc%add_input(UI_PARM, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call clin_fsc%add_input(UI_SRCH, nspace)
-        call clin_fsc%add_input(UI_SRCH, pgrp)
-        ! filter controls
-        call clin_fsc%add_input(UI_FILT, lp, required_override=.true.)
-        ! mask controls
-        call clin_fsc%add_input(UI_MASK, mskdiam)
-        call clin_fsc%add_input(UI_MASK, mskfile)
-        ! computer controls
-        call clin_fsc%add_input(UI_COMP, nthr)
-        ! add to ui_hash
-        call add_ui_program('clin_fsc', clin_fsc, prgtab)
-    end subroutine new_clin_fsc
 
     subroutine new_fsc( prgtab )
         class(ui_hash), intent(inout) :: prgtab

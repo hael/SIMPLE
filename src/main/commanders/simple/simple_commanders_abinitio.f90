@@ -10,7 +10,7 @@ use simple_cluster_seed,        only: gen_labelling
 use simple_decay_funs,          only: calc_update_frac_dyn, calc_update_frac
 implicit none
 
-public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_fast, commander_abinitio3D, commander_multivol_assign
+public :: commander_abinitio3D_cavgs, commander_abinitio3D, commander_multivol_assign
 private
 #include "simple_local_flags.inc"
 
@@ -18,11 +18,6 @@ type, extends(commander_base) :: commander_abinitio3D_cavgs
     contains
     procedure :: execute => exec_abinitio3D_cavgs
 end type commander_abinitio3D_cavgs
-
-type, extends(commander_base) :: commander_abinitio3D_cavgs_fast
-    contains
-    procedure :: execute => exec_abinitio3D_cavgs_fast
-end type commander_abinitio3D_cavgs_fast
 
 type, extends(commander_base) :: commander_abinitio3D
     contains
@@ -411,84 +406,6 @@ contains
             end subroutine rank_cavgs
 
     end subroutine exec_abinitio3D_cavgs
-
-    !> for crude generation of an initial 3D model from class averages
-    subroutine exec_abinitio3D_cavgs_fast( self, cline )
-        class(commander_abinitio3D_cavgs_fast), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline
-        type(commander_abinitio3D_cavgs) :: xabinitio3D_cavgs
-        type(parameters) :: params
-        real             :: lpstart, lpstop
-        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        ! resolution limits: lpstart in [12;20], lpstop in [6.;8.]
-        lpstart = max(min(params%mskdiam/10., 20.), 12.)
-        lpstop  = min(max(params%mskdiam/30.,  6.),  8.)
-        if( cline%defined('lpstart') ) lpstart = params%lpstart
-        if( cline%defined('lpstop')  ) lpstop  = params%lpstop
-        if( lpstop > lpstart ) lpstop = lpstart
-        call cline%delete('lpstart')
-        call cline%delete('lpstop')
-        ! command-line updates
-        if( cline%defined('nstates') )then
-            if( cline%get_iarg('nstates') > 1 )then
-                call cline%set('multivol_mode', 'independent')
-            endif
-        endif
-        call cline%set('mkdir',         'no')
-        call cline%set('lp_auto',       'no')
-        call cline%set('lpstart_ini3D', lpstart)
-        call cline%set('lpstop_ini3D',  lpstop)
-        call cline%set('nspace_max',    1500)
-        call cline%set('nstages',       NSTAGES_INI3D_MAX)
-        call cline%set('rank_cavgs',    'yes')
-        ! prune junk
-        call prune_junk_classes
-        call cline%delete('prune')
-        ! execution
-        call xabinitio3D_cavgs%execute( cline )
-        ! end
-        call simple_end('**** SIMPLE_ABINITIO3D_CAVGS_FAST NORMAL STOP ****')
-      contains
-
-        subroutine prune_junk_classes
-            use simple_strategy2D_utils, only: flag_non_junk_cavgs
-            use simple_imgarr_utils,     only: read_cavgs_into_imgarr
-            type(sp_project)              :: spproj
-            type(image),      allocatable :: cavg_imgs(:)
-            logical,          allocatable :: l_non_junk(:)
-            integer,          allocatable :: states(:)
-            type(string) :: fname
-            integer :: i, ncls, j
-            if( trim(params%prune).eq.'yes' )then
-                call spproj%read(params%projfile)
-                cavg_imgs = read_cavgs_into_imgarr(spproj)
-                call flag_non_junk_cavgs(cavg_imgs, 20.0, params%msk, l_non_junk, spproj%os_cls2D)
-                if( .not.all(l_non_junk) )then
-                    ncls = size(cavg_imgs)
-                    allocate(states(ncls),source=1)
-                    fname = 'cavgs_junk.mrc'
-                    j = 0
-                    do i = 1, ncls
-                        if( .not. l_non_junk(i) )then
-                            j = j + 1
-                            call cavg_imgs(i)%write(fname, j)
-                            call spproj%os_cls2D%set_state(i, 0)
-                            states(i) = 0
-                        endif
-                        call cavg_imgs(i)%kill
-                    enddo
-                    deallocate(cavg_imgs)
-                    call spproj%map_cavgs_selection(states)
-                    call spproj%write(params%projfile)
-                    write(logfhandle,'(A,I5)') '>>> # classes left after junk rejection ', count(l_non_junk)
-                    call fname%kill
-                endif
-                call spproj%kill
-            endif
-        end subroutine prune_junk_classes
-
-    end subroutine exec_abinitio3D_cavgs_fast
 
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio3D( self, cline )

@@ -3,10 +3,7 @@ module simple_commanders_refine3D
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_commanders_euclid
-use simple_cluster_seed,      only: gen_labelling
 use simple_commanders_volops, only: commander_postprocess
-use simple_commanders_mask,   only: commander_automask
-use simple_decay_funs,        only: inv_cos_decay, cos_decay
 implicit none
 #include "simple_local_flags.inc"
 
