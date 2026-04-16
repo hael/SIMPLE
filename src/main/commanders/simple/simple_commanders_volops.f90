@@ -424,6 +424,7 @@ contains
 
     !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
     subroutine exec_volops( self, cline )
+        use simple_image_msk, only: image_msk
         class(commander_volops), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
@@ -431,6 +432,7 @@ contains
         logical          :: here
         type(ori)        :: o
         type(image)      :: vol_rot
+        type(image_msk)  :: mskvol
         real             :: shvec(3),  ave, sdev, maxv, minv
         call build%init_params_and_build_general_tbox(cline,params)
         here = file_exists(params%vols(1))
@@ -481,10 +483,15 @@ contains
             if( cline%defined('xsh') .or. cline%defined('ysh') .or. cline%defined('zsh') )then
                 call build%vol%shift([params%xsh,params%ysh,params%zsh])
             endif
-            if( cline%defined('lp_backgr') .and. params%l_filemsk )then
-                call build%vol2%new(build%vol%get_ldim(), build%vol%get_smpd())
-                call build%vol2%read(params%mskfile)
-                call build%vol%lp_background(build%vol2, params%lp_backgr)
+            if( cline%defined('lp_backgr') )then
+                if( params%automsk .ne. 'no' )then
+                    call mskvol%new(build%vol%get_ldim(), build%vol%get_smpd())
+                    call mskvol%automask3D(params, build%vol, build%vol, l_tight=params%automsk.eq.'tight')
+                    call build%vol%lp_background(mskvol, params%lp_backgr)
+                    call mskvol%kill
+                else
+                    THROW_HARD('lp_backgr requires automsk=yes|tight under current masking policy')
+                endif
             endif
             call build%vol%write(params%outvol, del_if_exists=.true.)
         endif

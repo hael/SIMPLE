@@ -132,7 +132,6 @@ contains
         call refine3D_nano%add_input(UI_FILT, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
         ! mask controls
         call refine3D_nano%add_input(UI_MASK, mskdiam)
-        call refine3D_nano%add_input(UI_MASK, mskfile)
         ! computer controls
         call refine3D_nano%add_input(UI_COMP, nparts, required_override=.false.)
         call refine3D_nano%add_input(UI_COMP, nthr)

@@ -63,7 +63,7 @@ contains
         call set_refine3D_balance_policy( cfg )
         call set_refine3D_gauref_policy( cfg, params, istage )
         call set_refine3D_trailrec_policy( cfg, params, istage )
-        call set_refine3D_filtering_policy( cfg, params, istage )
+        call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_automsk_policy( cfg, istage, route )
         call set_refine3D_stage_controls( cfg, params, istage )
         call apply_refine3D_route_overrides( cfg, params, istage, route )
@@ -171,13 +171,15 @@ contains
         end select
     end subroutine set_refine3D_trailrec_policy
 
-    subroutine set_refine3D_filtering_policy( cfg, params, istage )
+    subroutine set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
         cfg%filt_mode  = 'none'
         cfg%lpstart    = 0.
         cfg%lpstop     = 0.
+        if( l_cavgs ) return ! no filtering for cavgs route
         if( istage >= LPAUTO_STAGE .and. (l_lpauto .or. l_nonuniform) )then
             cfg%filt_mode = trim(params%filt_mode)
             if( cfg%filt_mode.eq.'uniform' )then

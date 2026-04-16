@@ -100,9 +100,6 @@ contains
         self%ldim           = [self%box,self%box,self%box]
         ! create composites
         call self%envmask%new([self%box,self%box,self%box],self%smpd)
-        if( self%p_ptr%l_filemsk )then
-            call self%envmask%read(self%p_ptr%mskfile)
-        endif
         call self%even%new(self%ldim, self%p_ptr %smpd)
         call self%even%alloc_rho(self%p_ptr, spproj, expand=l_expand)
         call self%even%set_ft(.true.)
@@ -460,25 +457,8 @@ contains
             call odd%div(self%mag_correction)
             call odd%write(add2fbody(fname_odd,MRC_EXT,'_unfil'))
             if( .not. l_have_fsc )then
-                ! masking
-                if( self%p_ptr%l_filemsk .and. self%p_ptr%l_envfsc )then
-                    call even%zero_env_background(self%envmask)
-                    call odd%zero_env_background(self%envmask)
-                    call even%mul(self%envmask)
-                    call odd%mul(self%envmask)
-                else if( trim(self%p_ptr%automsk).ne.'no' )then
-                    call self%envmask%automask3D(self%p_ptr , even, odd, trim(self%p_ptr%automsk).eq.'tight')
-                    call self%envmask%write(string(MSKVOL_FILE))
-                    if( self%p_ptr%l_envfsc )then
-                        call even%zero_env_background(self%envmask)
-                        call odd%zero_env_background(self%envmask)
-                        call even%mul(self%envmask) 
-                        call odd%mul(self%envmask)
-                    endif
-                else
-                    call even%mask3D_soft(self%msk, backgr=0.)
-                    call odd%mask3D_soft(self%msk, backgr=0.)
-                endif
+                ! masking: try to load state-specific mask if automsk enabled
+                call load_state_mask_or_fallback(self, state, even, odd)
                 ! calculate FSC
                 call even%fft()
                 call odd%fft()
@@ -529,24 +509,8 @@ contains
             call even%write(fname_even, del_if_exists=.true.)
             call odd%write(fname_odd,   del_if_exists=.true.)
             if( .not. l_have_fsc )then
-                if( self%p_ptr%l_filemsk .and. self%p_ptr%l_envfsc )then
-                    call even%zero_env_background(self%envmask)
-                    call odd%zero_env_background(self%envmask)
-                    call even%mul(self%envmask)
-                    call odd%mul(self%envmask)
-                else if( trim(self%p_ptr%automsk).ne.'no' )then
-                    call self%envmask%automask3D(self%p_ptr , even, odd, trim(self%p_ptr%automsk).eq.'tight')
-                    call self%envmask%write(string(MSKVOL_FILE))
-                    if( self%p_ptr%l_envfsc )then
-                        call even%zero_env_background(self%envmask)
-                        call odd%zero_env_background(self%envmask)
-                        call even%mul(self%envmask) 
-                        call odd%mul(self%envmask)
-                    endif
-                else
-                    call even%mask3D_soft(self%msk, backgr=0.)
-                    call odd%mask3D_soft(self%msk, backgr=0.)
-                endif
+                ! masking: try to load state-specific mask if automask enabled
+                call load_state_mask_or_fallback(self, state, even, odd)
                 ! calculate FSC
                 call even%fft()
                 call odd%fft()
@@ -566,6 +530,48 @@ contains
         call odd%kill
     end subroutine sampl_dens_correct_eos
 
+    !> Load state-specific automask file if it exists, or generate on-the-fly, or use circular fallback
+    subroutine load_state_mask_or_fallback( self, state, even, odd )
+        class(reconstructor_eo), intent(inout) :: self
+        integer,                 intent(in)    :: state
+        class(image),            intent(inout) :: even, odd
+        type(string)  :: mskfile_state
+        real          :: smpd_mask
+        integer       :: ldim_mask(3), nptcls_mask
+        ! Try to load state-specific automask if automasking enabled
+        if( trim(self%p_ptr%automsk).ne.'no' )then
+            ! Construct state-specific filename: automask3D_state{N:02d}.mrc
+            mskfile_state = string(AUTOMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
+            if( file_exists(mskfile_state) )then
+                call find_ldim_nptcls(mskfile_state, ldim_mask, nptcls_mask, smpd=smpd_mask)
+                if( ldim_mask(1) == self%box .and. ldim_mask(2) == self%box .and. ldim_mask(3) == self%box .and. &
+                &abs(smpd_mask - self%smpd) <= 1.e-6 )then
+                    ! Load existing compatible state-specific mask
+                    call self%envmask%read_bimg(mskfile_state)
+                    ! Apply mask if l_envfsc is true
+                    if( self%p_ptr%l_envfsc )then
+                        call even%zero_env_background(self%envmask)
+                        call odd%zero_env_background(self%envmask)
+                        call even%mul(self%envmask)
+                        call odd%mul(self%envmask)
+                    endif
+                else
+                    ! Stale/incompatible mask file: fall back to spherical mask
+                    call even%mask3D_soft(self%msk, backgr=0.)
+                    call odd%mask3D_soft(self%msk, backgr=0.)
+                endif
+            else
+                ! VOLASSEMBLE is the sole automask producer; if missing, fall back to spherical mask
+                call even%mask3D_soft(self%msk, backgr=0.)
+                call odd%mask3D_soft(self%msk, backgr=0.)
+            endif
+        else
+            ! No automasking: use circular mask fallback
+            call even%mask3D_soft(self%msk, backgr=0.)
+            call odd%mask3D_soft(self%msk, backgr=0.)
+        endif
+    end subroutine load_state_mask_or_fallback
+
     subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc )
         class(reconstructor_eo), intent(inout) :: self
         class(image),            intent(in)    :: even, odd
@@ -578,15 +584,8 @@ contains
         call even_tmp%copy(even)
         call odd_tmp%copy(odd)
         ! masking
-        if( self%p_ptr%l_filemsk .and. self%p_ptr%l_envfsc )then
-            call even_tmp%zero_env_background(self%envmask)
-            call odd_tmp%zero_env_background(self%envmask)
-            call even_tmp%mul(self%envmask)
-            call odd_tmp%mul(self%envmask)
-        else
-            call even_tmp%mask3D_soft(self%msk, backgr=0.)
-            call odd_tmp%mask3D_soft(self%msk, backgr=0.)
-        endif
+        call even_tmp%mask3D_soft(self%msk, backgr=0.)
+        call odd_tmp%mask3D_soft(self%msk, backgr=0.)
         ! calculate FSC
         call even_tmp%fft()
         call odd_tmp%fft()

@@ -215,7 +215,6 @@ contains
         ! <empty>
         ! mask controls
         call trajectory_reconstruct3D%add_input(UI_MASK, mskdiam)
-        call trajectory_reconstruct3D%add_input(UI_MASK, mskfile)
         ! computer controls
         call trajectory_reconstruct3D%add_input(UI_COMP, nparts, required_override=.false.)
         call trajectory_reconstruct3D%add_input(UI_COMP, nthr)

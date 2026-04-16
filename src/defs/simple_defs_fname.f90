@@ -54,6 +54,7 @@ character(len=*), parameter :: MSK_OTSU             = 'masks_otsu.mrc'
 character(len=*), parameter :: AMSK_OTSU            = 'automasked_otsu.mrc'
 ! AUTOMASK3D
 character(len=*), parameter :: MSKVOL_FILE          = 'automask3D.mrc'
+character(len=*), parameter :: AUTOMASK_FBODY       = 'automask3D_state'
 ! REFINE3D
 character(len=*), parameter :: REFINE3D_ITER_FBODY  = 'refine3Ddoc_'
 character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'

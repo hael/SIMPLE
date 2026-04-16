@@ -71,7 +71,6 @@ type(ui_param) :: ml_reg_pool
 type(ui_param) :: moldiam
 type(ui_param) :: moldiam_max
 type(ui_param) :: mskdiam
-type(ui_param) :: mskfile
 type(ui_param) :: mul
 type(ui_param) :: nboxes_max
 type(ui_param) :: nchunks
@@ -440,10 +439,6 @@ subroutine set_ui_params
     call mskdiam%set_param(        'mskdiam',         'num',    'Mask diameter', &
                                    'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', &
                                    'mask diameter in A', .true., 0.)
-
-    call mskfile%set_param(        'mskfile',         'file',   'Input mask file', &
-                                   'Input mask file to apply to reference volume(s) before projection', &
-                                   'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
 
     call mul%set_param(            'mul',             'num',    'Multiplication factor', &
                                    'Multiplication factor{1.}', &

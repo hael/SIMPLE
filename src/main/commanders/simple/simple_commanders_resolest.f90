@@ -59,9 +59,9 @@ contains
         call even%read(params%vols(2))
         res = even%get_res()
         nyq = even%get_filtsz()
-        if( params%l_filemsk )then
+        if( params%automsk .ne. 'no' )then
             call mskvol%new([params%box,params%box,params%box], params%smpd)
-            call mskvol%read(params%mskfile)
+            call mskvol%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
             call phase_rand_fsc(even, odd, mskvol, params%msk, 1, nyq, fsc, fsc_t, fsc_n)
         else
             ! spherical masking
@@ -84,7 +84,7 @@ contains
         call odd%kill
         fsc_templ = FSC_FBODY//int2str_pad(1,2)
         call arr2file(fsc, fsc_templ//BIN_EXT)
-        if( params%l_filemsk )then
+        if( params%automsk .ne. 'no' )then
             call plot_phrand_fsc(size(fsc), fsc, fsc_t, fsc_n, res, params%smpd, fsc_templ%to_char())
         else
             call plot_fsc(size(fsc), fsc, res, params%smpd, fsc_templ%to_char())
@@ -98,7 +98,8 @@ contains
         class(commander_uniform_filter3D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd, mskvol, odd_filt
+        type(image)       :: even, odd, odd_filt
+        type(image_msk)   :: mskvol
         real              :: lpopt
         type(string)      :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -109,9 +110,9 @@ contains
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
         file_tag = 'uniform_3D_filter'
-        if( params%l_filemsk )then
+        if( params%automsk .ne. 'no' )then
             call mskvol%new([params%box,params%box,params%box], params%smpd)
-            call mskvol%read(params%mskfile)
+            call mskvol%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
             call mskvol%one_at_edge ! to expand before masking of reference internally
         else
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&

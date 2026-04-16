@@ -2,7 +2,6 @@
 module simple_abinitio_utils
 use simple_commanders_api
 use simple_commanders_volops, only: commander_postprocess, commander_symmetrize_map
-use simple_commanders_mask,   only: commander_automask
 use simple_cluster_seed,      only: gen_labelling
 use simple_class_frcs,        only: class_frcs
 use simple_decay_funs,        only: calc_update_frac_dyn
@@ -225,7 +224,7 @@ contains
                 if( .not.present(xrec3D) )then
                     THROW_HARD('Reconstructor required with polar=yes')
                 endif
-                cline_asymrec = cline_reconstruct3D
+                cline_asymrec = cline_refine3D
                 call cline_asymrec%set('prg',        'reconstruct3D')
                 call cline_asymrec%set('mkdir',      'no')
                 call cline_asymrec%set('projfile',   projfile)
@@ -260,7 +259,7 @@ contains
             call del_file('SYMAXIS_SEARCH_FINISHED')
             if( present(xrec3D) )then
                 ! symmetric reconstruction
-                cline_symrec = cline_reconstruct3D
+                cline_symrec = cline_refine3D
                 call cline_symrec%set('prg',        'reconstruct3D')
                 call cline_symrec%set('mkdir',      'no')
                 call cline_symrec%set('projfile',   projfile)
@@ -284,16 +283,15 @@ contains
         class(string),           intent(in)    :: projfile
         class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
-        type(commander_automask)       :: xautomask
         type(string)      :: vol,vol_even,vol_odd, str, tmpl, src, dest, sstate, sstage, pgrp
-        type(cmdline)     :: cline_rec, cline_automask
+        type(cmdline)     :: cline_rec
         type(class_frcs)  :: frcs
         real, allocatable :: fsc(:)
         integer           :: i, inspace, state
         ! Reconstruction
         pgrp = trim(params%pgrp)
         if( istage <= SYMSRCH_STAGE ) pgrp = trim(params%pgrp_start)
-        cline_rec = cline_reconstruct3D
+        cline_rec = cline_refine3D
         call cline_rec%set('prg',       'reconstruct3D')
         call cline_rec%set('mkdir',     'no')
         call cline_rec%set('projfile',  projfile)
@@ -307,7 +305,7 @@ contains
         call cline_rec%delete('update_frac')
         call cline_rec%delete('endit')
         call cline_rec%delete('automsk')
-        call cline_rec%delete('mskfile')
+        call cline_rec%delete('filt_mode')
         call cline_rec%delete('polar')
         call xrec3D%execute(cline_rec)
         if( params%l_polar )then
@@ -356,21 +354,6 @@ contains
                 str      = tmpl//'_odd'//MRC_EXT
                 call     simple_rename(vol_odd, str)
             enddo
-            if( istage >= AUTOMSK_STAGE .and. l_automsk )then
-                sstate   = int2str_pad(1,2)
-                vol_even = string(STARTVOL_FBODY)//sstate//'_even'//MRC_EXT
-                vol_odd  = string(STARTVOL_FBODY)//sstate//'_odd'//MRC_EXT
-                call cline_automask%set('vol1', vol_odd)
-                call cline_automask%set('vol2', vol_even)
-                call cline_automask%set('smpd', lpinfo(istage)%smpd_crop)
-                call cline_automask%set('amsklp', params%amsklp)
-                call cline_automask%set('automsk', 'yes')
-                call cline_automask%set('mkdir',    'no')
-                call cline_automask%set('nthr', params%nthr)
-                call xautomask%execute(cline_automask)
-                params%mskfile = MSKVOL_FILE
-                call cline_refine3D%set('mskfile', MSKVOL_FILE)
-            endif
         endif
         call cline_rec%kill
     end subroutine calc_rec

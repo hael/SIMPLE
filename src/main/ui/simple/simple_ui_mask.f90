@@ -119,7 +119,6 @@ contains
         call mask%add_input(UI_FILT, lp_backgr)
         ! mask controls
         call mask%add_input(UI_MASK, mskdiam, required_override=.false.)
-        call mask%add_input(UI_MASK, mskfile)
         call mask%add_input(UI_MASK, width)
         call mask%add_input(UI_MASK, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false., 6.)

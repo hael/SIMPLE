@@ -45,7 +45,6 @@ contains
         call fsc%add_input(UI_FILT, lp)
         ! mask controls
         call fsc%add_input(UI_MASK, mskdiam)
-        call fsc%add_input(UI_MASK, mskfile)
         ! computer controls
         call fsc%add_input(UI_COMP, nthr)
         ! add to ui_hash

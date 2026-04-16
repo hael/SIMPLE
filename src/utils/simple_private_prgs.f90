@@ -353,7 +353,6 @@ contains
         call cmd_dict%push('mirr',          'mirror(no|x|y){no}')
         call cmd_dict%push('moldiam',       'molecular diameter(in A)')
         call cmd_dict%push('mskdiam',       'mask diameter(in A)')
-        call cmd_dict%push('mskfile',       'maskfile.ext')
         call cmd_dict%push('mul',           'origin shift multiplication factor{1}')
         call cmd_dict%push('mw',            'molecular weight(in kD)')
         call cmd_dict%push('msklist',       'table (text file) of mask volume files(.txt)')
@@ -661,7 +660,6 @@ contains
         ! optional keys
         call private_prgs(18)%push_opt_key('nthr')
         call private_prgs(18)%push_opt_key('nstates')
-        call private_prgs(18)%push_opt_key('mskfile')
         call private_prgs(18)%push_opt_key('which_iter')
 
         ! CALC_PSPEC, for asssembling power spectra for refine3D

@@ -129,17 +129,18 @@ contains
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        write(logfhandle,609) '>>> REFINEMENT MODE IS '//trim(params%refine)
+        write(logfhandle,609) '>>> REFINEMENT MODE: '//trim(params%refine)
         if( trim(params%gauref).eq.'yes' )then
-        write(logfhandle,607) '>>> GAU REGULARIZATION IS ON'
+        write(logfhandle,607) '>>> GAU REGULARIZATION: on'
         else
-        write(logfhandle,609) '>>> GAU REGULARIZATION IS OFF'
+        write(logfhandle,609) '>>> GAU REGULARIZATION: off'
         endif
         if( params%l_ml_reg )then
-        write(logfhandle,607) '>>> ML  REGULARIZATION IS ON, TAU:    ', params%tau
+        write(logfhandle,607) '>>> ML  REGULARIZATION: on, TAU:    ', params%tau
         else
-        write(logfhandle,609) '>>> ML  REGULARIZATION IS OFF'
+        write(logfhandle,609) '>>> ML  REGULARIZATION: off'
         endif
+        write(logfhandle,609) '>>> FILTER MODE: '//trim(params%filt_mode)
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( cline%defined('trs') .or. params%trs >  MINSHIFT)then
@@ -295,22 +296,28 @@ contains
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        write(logfhandle,609) '>>> REFINEMENT MODE IS '//trim(params%refine)
+        write(logfhandle,609) '>>> REFINEMENT MODE: '//trim(params%refine)
         if( trim(params%gauref).eq.'yes' )then
-        write(logfhandle,607) '>>> GAU REGULARIZATION IS ON'
+        write(logfhandle,607) '>>> GAU REGULARIZATION: on'
         else
-        write(logfhandle,609) '>>> GAU REGULARIZATION IS OFF'
+        write(logfhandle,609) '>>> GAU REGULARIZATION: off'
         endif
         if( params%l_ml_reg )then
-        write(logfhandle,607) '>>> ML  REGULARIZATION IS ON, TAU:    ', params%tau
+        write(logfhandle,607) '>>> ML  REGULARIZATION: on, TAU:    ', params%tau
         else
-        write(logfhandle,609) '>>> ML  REGULARIZATION IS OFF'
+        write(logfhandle,609) '>>> ML  REGULARIZATION: off'
         endif
         if( params%l_icm )then
-        write(logfhandle,607) '>>> ICM REGULARIZATION IS ON, LAMBDA: ', params%lambda
+        write(logfhandle,607) '>>> ICM REGULARIZATION: on, LAMBDA: ', params%lambda
         else
-        write(logfhandle,609) '>>> ICM REGULARIZATION IS OFF'
+        write(logfhandle,609) '>>> ICM REGULARIZATION: off'
         endif
+        if( trim(params%automsk).ne.'no' )then
+        write(logfhandle,609) '>>> AUTOMASKING: on, MODE: '//trim(params%automsk)
+        else
+        write(logfhandle,609) '>>> AUTOMASKING: off'
+        endif
+        write(logfhandle,609) '>>> FILTER MODE: '//trim(params%filt_mode)
         if( params%l_update_frac )then
         if( cline%defined('ufrac_trec') )then
         write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', params%ufrac_trec
@@ -319,15 +326,15 @@ contains
         write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', trail_rec_ufrac
         endif
         if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
-        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS ON'
+        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING: on'
         else
-        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING WAS OFF'
+        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING: off'
         endif
         endif
         if( params%l_polar )then
-        write(logfhandle,609) '>>> POLAR REPRESENTATION IS ON'
+        write(logfhandle,609) '>>> REPRESENTATION: polar'
         else
-        write(logfhandle,609) '>>> CARTESIAN REPRESENTATION IS ON'
+        write(logfhandle,609) '>>> REPRESENTATION: cartesian'
         endif
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
@@ -354,10 +361,10 @@ contains
         ! determine convergence
         if( params%nstates == 1 )then
             if( self%frac_srch%avg > fracsrch_lim .and. self%mi_proj  > overlap_lim )then
-                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
+                write(logfhandle,'(A)') '>>> CONVERGED: yes'
                 converged = .true.
             else
-                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
+                write(logfhandle,'(A)') '>>> CONVERGED: no'
                 converged = .false.
             endif
         else
@@ -384,10 +391,10 @@ contains
                 'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
             if( min_state_mi_joint > OVERLAP_STATE_JOINT .and. self%frac_srch%avg > fracsrch_lim )then
-                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
+                write(logfhandle,'(A)') '>>> CONVERGED: yes'
                 converged = .true.
             else
-                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
+                write(logfhandle,'(A)') '>>> CONVERGED: no'
                 converged = .false.
             endif
             deallocate( state_mi_joint, statepops )

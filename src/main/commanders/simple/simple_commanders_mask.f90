@@ -34,10 +34,11 @@ contains
         class(cmdline),        intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        type(image)      :: mskvol
+        type(image_msk)  :: mskvol
         integer          :: ldim(3)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
+        if( cline%defined('mskfile') ) THROW_HARD('mskfile is no longer supported; use automsk or mskdiam')
         if( cline%defined('stk') )then
             ! 2D
             call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
@@ -54,11 +55,11 @@ contains
             call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
             call build%vol%read(params%vols(1))
-            if( params%l_filemsk )then
-                ! from file
+            if( params%automsk .ne. 'no' )then
+                ! from automasking
                 ldim = build%vol%get_ldim()
                 call mskvol%new(ldim, params%smpd)
-                call mskvol%read(params%mskfile)
+                call mskvol%automask3D(params, build%vol, build%vol, l_tight=params%automsk.eq.'tight')
                 if( cline%defined('lp_backgr') )then
                     call build%vol%lp_background(mskvol,params%lp_backgr)
                 else

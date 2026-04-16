@@ -20,20 +20,24 @@ contains
         type(parameters)              :: params
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
-        type(image)                   :: vol_prev_even, vol_prev_odd, gridcorr_img
+        type(image)                   :: vol_prev_even, vol_prev_odd, gridcorr_img, vol_merged
         type(image)                   :: vol_even_nu, vol_odd_nu, vol_msk
+        type(image)                   :: vol_e
+        type(image_msk)               :: mskvol
         type(string)                  :: recname, volname, volname_prev, fsc_txt_file
         type(string)                  :: volname_prev_even, volname_prev_odd, str_state, str_iter
-        type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname
+        type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname, mskfile_state
         logical, allocatable          :: l_mask(:,:,:)
-        logical                       :: l_nonuniform_mode
+        logical                       :: l_nonuniform_mode, do_automsk, l_mask_compatible, l_state_filemsk
+        integer, allocatable          :: imat(:,:,:)
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
-        real                          :: weight_prev, update_frac_trail_rec, mskrad_px
-        integer                       :: part, state, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part
+        real                          :: weight_prev, update_frac_trail_rec, mskrad_px, smpd_mask
+        integer                       :: part, state, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part, which_iter
+        integer                       :: ldim_mask(3), nptcls_mask
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
-        integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_nonuniform, t_tot
+        integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_automask, t_nonuniform, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
-        real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_nonuniform, rt_tot
+        real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_automask, rt_nonuniform, rt_tot
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -41,7 +45,7 @@ contains
         call build%init_params_and_build_general_tbox(cline,params)
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
         call build%eorecvol%kill_exp         ! reduced memory usage
-        numlen_part = max(1, params%numlen)
+        numlen_part       = max(1, params%numlen)
         l_nonuniform_mode = trim(params%filt_mode).eq.'nonuniform'
         allocate(res05s(params%nstates), res0143s(params%nstates))
         res0143s = 0.
@@ -57,6 +61,7 @@ contains
             rt_sampl_dens_correct_eos  = 0.
             rt_sampl_dens_correct_sum  = 0.
             rt_eoavg                   = 0.
+            rt_automask                = 0.
             rt_nonuniform              = 0.
         endif
         ! read in previous reconstruction when trail_rec==yes
@@ -144,6 +149,7 @@ contains
             call build%vol2%ifft()
             call build%vol2%mul(gridcorr_img)
             call build%vol2%write(eonames(1), del_if_exists=.true.)
+            call vol_e%copy(build%vol2)
             call build%vol2%zero_and_unflag_ft
             call build%vol2%read(eonames(2))
             call build%vol2%fft()
@@ -151,14 +157,14 @@ contains
             call build%vol2%ifft()
             call build%vol2%mul(gridcorr_img)
             call build%vol2%write(eonames(2), del_if_exists=.true.)
-            ! merged volume
-            call build%vol%ifft
-            call build%vol%mul(gridcorr_img)
-            call build%vol%write( volname, del_if_exists=.true. )
+            call build%vol%copy(vol_e)
+            ! merged volume in separate object to preserve even/odd in memory
+            call vol_merged%copy(vol_e)
+            call vol_merged%add(build%vol2)
+            call vol_merged%mul(0.5)
+            call vol_merged%write( volname, del_if_exists=.true. )
             call wait_for_closure( volname )
             if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
-                call build%vol%read(eonames(1))  ! even current
-                call build%vol2%read(eonames(2)) ! odd current
                 weight_prev = 1. - update_frac_trail_rec
                 call vol_prev_even%mul(weight_prev)
                 call vol_prev_odd%mul (weight_prev)
@@ -172,17 +178,66 @@ contains
                 call vol_prev_odd%kill
             endif
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
+            ! automasking after even/odd volume generation (state-aware for multi-state support)
+            if( L_BENCH_GLOB ) t_automask = tic()
+            if( trim(params%automsk).ne.'no' )then
+                which_iter = 1
+                if( cline%defined('which_iter') ) which_iter = params%which_iter
+                ! Build state-specific mask filename
+                mskfile_state = string(AUTOMASK_FBODY)//str_state//string(MRC_EXT)
+                ! Track state-specific mask availability and compatibility
+                l_state_filemsk    = file_exists(mskfile_state)
+                l_mask_compatible  = .false.
+                if( l_state_filemsk )then
+                    call find_ldim_nptcls(mskfile_state, ldim_mask, nptcls_mask)
+                    l_mask_compatible = ldim_mask(1) == params%box_crop .and. ldim_mask(2) == params%box_crop .and. &
+                                      &ldim_mask(3) == params%box_crop
+                    if( .not. l_mask_compatible )then
+                        write(logfhandle,'(A,1X,A)') '>>> Existing automask incompatible with current box/sampling, regenerating:', &
+                            &mskfile_state%to_char()
+                        l_state_filemsk = .false.
+                    endif
+                endif
+                ! Decide whether to generate new mask for this state (idempotent)
+                do_automsk = .false.
+                if( which_iter == params%startit .and. .not.l_state_filemsk )then
+                    do_automsk = .true.
+                else if( mod(which_iter,AMSK_FREQ)==0 .and. .not.l_state_filemsk )then
+                    do_automsk = .true.
+                else if( .not.l_state_filemsk )then
+                    ! e.g. stage transition where previous mask dimensions/sampling no longer fit
+                    do_automsk = .true.
+                endif
+                if( do_automsk )then
+                    call mskvol%automask3D(params, build%vol, build%vol2, trim(params%automsk).eq.'tight')
+                    call mskvol%write(mskfile_state)
+                    l_state_filemsk = .true.
+                endif
+            endif
+            if( L_BENCH_GLOB ) rt_automask = rt_automask + toc(t_automask)
             if( l_nonuniform_mode )then
                 if( L_BENCH_GLOB ) t_nonuniform = tic()
                 if( allocated(l_mask) ) deallocate(l_mask)
-                mskrad_px = 0.5 * params%mskdiam / params%smpd_crop
-                call vol_msk%disc(ldim, params%smpd_crop, mskrad_px, l_mask)
-                ! After trailed update, build%vol/build%vol2 already hold even/odd in memory.
-                ! Otherwise, reload the eo pair because build%vol may hold merged recvol.
-                if( .not.(params%l_trail_rec .and. update_frac_trail_rec < 0.99) )then
-                    call build%vol%read(eonames(1))
-                    call build%vol2%read(eonames(2))
+                if( trim(params%automsk).ne.'no' )then
+                    if( do_automsk )then
+                        call mskvol%set_imat
+                        call mskvol%get_imat(imat)
+                    else if( l_state_filemsk .and. file_exists(mskfile_state) )then
+                        call mskvol%new_bimg(ldim, params%smpd_crop)
+                        call mskvol%read_bimg(mskfile_state)
+                        call mskvol%get_imat(imat)
+                    endif
+                    if( allocated(imat) )then
+                        allocate(l_mask(ldim(1),ldim(2),ldim(3)))
+                        l_mask = imat > 0
+                        deallocate(imat)
+                    endif
                 endif
+                if( .not. allocated(l_mask) )then
+                    mskrad_px = 0.5 * params%mskdiam / params%smpd_crop
+                    call vol_msk%disc(ldim, params%smpd_crop, mskrad_px, l_mask)
+                endif
+                ! build%vol/build%vol2 hold the current even/odd pair in memory.
                 call setup_nu_dmats(build%vol, build%vol2, l_mask)
                 call optimize_nu_cutoff_finds()
                 call nu_filter_vols(vol_even_nu, vol_odd_nu)
@@ -214,8 +269,12 @@ contains
         call eorecvol_read%kill
         call vol_prev_even%kill
         call vol_prev_odd%kill
+        call vol_merged%kill
         if( allocated(l_mask) ) deallocate(l_mask)
+        if( allocated(imat) ) deallocate(imat)
         call cleanup_nu_filter()
+        call mskvol%kill_bimg
+        call vol_e%kill
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
@@ -232,6 +291,7 @@ contains
             write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', rt_sampl_dens_correct_eos
             write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', rt_sampl_dens_correct_sum
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', rt_eoavg
+            write(fnr,'(a,1x,f9.2)') 'automasking              : ', rt_automask
             write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', rt_nonuniform
             write(fnr,'(a,1x,f9.2)') 'total time               : ', rt_tot
             write(fnr,'(a)') ''
@@ -243,9 +303,10 @@ contains
             write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', (rt_sampl_dens_correct_eos/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', (rt_sampl_dens_correct_sum/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
+            write(fnr,'(a,1x,f9.2)') 'automasking              : ', (rt_automask/rt_tot)               * 100.
             write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', (rt_nonuniform/rt_tot)             * 100.
             write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
-            &((rt_init+rt_read+rt_sum_reduce+rt_sum_eos+rt_sampl_dens_correct_eos+rt_sampl_dens_correct_sum+rt_eoavg+rt_nonuniform)/rt_tot) * 100.
+            &((rt_init+rt_read+rt_sum_reduce+rt_sum_eos+rt_sampl_dens_correct_eos+rt_sampl_dens_correct_sum+rt_eoavg+rt_automask+rt_nonuniform)/rt_tot) * 100.
             call fclose(fnr)
         endif
     end subroutine exec_volassemble

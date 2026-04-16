@@ -30,7 +30,7 @@ contains
         ! centering
         if( params%center .eq. 'no' .or. params%nstates > 1 .or. &
             .not. params%l_doshift .or. params%pgrp(:1) .ne. 'c' .or. &
-            params%l_filemsk .or. params%l_update_frac )then
+            params%l_update_frac )then
             do_center = .false.
             xyz       = 0.
             return
@@ -65,60 +65,49 @@ contains
         integer :: filtsz
         logical :: have_even, have_odd, l_nonuniform_mode
         l_nonuniform_mode = trim(params%filt_mode).eq.'nonuniform'
-        ! READ
+        vol_avg = params%vols(s)
+        ! READ: try nonuniform refs first if requested, then regular refs, then average
         if( l_nonuniform_mode )then
             vol_even = add2fbody(params%vols_even(s), params%ext, NUFILT_SUFFIX)
             vol_odd  = add2fbody(params%vols_odd(s),  params%ext, NUFILT_SUFFIX)
-            if( .not.file_exists(vol_even) ) THROW_HARD('Missing nonuniform even reference for state='//int2str(s)//' : '//vol_even%to_char())
-            if( .not.file_exists(vol_odd)  ) THROW_HARD('Missing nonuniform odd reference for state='//int2str(s)//' : '//vol_odd%to_char())
-            call build%vol%read_and_crop(   vol_even, params%smpd, params%box_crop, params%smpd_crop)
-            call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
         else
             vol_even = params%vols_even(s)
             vol_odd  = params%vols_odd(s)
-            vol_avg  = params%vols(s)
-            have_even = file_exists(vol_even)
-            have_odd  = file_exists(vol_odd)
-            if( have_even .and. have_odd )then
-                call build%vol%read_and_crop(   vol_even, params%smpd, params%box_crop, params%smpd_crop)
-                call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
-            else
-                if( .not. file_exists(vol_avg) )then
-                    THROW_HARD('No usable reference volume inputs for state='//int2str(s)//'; need vol1 or vol_even/vol_odd')
-                endif
-                call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
-                call build%vol_odd%copy_fast(build%vol)
+        endif
+        have_even = file_exists(vol_even)
+        have_odd  = file_exists(vol_odd)
+        ! fall back to regular refs if nonuniform versions don't exist yet (will be created later in volassemble)
+        if( .not. have_even .or. .not. have_odd )then
+            if( l_nonuniform_mode )then
+                vol_even = params%vols_even(s)
+                vol_odd  = params%vols_odd(s)
+                have_even = file_exists(vol_even)
+                have_odd  = file_exists(vol_odd)
             endif
         endif
-        if( s == 1 .and. params%l_filemsk )then
-            ! read 3D envelope mask
-            call build%mskvol%read_and_crop(params%mskfile, params%smpd, params%box_crop, params%smpd_crop)
+        ! read even/odd pair or fall back to average volume
+        if( have_even .and. have_odd )then
+            call build%vol%read_and_crop(   vol_even, params%smpd, params%box_crop, params%smpd_crop)
+            call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
+        else
+            vol_avg = params%vols(s)
+            if( .not. file_exists(vol_avg) )then
+                THROW_HARD('No usable reference volume inputs for state='//int2str(s)//'; need vol1 or vol_even/vol_odd')
+            endif
+            call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
+            call build%vol_odd%copy_fast(build%vol)
         endif
         ! noise regularization
         if( params%l_noise_reg )then
             call build%vol%add_gauran(params%eps)
             call build%vol_odd%add_gauran(params%eps)
         endif
-        ! MASK
-        if( params%l_filemsk )then
-            ! envelope masking
-            call build%vol%zero_env_background(build%mskvol)
-            call build%vol_odd%zero_env_background(build%mskvol)
-            call build%vol%mul(build%mskvol)
-            call build%vol_odd%mul(build%mskvol)
-        else
-            ! circular masking
-            call build%vol%mask3D_soft(params%msk_crop, backgr=0.0)
-            call build%vol_odd%mask3D_soft(params%msk_crop, backgr=0.0)
-        endif
+        ! MASK: use circular masking (volassemble handles automask if needed)
+        call build%vol%mask3D_soft(params%msk_crop, backgr=0.0)
+        call build%vol_odd%mask3D_soft(params%msk_crop, backgr=0.0)
         ! FILTER
         if( params%l_icm )then
-            if( params%l_filemsk )then
-                l_msk = build%mskvol%bin2logical()
-                call build%vol%ICM3D_eo(build%vol_odd, params%lambda, l_msk)
-            else
-                call build%vol%ICM3D_eo(build%vol_odd, params%lambda)
-            endif
+            call build%vol%ICM3D_eo(build%vol_odd, params%lambda)
             if( params%l_lpset .or. trim(params%combine_eo).eq.'yes' )then ! no independent volume registration, so average eo pairs
                 call build%vol%add(build%vol_odd)
                 call build%vol%mul(0.5)
@@ -129,20 +118,16 @@ contains
             call build%vol_odd%fft
         else if( params%l_lpset .and. .not. l_nonuniform_mode )then
             ! read average volume that will occupy both even and odd
+            if( .not. file_exists(vol_avg) )then
+                THROW_HARD('Missing average reference for state='//int2str(s)//' : '//vol_avg%to_char())
+            endif
             call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
             ! noise regularization
             if( params%l_noise_reg )then
                 call build%vol%add_gauran(params%eps)
             endif
-            ! mask again, BP filter performed below
-            if( params%l_filemsk )then
-                ! envelope masking
-                call build%vol%zero_env_background(build%mskvol)
-                call build%vol%mul(build%mskvol)
-            else
-                ! circular masking
-                call build%vol%mask3D_soft(params%msk_crop, backgr=0.0)
-            endif
+            ! mask with circular mask (volassemble handles automask if needed)
+            call build%vol%mask3D_soft(params%msk_crop, backgr=0.0)
             ! FT & odd <- even
             call build%vol%fft
             call build%vol_odd%copy_fast(build%vol)
@@ -212,13 +197,9 @@ contains
         if( params%l_polar .and. (.not.cline%defined('vol1')) )then
             call polarft_estimate_lplim3D(params%box_crop, params%smpd_crop, lpstart, lpstop, lpopt)
         else
-            if( params%l_filemsk )then
-                call mskvol%read_and_crop(params%mskfile, params%smpd, params%box_crop, params%smpd_crop)
-                call mskvol%remove_edge
-            else
-                call mskvol%disc([params%box_crop,  params%box_crop, params%box_crop], params%smpd_crop,&
-                    &params%msk_crop, npix )
-            endif
+            ! Use circular mask for low-pass estimation (volassemble handles automasking)
+            call mskvol%disc([params%box_crop,  params%box_crop, params%box_crop], params%smpd_crop,&
+                &params%msk_crop, npix )
             vol_even = params%vols_even(state)
             vol_odd  = params%vols_odd(state)
             call build%vol%read_and_crop(    vol_even, params%smpd, params%box_crop, params%smpd_crop)

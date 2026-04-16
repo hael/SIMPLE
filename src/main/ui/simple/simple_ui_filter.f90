@@ -125,7 +125,6 @@ contains
         call uniform_filter3D%add_input(UI_FILT, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0)
         ! mask controls
         call uniform_filter3D%add_input(UI_MASK, mskdiam)
-        call uniform_filter3D%add_input(UI_MASK, mskfile)
         ! computer controls
         call uniform_filter3D%add_input(UI_COMP, nthr)
         ! add to ui_hash

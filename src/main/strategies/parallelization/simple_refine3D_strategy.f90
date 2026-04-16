@@ -52,7 +52,6 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     integer        :: nthr_master
     logical        :: have_oris
     logical        :: l_multistates
-    logical        :: l_automsk
     logical        :: l_combine_eo
     ! Prototypes / persistent command lines
     type(cmdline) :: cline_rec3D
@@ -356,8 +355,6 @@ contains
                     endif
                 endif
             end do
-            ! volume mask, one for all states
-            if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(params%mskfile, params%smpd, 1, 'vol_msk')
             call build%spproj%write_segment_inside('out')
         endif
         if( self%l_sigma )then
@@ -435,8 +432,6 @@ contains
             call cline%set('combine_eo','no')
             params%combine_eo = 'no'
         endif
-        ! automasking
-        self%l_automsk = (trim(params%automsk).ne.'no')
         ! set mkdir to no (to avoid nested directory structure in scheduled parts)
         call cline%set('mkdir', 'no')
         ! distributed environment
@@ -615,17 +610,15 @@ contains
         type(commander_prob_align)        :: xprob_align_distr
         type(commander_prob_align_neigh)  :: xprob_align_neigh_distr
         type(commander_volassemble)       :: xvolassemble
-        type(image_msk) :: mskvol
-        type(image)     :: vol_e, vol_o
         type(cmdline) :: cline_prob_align, cline_volassemble
         type(string)  :: str, str_iter, str_state
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
-        type(string)  :: fname_vol, fname_even, fname_odd, volpproc, vollp, volname, vol_in
+        type(string)  :: fname_vol, volpproc, vollp, volname, vol_in
         real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:)
         real    :: smpd
         integer :: state, iter, box
-        logical :: do_automsk, l_prob_state_mode, l_prob_neigh_mode
+        logical :: l_prob_state_mode, l_prob_neigh_mode
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = tic()
@@ -759,12 +752,6 @@ contains
                             call cline%set(vol, vol_iter)
                         endif
                     enddo
-                    ! volume mask, one for all states
-                    if( cline%defined('mskfile') )then
-                        if( file_exists(params%mskfile) )then
-                            call build%spproj%add_vol2os_out(params%mskfile, params%smpd, 1, 'vol_msk')
-                        endif
-                    endif
                     call build%spproj%write_segment_inside('out')
                     ! per-state postprocess (and optional automask)
                     do state = 1,params%nstates
@@ -776,36 +763,6 @@ contains
                         call xpostprocess%execute(self%cline_postprocess)
                         volpproc = string(VOL_FBODY)//str_state//PPROC_SUFFIX//params%ext%to_char()
                         vollp    = string(VOL_FBODY)//str_state//LP_SUFFIX//params%ext%to_char()
-                        if( self%l_automsk )then
-                            do_automsk = .false.
-                            if( iter == params%startit .and. .not.params%l_filemsk )then
-                                do_automsk = .true.
-                            else if( mod(iter,AMSK_FREQ)==0 )then
-                                do_automsk = .true.
-                            endif
-                            if( do_automsk )then
-                                call build%spproj%get_vol('vol', state, fname_vol, smpd, box)
-                                fname_even = add2fbody(fname_vol, params%ext, '_even')
-                                fname_odd  = add2fbody(fname_vol, params%ext, '_odd' )
-                                call vol_e%new([box,box,box], smpd)
-                                call vol_e%read(fname_even)
-                                call vol_o%new([box,box,box], smpd)
-                                call vol_o%read(fname_odd)
-                                if( cline%defined('thres') )then
-                                    call mskvol%automask3D(params, vol_e, vol_o, trim(params%automsk).eq.'tight', params%thres)
-                                else
-                                    call mskvol%automask3D(params, vol_e, vol_o, trim(params%automsk).eq.'tight')
-                                endif
-                                call mskvol%write(string(MSKVOL_FILE))
-                                params%mskfile   = MSKVOL_FILE
-                                params%l_filemsk = .true.
-                                call cline%set('mskfile', string(MSKVOL_FILE))
-                                call self%job_descr%set('mskfile', string(MSKVOL_FILE))
-                                call mskvol%kill_bimg
-                                call vol_e%kill
-                                call vol_o%kill
-                            endif
-                        endif
                         ! keep per-iteration postprocessed copies
                         vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext%to_char()
                         call simple_copy_file(volpproc, vol_iter)
@@ -869,8 +826,6 @@ contains
         call fsc_templ%kill
         call fsc_file%kill
         call fname_vol%kill
-        call fname_even%kill
-        call fname_odd%kill
         call volpproc%kill
         call vollp%kill
         if( allocated(res) ) deallocate(res)

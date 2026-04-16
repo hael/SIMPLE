@@ -123,7 +123,6 @@ contains
         call reconstruct3D%add_input(UI_FILT, wiener)
         ! mask controls
         call reconstruct3D%add_input(UI_MASK, mskdiam)
-        call reconstruct3D%add_input(UI_MASK, mskfile)
         ! computer controls
         call reconstruct3D%add_input(UI_COMP, nparts, required_override=.false.)
         call reconstruct3D%add_input(UI_COMP, nthr)
@@ -183,7 +182,6 @@ contains
         call refine3D%add_input(UI_FILT, combine_eo, gui_submenu="filter")
         ! mask controls
         call refine3D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
-        call refine3D%add_input(UI_MASK, mskfile, gui_submenu="mask")
         call refine3D%add_input(UI_MASK, automsk, gui_submenu="mask")
         ! computer controls
         call refine3D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)

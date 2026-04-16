@@ -160,7 +160,6 @@ type :: parameters
     type(string)              :: infile               !< file with inputs(.txt)
     type(string)              :: infile2              !< file with inputs(.txt)
     type(string)              :: last_prev_dir        !< last previous execution directory
-    type(string)              :: mskfile              !< maskfile.ext
     type(string)              :: msklist              !< table (text file) of mask volume files(.txt)
     type(string)              :: mskvols(MAXS)
     type(string)              :: niceserver           !< address and port of nice server for comms
@@ -517,7 +516,6 @@ type :: parameters
     logical :: l_doshift         = .false.
     logical :: l_eer_fraction    = .false.
     logical :: l_envfsc          = .false.
-    logical :: l_filemsk         = .false.
     logical :: l_fillin          = .false.
     logical :: l_greedy_smpl     = .true.
     logical :: l_frac_best       = .false.
@@ -583,7 +581,6 @@ contains
         self%infile2=''           !< file with inputs(.txt)
         self%infile=''            !< file with inputs(.txt)
         self%last_prev_dir=''     !< last previous execution directory
-        self%mskfile=''           !< maskfile.ext
         self%msklist=''           !< table (text file) of mask volume files(.txt)
         self%mskvols(MAXS)=''
         self%niceserver=''        !< address and port of nice server for comms
@@ -857,7 +854,6 @@ contains
         call check_file('gainref',        self%gainref)
         call check_file('infile',         self%infile,       'T')
         call check_file('infile2',        self%infile2,      'T')
-        call check_file('mskfile',        self%mskfile,      notAllowed='T')
         call check_file('oritab',         self%oritab,       'T', 'O')
         call check_file('oritab2',        self%oritab2,      'T', 'O')
         call check_file('outfile',        self%outfile,      'T', 'O')
@@ -1269,12 +1265,6 @@ contains
             self%box      = self%ldim(1)
             if( .not.cline%defined('box_crop') ) self%box_crop = self%box
         endif
-        ! no stack given, no vol given, get ldim from mskfile if present
-        if( self%stk .eq. '' .and. .not. vol_defined(1) .and. self%mskfile .ne. '' )then
-            call find_ldim_nptcls(self%mskfile, self%ldim, ifoo)
-            self%box      = self%ldim(1)
-            if( .not.cline%defined('box_crop') ) self%box_crop = self%box
-        endif
         ! directories
         if( self%mkdir.eq.'yes' )then
             if( self%dir_meta%to_char([1,1])  .ne.PATH_SEPARATOR )self%dir_meta   = PATH_PARENT//self%dir_meta%to_char()
@@ -1596,11 +1586,6 @@ contains
             endif
         endif
         ! automasking options
-        self%l_filemsk = .false.
-        if( cline%defined('mskfile') )then
-            if( .not.file_exists(self%mskfile) ) THROW_HARD('Inputted mask file '//self%mskfile%to_char()//' does not exist')
-            self%l_filemsk = .true.  ! indicate file is inputted
-        endif
         ! comlin generation
         select case(trim(self%polar))
             case('no')
@@ -1650,26 +1635,8 @@ contains
         endif
         ! set graphene flag
         self%l_graphene = self%graphene_filt .ne. 'no'
-        ! checks automask related values
-        if( cline%defined('mskfile') )then
-            if( .not. file_exists(self%mskfile) )then
-                write(logfhandle,*) 'file: ', self%mskfile%to_char()
-                THROW_HARD('input mask file not in cwd')
-            endif
-            call find_ldim_nptcls(self%mskfile, lfoo, ifoo, smpd)
-            if( lfoo(1) /= self%box_crop .or. lfoo(2) /= self%box_crop .or. lfoo(3) /= self%box_crop .or. &
-            &abs(smpd - self%smpd_crop) > 1.e-6 )then
-                if( basename(self%mskfile) == MSKVOL_FILE )then
-                    write(logfhandle,'(a)') '>>> Auto mask file does not match current box/sampling; will regenerate automask'
-                    call cline%delete('mskfile')
-                    self%mskfile   = ''
-                    self%l_filemsk = .false.
-                else
-                    write(logfhandle,'(a,1x,a)') 'Input mask incompatible with current box/sampling:', self%mskfile%to_char()
-                    THROW_HARD('mask file dimensions/sampling do not match box_crop/smpd_crop')
-                endif
-            endif
-        endif
+        ! mskfile is no longer accepted from CLI; masks are internal and state-specific
+        if( cline%defined('mskfile') ) THROW_HARD('mskfile is no longer supported on command line; masks are internal and per-state')
         ! scaling stuff
         self%l_autoscale = .false.
         if( self%autoscale .eq. 'yes' ) self%l_autoscale = .true.

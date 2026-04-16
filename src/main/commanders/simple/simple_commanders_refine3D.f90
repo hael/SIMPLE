@@ -136,8 +136,6 @@ contains
         ! 3D refinement, phase1
         str_state = int2str_pad(1,2)
         call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
-        params%mskfile = MSKVOL_FILE
-        call cline%set('mskfile',           MSKVOL_FILE)
         call cline%set('prg',                'refine3D')
         call cline%set('ufrac_trec', params%update_frac)
         call cline%set('maxits',          maxits_phase1)
@@ -151,12 +149,9 @@ contains
         endif
         iter = iter + 1
         ! re-reconstruct from all particle images
-        call cline_rec3D%set('mskfile', MSKVOL_FILE)
         call xrec3D%execute(cline_rec3D)
         ! 3D refinement, phase2
         call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
-        params%mskfile = MSKVOL_FILE
-        call cline%set('mskfile',    MSKVOL_FILE)
         call cline%set('maxits',   maxits_phase1)
         call cline%set('filt_mode', params%filt_mode)
         call cline%set('startit',           iter)

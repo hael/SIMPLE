@@ -36,7 +36,8 @@ contains
     subroutine automask3D_1( self, params, vol_even, vol_odd, vol_masked, l_tight, pix_thres )
         class(image_msk),  intent(inout) :: self
         class(parameters), intent(in)    :: params
-        class(image),      intent(inout) :: vol_even, vol_odd, vol_masked
+        class(image),      intent(in)    :: vol_even, vol_odd
+        class(image),      intent(inout) :: vol_masked
         logical,           intent(in)    :: l_tight
         real, optional,    intent(in)    :: pix_thres
         ! prepare volume for masking
@@ -53,7 +54,7 @@ contains
     subroutine automask3D_2( self, params, vol_even, vol_odd, l_tight, pix_thres )
         class(image_msk),  intent(inout) :: self
         class(parameters), intent(in)    :: params
-        class(image),      intent(inout) :: vol_even, vol_odd
+        class(image),      intent(in)    :: vol_even, vol_odd
         logical,           intent(in)    :: l_tight
         real, optional,    intent(in)    :: pix_thres 
         type(image) :: vol_filt
@@ -102,14 +103,18 @@ contains
     subroutine automask3D_filter( self, params, vol_even, vol_odd, vol_filt )
         class(image_msk),  intent(inout) :: self
         class(parameters), intent(in)    :: params
-        class(image),      intent(inout) :: vol_even, vol_odd, vol_filt
+        class(image),      intent(in)    :: vol_even, vol_odd
+        class(image),      intent(inout) :: vol_filt
+        type(image) :: vol_even_icm, vol_odd_icm
         real,    parameter :: LAM = 100.
         if( vol_even%is_2d() )THROW_HARD('automask3D_filter is intended for volumes only')
         self%amsklp = params%amsklp
-        ! ICM filter
-        call vol_even%ICM3D_eo(vol_odd, LAM)
-        call vol_filt%copy(vol_even)
-        call vol_filt%add(vol_odd)
+        ! ICM filter on local copies to preserve input volumes
+        call vol_even_icm%copy(vol_even)
+        call vol_odd_icm%copy(vol_odd)
+        call vol_even_icm%ICM3D_eo(vol_odd_icm, LAM)
+        call vol_filt%copy(vol_even_icm)
+        call vol_filt%add(vol_odd_icm)
         call vol_filt%mul(0.5)
         if( L_WRITE .and. params%part == 1 ) call vol_filt%write(string('ICM_avg.mrc'))
         ! low-pass filter
@@ -117,6 +122,8 @@ contains
         if( L_WRITE .and. params%part == 1 ) call vol_filt%write(string('ICM_avg_lp.mrc'))
         ! transfer image to binary image
         call self%transfer2bimg(vol_filt)
+        call vol_even_icm%kill
+        call vol_odd_icm%kill
     end subroutine automask3D_filter
 
     subroutine automask3D_binarize( self, params, l_tight, pix_thres )

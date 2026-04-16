@@ -56,6 +56,8 @@ contains
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         call cline%set('polar',        'yes') ! Always use polar=yes for fast initialization
+        call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
+        call cline%set('automsk',       'no') ! no envelope masking for cavgs route
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'yes')
         if( .not. cline%defined('objfun')           ) call cline%set('objfun',       'euclid') ! noise normalized Euclidean distances from the start
         if( .not. cline%defined('overlap')          ) call cline%set('overlap',          0.95)
@@ -513,18 +515,8 @@ contains
         ! set class global filt_mode flag for low-pass limit estimation
         l_lpauto     = params%l_lpauto
         l_nonuniform = trim(params%filt_mode).eq.'nonuniform'
-        ! set class global automasking flag
-        l_automsk = .false.
-        if( cline%defined('automsk') )then
-            if( trim(params%automsk).ne.'no' )then
-                if( trim(params%multivol_mode).eq.'single' )then
-                    l_automsk = .true.
-                else
-                    THROW_WARN('automasking not supported for modes other than multivol_mode.eq.single, turning automasking off')
-                    l_automsk = .false.
-                endif
-            endif
-        endif
+        ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
+        l_automsk = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
         ! prepare class command lines
         call prep_class_command_lines(params, cline, params%projfile)
         ! set symmetry class variables
