@@ -129,18 +129,20 @@ contains
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        write(logfhandle,609) '>>> REFINEMENT MODE: '//trim(params%refine)
+        write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
+        write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
         if( trim(params%gauref).eq.'yes' )then
-        write(logfhandle,607) '>>> GAU REGULARIZATION: on'
+        write(logfhandle,609) '>>> | GAU REGULARIZATION            | on'
         else
-        write(logfhandle,609) '>>> GAU REGULARIZATION: off'
+        write(logfhandle,609) '>>> | GAU REGULARIZATION            | off'
         endif
         if( params%l_ml_reg )then
-        write(logfhandle,607) '>>> ML  REGULARIZATION: on, TAU:    ', params%tau
+        write(logfhandle,'(A,F8.2)') '>>> | ML  REGULARIZATION            | on, TAU: ', params%tau
         else
-        write(logfhandle,609) '>>> ML  REGULARIZATION: off'
+        write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
         endif
-        write(logfhandle,609) '>>> FILTER MODE: '//trim(params%filt_mode)
+        write(logfhandle,609) '>>> | FILTER MODE                   | '//trim(params%filt_mode)
+        write(logfhandle,609) '>>> --------------------------------------------------'
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( cline%defined('trs') .or. params%trs >  MINSHIFT)then
@@ -296,46 +298,48 @@ contains
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        write(logfhandle,609) '>>> REFINEMENT MODE: '//trim(params%refine)
+        write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
+        write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
         if( trim(params%gauref).eq.'yes' )then
-        write(logfhandle,607) '>>> GAU REGULARIZATION: on'
+        write(logfhandle,609) '>>> | GAU REGULARIZATION            | on'
         else
-        write(logfhandle,609) '>>> GAU REGULARIZATION: off'
+        write(logfhandle,609) '>>> | GAU REGULARIZATION            | off'
         endif
         if( params%l_ml_reg )then
-        write(logfhandle,607) '>>> ML  REGULARIZATION: on, TAU:    ', params%tau
+        write(logfhandle,'(A,F8.2)') '>>> | ML  REGULARIZATION            | on, TAU: ', params%tau
         else
-        write(logfhandle,609) '>>> ML  REGULARIZATION: off'
+        write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
         endif
         if( params%l_icm )then
-        write(logfhandle,607) '>>> ICM REGULARIZATION: on, LAMBDA: ', params%lambda
+        write(logfhandle,'(A,F8.2)') '>>> | ICM REGULARIZATION            | on, LAMBDA: ', params%lambda
         else
-        write(logfhandle,609) '>>> ICM REGULARIZATION: off'
+        write(logfhandle,609) '>>> | ICM REGULARIZATION            | off'
         endif
         if( trim(params%automsk).ne.'no' )then
-        write(logfhandle,609) '>>> AUTOMASKING: on, MODE: '//trim(params%automsk)
+        write(logfhandle,609) '>>> | AUTOMASKING                   | on, MODE: '//trim(params%automsk)
         else
-        write(logfhandle,609) '>>> AUTOMASKING: off'
+        write(logfhandle,609) '>>> | AUTOMASKING                   | off'
         endif
-        write(logfhandle,609) '>>> FILTER MODE: '//trim(params%filt_mode)
+        write(logfhandle,609) '>>> | FILTER MODE                   | '//trim(params%filt_mode)
         if( params%l_update_frac )then
         if( cline%defined('ufrac_trec') )then
-        write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', params%ufrac_trec
+        write(logfhandle,'(A,F8.2)') '>>> | TRAILING REC UPDATE FRACTION  | ', params%ufrac_trec
         else
         trail_rec_ufrac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
-        write(logfhandle,607) '>>> TRAILING REC UPDATE FRACTION:     ', trail_rec_ufrac
+        write(logfhandle,'(A,F8.2)') '>>> | TRAILING REC UPDATE FRACTION  | ', trail_rec_ufrac
         endif
         if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
-        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING: on'
+        write(logfhandle,609) '>>> | FILLIN PARTICLE SAMPLING      | on'
         else
-        write(logfhandle,609) '>>> FILLIN PARTICLE SAMPLING: off'
+        write(logfhandle,609) '>>> | FILLIN PARTICLE SAMPLING      | off'
         endif
         endif
         if( params%l_polar )then
-        write(logfhandle,609) '>>> REPRESENTATION: polar'
+        write(logfhandle,609) '>>> | REPRESENTATION                | polar'
         else
-        write(logfhandle,609) '>>> REPRESENTATION: cartesian'
+        write(logfhandle,609) '>>> | REPRESENTATION                | cartesian'
         endif
+        write(logfhandle,609) '>>> --------------------------------------------------'
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
