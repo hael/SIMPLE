@@ -22,12 +22,14 @@ contains
         ! back FT (to make sure)
         call img%ifft()
         call img%fft()
-        ctfparms = orientation%get_ctfvars()
-        call img%apply_ctf(tfun, 'ctf', ctfparms )
+        if( aapply_ctf )then
+            ctfparms = orientation%get_ctfvars()
+            call img%apply_ctf(tfun, 'ctf', ctfparms )
+        endif
         if( present(bfac) ) call img%apply_bfac(bfac)
         ! add detector noise
         call img%ifft()
-        if( snr < 5 )then
+        if( snr < 5. )then
             call img%add_gauran(snr)
         endif
         if( .not. aapply_ctf ) return
