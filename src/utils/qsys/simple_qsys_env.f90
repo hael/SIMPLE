@@ -236,10 +236,10 @@ contains
     !  schedule_jobs() dispatches them in parallel respecting ncunits concurrency.
     !  Fully qsys-agnostic: works with local, SLURM, LSF, PBS, SGE.
     subroutine gen_subproject_scripts_and_schedule( self, jobs_descr, exec_bin, subproj_dirs )
-        class(qsys_env)                       :: self
-        type(chash),             intent(in)   :: jobs_descr(:)   !< one job description per subproject
-        class(string), optional, intent(in)   :: exec_bin        !< override executable binary
-        class(string), optional, intent(in)   :: subproj_dirs(:) !< per-subproject working directories
+        class(qsys_env)                     :: self
+        type(chash),             intent(in) :: jobs_descr(:)   !< one job description per subproject
+        class(string), optional, intent(in) :: exec_bin        !< override executable binary
+        class(string), optional, intent(in) :: subproj_dirs(:) !< per-subproject working directories
         call self%qscripts%generate_scripts_subprojects(jobs_descr, self%qdescr, exec_bin, subproj_dirs)
         call self%qscripts%schedule_jobs
     end subroutine gen_subproject_scripts_and_schedule

@@ -9,24 +9,24 @@ private
 
 type, extends(pca) :: kpca_svd
     private
-    real, allocatable :: E_zn(:,:)  !< expectations (feature vecs)
-    real, allocatable :: data(:,:)  !< projected data on feature vecs
-    integer           :: nthr                          !< number of threads
-    character(len=16) :: kpca_ker = ''                !< kernel type ('rbf' or 'cosine')
-    character(len=16) :: kpca_target = ''             !< target type ('ptcl' or other)
-    logical           :: existence=.false.
+    real, allocatable :: E_zn(:,:)             !< expectations (feature vecs)
+    real, allocatable :: data(:,:)             !< projected data on feature vecs
+    integer           :: nthr                  !< number of threads
+    character(len=16) :: kpca_ker    = ''      !< kernel type ('rbf' or 'cosine')
+    character(len=16) :: kpca_target = ''      !< target type ('ptcl' or other)
+    logical           :: existence   = .false.
     contains
     ! CONSTRUCTOR
-    procedure :: new      => new_kpca
+    procedure :: new        => new_kpca
     ! SETTERS
     procedure :: set_params => set_params_kpca
     ! GETTERS
-    procedure :: get_feat => get_feat_kpca
-    procedure :: generate => generate_kpca
+    procedure :: get_feat   => get_feat_kpca
+    procedure :: generate   => generate_kpca
     ! CALCULATORS
-    procedure :: master   => master_kpca
+    procedure :: master     => master_kpca
     ! DESTRUCTOR
-    procedure :: kill     => kill_kpca
+    procedure :: kill       => kill_kpca
     ! PRIVATE
     procedure, private :: kernel_center
     procedure, private :: cosine_kernel
@@ -45,12 +45,12 @@ contains
         class(kpca_svd), intent(inout) :: self
         integer,         intent(in)    :: N, D, Q
         call self%kill
-        self%N = N
-        self%D = D
-        self%Q = Q
+        self%N           = N
+        self%D           = D
+        self%Q           = Q
         ! Initialize with defaults (use set_params() to override)
-        self%nthr = 1
-        self%kpca_ker = 'cosine'
+        self%nthr        = 1
+        self%kpca_ker    = 'cosine'
         self%kpca_target = 'ptcl'
         ! allocate principal subspace and feature vectors
         allocate( self%E_zn(self%Q,self%N), self%data(self%D,self%N), source=0.)
