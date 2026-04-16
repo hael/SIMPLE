@@ -208,6 +208,10 @@ contains
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
         end select
+        select type(pca_ptr)
+            type is(kpca_svd)
+                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts)
+        end select
         do i = 1, ncls
             call progress_gfortran(i,ncls)
             if( trim(params%pca_img_ori) .eq. 'yes' )then

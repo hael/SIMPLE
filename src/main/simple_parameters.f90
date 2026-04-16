@@ -237,6 +237,7 @@ type :: parameters
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='kpca'      !< PCA mode(ppca|pca_svd|kpca){ppca}
+    character(len=STDLEN)     :: kpca_backend='exact' !< kPCA backend(exact|nystrom){exact}
     character(len=STDLEN)     :: kpca_ker='cosine'    !< kPCA kernel(rbf|cosine){cosine}
     character(len=STDLEN)     :: kpca_target='ptcl'   !< kPCA kernel target on ptcls or cavgs (ptcl|cls){ptcl}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -321,6 +322,7 @@ type :: parameters
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors 
+    integer :: kpca_nystrom_npts=0 !< # of Nyström landmarks{0=>auto}
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
@@ -758,6 +760,7 @@ contains
         call check_carg('pad',            self%pad)
         call check_carg('partition',      self%partition)
         call check_carg('pca_mode',       self%pca_mode)
+        call check_carg('kpca_backend',   self%kpca_backend)
         call check_carg('kpca_ker',       self%kpca_ker)
         call check_carg('kpca_target',    self%kpca_target)
         call check_carg('pcontrast',      self%pcontrast)

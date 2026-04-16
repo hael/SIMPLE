@@ -395,6 +395,10 @@ contains
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
         end select
+        select type(pca_ptr)
+            type is(kpca_svd)
+                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts)
+        end select
         if( l_transp_pca )then
             call pca_ptr%new(npix, params%nptcls, params%neigs)
             call pca_ptr%master(pcavecs, MAXPCAITS)

@@ -10,6 +10,7 @@ integer, parameter :: NP = 3, NS = 4, NC = 3, MAXPCAITS = 15
 type(ppca_inmem)   :: prob_pca
 type(pca_svd)      :: pca_obj
 type(kpca_svd)     :: kpca_obj
+type(kpca_svd)     :: kpca_nystrom_obj
 type(parameters)   :: params
 type(cmdline)      :: cline
 integer :: j
@@ -73,7 +74,7 @@ enddo
 print *, '---------------------------------------------------'
 ! kPCA test
 call kpca_obj%new(NS, NP, NC)
-call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target)
+call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'exact')
 call kpca_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS
@@ -82,6 +83,21 @@ do j = 1, NS
 end do
 !$omp end parallel do
 print *, 'Pre-imaged data using kPCA:'
+do j = 1, NP
+    print *, data_pca(j,:)
+enddo
+print *, '---------------------------------------------------'
+! Nyström kPCA test
+call kpca_nystrom_obj%new(NS, NP, NC)
+call kpca_nystrom_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'nystrom', NS)
+call kpca_nystrom_obj%master(data_cen)
+!$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+do j = 1, NS
+    call kpca_nystrom_obj%generate(j, avg, tmpvec)
+    data_pca(:,j) = tmpvec
+end do
+!$omp end parallel do
+print *, 'Pre-imaged data using Nyström kPCA:'
 do j = 1, NP
     print *, data_pca(j,:)
 enddo
