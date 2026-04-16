@@ -17,6 +17,7 @@ type, extends(pca) :: kpca_svd
     character(len=16) :: kpca_ker = ''                !< kernel type ('rbf' or 'cosine')
     character(len=16) :: kpca_target = ''             !< target type ('ptcl' or other)
     integer           :: kpca_nystrom_npts = 0        !< nr of Nystrom landmarks (0 => auto)
+    real              :: kpca_rbf_gamma = 0.          !< RBF gamma (0 => auto)
     logical           :: existence=.false.
     contains
     ! CONSTRUCTOR
@@ -36,6 +37,7 @@ type, extends(pca) :: kpca_svd
     procedure, private :: rbf_kernel
     procedure, private :: master_nystrom
     procedure, private :: compute_eigvecs
+    procedure, private :: get_rbf_gamma
     procedure, private :: projected_kernel_col
     procedure, private :: select_nystrom_inds
 end type
@@ -60,6 +62,7 @@ contains
         self%kpca_ker = 'cosine'
         self%kpca_target = 'ptcl'
         self%kpca_nystrom_npts = 0
+        self%kpca_rbf_gamma = 0.
         ! allocate principal subspace and feature vectors
         allocate( self%E_zn(self%Q,self%N), self%data(self%D,self%N), source=0.)
         self%existence = .true.
@@ -68,13 +71,14 @@ contains
     ! SETTERS
 
     !>  \brief  setter for runtime parameters
-    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target, kpca_backend, kpca_nystrom_npts )
+    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target, kpca_backend, kpca_nystrom_npts, kpca_rbf_gamma )
         class(kpca_svd),            intent(inout) :: self
         integer,          optional, intent(in)    :: nthr
         character(len=*), optional, intent(in)    :: kpca_ker
         character(len=*), optional, intent(in)    :: kpca_target
         character(len=*), optional, intent(in)    :: kpca_backend
         integer,          optional, intent(in)    :: kpca_nystrom_npts
+        real,             optional, intent(in)    :: kpca_rbf_gamma
         if( present(nthr) )then
             self%nthr = nthr
         endif
@@ -89,6 +93,9 @@ contains
         endif
         if( present(kpca_nystrom_npts) )then
             self%kpca_nystrom_npts = kpca_nystrom_npts
+        endif
+        if( present(kpca_rbf_gamma) )then
+            self%kpca_rbf_gamma = kpca_rbf_gamma
         endif
     end subroutine set_params_kpca
 
@@ -137,14 +144,19 @@ contains
         logical, parameter :: DEBUG   = .false.
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
-        real(dp) :: denom
-        real     :: ker(self%N,self%N), eig_vecs(self%N,self%Q), norm_pcavecs(self%D,self%N),norm_pcavecs_t(self%N,self%D),&
-                   &proj_data(self%N,self%nthr), norm_prev(self%D,self%nthr), norm_data(self%D,self%nthr)
-        integer  :: i, ind, iter, its, ithr
+        real(dp) :: denom, rbf_gamma
+        real     :: ker(self%N,self%N), eig_vecs(self%N,self%Q), eig_vals(self%Q), norm_pcavecs(self%D,self%N),&
+                   &norm_pcavecs_t(self%N,self%D)
+        real, allocatable :: ker_col(:,:), proj_data(:,:), norm_prev(:,:), norm_data(:,:)
+        integer  :: i, ind, iter, its, ithr, nworkthr
         if( trim(self%kpca_backend) .eq. 'nystrom' )then
             call self%master_nystrom(pcavecs, maxpcaits)
             return
         endif
+        nworkthr = max(1, max(self%nthr, omp_get_max_threads()))
+        allocate(ker_col(self%N,nworkthr), proj_data(self%N,nworkthr), norm_prev(self%D,nworkthr), norm_data(self%D,nworkthr), source=0.)
+        rbf_gamma = 0._dp
+        if( trim(self%kpca_ker) .eq. 'rbf' ) rbf_gamma = self%get_rbf_gamma(pcavecs)
         ! compute the kernel
         select case(trim(self%kpca_ker))
             case('rbf')
@@ -154,7 +166,8 @@ contains
         end select
         ! compute the sorted principle components of the kernel above
         if( DEBUG ) call system_clock(start_time, rate)
-        call self%compute_eigvecs(ker, eig_vecs)
+        call self%compute_eigvecs(ker, eig_vecs, eig_vals)
+        self%E_zn = transpose(matmul(ker, eig_vecs))
         if( DEBUG )then
             call system_clock(end_time)
             print *, "Eigh time: ", real(end_time-start_time)/real(rate), " seconds"
@@ -166,13 +179,13 @@ contains
         its = MAX_ITS
         if( present(maxpcaits) ) its = maxpcaits
         if( DEBUG ) call system_clock(start_time, rate)
-        ker = matmul(matmul(ker, eig_vecs), transpose(eig_vecs))
         select case(trim(self%kpca_ker))
             case('rbf')
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,iter,ithr,i,denom)
                 do ind = 1, self%N
-                    self%data(:,ind)  = pcavecs(:,ind)
                     ithr              = omp_get_thread_num() + 1
+                    call self%projected_kernel_col(eig_vecs, eig_vals, self%Q, ind, ker_col(:,ithr))
+                    self%data(:,ind)  = pcavecs(:,ind)
                     norm_prev(:,ithr) = 0.
                     iter              = 1
                     do while( euclid(self%data(:,ind),norm_prev(:,ithr)) > TOL .and. iter < its )
@@ -182,11 +195,11 @@ contains
                             proj_data(i,ithr) = euclid(norm_prev(:,ithr), pcavecs(:,i))**2
                         enddo
                         ! 2. applying the principle components to the projected vector
-                        proj_data(:,ithr) = exp(-proj_data(:,ithr)/real(self%Q)/C_CONST) * ker(:,ind)
+                        proj_data(:,ithr) = max(0., ker_col(:,ithr)) * exp(-real(rbf_gamma) * proj_data(:,ithr))
                         ! 3. computing the pre-image (of the image in step 1) using the result in step 2
                         denom             = sum(real(proj_data(:,ithr),dp))
-                        self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr))
-                        if( denom > DTINY ) self%data(:,ind) = self%data(:,ind)/real(denom)
+                        if( denom < DTINY ) exit
+                        self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
                         iter = iter + 1
                     enddo
                 enddo
@@ -204,6 +217,7 @@ contains
                     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
+                        call self%projected_kernel_col(eig_vecs, eig_vals, self%Q, ind, ker_col(:,ithr))
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
@@ -211,7 +225,7 @@ contains
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             ! 1. projecting each image on kernel space
-                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker(:,ind)
+                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_col(:,ithr)
                             ! 2. computing the pre-image
                             denom = sum(abs(real(proj_data(:,ithr),dp)))
                             if( denom < DTINY ) exit
@@ -227,6 +241,7 @@ contains
                     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
+                        call self%projected_kernel_col(eig_vecs, eig_vals, self%Q, ind, ker_col(:,ithr))
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
@@ -234,7 +249,7 @@ contains
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             ! 1. projecting each image on kernel space
-                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker(:,ind)
+                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_col(:,ithr)
                             ! 2. computing the pre-image
                             self%data(:,ind)  = matmul(norm_pcavecs, proj_data(:,ithr))
                             denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
@@ -250,6 +265,7 @@ contains
             call system_clock(end_time)
             print *, "Pre-imaging time: ", real(end_time-start_time)/real(rate), " seconds"
         endif
+        deallocate(ker_col, proj_data, norm_prev, norm_data)
     end subroutine master_kpca
 
     subroutine master_nystrom( self, pcavecs, maxpcaits )
@@ -258,11 +274,11 @@ contains
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 500
         real,    parameter :: TOL     = 0.0001
-        integer  :: m, q_used, r, its, ind, iter, ithr, i, j
+        integer  :: m, q_used, r, its, ind, iter, ithr, i, j, nworkthr
         integer  :: landmark_inds(self%N)
-        real(dp) :: denom, eig_tol
-        real     :: eig_q(self%Q), alpha(self%N,self%Q), ker_col(self%N,self%nthr), proj_data(self%N,self%nthr),&
-                   &norm_prev(self%D,self%nthr), norm_data(self%D,self%nthr), norm_pcavecs(self%D,self%N), norm_pcavecs_t(self%N,self%D)
+        real(dp) :: denom, eig_tol, rbf_gamma
+        real     :: eig_q(self%Q), alpha(self%N,self%Q), norm_pcavecs(self%D,self%N), norm_pcavecs_t(self%N,self%D)
+        real, allocatable :: ker_col(:,:), proj_data(:,:), norm_prev(:,:), norm_data(:,:)
         real, allocatable :: ker_nm(:,:), ker_mm(:,:), feat(:,:), feat_center(:), eig_w(:), eigvec_w(:,:), tmp_ker_mm(:,:),&
                             &tmp_gram(:,:), gram_eigvecs(:,:), landmark_mat(:,:), gram_small(:,:), gram_eigvecs_small(:,:)
         m = self%kpca_nystrom_npts
@@ -271,8 +287,12 @@ contains
         if( m < 1 )then
             THROW_HARD('kpca Nystrom backend requires at least one landmark')
         endif
+        nworkthr = max(1, max(self%nthr, omp_get_max_threads()))
+        rbf_gamma = 0._dp
+        if( trim(self%kpca_ker) .eq. 'rbf' ) rbf_gamma = self%get_rbf_gamma(pcavecs)
         allocate(ker_nm(self%N,m), ker_mm(m,m), feat(self%N,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m),&
-                 &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), source=0.)
+                 &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nworkthr), proj_data(self%N,nworkthr),&
+                 &norm_prev(self%D,nworkthr), norm_data(self%D,nworkthr), source=0.)
         call self%select_nystrom_inds(m, landmark_inds(1:m))
         landmark_mat(:,1:m) = pcavecs(:,landmark_inds(1:m))
         select case(trim(self%kpca_ker))
@@ -294,7 +314,7 @@ contains
                     enddo
                 enddo
                 !$omp end parallel do
-                ker_nm(1:self%N,1:m) = exp(-ker_nm(1:self%N,1:m)/real(self%Q)/C_CONST)
+                ker_nm(1:self%N,1:m) = exp(-real(rbf_gamma) * ker_nm(1:self%N,1:m))
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(j,i)
                 do j = 1,m
                     ker_mm(j,j) = 1.
@@ -306,7 +326,7 @@ contains
                 !$omp end parallel do
                 do j = 1,m
                     do i = 1,j-1
-                        ker_mm(i,j) = exp(-ker_mm(i,j)/real(self%Q)/C_CONST)
+                        ker_mm(i,j) = exp(-real(rbf_gamma) * ker_mm(i,j))
                         ker_mm(j,i) = ker_mm(i,j)
                     enddo
                 enddo
@@ -363,10 +383,10 @@ contains
                         do i = 1,self%N
                             proj_data(i,ithr) = euclid(norm_prev(:,ithr), pcavecs(:,i))**2
                         enddo
-                        proj_data(:,ithr) = exp(-proj_data(:,ithr)/real(self%Q)/C_CONST) * ker_col(:,ithr)
+                        proj_data(:,ithr) = max(0., ker_col(:,ithr)) * exp(-real(rbf_gamma) * proj_data(:,ithr))
                         denom             = sum(real(proj_data(:,ithr),dp))
-                        self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr))
-                        if( denom > DTINY ) self%data(:,ind) = self%data(:,ind) / real(denom)
+                        if( denom < DTINY ) exit
+                        self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
                         iter = iter + 1
                     enddo
                 enddo
@@ -425,7 +445,7 @@ contains
                 endif
         end select
         deallocate(ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram, gram_eigvecs, landmark_mat, &
-                   &gram_small, gram_eigvecs_small)
+                   &gram_small, gram_eigvecs_small, ker_col, proj_data, norm_prev, norm_data)
     end subroutine master_nystrom
 
     subroutine kernel_center( self, ker )
@@ -462,7 +482,9 @@ contains
         class(kpca_svd), intent(inout) :: self
         real,            intent(in)    :: mat(self%D,self%N)
         real,            intent(out)   :: ker(self%N,self%N)
-        integer :: i, j
+        integer  :: i, j
+        real(dp) :: gamma
+        gamma = self%get_rbf_gamma(mat)
         ! squared euclidean distance between pairs of rows
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,j)
         do j = 1,self%N
@@ -474,33 +496,58 @@ contains
         enddo
         !$omp end parallel do
         ! normalization and centering
-        ker = exp(-ker/real(self%Q)/C_CONST)
+        ker = exp(-real(gamma) * ker)
         call self%kernel_center(ker)
     end subroutine rbf_kernel
 
-    subroutine compute_eigvecs( self, ker, eig_vecs )
+    subroutine compute_eigvecs( self, ker, eig_vecs, eig_vals )
         class(kpca_svd), intent(inout) :: self
         real,            intent(in)    :: ker(self%N,self%N)
+        real,            intent(out)   :: eig_vals(self%Q)
         real,            intent(inout) :: eig_vecs(self%N,self%Q)
-        real    :: eig_vals(self%Q), tmp_ker(self%N,self%N)
+        real    :: tmp_ker(self%N,self%N)
         integer :: i
         tmp_ker = ker
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
-        do i = 1, self%N
-            tmp_ker(:,i) = tmp_ker(:,i) - sum(tmp_ker(:,i))/real(self%N)
-        enddo
-        !$omp end parallel do
         ! computing eigvals/eigvecs
         call eigh(self%N, tmp_ker, self%Q, eig_vals, eig_vecs)
-        eig_vals = eig_vals**2 / real(self%N)
+        eig_vals = eig_vals(self%Q:1:-1)
+        eig_vecs = eig_vecs(:,self%Q:1:-1)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1, self%Q
-            eig_vecs(:,i) = eig_vecs(:,i) / sqrt(eig_vals(i))
+            if( eig_vals(i) > real(DTINY) )then
+                eig_vecs(:,i) = eig_vecs(:,i) / sqrt(eig_vals(i))
+            else
+                eig_vecs(:,i) = 0.
+                eig_vals(i)   = 0.
+            endif
         enddo
         !$omp end parallel do
-        ! reverse the sorted order of eig_vecs
-        eig_vecs = eig_vecs(:,self%Q:1:-1)
     end subroutine compute_eigvecs
+
+    real(dp) function get_rbf_gamma( self, mat ) result( gamma )
+        class(kpca_svd), intent(in) :: self
+        real,            intent(in) :: mat(self%D,self%N)
+        integer  :: i, j, npairs
+        real(dp) :: mean_sqdist
+        if( self%kpca_rbf_gamma > 0. )then
+            gamma = real(self%kpca_rbf_gamma, dp)
+            return
+        endif
+        mean_sqdist = 0._dp
+        npairs      = 0
+        do j = 1,self%N
+            do i = 1,j-1
+                mean_sqdist = mean_sqdist + euclid(real(mat(:,i),dp), real(mat(:,j),dp))**2
+                npairs = npairs + 1
+            enddo
+        enddo
+        if( npairs < 1 )then
+            gamma = 1._dp
+        else
+            mean_sqdist = mean_sqdist / real(npairs, dp)
+            gamma = 1._dp / max(mean_sqdist, DTINY)
+        endif
+    end function get_rbf_gamma
 
     subroutine projected_kernel_col( self, eig_vecs, eig_vals, q_used, ind, ker_col )
         class(kpca_svd), intent(inout) :: self

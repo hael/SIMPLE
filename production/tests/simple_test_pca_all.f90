@@ -1,5 +1,6 @@
 program simple_test_pca_all
 use simple_core_module_api
+!$ use omp_lib
 use simple_ppca_inmem, only: ppca_inmem
 use simple_pca_svd,    only: pca_svd
 use simple_kpca_svd,   only: kpca_svd
@@ -11,11 +12,17 @@ type(ppca_inmem)   :: prob_pca
 type(pca_svd)      :: pca_obj
 type(kpca_svd)     :: kpca_obj
 type(kpca_svd)     :: kpca_nystrom_obj
+type(kpca_svd)     :: kpca_rbf_obj
+type(kpca_svd)     :: kpca_rbf_nystrom_obj
 type(parameters)   :: params
 type(cmdline)      :: cline
-integer :: j
+integer :: j, nthr_test
 real    :: data_ori(NP, NS), avg(NP), tmpvec(NP), data_pca(NP, NS), E_zn(NC, NS), data_cen(NP, NS)
 call params%new(cline)
+!$ nthr_test = min(4, max(2, omp_get_max_threads()))
+!$ call omp_set_num_threads(nthr_test)
+!$ params%nthr = nthr_test
+!$ if( nthr_test > 1 ) print *, 'Testing kPCA with OpenMP threads:', nthr_test
 data_ori(1,:) = [ 1, 2, 3, 4]
 data_ori(2,:) = [ 3, 1, 5, 8]
 data_ori(3,:) = [-1, 0, 4, 10]
@@ -74,7 +81,7 @@ enddo
 print *, '---------------------------------------------------'
 ! kPCA test
 call kpca_obj%new(NS, NP, NC)
-call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'exact')
+    call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'exact', kpca_rbf_gamma=params%kpca_rbf_gamma)
 call kpca_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS
@@ -89,7 +96,7 @@ enddo
 print *, '---------------------------------------------------'
 ! Nyström kPCA test
 call kpca_nystrom_obj%new(NS, NP, NC)
-call kpca_nystrom_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'nystrom', NS)
+    call kpca_nystrom_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'nystrom', NS, params%kpca_rbf_gamma)
 call kpca_nystrom_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS
@@ -98,6 +105,36 @@ do j = 1, NS
 end do
 !$omp end parallel do
 print *, 'Pre-imaged data using Nyström kPCA:'
+do j = 1, NP
+    print *, data_pca(j,:)
+enddo
+print *, '---------------------------------------------------'
+! RBF kPCA smoke test
+call kpca_rbf_obj%new(NS, NP, NC)
+    call kpca_rbf_obj%set_params(params%nthr, 'rbf', params%kpca_target, 'exact', kpca_rbf_gamma=0.)
+call kpca_rbf_obj%master(data_cen)
+!$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+do j = 1, NS
+    call kpca_rbf_obj%generate(j, avg, tmpvec)
+    data_pca(:,j) = tmpvec
+end do
+!$omp end parallel do
+print *, 'Pre-imaged data using RBF kPCA:'
+do j = 1, NP
+    print *, data_pca(j,:)
+enddo
+print *, '---------------------------------------------------'
+! RBF Nyström kPCA smoke test
+call kpca_rbf_nystrom_obj%new(NS, NP, NC)
+    call kpca_rbf_nystrom_obj%set_params(params%nthr, 'rbf', params%kpca_target, 'nystrom', NS, 0.)
+call kpca_rbf_nystrom_obj%master(data_cen)
+!$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+do j = 1, NS
+    call kpca_rbf_nystrom_obj%generate(j, avg, tmpvec)
+    data_pca(:,j) = tmpvec
+end do
+!$omp end parallel do
+print *, 'Pre-imaged data using RBF Nyström kPCA:'
 do j = 1, NP
     print *, data_pca(j,:)
 enddo

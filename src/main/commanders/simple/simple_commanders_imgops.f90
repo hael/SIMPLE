@@ -397,7 +397,7 @@ contains
         end select
         select type(pca_ptr)
             type is(kpca_svd)
-                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts)
+                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
         end select
         if( l_transp_pca )then
             call pca_ptr%new(npix, params%nptcls, params%neigs)

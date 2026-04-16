@@ -440,6 +440,7 @@ type :: parameters
     real    :: hp_ctf_estimate=HP_CTF_ESTIMATE !< high-pass limit 4 ctf_estimate(in A)
     real    :: icefracthreshold=ICEFRAC_THRESHOLD !< ice fraction threshold{1.0}
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
+    real    :: kpca_rbf_gamma=0.   !< RBF gamma (0=>auto)
     real    :: lambda=1.0
     real    :: lam_bounds(2) = [0.05,1.0]
     real    :: lp=20.              !< low-pass limit(in A)

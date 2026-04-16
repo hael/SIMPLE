@@ -151,6 +151,7 @@ contains
         call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: probabilistic PCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){kpca}', .false., 'kpca')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){cosine}', '(rbf|cosine){cosine}', .false., 'cosine')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){exact}', '(exact|nystrom){exact}', .false., 'exact')
+        call trajectory_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
         call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nystrom landmark count (0 => auto)', 'Nystrom landmark count (0 => auto)', '# landmarks', .false., 0.0)
         ! mask controls
         ! <empty>
