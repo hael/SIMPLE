@@ -64,7 +64,7 @@ contains
         call set_refine3D_gauref_policy( cfg, params, istage )
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
-        call set_refine3D_automsk_policy( cfg, istage, route )
+        call set_refine3D_automsk_policy( cfg, params, istage, route )
         call set_refine3D_stage_controls( cfg, params, istage )
         call apply_refine3D_route_overrides( cfg, params, istage, route )
     end subroutine build_refine3D_stage_cfg
@@ -193,13 +193,14 @@ contains
         endif
     end subroutine set_refine3D_filtering_policy
 
-    subroutine set_refine3D_automsk_policy( cfg, istage, route )
+    subroutine set_refine3D_automsk_policy( cfg, params, istage, route )
         type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
         cfg%automsk = 'no'
         if( route == REFINE3D_ROUTE_STD )then
-            if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = 'yes'
+            if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
         endif
     end subroutine set_refine3D_automsk_policy
 

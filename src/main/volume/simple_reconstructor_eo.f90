@@ -532,36 +532,29 @@ contains
 
     !> Load state-specific automask file if it exists, or generate on-the-fly, or use circular fallback
     subroutine load_state_mask_or_fallback( self, state, even, odd )
+        use simple_volume_postprocess_policy, only: state_mask_is_compatible
         class(reconstructor_eo), intent(inout) :: self
         integer,                 intent(in)    :: state
         class(image),            intent(inout) :: even, odd
         type(string)  :: mskfile_state
-        real          :: smpd_mask
-        integer       :: ldim_mask(3), nptcls_mask
+        logical       :: l_state_mask_exists, l_state_mask_compatible
         ! Try to load state-specific automask if automasking enabled
         if( trim(self%p_ptr%automsk).ne.'no' )then
             ! Construct state-specific filename: automask3D_state{N:02d}.mrc
             mskfile_state = string(AUTOMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
-            if( file_exists(mskfile_state) )then
-                call find_ldim_nptcls(mskfile_state, ldim_mask, nptcls_mask, smpd=smpd_mask)
-                if( ldim_mask(1) == self%box .and. ldim_mask(2) == self%box .and. ldim_mask(3) == self%box .and. &
-                &abs(smpd_mask - self%smpd) <= 1.e-6 )then
-                    ! Load existing compatible state-specific mask
-                    call self%envmask%read_bimg(mskfile_state)
-                    ! Apply mask if l_envfsc is true
-                    if( self%p_ptr%l_envfsc )then
-                        call even%zero_env_background(self%envmask)
-                        call odd%zero_env_background(self%envmask)
-                        call even%mul(self%envmask)
-                        call odd%mul(self%envmask)
-                    endif
-                else
-                    ! Stale/incompatible mask file: fall back to spherical mask
-                    call even%mask3D_soft(self%msk, backgr=0.)
-                    call odd%mask3D_soft(self%msk, backgr=0.)
+            call state_mask_is_compatible(mskfile_state, self%box, self%smpd, l_state_mask_exists, l_state_mask_compatible)
+            if( l_state_mask_compatible )then
+                ! Load existing compatible state-specific mask
+                call self%envmask%read_bimg(mskfile_state)
+                ! Apply mask if l_envfsc is true
+                if( self%p_ptr%l_envfsc )then
+                    call even%zero_env_background(self%envmask)
+                    call odd%zero_env_background(self%envmask)
+                    call even%mul(self%envmask)
+                    call odd%mul(self%envmask)
                 endif
             else
-                ! VOLASSEMBLE is the sole automask producer; if missing, fall back to spherical mask
+                ! VOLASSEMBLE is the sole automask producer; if missing or stale, fall back to spherical mask
                 call even%mask3D_soft(self%msk, backgr=0.)
                 call odd%mask3D_soft(self%msk, backgr=0.)
             endif

@@ -15,6 +15,7 @@ contains
         use simple_gridding,         only: prep3D_inv_instrfun4mul
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
                                          &cleanup_nu_filter, print_nu_filtmap_lowpass_stats
+        use simple_volume_postprocess_policy, only: volume_postprocess_plan, plan_state_postprocess
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
@@ -24,16 +25,17 @@ contains
         type(image)                   :: vol_even_nu, vol_odd_nu, vol_msk
         type(image)                   :: vol_e
         type(image_msk)               :: mskvol
+        type(image_bin)               :: state_mask_bin
         type(string)                  :: recname, volname, volname_prev, fsc_txt_file
         type(string)                  :: volname_prev_even, volname_prev_odd, str_state, str_iter
-        type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname, mskfile_state
+        type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname
+        type(volume_postprocess_plan) :: pp_plan
         logical, allocatable          :: l_mask(:,:,:)
-        logical                       :: l_nonuniform_mode, do_automsk, l_mask_compatible, l_state_filemsk
+        logical                       :: l_nonuniform_mode
         integer, allocatable          :: imat(:,:,:)
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
-        real                          :: weight_prev, update_frac_trail_rec, mskrad_px, smpd_mask
+        real                          :: weight_prev, update_frac_trail_rec, mskrad_px
         integer                       :: part, state, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part, which_iter
-        integer                       :: ldim_mask(3), nptcls_mask
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_automask, t_nonuniform, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
@@ -178,54 +180,32 @@ contains
                 call vol_prev_odd%kill
             endif
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
+            which_iter = 1
+            if( cline%defined('which_iter') ) which_iter = params%which_iter
+            call plan_state_postprocess(params, state, which_iter, l_nonuniform_mode, pp_plan)
+            if( pp_plan%l_state_mask_incompatible )then
+                write(logfhandle,'(A,1X,A)') '>>> Existing automask incompatible with current box/sampling, regenerating:', &
+                    &pp_plan%mskfile_state%to_char()
+            endif
             ! automasking after even/odd volume generation (state-aware for multi-state support)
             if( L_BENCH_GLOB ) t_automask = tic()
-            if( trim(params%automsk).ne.'no' )then
-                which_iter = 1
-                if( cline%defined('which_iter') ) which_iter = params%which_iter
-                ! Build state-specific mask filename
-                mskfile_state = string(AUTOMASK_FBODY)//str_state//string(MRC_EXT)
-                ! Track state-specific mask availability and compatibility
-                l_state_filemsk    = file_exists(mskfile_state)
-                l_mask_compatible  = .false.
-                if( l_state_filemsk )then
-                    call find_ldim_nptcls(mskfile_state, ldim_mask, nptcls_mask)
-                    l_mask_compatible = ldim_mask(1) == params%box_crop .and. ldim_mask(2) == params%box_crop .and. &
-                                      &ldim_mask(3) == params%box_crop
-                    if( .not. l_mask_compatible )then
-                        write(logfhandle,'(A,1X,A)') '>>> Existing automask incompatible with current box/sampling, regenerating:', &
-                            &mskfile_state%to_char()
-                        l_state_filemsk = .false.
-                    endif
-                endif
-                ! Decide whether to generate new mask for this state (idempotent)
-                do_automsk = .false.
-                if( which_iter == params%startit .and. .not.l_state_filemsk )then
-                    do_automsk = .true.
-                else if( mod(which_iter,AMSK_FREQ)==0 .and. .not.l_state_filemsk )then
-                    do_automsk = .true.
-                else if( .not.l_state_filemsk )then
-                    ! e.g. stage transition where previous mask dimensions/sampling no longer fit
-                    do_automsk = .true.
-                endif
-                if( do_automsk )then
-                    call mskvol%automask3D(params, build%vol, build%vol2, trim(params%automsk).eq.'tight')
-                    call mskvol%write(mskfile_state)
-                    l_state_filemsk = .true.
-                endif
+            if( pp_plan%regenerate_automask )then
+                call mskvol%automask3D(params, build%vol, build%vol2, trim(params%automsk).eq.'tight')
+                call mskvol%write(pp_plan%mskfile_state)
             endif
             if( L_BENCH_GLOB ) rt_automask = rt_automask + toc(t_automask)
             if( l_nonuniform_mode )then
                 if( L_BENCH_GLOB ) t_nonuniform = tic()
                 if( allocated(l_mask) ) deallocate(l_mask)
-                if( trim(params%automsk).ne.'no' )then
-                    if( do_automsk )then
+                if( pp_plan%use_state_mask_for_nonuniform )then
+                    if( pp_plan%regenerate_automask )then
                         call mskvol%set_imat
                         call mskvol%get_imat(imat)
-                    else if( l_state_filemsk .and. file_exists(mskfile_state) )then
-                        call mskvol%new_bimg(ldim, params%smpd_crop)
-                        call mskvol%read_bimg(mskfile_state)
-                        call mskvol%get_imat(imat)
+                    else
+                        call state_mask_bin%new_bimg(ldim, params%smpd_crop)
+                        call state_mask_bin%read_bimg(pp_plan%mskfile_state)
+                        call state_mask_bin%get_imat(imat)
+                        call state_mask_bin%kill_bimg
                     endif
                     if( allocated(imat) )then
                         allocate(l_mask(ldim(1),ldim(2),ldim(3)))
@@ -273,6 +253,7 @@ contains
         if( allocated(l_mask) ) deallocate(l_mask)
         if( allocated(imat) ) deallocate(imat)
         call cleanup_nu_filter()
+        call state_mask_bin%kill_bimg
         call mskvol%kill_bimg
         call vol_e%kill
         ! end gracefully

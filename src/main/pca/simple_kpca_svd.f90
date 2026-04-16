@@ -40,6 +40,10 @@ type, extends(pca) :: kpca_svd
     procedure, private :: get_rbf_gamma
     procedure, private :: projected_kernel_col
     procedure, private :: select_nystrom_inds
+    procedure, private :: dense_tmm
+    procedure, private :: dense_mm
+    procedure, private :: gram_symmetric
+    procedure, private :: center_columns
 end type
 
 real, parameter :: C_CONST = 0.4  ! for rbf_kernel for testing
@@ -304,8 +308,8 @@ contains
                     if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
                 enddo
                 !$omp end parallel do
-                ker_nm(1:self%N,1:m) = matmul(transpose(norm_pcavecs), norm_pcavecs(:,landmark_inds(1:m)))
-                ker_mm(1:m,1:m)      = matmul(transpose(norm_pcavecs(:,landmark_inds(1:m))), norm_pcavecs(:,landmark_inds(1:m)))
+                call self%dense_tmm(norm_pcavecs, norm_pcavecs(:,landmark_inds(1:m)), ker_nm(1:self%N,1:m))
+                call self%dense_tmm(norm_pcavecs(:,landmark_inds(1:m)), norm_pcavecs(:,landmark_inds(1:m)), ker_mm(1:m,1:m))
             case('rbf')
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(j,i)
                 do j = 1,m
@@ -342,22 +346,21 @@ contains
         if( r < 1 )then
             THROW_HARD('Nystrom kernel approximation is rank deficient')
         endif
-        feat(1:self%N,1:r) = matmul(ker_nm(1:self%N,1:m), eigvec_w(:,1:r))
+        call self%dense_mm(ker_nm(1:self%N,1:m), eigvec_w(:,1:r), feat(1:self%N,1:r))
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1,r
             feat(:,i) = feat(:,i) / sqrt(max(eig_w(i), real(DTINY)))
         enddo
         !$omp end parallel do
-        feat_center(1:r) = sum(feat(1:self%N,1:r), dim=1) / real(self%N)
-        feat(1:self%N,1:r) = feat(1:self%N,1:r) - spread(feat_center(1:r), dim=1, ncopies=self%N)
-        tmp_gram(1:r,1:r) = matmul(transpose(feat(1:self%N,1:r)), feat(1:self%N,1:r))
+        call self%center_columns(feat(1:self%N,1:r), feat_center(1:r))
+        call self%gram_symmetric(feat(1:self%N,1:r), tmp_gram(1:r,1:r))
         q_used = min(self%Q, r)
         allocate(gram_small(r,r), gram_eigvecs_small(r,q_used))
         gram_small = tmp_gram(1:r,1:r)
         call eigh(r, gram_small, q_used, eig_q(1:q_used), gram_eigvecs_small)
         eig_q(1:q_used)                  = eig_q(q_used:1:-1)
         gram_eigvecs(1:r,1:q_used)       = gram_eigvecs_small(:,q_used:1:-1)
-        alpha(:,1:q_used)                = matmul(feat(1:self%N,1:r), gram_eigvecs(1:r,1:q_used))
+        call self%dense_mm(feat(1:self%N,1:r), gram_eigvecs(1:r,1:q_used), alpha(:,1:q_used))
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1,q_used
             if( eig_q(i) > real(DTINY) ) alpha(:,i) = alpha(:,i) / sqrt(eig_q(i))
@@ -573,6 +576,97 @@ contains
             inds(i) = 1 + ((i-1) * (self%N-1)) / (m-1)
         enddo
     end subroutine select_nystrom_inds
+
+    subroutine dense_tmm( self, left, right, out )
+        class(kpca_svd), intent(in)  :: self
+        real,            intent(in)  :: left(:,:), right(:,:)
+        real,            intent(out) :: out(:,:)
+        integer  :: i, j, k, nrow, ninner, ncol
+        real(dp) :: acc
+        out = 0.
+        nrow   = size(left, 2)
+        ninner = size(left, 1)
+        ncol   = size(right, 2)
+        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j,k,acc)
+        do j = 1, ncol
+            do i = 1, nrow
+                acc = 0._dp
+                do k = 1, ninner
+                    acc = acc + real(left(k,i),dp) * real(right(k,j),dp)
+                enddo
+                out(i,j) = real(acc)
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine dense_tmm
+
+    subroutine dense_mm( self, left, right, out )
+        class(kpca_svd), intent(in)  :: self
+        real,            intent(in)  :: left(:,:), right(:,:)
+        real,            intent(out) :: out(:,:)
+        integer  :: i, j, k, nrow, ninner, ncol
+        real(dp) :: acc
+        out = 0.
+        nrow   = size(left, 1)
+        ninner = size(left, 2)
+        ncol   = size(right, 2)
+        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i,j,k,acc)
+        do j = 1, ncol
+            do i = 1, nrow
+                acc = 0._dp
+                do k = 1, ninner
+                    acc = acc + real(left(i,k),dp) * real(right(k,j),dp)
+                enddo
+                out(i,j) = real(acc)
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine dense_mm
+
+    subroutine gram_symmetric( self, feat, gram )
+        class(kpca_svd), intent(in)  :: self
+        real,            intent(in)  :: feat(:,:)
+        real,            intent(out) :: gram(:,:)
+        integer  :: i, j, k, nrow, ncol
+        real(dp) :: acc
+        nrow = size(feat, 1)
+        ncol = size(feat, 2)
+        gram = 0.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,j,k,acc)
+        do j = 1, ncol
+            do i = 1, j
+                acc = 0._dp
+                do k = 1, nrow
+                    acc = acc + real(feat(k,i),dp) * real(feat(k,j),dp)
+                enddo
+                gram(i,j) = real(acc)
+                gram(j,i) = gram(i,j)
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine gram_symmetric
+
+    subroutine center_columns( self, mat, col_mean )
+        class(kpca_svd), intent(in)    :: self
+        real,            intent(inout) :: mat(:,:)
+        real,            intent(out)   :: col_mean(:)
+        integer  :: i, j, nrow, ncol
+        real(dp) :: acc
+        nrow = size(mat, 1)
+        ncol = size(mat, 2)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,j,acc)
+        do j = 1, ncol
+            acc = 0._dp
+            do i = 1, nrow
+                acc = acc + real(mat(i,j),dp)
+            enddo
+            col_mean(j) = real(acc / real(nrow, dp))
+            do i = 1, nrow
+                mat(i,j) = mat(i,j) - col_mean(j)
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine center_columns
 
     ! DESTRUCTOR
 
