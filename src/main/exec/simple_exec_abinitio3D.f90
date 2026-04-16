@@ -2,7 +2,7 @@
 module simple_exec_abinitio3D
 use simple_cmdline,             only: cmdline
 use simple_string,              only: string
-use simple_exec_helpers,        only: restarted_exec
+use simple_exec_helpers,        only: restarted_exec, exec_screen
 use simple_commanders_abinitio, only: commander_abinitio3D_cavgs, commander_abinitio3D, commander_multivol_assign
 use simple_commanders_volops,   only: commander_noisevol
 use simple_commanders_resolest, only: commander_estimate_lpstages
@@ -29,7 +29,9 @@ contains
         l_did_execute = .true.
         select case(trim(which))
             case( 'abinitio3D' )
-                if( cline%defined('nrestarts') )then
+                if( cline%defined('screen') )then
+                    call exec_screen(cline, string('abinitio3D'), string('simple_exec'))
+                else if( cline%defined('nrestarts') )then
                     call restarted_exec(cline, string('abinitio3D'), string('simple_exec'))
                 else
                     call xabinitio3D%execute(cline)

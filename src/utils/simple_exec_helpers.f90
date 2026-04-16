@@ -7,8 +7,9 @@ use simple_cmdline,    only: cmdline
 use simple_sp_project, only: sp_project
 implicit none
 
-public :: restarted_exec, async_exec, gen_exec_cmd, script_exec, update_job_descriptions_in_project
-public :: copy_project_file_to_root_dir, set_master_num_threads, set_shmem_flag
+public :: restarted_exec, async_exec, gen_exec_cmd, script_exec, exec_screen
+public :: update_job_descriptions_in_project, copy_project_file_to_root_dir, set_master_num_threads
+public :: set_shmem_flag
 private
 #include "simple_local_flags.inc"
 
@@ -43,6 +44,100 @@ contains
         end do
         call job_descr%kill
     end subroutine restarted_exec
+
+    subroutine exec_screen( cline, prg, executable )
+        class(cmdline),        intent(inout) :: cline
+        class(string),         intent(in)    :: prg, executable
+        type(string),            allocatable :: lines(:)
+        type(chash),             allocatable :: parms(:)
+        character(len=STDLEN),   allocatable :: vals(:), pairs(:)
+        type(cmdline)             :: cline_screen
+        type(string)              :: cmd, str, fname, key, val
+        type(chash)               :: job_descr
+        character(len=LONGSTRLEN) :: line
+        integer  :: nrepeats, i,j, irepeat, nargs, nvals, npairs, njobs, n
+        if( .not. cline%defined('projfile') )then
+            THROW_HARD('projfile needs to be defined on command line for exec_screens')
+        endif
+        ! Optional restarts
+        nrepeats = 1
+        if( cline%defined('nrestarts') ) nrepeats = cline%get_iarg('nrestarts')
+        if( nrepeats < 1 )then
+            THROW_HARD('Invalid # of RESTARTS; exec_screen')
+        endif
+        ! Read parameters
+        fname = cline%get_carg('screen')
+        if( .not. file_exists(fname) )then
+            THROW_HARD('Screen file '//fname%to_char()//' does not exist; exec_screen')
+        endif
+        call read_filetable(fname, lines)
+        njobs = size(lines)
+        write(logfhandle,'(A,I6)') '>>> NUMBER OF JOBS TO EXECUTE: ', njobs*nrepeats
+        ! Parse lines and arguments
+        allocate(parms(njobs),vals(2))
+        do i = 1,njobs
+            line = lines(i)%to_char()
+            ! # of ocurrences of '='
+            n = count([(line(j:j), j=1,len_trim(line))] == '=')
+            if( n == 0 )then
+                THROW_HARD('Invalid line formatting in screen file: '//trim(line)//' ; exec_screen')
+            endif
+            allocate(pairs(n))
+            call parsestr(line, ' ', pairs, npairs)
+            parms(i) = chash(npairs)
+            do j = 1, npairs
+                call parsestr(pairs(j), '=', vals, nvals)
+                if( nvals /= 2 )then
+                    THROW_HARD('Invalid key-value pair in screen file: '//trim(pairs(j))//' ; exec_screen')
+                endif
+                call parms(i)%push(vals(1), vals(2))
+            enddo
+            deallocate(pairs)
+        enddo
+        call lines%kill
+        deallocate(vals,lines)
+        ! update global command line
+        call cline%delete('screen')
+        call cline%delete('nrestarts')
+        ! Execution loop
+        do i = 1,njobs
+            cline_screen = cline
+            call cline_screen%set('prg', prg)
+            ! parameters for this screen
+            str = string('')
+            do j = 1,parms(i)%size_of()
+                key = parms(i)%get_key(j)
+                val = parms(i)%get(j)
+                call cline_screen%set(key, val)
+                str = str//'_'//key//'_'//val
+            end do
+            ! compose the command line
+            write(logfhandle,'(A)')'>>>'
+            call cline_screen%gen_job_descr(job_descr)
+            if( nrepeats == 1 )then
+                ! single execution
+                cmd = executable//' '//job_descr%chash2str()
+                cmd = cmd//' > '//uppercase(prg%to_char())//'_OUTPUT_SCREEN_'//trim(str%to_char())
+                write(logfhandle,'(A,A,A)')'>>> ',str%to_char()
+                ! execute
+                call exec_cmdline(cmd)
+            else
+                ! repeated executions
+                do irepeat = 1,nrepeats
+                    cmd = executable//' '//job_descr%chash2str()
+                    cmd = cmd//' > '//uppercase(prg%to_char())//'_OUTPUT_REPEAT_'//int2str(irepeat)&
+                            &//'_SCREEN_'//trim(str%to_char())
+                    write(logfhandle,'(A,A,A)')'>>> ',str%to_char(),' - REPEAT: '//int2str(irepeat)
+                    ! execute
+                    call exec_cmdline(cmd)
+                enddo
+            endif
+            call job_descr%kill
+            call parms(i)%kill
+        enddo
+        deallocate(parms)
+        call cline_screen%kill
+    end subroutine exec_screen
 
     subroutine async_exec( cline, executable, output )
         class(cmdline), intent(inout) :: cline

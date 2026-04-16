@@ -88,7 +88,6 @@ type :: parameters
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='yes'
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
-    character(len=3)          :: polar='no'           !< To use polar FT representation(yes|no){no}
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_corrs='no'     !< exporting corrs during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
@@ -246,6 +245,7 @@ type :: parameters
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
+    character(len=STDLEN)     :: polar='no'           !< To use polar FT representation(yes|no|new){no}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option

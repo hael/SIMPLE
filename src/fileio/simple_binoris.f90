@@ -221,6 +221,7 @@ contains
         ! 3d part
         if( allocated(bytearr_part3) )then
             ! find next nonzero first_data_byte
+            first_data_byte = 0
             do iseg=isegment + 1,self%n_segments
                 if( self%header(iseg)%first_data_byte > 0 )then
                     first_data_byte = self%header(iseg)%first_data_byte
@@ -274,6 +275,7 @@ contains
         ! 3d part
         if( allocated(bytearr_part3) )then
             ! find next nonzero first_data_byte
+            first_data_byte = 0
             do iseg=isegment + 1,self%n_segments
                 if( self%header(iseg)%first_data_byte > 0 )then
                     first_data_byte = self%header(iseg)%first_data_byte
