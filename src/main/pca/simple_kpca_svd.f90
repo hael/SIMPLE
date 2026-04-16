@@ -44,6 +44,8 @@ type, extends(pca) :: kpca_svd
     procedure, private :: dense_mm
     procedure, private :: gram_symmetric
     procedure, private :: center_columns
+    procedure, private :: partial_eigh_sym
+    procedure, private :: orthonormalize_cols
 end type
 
 real, parameter :: C_CONST = 0.4  ! for rbf_kernel for testing
@@ -278,7 +280,7 @@ contains
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 500
         real,    parameter :: TOL     = 0.0001
-        integer  :: m, q_used, r, its, ind, iter, ithr, i, j, nworkthr
+        integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, nworkthr
         integer  :: landmark_inds(self%N)
         real(dp) :: denom, eig_tol, rbf_gamma
         real     :: eig_q(self%Q), alpha(self%N,self%Q), norm_pcavecs(self%D,self%N), norm_pcavecs_t(self%N,self%D)
@@ -294,6 +296,7 @@ contains
         nworkthr = max(1, max(self%nthr, omp_get_max_threads()))
         rbf_gamma = 0._dp
         if( trim(self%kpca_ker) .eq. 'rbf' ) rbf_gamma = self%get_rbf_gamma(pcavecs)
+        r_keep = min(m, max(self%Q, min(2*self%Q, self%Q + 32)))
         allocate(ker_nm(self%N,m), ker_mm(m,m), feat(self%N,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m),&
                  &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nworkthr), proj_data(self%N,nworkthr),&
                  &norm_prev(self%D,nworkthr), norm_data(self%D,nworkthr), source=0.)
@@ -338,11 +341,9 @@ contains
                 THROW_HARD('Unsupported kPCA kernel backend: '//trim(self%kpca_ker))
         end select
         tmp_ker_mm = ker_mm(1:m,1:m)
-        call eigh(m, tmp_ker_mm, m, eig_w(1:m), eigvec_w)
-        eig_w(1:m)    = eig_w(m:1:-1)
-        eigvec_w(:,:) = eigvec_w(:,m:1:-1)
-        eig_tol = max(real(DTINY,dp), 1.e-6_dp * max(real(maxval(eig_w(1:m)),dp), 1._dp))
-        r = count(real(eig_w(1:m),dp) > eig_tol)
+        call self%partial_eigh_sym(tmp_ker_mm, r_keep, eig_w(1:r_keep), eigvec_w(:,1:r_keep))
+        eig_tol = max(real(DTINY,dp), 1.e-6_dp * max(real(maxval(eig_w(1:r_keep)),dp), 1._dp))
+        r = count(real(eig_w(1:r_keep),dp) > eig_tol)
         if( r < 1 )then
             THROW_HARD('Nystrom kernel approximation is rank deficient')
         endif
@@ -357,9 +358,8 @@ contains
         q_used = min(self%Q, r)
         allocate(gram_small(r,r), gram_eigvecs_small(r,q_used))
         gram_small = tmp_gram(1:r,1:r)
-        call eigh(r, gram_small, q_used, eig_q(1:q_used), gram_eigvecs_small)
-        eig_q(1:q_used)                  = eig_q(q_used:1:-1)
-        gram_eigvecs(1:r,1:q_used)       = gram_eigvecs_small(:,q_used:1:-1)
+        call self%partial_eigh_sym(gram_small, q_used, eig_q(1:q_used), gram_eigvecs_small)
+        gram_eigvecs(1:r,1:q_used)       = gram_eigvecs_small(:,1:q_used)
         call self%dense_mm(feat(1:self%N,1:r), gram_eigvecs(1:r,1:q_used), alpha(:,1:q_used))
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1,q_used
@@ -667,6 +667,68 @@ contains
         enddo
         !$omp end parallel do
     end subroutine center_columns
+
+    subroutine partial_eigh_sym( self, mat, neigs, eigvals, eigvecs )
+        class(kpca_svd), intent(in)    :: self
+        real,            intent(in)    :: mat(:,:)
+        integer,         intent(in)    :: neigs
+        real,            intent(out)   :: eigvals(neigs)
+        real,            intent(out)   :: eigvecs(size(mat,1),neigs)
+        integer, parameter :: MAX_IT = 10
+        integer :: n, ksub, iter, j
+        real, allocatable :: basis(:,:), z(:,:), small(:,:), small_vecs(:,:)
+        n = size(mat,1)
+        if( neigs >= n .or. n <= max(64, 2*neigs) )then
+            allocate(small(n,n))
+            small = mat
+            call eigh(n, small, neigs, eigvals, eigvecs)
+            eigvals = eigvals(neigs:1:-1)
+            eigvecs = eigvecs(:,neigs:1:-1)
+            deallocate(small)
+            return
+        endif
+        ksub = min(n, max(neigs + 8, min(2*neigs, neigs + 32)))
+        allocate(basis(n,ksub), z(n,ksub), small(ksub,ksub), small_vecs(ksub,neigs), source=0.)
+        do j = 1, ksub
+            basis(:,j) = mat(:,j)
+            if( sum(abs(real(basis(:,j),dp))) <= DTINY ) basis(j,j) = 1.
+        enddo
+        call self%orthonormalize_cols(basis)
+        do iter = 1, MAX_IT
+            call self%dense_mm(mat, basis, z)
+            call self%orthonormalize_cols(z)
+            basis = z
+        enddo
+        call self%dense_mm(mat, basis, z)
+        call self%dense_tmm(basis, z, small)
+        call eigh(ksub, small, neigs, eigvals, small_vecs)
+        eigvals    = eigvals(neigs:1:-1)
+        small_vecs = small_vecs(:,neigs:1:-1)
+        call self%dense_mm(basis, small_vecs, eigvecs)
+        deallocate(basis, z, small, small_vecs)
+    end subroutine partial_eigh_sym
+
+    subroutine orthonormalize_cols( self, mat )
+        class(kpca_svd), intent(in)    :: self
+        real,            intent(inout) :: mat(:,:)
+        integer  :: i, j, nrow, ncol
+        real(dp) :: proj, nrm
+        nrow = size(mat,1)
+        ncol = size(mat,2)
+        do j = 1, ncol
+            do i = 1, j-1
+                proj = sum(real(mat(:,i),dp) * real(mat(:,j),dp))
+                mat(:,j) = mat(:,j) - real(proj) * mat(:,i)
+            enddo
+            nrm = sqrt(sum(real(mat(:,j),dp) * real(mat(:,j),dp)))
+            if( nrm <= DTINY )then
+                mat(:,j) = 0.
+                mat(1 + mod(j-1, nrow), j) = 1.
+            else
+                mat(:,j) = mat(:,j) / real(nrm)
+            endif
+        enddo
+    end subroutine orthonormalize_cols
 
     ! DESTRUCTOR
 

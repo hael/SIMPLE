@@ -418,10 +418,13 @@ contains
         else
             call pca_ptr%new(params%nptcls, npix, params%neigs)
             call pca_ptr%master(pcavecs, MAXPCAITS)
-            allocate(gen(npix))
+            !$omp parallel do private(iptcl) default(shared) proc_bind(close) schedule(static)
             do iptcl = 1, params%nptcls
-                call pca_ptr%generate(iptcl, avg, gen)
-                call imgs(iptcl)%unserialize(gen)
+                call pca_ptr%generate(iptcl, avg, pcavecs(:,iptcl))
+            end do
+            !$omp end parallel do
+            do iptcl = 1, params%nptcls
+                call imgs(iptcl)%unserialize(pcavecs(:,iptcl))
                 call imgs(iptcl)%write(params%outstk, iptcl)
                 call imgs(iptcl)%kill
             end do
