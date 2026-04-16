@@ -368,6 +368,8 @@ contains
         type(simple_nice_comm)         :: nice_comm
         type(parameters)               :: params
         type(builder)                  :: build
+        integer(int64)                 :: t0, t1
+        real(real64)                   :: trate
         integer                        :: npix, iptcl, j
         logical                        :: l_transp_pca
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
@@ -379,13 +381,19 @@ contains
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)
         call nice_comm%cycle()
+        call system_clock(t0, trate)
         allocate(imgs(params%nptcls))
         do iptcl = 1, params%nptcls
             call imgs(iptcl)%new([params%box,params%box,1], params%smpd)
             call imgs(iptcl)%read(params%stk, iptcl)
         end do
+        call system_clock(t1)
+        if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
         l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
+        call system_clock(t0)
         call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
+        call system_clock(t1)
+        if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
         ! pca allocation
         select case(trim(params%pca_mode))
             case('ppca')
@@ -401,8 +409,12 @@ contains
         end select
         if( l_transp_pca )then
             call pca_ptr%new(npix, params%nptcls, params%neigs)
+            call system_clock(t0)
             call pca_ptr%master(pcavecs, MAXPCAITS)
+            call system_clock(t1)
+            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
             allocate(tmpvec(params%nptcls))
+            call system_clock(t0)
             !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
             do j = 1, npix
                 call pca_ptr%generate(j, avg, tmpvec)
@@ -415,9 +427,15 @@ contains
                 call imgs(iptcl)%write(params%outstk, iptcl)
                 call imgs(iptcl)%kill
             end do
+            call system_clock(t1)
+            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
         else
             call pca_ptr%new(params%nptcls, npix, params%neigs)
+            call system_clock(t0)
             call pca_ptr%master(pcavecs, MAXPCAITS)
+            call system_clock(t1)
+            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
+            call system_clock(t0)
             !$omp parallel do private(iptcl) default(shared) proc_bind(close) schedule(static)
             do iptcl = 1, params%nptcls
                 call pca_ptr%generate(iptcl, avg, pcavecs(:,iptcl))
@@ -428,6 +446,8 @@ contains
                 call imgs(iptcl)%write(params%outstk, iptcl)
                 call imgs(iptcl)%kill
             end do
+            call system_clock(t1)
+            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
         endif
         ! cleanup
         deallocate(imgs)

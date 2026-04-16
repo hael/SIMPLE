@@ -280,9 +280,12 @@ contains
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 500
         real,    parameter :: TOL     = 0.0001
+        logical, parameter :: PROFILE = .true.
         integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, nworkthr
         integer  :: landmark_inds(self%N)
         real(dp) :: denom, eig_tol, rbf_gamma
+        integer(int64) :: t0, t1
+        real(real64)   :: trate
         real     :: eig_q(self%Q), alpha(self%N,self%Q), norm_pcavecs(self%D,self%N), norm_pcavecs_t(self%N,self%D)
         real, allocatable :: ker_col(:,:), proj_data(:,:), norm_prev(:,:), norm_data(:,:)
         real, allocatable :: ker_nm(:,:), ker_mm(:,:), feat(:,:), feat_center(:), eig_w(:), eigvec_w(:,:), tmp_ker_mm(:,:),&
@@ -293,6 +296,7 @@ contains
         if( m < 1 )then
             THROW_HARD('kpca Nystrom backend requires at least one landmark')
         endif
+        if( PROFILE ) call system_clock(t0, trate)
         nworkthr = max(1, max(self%nthr, omp_get_max_threads()))
         rbf_gamma = 0._dp
         if( trim(self%kpca_ker) .eq. 'rbf' ) rbf_gamma = self%get_rbf_gamma(pcavecs)
@@ -340,8 +344,18 @@ contains
             case default
                 THROW_HARD('Unsupported kPCA kernel backend: '//trim(self%kpca_ker))
         end select
+        if( PROFILE )then
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A,I8,A,I8)') 'kPCA Nyström kernel/features setup: ', real(t1-t0)/real(trate), ' s; N=', self%N, ' m=', m
+            call system_clock(t0)
+        endif
         tmp_ker_mm = ker_mm(1:m,1:m)
         call self%partial_eigh_sym(tmp_ker_mm, r_keep, eig_w(1:r_keep), eigvec_w(:,1:r_keep))
+        if( PROFILE )then
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström landmark eigensolve: ', real(t1-t0)/real(trate), ' s; r_keep=', r_keep
+            call system_clock(t0)
+        endif
         eig_tol = max(real(DTINY,dp), 1.e-6_dp * max(real(maxval(eig_w(1:r_keep)),dp), 1._dp))
         r = count(real(eig_w(1:r_keep),dp) > eig_tol)
         if( r < 1 )then
@@ -358,6 +372,11 @@ contains
         q_used = min(self%Q, r)
         allocate(gram_small(r,r), gram_eigvecs_small(r,q_used))
         gram_small = tmp_gram(1:r,1:r)
+        if( PROFILE )then
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström feature/gram build: ', real(t1-t0)/real(trate), ' s; r=', r
+            call system_clock(t0)
+        endif
         call self%partial_eigh_sym(gram_small, q_used, eig_q(1:q_used), gram_eigvecs_small)
         gram_eigvecs(1:r,1:q_used)       = gram_eigvecs_small(:,1:q_used)
         call self%dense_mm(feat(1:self%N,1:r), gram_eigvecs(1:r,1:q_used), alpha(:,1:q_used))
@@ -366,6 +385,11 @@ contains
             if( eig_q(i) > real(DTINY) ) alpha(:,i) = alpha(:,i) / sqrt(eig_q(i))
         enddo
         !$omp end parallel do
+        if( PROFILE )then
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström reduced eigensolve/proj: ', real(t1-t0)/real(trate), ' s; q=', q_used
+            call system_clock(t0)
+        endif
         if( q_used < self%Q )then
             alpha(:,q_used+1:self%Q) = 0.
             eig_q(q_used+1:self%Q)   = 0.
@@ -447,6 +471,10 @@ contains
                     !$omp end parallel do
                 endif
         end select
+        if( PROFILE )then
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström pre-image/reconstruct: ', real(t1-t0)/real(trate), ' s'
+        endif
         deallocate(ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram, gram_eigvecs, landmark_mat, &
                    &gram_small, gram_eigvecs_small, ker_col, proj_data, norm_prev, norm_data)
     end subroutine master_nystrom

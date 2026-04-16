@@ -50,22 +50,28 @@ contains
         if( allocated(pcavecs) ) deallocate(pcavecs)
         if( allocated(avg)     ) deallocate(avg)
         allocate(pcavecs(D,n), source=0.)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1, n
             pcavecs(:,i) = imgs(i)%serialize(ll_mask)
         end do
+        !$omp end parallel do
         if( ttransp )then
             if( present(avg_pix) ) avg_pix = sum(pcavecs, dim=2) / real(n)
             pcavecs = transpose(pcavecs)
             avg = sum(pcavecs, dim=2) / real(D)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
             do i = 1, D
                 pcavecs(:,i) = pcavecs(:,i) - avg
             end do
+            !$omp end parallel do
         else
             avg = sum(pcavecs, dim=2) / real(n)
             if( present(avg_pix) ) avg_pix = avg
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
             do i = 1, n
                 pcavecs(:,i) = pcavecs(:,i) - avg
             end do
+            !$omp end parallel do
         endif
         if( l_fft )then
             do i = 1, n
