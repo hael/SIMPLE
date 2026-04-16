@@ -279,6 +279,7 @@ contains
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 500
+        integer, parameter :: NYSTROM_AUTO_MAX = 512
         real,    parameter :: TOL     = 0.0001
         logical, parameter :: PROFILE = .true.
         integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, nworkthr
@@ -291,7 +292,7 @@ contains
         real, allocatable :: ker_nm(:,:), ker_mm(:,:), feat(:,:), feat_center(:), eig_w(:), eigvec_w(:,:), tmp_ker_mm(:,:),&
                             &tmp_gram(:,:), gram_eigvecs(:,:), landmark_mat(:,:), gram_small(:,:), gram_eigvecs_small(:,:)
         m = self%kpca_nystrom_npts
-        if( m <= 0 ) m = min(self%N, max(4*self%Q, 32))
+        if( m <= 0 ) m = min(self%N, min(NYSTROM_AUTO_MAX, max(2*self%Q, 64)))
         m = min(self%N, max(self%Q, m))
         if( m < 1 )then
             THROW_HARD('kpca Nystrom backend requires at least one landmark')
@@ -306,6 +307,11 @@ contains
                  &norm_prev(self%D,nworkthr), norm_data(self%D,nworkthr), source=0.)
         call self%select_nystrom_inds(m, landmark_inds(1:m))
         landmark_mat(:,1:m) = pcavecs(:,landmark_inds(1:m))
+        if( PROFILE )then
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A,I8,A,I8,A,I8)') 'kPCA Nyström alloc/init: ', real(t1-t0)/real(trate), ' s; N=', self%N, ' D=', self%D, ' m=', m
+            call system_clock(t0)
+        endif
         select case(trim(self%kpca_ker))
             case('cosine')
                 norm_pcavecs = pcavecs
@@ -346,7 +352,7 @@ contains
         end select
         if( PROFILE )then
             call system_clock(t1)
-            write(logfhandle,'(A,F8.3,A,I8,A,I8)') 'kPCA Nyström kernel/features setup: ', real(t1-t0)/real(trate), ' s; N=', self%N, ' m=', m
+            write(logfhandle,'(A,F8.3,A,I8,A,I8)') 'kPCA Nyström kernel setup: ', real(t1-t0)/real(trate), ' s; N=', self%N, ' m=', m
             call system_clock(t0)
         endif
         tmp_ker_mm = ker_mm(1:m,1:m)
