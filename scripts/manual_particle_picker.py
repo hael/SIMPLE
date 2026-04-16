@@ -262,7 +262,7 @@ class ParticlePicker:
     def on_close(self, event) -> None:
         self.closed = True
 
-    def save_boxes(self, output_file: str = "boxfile.box") -> None:
+    def save_boxes(self, output_file: str = "positions_all.box") -> None:
         with open(output_file, "w", encoding="utf-8") as f:
             for item in self.boxes:
                 x_bl = int(round(item.x - self.box_size / 2.0))
@@ -292,12 +292,12 @@ def pick_particles_with_input() -> None:
     picker = ParticlePicker(img=img, box_size=box_size)
     plt.show()
 
-    picker.save_boxes("boxfile.box")
+    picker.save_boxes("positions_all.box")
 
     print(f"\nFinished! Total particles picked: {len(picker.boxes)}")
     for i, item in enumerate(picker.boxes, start=1):
         print(f"Particle {i}: X={item.x:.2f}, Y={item.y:.2f}")
-    print("Saved boxes to boxfile.box")
+    print("Saved boxes to positions_all.box")
 
 
 if __name__ == "__main__":

@@ -9,14 +9,14 @@ type(ui_program), target :: model_validate
 
 contains
 
-    subroutine construct_validate_programs(prgtab)
+    subroutine construct_validate_programs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call new_check_refpick(prgtab)
         call new_mini_stream(prgtab)
         call new_model_validate(prgtab)
     end subroutine construct_validate_programs
 
-    subroutine print_validate_programs(logfhandle)
+    subroutine print_validate_programs( logfhandle)
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('VALIDATION:', C_UNDERLINED)
         write(logfhandle,'(A)') check_refpick%name%to_char()
@@ -98,7 +98,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call model_validate%new(&
-        &'model_validate', &                                                                        ! name
+        &'model_validate', &                                                                          ! name
         &'Validation of atomic model',&                                                               ! descr_short
         &'is a program to validate the PDB atomic model given a 3D experimental density map in MRC',& ! descr long
         &'simple_exec',&                                                                              ! executable

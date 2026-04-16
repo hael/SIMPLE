@@ -42,11 +42,13 @@ contains
         !call atoms_stats%add_input(UI_IO, )
         ! parameter input/output
         !call atoms_stats%add_input(UI_IMG, )
+        call atoms_stats%add_input(UI_PARM, smpd,    required_override=.true.)
         ! alternative inputs
         !call atoms_stats%add_input(UI_PARM, )
         ! search controls
         !call atoms_stats%add_input(UI_SRCH, )
         ! filter controls
+        call atoms_stats%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         !call atoms_stats%add_input(UI_FILT, )
         ! mask controls
         !call atoms_stats%add_input(UI_MASK, )
@@ -69,12 +71,14 @@ contains
         ! image input/output
         !call detect_atoms%add_input(UI_IO, )
         ! parameter input/output
+        call detect_atoms%add_input(UI_PARM, smpd,    required_override=.true.)
         !call detect_atoms%add_input(UI_IMG, )
         ! alternative inputs
         !call detect_atoms%add_input(UI_PARM, )
         ! search controls
         !call detect_atoms%add_input(UI_SRCH, )
         ! filter controls
+        call detect_atoms%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         !call detect_atoms%add_input(UI_FILT, )
         ! mask controls
         call detect_atoms%add_input(UI_MASK, mskdiam, required_override=.false.)
@@ -97,12 +101,14 @@ contains
         ! image input/output
         !call simulate_nanoparticle%add_input(UI_IO, )
         ! parameter input/output
+        call simulate_nanoparticle%add_input(UI_PARM, smpd,    required_override=.true.)
         !call simulate_nanoparticle%add_input(UI_IMG, )
         ! alternative inputs
         !call simulate_nanoparticle%add_input(UI_PARM, )
         ! search controls
         !call simulate_nanoparticle%add_input(UI_SRCH, )
         ! filter controls
+        call simulate_nanoparticle%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         !call simulate_nanoparticle%add_input(UI_FILT, )
         ! mask controls
         !call simulate_nanoparticle%add_input(UI_MASK, )
@@ -125,12 +131,14 @@ contains
         ! image input/output
         !call single_workflow%add_input(UI_IO, )
         ! parameter input/output
+        call single_workflow%add_input(UI_PARM, smpd,    required_override=.true.)
         !call single_workflow%add_input(UI_IMG, )
         ! alternative inputs
         !call single_workflow%add_input(UI_PARM, )
         ! search controls
         !call single_workflow%add_input(UI_SRCH, )
         ! filter controls
+        call single_workflow%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         !call single_workflow%add_input(UI_FILT, )
         ! mask controls
         !call single_workflow%add_input(UI_MASK, )
