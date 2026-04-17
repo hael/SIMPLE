@@ -19,7 +19,7 @@ type, extends(pca) :: kpca_svd
     character(len=16) :: kpca_ker          = ''      !< kernel type ('rbf' or 'cosine')
     character(len=16) :: kpca_target       = ''      !< target type ('ptcl' or other)
     integer           :: kpca_nystrom_npts = 512       !< nr of Nystrom landmarks
-    integer           :: kpca_nystrom_local_nbrs = 128 !< max extra local support for Nyström reconstruction
+    integer           :: kpca_nystrom_local_nbrs = 96 !< max extra local support for Nyström reconstruction
     real              :: kpca_rbf_gamma    = 0.      !< RBF gamma (0 => auto)
     real              :: kpca_cosine_weight_power = 1.5 !< cosine local-weight sharpening power
     logical           :: existence         = .false.
@@ -70,10 +70,10 @@ contains
         ! Initialize with defaults (use set_params() to override)
         self%nthr              = 1
         self%kpca_backend      = 'nystrom'
-        self%kpca_ker          = 'cosine'
+        self%kpca_ker          = 'rbf'
         self%kpca_target       = 'ptcl'
         self%kpca_nystrom_npts = 512
-        self%kpca_nystrom_local_nbrs = 128
+        self%kpca_nystrom_local_nbrs = 96
         self%kpca_rbf_gamma    = 0.
         self%kpca_cosine_weight_power = 1.5
         ! allocate principal subspace and feature vectors
@@ -368,7 +368,7 @@ contains
         nthr_use = max(1, max(self%nthr, omp_get_max_threads()))
         local_nbrs = min(max(0, self%kpca_nystrom_local_nbrs), max(0, self%N - m))
         local_pool_nbrs = local_nbrs
-        if( trim(self%kpca_ker) .eq. 'cosine' .or. trim(self%kpca_ker) .eq. 'rbf' )then
+        if( trim(self%kpca_ker) .eq. 'cosine' )then
             local_pool_nbrs = min(max(0, self%N - m), max(local_nbrs, 2 * local_nbrs))
         endif
         allocate(ker_nm(self%N,m), ker_mm(m,m), feat(self%N,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m),&

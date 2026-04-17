@@ -237,7 +237,7 @@ type :: parameters
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='kpca'      !< PCA mode(ppca|pca_svd|kpca){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
-    character(len=STDLEN)     :: kpca_ker='cosine'    !< kPCA kernel(rbf|cosine){cosine}
+    character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: kpca_target='ptcl'   !< kPCA kernel target on ptcls or cavgs (ptcl|cls){ptcl}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN)     :: pickkind='gau'       !< Picking quasi-template(gau|ring|disc){gau}
@@ -322,7 +322,7 @@ type :: parameters
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors {0=>auto for Nyström kPCA}
     integer :: kpca_nystrom_npts=512 !< # of Nyström landmarks
-    integer :: kpca_nystrom_local_nbrs=128 !< max extra local support neighbors for Nyström reconstruction
+    integer :: kpca_nystrom_local_nbrs=96 !< max extra local support neighbors for Nyström reconstruction
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
