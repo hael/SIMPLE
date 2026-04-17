@@ -1291,13 +1291,16 @@ contains
         if( self%ldim(3) == 1 ) xyz(3) = 0.
     end subroutine masscen
 
-    !>  Per frame real space polynomial interpolation (type-bound, pointer-free)
-    module subroutine micrograph_interp( self, interp_fixed_frame, fixed_frame, nframes, frames, &
-            &weights, poly_coeffs_dim, poly_coeffs )
+    !>  Warps weighted frames according to inputted polynomial deformation model
+    !   (bilinear interpolation) and sums them into self (micrograph)
+    module subroutine warp_frames_and_sum( self, interp_fixed_frame, fixed_frame, fromtof,&
+                                            &frames, weights, poly_coeffs_dim, poly_coeffs )
         class(image),  intent(inout) :: self
-        integer,       intent(in)    :: interp_fixed_frame, fixed_frame, nframes, poly_coeffs_dim
-        type(image),   intent(inout) :: frames(nframes)
-        real,          intent(in)    :: weights(nframes)
+        integer,       intent(in)    :: interp_fixed_frame, fixed_frame
+        integer,       intent(in)    :: fromtof(2)
+        type(image),   intent(in)    :: frames(fromtof(1):fromtof(2))
+        real,          intent(in)    :: weights(fromtof(1):fromtof(2))
+        integer,       intent(in)    :: poly_coeffs_dim
         real(dp),      intent(in)    :: poly_coeffs(poly_coeffs_dim,2)
         real(dp) :: dtvec(3), t, ti, dt, dt2, dt3
         real(dp) :: A1_c0, A1_c1, A1_c2, A2_c0, A2_c1, A2_c2
@@ -1305,12 +1308,12 @@ contains
         real(dp) :: A1, A2, D1, D2, x, y, inv_nx, inv_ny
         integer  :: ldim(3), i, j, iframe
         real     :: w, pixx, pixy
-        ldim   = frames(1)%ldim
+        ldim   = frames(fromtof(1))%ldim
         inv_nx = 1.0_dp / real(ldim(1)-1, dp)
         inv_ny = 1.0_dp / real(ldim(2)-1, dp)
         call self%zero_and_unflag_ft
         ti = real(interp_fixed_frame-fixed_frame, dp)
-        do iframe = 1,nframes
+        do iframe = fromtof(1),fromtof(2)
             w = weights(iframe)
             if( abs(w) < TINY ) cycle          ! skip zero-weight frames
             t      = real(iframe-fixed_frame, dp)
@@ -1334,7 +1337,7 @@ contains
             !$omp proc_bind(close) schedule(static)
             do j = 1, ldim(2)
                 y  = real(j-1,dp) * inv_ny - 0.5_dp
-                ! Horner on y: A = c0 + y*(c1 + y*c2)
+                ! A = c0 + y*(c1 + y*c2)
                 A1 = A1_c0 + y*(A1_c1 + y*A1_c2)
                 A2 = A2_c0 + y*(A2_c1 + y*A2_c2)
                 ! Fold B*xy term into row-level constant; Horner on x becomes x*(D + Bx2*x)
@@ -1345,6 +1348,7 @@ contains
                     ! Horner on x: eliminates x2 and xy; 2 mults instead of 5
                     pixx = real(i) + real(A1 + x*(D1 + B1x2*x))
                     pixy = real(j) + real(A2 + x*(D2 + B2x2*x))
+                    ! accumulate into micrograph with bilinear interpolation
                     self%rmat(i,j,1) = self%rmat(i,j,1) + w*interp_bilin(pixx,pixy)
                 end do
             end do
@@ -1375,6 +1379,6 @@ contains
                     &          t1*u  * frames(iframe)%rmat(x1_h, y2_h, 1)
             end function interp_bilin
 
-    end subroutine micrograph_interp
+    end subroutine warp_frames_and_sum
 
 end submodule simple_image_geom

@@ -289,10 +289,14 @@ contains
         real,        pointer     :: rmatin(:,:,:), rmatout(:,:,:)
         type(image), allocatable :: local_frames(:)
         type(image)              :: backgr
+        real(dp)                 :: polynomial2d(POLYDIM,2)
         integer                  :: ldim(3), iframe, n
         ldim = self%ldim_sc
         n    = self%fromtof(2)-self%fromtof(1)+1
         allocate(local_frames(self%fromtof(1):self%fromtof(2)))
+        if( self%l_poly )then
+            polynomial2d = reshape([self%polyx,self%polyy], [POLYDIM,2])
+        endif
         if( self%convention%to_char().eq.'cs' )then
             ! Frames Stage drift
             !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
@@ -322,7 +326,10 @@ contains
             end do
             !$omp end parallel do
             ! Non dose-weighted beam-induced correction
-            if( self%l_poly ) call bimc(micrograph_nodw)
+            if( self%l_poly )then
+                call micrograph_nodw%warp_frames_and_sum(self%align_frame, self%align_frame,&
+                        &self%fromtof, local_frames, self%weights, POLYDIM, polynomial2d)
+            endif
             ! Dose-weighing
             if( self%l_doseweighing )then
                 !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
@@ -338,7 +345,8 @@ contains
                 !$omp end parallel do
                 if( self%l_poly )then
                     ! Dose-weighted beam-induced correction
-                    call bimc(micrograph_dw)
+                    call micrograph_dw%warp_frames_and_sum(self%align_frame, self%align_frame,&
+                            &self%fromtof, local_frames, self%weights, POLYDIM, polynomial2d)
                 else
                     ! Dose-weighted stage-drift correction
                     call micrograph_dw%new(ldim, self%smpd_out)
@@ -363,7 +371,8 @@ contains
                 !$omp end parallel do
                 ! Beam-induced motion
                 ! non dose-weighted
-                call bimc(micrograph_nodw)
+                call micrograph_nodw%warp_frames_and_sum(self%align_frame, self%align_frame,&
+                        &self%fromtof, local_frames, self%weights, POLYDIM, polynomial2d)
                 ! dose-weighted
                 if( self%l_doseweighing )then
                     call apply_dose_weighing(self%nframes, local_frames, self%fromtof, self%total_dose, self%kv)
@@ -373,7 +382,8 @@ contains
                         call local_frames(iframe)%ifft
                     end do
                     !$omp end parallel do
-                    call bimc(micrograph_dw)
+                    call micrograph_dw%warp_frames_and_sum(self%align_frame, self%align_frame,&
+                            &self%fromtof, local_frames, self%weights, POLYDIM, polynomial2d)
                 else
                     call micrograph_dw%kill
                 endif
@@ -412,94 +422,6 @@ contains
         !$omp end parallel do
         deallocate(local_frames)
         call backgr%kill
-    contains
-
-        ! Performs beam-induced motion correction on real-space frames
-        subroutine bimc( mic )
-            class(image), intent(inout) :: mic
-            real(dp)      :: t,ti, dt,dt2,dt3, x,x2,y,y2,xy, A1,A2
-            real(dp)      :: B1x,B1x2,B1xy,B2x,B2x2,B2xy
-            integer       :: i, j
-            real          :: w, pixx,pixy
-            call mic%new(ldim, self%smpd_out)
-            call mic%zero_and_unflag_ft
-            call mic%get_rmat_ptr(rmatout)
-            ti = 0.d0
-            do iframe = self%fromtof(1),self%fromtof(2)
-                call local_frames(iframe)%get_rmat_ptr(rmatin)
-                w = self%weights(iframe)
-                t = real(iframe-self%align_frame, dp)
-                dt  = ti-t
-                dt2 = ti*ti - t*t
-                dt3 = ti*ti*ti - t*t*t
-                B1x  = sum(self%polyx(4:6)   * [dt,dt2,dt3])
-                B1x2 = sum(self%polyx(7:9)   * [dt,dt2,dt3])
-                B1xy = sum(self%polyx(16:18) * [dt,dt2,dt3])
-                B2x  = sum(self%polyy(4:6)   * [dt,dt2,dt3])
-                B2x2 = sum(self%polyy(7:9)   * [dt,dt2,dt3])
-                B2xy = sum(self%polyy(16:18) * [dt,dt2,dt3])
-                !$omp parallel do default(shared) private(i,j,x,x2,y,y2,xy,A1,A2,pixx,pixy)&
-                !$omp proc_bind(close) schedule(static)
-                do j = 1, ldim(2)
-                    y  = real(j-1,dp) / real(ldim(2)-1,dp) - 0.5d0
-                    y2 = y*y
-                    A1 =           sum(self%polyx(1:3)   * [dt,dt2,dt3])
-                    A1 = A1 + y  * sum(self%polyx(10:12) * [dt,dt2,dt3])
-                    A1 = A1 + y2 * sum(self%polyx(13:15) * [dt,dt2,dt3])
-                    A2 =           sum(self%polyy(1:3)   * [dt,dt2,dt3])
-                    A2 = A2 + y  * sum(self%polyy(10:12) * [dt,dt2,dt3])
-                    A2 = A2 + y2 * sum(self%polyy(13:15) * [dt,dt2,dt3])
-                    do i = 1, ldim(1)
-                        x  = real(i-1,dp) / real(ldim(1)-1,dp) - 0.5d0
-                        x2 = x*x
-                        xy = x*y
-                        pixx = real(i) + real(A1 + B1x*x + B1x2*x2 + B1xy*xy)
-                        pixy = real(j) + real(A2 + B2x*x + B2x2*x2 + B2xy*xy)
-                        rmatout(i,j,1) = rmatout(i,j,1) + w*interp_bilin(pixx,pixy)
-                    end do
-                end do
-                !$omp end parallel do
-            enddo
-        end subroutine bimc
-
-        pure real function interp_bilin( xval, yval )
-            real, intent(in) :: xval, yval
-            integer  :: x1_h,  x2_h,  y1_h,  y2_h
-            real     :: t, u
-            logical  :: outside
-            outside = .false.
-            x1_h = floor(xval)
-            x2_h = x1_h + 1
-            if( x1_h<1 .or. x2_h<1 )then
-                x1_h    = 1
-                outside = .true.
-            endif
-            if( x1_h>ldim(1) .or. x2_h>ldim(1) )then
-                x1_h    = ldim(1)
-                outside = .true.
-            endif
-            y1_h = floor(yval)
-            y2_h = y1_h + 1
-            if( y1_h<1 .or. y2_h<1 )then
-                y1_h    = 1
-                outside = .true.
-            endif
-            if( y1_h>ldim(2) .or. y2_h>ldim(2) )then
-                y1_h    = ldim(2)
-                outside = .true.
-            endif
-            if( outside )then
-                interp_bilin = rmatin(x1_h, y1_h, 1)
-                return
-            endif
-            t  = xval - real(x1_h)
-            u  = yval - real(y1_h)
-            interp_bilin =  (1. - t) * (1. - u) * rmatin(x1_h, y1_h, 1) + &
-                                 &t  * (1. - u) * rmatin(x2_h, y1_h, 1) + &
-                                 &t  *       u  * rmatin(x2_h, y2_h, 1) + &
-                           &(1. - t) *       u  * rmatin(x1_h, y2_h, 1)
-        end function interp_bilin
-
     end subroutine generate_micrographs
 
     subroutine write_star( self, star_fname )

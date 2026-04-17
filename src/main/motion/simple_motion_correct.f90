@@ -8,7 +8,7 @@ use simple_opt_image_weights,    only: opt_image_weights
 use simple_image,                only: image
 use simple_eer_factory,          only: eer_decoder
 use simple_parameters,           only: parameters
-use simple_motion_correct_utils, only: micrograph_interp, correct_gain, apply_dose_weighing, calc_eer_fraction
+use simple_motion_correct_utils, only: correct_gain, apply_dose_weighing, calc_eer_fraction
 implicit none
 
 ! Stage drift
@@ -118,7 +118,7 @@ contains
             case(2)
                 ldim    = 2 * ldim
                 ldim(3) = 1
-                smpd    = smpd / 2. ! x2 upsampling to 8K x 8K pixel sizze
+                smpd    = smpd / 2. ! x2 upsampling to 8K x 8K pixel size
             case DEFAULT
                 THROW_HARD('Unsupported up-sampling: '//int2str(p_ptr%eer_upsampling)//'; motion_correct_init')
             end select
@@ -593,7 +593,7 @@ contains
         if( l_BENCH ) t_patched_forctf = tic()
         call movie_sum_ctf%new(ldim_scaled, smpd_scaled)
         weights = scalar_weight
-        call motion_patch%polytransfo(movie_frames_scaled(:), weights, movie_sum_ctf)
+        call motion_patch%gen_micrograph(movie_frames_scaled(:), weights, movie_sum_ctf)
         if( l_BENCH ) rt_patched_forctf = toc(t_patched_forctf)
         if( p_ptr%l_dose_weight )then
             ! dose weighing
@@ -617,7 +617,7 @@ contains
         if( l_BENCH ) t_patched_mic = tic()
         call movie_sum_corrected%new(ldim_scaled, smpd_scaled)
         weights = frameweights
-        call motion_patch%polytransfo(movie_frames_scaled(:), weights, movie_sum_corrected)
+        call motion_patch%gen_micrograph(movie_frames_scaled(:), weights, movie_sum_corrected)
         if( l_BENCH ) rt_patched_mic = toc(t_patched_mic)
         if( L_BENCH )then
             rt_patched = toc(t_patched)

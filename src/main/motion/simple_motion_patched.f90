@@ -75,7 +75,7 @@ contains
     procedure                           :: set_bfactor
     procedure                           :: get_poly4star
     procedure                           :: get_polyfit_rmsd
-    procedure                           :: polytransfo
+    procedure                           :: gen_micrograph
     ! Destructor
     procedure                           :: kill
 end type motion_patched
@@ -671,15 +671,15 @@ contains
         shift(2) = apply_patch_poly(self%poly_coeffs(:,2), xx,yy,t)
     end subroutine get_local_shift
 
-    !>  Per frame real space polynomial interpolation
-    subroutine polytransfo( self, frames, weights, frame_output )
+    !>  Generates the micrograph by summing the frames deformed by the polynomial model
+    subroutine gen_micrograph( self, frames, weights, mic)
         class(motion_patched), intent(inout) :: self
         type(image),           intent(inout) :: frames(self%nframes)
         real,                  intent(in)    :: weights(self%nframes)
-        type(image),           intent(inout) :: frame_output
-        call micrograph_interp(self%interp_fixed_frame, self%fixed_frame, self%nframes,&
-            &frames, weights, PATCH_PDIM, self%poly_coeffs, frame_output)
-    end subroutine polytransfo
+        type(image),           intent(inout) :: mic
+        call mic%warp_frames_and_sum(self%interp_fixed_frame, self%fixed_frame,&
+           &[1, self%nframes], frames, weights, PATCH_PDIM, self%poly_coeffs)
+    end subroutine gen_micrograph
 
     subroutine set_size_frames_ref( self )
         class(motion_patched), intent(inout) :: self

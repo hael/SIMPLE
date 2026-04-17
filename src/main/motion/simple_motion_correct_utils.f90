@@ -6,7 +6,7 @@ use simple_image,       only: image
 use simple_eer_factory, only: eer_decoder
 implicit none
 
-public :: correct_gain, flip_gain, apply_dose_weighing, micrograph_interp, calc_eer_fraction
+public :: correct_gain, flip_gain, apply_dose_weighing, calc_eer_fraction
 private
 #include "simple_local_flags.inc"
 
@@ -139,100 +139,6 @@ contains
         enddo
         !$omp end parallel do
     end subroutine apply_dose_weighing
-
-    !>  Per frame real space polynomial interpolation
-    subroutine micrograph_interp(interp_fixed_frame, fixed_frame, nframes, frames,&
-        &weights, poly_coeffs_dim, poly_coeffs, frame_output)
-        integer,               intent(in)    :: interp_fixed_frame, fixed_frame, nframes, poly_coeffs_dim
-        type(image),           intent(inout) :: frames(nframes)
-        real,                  intent(in)    :: weights(nframes)
-        real(dp),              intent(in)    :: poly_coeffs(poly_coeffs_dim,2)
-        type(image),           intent(inout) :: frame_output
-        real, pointer :: rmatin(:,:,:), rmatout(:,:,:)
-        real(dp)      :: t,ti, dt,dt2,dt3, x,x2,y,y2,xy, A1,A2, B1x,B1x2,B1xy,B2x,B2x2,B2xy
-        integer       :: ldim(3), i, j, iframe
-        real          :: w, pixx,pixy
-        ldim = frames(1)%get_ldim()
-        call frame_output%zero_and_unflag_ft
-        call frame_output%get_rmat_ptr(rmatout)
-        ti = real(interp_fixed_frame-fixed_frame, dp)
-        do iframe = 1,nframes
-            call frames(iframe)%get_rmat_ptr(rmatin)
-            w = weights(iframe)
-            t = real(iframe-fixed_frame, dp)
-            dt  = ti-t
-            dt2 = ti*ti - t*t
-            dt3 = ti*ti*ti - t*t*t
-            B1x  = sum(poly_coeffs(4:6,1)   * [dt,dt2,dt3])
-            B1x2 = sum(poly_coeffs(7:9,1)   * [dt,dt2,dt3])
-            B1xy = sum(poly_coeffs(16:18,1) * [dt,dt2,dt3])
-            B2x  = sum(poly_coeffs(4:6,2)   * [dt,dt2,dt3])
-            B2x2 = sum(poly_coeffs(7:9,2)   * [dt,dt2,dt3])
-            B2xy = sum(poly_coeffs(16:18,2) * [dt,dt2,dt3])
-            !$omp parallel do default(shared) private(i,j,x,x2,y,y2,xy,A1,A2,pixx,pixy)&
-            !$omp proc_bind(close) schedule(static)
-            do j = 1, ldim(2)
-                y  = real(j-1,dp) / real(ldim(2)-1,dp) - 0.5d0
-                y2 = y*y
-                A1 =           sum(poly_coeffs(1:3,1)   * [dt,dt2,dt3])
-                A1 = A1 + y  * sum(poly_coeffs(10:12,1) * [dt,dt2,dt3])
-                A1 = A1 + y2 * sum(poly_coeffs(13:15,1) * [dt,dt2,dt3])
-                A2 =           sum(poly_coeffs(1:3,2)   * [dt,dt2,dt3])
-                A2 = A2 + y  * sum(poly_coeffs(10:12,2) * [dt,dt2,dt3])
-                A2 = A2 + y2 * sum(poly_coeffs(13:15,2) * [dt,dt2,dt3])
-                do i = 1, ldim(1)
-                    x  = real(i-1,dp) / real(ldim(1)-1,dp) - 0.5d0
-                    x2 = x*x
-                    xy = x*y
-                    pixx = real(i) + real(A1 + B1x*x + B1x2*x2 + B1xy*xy)
-                    pixy = real(j) + real(A2 + B2x*x + B2x2*x2 + B2xy*xy)
-                    rmatout(i,j,1) = rmatout(i,j,1) + w*interp_bilin(pixx,pixy)
-                end do
-            end do
-            !$omp end parallel do
-        enddo
-        nullify(rmatin,rmatout)
-        contains
-
-        pure real function interp_bilin( xval, yval )
-            real, intent(in) :: xval, yval
-            integer  :: x1_h,  x2_h,  y1_h,  y2_h
-            real     :: t, u
-            logical  :: outside
-            outside = .false.
-            x1_h = floor(xval)
-            x2_h = x1_h + 1
-            if( x1_h<1 .or. x2_h<1 )then
-                x1_h    = 1
-                outside = .true.
-            endif
-            if( x1_h>ldim(1) .or. x2_h>ldim(1) )then
-                x1_h    = ldim(1)
-                outside = .true.
-            endif
-            y1_h = floor(yval)
-            y2_h = y1_h + 1
-            if( y1_h<1 .or. y2_h<1 )then
-                y1_h    = 1
-                outside = .true.
-            endif
-            if( y1_h>ldim(2) .or. y2_h>ldim(2) )then
-                y1_h    = ldim(2)
-                outside = .true.
-            endif
-            if( outside )then
-                interp_bilin = rmatin(x1_h, y1_h, 1)
-                return
-            endif
-            t  = xval - real(x1_h)
-            u  = yval - real(y1_h)
-            interp_bilin =  (1. - t) * (1. - u) * rmatin(x1_h, y1_h, 1) + &
-                &      t  * (1. - u) * rmatin(x2_h, y1_h, 1) + &
-                &      t  *       u  * rmatin(x2_h, y2_h, 1) + &
-                &(1. - t) *       u  * rmatin(x1_h, y2_h, 1)
-        end function interp_bilin
-
-    end subroutine micrograph_interp
 
     !>  Utility to calculate the number fractions, # eer frames per fraction and adjusted total_dose
     !   while minimizing the number of leftover frames given total dose, total # of eer frames & a dose target

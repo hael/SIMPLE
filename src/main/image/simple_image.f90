@@ -400,7 +400,7 @@ contains
     generic            :: shift2Dserial => shift2Dserial_1, shift2Dserial_2
     procedure          :: shift2D_demoivre
     procedure          :: masscen
-    procedure          :: micrograph_interp
+    procedure          :: warp_frames_and_sum
     ! NORMALIZE, file: simple_image_norm.f90
     procedure          :: scale_pixels
     procedure          :: norm
@@ -2456,14 +2456,16 @@ interface
         logical, optional, intent(in)    :: mask_in(:,:,:)
     end subroutine masscen
 
-    module subroutine micrograph_interp( self, interp_fixed_frame, fixed_frame, nframes, frames, &
-            &weights, poly_coeffs_dim, poly_coeffs )
+    module subroutine warp_frames_and_sum( self, interp_fixed_frame, fixed_frame, fromtof,&
+                                        &frames, weights, poly_coeffs_dim, poly_coeffs )
         class(image),  intent(inout) :: self
-        integer,       intent(in)    :: interp_fixed_frame, fixed_frame, nframes, poly_coeffs_dim
-        type(image),   intent(inout) :: frames(nframes)
-        real,          intent(in)    :: weights(nframes)
+        integer,       intent(in)    :: interp_fixed_frame, fixed_frame
+        integer,       intent(in)    :: fromtof(2)
+        type(image),   intent(in)    :: frames(fromtof(1):fromtof(2))
+        real,          intent(in)    :: weights(fromtof(1):fromtof(2))
+        integer,       intent(in)    :: poly_coeffs_dim
         real(dp),      intent(in)    :: poly_coeffs(poly_coeffs_dim,2)
-    end subroutine micrograph_interp
+    end subroutine warp_frames_and_sum
 
     ! ===== normalization procedure interfaces =====
 
