@@ -403,14 +403,30 @@ contains
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
         end select
-        select type(pca_ptr)
-            type is(kpca_svd)
-                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
-        end select
         if( l_transp_pca )then
             call pca_ptr%new(npix, params%nptcls, params%neigs)
+            select type(pca_ptr)
+                type is(kpca_svd)
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
+            end select
+            if( trim(params%pca_mode) .eq. 'kpca' )then
+                write(logfhandle,'(A,A,A,A,A,I8,A,I8)') 'kPCA denoise entering master: backend=', trim(params%kpca_backend), &
+                    '; kernel=', trim(params%kpca_ker), '; nptcls=', params%nptcls, ' npix=', npix
+                call flush(logfhandle)
+            endif
             call system_clock(t0)
-            call pca_ptr%master(pcavecs, MAXPCAITS)
+            select type(pca_ptr)
+                type is(kpca_svd)
+                    write(logfhandle,'(A)') 'kPCA denoise dispatch type: kpca_svd'
+                    call flush(logfhandle)
+                    call pca_ptr%master(pcavecs, MAXPCAITS)
+                class default
+                    if( trim(params%pca_mode) .eq. 'kpca' )then
+                        write(logfhandle,'(A)') 'kPCA denoise dispatch type: NOT kpca_svd'
+                        call flush(logfhandle)
+                    endif
+                    call pca_ptr%master(pcavecs, MAXPCAITS)
+            end select
             call system_clock(t1)
             if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
             allocate(tmpvec(params%nptcls))
@@ -431,8 +447,28 @@ contains
             if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
         else
             call pca_ptr%new(params%nptcls, npix, params%neigs)
+            select type(pca_ptr)
+                type is(kpca_svd)
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
+            end select
+            if( trim(params%pca_mode) .eq. 'kpca' )then
+                write(logfhandle,'(A,A,A,A,A,I8,A,I8)') 'kPCA denoise entering master: backend=', trim(params%kpca_backend), &
+                    '; kernel=', trim(params%kpca_ker), '; nptcls=', params%nptcls, ' npix=', npix
+                call flush(logfhandle)
+            endif
             call system_clock(t0)
-            call pca_ptr%master(pcavecs, MAXPCAITS)
+            select type(pca_ptr)
+                type is(kpca_svd)
+                    write(logfhandle,'(A)') 'kPCA denoise dispatch type: kpca_svd'
+                    call flush(logfhandle)
+                    call pca_ptr%master(pcavecs, MAXPCAITS)
+                class default
+                    if( trim(params%pca_mode) .eq. 'kpca' )then
+                        write(logfhandle,'(A)') 'kPCA denoise dispatch type: NOT kpca_svd'
+                        call flush(logfhandle)
+                    endif
+                    call pca_ptr%master(pcavecs, MAXPCAITS)
+            end select
             call system_clock(t1)
             if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
             call system_clock(t0)

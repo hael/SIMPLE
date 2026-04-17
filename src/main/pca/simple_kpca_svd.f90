@@ -59,16 +59,16 @@ contains
         class(kpca_svd), intent(inout) :: self
         integer,         intent(in)    :: N, D, Q
         call self%kill
-        self%N           = N
-        self%D           = D
-        self%Q           = Q
+        self%N = N
+        self%D = D
+        self%Q = Q
         ! Initialize with defaults (use set_params() to override)
-        self%nthr = 1
-        self%kpca_backend = 'exact'
-        self%kpca_ker = 'cosine'
-        self%kpca_target = 'ptcl'
+        self%nthr              = 1
+        self%kpca_backend      = 'exact'
+        self%kpca_ker          = 'cosine'
+        self%kpca_target       = 'ptcl'
         self%kpca_nystrom_npts = 0
-        self%kpca_rbf_gamma = 0.
+        self%kpca_rbf_gamma    = 0.
         ! allocate principal subspace and feature vectors
         allocate( self%E_zn(self%Q,self%N), self%data(self%D,self%N), source=0.)
         self%existence = .true.
@@ -147,20 +147,28 @@ contains
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 500
         real,    parameter :: TOL     = 0.0001
-        logical, parameter :: DEBUG   = .false.
+        logical, parameter :: DEBUG   = .true.
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
         real(dp) :: denom, rbf_gamma
-        real     :: ker(self%N,self%N), eig_vecs(self%N,self%Q), eig_vals(self%Q), norm_pcavecs(self%D,self%N),&
-                   &norm_pcavecs_t(self%N,self%D)
+        real     :: ker(self%N,self%N), eig_vecs(self%N,self%Q), eig_vals(self%Q)
         real, allocatable :: ker_col(:,:), proj_data(:,:), norm_prev(:,:), norm_data(:,:)
-        integer  :: i, ind, iter, its, ithr, nworkthr
+        real, allocatable :: norm_pcavecs(:,:), norm_pcavecs_t(:,:)
+        integer  :: i, ind, iter, its, ithr
+        if( DEBUG )then
+            write(logfhandle,'(A,A,A,A,A,A,A,I8,A,I8,A,I8)') 'kPCA master entry: backend=', trim(self%kpca_backend), &
+                '; kernel=', trim(self%kpca_ker), '; target=', trim(self%kpca_target), '; N=', self%N, ' D=', self%D, ' Q=', self%Q
+            call flush(logfhandle)
+        endif
         if( trim(self%kpca_backend) .eq. 'nystrom' )then
+            if( DEBUG )then
+                write(logfhandle,'(A)') 'kPCA master dispatch: entering Nyström backend'
+                call flush(logfhandle)
+            endif
             call self%master_nystrom(pcavecs, maxpcaits)
             return
         endif
-        nworkthr = max(1, max(self%nthr, omp_get_max_threads()))
-        allocate(ker_col(self%N,nworkthr), proj_data(self%N,nworkthr), norm_prev(self%D,nworkthr), norm_data(self%D,nworkthr), source=0.)
+        allocate(ker_col(self%N,nthr_glob), proj_data(self%N,nthr_glob), norm_prev(self%D,nthr_glob), norm_data(self%D,nthr_glob), source=0.)
         rbf_gamma = 0._dp
         if( trim(self%kpca_ker) .eq. 'rbf' ) rbf_gamma = self%get_rbf_gamma(pcavecs)
         ! compute the kernel
@@ -211,6 +219,7 @@ contains
                 enddo
                 !$omp end parallel do
             case('cosine')
+                allocate(norm_pcavecs(self%D,self%N), source=pcavecs)
                 norm_pcavecs = pcavecs
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
                 do i = 1,self%N
@@ -218,6 +227,7 @@ contains
                     if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
                 enddo
                 !$omp end parallel do
+                allocate(norm_pcavecs_t(self%N,self%D))
                 norm_pcavecs_t = transpose(norm_pcavecs)
                 if( trim(self%kpca_target) .eq. 'ptcl' )then
                     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom)
@@ -271,6 +281,8 @@ contains
             call system_clock(end_time)
             print *, "Pre-imaging time: ", real(end_time-start_time)/real(rate), " seconds"
         endif
+        if( allocated(norm_pcavecs)   ) deallocate(norm_pcavecs)
+        if( allocated(norm_pcavecs_t) ) deallocate(norm_pcavecs_t)
         deallocate(ker_col, proj_data, norm_prev, norm_data)
     end subroutine master_kpca
 
@@ -280,15 +292,19 @@ contains
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 500
         integer, parameter :: NYSTROM_AUTO_MAX = 512
+        integer, parameter :: EARLY_STOP_PATIENCE = 3
         real,    parameter :: TOL     = 0.0001
+        real(dp), parameter :: EARLY_STOP_REL = 1.e-5_dp
         logical, parameter :: PROFILE = .true.
-        integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, nworkthr
+        integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j
+        integer  :: stagn_count
         integer  :: landmark_inds(self%N)
-        real(dp) :: denom, eig_tol, rbf_gamma
+        real(dp) :: denom, eig_tol, rbf_gamma, err_prev, err_curr
         integer(int64) :: t0, t1
         real(real64)   :: trate
-        real     :: eig_q(self%Q), alpha(self%N,self%Q), norm_pcavecs(self%D,self%N), norm_pcavecs_t(self%N,self%D)
+        real, allocatable :: eig_q(:), alpha(:,:)
         real, allocatable :: ker_col(:,:), proj_data(:,:), norm_prev(:,:), norm_data(:,:)
+        real, allocatable :: norm_pcavecs(:,:), norm_pcavecs_t(:,:)
         real, allocatable :: ker_nm(:,:), ker_mm(:,:), feat(:,:), feat_center(:), eig_w(:), eigvec_w(:,:), tmp_ker_mm(:,:),&
                             &tmp_gram(:,:), gram_eigvecs(:,:), landmark_mat(:,:), gram_small(:,:), gram_eigvecs_small(:,:)
         m = self%kpca_nystrom_npts
@@ -297,23 +313,59 @@ contains
         if( m < 1 )then
             THROW_HARD('kpca Nystrom backend requires at least one landmark')
         endif
-        if( PROFILE ) call system_clock(t0, trate)
-        nworkthr = max(1, max(self%nthr, omp_get_max_threads()))
+        if( PROFILE )then
+            call system_clock(t0, trate)
+            write(logfhandle,'(A)') 'kPCA Nyström entered'
+            call flush(logfhandle)
+        endif
+        if( PROFILE )then
+            write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8)') 'kPCA Nyström start: kernel=', trim(self%kpca_ker), &
+                '; N=', self%N, ' D=', self%D, ' Q=', self%Q, ' m=', m
+            call flush(logfhandle)
+        endif
         rbf_gamma = 0._dp
         if( trim(self%kpca_ker) .eq. 'rbf' ) rbf_gamma = self%get_rbf_gamma(pcavecs)
         r_keep = min(m, max(self%Q, min(2*self%Q, self%Q + 32)))
+        if( PROFILE ) call system_clock(t0)
+        allocate(eig_q(self%Q), alpha(self%N,self%Q), source=0.)
+        if( PROFILE )then
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A,I8,A,I8)') 'kPCA Nyström alpha/eig alloc: ', real(t1-t0)/real(trate), ' s; N=', self%N, ' Q=', self%Q
+            call flush(logfhandle)
+        endif
+        if( PROFILE ) call system_clock(t0)
         allocate(ker_nm(self%N,m), ker_mm(m,m), feat(self%N,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m),&
-                 &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nworkthr), proj_data(self%N,nworkthr),&
-                 &norm_prev(self%D,nworkthr), norm_data(self%D,nworkthr), source=0.)
+                 &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nthr_glob), proj_data(self%N,nthr_glob),&
+                 &norm_prev(self%D,nthr_glob), norm_data(self%D,nthr_glob), source=0.)
+        if( PROFILE )then
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström work alloc: ', real(t1-t0)/real(trate), ' s'
+            call flush(logfhandle)
+            call system_clock(t0)
+        endif
         call self%select_nystrom_inds(m, landmark_inds(1:m))
+        if( PROFILE )then
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström landmark index selection: ', real(t1-t0)/real(trate), ' s'
+            call flush(logfhandle)
+            call system_clock(t0)
+        endif
         landmark_mat(:,1:m) = pcavecs(:,landmark_inds(1:m))
         if( PROFILE )then
             call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström landmark copy: ', real(t1-t0)/real(trate), ' s'
+            call flush(logfhandle)
+            call system_clock(t0)
+        endif
+        if( PROFILE )then
+            call system_clock(t1)
             write(logfhandle,'(A,F8.3,A,I8,A,I8,A,I8)') 'kPCA Nyström alloc/init: ', real(t1-t0)/real(trate), ' s; N=', self%N, ' D=', self%D, ' m=', m
+            call flush(logfhandle)
             call system_clock(t0)
         endif
         select case(trim(self%kpca_ker))
             case('cosine')
+                allocate(norm_pcavecs(self%D,self%N), source=pcavecs)
                 norm_pcavecs = pcavecs
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
                 do i = 1,self%N
@@ -321,8 +373,26 @@ contains
                     if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
                 enddo
                 !$omp end parallel do
+                if( PROFILE )then
+                    call system_clock(t1)
+                    write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström cosine normalize: ', real(t1-t0)/real(trate), ' s'
+                    call flush(logfhandle)
+                    call system_clock(t0)
+                endif
                 call self%dense_tmm(norm_pcavecs, norm_pcavecs(:,landmark_inds(1:m)), ker_nm(1:self%N,1:m))
+                if( PROFILE )then
+                    call system_clock(t1)
+                    write(logfhandle,'(A,F8.3,A,I8,A,I8)') 'kPCA Nyström cosine K_nm: ', real(t1-t0)/real(trate), ' s; N=', self%N, ' m=', m
+                    call flush(logfhandle)
+                    call system_clock(t0)
+                endif
                 call self%dense_tmm(norm_pcavecs(:,landmark_inds(1:m)), norm_pcavecs(:,landmark_inds(1:m)), ker_mm(1:m,1:m))
+                if( PROFILE )then
+                    call system_clock(t1)
+                    write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström cosine K_mm: ', real(t1-t0)/real(trate), ' s; m=', m
+                    call flush(logfhandle)
+                    call system_clock(t0)
+                endif
             case('rbf')
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(j,i)
                 do j = 1,m
@@ -353,6 +423,7 @@ contains
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A,I8,A,I8)') 'kPCA Nyström kernel setup: ', real(t1-t0)/real(trate), ' s; N=', self%N, ' m=', m
+            call flush(logfhandle)
             call system_clock(t0)
         endif
         tmp_ker_mm = ker_mm(1:m,1:m)
@@ -360,6 +431,7 @@ contains
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström landmark eigensolve: ', real(t1-t0)/real(trate), ' s; r_keep=', r_keep
+            call flush(logfhandle)
             call system_clock(t0)
         endif
         eig_tol = max(real(DTINY,dp), 1.e-6_dp * max(real(maxval(eig_w(1:r_keep)),dp), 1._dp))
@@ -381,6 +453,7 @@ contains
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström feature/gram build: ', real(t1-t0)/real(trate), ' s; r=', r
+            call flush(logfhandle)
             call system_clock(t0)
         endif
         call self%partial_eigh_sym(gram_small, q_used, eig_q(1:q_used), gram_eigvecs_small)
@@ -394,6 +467,7 @@ contains
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström reduced eigensolve/proj: ', real(t1-t0)/real(trate), ' s; q=', q_used
+            call flush(logfhandle)
             call system_clock(t0)
         endif
         if( q_used < self%Q )then
@@ -402,6 +476,11 @@ contains
         endif
         its = MAX_ITS
         if( present(maxpcaits) ) its = maxpcaits
+        if( PROFILE )then
+            write(logfhandle,'(A,I8,A,I8)') 'kPCA Nyström pre-image start: N=', self%N, ' max_its=', its
+            call flush(logfhandle)
+            call system_clock(t0)
+        endif
         select case(trim(self%kpca_ker))
             case('rbf')
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,iter,ithr,i,denom)
@@ -425,22 +504,27 @@ contains
                 enddo
                 !$omp end parallel do
             case('cosine')
-                norm_pcavecs = pcavecs
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
-                do i = 1,self%N
-                    denom = dsqrt(sum(real(pcavecs(:,i),dp)**2))
-                    if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
-                enddo
-                !$omp end parallel do
+                if( .not. allocated(norm_pcavecs) )then
+                    allocate(norm_pcavecs(self%D,self%N), source=pcavecs)
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
+                    do i = 1,self%N
+                        denom = dsqrt(sum(real(pcavecs(:,i),dp)**2))
+                        if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
+                    enddo
+                    !$omp end parallel do
+                endif
+                allocate(norm_pcavecs_t(self%N,self%D))
                 norm_pcavecs_t = transpose(norm_pcavecs)
                 if( trim(self%kpca_target) .eq. 'ptcl' )then
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom)
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
+                        err_prev          = huge(1._dp)
+                        stagn_count       = 0
                         iter              = 1
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
@@ -451,18 +535,36 @@ contains
                             denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
                             if( denom < DTINY ) exit
                             norm_data(:,ithr) = self%data(:,ind) / real(denom)
+                            err_curr = abs(sum(real(norm_data(:,ithr),dp) * real(norm_prev(:,ithr),dp)) - 1._dp)
+                            if( abs(err_prev - err_curr) <= EARLY_STOP_REL * max(1._dp, err_prev) )then
+                                stagn_count = stagn_count + 1
+                                if( stagn_count >= EARLY_STOP_PATIENCE ) exit
+                            else
+                                stagn_count = 0
+                            endif
+                            err_prev = err_curr
                             iter = iter + 1
                         enddo
+                        if( PROFILE .and. mod(ind, 256) == 0 )then
+                            !$omp critical(kpca_nystrom_preimg_progress)
+                            call system_clock(t1)
+                            write(logfhandle,'(A,I8,A,I8,A,F8.3,A)') 'kPCA Nyström pre-image progress: ', ind, '/', self%N, &
+                                '; elapsed=', real(t1-t0)/real(trate), ' s'
+                            call flush(logfhandle)
+                            !$omp end critical(kpca_nystrom_preimg_progress)
+                        endif
                     enddo
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom)
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
+                        err_prev          = huge(1._dp)
+                        stagn_count       = 0
                         iter              = 1
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
@@ -471,8 +573,24 @@ contains
                             denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
                             if( denom < DTINY ) exit
                             norm_data(:,ithr) = self%data(:,ind) / real(denom)
+                            err_curr = abs(sum(real(norm_data(:,ithr),dp) * real(norm_prev(:,ithr),dp)) - 1._dp)
+                            if( abs(err_prev - err_curr) <= EARLY_STOP_REL * max(1._dp, err_prev) )then
+                                stagn_count = stagn_count + 1
+                                if( stagn_count >= EARLY_STOP_PATIENCE ) exit
+                            else
+                                stagn_count = 0
+                            endif
+                            err_prev = err_curr
                             iter = iter + 1
                         enddo
+                        if( PROFILE .and. mod(ind, 256) == 0 )then
+                            !$omp critical(kpca_nystrom_preimg_progress)
+                            call system_clock(t1)
+                            write(logfhandle,'(A,I8,A,I8,A,F8.3,A)') 'kPCA Nyström pre-image progress: ', ind, '/', self%N, &
+                                '; elapsed=', real(t1-t0)/real(trate), ' s'
+                            call flush(logfhandle)
+                            !$omp end critical(kpca_nystrom_preimg_progress)
+                        endif
                     enddo
                     !$omp end parallel do
                 endif
@@ -480,7 +598,11 @@ contains
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström pre-image/reconstruct: ', real(t1-t0)/real(trate), ' s'
+            call flush(logfhandle)
         endif
+        if( allocated(norm_pcavecs)   ) deallocate(norm_pcavecs)
+        if( allocated(norm_pcavecs_t) ) deallocate(norm_pcavecs_t)
+        deallocate(eig_q, alpha)
         deallocate(ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram, gram_eigvecs, landmark_mat, &
                    &gram_small, gram_eigvecs_small, ker_col, proj_data, norm_prev, norm_data)
     end subroutine master_nystrom
