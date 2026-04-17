@@ -419,7 +419,7 @@ contains
             select type(pca_ptr)
                 type is(kpca_svd)
                     call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target,&
-                    &params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs)
+                    &params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
             end select
             call system_clock(t0)
             select type(pca_ptr)
@@ -451,7 +451,7 @@ contains
             select type(pca_ptr)
                 type is(kpca_svd)
                     call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend,&
-                    &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs)
+                    &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
             end select
             call system_clock(t0)
             select type(pca_ptr)

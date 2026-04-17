@@ -21,6 +21,7 @@ type, extends(pca) :: kpca_svd
     integer           :: kpca_nystrom_npts = 512       !< nr of Nystrom landmarks
     integer           :: kpca_nystrom_local_nbrs = 128 !< max extra local support for Nyström reconstruction
     real              :: kpca_rbf_gamma    = 0.      !< RBF gamma (0 => auto)
+    real              :: kpca_cosine_weight_power = 1.5 !< cosine local-weight sharpening power
     logical           :: existence         = .false.
     contains
     ! CONSTRUCTOR
@@ -74,6 +75,7 @@ contains
         self%kpca_nystrom_npts = 512
         self%kpca_nystrom_local_nbrs = 128
         self%kpca_rbf_gamma    = 0.
+        self%kpca_cosine_weight_power = 1.5
         ! allocate principal subspace and feature vectors
         allocate( self%E_zn(self%Q,self%N), self%data(self%D,self%N), source=0.)
         self%existence = .true.
@@ -82,7 +84,7 @@ contains
     ! SETTERS
 
     !>  \brief  setter for runtime parameters
-    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target, kpca_backend, kpca_nystrom_npts, kpca_rbf_gamma, kpca_nystrom_local_nbrs )
+    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target, kpca_backend, kpca_nystrom_npts, kpca_rbf_gamma, kpca_nystrom_local_nbrs, kpca_cosine_weight_power )
         class(kpca_svd),            intent(inout) :: self
         integer,          optional, intent(in)    :: nthr
         character(len=*), optional, intent(in)    :: kpca_ker
@@ -91,6 +93,7 @@ contains
         integer,          optional, intent(in)    :: kpca_nystrom_npts
         real,             optional, intent(in)    :: kpca_rbf_gamma
         integer,          optional, intent(in)    :: kpca_nystrom_local_nbrs
+        real,             optional, intent(in)    :: kpca_cosine_weight_power
         if( present(nthr) )then
             self%nthr = nthr
         endif
@@ -111,6 +114,9 @@ contains
         endif
         if( present(kpca_nystrom_local_nbrs) )then
             self%kpca_nystrom_local_nbrs = kpca_nystrom_local_nbrs
+        endif
+        if( present(kpca_cosine_weight_power) )then
+            self%kpca_cosine_weight_power = kpca_cosine_weight_power
         endif
     end subroutine set_params_kpca
 
@@ -341,7 +347,15 @@ contains
             call flush(logfhandle)
         endif
         rbf_gamma = 0._dp
-        if( trim(self%kpca_ker) .eq. 'rbf' ) rbf_gamma = self%get_rbf_gamma(pcavecs)
+        if( trim(self%kpca_ker) .eq. 'rbf' )then
+            if( PROFILE ) call system_clock(t0)
+            rbf_gamma = self%get_rbf_gamma(pcavecs)
+            if( PROFILE )then
+                call system_clock(t1)
+                write(logfhandle,'(A,F8.3,A,ES10.3)') 'kPCA Nyström RBF gamma setup: ', real(t1-t0)/real(trate), ' s; gamma=', rbf_gamma
+                call flush(logfhandle)
+            endif
+        endif
         r_keep = min(m, max(self%Q, min(2*self%Q, self%Q + 32)))
         if( PROFILE ) call system_clock(t0)
         allocate(eig_q(self%Q), alpha(self%N,self%Q), source=0.)
@@ -612,11 +626,13 @@ contains
                                 denom = 0._dp
                                 do k = 1, support_count
                                     score = max(0._dp, sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp)))
+                                    score = score ** real(self%kpca_cosine_weight_power, dp)
                                     self%data(:,ind) = self%data(:,ind) + real(score) * pcavecs(:,support_inds(k,ithr))
                                     denom = denom + score
                                 enddo
                             else
                                 proj_data(1:m,ithr) = max(real(matmul(norm_landmarks_t, norm_prev(:,ithr)),dp), 0._dp)
+                                proj_data(1:m,ithr) = real(real(proj_data(1:m,ithr),dp) ** real(self%kpca_cosine_weight_power, dp))
                                 denom = sum(real(proj_data(1:m,ithr),dp))
                                 self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr))
                             endif
@@ -677,10 +693,12 @@ contains
                                 self%data(:,ind) = 0.
                                 do k = 1, support_count
                                     score = max(0._dp, sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp)))
+                                    score = score ** real(self%kpca_cosine_weight_power, dp)
                                     self%data(:,ind) = self%data(:,ind) + real(score) * norm_pcavecs(:,support_inds(k,ithr))
                                 enddo
                             else
                                 proj_data(1:m,ithr) = max(real(matmul(norm_landmarks_t, norm_prev(:,ithr)),dp), 0._dp)
+                                proj_data(1:m,ithr) = real(real(proj_data(1:m,ithr),dp) ** real(self%kpca_cosine_weight_power, dp))
                                 self%data(:,ind)  = matmul(norm_landmarks, proj_data(1:m,ithr))
                             endif
                             denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
@@ -832,23 +850,37 @@ contains
 
     real(dp) function auto_rbf_gamma_from_data( mat ) result( gamma )
         real, intent(in) :: mat(:,:)
-        integer  :: i, j, npairs, n
+        integer, parameter :: MAX_GAMMA_SAMPLES = 128
+        integer  :: i, j, npairs, n, nsamp
+        integer, allocatable :: samp_inds(:)
         real(dp) :: mean_sqdist
         n = size(mat, 2)
+        nsamp = min(n, MAX_GAMMA_SAMPLES)
+        if( nsamp < 2 )then
+            gamma = 1._dp
+            return
+        endif
+        allocate(samp_inds(nsamp))
+        do i = 1,nsamp
+            samp_inds(i) = 1 + ((i-1) * (n-1)) / max(1, nsamp-1)
+        enddo
         mean_sqdist = 0._dp
         npairs      = 0
-        do j = 1,n
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,j) reduction(+:mean_sqdist,npairs)
+        do j = 1,nsamp
             do i = 1,j-1
-                mean_sqdist = mean_sqdist + euclid(real(mat(:,i),dp), real(mat(:,j),dp))**2
+                mean_sqdist = mean_sqdist + euclid(real(mat(:,samp_inds(i)),dp), real(mat(:,samp_inds(j)),dp))**2
                 npairs = npairs + 1
             enddo
         enddo
+        !$omp end parallel do
         if( npairs < 1 )then
             gamma = 1._dp
         else
             mean_sqdist = mean_sqdist / real(npairs, dp)
             gamma = 1._dp / max(mean_sqdist, DTINY)
         endif
+        deallocate(samp_inds)
     end function auto_rbf_gamma_from_data
 
     integer function choose_auto_q_from_eigs( eigvals, energy_frac ) result( q_auto )

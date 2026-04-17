@@ -110,13 +110,13 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call ppca_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; try 64, 128)', 'Number of eigencomponents (0 => auto for Nyström kPCA; try 64, 128)', '# eigenvecs', .true., 128.0)
+        call ppca_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .true., 160.0)
         call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: probabilistic PCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){kpca}', .false., 'ppca')
         call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){cosine}', '(rbf|cosine){cosine}', .false., 'cosine')
         call ppca_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
         call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
-        call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (adaptive; 0 => landmarks only; try 64, 128, 256)', 'Nyström max local support neighbors (adaptive; 0 => landmarks only; try 64, 128, 256)', '# max local nbrs', .false., 128.0)
+        call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (adaptive; default 128; try 96, 128, 160)', 'Nyström max local support neighbors (adaptive; default 128; try 96, 128, 160)', '# max local nbrs', .false., 128.0)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -144,14 +144,14 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call ppca_denoise_classes%add_input(UI_FILT, 'neigs', 'num', '# eigenvecs (0 => auto for Nyström kPCA; try 64, 128)', '# eigenvecs (0 => auto for Nyström kPCA; try 64, 128)', '# eigenvecs', .false., 128.0)
+        call ppca_denoise_classes%add_input(UI_FILT, 'neigs', 'num', '# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .false., 160.0)
         call ppca_denoise_classes%add_input(UI_FILT, 'transp_pca', 'binary', 'transpose for pixel-wise learning', 'transpose for pixel-wise learning(yes|no){no}', '(yes|no){no}', .false., 'no')
         call ppca_denoise_classes%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: probabilistic PCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){kpca}', .false., 'ppca')
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){cosine}', '(rbf|cosine){cosine}', .false., 'cosine')
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
-        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (adaptive; 0 => landmarks only; try 64, 128, 256)', 'Nyström max local support neighbors (adaptive; 0 => landmarks only; try 64, 128, 256)', '# max local nbrs', .false., 128.0)
+        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (adaptive; default 128; try 96, 128, 160)', 'Nyström max local support neighbors (adaptive; default 128; try 96, 128, 160)', '# max local nbrs', .false., 128.0)
         ! mask controls
         ! <empty>
         ! computer controls

@@ -96,7 +96,8 @@ enddo
     print *, '---------------------------------------------------'
     ! Nyström kPCA test
     call kpca_nystrom_obj%new(NS, NP, NC)
-    call kpca_nystrom_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'nystrom', NS, params%kpca_rbf_gamma)
+    call kpca_nystrom_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'nystrom', NS, params%kpca_rbf_gamma, &
+        kpca_cosine_weight_power=params%kpca_cosine_weight_power)
 call kpca_nystrom_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS

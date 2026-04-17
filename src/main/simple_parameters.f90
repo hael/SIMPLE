@@ -440,6 +440,7 @@ type :: parameters
     real    :: hp_ctf_estimate=HP_CTF_ESTIMATE !< high-pass limit 4 ctf_estimate(in A)
     real    :: icefracthreshold=ICEFRAC_THRESHOLD !< ice fraction threshold{1.0}
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
+    real    :: kpca_cosine_weight_power=1.5 !< cosine local-weight sharpening power
     real    :: kpca_rbf_gamma=0.   !< RBF gamma (0=>auto)
     real    :: lambda=1.0
     real    :: lam_bounds(2) = [0.05,1.0]
@@ -1042,6 +1043,7 @@ contains
         call check_rarg('gaufreq',        self%gaufreq)
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
+        call check_rarg('kpca_cosine_weight_power', self%kpca_cosine_weight_power)
         call check_rarg('icefracthreshold',self%icefracthreshold)
         call check_rarg('kv',             self%kv)
         call check_rarg('lambda',         self%lambda)
