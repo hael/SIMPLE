@@ -307,7 +307,7 @@ contains
         real(dp), parameter :: EARLY_STOP_REL = 1.e-5_dp
         logical, parameter :: PROFILE = .true.
         integer, parameter :: SUPPORT_REFRESH_ITERS = 3
-        integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, k, nthr_use, local_nbrs
+        integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, k, nthr_use, local_nbrs, local_pool_nbrs
         integer  :: progress_done, progress_step, progress_next, done_now
         integer  :: stagn_count
         integer  :: landmark_inds(self%N)
@@ -352,14 +352,15 @@ contains
         endif
         if( PROFILE ) call system_clock(t0)
         nthr_use = max(1, max(self%nthr, omp_get_max_threads()))
-        local_nbrs = 0
         local_nbrs = min(max(0, self%kpca_nystrom_local_nbrs), max(0, self%N - m))
+        local_pool_nbrs = local_nbrs
+        if( trim(self%kpca_ker) .eq. 'cosine' ) local_pool_nbrs = min(max(0, self%N - m), max(local_nbrs, 2 * local_nbrs))
         allocate(ker_nm(self%N,m), ker_mm(m,m), feat(self%N,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m),&
                  &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nthr_use), proj_data(m,nthr_use),&
                  &norm_prev(self%D,nthr_use), norm_data(self%D,nthr_use), final_residual(self%N), source=0.)
         allocate(support_used(self%N), iter_used(self%N), source=0)
-        if( local_nbrs > 0 )then
-            allocate(support_scores(local_nbrs,nthr_use), support_inds(local_nbrs,nthr_use), is_landmark(self%N))
+        if( local_pool_nbrs > 0 )then
+            allocate(support_scores(local_pool_nbrs,nthr_use), support_inds(local_pool_nbrs,nthr_use), is_landmark(self%N))
             support_scores = 0.
             support_inds   = 0
             is_landmark = .false.
@@ -535,7 +536,7 @@ contains
                     do while( euclid(self%data(:,ind),norm_prev(:,ithr)) > TOL .and. iter < its )
                         norm_prev(:,ithr) = self%data(:,ind)
                         if( local_nbrs > 0 .and. (iter == 1 .or. mod(iter-1, SUPPORT_REFRESH_ITERS) == 0) )then
-                            call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
+                            call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_pool_nbrs, support_count, &
                                 support_inds(:,ithr), support_scores(:,ithr))
                         endif
                         do i = 1,m
@@ -603,18 +604,21 @@ contains
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             if( local_nbrs > 0 .and. (iter == 1 .or. mod(iter-1, SUPPORT_REFRESH_ITERS) == 0) )then
-                                call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
+                                call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_pool_nbrs, support_count, &
                                     support_inds(:,ithr), support_scores(:,ithr), current_vec=norm_prev(:,ithr), support_mat=norm_pcavecs)
                             endif
-                            proj_data(1:m,ithr) = matmul(norm_landmarks_t, norm_prev(:,ithr)) * ker_col(landmark_inds(1:m),ithr)
-                            denom = sum(abs(real(proj_data(1:m,ithr),dp)))
-                            self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr))
                             if( support_count > 0 )then
+                                self%data(:,ind) = 0.
+                                denom = 0._dp
                                 do k = 1, support_count
-                                    score = real(support_scores(k,ithr), dp) * sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp))
+                                    score = max(0._dp, sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp)))
                                     self%data(:,ind) = self%data(:,ind) + real(score) * pcavecs(:,support_inds(k,ithr))
-                                    denom = denom + abs(score)
+                                    denom = denom + score
                                 enddo
+                            else
+                                proj_data(1:m,ithr) = max(real(matmul(norm_landmarks_t, norm_prev(:,ithr)),dp), 0._dp)
+                                denom = sum(real(proj_data(1:m,ithr),dp))
+                                self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr))
                             endif
                             if( denom < DTINY ) exit
                             self%data(:,ind)  = self%data(:,ind) / real(denom)
@@ -666,16 +670,18 @@ contains
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             if( local_nbrs > 0 .and. (iter == 1 .or. mod(iter-1, SUPPORT_REFRESH_ITERS) == 0) )then
-                                call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
+                                call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_pool_nbrs, support_count, &
                                     support_inds(:,ithr), support_scores(:,ithr), current_vec=norm_prev(:,ithr), support_mat=norm_pcavecs)
                             endif
-                            proj_data(1:m,ithr) = matmul(norm_landmarks_t, norm_prev(:,ithr)) * ker_col(landmark_inds(1:m),ithr)
-                            self%data(:,ind)  = matmul(norm_landmarks, proj_data(1:m,ithr))
                             if( support_count > 0 )then
+                                self%data(:,ind) = 0.
                                 do k = 1, support_count
-                                    score = real(support_scores(k,ithr), dp) * sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp))
+                                    score = max(0._dp, sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp)))
                                     self%data(:,ind) = self%data(:,ind) + real(score) * norm_pcavecs(:,support_inds(k,ithr))
                                 enddo
+                            else
+                                proj_data(1:m,ithr) = max(real(matmul(norm_landmarks_t, norm_prev(:,ithr)),dp), 0._dp)
+                                self%data(:,ind)  = matmul(norm_landmarks, proj_data(1:m,ithr))
                             endif
                             denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
                             if( denom < DTINY ) exit
@@ -1113,15 +1119,13 @@ contains
         real,    optional, intent(in) :: support_mat(:,:)
         real(dp), parameter :: SCORE_SOFTEN = 0.70_dp
         real(dp), parameter :: CURRENT_BLEND = 0.65_dp
-        real(dp), parameter :: DIVERSITY_PENALTY = 0.35_dp
         integer, parameter :: DIVERSITY_SKETCH_DIM = 32
         integer, parameter :: CAND_MULT = 8
-        integer :: i, j, k, pos, ncand, n_pool, best_pos, nsketch
+        integer :: i, j, pos, ncand, n_pool, nsketch
         real    :: w
         integer, allocatable :: cand_inds(:), sketch_idx(:)
-        logical, allocatable :: selected(:)
         real, allocatable :: cand_vals(:)
-        real(dp) :: cur_align, div_pen, score, best_score, sim, scale, pool_score, base_score
+        real(dp) :: cur_align, scale, pool_score, base_score
         inds = 0
         vals = 0.
         n_keep = 0
@@ -1180,42 +1184,32 @@ contains
             deallocate(cand_inds, cand_vals)
             return
         endif
-        allocate(selected(n_keep))
-        selected   = .false.
         ncand = n_keep
-        do k = 1, min(max_keep, ncand)
-            best_pos = 0
-            best_score = -huge(1._dp)
-            do i = 1, ncand
-                if( selected(i) ) cycle
-                score = real(cand_vals(i), dp)
-                if( present(current_vec) .and. present(support_mat) )then
-                    div_pen   = 0._dp
-                    do j = 1, k-1
-                        sim = 0._dp
-                        do pos = 1, nsketch
-                            sim = sim + real(support_mat(sketch_idx(pos),cand_inds(i)),dp) * real(support_mat(sketch_idx(pos),inds(j)),dp)
-                        enddo
-                        sim = max(0._dp, sim)
-                        div_pen = max(div_pen, sim)
-                    enddo
-                    score = score * (1._dp - DIVERSITY_PENALTY * div_pen)
-                endif
-                if( score > best_score )then
-                    best_score = score
-                    best_pos   = i
-                endif
+        do i = 1, ncand-1
+            pos = i
+            do j = i+1, ncand
+                if( cand_vals(j) > cand_vals(pos) ) pos = j
             enddo
-            if( best_pos <= 0 ) exit
-            inds(k) = cand_inds(best_pos)
-            vals(k) = cand_vals(best_pos)
-            selected(best_pos) = .true.
+            if( pos /= i )then
+                j = cand_inds(i)
+                cand_inds(i) = cand_inds(pos)
+                cand_inds(pos) = j
+                w = cand_vals(i)
+                cand_vals(i) = cand_vals(pos)
+                cand_vals(pos) = w
+            endif
         enddo
-        n_keep = count(inds > 0)
+        n_keep = min(max_keep, ncand)
         if( n_keep <= 1 )then
-            deallocate(cand_inds, cand_vals, selected)
+            if( n_keep == 1 )then
+                inds(1) = cand_inds(1)
+                vals(1) = cand_vals(1)
+            endif
+            deallocate(cand_inds, cand_vals)
             return
         endif
+        inds(1:n_keep) = cand_inds(1:n_keep)
+        vals(1:n_keep) = cand_vals(1:n_keep)
         scale = max(real(vals(1), dp), real(DTINY, dp))
         do i = 1, n_keep
             vals(i) = real((max(real(vals(i), dp), 0._dp) / scale) ** SCORE_SOFTEN)
@@ -1225,7 +1219,7 @@ contains
             vals(n_keep+1:max_keep) = 0.
         endif
         if( allocated(sketch_idx) ) deallocate(sketch_idx)
-        deallocate(cand_inds, cand_vals, selected)
+        deallocate(cand_inds, cand_vals)
     end subroutine select_local_support_inds
 
     subroutine dense_tmm( self, left, right, out )
