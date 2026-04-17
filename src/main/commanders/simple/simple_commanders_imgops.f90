@@ -418,7 +418,7 @@ contains
             call pca_ptr%new(npix, params%nptcls, neigs)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_topk)
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
             end select
             if( trim(params%pca_mode) .eq. 'kpca' )then
                 write(logfhandle,'(A,A,A,A,A,I8,A,I8)') 'kPCA denoise entering master: backend=', trim(params%kpca_backend), &
@@ -460,7 +460,7 @@ contains
             call pca_ptr%new(params%nptcls, npix, neigs)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_topk)
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
             end select
             if( trim(params%pca_mode) .eq. 'kpca' )then
                 write(logfhandle,'(A,A,A,A,A,I8,A,I8)') 'kPCA denoise entering master: backend=', trim(params%kpca_backend), &

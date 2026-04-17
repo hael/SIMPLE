@@ -115,8 +115,7 @@ contains
         call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){cosine}', '(rbf|cosine){cosine}', .false., 'cosine')
         call ppca_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
-        call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=128; try 128, 256)', 'Nyström landmark count (0 => auto=128; try 128, 256)', '# landmarks', .false., 0.0)
-        call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_topk', 'num', 'Nyström reconstruction top-k landmark weights (0 => use all landmarks; try 16, 32)', 'Nyström reconstruction top-k landmark weights (0 => use all landmarks; try 16, 32)', 'top-k', .false., 0.0)
+        call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 128, 256)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 128, 256)', '# landmarks', .false., 0.0)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -150,8 +149,7 @@ contains
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){cosine}', '(rbf|cosine){cosine}', .false., 'cosine')
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
-        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=128; try 128, 256)', 'Nyström landmark count (0 => auto=128; try 128, 256)', '# landmarks', .false., 0.0)
-        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_topk', 'num', 'Nyström reconstruction top-k landmark weights (0 => use all landmarks; try 16, 32)', 'Nyström reconstruction top-k landmark weights (0 => use all landmarks; try 16, 32)', 'top-k', .false., 0.0)
+        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 128, 256)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 128, 256)', '# landmarks', .false., 0.0)
         ! mask controls
         ! <empty>
         ! computer controls

@@ -81,7 +81,7 @@ enddo
 print *, '---------------------------------------------------'
     ! kPCA test
 call kpca_obj%new(NS, NP, NC)
-    call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'exact', kpca_rbf_gamma=params%kpca_rbf_gamma, kpca_nystrom_topk=params%kpca_nystrom_topk)
+    call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'exact', kpca_rbf_gamma=params%kpca_rbf_gamma)
 call kpca_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS
@@ -95,10 +95,8 @@ do j = 1, NP
 enddo
     print *, '---------------------------------------------------'
     ! Nyström kPCA test
-    params%kpca_nystrom_topk = 2
-    print *, 'Testing Nyström cosine top-k landmarks:', params%kpca_nystrom_topk
     call kpca_nystrom_obj%new(NS, NP, NC)
-    call kpca_nystrom_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'nystrom', NS, params%kpca_rbf_gamma, params%kpca_nystrom_topk)
+    call kpca_nystrom_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'nystrom', NS, params%kpca_rbf_gamma)
 call kpca_nystrom_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS
@@ -113,7 +111,7 @@ enddo
 print *, '---------------------------------------------------'
 ! RBF kPCA smoke test
 call kpca_rbf_obj%new(NS, NP, NC)
-    call kpca_rbf_obj%set_params(params%nthr, 'rbf', params%kpca_target, 'exact', kpca_rbf_gamma=0., kpca_nystrom_topk=params%kpca_nystrom_topk)
+    call kpca_rbf_obj%set_params(params%nthr, 'rbf', params%kpca_target, 'exact', kpca_rbf_gamma=0.)
 call kpca_rbf_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS
@@ -128,7 +126,7 @@ enddo
 print *, '---------------------------------------------------'
 ! RBF Nyström kPCA smoke test
 call kpca_rbf_nystrom_obj%new(NS, NP, NC)
-    call kpca_rbf_nystrom_obj%set_params(params%nthr, 'rbf', params%kpca_target, 'nystrom', NS, 0., params%kpca_nystrom_topk)
+    call kpca_rbf_nystrom_obj%set_params(params%nthr, 'rbf', params%kpca_target, 'nystrom', NS, 0.)
 call kpca_rbf_nystrom_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS

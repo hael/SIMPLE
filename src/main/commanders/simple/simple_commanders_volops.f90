@@ -815,7 +815,7 @@ contains
         end select
         select type(pca_ptr)
             type is(kpca_svd)
-                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_topk)
+                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
         end select
         call pca_ptr%new(npix, npix, neigs)
         call pca_ptr%master(pcavec, MAXPCAITS)

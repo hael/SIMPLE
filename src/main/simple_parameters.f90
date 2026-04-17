@@ -322,7 +322,6 @@ type :: parameters
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors {0=>auto for Nyström kPCA}
     integer :: kpca_nystrom_npts=0 !< # of Nyström landmarks{0=>auto}
-    integer :: kpca_nystrom_topk=0 !< # of Nyström landmark weights retained{0=>all}
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
@@ -937,7 +936,6 @@ contains
         call check_iarg('ndiscrete',      self%ndiscrete)
         call check_iarg('neigs',          self%neigs)
         call check_iarg('kpca_nystrom_npts', self%kpca_nystrom_npts)
-        call check_iarg('kpca_nystrom_topk', self%kpca_nystrom_topk)
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
