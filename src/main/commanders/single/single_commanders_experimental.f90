@@ -542,6 +542,7 @@ contains
             call cline_refine3D_cavgs%set('lp',                   1.0)
             call cline_refine3D_cavgs%set('trs',                  5.0)
             call cline_refine3D_cavgs%set('nspace',             10000)
+            call cline_refine3D_cavgs%set('nspace_sub',           500)
             call cline_refine3D_cavgs%set('center',              'no')
             ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
             call xrefine3D_nano%execute(cline_refine3D_cavgs)
