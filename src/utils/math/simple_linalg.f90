@@ -1523,12 +1523,12 @@ contains
         real,     intent(out)         :: eigvals(neigs)
         real,     intent(out)         :: eigvecs(n,neigs)
         logical, optional, intent(in) :: smallest
-        integer,  allocatable   :: iwork(:)
+        integer,  allocatable   :: iwork(:), isuppz(:)
         real,     allocatable   :: work(:)
         logical,  parameter     :: DEBUG  = .false.
         real,     parameter     :: ABSTOL = -1.0
         integer(int64) :: start_time, end_time
-        integer        :: lwmax, info, il, iu, m, isuppz(n)
+        integer        :: lwmax, info, il, iu, m
         real(real64)   :: rate
         real           :: vl, vu
         logical        :: l_smallest
@@ -1536,7 +1536,7 @@ contains
         l_smallest = .false.
         if( present(smallest) ) l_smallest = smallest
         lwmax = 26 * n     ! explained in dsyevr.f90
-        allocate(iwork(lwmax), work(lwmax))
+        allocate(iwork(lwmax), work(lwmax), isuppz(2*max(1, neigs)))
         if( l_smallest )then
             ! computes the neigs smallest eigenvalues/vectors
             il = 1
