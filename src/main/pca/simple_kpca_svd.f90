@@ -305,7 +305,8 @@ contains
         integer, parameter :: EARLY_STOP_PATIENCE = 3
         real,    parameter :: TOL     = 0.0001
         real(dp), parameter :: EARLY_STOP_REL = 1.e-5_dp
-        logical, parameter :: PROFILE = .false.
+        logical, parameter :: PROFILE = .true.
+        integer, parameter :: SUPPORT_REFRESH_ITERS = 3
         integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, k, nthr_use, local_nbrs
         integer  :: progress_done, progress_step, progress_next, done_now
         integer  :: stagn_count
@@ -321,7 +322,9 @@ contains
                             &tmp_gram(:,:), gram_eigvecs(:,:), landmark_mat(:,:), gram_small(:,:), gram_eigvecs_small(:,:),&
                             &landmark_eigvals(:), landmark_eigvecs(:,:), gram_eigvals(:)
         real, allocatable :: support_scores(:,:)
-        integer, allocatable :: support_inds(:,:), support_counts(:)
+        real, allocatable :: final_residual(:)
+        integer, allocatable :: support_inds(:,:)
+        integer, allocatable :: support_used(:), iter_used(:)
         logical, allocatable :: is_landmark(:)
         m = resolve_nystrom_npts(self%N, self%Q, self%kpca_nystrom_npts)
         if( m < 1 )then
@@ -353,12 +356,12 @@ contains
         local_nbrs = min(max(0, self%kpca_nystrom_local_nbrs), max(0, self%N - m))
         allocate(ker_nm(self%N,m), ker_mm(m,m), feat(self%N,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m),&
                  &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nthr_use), proj_data(m,nthr_use),&
-                 &norm_prev(self%D,nthr_use), norm_data(self%D,nthr_use), source=0.)
+                 &norm_prev(self%D,nthr_use), norm_data(self%D,nthr_use), final_residual(self%N), source=0.)
+        allocate(support_used(self%N), iter_used(self%N), source=0)
         if( local_nbrs > 0 )then
-            allocate(support_scores(local_nbrs,nthr_use), support_inds(local_nbrs,nthr_use), support_counts(nthr_use), is_landmark(self%N))
+            allocate(support_scores(local_nbrs,nthr_use), support_inds(local_nbrs,nthr_use), is_landmark(self%N))
             support_scores = 0.
             support_inds   = 0
-            support_counts = 0
             is_landmark = .false.
         endif
         if( PROFILE )then
@@ -515,7 +518,7 @@ contains
             call system_clock(t0)
         endif
         progress_done = 0
-        progress_step = max(1, self%N / 20)
+        progress_step = max(1, self%N / 100)
         progress_next = progress_step
         select case(trim(self%kpca_ker))
             case('rbf')
@@ -523,13 +526,7 @@ contains
                 do ind = 1, self%N
                     ithr              = omp_get_thread_num() + 1
                     call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
-                    if( local_nbrs > 0 )then
-                        call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
-                            support_inds(:,ithr), support_scores(:,ithr))
-                        support_counts(ithr) = support_count
-                    else
-                        support_counts(ithr) = 0
-                    endif
+                    support_count = 0
                     self%data(:,ind)  = pcavecs(:,ind)
                     norm_prev(:,ithr) = 0.
                     err_prev          = huge(1._dp)
@@ -537,21 +534,25 @@ contains
                     iter              = 1
                     do while( euclid(self%data(:,ind),norm_prev(:,ithr)) > TOL .and. iter < its )
                         norm_prev(:,ithr) = self%data(:,ind)
+                        if( local_nbrs > 0 .and. (iter == 1 .or. mod(iter-1, SUPPORT_REFRESH_ITERS) == 0) )then
+                            call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
+                                support_inds(:,ithr), support_scores(:,ithr))
+                        endif
                         do i = 1,m
                             proj_data(i,ithr) = euclid(norm_prev(:,ithr), landmark_mat(:,i))**2
                         enddo
                         proj_data(1:m,ithr) = max(0., ker_col(landmark_inds(1:m),ithr)) * exp(-real(rbf_gamma) * proj_data(1:m,ithr))
                         denom             = sum(real(proj_data(1:m,ithr),dp))
-                        if( support_counts(ithr) > 0 )then
-                            do k = 1, support_counts(ithr)
+                        if( support_count > 0 )then
+                            do k = 1, support_count
                                 score = real(support_scores(k,ithr), dp) * exp(-real(rbf_gamma) * euclid(norm_prev(:,ithr), pcavecs(:,support_inds(k,ithr)))**2)
                                 denom = denom + score
                             enddo
                         endif
                         if( denom < DTINY ) exit
                         self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr)) / real(denom)
-                        if( support_counts(ithr) > 0 )then
-                            do k = 1, support_counts(ithr)
+                        if( support_count > 0 )then
+                            do k = 1, support_count
                                 score = real(support_scores(k,ithr), dp) * exp(-real(rbf_gamma) * euclid(norm_prev(:,ithr), pcavecs(:,support_inds(k,ithr)))**2)
                                 self%data(:,ind) = self%data(:,ind) + real(score / denom) * pcavecs(:,support_inds(k,ithr))
                             enddo
@@ -566,6 +567,9 @@ contains
                         err_prev = err_curr
                         iter = iter + 1
                     enddo
+                    support_used(ind) = support_count
+                    iter_used(ind)    = iter
+                    final_residual(ind) = real(err_prev)
                     !$omp atomic capture
                     done_now = progress_done
                     progress_done = progress_done + 1
@@ -589,13 +593,7 @@ contains
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
-                        if( local_nbrs > 0 )then
-                            call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
-                                support_inds(:,ithr), support_scores(:,ithr))
-                            support_counts(ithr) = support_count
-                        else
-                            support_counts(ithr) = 0
-                        endif
+                        support_count = 0
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
@@ -604,11 +602,15 @@ contains
                         iter              = 1
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
+                            if( local_nbrs > 0 .and. (iter == 1 .or. mod(iter-1, SUPPORT_REFRESH_ITERS) == 0) )then
+                                call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
+                                    support_inds(:,ithr), support_scores(:,ithr), current_vec=norm_prev(:,ithr), support_mat=norm_pcavecs)
+                            endif
                             proj_data(1:m,ithr) = matmul(norm_landmarks_t, norm_prev(:,ithr)) * ker_col(landmark_inds(1:m),ithr)
                             denom = sum(abs(real(proj_data(1:m,ithr),dp)))
                             self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr))
-                            if( support_counts(ithr) > 0 )then
-                                do k = 1, support_counts(ithr)
+                            if( support_count > 0 )then
+                                do k = 1, support_count
                                     score = real(support_scores(k,ithr), dp) * sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp))
                                     self%data(:,ind) = self%data(:,ind) + real(score) * pcavecs(:,support_inds(k,ithr))
                                     denom = denom + abs(score)
@@ -629,6 +631,9 @@ contains
                             err_prev = err_curr
                             iter = iter + 1
                         enddo
+                        support_used(ind) = support_count
+                        iter_used(ind)    = iter
+                        final_residual(ind) = real(err_prev)
                         !$omp atomic capture
                         done_now = progress_done
                         progress_done = progress_done + 1
@@ -651,13 +656,7 @@ contains
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
-                        if( local_nbrs > 0 )then
-                            call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
-                                support_inds(:,ithr), support_scores(:,ithr))
-                            support_counts(ithr) = support_count
-                        else
-                            support_counts(ithr) = 0
-                        endif
+                        support_count = 0
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
@@ -666,10 +665,14 @@ contains
                         iter              = 1
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
+                            if( local_nbrs > 0 .and. (iter == 1 .or. mod(iter-1, SUPPORT_REFRESH_ITERS) == 0) )then
+                                call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
+                                    support_inds(:,ithr), support_scores(:,ithr), current_vec=norm_prev(:,ithr), support_mat=norm_pcavecs)
+                            endif
                             proj_data(1:m,ithr) = matmul(norm_landmarks_t, norm_prev(:,ithr)) * ker_col(landmark_inds(1:m),ithr)
                             self%data(:,ind)  = matmul(norm_landmarks, proj_data(1:m,ithr))
-                            if( support_counts(ithr) > 0 )then
-                                do k = 1, support_counts(ithr)
+                            if( support_count > 0 )then
+                                do k = 1, support_count
                                     score = real(support_scores(k,ithr), dp) * sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp))
                                     self%data(:,ind) = self%data(:,ind) + real(score) * norm_pcavecs(:,support_inds(k,ithr))
                                 enddo
@@ -687,6 +690,9 @@ contains
                             err_prev = err_curr
                             iter = iter + 1
                         enddo
+                        support_used(ind) = support_count
+                        iter_used(ind)    = iter
+                        final_residual(ind) = real(err_prev)
                         !$omp atomic capture
                         done_now = progress_done
                         progress_done = progress_done + 1
@@ -709,6 +715,13 @@ contains
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström pre-image/reconstruct: ', real(t1-t0)/real(trate), ' s'
+            write(logfhandle,'(A,F8.2,A,F8.2,A,I8)') 'kPCA Nyström support stats: mean=', sum(real(support_used))/real(self%N), &
+                ' std=', sqrt(max(0., sum((real(support_used)-sum(real(support_used))/real(self%N))**2) / real(self%N))), &
+                ' max=', maxval(support_used)
+            write(logfhandle,'(A,F8.2,A,I8)') 'kPCA Nyström iteration stats: mean=', sum(real(iter_used))/real(self%N), &
+                ' max=', maxval(iter_used)
+            write(logfhandle,'(A,ES10.3,A,ES10.3,A,ES10.3)') 'kPCA Nyström residual stats: mean=', sum(final_residual)/real(self%N), &
+                ' std=', sqrt(max(0., sum((final_residual-sum(final_residual)/real(self%N))**2) / real(self%N))), ' max=', maxval(final_residual)
             call flush(logfhandle)
         endif
         if( allocated(norm_pcavecs)   ) deallocate(norm_pcavecs)
@@ -716,11 +729,10 @@ contains
         if( allocated(norm_landmarks_t) ) deallocate(norm_landmarks_t)
         if( allocated(support_scores) ) deallocate(support_scores)
         if( allocated(support_inds) ) deallocate(support_inds)
-        if( allocated(support_counts) ) deallocate(support_counts)
         if( allocated(is_landmark) ) deallocate(is_landmark)
         deallocate(eig_q, alpha)
         deallocate(ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram, gram_eigvecs, landmark_mat, &
-                   &gram_small, gram_eigvecs_small, gram_eigvals, ker_col, proj_data, norm_prev, norm_data)
+                   &gram_small, gram_eigvecs_small, gram_eigvals, ker_col, proj_data, norm_prev, norm_data, support_used, iter_used, final_residual)
     end subroutine master_nystrom
 
     subroutine kernel_center( self, ker )
@@ -1090,70 +1102,130 @@ contains
         deallocate(candidates, cand_norms, chosen, sketch_pos, sketch, min_dist)
     end subroutine choose_nystrom_inds_from_data
 
-    subroutine select_local_support_inds( self, weights, is_landmark, self_ind, max_keep, n_keep, inds, vals )
+    subroutine select_local_support_inds( self, weights, is_landmark, self_ind, max_keep, n_keep, inds, vals, current_vec, support_mat )
         class(kpca_svd), intent(in)  :: self
         real,            intent(in)  :: weights(:)
         logical,         intent(in)  :: is_landmark(:)
         integer,         intent(in)  :: self_ind, max_keep
         integer,         intent(out) :: n_keep, inds(max_keep)
         real,            intent(out) :: vals(max_keep)
-        real(dp), parameter :: KEEP_FRAC = 0.90_dp
-        integer :: i, j, pos
-        real    :: w, tmpv
-        integer :: tmpi
-        real(dp) :: total_pos, keep_target, running
+        real,    optional, intent(in) :: current_vec(:)
+        real,    optional, intent(in) :: support_mat(:,:)
+        real(dp), parameter :: SCORE_SOFTEN = 0.70_dp
+        real(dp), parameter :: CURRENT_BLEND = 0.65_dp
+        real(dp), parameter :: DIVERSITY_PENALTY = 0.35_dp
+        integer, parameter :: DIVERSITY_SKETCH_DIM = 32
+        integer, parameter :: CAND_MULT = 8
+        integer :: i, j, k, pos, ncand, n_pool, best_pos, nsketch
+        real    :: w
+        integer, allocatable :: cand_inds(:), sketch_idx(:)
+        logical, allocatable :: selected(:)
+        real, allocatable :: cand_vals(:)
+        real(dp) :: cur_align, div_pen, score, best_score, sim, scale, pool_score, base_score
         inds = 0
         vals = 0.
         n_keep = 0
         if( max_keep <= 0 ) return
-        total_pos = 0._dp
+        n_pool = min(size(weights), max_keep * CAND_MULT)
+        allocate(cand_inds(n_pool), cand_vals(n_pool))
+        cand_inds = 0
+        cand_vals = 0.
+        if( present(current_vec) .and. present(support_mat) )then
+            nsketch = min(DIVERSITY_SKETCH_DIM, size(current_vec))
+            allocate(sketch_idx(nsketch))
+            if( nsketch == 1 )then
+                sketch_idx(1) = 1
+            else
+                do i = 1,nsketch
+                    sketch_idx(i) = 1 + ((i-1) * (size(current_vec)-1)) / (nsketch-1)
+                enddo
+            end if
+        endif
         do i = 1, size(weights)
             if( i == self_ind ) cycle
             if( is_landmark(i) ) cycle
             w = weights(i)
-            if( w <= 0. ) cycle
-            total_pos = total_pos + real(w, dp)
-            if( n_keep < max_keep )then
+            base_score = max(real(w, dp), 0._dp)
+            if( present(current_vec) .and. present(support_mat) )then
+                cur_align = 0._dp
+                do j = 1, nsketch
+                    cur_align = cur_align + real(support_mat(sketch_idx(j),i),dp) * real(current_vec(sketch_idx(j)),dp)
+                enddo
+                cur_align = max(0._dp, cur_align)
+                pool_score = (1._dp - CURRENT_BLEND) * base_score + CURRENT_BLEND * cur_align
+            else
+                pool_score = base_score
+            endif
+            if( pool_score <= 0._dp ) cycle
+            if( n_keep < n_pool )then
                 n_keep = n_keep + 1
-                inds(n_keep) = i
-                vals(n_keep) = w
+                cand_inds(n_keep) = i
+                cand_vals(n_keep) = real(pool_score)
             else
                 pos = 1
-                do j = 2, max_keep
-                    if( vals(j) < vals(pos) ) pos = j
+                do j = 2, n_pool
+                    if( cand_vals(j) < cand_vals(pos) ) pos = j
                 enddo
-                if( w > vals(pos) )then
-                    inds(pos) = i
-                    vals(pos) = w
+                if( pool_score > real(cand_vals(pos), dp) )then
+                    cand_inds(pos) = i
+                    cand_vals(pos) = real(pool_score)
                 endif
             endif
         enddo
-        if( n_keep <= 1 ) return
-        do i = 1, n_keep-1
-            do j = i+1, n_keep
-                if( vals(j) > vals(i) )then
-                    tmpv    = vals(i)
-                    vals(i) = vals(j)
-                    vals(j) = tmpv
-                    tmpi    = inds(i)
-                    inds(i) = inds(j)
-                    inds(j) = tmpi
+        if( n_keep <= 1 )then
+            if( n_keep == 1 )then
+                inds(1) = cand_inds(1)
+                vals(1) = cand_vals(1)
+            endif
+            deallocate(cand_inds, cand_vals)
+            return
+        endif
+        allocate(selected(n_keep))
+        selected   = .false.
+        ncand = n_keep
+        do k = 1, min(max_keep, ncand)
+            best_pos = 0
+            best_score = -huge(1._dp)
+            do i = 1, ncand
+                if( selected(i) ) cycle
+                score = real(cand_vals(i), dp)
+                if( present(current_vec) .and. present(support_mat) )then
+                    div_pen   = 0._dp
+                    do j = 1, k-1
+                        sim = 0._dp
+                        do pos = 1, nsketch
+                            sim = sim + real(support_mat(sketch_idx(pos),cand_inds(i)),dp) * real(support_mat(sketch_idx(pos),inds(j)),dp)
+                        enddo
+                        sim = max(0._dp, sim)
+                        div_pen = max(div_pen, sim)
+                    enddo
+                    score = score * (1._dp - DIVERSITY_PENALTY * div_pen)
+                endif
+                if( score > best_score )then
+                    best_score = score
+                    best_pos   = i
                 endif
             enddo
+            if( best_pos <= 0 ) exit
+            inds(k) = cand_inds(best_pos)
+            vals(k) = cand_vals(best_pos)
+            selected(best_pos) = .true.
         enddo
-        keep_target = KEEP_FRAC * total_pos
-        running = 0._dp
+        n_keep = count(inds > 0)
+        if( n_keep <= 1 )then
+            deallocate(cand_inds, cand_vals, selected)
+            return
+        endif
+        scale = max(real(vals(1), dp), real(DTINY, dp))
         do i = 1, n_keep
-            running = running + real(vals(i), dp)
-            if( running >= keep_target )then
-                n_keep = i
-                exit
-            endif
+            vals(i) = real((max(real(vals(i), dp), 0._dp) / scale) ** SCORE_SOFTEN)
         enddo
         if( n_keep < max_keep )then
             inds(n_keep+1:max_keep) = 0
             vals(n_keep+1:max_keep) = 0.
         endif
+        if( allocated(sketch_idx) ) deallocate(sketch_idx)
+        deallocate(cand_inds, cand_vals, selected)
     end subroutine select_local_support_inds
 
     subroutine dense_tmm( self, left, right, out )

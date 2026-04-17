@@ -388,10 +388,12 @@ contains
             call imgs(iptcl)%read(params%stk, iptcl)
         end do
         call system_clock(t1)
+        if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
         l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
         call system_clock(t0)
         call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
         call system_clock(t1)
+        if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
         neigs = params%neigs
         if( trim(params%pca_mode) .eq. 'kpca' .and. trim(params%kpca_backend) .eq. 'nystrom' .and. neigs <= 0 )then
             neigs = max(8, min(64, max(1, params%kpca_nystrom_npts / 2)))
@@ -427,6 +429,7 @@ contains
                     call pca_ptr%master(pcavecs, MAXPCAITS)
             end select
             call system_clock(t1)
+            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
             allocate(tmpvec(params%nptcls))
             call system_clock(t0)
             !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
@@ -442,6 +445,7 @@ contains
                 call imgs(iptcl)%kill
             end do
             call system_clock(t1)
+            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
         else
             call pca_ptr%new(params%nptcls, npix, neigs)
             select type(pca_ptr)
@@ -457,6 +461,7 @@ contains
                     call pca_ptr%master(pcavecs, MAXPCAITS)
             end select
             call system_clock(t1)
+            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
             call system_clock(t0)
             !$omp parallel do private(iptcl) default(shared) proc_bind(close) schedule(static)
             do iptcl = 1, params%nptcls
@@ -469,6 +474,7 @@ contains
                 call imgs(iptcl)%kill
             end do
             call system_clock(t1)
+            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
         endif
         ! cleanup
         deallocate(imgs)
