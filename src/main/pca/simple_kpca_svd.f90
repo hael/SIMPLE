@@ -156,7 +156,7 @@ contains
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 500
         real,    parameter :: TOL     = 0.0001
-        logical, parameter :: DEBUG   = .true.
+        logical, parameter :: DEBUG   = .false.
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
         real(dp) :: denom, rbf_gamma
@@ -305,8 +305,9 @@ contains
         integer, parameter :: EARLY_STOP_PATIENCE = 3
         real,    parameter :: TOL     = 0.0001
         real(dp), parameter :: EARLY_STOP_REL = 1.e-5_dp
-        logical, parameter :: PROFILE = .true.
+        logical, parameter :: PROFILE = .false.
         integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, k, nthr_use, local_nbrs
+        integer  :: progress_done, progress_step, progress_next, done_now
         integer  :: stagn_count
         integer  :: landmark_inds(self%N)
         integer  :: support_count
@@ -513,9 +514,12 @@ contains
             call flush(logfhandle)
             call system_clock(t0)
         endif
+        progress_done = 0
+        progress_step = max(1, self%N / 20)
+        progress_next = progress_step
         select case(trim(self%kpca_ker))
             case('rbf')
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,iter,ithr,i,denom,stagn_count,err_prev,err_curr,support_count,k,score)
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,iter,ithr,i,denom,stagn_count,err_prev,err_curr,support_count,k,score,done_now)
                 do ind = 1, self%N
                     ithr              = omp_get_thread_num() + 1
                     call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
@@ -562,19 +566,26 @@ contains
                         err_prev = err_curr
                         iter = iter + 1
                     enddo
-                    if( PROFILE .and. mod(ind, 256) == 0 )then
+                    !$omp atomic capture
+                    done_now = progress_done
+                    progress_done = progress_done + 1
+                    done_now = done_now + 1
+                    if( done_now >= progress_next .or. done_now == self%N )then
                         !$omp critical(kpca_nystrom_preimg_progress)
-                        call system_clock(t1)
-                        write(logfhandle,'(A,I8,A,I8,A,F8.3,A)') 'kPCA Nyström pre-image progress: ', ind, '/', self%N, &
-                            '; elapsed=', real(t1-t0)/real(trate), ' s'
-                        call flush(logfhandle)
+                        do while( progress_next <= done_now .or. (done_now == self%N .and. progress_next <= self%N) )
+                            write(logfhandle,'(A,I8,A,I8,A,F6.2,A)') 'kPCA Nyström pre-image progress: ', progress_next, '/', self%N, &
+                                '; done=', 100. * real(progress_next) / real(self%N), '%'
+                            call flush(logfhandle)
+                            if( progress_next >= self%N ) exit
+                            progress_next = min(self%N, progress_next + progress_step)
+                        enddo
                         !$omp end critical(kpca_nystrom_preimg_progress)
                     endif
                 enddo
                 !$omp end parallel do
             case('cosine')
                 if( trim(self%kpca_target) .eq. 'ptcl' )then
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr,support_count,k,score)
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr,support_count,k,score,done_now)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
@@ -618,18 +629,25 @@ contains
                             err_prev = err_curr
                             iter = iter + 1
                         enddo
-                        if( PROFILE .and. mod(ind, 256) == 0 )then
+                        !$omp atomic capture
+                        done_now = progress_done
+                        progress_done = progress_done + 1
+                        done_now = done_now + 1
+                        if( done_now >= progress_next .or. done_now == self%N )then
                             !$omp critical(kpca_nystrom_preimg_progress)
-                            call system_clock(t1)
-                            write(logfhandle,'(A,I8,A,I8,A,F8.3,A)') 'kPCA Nyström pre-image progress: ', ind, '/', self%N, &
-                                '; elapsed=', real(t1-t0)/real(trate), ' s'
-                            call flush(logfhandle)
+                            do while( progress_next <= done_now .or. (done_now == self%N .and. progress_next <= self%N) )
+                                write(logfhandle,'(A,I8,A,I8,A,F6.2,A)') 'kPCA Nyström pre-image progress: ', progress_next, '/', self%N, &
+                                    '; done=', 100. * real(progress_next) / real(self%N), '%'
+                                call flush(logfhandle)
+                                if( progress_next >= self%N ) exit
+                                progress_next = min(self%N, progress_next + progress_step)
+                            enddo
                             !$omp end critical(kpca_nystrom_preimg_progress)
                         endif
                     enddo
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr,support_count,k,score)
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr,support_count,k,score,done_now)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
@@ -669,12 +687,19 @@ contains
                             err_prev = err_curr
                             iter = iter + 1
                         enddo
-                        if( PROFILE .and. mod(ind, 256) == 0 )then
+                        !$omp atomic capture
+                        done_now = progress_done
+                        progress_done = progress_done + 1
+                        done_now = done_now + 1
+                        if( done_now >= progress_next .or. done_now == self%N )then
                             !$omp critical(kpca_nystrom_preimg_progress)
-                            call system_clock(t1)
-                            write(logfhandle,'(A,I8,A,I8,A,F8.3,A)') 'kPCA Nyström pre-image progress: ', ind, '/', self%N, &
-                                '; elapsed=', real(t1-t0)/real(trate), ' s'
-                            call flush(logfhandle)
+                            do while( progress_next <= done_now .or. (done_now == self%N .and. progress_next <= self%N) )
+                                write(logfhandle,'(A,I8,A,I8,A,F6.2,A)') 'kPCA Nyström pre-image progress: ', progress_next, '/', self%N, &
+                                    '; done=', 100. * real(progress_next) / real(self%N), '%'
+                                call flush(logfhandle)
+                                if( progress_next >= self%N ) exit
+                                progress_next = min(self%N, progress_next + progress_step)
+                            enddo
                             !$omp end critical(kpca_nystrom_preimg_progress)
                         endif
                     enddo

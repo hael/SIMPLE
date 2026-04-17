@@ -288,7 +288,8 @@ subroutine exec_test_pca_all( self, cline )
     print *, '---------------------------------------------------'
     ! kPCA test
     call kpca_obj%new(NS, NP, NC)
-    call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs)
+    call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend,&
+    &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs)
     call kpca_obj%master(data_cen)
     !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
     do j = 1, NS

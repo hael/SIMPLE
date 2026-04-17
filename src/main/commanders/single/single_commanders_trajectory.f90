@@ -369,8 +369,10 @@ contains
         class(commander_trajectory_denoise), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(commander_ppca_denoise) :: xkpca_den
-        if( .not. cline%defined('neigs')    ) call cline%set('neigs', 500)
-        if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'kpca')
+        if( .not. cline%defined('neigs')                   ) call cline%set('neigs', 128)
+        if( .not. cline%defined('kpca_nystrom_npts')       ) call cline%set('kpca_nystrom_npts', 512)
+        if( .not. cline%defined('kpca_nystrom_local_nbrs') ) call cline%set('kpca_nystrom_local_nbrs', 128)
+        if( .not. cline%defined('pca_mode')                ) call cline%set('pca_mode', 'kpca')
         call xkpca_den%execute(cline)
     end subroutine exec_trajectory_denoise
 

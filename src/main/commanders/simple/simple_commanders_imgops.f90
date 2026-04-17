@@ -388,12 +388,10 @@ contains
             call imgs(iptcl)%read(params%stk, iptcl)
         end do
         call system_clock(t1)
-        if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
         l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
         call system_clock(t0)
         call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
         call system_clock(t1)
-        if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
         neigs = params%neigs
         if( trim(params%pca_mode) .eq. 'kpca' .and. trim(params%kpca_backend) .eq. 'nystrom' .and. neigs <= 0 )then
             neigs = max(8, min(64, max(1, params%kpca_nystrom_npts / 2)))
@@ -418,28 +416,17 @@ contains
             call pca_ptr%new(npix, params%nptcls, neigs)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs)
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target,&
+                    &params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs)
             end select
-            if( trim(params%pca_mode) .eq. 'kpca' )then
-                write(logfhandle,'(A,A,A,A,A,I8,A,I8)') 'kPCA denoise entering master: backend=', trim(params%kpca_backend), &
-                    '; kernel=', trim(params%kpca_ker), '; nptcls=', params%nptcls, ' npix=', npix
-                call flush(logfhandle)
-            endif
             call system_clock(t0)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    write(logfhandle,'(A)') 'kPCA denoise dispatch type: kpca_svd'
-                    call flush(logfhandle)
                     call pca_ptr%master(pcavecs, MAXPCAITS)
                 class default
-                    if( trim(params%pca_mode) .eq. 'kpca' )then
-                        write(logfhandle,'(A)') 'kPCA denoise dispatch type: NOT kpca_svd'
-                        call flush(logfhandle)
-                    endif
                     call pca_ptr%master(pcavecs, MAXPCAITS)
             end select
             call system_clock(t1)
-            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
             allocate(tmpvec(params%nptcls))
             call system_clock(t0)
             !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
@@ -455,33 +442,21 @@ contains
                 call imgs(iptcl)%kill
             end do
             call system_clock(t1)
-            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
         else
             call pca_ptr%new(params%nptcls, npix, neigs)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs)
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend,&
+                    &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs)
             end select
-            if( trim(params%pca_mode) .eq. 'kpca' )then
-                write(logfhandle,'(A,A,A,A,A,I8,A,I8)') 'kPCA denoise entering master: backend=', trim(params%kpca_backend), &
-                    '; kernel=', trim(params%kpca_ker), '; nptcls=', params%nptcls, ' npix=', npix
-                call flush(logfhandle)
-            endif
             call system_clock(t0)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    write(logfhandle,'(A)') 'kPCA denoise dispatch type: kpca_svd'
-                    call flush(logfhandle)
                     call pca_ptr%master(pcavecs, MAXPCAITS)
                 class default
-                    if( trim(params%pca_mode) .eq. 'kpca' )then
-                        write(logfhandle,'(A)') 'kPCA denoise dispatch type: NOT kpca_svd'
-                        call flush(logfhandle)
-                    endif
                     call pca_ptr%master(pcavecs, MAXPCAITS)
             end select
             call system_clock(t1)
-            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
             call system_clock(t0)
             !$omp parallel do private(iptcl) default(shared) proc_bind(close) schedule(static)
             do iptcl = 1, params%nptcls
@@ -494,7 +469,6 @@ contains
                 call imgs(iptcl)%kill
             end do
             call system_clock(t1)
-            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
         endif
         ! cleanup
         deallocate(imgs)
