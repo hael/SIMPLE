@@ -566,12 +566,12 @@ contains
             cnt = -1
             do i = 1, ncavgs
                 cnt = cnt + 2
-                if( rstates(cnt) > 0.5 )then
-                    state_mask(cnt) = .true.
+                if( rstates(i) > 0.5 )then
+                    state_mask(i) = .true.
                     call imgs(1)%new([params%box,params%box,1],   smpd)
                     call imgs(2)%new([params%box,params%box,1],   smpd)
-                    call imgs(1)%read(cavgs_stk,                   cnt)
-                    call imgs(2)%read(string('reprojs.mrc'),       cnt)
+                    call imgs(1)%read(cavgs_stk,                     i)
+                    call imgs(2)%read(string('reprojs.mrc'),         i)
                     call imgs(1)%norm
                     call imgs(2)%norm
                     call imgs(1)%write(fname_cvags_vs_reprojs, cnt    )
@@ -579,7 +579,7 @@ contains
                     call imgs(1)%kill
                     call imgs(2)%kill
                 else
-                    state_mask(cnt) = .false.
+                    state_mask(i) = .false.
                 endif
             enddo       
         else
