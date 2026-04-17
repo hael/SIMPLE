@@ -368,7 +368,9 @@ contains
         nthr_use = max(1, max(self%nthr, omp_get_max_threads()))
         local_nbrs = min(max(0, self%kpca_nystrom_local_nbrs), max(0, self%N - m))
         local_pool_nbrs = local_nbrs
-        if( trim(self%kpca_ker) .eq. 'cosine' ) local_pool_nbrs = min(max(0, self%N - m), max(local_nbrs, 2 * local_nbrs))
+        if( trim(self%kpca_ker) .eq. 'cosine' .or. trim(self%kpca_ker) .eq. 'rbf' )then
+            local_pool_nbrs = min(max(0, self%N - m), max(local_nbrs, 2 * local_nbrs))
+        endif
         allocate(ker_nm(self%N,m), ker_mm(m,m), feat(self%N,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m),&
                  &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nthr_use), proj_data(m,nthr_use),&
                  &norm_prev(self%D,nthr_use), norm_data(self%D,nthr_use), final_residual(self%N), source=0.)
