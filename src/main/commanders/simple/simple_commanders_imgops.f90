@@ -396,8 +396,8 @@ contains
         if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
         neigs = params%neigs
         if( trim(params%pca_mode) .eq. 'kpca' .and. trim(params%kpca_backend) .eq. 'nystrom' .and. neigs <= 0 )then
-            neigs = suggest_kpca_nystrom_neigs(pcavecs, params%kpca_ker, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
-            write(logfhandle,'(A,I8,A)') 'kPCA denoise auto-selected neigs: ', neigs, ' (Nyström spectrum 99% energy)'
+            neigs = max(8, min(64, max(1, params%kpca_nystrom_npts / 2)))
+            write(logfhandle,'(A,I8,A)') 'kPCA denoise auto-selected neigs: ', neigs, ' (Nyström safe heuristic)'
             call flush(logfhandle)
         endif
         if( l_transp_pca )then

@@ -762,17 +762,15 @@ contains
     end function choose_auto_q_from_eigs
 
     integer function suggest_kpca_nystrom_neigs( pcavecs, kpca_ker, kpca_nystrom_npts, kpca_rbf_gamma ) result( q_auto )
-        real,            intent(in) :: pcavecs(:,:)
+        real,             intent(in) :: pcavecs(:,:)
         character(len=*), intent(in) :: kpca_ker
         integer, optional, intent(in) :: kpca_nystrom_npts
         real,    optional, intent(in) :: kpca_rbf_gamma
         real(dp), parameter :: ENERGY_FRAC = 0.99_dp
-        integer  :: n, d, m, r_keep, r, i, j
+        integer  :: n, d, m, i, j
         integer, allocatable :: landmark_inds(:)
-        real(dp) :: denom, eig_tol, gamma
-        real, allocatable :: ker_nm(:,:), ker_mm(:,:), feat(:,:), feat_center(:), eig_w(:), eigvec_w(:,:), tmp_ker_mm(:,:), &
-                             tmp_gram(:,:), norm_pcavecs(:,:), norm_landmarks(:,:), landmark_eigvals(:), landmark_eigvecs(:,:), &
-                             gram_small(:,:), gram_eigvals(:), gram_eigvecs(:,:)
+        real(dp) :: gamma, denom
+        real, allocatable :: ker_mm(:,:), tmp_ker_mm(:,:), eigvals_full(:), eigvecs_full(:,:), eigvals_desc(:), norm_landmarks(:,:)
         n = size(pcavecs, 2)
         d = size(pcavecs, 1)
         if( n <= 1 )then
@@ -784,8 +782,8 @@ contains
         else
             m = resolve_nystrom_npts(n, 0, 0)
         endif
-        r_keep = min(m, max(16, min(m, 64)))
-        allocate(landmark_inds(m))
+        allocate(landmark_inds(m), source=0)
+        allocate(ker_mm(m,m), tmp_ker_mm(m,m), eigvals_full(m), eigvecs_full(m,m), eigvals_desc(m), source=0.)
         do i = 1,m
             if( m == 1 )then
                 landmark_inds(i) = 1
@@ -793,19 +791,15 @@ contains
                 landmark_inds(i) = 1 + ((i-1) * (n-1)) / (m-1)
             endif
         enddo
-        allocate(ker_nm(n,m), ker_mm(m,m), feat(n,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m), tmp_gram(m,m), source=0.)
         select case(trim(kpca_ker))
             case('cosine')
-                allocate(norm_pcavecs(d,n), norm_landmarks(d,m), source=0.)
-                norm_pcavecs = pcavecs
-                do i = 1,n
-                    denom = dsqrt(sum(real(pcavecs(:,i),dp)**2))
-                    if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
+                allocate(norm_landmarks(d,m), source=pcavecs(:,landmark_inds))
+                do i = 1,m
+                    denom = dsqrt(sum(real(norm_landmarks(:,i),dp)**2))
+                    if( denom > DTINY ) norm_landmarks(:,i) = norm_landmarks(:,i) / real(denom)
                 enddo
-                norm_landmarks = norm_pcavecs(:,landmark_inds)
-                ker_nm = matmul(transpose(norm_pcavecs), norm_landmarks)
                 ker_mm = matmul(transpose(norm_landmarks), norm_landmarks)
-                deallocate(norm_pcavecs, norm_landmarks)
+                deallocate(norm_landmarks)
             case('rbf')
                 if( present(kpca_rbf_gamma) )then
                     gamma = real(kpca_rbf_gamma, dp)
@@ -813,11 +807,6 @@ contains
                     gamma = 0._dp
                 endif
                 if( gamma <= 0._dp ) gamma = auto_rbf_gamma_from_data(pcavecs)
-                do j = 1,m
-                    do i = 1,n
-                        ker_nm(i,j) = exp(-real(gamma) * euclid(pcavecs(:,i), pcavecs(:,landmark_inds(j)))**2)
-                    enddo
-                enddo
                 do j = 1,m
                     ker_mm(j,j) = 1.
                     do i = 1,j-1
@@ -827,37 +816,15 @@ contains
                 enddo
             case default
                 q_auto = min(n-1, max(8, min(64, m/2)))
-                deallocate(landmark_inds, ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram)
+                deallocate(landmark_inds, ker_mm, tmp_ker_mm, eigvals_full, eigvecs_full, eigvals_desc)
                 return
         end select
-        allocate(landmark_eigvals(r_keep), landmark_eigvecs(m,r_keep))
         tmp_ker_mm = ker_mm
-        call eigh(m, tmp_ker_mm, r_keep, landmark_eigvals, landmark_eigvecs)
-        eig_w(1:r_keep)      = landmark_eigvals(r_keep:1:-1)
-        eigvec_w(:,1:r_keep) = landmark_eigvecs(:,r_keep:1:-1)
-        deallocate(landmark_eigvals, landmark_eigvecs)
-        eig_tol = max(real(DTINY,dp), 1.e-6_dp * max(real(maxval(eig_w(1:r_keep)),dp), 1._dp))
-        r = count(real(eig_w(1:r_keep),dp) > eig_tol)
-        if( r < 1 )then
-            q_auto = 1
-            deallocate(landmark_inds, ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram)
-            return
-        endif
-        feat(:,1:r) = matmul(ker_nm, eigvec_w(:,1:r))
-        do i = 1,r
-            feat(:,i) = feat(:,i) / sqrt(max(eig_w(i), real(DTINY)))
-        enddo
-        feat_center(1:r) = sum(feat(:,1:r), dim=1) / real(n)
-        do i = 1,r
-            feat(:,i) = feat(:,i) - feat_center(i)
-        enddo
-        allocate(gram_small(r,r), gram_eigvals(r), gram_eigvecs(r,r))
-        gram_small = matmul(transpose(feat(:,1:r)), feat(:,1:r))
-        call eigh(r, gram_small, r, gram_eigvals, gram_eigvecs)
-        gram_eigvals = gram_eigvals(r:1:-1)
-        q_auto = choose_auto_q_from_eigs(gram_eigvals, ENERGY_FRAC)
-        q_auto = min(max(q_auto, min(8, r)), r)
-        deallocate(landmark_inds, ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram, gram_small, gram_eigvals, gram_eigvecs)
+        call eigh(m, tmp_ker_mm, m, eigvals_full, eigvecs_full)
+        eigvals_desc = eigvals_full(m:1:-1)
+        q_auto = choose_auto_q_from_eigs(eigvals_desc, ENERGY_FRAC)
+        q_auto = min(max(q_auto, min(8, m)), m)
+        deallocate(landmark_inds, ker_mm, tmp_ker_mm, eigvals_full, eigvecs_full, eigvals_desc)
     end function suggest_kpca_nystrom_neigs
 
     real(dp) function get_rbf_gamma( self, mat ) result( gamma )
