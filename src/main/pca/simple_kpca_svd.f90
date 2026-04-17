@@ -4,21 +4,24 @@ use simple_core_module_api
 use simple_pca, only: pca
 implicit none
 
-public :: kpca_svd
+public :: kpca_svd, suggest_kpca_nystrom_neigs
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: NYSTROM_AUTO_NPTS = 128
+
 type, extends(pca) :: kpca_svd
     private
-    real, allocatable :: E_zn(:,:)  !< expectations (feature vecs)
-    real, allocatable :: data(:,:)  !< projected data on feature vecs
-    integer           :: nthr                          !< number of threads
-    character(len=16) :: kpca_backend = ''            !< backend ('exact' or 'nystrom')
-    character(len=16) :: kpca_ker = ''                !< kernel type ('rbf' or 'cosine')
-    character(len=16) :: kpca_target = ''             !< target type ('ptcl' or other)
-    integer           :: kpca_nystrom_npts = 0        !< nr of Nystrom landmarks (0 => auto)
-    real              :: kpca_rbf_gamma = 0.          !< RBF gamma (0 => auto)
-    logical           :: existence=.false.
+    real, allocatable :: E_zn(:,:)                   !< expectations (feature vecs)
+    real, allocatable :: data(:,:)                   !< projected data on feature vecs
+    integer           :: nthr                        !< number of threads
+    character(len=16) :: kpca_backend      = ''      !< backend ('exact' or 'nystrom')
+    character(len=16) :: kpca_ker          = ''      !< kernel type ('rbf' or 'cosine')
+    character(len=16) :: kpca_target       = ''      !< target type ('ptcl' or other)
+    integer           :: kpca_nystrom_npts = 0       !< nr of Nystrom landmarks (0 => auto)
+    integer           :: kpca_nystrom_topk = 0       !< top-k Nyström landmark weights (0 => all)
+    real              :: kpca_rbf_gamma    = 0.      !< RBF gamma (0 => auto)
+    logical           :: existence         = .false.
     contains
     ! CONSTRUCTOR
     procedure :: new        => new_kpca
@@ -46,6 +49,7 @@ type, extends(pca) :: kpca_svd
     procedure, private :: center_columns
     procedure, private :: partial_eigh_sym
     procedure, private :: orthonormalize_cols
+    procedure, private :: topk_abs_inplace
 end type
 
 real, parameter :: C_CONST = 0.4  ! for rbf_kernel for testing
@@ -64,10 +68,11 @@ contains
         self%Q = Q
         ! Initialize with defaults (use set_params() to override)
         self%nthr              = 1
-        self%kpca_backend      = 'exact'
+        self%kpca_backend      = 'nystrom'
         self%kpca_ker          = 'cosine'
         self%kpca_target       = 'ptcl'
         self%kpca_nystrom_npts = 0
+        self%kpca_nystrom_topk = 0
         self%kpca_rbf_gamma    = 0.
         ! allocate principal subspace and feature vectors
         allocate( self%E_zn(self%Q,self%N), self%data(self%D,self%N), source=0.)
@@ -77,7 +82,7 @@ contains
     ! SETTERS
 
     !>  \brief  setter for runtime parameters
-    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target, kpca_backend, kpca_nystrom_npts, kpca_rbf_gamma )
+    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target, kpca_backend, kpca_nystrom_npts, kpca_rbf_gamma, kpca_nystrom_topk )
         class(kpca_svd),            intent(inout) :: self
         integer,          optional, intent(in)    :: nthr
         character(len=*), optional, intent(in)    :: kpca_ker
@@ -85,6 +90,7 @@ contains
         character(len=*), optional, intent(in)    :: kpca_backend
         integer,          optional, intent(in)    :: kpca_nystrom_npts
         real,             optional, intent(in)    :: kpca_rbf_gamma
+        integer,          optional, intent(in)    :: kpca_nystrom_topk
         if( present(nthr) )then
             self%nthr = nthr
         endif
@@ -102,6 +108,9 @@ contains
         endif
         if( present(kpca_rbf_gamma) )then
             self%kpca_rbf_gamma = kpca_rbf_gamma
+        endif
+        if( present(kpca_nystrom_topk) )then
+            self%kpca_nystrom_topk = kpca_nystrom_topk
         endif
     end subroutine set_params_kpca
 
@@ -151,6 +160,7 @@ contains
         integer(int64)     :: start_time, end_time
         real(real64)       :: rate
         real(dp) :: denom, rbf_gamma
+        integer  :: nthr_use
         real     :: ker(self%N,self%N), eig_vecs(self%N,self%Q), eig_vals(self%Q)
         real, allocatable :: ker_col(:,:), proj_data(:,:), norm_prev(:,:), norm_data(:,:)
         real, allocatable :: norm_pcavecs(:,:), norm_pcavecs_t(:,:)
@@ -168,7 +178,8 @@ contains
             call self%master_nystrom(pcavecs, maxpcaits)
             return
         endif
-        allocate(ker_col(self%N,nthr_glob), proj_data(self%N,nthr_glob), norm_prev(self%D,nthr_glob), norm_data(self%D,nthr_glob), source=0.)
+        nthr_use = max(1, max(self%nthr, omp_get_max_threads()))
+        allocate(ker_col(self%N,nthr_use), proj_data(self%N,nthr_use), norm_prev(self%D,nthr_use), norm_data(self%D,nthr_use), source=0.)
         rbf_gamma = 0._dp
         if( trim(self%kpca_ker) .eq. 'rbf' ) rbf_gamma = self%get_rbf_gamma(pcavecs)
         ! compute the kernel
@@ -291,12 +302,11 @@ contains
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits
         integer, parameter :: MAX_ITS = 500
-        integer, parameter :: NYSTROM_AUTO_MAX = 512
         integer, parameter :: EARLY_STOP_PATIENCE = 3
         real,    parameter :: TOL     = 0.0001
         real(dp), parameter :: EARLY_STOP_REL = 1.e-5_dp
         logical, parameter :: PROFILE = .true.
-        integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j
+        integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, topk, nthr_use
         integer  :: stagn_count
         integer  :: landmark_inds(self%N)
         real(dp) :: denom, eig_tol, rbf_gamma, err_prev, err_curr
@@ -304,12 +314,11 @@ contains
         real(real64)   :: trate
         real, allocatable :: eig_q(:), alpha(:,:)
         real, allocatable :: ker_col(:,:), proj_data(:,:), norm_prev(:,:), norm_data(:,:)
-        real, allocatable :: norm_pcavecs(:,:), norm_pcavecs_t(:,:)
+        real, allocatable :: norm_pcavecs(:,:), norm_landmarks(:,:), norm_landmarks_t(:,:), land_weights(:,:)
         real, allocatable :: ker_nm(:,:), ker_mm(:,:), feat(:,:), feat_center(:), eig_w(:), eigvec_w(:,:), tmp_ker_mm(:,:),&
-                            &tmp_gram(:,:), gram_eigvecs(:,:), landmark_mat(:,:), gram_small(:,:), gram_eigvecs_small(:,:)
-        m = self%kpca_nystrom_npts
-        if( m <= 0 ) m = min(self%N, min(NYSTROM_AUTO_MAX, max(2*self%Q, 64)))
-        m = min(self%N, max(self%Q, m))
+                            &tmp_gram(:,:), gram_eigvecs(:,:), landmark_mat(:,:), gram_small(:,:), gram_eigvecs_small(:,:),&
+                            &landmark_eigvals(:), landmark_eigvecs(:,:), gram_eigvals(:)
+        m = resolve_nystrom_npts(self%N, self%Q, self%kpca_nystrom_npts)
         if( m < 1 )then
             THROW_HARD('kpca Nystrom backend requires at least one landmark')
         endif
@@ -326,6 +335,9 @@ contains
         rbf_gamma = 0._dp
         if( trim(self%kpca_ker) .eq. 'rbf' ) rbf_gamma = self%get_rbf_gamma(pcavecs)
         r_keep = min(m, max(self%Q, min(2*self%Q, self%Q + 32)))
+        topk = self%kpca_nystrom_topk
+        if( topk <= 0 ) topk = m
+        topk = min(m, topk)
         if( PROFILE ) call system_clock(t0)
         allocate(eig_q(self%Q), alpha(self%N,self%Q), source=0.)
         if( PROFILE )then
@@ -334,9 +346,10 @@ contains
             call flush(logfhandle)
         endif
         if( PROFILE ) call system_clock(t0)
+        nthr_use = max(1, max(self%nthr, omp_get_max_threads()))
         allocate(ker_nm(self%N,m), ker_mm(m,m), feat(self%N,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m),&
-                 &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nthr_glob), proj_data(self%N,nthr_glob),&
-                 &norm_prev(self%D,nthr_glob), norm_data(self%D,nthr_glob), source=0.)
+                 &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nthr_use), proj_data(m,nthr_use),&
+                 &norm_prev(self%D,nthr_use), norm_data(self%D,nthr_use), land_weights(m,nthr_use), source=0.)
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström work alloc: ', real(t1-t0)/real(trate), ' s'
@@ -379,6 +392,9 @@ contains
                     call flush(logfhandle)
                     call system_clock(t0)
                 endif
+                allocate(norm_landmarks(self%D,m), norm_landmarks_t(m,self%D), source=0.)
+                norm_landmarks(:,1:m) = norm_pcavecs(:,landmark_inds(1:m))
+                norm_landmarks_t      = transpose(norm_landmarks)
                 call self%dense_tmm(norm_pcavecs, norm_pcavecs(:,landmark_inds(1:m)), ker_nm(1:self%N,1:m))
                 if( PROFILE )then
                     call system_clock(t1)
@@ -426,8 +442,12 @@ contains
             call flush(logfhandle)
             call system_clock(t0)
         endif
+        allocate(landmark_eigvals(r_keep), landmark_eigvecs(m,r_keep))
         tmp_ker_mm = ker_mm(1:m,1:m)
-        call self%partial_eigh_sym(tmp_ker_mm, r_keep, eig_w(1:r_keep), eigvec_w(:,1:r_keep))
+        call self%partial_eigh_sym(tmp_ker_mm, r_keep, landmark_eigvals, landmark_eigvecs)
+        eig_w(1:r_keep)        = landmark_eigvals
+        eigvec_w(:,1:r_keep)   = landmark_eigvecs
+        deallocate(landmark_eigvals, landmark_eigvecs)
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström landmark eigensolve: ', real(t1-t0)/real(trate), ' s; r_keep=', r_keep
@@ -448,7 +468,7 @@ contains
         call self%center_columns(feat(1:self%N,1:r), feat_center(1:r))
         call self%gram_symmetric(feat(1:self%N,1:r), tmp_gram(1:r,1:r))
         q_used = min(self%Q, r)
-        allocate(gram_small(r,r), gram_eigvecs_small(r,q_used))
+        allocate(gram_small(r,r), gram_eigvecs_small(r,q_used), gram_eigvals(q_used))
         gram_small = tmp_gram(1:r,1:r)
         if( PROFILE )then
             call system_clock(t1)
@@ -456,7 +476,8 @@ contains
             call flush(logfhandle)
             call system_clock(t0)
         endif
-        call self%partial_eigh_sym(gram_small, q_used, eig_q(1:q_used), gram_eigvecs_small)
+        call self%partial_eigh_sym(gram_small, q_used, gram_eigvals, gram_eigvecs_small)
+        eig_q(1:q_used)                       = gram_eigvals
         gram_eigvecs(1:r,1:q_used)       = gram_eigvecs_small(:,1:q_used)
         call self%dense_mm(feat(1:self%N,1:r), gram_eigvecs(1:r,1:q_used), alpha(:,1:q_used))
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
@@ -487,39 +508,32 @@ contains
                 do ind = 1, self%N
                     ithr              = omp_get_thread_num() + 1
                     call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
+                    land_weights(:,ithr) = max(0., ker_col(landmark_inds(1:m),ithr))
+                    call self%topk_abs_inplace(land_weights(:,ithr), topk)
                     self%data(:,ind)  = pcavecs(:,ind)
                     norm_prev(:,ithr) = 0.
                     iter              = 1
                     do while( euclid(self%data(:,ind),norm_prev(:,ithr)) > TOL .and. iter < its )
                         norm_prev(:,ithr) = self%data(:,ind)
-                        do i = 1,self%N
-                            proj_data(i,ithr) = euclid(norm_prev(:,ithr), pcavecs(:,i))**2
+                        do i = 1,m
+                            proj_data(i,ithr) = euclid(norm_prev(:,ithr), landmark_mat(:,i))**2
                         enddo
-                        proj_data(:,ithr) = max(0., ker_col(:,ithr)) * exp(-real(rbf_gamma) * proj_data(:,ithr))
-                        denom             = sum(real(proj_data(:,ithr),dp))
+                        proj_data(1:m,ithr) = land_weights(:,ithr) * exp(-real(rbf_gamma) * proj_data(1:m,ithr))
+                        denom             = sum(real(proj_data(1:m,ithr),dp))
                         if( denom < DTINY ) exit
-                        self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
+                        self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr)) / real(denom)
                         iter = iter + 1
                     enddo
                 enddo
                 !$omp end parallel do
             case('cosine')
-                if( .not. allocated(norm_pcavecs) )then
-                    allocate(norm_pcavecs(self%D,self%N), source=pcavecs)
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,denom)
-                    do i = 1,self%N
-                        denom = dsqrt(sum(real(pcavecs(:,i),dp)**2))
-                        if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
-                    enddo
-                    !$omp end parallel do
-                endif
-                allocate(norm_pcavecs_t(self%N,self%D))
-                norm_pcavecs_t = transpose(norm_pcavecs)
                 if( trim(self%kpca_target) .eq. 'ptcl' )then
                     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
+                        land_weights(:,ithr) = ker_col(landmark_inds(1:m),ithr)
+                        call self%topk_abs_inplace(land_weights(:,ithr), topk)
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
@@ -528,10 +542,10 @@ contains
                         iter              = 1
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
-                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_col(:,ithr)
-                            denom = sum(abs(real(proj_data(:,ithr),dp)))
+                            proj_data(1:m,ithr) = matmul(norm_landmarks_t, norm_prev(:,ithr)) * land_weights(:,ithr)
+                            denom = sum(abs(real(proj_data(1:m,ithr),dp)))
                             if( denom < DTINY ) exit
-                            self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
+                            self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr)) / real(denom)
                             denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
                             if( denom < DTINY ) exit
                             norm_data(:,ithr) = self%data(:,ind) / real(denom)
@@ -560,6 +574,8 @@ contains
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
+                        land_weights(:,ithr) = ker_col(landmark_inds(1:m),ithr)
+                        call self%topk_abs_inplace(land_weights(:,ithr), topk)
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
@@ -568,8 +584,8 @@ contains
                         iter              = 1
                         do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
                             norm_prev(:,ithr) = norm_data(:,ithr)
-                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_col(:,ithr)
-                            self%data(:,ind)  = matmul(norm_pcavecs, proj_data(:,ithr))
+                            proj_data(1:m,ithr) = matmul(norm_landmarks_t, norm_prev(:,ithr)) * land_weights(:,ithr)
+                            self%data(:,ind)  = matmul(norm_landmarks, proj_data(1:m,ithr))
                             denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
                             if( denom < DTINY ) exit
                             norm_data(:,ithr) = self%data(:,ind) / real(denom)
@@ -601,10 +617,11 @@ contains
             call flush(logfhandle)
         endif
         if( allocated(norm_pcavecs)   ) deallocate(norm_pcavecs)
-        if( allocated(norm_pcavecs_t) ) deallocate(norm_pcavecs_t)
+        if( allocated(norm_landmarks) ) deallocate(norm_landmarks)
+        if( allocated(norm_landmarks_t) ) deallocate(norm_landmarks_t)
         deallocate(eig_q, alpha)
         deallocate(ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram, gram_eigvecs, landmark_mat, &
-                   &gram_small, gram_eigvecs_small, ker_col, proj_data, norm_prev, norm_data)
+                   &gram_small, gram_eigvecs_small, gram_eigvals, ker_col, proj_data, norm_prev, norm_data, land_weights)
     end subroutine master_nystrom
 
     subroutine kernel_center( self, ker )
@@ -665,12 +682,15 @@ contains
         real,            intent(out)   :: eig_vals(self%Q)
         real,            intent(inout) :: eig_vecs(self%N,self%Q)
         real    :: tmp_ker(self%N,self%N)
+        real, allocatable :: eig_vals_raw(:), eig_vecs_raw(:,:)
         integer :: i
         tmp_ker = ker
         ! computing eigvals/eigvecs
-        call eigh(self%N, tmp_ker, self%Q, eig_vals, eig_vecs)
-        eig_vals = eig_vals(self%Q:1:-1)
-        eig_vecs = eig_vecs(:,self%Q:1:-1)
+        allocate(eig_vals_raw(self%Q), eig_vecs_raw(self%N,self%Q))
+        call eigh(self%N, tmp_ker, self%Q, eig_vals_raw, eig_vecs_raw)
+        eig_vals = eig_vals_raw(self%Q:1:-1)
+        eig_vecs = eig_vecs_raw(:,self%Q:1:-1)
+        deallocate(eig_vals_raw, eig_vecs_raw)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = 1, self%Q
             if( eig_vals(i) > real(DTINY) )then
@@ -683,18 +703,24 @@ contains
         !$omp end parallel do
     end subroutine compute_eigvecs
 
-    real(dp) function get_rbf_gamma( self, mat ) result( gamma )
-        class(kpca_svd), intent(in) :: self
-        real,            intent(in) :: mat(self%D,self%N)
-        integer  :: i, j, npairs
-        real(dp) :: mean_sqdist
-        if( self%kpca_rbf_gamma > 0. )then
-            gamma = real(self%kpca_rbf_gamma, dp)
-            return
+    integer function resolve_nystrom_npts( n_samples, q_hint, npts_user ) result( m )
+        integer, intent(in) :: n_samples, q_hint, npts_user
+        if( npts_user > 0 )then
+            m = npts_user
+        else
+            m = NYSTROM_AUTO_NPTS
         endif
+        m = min(n_samples, max(max(q_hint, 1), m))
+    end function resolve_nystrom_npts
+
+    real(dp) function auto_rbf_gamma_from_data( mat ) result( gamma )
+        real, intent(in) :: mat(:,:)
+        integer  :: i, j, npairs, n
+        real(dp) :: mean_sqdist
+        n = size(mat, 2)
         mean_sqdist = 0._dp
         npairs      = 0
-        do j = 1,self%N
+        do j = 1,n
             do i = 1,j-1
                 mean_sqdist = mean_sqdist + euclid(real(mat(:,i),dp), real(mat(:,j),dp))**2
                 npairs = npairs + 1
@@ -706,6 +732,142 @@ contains
             mean_sqdist = mean_sqdist / real(npairs, dp)
             gamma = 1._dp / max(mean_sqdist, DTINY)
         endif
+    end function auto_rbf_gamma_from_data
+
+    integer function choose_auto_q_from_eigs( eigvals, energy_frac ) result( q_auto )
+        real,    intent(in) :: eigvals(:)
+        real(dp), intent(in) :: energy_frac
+        integer  :: i, npos
+        real(dp) :: total_energy, running_energy
+        npos = count(real(eigvals,dp) > real(DTINY,dp))
+        if( npos < 1 )then
+            q_auto = 1
+            return
+        endif
+        total_energy = sum(real(eigvals(1:npos),dp))
+        if( total_energy <= real(DTINY,dp) )then
+            q_auto = 1
+            return
+        endif
+        running_energy = 0._dp
+        q_auto = npos
+        do i = 1,npos
+            running_energy = running_energy + real(eigvals(i),dp)
+            if( running_energy / total_energy >= energy_frac )then
+                q_auto = i
+                exit
+            endif
+        enddo
+        q_auto = max(1, q_auto)
+    end function choose_auto_q_from_eigs
+
+    integer function suggest_kpca_nystrom_neigs( pcavecs, kpca_ker, kpca_nystrom_npts, kpca_rbf_gamma ) result( q_auto )
+        real,            intent(in) :: pcavecs(:,:)
+        character(len=*), intent(in) :: kpca_ker
+        integer, optional, intent(in) :: kpca_nystrom_npts
+        real,    optional, intent(in) :: kpca_rbf_gamma
+        real(dp), parameter :: ENERGY_FRAC = 0.99_dp
+        integer  :: n, d, m, r_keep, r, i, j
+        integer, allocatable :: landmark_inds(:)
+        real(dp) :: denom, eig_tol, gamma
+        real, allocatable :: ker_nm(:,:), ker_mm(:,:), feat(:,:), feat_center(:), eig_w(:), eigvec_w(:,:), tmp_ker_mm(:,:), &
+                             tmp_gram(:,:), norm_pcavecs(:,:), norm_landmarks(:,:), landmark_eigvals(:), landmark_eigvecs(:,:), &
+                             gram_small(:,:), gram_eigvals(:), gram_eigvecs(:,:)
+        n = size(pcavecs, 2)
+        d = size(pcavecs, 1)
+        if( n <= 1 )then
+            q_auto = 1
+            return
+        endif
+        if( present(kpca_nystrom_npts) )then
+            m = resolve_nystrom_npts(n, 0, kpca_nystrom_npts)
+        else
+            m = resolve_nystrom_npts(n, 0, 0)
+        endif
+        r_keep = min(m, max(16, min(m, 64)))
+        allocate(landmark_inds(m))
+        do i = 1,m
+            if( m == 1 )then
+                landmark_inds(i) = 1
+            else
+                landmark_inds(i) = 1 + ((i-1) * (n-1)) / (m-1)
+            endif
+        enddo
+        allocate(ker_nm(n,m), ker_mm(m,m), feat(n,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m), tmp_gram(m,m), source=0.)
+        select case(trim(kpca_ker))
+            case('cosine')
+                allocate(norm_pcavecs(d,n), norm_landmarks(d,m), source=0.)
+                norm_pcavecs = pcavecs
+                do i = 1,n
+                    denom = dsqrt(sum(real(pcavecs(:,i),dp)**2))
+                    if( denom > DTINY ) norm_pcavecs(:,i) = pcavecs(:,i) / real(denom)
+                enddo
+                norm_landmarks = norm_pcavecs(:,landmark_inds)
+                ker_nm = matmul(transpose(norm_pcavecs), norm_landmarks)
+                ker_mm = matmul(transpose(norm_landmarks), norm_landmarks)
+                deallocate(norm_pcavecs, norm_landmarks)
+            case('rbf')
+                if( present(kpca_rbf_gamma) )then
+                    gamma = real(kpca_rbf_gamma, dp)
+                else
+                    gamma = 0._dp
+                endif
+                if( gamma <= 0._dp ) gamma = auto_rbf_gamma_from_data(pcavecs)
+                do j = 1,m
+                    do i = 1,n
+                        ker_nm(i,j) = exp(-real(gamma) * euclid(pcavecs(:,i), pcavecs(:,landmark_inds(j)))**2)
+                    enddo
+                enddo
+                do j = 1,m
+                    ker_mm(j,j) = 1.
+                    do i = 1,j-1
+                        ker_mm(i,j) = exp(-real(gamma) * euclid(pcavecs(:,landmark_inds(i)), pcavecs(:,landmark_inds(j)))**2)
+                        ker_mm(j,i) = ker_mm(i,j)
+                    enddo
+                enddo
+            case default
+                q_auto = min(n-1, max(8, min(64, m/2)))
+                deallocate(landmark_inds, ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram)
+                return
+        end select
+        allocate(landmark_eigvals(r_keep), landmark_eigvecs(m,r_keep))
+        tmp_ker_mm = ker_mm
+        call eigh(m, tmp_ker_mm, r_keep, landmark_eigvals, landmark_eigvecs)
+        eig_w(1:r_keep)      = landmark_eigvals(r_keep:1:-1)
+        eigvec_w(:,1:r_keep) = landmark_eigvecs(:,r_keep:1:-1)
+        deallocate(landmark_eigvals, landmark_eigvecs)
+        eig_tol = max(real(DTINY,dp), 1.e-6_dp * max(real(maxval(eig_w(1:r_keep)),dp), 1._dp))
+        r = count(real(eig_w(1:r_keep),dp) > eig_tol)
+        if( r < 1 )then
+            q_auto = 1
+            deallocate(landmark_inds, ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram)
+            return
+        endif
+        feat(:,1:r) = matmul(ker_nm, eigvec_w(:,1:r))
+        do i = 1,r
+            feat(:,i) = feat(:,i) / sqrt(max(eig_w(i), real(DTINY)))
+        enddo
+        feat_center(1:r) = sum(feat(:,1:r), dim=1) / real(n)
+        do i = 1,r
+            feat(:,i) = feat(:,i) - feat_center(i)
+        enddo
+        allocate(gram_small(r,r), gram_eigvals(r), gram_eigvecs(r,r))
+        gram_small = matmul(transpose(feat(:,1:r)), feat(:,1:r))
+        call eigh(r, gram_small, r, gram_eigvals, gram_eigvecs)
+        gram_eigvals = gram_eigvals(r:1:-1)
+        q_auto = choose_auto_q_from_eigs(gram_eigvals, ENERGY_FRAC)
+        q_auto = min(max(q_auto, min(8, r)), r)
+        deallocate(landmark_inds, ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram, gram_small, gram_eigvals, gram_eigvecs)
+    end function suggest_kpca_nystrom_neigs
+
+    real(dp) function get_rbf_gamma( self, mat ) result( gamma )
+        class(kpca_svd), intent(in) :: self
+        real,            intent(in) :: mat(self%D,self%N)
+        if( self%kpca_rbf_gamma > 0. )then
+            gamma = real(self%kpca_rbf_gamma, dp)
+            return
+        endif
+        gamma = auto_rbf_gamma_from_data(mat)
     end function get_rbf_gamma
 
     subroutine projected_kernel_col( self, eig_vecs, eig_vals, q_used, ind, ker_col )
@@ -885,6 +1047,50 @@ contains
             endif
         enddo
     end subroutine orthonormalize_cols
+
+    subroutine topk_abs_inplace( self, vec, k )
+        class(kpca_svd), intent(in)    :: self
+        real,            intent(inout) :: vec(:)
+        integer,         intent(in)    :: k
+        integer :: i, j, n, imin
+        real(dp) :: vabs, minabs
+        integer, allocatable :: keep_inds(:)
+        real(dp), allocatable :: keep_abs(:)
+        logical, allocatable :: keep_mask(:)
+        n = size(vec)
+        if( k <= 0 .or. k >= n ) return
+        allocate(keep_inds(k), keep_abs(k), keep_mask(n))
+        keep_inds = 0
+        keep_abs  = 0._dp
+        keep_mask = .false.
+        do i = 1, n
+            vabs = abs(real(vec(i),dp))
+            if( i <= k )then
+                keep_inds(i) = i
+                keep_abs(i)  = vabs
+            else
+                imin = 1
+                minabs = keep_abs(1)
+                do j = 2, k
+                    if( keep_abs(j) < minabs )then
+                        minabs = keep_abs(j)
+                        imin   = j
+                    endif
+                enddo
+                if( vabs > minabs )then
+                    keep_inds(imin) = i
+                    keep_abs(imin)  = vabs
+                endif
+            endif
+        enddo
+        do i = 1, k
+            if( keep_inds(i) >= 1 .and. keep_inds(i) <= n ) keep_mask(keep_inds(i)) = .true.
+        enddo
+        do i = 1, n
+            if( .not. keep_mask(i) ) vec(i) = 0.
+        enddo
+        deallocate(keep_inds, keep_abs, keep_mask)
+    end subroutine topk_abs_inplace
 
     ! DESTRUCTOR
 

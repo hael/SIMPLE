@@ -779,7 +779,7 @@ contains
         use simple_pca,        only: pca
         use simple_ppca_inmem, only: ppca_inmem
         use simple_pca_svd,    only: pca_svd
-        use simple_kpca_svd,   only: kpca_svd
+        use simple_kpca_svd,   only: kpca_svd, suggest_kpca_nystrom_neigs
         class(commander_ppca_volvar), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         integer,     parameter   :: MAXPCAITS = 15
@@ -788,7 +788,7 @@ contains
         type(parameters)  :: params
         type(builder)     :: build
         type(image)       :: vol
-        integer           :: npix
+        integer           :: npix, neigs
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_volvar_out'//STK_EXT)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
@@ -797,6 +797,13 @@ contains
         ! masking
         if(cline%defined('mskdiam')) call build%vol%mask3D_soft(params%msk, backgr=0.)
         call make_pcavol(build%vol, npix, avg, pcavec)
+        neigs = params%neigs
+        if( trim(params%pca_mode) .eq. 'kpca' .and. trim(params%kpca_backend) .eq. 'nystrom' .and. neigs <= 0 )then
+            neigs = suggest_kpca_nystrom_neigs(pcavec, params%kpca_ker, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
+            write(logfhandle,'(A,I8,A)') 'kPCA volvar auto-selected neigs: ', neigs, ' (Nyström spectrum 99% energy)'
+            call flush(logfhandle)
+        endif
+        neigs = min(max(neigs, 1), max(npix-1, 1))
         ! pca allocation
         select case(trim(params%pca_mode))
             case('ppca')
@@ -808,9 +815,9 @@ contains
         end select
         select type(pca_ptr)
             type is(kpca_svd)
-                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
+                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_topk)
         end select
-        call pca_ptr%new(npix, npix, params%neigs)
+        call pca_ptr%new(npix, npix, neigs)
         call pca_ptr%master(pcavec, MAXPCAITS)
         allocate(gen(npix))
         call pca_ptr%generate(1, avg, gen)

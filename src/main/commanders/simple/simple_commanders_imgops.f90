@@ -358,7 +358,7 @@ contains
         use simple_pca,        only: pca
         use simple_ppca_inmem, only: ppca_inmem
         use simple_pca_svd,    only: pca_svd
-        use simple_kpca_svd,   only: kpca_svd
+        use simple_kpca_svd,   only: kpca_svd, suggest_kpca_nystrom_neigs
         class(commander_ppca_denoise), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         integer,           parameter   :: MAXPCAITS = 15
@@ -370,7 +370,7 @@ contains
         type(builder)                  :: build
         integer(int64)                 :: t0, t1
         real(real64)                   :: trate
-        integer                        :: npix, iptcl, j
+        integer                        :: npix, iptcl, j, neigs
         logical                        :: l_transp_pca
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//STK_EXT)
@@ -394,6 +394,17 @@ contains
         call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
         call system_clock(t1)
         if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
+        neigs = params%neigs
+        if( trim(params%pca_mode) .eq. 'kpca' .and. trim(params%kpca_backend) .eq. 'nystrom' .and. neigs <= 0 )then
+            neigs = suggest_kpca_nystrom_neigs(pcavecs, params%kpca_ker, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
+            write(logfhandle,'(A,I8,A)') 'kPCA denoise auto-selected neigs: ', neigs, ' (Nyström spectrum 99% energy)'
+            call flush(logfhandle)
+        endif
+        if( l_transp_pca )then
+            neigs = min(max(neigs, 1), max(npix-1, 1))
+        else
+            neigs = min(max(neigs, 1), max(params%nptcls-1, 1))
+        endif
         ! pca allocation
         select case(trim(params%pca_mode))
             case('ppca')
@@ -404,10 +415,10 @@ contains
                 allocate(kpca_svd   :: pca_ptr)
         end select
         if( l_transp_pca )then
-            call pca_ptr%new(npix, params%nptcls, params%neigs)
+            call pca_ptr%new(npix, params%nptcls, neigs)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_topk)
             end select
             if( trim(params%pca_mode) .eq. 'kpca' )then
                 write(logfhandle,'(A,A,A,A,A,I8,A,I8)') 'kPCA denoise entering master: backend=', trim(params%kpca_backend), &
@@ -446,10 +457,10 @@ contains
             call system_clock(t1)
             if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
         else
-            call pca_ptr%new(params%nptcls, npix, params%neigs)
+            call pca_ptr%new(params%nptcls, npix, neigs)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_topk)
             end select
             if( trim(params%pca_mode) .eq. 'kpca' )then
                 write(logfhandle,'(A,A,A,A,A,I8,A,I8)') 'kPCA denoise entering master: backend=', trim(params%kpca_backend), &
