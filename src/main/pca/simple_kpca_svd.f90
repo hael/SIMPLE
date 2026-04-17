@@ -19,6 +19,7 @@ type, extends(pca) :: kpca_svd
     character(len=16) :: kpca_ker          = ''      !< kernel type ('rbf' or 'cosine')
     character(len=16) :: kpca_target       = ''      !< target type ('ptcl' or other)
     integer           :: kpca_nystrom_npts = 0       !< nr of Nystrom landmarks (0 => auto)
+    integer           :: kpca_nystrom_local_nbrs = 32 !< extra local support for Nyström reconstruction
     real              :: kpca_rbf_gamma    = 0.      !< RBF gamma (0 => auto)
     logical           :: existence         = .false.
     contains
@@ -48,6 +49,7 @@ type, extends(pca) :: kpca_svd
     procedure, private :: center_columns
     procedure, private :: partial_eigh_sym
     procedure, private :: orthonormalize_cols
+    procedure, private :: select_local_support_inds
 end type
 
 real, parameter :: C_CONST = 0.4  ! for rbf_kernel for testing
@@ -70,6 +72,7 @@ contains
         self%kpca_ker          = 'cosine'
         self%kpca_target       = 'ptcl'
         self%kpca_nystrom_npts = 0
+        self%kpca_nystrom_local_nbrs = 32
         self%kpca_rbf_gamma    = 0.
         ! allocate principal subspace and feature vectors
         allocate( self%E_zn(self%Q,self%N), self%data(self%D,self%N), source=0.)
@@ -79,7 +82,7 @@ contains
     ! SETTERS
 
     !>  \brief  setter for runtime parameters
-    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target, kpca_backend, kpca_nystrom_npts, kpca_rbf_gamma )
+    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target, kpca_backend, kpca_nystrom_npts, kpca_rbf_gamma, kpca_nystrom_local_nbrs )
         class(kpca_svd),            intent(inout) :: self
         integer,          optional, intent(in)    :: nthr
         character(len=*), optional, intent(in)    :: kpca_ker
@@ -87,6 +90,7 @@ contains
         character(len=*), optional, intent(in)    :: kpca_backend
         integer,          optional, intent(in)    :: kpca_nystrom_npts
         real,             optional, intent(in)    :: kpca_rbf_gamma
+        integer,          optional, intent(in)    :: kpca_nystrom_local_nbrs
         if( present(nthr) )then
             self%nthr = nthr
         endif
@@ -104,6 +108,9 @@ contains
         endif
         if( present(kpca_rbf_gamma) )then
             self%kpca_rbf_gamma = kpca_rbf_gamma
+        endif
+        if( present(kpca_nystrom_local_nbrs) )then
+            self%kpca_nystrom_local_nbrs = kpca_nystrom_local_nbrs
         endif
     end subroutine set_params_kpca
 
@@ -299,10 +306,11 @@ contains
         real,    parameter :: TOL     = 0.0001
         real(dp), parameter :: EARLY_STOP_REL = 1.e-5_dp
         logical, parameter :: PROFILE = .true.
-        integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, nthr_use
+        integer  :: m, q_used, r, r_keep, its, ind, iter, ithr, i, j, k, nthr_use, local_nbrs
         integer  :: stagn_count
         integer  :: landmark_inds(self%N)
-        real(dp) :: denom, eig_tol, rbf_gamma, err_prev, err_curr
+        integer  :: support_count
+        real(dp) :: denom, eig_tol, rbf_gamma, err_prev, err_curr, score
         integer(int64) :: t0, t1
         real(real64)   :: trate
         real, allocatable :: eig_q(:), alpha(:,:)
@@ -311,6 +319,9 @@ contains
         real, allocatable :: ker_nm(:,:), ker_mm(:,:), feat(:,:), feat_center(:), eig_w(:), eigvec_w(:,:), tmp_ker_mm(:,:),&
                             &tmp_gram(:,:), gram_eigvecs(:,:), landmark_mat(:,:), gram_small(:,:), gram_eigvecs_small(:,:),&
                             &landmark_eigvals(:), landmark_eigvecs(:,:), gram_eigvals(:)
+        real, allocatable :: support_scores(:,:)
+        integer, allocatable :: support_inds(:,:), support_counts(:)
+        logical, allocatable :: is_landmark(:)
         m = resolve_nystrom_npts(self%N, self%Q, self%kpca_nystrom_npts)
         if( m < 1 )then
             THROW_HARD('kpca Nystrom backend requires at least one landmark')
@@ -337,9 +348,18 @@ contains
         endif
         if( PROFILE ) call system_clock(t0)
         nthr_use = max(1, max(self%nthr, omp_get_max_threads()))
+        local_nbrs = 0
+        local_nbrs = min(max(0, self%kpca_nystrom_local_nbrs), max(0, self%N - m))
         allocate(ker_nm(self%N,m), ker_mm(m,m), feat(self%N,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m),&
                  &tmp_gram(m,m), gram_eigvecs(m,self%Q), landmark_mat(self%D,m), ker_col(self%N,nthr_use), proj_data(m,nthr_use),&
                  &norm_prev(self%D,nthr_use), norm_data(self%D,nthr_use), source=0.)
+        if( local_nbrs > 0 )then
+            allocate(support_scores(local_nbrs,nthr_use), support_inds(local_nbrs,nthr_use), support_counts(nthr_use), is_landmark(self%N))
+            support_scores = 0.
+            support_inds   = 0
+            support_counts = 0
+            is_landmark = .false.
+        endif
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström work alloc: ', real(t1-t0)/real(trate), ' s'
@@ -347,6 +367,7 @@ contains
             call system_clock(t0)
         endif
         call self%select_nystrom_inds(m, landmark_inds(1:m), pcavecs)
+        if( local_nbrs > 0 ) is_landmark(landmark_inds(1:m)) = .true.
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A)') 'kPCA Nyström landmark index selection: ', real(t1-t0)/real(trate), ' s'
@@ -494,12 +515,21 @@ contains
         endif
         select case(trim(self%kpca_ker))
             case('rbf')
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,iter,ithr,i,denom)
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,iter,ithr,i,denom,stagn_count,err_prev,err_curr,support_count,k,score)
                 do ind = 1, self%N
                     ithr              = omp_get_thread_num() + 1
                     call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
+                    if( local_nbrs > 0 )then
+                        call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
+                            support_inds(:,ithr), support_scores(:,ithr))
+                        support_counts(ithr) = support_count
+                    else
+                        support_counts(ithr) = 0
+                    endif
                     self%data(:,ind)  = pcavecs(:,ind)
                     norm_prev(:,ithr) = 0.
+                    err_prev          = huge(1._dp)
+                    stagn_count       = 0
                     iter              = 1
                     do while( euclid(self%data(:,ind),norm_prev(:,ithr)) > TOL .and. iter < its )
                         norm_prev(:,ithr) = self%data(:,ind)
@@ -508,18 +538,53 @@ contains
                         enddo
                         proj_data(1:m,ithr) = max(0., ker_col(landmark_inds(1:m),ithr)) * exp(-real(rbf_gamma) * proj_data(1:m,ithr))
                         denom             = sum(real(proj_data(1:m,ithr),dp))
+                        if( support_counts(ithr) > 0 )then
+                            do k = 1, support_counts(ithr)
+                                score = real(support_scores(k,ithr), dp) * exp(-real(rbf_gamma) * euclid(norm_prev(:,ithr), pcavecs(:,support_inds(k,ithr)))**2)
+                                denom = denom + score
+                            enddo
+                        endif
                         if( denom < DTINY ) exit
                         self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr)) / real(denom)
+                        if( support_counts(ithr) > 0 )then
+                            do k = 1, support_counts(ithr)
+                                score = real(support_scores(k,ithr), dp) * exp(-real(rbf_gamma) * euclid(norm_prev(:,ithr), pcavecs(:,support_inds(k,ithr)))**2)
+                                self%data(:,ind) = self%data(:,ind) + real(score / denom) * pcavecs(:,support_inds(k,ithr))
+                            enddo
+                        endif
+                        err_curr = euclid(self%data(:,ind), norm_prev(:,ithr))
+                        if( abs(err_prev - err_curr) <= EARLY_STOP_REL * max(1._dp, err_prev) )then
+                            stagn_count = stagn_count + 1
+                            if( stagn_count >= EARLY_STOP_PATIENCE ) exit
+                        else
+                            stagn_count = 0
+                        endif
+                        err_prev = err_curr
                         iter = iter + 1
                     enddo
+                    if( PROFILE .and. mod(ind, 256) == 0 )then
+                        !$omp critical(kpca_nystrom_preimg_progress)
+                        call system_clock(t1)
+                        write(logfhandle,'(A,I8,A,I8,A,F8.3,A)') 'kPCA Nyström pre-image progress: ', ind, '/', self%N, &
+                            '; elapsed=', real(t1-t0)/real(trate), ' s'
+                        call flush(logfhandle)
+                        !$omp end critical(kpca_nystrom_preimg_progress)
+                    endif
                 enddo
                 !$omp end parallel do
             case('cosine')
                 if( trim(self%kpca_target) .eq. 'ptcl' )then
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr)
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr,support_count,k,score)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
+                        if( local_nbrs > 0 )then
+                            call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
+                                support_inds(:,ithr), support_scores(:,ithr))
+                            support_counts(ithr) = support_count
+                        else
+                            support_counts(ithr) = 0
+                        endif
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
@@ -530,8 +595,16 @@ contains
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             proj_data(1:m,ithr) = matmul(norm_landmarks_t, norm_prev(:,ithr)) * ker_col(landmark_inds(1:m),ithr)
                             denom = sum(abs(real(proj_data(1:m,ithr),dp)))
+                            self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr))
+                            if( support_counts(ithr) > 0 )then
+                                do k = 1, support_counts(ithr)
+                                    score = real(support_scores(k,ithr), dp) * sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp))
+                                    self%data(:,ind) = self%data(:,ind) + real(score) * pcavecs(:,support_inds(k,ithr))
+                                    denom = denom + abs(score)
+                                enddo
+                            endif
                             if( denom < DTINY ) exit
-                            self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr)) / real(denom)
+                            self%data(:,ind)  = self%data(:,ind) / real(denom)
                             denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
                             if( denom < DTINY ) exit
                             norm_data(:,ithr) = self%data(:,ind) / real(denom)
@@ -556,10 +629,17 @@ contains
                     enddo
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr)
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr,support_count,k,score)
                     do ind = 1, self%N
                         ithr              = omp_get_thread_num() + 1
                         call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
+                        if( local_nbrs > 0 )then
+                            call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_nbrs, support_count, &
+                                support_inds(:,ithr), support_scores(:,ithr))
+                            support_counts(ithr) = support_count
+                        else
+                            support_counts(ithr) = 0
+                        endif
                         self%data(:,ind)  = pcavecs(:,ind)
                         norm_prev(:,ithr) = 1. / sqrt(real(self%D))
                         norm_data(:,ithr) = norm_pcavecs(:,ind)
@@ -570,6 +650,12 @@ contains
                             norm_prev(:,ithr) = norm_data(:,ithr)
                             proj_data(1:m,ithr) = matmul(norm_landmarks_t, norm_prev(:,ithr)) * ker_col(landmark_inds(1:m),ithr)
                             self%data(:,ind)  = matmul(norm_landmarks, proj_data(1:m,ithr))
+                            if( support_counts(ithr) > 0 )then
+                                do k = 1, support_counts(ithr)
+                                    score = real(support_scores(k,ithr), dp) * sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp))
+                                    self%data(:,ind) = self%data(:,ind) + real(score) * norm_pcavecs(:,support_inds(k,ithr))
+                                enddo
+                            endif
                             denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
                             if( denom < DTINY ) exit
                             norm_data(:,ithr) = self%data(:,ind) / real(denom)
@@ -603,6 +689,10 @@ contains
         if( allocated(norm_pcavecs)   ) deallocate(norm_pcavecs)
         if( allocated(norm_landmarks) ) deallocate(norm_landmarks)
         if( allocated(norm_landmarks_t) ) deallocate(norm_landmarks_t)
+        if( allocated(support_scores) ) deallocate(support_scores)
+        if( allocated(support_inds) ) deallocate(support_inds)
+        if( allocated(support_counts) ) deallocate(support_counts)
+        if( allocated(is_landmark) ) deallocate(is_landmark)
         deallocate(eig_q, alpha)
         deallocate(ker_nm, ker_mm, feat, feat_center, eig_w, eigvec_w, tmp_ker_mm, tmp_gram, gram_eigvecs, landmark_mat, &
                    &gram_small, gram_eigvecs_small, gram_eigvals, ker_col, proj_data, norm_prev, norm_data)
@@ -974,6 +1064,41 @@ contains
         enddo
         deallocate(candidates, cand_norms, chosen, sketch_pos, sketch, min_dist)
     end subroutine choose_nystrom_inds_from_data
+
+    subroutine select_local_support_inds( self, weights, is_landmark, self_ind, max_keep, n_keep, inds, vals )
+        class(kpca_svd), intent(in)  :: self
+        real,            intent(in)  :: weights(:)
+        logical,         intent(in)  :: is_landmark(:)
+        integer,         intent(in)  :: self_ind, max_keep
+        integer,         intent(out) :: n_keep, inds(max_keep)
+        real,            intent(out) :: vals(max_keep)
+        integer :: i, j, pos
+        real    :: w
+        inds = 0
+        vals = 0.
+        n_keep = 0
+        if( max_keep <= 0 ) return
+        do i = 1, size(weights)
+            if( i == self_ind ) cycle
+            if( is_landmark(i) ) cycle
+            w = weights(i)
+            if( w <= 0. ) cycle
+            if( n_keep < max_keep )then
+                n_keep = n_keep + 1
+                inds(n_keep) = i
+                vals(n_keep) = w
+            else
+                pos = 1
+                do j = 2, max_keep
+                    if( vals(j) < vals(pos) ) pos = j
+                enddo
+                if( w > vals(pos) )then
+                    inds(pos) = i
+                    vals(pos) = w
+                endif
+            endif
+        enddo
+    end subroutine select_local_support_inds
 
     subroutine dense_tmm( self, left, right, out )
         class(kpca_svd), intent(in)  :: self

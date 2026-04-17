@@ -153,6 +153,7 @@ contains
         call trajectory_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
         call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 128, 256)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 128, 256)', '# landmarks', .false., 0.0)
+        call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström local support neighbors (0 => landmarks only; try 16, 32)', 'Nyström local support neighbors (0 => landmarks only; try 16, 32)', '# local nbrs', .false., 32.0)
         ! mask controls
         ! <empty>
         ! computer controls
