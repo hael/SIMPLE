@@ -562,20 +562,22 @@ contains
             call xreproject%execute(cline_reproject)
             fname_cvags_vs_reprojs = 'cavgs_vs_reprojections_rec.mrc'
             ! write cavgs & reprojections
-            allocate(imgs(2*ncavgs))
-            cnt = 0
-            do i = 1,2*ncavgs,2
-                cnt = cnt + 1
+            allocate(imgs(2), state_mask(ncavgs))
+            cnt = -1
+            do i = 1, ncavgs
+                cnt = cnt + 2
                 if( rstates(cnt) > 0.5 )then
                     state_mask(cnt) = .true.
-                    call imgs(i    )%new([params%box,params%box,1],   smpd)
-                    call imgs(i + 1)%new([params%box,params%box,1],   smpd)
-                    call imgs(i    )%read(cavgs_stk,                   cnt)
-                    call imgs(i + 1)%read(string('reprojs.mrc'),       cnt)
-                    call imgs(i    )%norm
-                    call imgs(i + 1)%norm
-                    call imgs(i    )%write(fname_cvags_vs_reprojs, cnt    )
-                    call imgs(i + 1)%write(fname_cvags_vs_reprojs, cnt + 1)
+                    call imgs(1)%new([params%box,params%box,1],   smpd)
+                    call imgs(2)%new([params%box,params%box,1],   smpd)
+                    call imgs(1)%read(cavgs_stk,                   cnt)
+                    call imgs(2)%read(string('reprojs.mrc'),       cnt)
+                    call imgs(1)%norm
+                    call imgs(2)%norm
+                    call imgs(1)%write(fname_cvags_vs_reprojs, cnt    )
+                    call imgs(2)%write(fname_cvags_vs_reprojs, cnt + 1)
+                    call imgs(1)%kill
+                    call imgs(2)%kill
                 else
                     state_mask(cnt) = .false.
                 endif
@@ -585,9 +587,7 @@ contains
         endif
         ! deallocate
         call cavgs_stk%kill
-        do i=1,2*ncavgs
-            call imgs(i)%kill
-        enddo
+        deallocate(rstates, state_mask)
         ! end gracefully
         call simple_end('**** VALIDATE_CAVGVS_MODEL NORMAL STOP ****')
     end subroutine exec_validate_cavgs_vs_model
