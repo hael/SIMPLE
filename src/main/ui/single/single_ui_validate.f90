@@ -6,6 +6,7 @@ implicit none
 type(ui_program), target :: cavgseoproc_nano
 type(ui_program), target :: cavgsproc_nano
 type(ui_program), target :: ptclsproc_nano
+type(ui_program), target :: validate_cavgs_vs_model
 
 contains
 
@@ -14,6 +15,7 @@ contains
         call new_cavgseoproc_nano(prgtab)
         call new_cavgsproc_nano(prgtab)
         call new_ptclsproc_nano(prgtab)
+        call new_validate_cavgs_vs_model(prgtab)
     end subroutine construct_single_validate_programs
 
     subroutine print_single_validate_programs(logfhandle)
@@ -22,6 +24,7 @@ contains
         write(logfhandle,'(A)') cavgseoproc_nano%name%to_char()
         write(logfhandle,'(A)') cavgsproc_nano%name%to_char()
         write(logfhandle,'(A)') ptclsproc_nano%name%to_char()
+        write(logfhandle,'(A)') validate_cavgs_vs_model%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_single_validate_programs
 
@@ -110,5 +113,34 @@ contains
         ! add to ui_hash
         call add_ui_program('ptclsproc_nano', ptclsproc_nano, prgtab)
     end subroutine new_ptclsproc_nano
+
+    subroutine new_validate_cavgs_vs_model( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call validate_cavgs_vs_model%new(&
+        &'validate_cavgs_vs_model',&                                                                       ! name
+        &'Validation of class averages against model projections',&                                        ! descr_short
+        &'is a program to validate the class averages against model projections using cross-correlation',& ! descr_long
+        &'single_exec',&                                                                                   ! executable
+        &.true., gui_advanced=.false.)                                                                     ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call validate_cavgs_vs_model%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call validate_cavgs_vs_model%add_input(UI_PARM, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call validate_cavgs_vs_model%add_input(UI_SRCH, pgrp)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call validate_cavgs_vs_model%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call validate_cavgs_vs_model%add_input(UI_COMP, nthr)
+        call validate_cavgs_vs_model%add_input(UI_COMP, script)
+        ! add to ui_hash
+        call add_ui_program('validate_cavgs_vs_model', validate_cavgs_vs_model, prgtab)
+    end subroutine new_validate_cavgs_vs_model
 
 end module single_ui_validate

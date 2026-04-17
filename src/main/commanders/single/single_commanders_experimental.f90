@@ -30,6 +30,11 @@ type, extends(commander_base) :: commander_trajectory_make_projavgs
     procedure :: execute      => exec_trajectory_make_projavgs
 end type commander_trajectory_make_projavgs
 
+type, extends(commander_base) :: commander_validate_cavgs_vs_model
+  contains
+    procedure :: execute      => exec_validate_cavgs_vs_model
+end type commander_validate_cavgs_vs_model
+
 contains
 
     subroutine exec_cavgsproc_nano( self, cline )
@@ -47,7 +52,7 @@ contains
         real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical,          allocatable :: state_mask(:)
         integer,          allocatable :: pinds(:)
-        integer :: ncavgs, i, j, cnt, cnt2, tmax, tmin, tstamp
+        integer :: ncavgs, i, j, cnt, cnt2, tmax, tmin, tstamp, funit
         real    :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
@@ -95,7 +100,7 @@ contains
             ! write cavgs & reprojections
             allocate(imgs(2*ncavgs), state_mask(ncavgs))
             cnt = 0
-            open(unit=25, file="radial_analysis.csv")
+            open(unit=funit, file="radial_analysis.csv")
             do i = 1,2*ncavgs,2
                 cnt = cnt + 1
                 if( rstates(cnt) > 0.5 )then
@@ -121,14 +126,14 @@ contains
                 else
                     state_mask(cnt) = .false.
                 endif
-                write(25, '(A)') "          "
+                write(funit, '(A)') "          "
 
             enddo
             command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-.4:1]; splot " //"'"//"radial_analysis.csv"//"'"// &
             " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
             "'"// "; set title " //"'"//"Radial Cross-correlation"//"'"// "; set nokey; set output 'radial_analysis.png'; replot" //'"'
             call execute_command_line(command_plot%to_char())
-            close(25)
+            close(funit)
             cnt   = 0
             cnt2  = 1 ! needed because we have omissions
             fname = 'cavgs_vs_reprojections.mrc'
@@ -147,6 +152,9 @@ contains
         call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* reproject_oris.txt stderrout')
         ! deallocate
         call cavgs_stk%kill
+        do i=1,size(imgs)
+            call imgs(i)%kill
+        enddo
         ! end gracefully
         call simple_end('**** CAVGSPROC_NANO NORMAL STOP ****')
     end subroutine exec_cavgsproc_nano
@@ -162,7 +170,7 @@ contains
         real,    allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical, allocatable :: state_mask(:)
         integer, allocatable :: pinds(:)
-        integer :: ncavgs, i, j, cnt, tmax, tmin, tstamp
+        integer :: ncavgs, i, j, cnt, tmax, tmin, tstamp, funit
         real    :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgseoproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
@@ -180,7 +188,7 @@ contains
         print *,"params", params%box
         allocate(rad_cc(ncavgs,params%box/2), rad_dists(ncavgs,params%box/2), state_mask(ncavgs))
         cnt = 0
-        open(unit=25, file="evenodd_radial_analysis.csv")
+        open(unit=funit, file="evenodd_radial_analysis.csv")
         print *, "ncavgs", ncavgs
         do i = 1, ncavgs
             cnt = cnt + 1
@@ -199,20 +207,23 @@ contains
                 tstamp = tmin + (tmax-tmin)/2
                 call cavg_odd%radial_cc(cavg_even, img_w, smpd, rad_cc(cnt,:), rad_dists(cnt,:)) 
                 do j = 1, size(rad_dists,dim=2)
-                    write(25,'(i6, i6, 2F18.6, i6, i6)') cnt, tstamp, rad_dists(cnt,j), rad_cc(cnt,j), tmax-tmin, size(pinds)
+                    write(funit,'(i6, i6, 2F18.6, i6, i6)') cnt, tstamp, rad_dists(cnt,j), rad_cc(cnt,j), tmax-tmin, size(pinds)
                 enddo
             else
                 state_mask(cnt) = .false.
             endif
-            write(25, '(A)') "          "
+            write(funit, '(A)') "          "
         enddo
         command_plot = "gnuplot -e "//'"'//"set pm3d map; set zrange[-.4:1]; splot " //"'"//"evenodd_radial_analysis.csv"//"'"// &
             " u 2:3:4 ; set term png; set xlabel " //"'"//"Time"//"'"// "; set ylabel " //"'"//"Radius({\305})"// &
             "'"// "; set title " //"'"//"Even-Odd Radial Cross-correlation"//"'"// "; set nokey; set output 'radial_analysis.png'; replot" //'"'
         call execute_command_line(command_plot%to_char())
-        close(25)
+        close(funit)
         ! deallocate
         call cavgs_stk%kill
+        call cavg_odd%kill
+        call cavg_even%kill
+        call img_w%kill
         ! end gracefully
         call simple_end('**** CAVGSEOPROC_NANO NORMAL STOP ****')
     end subroutine exec_cavgseoproc_nano
@@ -492,5 +503,93 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_PROJAVGS NORMAL STOP ****')
     end subroutine exec_trajectory_make_projavgs
+
+    subroutine exec_validate_cavgs_vs_model( self, cline )
+        use single_commanders_nano3D, only: commander_refine3D_nano
+        class(commander_validate_cavgs_vs_model), intent(inout) :: self
+        class(cmdline),                           intent(inout) :: cline
+        type(parameters)              :: params
+        type(commander_refine3D_nano) :: xrefine3D_nano
+        type(commander_reproject)     :: xreproject
+        type(cmdline)                 :: cline_refine3D_cavgs, cline_reproject
+        type(image),      allocatable :: imgs(:)
+        type(sp_project)              :: spproj
+        type(string)                  :: cavgs_stk, fname_cvags_vs_reprojs
+        real,             allocatable :: rstates(:)
+        logical,          allocatable :: state_mask(:)
+        integer :: ncavgs, i, j, cnt, cnt2, tmax, tmin, tstamp
+        real    :: smpd
+        call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgsproc_nano & copy the project file
+        call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
+        params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
+        call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
+        ! read the project file
+        call spproj%read(params%projfile)
+        ! retrieve cavgs stack
+        call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
+        if( ncavgs /= 0 )then
+            ! update cline_refine3D_cavgs accordingly
+            call cline_refine3D_cavgs%set('prg',      'refine3D_nano')
+            call cline_refine3D_cavgs%set('vol1',      params%vols(1))
+            call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
+            call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
+            call cline_refine3D_cavgs%set('nthr',         params%nthr)
+            call cline_refine3D_cavgs%set('mkdir',               'no')
+            call cline_refine3D_cavgs%set('maxits',                 1)
+            call cline_refine3D_cavgs%set('projfile', params%projfile)
+            call cline_refine3D_cavgs%set('oritype',          'cls3D')
+            call cline_refine3D_cavgs%set('objfun',              'cc')
+            call cline_refine3D_cavgs%set('lp',                   1.0)
+            call cline_refine3D_cavgs%set('trs',                  5.0)
+            call cline_refine3D_cavgs%set('nspace',             10000)
+            call cline_refine3D_cavgs%set('center',              'no')
+            ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
+            call xrefine3D_nano%execute(cline_refine3D_cavgs)
+            ! align cavgs
+            call spproj%read_segment('cls3D', params%projfile) ! now the newly generated cls3D field will be read...
+            ! ...so write out its content
+            call spproj%os_cls3D%write(string('cavgs_oris.txt'))
+            ! ...and get the state flags
+            if( allocated(rstates) ) deallocate(rstates)
+            rstates = spproj%os_cls3D%get_all('state')
+            ! prepare for re-projection
+            call cline_reproject%set('vol1',      params%vols(1))
+            call cline_reproject%set('outstk',     'reprojs.mrc')
+            call cline_reproject%set('smpd',                smpd)
+            call cline_reproject%set('oritab',  'cavgs_oris.txt')
+            call cline_reproject%set('pgrp',         params%pgrp)
+            call cline_reproject%set('nthr',         params%nthr)
+            call xreproject%execute(cline_reproject)
+            fname_cvags_vs_reprojs = 'cavgs_vs_reprojections_rec.mrc'
+            ! write cavgs & reprojections
+            allocate(imgs(2*ncavgs))
+            cnt = 0
+            do i = 1,2*ncavgs,2
+                cnt = cnt + 1
+                if( rstates(cnt) > 0.5 )then
+                    state_mask(cnt) = .true.
+                    call imgs(i    )%new([params%box,params%box,1],   smpd)
+                    call imgs(i + 1)%new([params%box,params%box,1],   smpd)
+                    call imgs(i    )%read(cavgs_stk,                   cnt)
+                    call imgs(i + 1)%read(string('reprojs.mrc'),       cnt)
+                    call imgs(i    )%norm
+                    call imgs(i + 1)%norm
+                    call imgs(i    )%write(fname_cvags_vs_reprojs, cnt    )
+                    call imgs(i + 1)%write(fname_cvags_vs_reprojs, cnt + 1)
+                else
+                    state_mask(cnt) = .false.
+                endif
+            enddo       
+        else
+            THROW_HARD("No class averages found in the project file; exec_validate_cavgs_vs_model.")
+        endif
+        ! deallocate
+        call cavgs_stk%kill
+        do i=1,2*ncavgs
+            call imgs(i)%kill
+        enddo
+        ! end gracefully
+        call simple_end('**** VALIDATE_CAVGVS_MODEL NORMAL STOP ****')
+    end subroutine exec_validate_cavgs_vs_model
 
   end module single_commanders_experimental
