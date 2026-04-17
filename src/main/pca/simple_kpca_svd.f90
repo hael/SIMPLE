@@ -770,13 +770,7 @@ contains
         endif
         r_keep = min(m, max(16, min(m, 64)))
         allocate(landmark_inds(m), source=0)
-        do i = 1,m
-            if( m == 1 )then
-                landmark_inds(i) = 1
-            else
-                landmark_inds(i) = 1 + ((i-1) * (n-1)) / (m-1)
-            endif
-        enddo
+        call choose_nystrom_inds_from_data(m, n, d, landmark_inds, pcavecs)
         allocate(ker_nm(n,m), ker_mm(m,m), feat(n,m), feat_center(m), eig_w(m), eigvec_w(m,m), tmp_ker_mm(m,m), tmp_gram(m,m), source=0.)
         select case(trim(kpca_ker))
             case('cosine')
@@ -870,33 +864,116 @@ contains
         integer,         intent(in)    :: m
         integer,         intent(out)   :: inds(m)
         real, optional,  intent(in)    :: pcavecs(self%D,self%N)
-        integer :: i, ibeg, iend, best_i, k
-        real(dp) :: best_norm, cur_norm
-        if( m == 1 )then
+        if( present(pcavecs) )then
+            call choose_nystrom_inds_from_data(m, self%N, self%D, inds, pcavecs)
+        else
+            call choose_nystrom_inds_from_data(m, self%N, 0, inds)
+        endif
+    end subroutine select_nystrom_inds
+
+    subroutine choose_nystrom_inds_from_data( m, n, d, inds, pcavecs )
+        integer,         intent(in)  :: m, n, d
+        integer,         intent(out) :: inds(m)
+        real, optional,  intent(in)  :: pcavecs(d,n)
+        integer, parameter :: SKETCH_DIM = 32
+        integer :: i, j, k, ncand, nsketch, ibeg, iend, best_i, best_pos, cand_idx
+        integer, allocatable :: candidates(:), sketch_pos(:)
+        logical, allocatable :: chosen(:)
+        real(dp), allocatable :: cand_norms(:), min_dist(:), sketch(:,:)
+        real(dp) :: cur_norm, best_norm, dist_ij, delta, nrm
+        if( m <= 1 .or. n <= 1 )then
             inds(1) = 1
             return
         endif
-        if( present(pcavecs) .and. m < self%N )then
+        if( .not. present(pcavecs) .or. d <= 0 .or. m >= n )then
             do i = 1,m
-                ibeg = 1 + ((i-1) * self%N) / m
-                iend = max(ibeg, (i * self%N) / m)
-                best_i = ibeg
-                best_norm = -1._dp
-                do k = ibeg, iend
-                    cur_norm = sum(real(pcavecs(:,k),dp) * real(pcavecs(:,k),dp))
-                    if( cur_norm > best_norm )then
-                        best_norm = cur_norm
-                        best_i    = k
-                    endif
-                enddo
-                inds(i) = best_i
+                inds(i) = 1 + ((i-1) * (n-1)) / max(1, m-1)
             enddo
             return
         endif
-        do i = 1,m
-            inds(i) = 1 + ((i-1) * (self%N-1)) / (m-1)
+        ncand = min(n, max(m, min(4*m, n)))
+        allocate(candidates(ncand), cand_norms(ncand), chosen(ncand))
+        candidates = 0
+        cand_norms = 0._dp
+        chosen     = .false.
+        do i = 1,ncand
+            ibeg = 1 + ((i-1) * n) / ncand
+            iend = max(ibeg, (i * n) / ncand)
+            best_i = ibeg
+            best_norm = -1._dp
+            do k = ibeg, iend
+                cur_norm = sum(real(pcavecs(:,k),dp) * real(pcavecs(:,k),dp))
+                if( cur_norm > best_norm )then
+                    best_norm = cur_norm
+                    best_i    = k
+                endif
+            enddo
+            candidates(i) = best_i
+            cand_norms(i) = max(best_norm, DTINY)
         enddo
-    end subroutine select_nystrom_inds
+        nsketch = min(SKETCH_DIM, d)
+        allocate(sketch_pos(nsketch), sketch(nsketch,ncand), min_dist(ncand))
+        sketch_pos = 0
+        sketch     = 0._dp
+        min_dist   = 0._dp
+        if( nsketch == 1 )then
+            sketch_pos(1) = 1
+        else
+            do i = 1,nsketch
+                sketch_pos(i) = 1 + ((i-1) * (d-1)) / (nsketch-1)
+            enddo
+        endif
+        do i = 1,ncand
+            cand_idx = candidates(i)
+            nrm = sqrt(cand_norms(i))
+            do j = 1,nsketch
+                sketch(j,i) = real(pcavecs(sketch_pos(j), cand_idx), dp) / nrm
+            enddo
+        enddo
+        best_pos = 1
+        best_norm = -1._dp
+        do i = 1,ncand
+            cur_norm = sum(sketch(:,i) * sketch(:,i))
+            if( cur_norm > best_norm )then
+                best_norm = cur_norm
+                best_pos  = i
+            endif
+        enddo
+        inds(1) = candidates(best_pos)
+        chosen(best_pos) = .true.
+        do i = 1,ncand
+            dist_ij = 0._dp
+            do j = 1,nsketch
+                delta = sketch(j,i) - sketch(j,best_pos)
+                dist_ij = dist_ij + delta * delta
+            enddo
+            min_dist(i) = dist_ij
+        enddo
+        min_dist(best_pos) = -1._dp
+        do k = 2,m
+            best_pos = 1
+            best_norm = -1._dp
+            do i = 1,ncand
+                if( .not. chosen(i) .and. min_dist(i) > best_norm )then
+                    best_norm = min_dist(i)
+                    best_pos  = i
+                endif
+            enddo
+            inds(k) = candidates(best_pos)
+            chosen(best_pos) = .true.
+            do i = 1,ncand
+                if( .not. chosen(i) )then
+                    dist_ij = 0._dp
+                    do j = 1,nsketch
+                        delta = sketch(j,i) - sketch(j,best_pos)
+                        dist_ij = dist_ij + delta * delta
+                    enddo
+                    min_dist(i) = min(min_dist(i), dist_ij)
+                endif
+            enddo
+        enddo
+        deallocate(candidates, cand_norms, chosen, sketch_pos, sketch, min_dist)
+    end subroutine choose_nystrom_inds_from_data
 
     subroutine dense_tmm( self, left, right, out )
         class(kpca_svd), intent(in)  :: self
