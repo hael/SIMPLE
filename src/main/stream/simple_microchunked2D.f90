@@ -110,7 +110,6 @@ module simple_microchunked2D
   use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr
   use simple_projfile_utils,          only: merge_chunk_projfiles
   use simple_cluster2D_rejector,      only: cluster2D_rejector
-  use simple_stream_microchunk_utils, only: calc_rejection_score, reject_outliers, reject_auto, reject_basic
 
   implicit none
   public  :: microchunked2D
@@ -1380,24 +1379,10 @@ contains
     allocate(l_rejected(ncls), source=.false.)
 
     ! ! Outlier rejection applied at every tier
-    ! call reject_outliers(cavg_imgs, mskrad, l_rejected)
-    ! call write_cavgs(stkname, string('_rejected_outliers.mrc'), selected=.false.)
-
-    ! ! Pass-1 uses auto rejection; all other tiers use basic rejection
-    ! if( label == string(LABEL_PASS_1) ) then
-    !   call reject_auto(cavg_imgs, l_rejected)
-    !   call write_cavgs(stkname, string('_rejected_auto.mrc'),  selected=.false.)
-    ! else
-    !   call reject_basic(spproj%os_cls2D, l_rejected)
-    !   call write_cavgs(stkname, string('_rejected_basic.mrc'), selected=.false.)
-    ! end if
-    ! call write_cavgs(stkname, string('_selected.mrc'), selected=.true.)
-
     call rejector%new(cavg_imgs, self%mskdiam)
     call rejector%reject_pop(spproj%os_cls2D)
     call rejector%reject_res(spproj%os_cls2D)
     call rejector%reject_mask()
-  !  call rejector%reject_brightness()! doesnt add anything
     call rejector%reject_local_variance()
     l_rejected = rejector%get_rejected()
     call write_cavgs(stkname, string('_rejected.mrc'), selected=.false.)
