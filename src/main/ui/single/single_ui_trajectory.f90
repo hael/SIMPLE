@@ -147,13 +147,13 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; try 50, 100)', 'Number of eigencomponents (0 => auto for Nyström kPCA; try 50, 100)', '# eigenvecs', .false., 50.0)
+        call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; try 64, 128)', 'Number of eigencomponents (0 => auto for Nyström kPCA; try 64, 128)', '# eigenvecs', .false., 128.0)
         call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: probabilistic PCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){kpca}', .false., 'kpca')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){cosine}', '(rbf|cosine){cosine}', .false., 'cosine')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
-        call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 128, 256)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 128, 256)', '# landmarks', .false., 0.0)
-        call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström local support neighbors (0 => landmarks only; try 16, 32)', 'Nyström local support neighbors (0 => landmarks only; try 16, 32)', '# local nbrs', .false., 32.0)
+        call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
+        call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (adaptive; 0 => landmarks only; try 64, 128, 256)', 'Nyström max local support neighbors (adaptive; 0 => landmarks only; try 64, 128, 256)', '# max local nbrs', .false., 128.0)
         ! mask controls
         ! <empty>
         ! computer controls

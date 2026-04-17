@@ -18,8 +18,8 @@ type, extends(pca) :: kpca_svd
     character(len=16) :: kpca_backend      = ''      !< backend ('exact' or 'nystrom')
     character(len=16) :: kpca_ker          = ''      !< kernel type ('rbf' or 'cosine')
     character(len=16) :: kpca_target       = ''      !< target type ('ptcl' or other)
-    integer           :: kpca_nystrom_npts = 0       !< nr of Nystrom landmarks (0 => auto)
-    integer           :: kpca_nystrom_local_nbrs = 32 !< extra local support for Nyström reconstruction
+    integer           :: kpca_nystrom_npts = 512       !< nr of Nystrom landmarks
+    integer           :: kpca_nystrom_local_nbrs = 128 !< max extra local support for Nyström reconstruction
     real              :: kpca_rbf_gamma    = 0.      !< RBF gamma (0 => auto)
     logical           :: existence         = .false.
     contains
@@ -71,8 +71,8 @@ contains
         self%kpca_backend      = 'nystrom'
         self%kpca_ker          = 'cosine'
         self%kpca_target       = 'ptcl'
-        self%kpca_nystrom_npts = 0
-        self%kpca_nystrom_local_nbrs = 32
+        self%kpca_nystrom_npts = 512
+        self%kpca_nystrom_local_nbrs = 128
         self%kpca_rbf_gamma    = 0.
         ! allocate principal subspace and feature vectors
         allocate( self%E_zn(self%Q,self%N), self%data(self%D,self%N), source=0.)
@@ -1072,17 +1072,22 @@ contains
         integer,         intent(in)  :: self_ind, max_keep
         integer,         intent(out) :: n_keep, inds(max_keep)
         real,            intent(out) :: vals(max_keep)
+        real(dp), parameter :: KEEP_FRAC = 0.90_dp
         integer :: i, j, pos
-        real    :: w
+        real    :: w, tmpv
+        integer :: tmpi
+        real(dp) :: total_pos, keep_target, running
         inds = 0
         vals = 0.
         n_keep = 0
         if( max_keep <= 0 ) return
+        total_pos = 0._dp
         do i = 1, size(weights)
             if( i == self_ind ) cycle
             if( is_landmark(i) ) cycle
             w = weights(i)
             if( w <= 0. ) cycle
+            total_pos = total_pos + real(w, dp)
             if( n_keep < max_keep )then
                 n_keep = n_keep + 1
                 inds(n_keep) = i
@@ -1098,6 +1103,32 @@ contains
                 endif
             endif
         enddo
+        if( n_keep <= 1 ) return
+        do i = 1, n_keep-1
+            do j = i+1, n_keep
+                if( vals(j) > vals(i) )then
+                    tmpv    = vals(i)
+                    vals(i) = vals(j)
+                    vals(j) = tmpv
+                    tmpi    = inds(i)
+                    inds(i) = inds(j)
+                    inds(j) = tmpi
+                endif
+            enddo
+        enddo
+        keep_target = KEEP_FRAC * total_pos
+        running = 0._dp
+        do i = 1, n_keep
+            running = running + real(vals(i), dp)
+            if( running >= keep_target )then
+                n_keep = i
+                exit
+            endif
+        enddo
+        if( n_keep < max_keep )then
+            inds(n_keep+1:max_keep) = 0
+            vals(n_keep+1:max_keep) = 0.
+        endif
     end subroutine select_local_support_inds
 
     subroutine dense_tmm( self, left, right, out )

@@ -321,8 +321,8 @@ type :: parameters
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors {0=>auto for Nyström kPCA}
-    integer :: kpca_nystrom_npts=0 !< # of Nyström landmarks{0=>auto}
-    integer :: kpca_nystrom_local_nbrs=32 !< extra local support neighbors for Nyström cosine reconstruction
+    integer :: kpca_nystrom_npts=512 !< # of Nyström landmarks
+    integer :: kpca_nystrom_local_nbrs=128 !< max extra local support neighbors for Nyström reconstruction
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
