@@ -56,6 +56,7 @@ type(commander_binarize)                :: xbinarize
 
 ! MISCELLANOUS PROGRAMS
 type(commander_aggregate_chunks)        :: xaggregate_chunks
+type(commander_fractionate_movies)      :: xfractionate_movies
 type(commander_kstest)                  :: xkstst
 type(commander_pearsn)                  :: xpearsn
 
@@ -200,6 +201,8 @@ select case(prg)
     ! MISCELLANOUS PROGRAMS
     case( 'aggregate_chunks' )
         call xaggregate_chunks%execute(cline)
+    case( 'fractionate_movies' )
+        call xfractionate_movies%execute(cline)
     case( 'kstest' )
         call xkstst%execute(cline)
     case( 'pearsn' )
