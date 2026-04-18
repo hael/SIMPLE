@@ -235,10 +235,9 @@ type :: parameters
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN)     :: pca_mode='kpca'      !< PCA mode(ppca|pca_svd|kpca){ppca}
+    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
-    character(len=STDLEN)     :: kpca_target='ptcl'   !< kPCA kernel target on ptcls or cavgs (ptcl|cls){ptcl}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN)     :: pickkind='gau'       !< Picking quasi-template(gau|ring|disc){gau}
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
@@ -442,6 +441,7 @@ type :: parameters
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: kpca_cosine_weight_power=1.5 !< cosine local-weight sharpening power
     real    :: kpca_rbf_gamma=0.   !< RBF gamma (0=>auto)
+    real    :: ppca_kpca_resid_alpha=0.5 !< damping for residual kPCA correction on top of PPCA
     real    :: lambda=1.0
     real    :: lam_bounds(2) = [0.05,1.0]
     real    :: lp=20.              !< low-pass limit(in A)
@@ -762,7 +762,6 @@ contains
         call check_carg('pca_mode',       self%pca_mode)
         call check_carg('kpca_backend',   self%kpca_backend)
         call check_carg('kpca_ker',       self%kpca_ker)
-        call check_carg('kpca_target',    self%kpca_target)
         call check_carg('pcontrast',      self%pcontrast)
         call check_carg('pickkind',       self%pickkind)
         call check_carg('pgrp',           self%pgrp)
@@ -1044,6 +1043,7 @@ contains
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
         call check_rarg('kpca_cosine_weight_power', self%kpca_cosine_weight_power)
+        call check_rarg('ppca_kpca_resid_alpha', self%ppca_kpca_resid_alpha)
         call check_rarg('icefracthreshold',self%icefracthreshold)
         call check_rarg('kv',             self%kv)
         call check_rarg('lambda',         self%lambda)

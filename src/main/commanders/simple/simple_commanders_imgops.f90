@@ -354,30 +354,34 @@ contains
     end subroutine exec_filter
 
     subroutine exec_ppca_denoise( self, cline )
-        use simple_imgproc,    only: make_pcavecs
-        use simple_pca,        only: pca
-        use simple_ppca_inmem, only: ppca_inmem
-        use simple_pca_svd,    only: pca_svd
-        use simple_kpca_svd,   only: kpca_svd, suggest_kpca_nystrom_neigs
+        use simple_imgproc,     only: make_pcavecs
+        use simple_pca,         only: pca
+        use simple_ppca,        only: ppca
+        use simple_pca_svd,     only: pca_svd
+        use simple_kpca_svd,    only: kpca_svd, suggest_kpca_nystrom_neigs
         class(commander_ppca_denoise), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         integer,           parameter   :: MAXPCAITS = 15
-        class(pca),        pointer     :: pca_ptr  => null()
+        class(pca),        pointer     :: pca_ptr         => null()
+        type(ppca),        pointer     :: ppca_ptr_typed  => null()
+        type(kpca_svd),    pointer     :: kpca_ptr        => null()
         type(image),       allocatable :: imgs(:)
-        real,              allocatable :: avg(:), gen(:), pcavecs(:,:), tmpvec(:)
+        real,              allocatable :: avg(:), gen(:), pcavecs(:,:), tmpvec(:), zavg(:), corrvec(:)
         type(simple_nice_comm)         :: nice_comm
         type(parameters)               :: params
         type(builder)                  :: build
         integer(int64)                 :: t0, t1
         real(real64)                   :: trate
         integer                        :: npix, iptcl, j, neigs
-        logical                        :: l_transp_pca
+        logical                        :: l_transp_pca, l_profile_pca, l_hybrid_resid
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//STK_EXT)
         ! doesn't work if projfile given - may need to mod in future
         if(cline%defined('projfile')) call cline%delete('projfile')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
+        l_hybrid_resid = trim(params%pca_mode) .eq. 'ppca_kpca_resid'
+        l_profile_pca = trim(params%pca_mode) .eq. 'kpca' .or. trim(params%pca_mode) .eq. 'ppca' .or. l_hybrid_resid
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)
         call nice_comm%cycle()
@@ -388,16 +392,36 @@ contains
             call imgs(iptcl)%read(params%stk, iptcl)
         end do
         call system_clock(t1)
-        if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
+        if( l_profile_pca )then
+            if( trim(params%pca_mode) .eq. 'kpca' )then
+                write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
+            else if( l_hybrid_resid )then
+                write(logfhandle,'(A,F8.3,A,I8)') 'PPCA+kPCA residual denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
+            else
+                write(logfhandle,'(A,F8.3,A,I8)') 'PPCA denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
+            endif
+        endif
         l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
         call system_clock(t0)
         call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
         call system_clock(t1)
-        if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
+        if( l_profile_pca )then
+            if( trim(params%pca_mode) .eq. 'kpca' )then
+                write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
+            else if( l_hybrid_resid )then
+                write(logfhandle,'(A,F8.3,A,I8)') 'PPCA+kPCA residual denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
+            else
+                write(logfhandle,'(A,F8.3,A,I8)') 'PPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
+            endif
+        endif
         neigs = params%neigs
-        if( trim(params%pca_mode) .eq. 'kpca' .and. trim(params%kpca_backend) .eq. 'nystrom' .and. neigs <= 0 )then
+        if( (trim(params%pca_mode) .eq. 'kpca' .or. l_hybrid_resid) .and. trim(params%kpca_backend) .eq. 'nystrom' .and. neigs <= 0 )then
             neigs = max(8, min(64, max(1, params%kpca_nystrom_npts / 2)))
-            write(logfhandle,'(A,I8,A)') 'kPCA denoise auto-selected neigs: ', neigs, ' (Nyström safe heuristic)'
+            if( l_hybrid_resid )then
+                write(logfhandle,'(A,I8,A)') 'PPCA+kPCA residual auto-selected neigs: ', neigs, ' (Nyström safe heuristic)'
+            else
+                write(logfhandle,'(A,I8,A)') 'kPCA denoise auto-selected neigs: ', neigs, ' (Nyström safe heuristic)'
+            endif
             call flush(logfhandle)
         endif
         if( l_transp_pca )then
@@ -405,20 +429,146 @@ contains
         else
             neigs = min(max(neigs, 1), max(params%nptcls-1, 1))
         endif
+        if( l_hybrid_resid )then
+            ! Residual hybrid denoiser:
+            ! 1. Fit PPCA to the centered particle stack and reconstruct the linear denoised estimate.
+            ! 2. Form a residual stack r = x - x_ppca that contains what the linear model did not explain.
+            ! 3. Run kPCA only on that residual stack, not on the full images.
+            ! 4. Write x_hybrid = avg + x_ppca + alpha * r_kpca.
+            !
+            ! Why this exists as a separate mode:
+            ! - A direct PPCA -> kPCA image-domain cascade tended to make images blurrier.
+            ! - The intent here is different: PPCA handles the global linear denoising,
+            !   while kPCA is restricted to modeling structured nonlinear leftovers.
+            ! - Keeping this in its own pca_mode keeps the existing ppca and kpca
+            !   behavior untouched and makes the hybrid easy to benchmark independently.
+            !
+            ! Current scope:
+            ! - Implemented only for transp_pca=no in the image-denoise commander.
+            ! - Uses the existing PPCA and kPCA solvers as black-box stages.
+            ! - alpha controls how strongly the residual kPCA correction is blended back.
+            if( l_transp_pca ) THROW_HARD('ppca_kpca_resid currently supports transp_pca=no only')
+            allocate(ppca_ptr_typed, kpca_ptr)
+            call ppca_ptr_typed%new(params%nptcls, npix, neigs)
+            call kpca_ptr%new(params%nptcls, npix, neigs)
+            call kpca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_backend,&
+            &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
+            allocate(zavg(npix), tmpvec(npix), corrvec(npix), source=0.)
+            call system_clock(t0)
+            call ppca_ptr_typed%master(pcavecs, MAXPCAITS)
+            do iptcl = 1, params%nptcls
+                call ppca_ptr_typed%generate(iptcl, zavg, tmpvec)
+                pcavecs(:,iptcl) = pcavecs(:,iptcl) - tmpvec
+            enddo
+            if( l_profile_pca ) write(logfhandle,'(A)') 'PPCA+kPCA residual: residual stack formed from PPCA reconstruction'
+            call flush(logfhandle)
+            call kpca_ptr%master(pcavecs, MAXPCAITS)
+            call system_clock(t1)
+            if( l_profile_pca ) write(logfhandle,'(A,F8.3,A)') 'PPCA+kPCA residual denoise master: ', real(t1-t0)/real(trate), ' s'
+            call system_clock(t0)
+            block
+                ! Hybrid residual diagnostics:
+                ! - residual RMS stats: size of the residual left after PPCA alone.
+                ! - correction RMS stats: size of the damped kPCA correction being added back.
+                ! - remaining residual RMS stats: size of (residual - alpha * correction).
+                !   If this drops meaningfully, the residual kPCA stage is explaining structure
+                !   that PPCA did not capture.
+                ! - residual/correction cosine stats: directional alignment between the PPCA
+                !   residual and the kPCA correction. High positive values mean the correction
+                !   is targeting the residual rather than acting like an unrelated smoother.
+                !
+                ! Practical interpretation:
+                ! - correction RMS << residual RMS  => hybrid is barely changing the PPCA result
+                ! - remaining residual RMS much lower than residual RMS => hybrid is active/useful
+                ! - cosine near 1 => correction tracks the residual well
+                ! - cosine near 0 or negative => correction is weakly aligned or potentially harmful
+                real(dp) :: resid_rms, corr_rms, remain_rms, align_cos
+                real(dp) :: resid_norm2, corr_norm2, dot_rc
+                real(dp) :: resid_sum, resid_sumsq, resid_max
+                real(dp) :: corr_sum, corr_sumsq, corr_max
+                real(dp) :: remain_sum, remain_sumsq, remain_max
+                real(dp) :: align_sum, align_sumsq, align_max
+                real(dp) :: inv_np, alpha
+                alpha = real(params%ppca_kpca_resid_alpha, dp)
+                inv_np = 1._dp / real(npix, dp)
+                resid_sum = 0._dp;  resid_sumsq = 0._dp;  resid_max = 0._dp
+                corr_sum  = 0._dp;  corr_sumsq  = 0._dp;  corr_max  = 0._dp
+                remain_sum = 0._dp; remain_sumsq = 0._dp; remain_max = 0._dp
+                align_sum = 0._dp;  align_sumsq = 0._dp;  align_max = -huge(1._dp)
+                do iptcl = 1, params%nptcls
+                    call ppca_ptr_typed%generate(iptcl, zavg, tmpvec)
+                    call kpca_ptr%generate(iptcl, zavg, corrvec)
+                    resid_norm2 = sum(real(pcavecs(:,iptcl), dp)**2)
+                    corr_norm2  = sum(real(corrvec, dp)**2)
+                    dot_rc      = sum(real(pcavecs(:,iptcl), dp) * real(corrvec, dp))
+                    resid_rms = sqrt(resid_norm2 * inv_np)
+                    corr_rms  = sqrt((alpha * alpha) * corr_norm2 * inv_np)
+                    remain_rms = sqrt(sum((real(pcavecs(:,iptcl), dp) - alpha * real(corrvec, dp))**2) * inv_np)
+                    if( resid_norm2 > DTINY .and. corr_norm2 > DTINY )then
+                        align_cos = dot_rc / sqrt(resid_norm2 * corr_norm2)
+                    else
+                        align_cos = 0._dp
+                    endif
+                    resid_sum   = resid_sum + resid_rms
+                    resid_sumsq = resid_sumsq + resid_rms * resid_rms
+                    resid_max   = max(resid_max, resid_rms)
+                    corr_sum    = corr_sum + corr_rms
+                    corr_sumsq  = corr_sumsq + corr_rms * corr_rms
+                    corr_max    = max(corr_max, corr_rms)
+                    remain_sum   = remain_sum + remain_rms
+                    remain_sumsq = remain_sumsq + remain_rms * remain_rms
+                    remain_max   = max(remain_max, remain_rms)
+                    align_sum   = align_sum + align_cos
+                    align_sumsq = align_sumsq + align_cos * align_cos
+                    align_max   = max(align_max, align_cos)
+                    tmpvec = avg + tmpvec + params%ppca_kpca_resid_alpha * corrvec
+                    call imgs(iptcl)%unserialize(tmpvec)
+                    call imgs(iptcl)%write(params%outstk, iptcl)
+                    call imgs(iptcl)%kill
+                end do
+                if( l_profile_pca )then
+                    write(logfhandle,'(A,3(A,F9.4))') 'PPCA+kPCA residual RMS stats:', &
+                        ' mean=', resid_sum / real(params%nptcls, dp), &
+                        ' std=', sqrt(max(0._dp, resid_sumsq / real(params%nptcls, dp) - (resid_sum / real(params%nptcls, dp))**2)), &
+                        ' max=', resid_max
+                    write(logfhandle,'(A,3(A,F9.4))') 'PPCA+kPCA correction RMS stats:', &
+                        ' mean=', corr_sum / real(params%nptcls, dp), &
+                        ' std=', sqrt(max(0._dp, corr_sumsq / real(params%nptcls, dp) - (corr_sum / real(params%nptcls, dp))**2)), &
+                        ' max=', corr_max
+                    write(logfhandle,'(A,3(A,F9.4))') 'PPCA+kPCA remaining residual RMS stats:', &
+                        ' mean=', remain_sum / real(params%nptcls, dp), &
+                        ' std=', sqrt(max(0._dp, remain_sumsq / real(params%nptcls, dp) - (remain_sum / real(params%nptcls, dp))**2)), &
+                        ' max=', remain_max
+                    write(logfhandle,'(A,3(A,F9.4))') 'PPCA+kPCA residual/correction cosine stats:', &
+                        ' mean=', align_sum / real(params%nptcls, dp), &
+                        ' std=', sqrt(max(0._dp, align_sumsq / real(params%nptcls, dp) - (align_sum / real(params%nptcls, dp))**2)), &
+                        ' max=', align_max
+                endif
+            end block
+            call system_clock(t1)
+            if( l_profile_pca ) write(logfhandle,'(A,F8.3,A,F6.3)') 'PPCA+kPCA residual denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s; alpha=', params%ppca_kpca_resid_alpha
+            deallocate(imgs)
+            deallocate(zavg, tmpvec, corrvec)
+            deallocate(ppca_ptr_typed, kpca_ptr)
+            call build%kill_general_tbox
+            call nice_comm%terminate()
+            call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
+            return
+        endif
         ! pca allocation
         select case(trim(params%pca_mode))
             case('ppca')
-                allocate(ppca_inmem :: pca_ptr)
+                allocate(ppca :: pca_ptr)
             case('pca_svd')
-                allocate(pca_svd    :: pca_ptr)
+                allocate(pca_svd     :: pca_ptr)
             case('kpca')
-                allocate(kpca_svd   :: pca_ptr)
+                allocate(kpca_svd    :: pca_ptr)
         end select
         if( l_transp_pca )then
             call pca_ptr%new(npix, params%nptcls, neigs)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target,&
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker,&
                     &params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
             end select
             call system_clock(t0)
@@ -429,7 +579,13 @@ contains
                     call pca_ptr%master(pcavecs, MAXPCAITS)
             end select
             call system_clock(t1)
-            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
+            if( l_profile_pca )then
+                if( trim(params%pca_mode) .eq. 'kpca' )then
+                    write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
+                else
+                    write(logfhandle,'(A,F8.3,A)') 'PPCA denoise master: ', real(t1-t0)/real(trate), ' s'
+                endif
+            endif
             allocate(tmpvec(params%nptcls))
             call system_clock(t0)
             !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
@@ -445,12 +601,18 @@ contains
                 call imgs(iptcl)%kill
             end do
             call system_clock(t1)
-            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
+            if( l_profile_pca )then
+                if( trim(params%pca_mode) .eq. 'kpca' )then
+                    write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
+                else
+                    write(logfhandle,'(A,F8.3,A)') 'PPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
+                endif
+            endif
         else
             call pca_ptr%new(params%nptcls, npix, neigs)
             select type(pca_ptr)
                 type is(kpca_svd)
-                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend,&
+                    call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_backend,&
                     &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
             end select
             call system_clock(t0)
@@ -461,7 +623,13 @@ contains
                     call pca_ptr%master(pcavecs, MAXPCAITS)
             end select
             call system_clock(t1)
-            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
+            if( l_profile_pca )then
+                if( trim(params%pca_mode) .eq. 'kpca' )then
+                    write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
+                else
+                    write(logfhandle,'(A,F8.3,A)') 'PPCA denoise master: ', real(t1-t0)/real(trate), ' s'
+                endif
+            endif
             call system_clock(t0)
             !$omp parallel do private(iptcl) default(shared) proc_bind(close) schedule(static)
             do iptcl = 1, params%nptcls
@@ -474,7 +642,13 @@ contains
                 call imgs(iptcl)%kill
             end do
             call system_clock(t1)
-            if( trim(params%pca_mode) .eq. 'kpca' ) write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
+            if( l_profile_pca )then
+                if( trim(params%pca_mode) .eq. 'kpca' )then
+                    write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
+                else
+                    write(logfhandle,'(A,F8.3,A)') 'PPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
+                endif
+            endif
         endif
         ! cleanup
         deallocate(imgs)

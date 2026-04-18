@@ -1,14 +1,14 @@
 program simple_test_pca_all
 use simple_core_module_api
 !$ use omp_lib
-use simple_ppca_inmem, only: ppca_inmem
+use simple_ppca,       only: ppca
 use simple_pca_svd,    only: pca_svd
 use simple_kpca_svd,   only: kpca_svd
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
 implicit none
 integer, parameter :: NP = 3, NS = 4, NC = 3, MAXPCAITS = 15
-type(ppca_inmem)   :: prob_pca
+type(ppca)         :: prob_pca
 type(pca_svd)      :: pca_obj
 type(kpca_svd)     :: kpca_obj
 type(kpca_svd)     :: kpca_nystrom_obj
@@ -81,7 +81,7 @@ enddo
 print *, '---------------------------------------------------'
     ! kPCA test
 call kpca_obj%new(NS, NP, NC)
-    call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'exact', kpca_rbf_gamma=params%kpca_rbf_gamma)
+    call kpca_obj%set_params(params%nthr, params%kpca_ker, 'exact', kpca_rbf_gamma=params%kpca_rbf_gamma)
 call kpca_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS
@@ -96,7 +96,7 @@ enddo
     print *, '---------------------------------------------------'
     ! Nyström kPCA test
     call kpca_nystrom_obj%new(NS, NP, NC)
-    call kpca_nystrom_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, 'nystrom', NS, params%kpca_rbf_gamma, &
+    call kpca_nystrom_obj%set_params(params%nthr, params%kpca_ker, 'nystrom', NS, params%kpca_rbf_gamma, &
         kpca_cosine_weight_power=params%kpca_cosine_weight_power)
 call kpca_nystrom_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
@@ -112,7 +112,7 @@ enddo
 print *, '---------------------------------------------------'
 ! RBF kPCA smoke test
 call kpca_rbf_obj%new(NS, NP, NC)
-    call kpca_rbf_obj%set_params(params%nthr, 'rbf', params%kpca_target, 'exact', kpca_rbf_gamma=0.)
+    call kpca_rbf_obj%set_params(params%nthr, 'rbf', 'exact', kpca_rbf_gamma=0.)
 call kpca_rbf_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS
@@ -127,7 +127,7 @@ enddo
 print *, '---------------------------------------------------'
 ! RBF Nyström kPCA smoke test
 call kpca_rbf_nystrom_obj%new(NS, NP, NC)
-    call kpca_rbf_nystrom_obj%set_params(params%nthr, 'rbf', params%kpca_target, 'nystrom', NS, 0.)
+    call kpca_rbf_nystrom_obj%set_params(params%nthr, 'rbf', 'nystrom', NS, 0.)
 call kpca_rbf_nystrom_obj%master(data_cen)
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS

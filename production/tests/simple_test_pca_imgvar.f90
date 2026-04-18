@@ -1,13 +1,13 @@
 program simple_test_pca_imgvar
 use simple_core_module_api
-use simple_ppca_inmem, only: ppca_inmem
+use simple_ppca,       only: ppca
 use simple_pca_svd,    only: pca_svd
 use simple_kpca_svd,   only: kpca_svd
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
 implicit none
 integer, parameter :: NX = 5, NY = 5, NP = NX*NY, NC = 2, MAXPCAITS = 15
-type(ppca_inmem)   :: prob_pca
+type(ppca)         :: prob_pca
 integer :: i, j, cnt
 real    :: imgs(NX, NY, NC), flat_img(NP), dist_x(NP), dist_y(NP)
 real    :: data_ori(NP, NP), avg(NP), E_zn(NC, NP), data_cen(NP, NP), tmpvec(NP)

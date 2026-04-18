@@ -215,7 +215,7 @@ subroutine exec_test_multinomal_test( self, cline )
 end subroutine exec_test_multinomal_test
 
 subroutine exec_test_pca_all( self, cline )
-    use simple_ppca_inmem, only: ppca_inmem
+    use simple_ppca,       only: ppca
     use simple_pca_svd,    only: pca_svd
     use simple_kpca_svd,   only: kpca_svd
     use simple_cmdline,    only: cmdline
@@ -223,7 +223,7 @@ subroutine exec_test_pca_all( self, cline )
     class(commander_test_pca_all),    intent(inout) :: self
     class(cmdline),                   intent(inout) :: cline
     integer, parameter :: NP = 3, NS = 4, NC = 3, MAXPCAITS = 15
-    type(ppca_inmem)   :: prob_pca
+    type(ppca)         :: prob_pca
     type(pca_svd)      :: pca_obj
     type(kpca_svd)     :: kpca_obj
     type(parameters)   :: params
@@ -288,7 +288,7 @@ subroutine exec_test_pca_all( self, cline )
     print *, '---------------------------------------------------'
     ! kPCA test
     call kpca_obj%new(NS, NP, NC)
-    call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend,&
+    call kpca_obj%set_params(params%nthr, params%kpca_ker, params%kpca_backend,&
     &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
     call kpca_obj%master(data_cen)
     !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
@@ -305,7 +305,7 @@ subroutine exec_test_pca_all( self, cline )
 end subroutine exec_test_pca_all
 
 subroutine exec_test_pca_imgvar( self, cline )
-    use simple_ppca_inmem, only: ppca_inmem
+    use simple_ppca,       only: ppca
     use simple_pca_svd,    only: pca_svd
     use simple_kpca_svd,   only: kpca_svd
     use simple_cmdline,    only: cmdline
@@ -313,7 +313,7 @@ subroutine exec_test_pca_imgvar( self, cline )
     class(commander_test_pca_imgvar),   intent(inout) :: self
     class(cmdline),                     intent(inout) :: cline
     integer, parameter :: NX = 5, NY = 5, NP = NX*NY, NC = 2, MAXPCAITS = 15
-    type(ppca_inmem)   :: prob_pca
+    type(ppca)         :: prob_pca
     integer :: i, j, cnt
     real    :: imgs(NX, NY, NC), flat_img(NP), dist_x(NP), dist_y(NP)
     real    :: data_ori(NP, NP), avg(NP), E_zn(NC, NP), data_cen(NP, NP), tmpvec(NP)

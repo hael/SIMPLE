@@ -17,7 +17,6 @@ type, extends(pca) :: kpca_svd
     integer           :: nthr                        !< number of threads
     character(len=16) :: kpca_backend      = ''      !< backend ('exact' or 'nystrom')
     character(len=16) :: kpca_ker          = ''      !< kernel type ('rbf' or 'cosine')
-    character(len=16) :: kpca_target       = ''      !< target type ('ptcl' or other)
     integer           :: kpca_nystrom_npts = 512       !< nr of Nystrom landmarks
     integer           :: kpca_nystrom_local_nbrs = 96 !< max extra local support for Nyström reconstruction
     real              :: kpca_rbf_gamma    = 0.      !< RBF gamma (0 => auto)
@@ -71,7 +70,6 @@ contains
         self%nthr              = 1
         self%kpca_backend      = 'nystrom'
         self%kpca_ker          = 'rbf'
-        self%kpca_target       = 'ptcl'
         self%kpca_nystrom_npts = 512
         self%kpca_nystrom_local_nbrs = 96
         self%kpca_rbf_gamma    = 0.
@@ -84,11 +82,10 @@ contains
     ! SETTERS
 
     !>  \brief  setter for runtime parameters
-    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_target, kpca_backend, kpca_nystrom_npts, kpca_rbf_gamma, kpca_nystrom_local_nbrs, kpca_cosine_weight_power )
+    subroutine set_params_kpca( self, nthr, kpca_ker, kpca_backend, kpca_nystrom_npts, kpca_rbf_gamma, kpca_nystrom_local_nbrs, kpca_cosine_weight_power )
         class(kpca_svd),            intent(inout) :: self
         integer,          optional, intent(in)    :: nthr
         character(len=*), optional, intent(in)    :: kpca_ker
-        character(len=*), optional, intent(in)    :: kpca_target
         character(len=*), optional, intent(in)    :: kpca_backend
         integer,          optional, intent(in)    :: kpca_nystrom_npts
         real,             optional, intent(in)    :: kpca_rbf_gamma
@@ -99,9 +96,6 @@ contains
         endif
         if( present(kpca_ker) )then
             self%kpca_ker = trim(kpca_ker)
-        endif
-        if( present(kpca_target) )then
-            self%kpca_target = trim(kpca_target)
         endif
         if( present(kpca_backend) )then
             self%kpca_backend = trim(kpca_backend)
@@ -173,7 +167,7 @@ contains
         integer  :: i, ind, iter, its, ithr
         if( DEBUG )then
             write(logfhandle,'(A,A,A,A,A,A,A,I8,A,I8,A,I8)') 'kPCA master entry: backend=', trim(self%kpca_backend), &
-                '; kernel=', trim(self%kpca_ker), '; target=', trim(self%kpca_target), '; N=', self%N, ' D=', self%D, ' Q=', self%Q
+                '; kernel=', trim(self%kpca_ker), '; N=', self%N, ' D=', self%D, ' Q=', self%Q
             call flush(logfhandle)
         endif
         if( trim(self%kpca_backend) .eq. 'nystrom' )then
@@ -246,53 +240,27 @@ contains
                 !$omp end parallel do
                 allocate(norm_pcavecs_t(self%N,self%D))
                 norm_pcavecs_t = transpose(norm_pcavecs)
-                if( trim(self%kpca_target) .eq. 'ptcl' )then
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom)
-                    do ind = 1, self%N
-                        ithr              = omp_get_thread_num() + 1
-                        call self%projected_kernel_col(eig_vecs, eig_vals, self%Q, ind, ker_col(:,ithr))
-                        self%data(:,ind)  = pcavecs(:,ind)
-                        norm_prev(:,ithr) = 1. / sqrt(real(self%D))
-                        norm_data(:,ithr) = norm_pcavecs(:,ind)
-                        iter              = 1
-                        do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
-                            norm_prev(:,ithr) = norm_data(:,ithr)
-                            ! 1. projecting each image on kernel space
-                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_col(:,ithr)
-                            ! 2. computing the pre-image
-                            denom = sum(abs(real(proj_data(:,ithr),dp)))
-                            if( denom < DTINY ) exit
-                            self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
-                            denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
-                            if( denom < DTINY ) exit
-                            norm_data(:,ithr) = self%data(:,ind) / real(denom)
-                            iter = iter + 1
-                        enddo
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom)
+                do ind = 1, self%N
+                    ithr              = omp_get_thread_num() + 1
+                    call self%projected_kernel_col(eig_vecs, eig_vals, self%Q, ind, ker_col(:,ithr))
+                    self%data(:,ind)  = pcavecs(:,ind)
+                    norm_prev(:,ithr) = 1. / sqrt(real(self%D))
+                    norm_data(:,ithr) = norm_pcavecs(:,ind)
+                    iter              = 1
+                    do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
+                        norm_prev(:,ithr) = norm_data(:,ithr)
+                        proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_col(:,ithr)
+                        denom = sum(abs(real(proj_data(:,ithr),dp)))
+                        if( denom < DTINY ) exit
+                        self%data(:,ind)  = matmul(pcavecs, proj_data(:,ithr)) / real(denom)
+                        denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
+                        if( denom < DTINY ) exit
+                        norm_data(:,ithr) = self%data(:,ind) / real(denom)
+                        iter = iter + 1
                     enddo
-                    !$omp end parallel do
-                else
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom)
-                    do ind = 1, self%N
-                        ithr              = omp_get_thread_num() + 1
-                        call self%projected_kernel_col(eig_vecs, eig_vals, self%Q, ind, ker_col(:,ithr))
-                        self%data(:,ind)  = pcavecs(:,ind)
-                        norm_prev(:,ithr) = 1. / sqrt(real(self%D))
-                        norm_data(:,ithr) = norm_pcavecs(:,ind)
-                        iter              = 1
-                        do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
-                            norm_prev(:,ithr) = norm_data(:,ithr)
-                            ! 1. projecting each image on kernel space
-                            proj_data(:,ithr) = matmul(norm_pcavecs_t, norm_prev(:,ithr)) * ker_col(:,ithr)
-                            ! 2. computing the pre-image
-                            self%data(:,ind)  = matmul(norm_pcavecs, proj_data(:,ithr))
-                            denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
-                            if( denom < DTINY ) exit
-                            norm_data(:,ithr) = self%data(:,ind) / real(denom)
-                            iter = iter + 1
-                        enddo
-                    enddo
-                    !$omp end parallel do
-                endif
+                enddo
+                !$omp end parallel do
         end select
         if( DEBUG )then
             call system_clock(end_time)
@@ -605,138 +573,73 @@ contains
                 enddo
                 !$omp end parallel do
             case('cosine')
-                if( trim(self%kpca_target) .eq. 'ptcl' )then
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr,support_count,k,score,done_now)
-                    do ind = 1, self%N
-                        ithr              = omp_get_thread_num() + 1
-                        call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
-                        support_count = 0
-                        self%data(:,ind)  = pcavecs(:,ind)
-                        norm_prev(:,ithr) = 1. / sqrt(real(self%D))
-                        norm_data(:,ithr) = norm_pcavecs(:,ind)
-                        err_prev          = huge(1._dp)
-                        stagn_count       = 0
-                        iter              = 1
-                        do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
-                            norm_prev(:,ithr) = norm_data(:,ithr)
-                            if( local_nbrs > 0 .and. (iter == 1 .or. mod(iter-1, SUPPORT_REFRESH_ITERS) == 0) )then
-                                call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_pool_nbrs, support_count, &
-                                    support_inds(:,ithr), support_scores(:,ithr), current_vec=norm_prev(:,ithr), support_mat=norm_pcavecs)
-                            endif
-                            if( support_count > 0 )then
-                                self%data(:,ind) = 0.
-                                denom = 0._dp
-                                do k = 1, support_count
-                                    score = max(0._dp, sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp)))
-                                    score = score ** real(self%kpca_cosine_weight_power, dp)
-                                    self%data(:,ind) = self%data(:,ind) + real(score) * pcavecs(:,support_inds(k,ithr))
-                                    denom = denom + score
-                                enddo
-                            else
-                                proj_data(1:m,ithr) = max(real(matmul(norm_landmarks_t, norm_prev(:,ithr)),dp), 0._dp)
-                                proj_data(1:m,ithr) = real(real(proj_data(1:m,ithr),dp) ** real(self%kpca_cosine_weight_power, dp))
-                                denom = sum(real(proj_data(1:m,ithr),dp))
-                                self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr))
-                            endif
-                            if( denom < DTINY ) exit
-                            self%data(:,ind)  = self%data(:,ind) / real(denom)
-                            denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
-                            if( denom < DTINY ) exit
-                            norm_data(:,ithr) = self%data(:,ind) / real(denom)
-                            err_curr = abs(sum(real(norm_data(:,ithr),dp) * real(norm_prev(:,ithr),dp)) - 1._dp)
-                            if( abs(err_prev - err_curr) <= EARLY_STOP_REL * max(1._dp, err_prev) )then
-                                stagn_count = stagn_count + 1
-                                if( stagn_count >= EARLY_STOP_PATIENCE ) exit
-                            else
-                                stagn_count = 0
-                            endif
-                            err_prev = err_curr
-                            iter = iter + 1
-                        enddo
-                        support_used(ind) = support_count
-                        iter_used(ind)    = iter
-                        final_residual(ind) = real(err_prev)
-                        !$omp atomic capture
-                        done_now = progress_done
-                        progress_done = progress_done + 1
-                        done_now = done_now + 1
-                        if( done_now >= progress_next .or. done_now == self%N )then
-                            !$omp critical(kpca_nystrom_preimg_progress)
-                            do while( progress_next <= done_now .or. (done_now == self%N .and. progress_next <= self%N) )
-                                write(logfhandle,'(A,I8,A,I8,A,F6.2,A)') 'kPCA Nyström pre-image progress: ', progress_next, '/', self%N, &
-                                    '; done=', 100. * real(progress_next) / real(self%N), '%'
-                                call flush(logfhandle)
-                                if( progress_next >= self%N ) exit
-                                progress_next = min(self%N, progress_next + progress_step)
-                            enddo
-                            !$omp end critical(kpca_nystrom_preimg_progress)
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr,support_count,k,score,done_now)
+                do ind = 1, self%N
+                    ithr              = omp_get_thread_num() + 1
+                    call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
+                    support_count = 0
+                    self%data(:,ind)  = pcavecs(:,ind)
+                    norm_prev(:,ithr) = 1. / sqrt(real(self%D))
+                    norm_data(:,ithr) = norm_pcavecs(:,ind)
+                    err_prev          = huge(1._dp)
+                    stagn_count       = 0
+                    iter              = 1
+                    do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
+                        norm_prev(:,ithr) = norm_data(:,ithr)
+                        if( local_nbrs > 0 .and. (iter == 1 .or. mod(iter-1, SUPPORT_REFRESH_ITERS) == 0) )then
+                            call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_pool_nbrs, support_count, &
+                                support_inds(:,ithr), support_scores(:,ithr), current_vec=norm_prev(:,ithr), support_mat=norm_pcavecs)
                         endif
-                    enddo
-                    !$omp end parallel do
-                else
-                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ind,ithr,iter,denom,stagn_count,err_prev,err_curr,support_count,k,score,done_now)
-                    do ind = 1, self%N
-                        ithr              = omp_get_thread_num() + 1
-                        call self%projected_kernel_col(alpha, eig_q, q_used, ind, ker_col(:,ithr))
-                        support_count = 0
-                        self%data(:,ind)  = pcavecs(:,ind)
-                        norm_prev(:,ithr) = 1. / sqrt(real(self%D))
-                        norm_data(:,ithr) = norm_pcavecs(:,ind)
-                        err_prev          = huge(1._dp)
-                        stagn_count       = 0
-                        iter              = 1
-                        do while( abs(sum(norm_data(:,ithr) * norm_prev(:,ithr)) - 1.) > TOL .and. iter < its )
-                            norm_prev(:,ithr) = norm_data(:,ithr)
-                            if( local_nbrs > 0 .and. (iter == 1 .or. mod(iter-1, SUPPORT_REFRESH_ITERS) == 0) )then
-                                call self%select_local_support_inds(ker_col(:,ithr), is_landmark, ind, local_pool_nbrs, support_count, &
-                                    support_inds(:,ithr), support_scores(:,ithr), current_vec=norm_prev(:,ithr), support_mat=norm_pcavecs)
-                            endif
-                            if( support_count > 0 )then
-                                self%data(:,ind) = 0.
-                                do k = 1, support_count
-                                    score = max(0._dp, sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp)))
-                                    score = score ** real(self%kpca_cosine_weight_power, dp)
-                                    self%data(:,ind) = self%data(:,ind) + real(score) * norm_pcavecs(:,support_inds(k,ithr))
-                                enddo
-                            else
-                                proj_data(1:m,ithr) = max(real(matmul(norm_landmarks_t, norm_prev(:,ithr)),dp), 0._dp)
-                                proj_data(1:m,ithr) = real(real(proj_data(1:m,ithr),dp) ** real(self%kpca_cosine_weight_power, dp))
-                                self%data(:,ind)  = matmul(norm_landmarks, proj_data(1:m,ithr))
-                            endif
-                            denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
-                            if( denom < DTINY ) exit
-                            norm_data(:,ithr) = self%data(:,ind) / real(denom)
-                            err_curr = abs(sum(real(norm_data(:,ithr),dp) * real(norm_prev(:,ithr),dp)) - 1._dp)
-                            if( abs(err_prev - err_curr) <= EARLY_STOP_REL * max(1._dp, err_prev) )then
-                                stagn_count = stagn_count + 1
-                                if( stagn_count >= EARLY_STOP_PATIENCE ) exit
-                            else
-                                stagn_count = 0
-                            endif
-                            err_prev = err_curr
-                            iter = iter + 1
-                        enddo
-                        support_used(ind) = support_count
-                        iter_used(ind)    = iter
-                        final_residual(ind) = real(err_prev)
-                        !$omp atomic capture
-                        done_now = progress_done
-                        progress_done = progress_done + 1
-                        done_now = done_now + 1
-                        if( done_now >= progress_next .or. done_now == self%N )then
-                            !$omp critical(kpca_nystrom_preimg_progress)
-                            do while( progress_next <= done_now .or. (done_now == self%N .and. progress_next <= self%N) )
-                                write(logfhandle,'(A,I8,A,I8,A,F6.2,A)') 'kPCA Nyström pre-image progress: ', progress_next, '/', self%N, &
-                                    '; done=', 100. * real(progress_next) / real(self%N), '%'
-                                call flush(logfhandle)
-                                if( progress_next >= self%N ) exit
-                                progress_next = min(self%N, progress_next + progress_step)
+                        if( support_count > 0 )then
+                            self%data(:,ind) = 0.
+                            denom = 0._dp
+                            do k = 1, support_count
+                                score = max(0._dp, sum(real(norm_pcavecs(:,support_inds(k,ithr)),dp) * real(norm_prev(:,ithr),dp)))
+                                score = score ** real(self%kpca_cosine_weight_power, dp)
+                                self%data(:,ind) = self%data(:,ind) + real(score) * pcavecs(:,support_inds(k,ithr))
+                                denom = denom + score
                             enddo
-                            !$omp end critical(kpca_nystrom_preimg_progress)
+                        else
+                            proj_data(1:m,ithr) = max(real(matmul(norm_landmarks_t, norm_prev(:,ithr)),dp), 0._dp)
+                            proj_data(1:m,ithr) = real(real(proj_data(1:m,ithr),dp) ** real(self%kpca_cosine_weight_power, dp))
+                            denom = sum(real(proj_data(1:m,ithr),dp))
+                            self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr))
                         endif
+                        if( denom < DTINY ) exit
+                        self%data(:,ind)  = self%data(:,ind) / real(denom)
+                        denom             = dsqrt(sum(real(self%data(:,ind),dp)**2))
+                        if( denom < DTINY ) exit
+                        norm_data(:,ithr) = self%data(:,ind) / real(denom)
+                        err_curr = abs(sum(real(norm_data(:,ithr),dp) * real(norm_prev(:,ithr),dp)) - 1._dp)
+                        if( abs(err_prev - err_curr) <= EARLY_STOP_REL * max(1._dp, err_prev) )then
+                            stagn_count = stagn_count + 1
+                            if( stagn_count >= EARLY_STOP_PATIENCE ) exit
+                        else
+                            stagn_count = 0
+                        endif
+                        err_prev = err_curr
+                        iter = iter + 1
                     enddo
-                    !$omp end parallel do
-                endif
+                    support_used(ind) = support_count
+                    iter_used(ind)    = iter
+                    final_residual(ind) = real(err_prev)
+                    !$omp atomic capture
+                    done_now = progress_done
+                    progress_done = progress_done + 1
+                    done_now = done_now + 1
+                    if( done_now >= progress_next .or. done_now == self%N )then
+                        !$omp critical(kpca_nystrom_preimg_progress)
+                        do while( progress_next <= done_now .or. (done_now == self%N .and. progress_next <= self%N) )
+                            write(logfhandle,'(A,I8,A,I8,A,F6.2,A)') 'kPCA Nyström pre-image progress: ', progress_next, '/', self%N, &
+                                '; done=', 100. * real(progress_next) / real(self%N), '%'
+                            call flush(logfhandle)
+                            if( progress_next >= self%N ) exit
+                            progress_next = min(self%N, progress_next + progress_step)
+                        enddo
+                        !$omp end critical(kpca_nystrom_preimg_progress)
+                    endif
+                enddo
+                !$omp end parallel do
         end select
         if( PROFILE )then
             call system_clock(t1)

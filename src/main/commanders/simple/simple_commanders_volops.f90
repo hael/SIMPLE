@@ -775,11 +775,11 @@ contains
     end subroutine exec_symmetry_test
 
     subroutine exec_ppca_volvar( self, cline )
-        use simple_imgproc,    only: make_pcavol
-        use simple_pca,        only: pca
-        use simple_ppca_inmem, only: ppca_inmem
-        use simple_pca_svd,    only: pca_svd
-        use simple_kpca_svd,   only: kpca_svd, suggest_kpca_nystrom_neigs
+        use simple_imgproc,     only: make_pcavol
+        use simple_pca,         only: pca
+        use simple_ppca,        only: ppca
+        use simple_pca_svd,     only: pca_svd
+        use simple_kpca_svd,    only: kpca_svd, suggest_kpca_nystrom_neigs
         class(commander_ppca_volvar), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         integer,     parameter   :: MAXPCAITS = 15
@@ -807,7 +807,7 @@ contains
         ! pca allocation
         select case(trim(params%pca_mode))
             case('ppca')
-                allocate(ppca_inmem :: pca_ptr)
+                allocate(ppca :: pca_ptr)
             case('pca_svd')
                 allocate(pca_svd    :: pca_ptr)
             case('kpca')
@@ -815,7 +815,7 @@ contains
         end select
         select type(pca_ptr)
             type is(kpca_svd)
-                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_target, params%kpca_backend,&
+                call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_backend,&
                 &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
         end select
         call pca_ptr%new(npix, npix, neigs)

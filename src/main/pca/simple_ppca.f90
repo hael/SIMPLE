@@ -1,245 +1,209 @@
-!@descr: class for probabilistic principal component analysis 
-!==Class simple_ppca
-!
-! simple_ppca is the SIMPLE class for probabilistic principal component analysis.
-! This code should be able to deal with many millions of particle images.
-! The code is distributed with the hope that it will be useful, but _WITHOUT_
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the
-! GNU General Public License. *Author:* Hans Elmlund, 2011-09-03.
-!
-!==Changes are documented below
-!
+!@descr: Bishop/Tipping probabilistic PCA with explicit isotropic noise
 module simple_ppca
-use simple_defs ! singleton
+use simple_core_module_api
+use simple_pca, only: pca
 implicit none
 
 public :: ppca
 private
 
-type ppca
+type, extends(pca) :: ppca
     private
-    integer           :: N           !< nr of data vectors
-    integer           :: D           !< nr of components in each data vec
-    integer           :: Q           !< nr of components in each latent vec
-    integer           :: funit       !< file handle data stack
-    real, allocatable :: W(:,:)      !< principal subspace, defined by the W columns
-    real, allocatable :: E_zn(:,:,:) !< expectations (feature vecs)
-    real, allocatable :: W_1(:,:), W_2(:,:), W_3(:,:), Wt(:,:)
-    real, allocatable :: M(:,:), Minv(:,:), MinvWt(:,:), X(:,:), E_znzn(:,:)
-    logical           :: existence=.false.
+    real, allocatable :: W(:,:)      !< loading matrix
+    real, allocatable :: E_zn(:,:)   !< posterior latent means
+    real, allocatable :: data(:,:)   !< reconstructed centered data
+    real, allocatable :: Wt(:,:), M(:,:), Minv(:,:), MinvWt(:,:), S_xz(:,:), S_zz(:,:), Iq(:,:)
+    real              :: sigma2 = 1.
+    real(dp)          :: xnorm2_total = 0._dp
+    logical           :: existence = .false.
   contains
-    ! CONSTRUCTOR
-    procedure          :: new
-    ! GETTERS
-    procedure          :: get_N
-    procedure          :: get_D
-    procedure          :: get_Q
-    procedure          :: get_feat
-    procedure          :: get_feats_ptr
-    procedure          :: generate
-    ! CALCULATORS
-    procedure          :: master
+    procedure :: new      => new_ppca
+    procedure :: get_feat => get_feat_ppca
+    procedure :: generate => generate_ppca
+    procedure :: master   => master_ppca
     procedure, private :: init
     procedure, private :: em_opt
-    ! DESTRUCTOR
-    procedure :: kill
+    procedure :: kill     => kill_ppca
 end type
 
 contains
 
-    ! CONSTRUCTORS
-
-     !>  \brief  is a constructor
-    function constructor( N, D, Q ) result( self )
-        integer, intent(in) :: N, D, Q
-        type(ppca)          :: self
-        call self%new( N, D, Q )
-    end function constructor
-
-    !>  \brief  is a constructor
-    subroutine new( self, N, D, Q )
+    subroutine new_ppca( self, N, D, Q )
         class(ppca), intent(inout) :: self
         integer,     intent(in)    :: N, D, Q
         call self%kill
         self%N = N
         self%D = D
         self%Q = Q
-        ! allocate principal subspace and feature vectors
-        allocate( self%W(self%D,self%Q), self%E_zn(self%N,self%Q,1), self%W_1(self%D,self%Q),&
-        self%W_2(self%Q,self%Q), self%W_3(self%Q,self%Q), self%Wt(self%Q,self%D),&
-        self%M(self%Q,self%Q), self%Minv(self%Q,self%Q), self%MinvWt(self%Q,self%D),&
-        self%X(self%D,1), self%E_znzn(self%Q,self%Q), source=0.)
+        allocate(self%W(self%D,self%Q), self%E_zn(self%Q,self%N), self%data(self%D,self%N), &
+                 self%Wt(self%Q,self%D), self%M(self%Q,self%Q), self%Minv(self%Q,self%Q), &
+                 self%MinvWt(self%Q,self%D), self%S_xz(self%D,self%Q), self%S_zz(self%Q,self%Q), &
+                 self%Iq(self%Q,self%Q), source=0.)
         self%existence = .true.
-    end subroutine new
+    end subroutine new_ppca
 
-    ! GETTERS
-
-    pure integer function get_N( self )
-        class(ppca), intent(in) :: self
-        get_N = self%N
-    end function get_N
-
-    pure integer function get_D( self )
-        class(ppca), intent(in) :: self
-        get_D = self%D
-    end function get_D
-
-    pure integer function get_Q( self )
-        class(ppca), intent(in) :: self
-        get_Q = self%Q
-    end function get_Q
-
-    !>  \brief  is for getting a feature vector
-    function get_feat( self, i ) result( feat )
+    function get_feat_ppca( self, i ) result( feat )
         class(ppca), intent(inout) :: self
-        integer, intent(in)        :: i
+        integer,     intent(in)    :: i
         real, allocatable          :: feat(:)
-        allocate(feat(self%Q), source=self%E_zn(i,:,1))
-    end function get_feat
+        allocate(feat(self%Q), source=self%E_zn(:,i))
+    end function get_feat_ppca
 
-    !>  \brief  is for getting a pointer to the features (that become exposed)
-    function get_feats_ptr( self ) result( ptr )
-        class(ppca), intent(inout), target :: self
-        real, pointer :: ptr(:,:)
-        ptr => self%E_zn(:,:,1)
-    end function get_feats_ptr
-
-    !>  \brief  is for sampling the generative model at a given image index
-    function generate( self, i, avg ) result( dat )
+    subroutine generate_ppca( self, i, avg, dat )
         class(ppca), intent(inout) :: self
         integer,     intent(in)    :: i
         real,        intent(in)    :: avg(self%D)
-        real, allocatable :: dat(:)
-        real              :: tmp(self%D,1)
-        tmp = matmul(self%W,self%E_zn(i,:,:))
-        allocate(dat(self%D), source=tmp(:,1))
-        dat = dat + avg
-    end function generate
+        real,        intent(inout) :: dat(self%D)
+        dat = avg + self%data(:,i)
+    end subroutine generate_ppca
 
-    ! CALCULATORS
-
-    !>  \brief  doing it all
-    subroutine master( self, datastk, recsz, featstk, maxpcaits )
-        class(ppca), intent(inout)             :: self
-        character(len=*), intent(in)           :: datastk, featstk
-        integer, intent(in)                    :: recsz, maxpcaits
-        integer                                :: k, file_stat, funit2, recsz2, err
-        real                                   :: p, p_prev
-        write(logfhandle,'(A)') '>>> GENERATIVE ITERATIVE PCA'
-        open(newunit=self%funit, status='old', action='read', file=datastk,&
-        access='direct', form='unformatted', recl=recsz, iostat=file_stat)
-        inquire( iolength=recsz2 ) self%E_zn(1,:,1)
-        open(newunit=funit2, status='replace', action='write', file=featstk,&
-        access='direct', form='unformatted', recl=recsz2, iostat=file_stat)
-        p = 0.
-        k = 0
-        call self%init
-        do
-            k = k+1
-            p_prev = p
-            call self%em_opt( p, err )
-            if( err == -1 )then
-                write(logfhandle,'(A)') 'ERROR, in matrix inversion, iteration:', k
-                write(logfhandle,'(A)') 'RESTARTING'
-                call self%init
-                k = 0
-                cycle
+    subroutine master_ppca( self, pcavecs, maxpcaits )
+        class(ppca),          intent(inout) :: self
+        real,                 intent(in)    :: pcavecs(self%D,self%N)
+        integer, optional,    intent(in)    :: maxpcaits
+        integer, parameter :: MAX_ITS_DEFAULT = 50
+        real(dp), parameter :: TOL_SIGMA = 1.e-6_dp
+        real(dp), parameter :: TOL_WREL  = 1.e-5_dp
+        integer :: it, maxits
+        integer(int64) :: t0, t1
+        real(real64)   :: trate
+        real(dp) :: sigma_prev, w_change, sigma_rel
+        if( present(maxpcaits) )then
+            maxits = max(1, maxpcaits)
+        else
+            maxits = MAX_ITS_DEFAULT
+        endif
+        call system_clock(t0, trate)
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'PPCA start: N=', self%N, ' D=', self%D, ' Q=', self%Q, ' maxits=', maxits
+        call flush(logfhandle)
+        call self%init(pcavecs)
+        sigma_prev = huge(1._dp)
+        do it = 1, maxits
+            call self%em_opt(pcavecs, w_change)
+            sigma_rel = abs(real(self%sigma2,dp) - sigma_prev) / max(1.e-8_dp, sigma_prev)
+            if( it == 1 .or. mod(it,5) == 0 .or. it == maxits )then
+                write(logfhandle,'(A,I4,A,ES10.3,A,ES10.3,A,ES10.3)') &
+                    'PPCA iter=', it, ' sigma2=', real(self%sigma2,dp), ' dW=', w_change, ' dsigma=', sigma_rel
+                call flush(logfhandle)
             endif
-            if( k == 1 .or. mod(k,5) == 0 )then
-                write(logfhandle,"(1X,A,1X,I3,1X,A,1X,F10.0)") 'Iteration:', k, 'Squared error:', p
+            if( sigma_rel <= TOL_SIGMA .and. w_change <= TOL_WREL )then
+                write(logfhandle,'(A,I4,A)') 'PPCA converged at iter=', it, ''
+                call flush(logfhandle)
+                exit
             endif
-            if( (abs(p-p_prev) < 0.1) .or. k == maxpcaits ) exit
-        end do
-        ! write features to disk
-        do k=1,self%N
-            write(funit2, rec=k) self%E_zn(k,:,1)
-        end do
-        close(unit=self%funit)
-        close(unit=funit2)
-    end subroutine master
+            sigma_prev = real(self%sigma2,dp)
+        enddo
+        self%data = matmul(self%W, self%E_zn)
+        call system_clock(t1)
+        write(logfhandle,'(A,F8.3,A,ES10.3)') 'PPCA total: ', real(t1-t0)/real(trate), ' s; sigma2=', real(self%sigma2,dp)
+        call flush(logfhandle)
+    end subroutine master_ppca
 
-    subroutine init( self )
-        use simple_rnd, only: mnorm_smp, ran3
+    subroutine init( self, pcavecs )
+        use simple_rnd, only: ran3
         class(ppca), intent(inout) :: self
+        real,        intent(in)    :: pcavecs(self%D,self%N)
         integer :: i, j
-        real    :: meanv(self%Q), Imat(self%Q,self%Q)
-        ! make identity matrices
-        Imat=0.; do i=1,self%Q ; Imat(i,i)=1. ; end do
-        meanv = 0.
-        ! initialize latent variables by zero mean gaussians with unit variance
-        do i=1,self%N
-            self%E_zn(i,:,1) = mnorm_smp(Imat, self%Q, meanv)
-        end do
-        ! initialize weight matrix with uniform random nrs, normalize over j
-        do i=1,self%D
-            do j=1,self%Q
-                self%W(i,j) = ran3()
-            end do
-            self%W(i,:) = self%W(i,:)/sum(self%W(i,:))
-        end do
-        ! transpose W
-        self%Wt = transpose(self%W)
-        ! set W_2 to WtW
-        self%W_2 = matmul(self%Wt,self%W)
+        real(dp) :: mean_sq
+        self%Iq = 0.
+        do i = 1,self%Q
+            self%Iq(i,i) = 1.
+        enddo
+        do i = 1,self%D
+            do j = 1,self%Q
+                self%W(i,j) = 0.01 * ran3()
+            enddo
+        enddo
+        mean_sq = sum(real(pcavecs,dp)**2) / real(max(1,self%D*self%N), dp)
+        self%xnorm2_total = sum(real(pcavecs,dp)**2)
+        self%sigma2 = real(max(mean_sq * 0.1_dp, real(DTINY,dp)))
+        self%E_zn   = 0.
+        self%data   = 0.
     end subroutine init
 
-    !>  \brief  EM algorithm
-    subroutine em_opt( self, p, err )
+    subroutine em_opt( self, pcavecs, w_change )
         use simple_math, only: matinv
         class(ppca), intent(inout) :: self
-        integer, intent(out)       :: err
-        real, intent(out)          :: p
-        integer                    :: i
-        real                       :: tmp(self%D,1)
-        ! E-STEP
-        self%M = matmul(self%Wt,self%W)
-        call matinv(self%M, self%Minv, self%Q, err)
-        if( err == -1 ) return
-        self%MinvWt = matmul(self%Minv,self%Wt)
-        self%W_1 = 0.
-        self%W_2 = 0.
-        do i=1,self%N
-            ! read data vec
-            read(self%funit, rec=i) self%X(:,1)
-            ! Expectation step (calculate expectations using the old W)
-            self%E_zn(i,:,:) = matmul(self%MinvWt,self%X)
-            self%E_znzn = matmul(self%E_zn(i,:,:),transpose(self%E_zn(i,:,:)))
-            ! Prepare for update of W (M-step)
-            self%W_1 = self%W_1+matmul(self%X,transpose(self%E_zn(i,:,:)))
-            self%W_2 = self%W_2+self%E_znzn
-        end do
-
-        ! M-STEP
-        call matinv(self%W_2, self%W_3, self%Q, err)
-        if( err == -1 ) return
-        ! update W
-        self%W = matmul(self%W_1,self%W_3)
-        ! update Wt
+        real,        intent(in)    :: pcavecs(self%D,self%N)
+        real(dp),    intent(out)   :: w_change
+        integer, parameter :: BLOCKSZ = 512
+        integer :: i, ibeg, iend, nblk, err
+        integer(int64) :: t0, t1
+        real(real64)   :: trate
+        real(dp) :: sigma_floor, term2, sigma_num
+        real, allocatable :: w_old(:,:), wt_w(:,:)
+        sigma_floor = max(real(DTINY,dp), 1.e-8_dp)
+        allocate(w_old(self%D,self%Q), wt_w(self%Q,self%Q), source=0.)
+        w_old = self%W
         self%Wt = transpose(self%W)
-        ! set W_2 to WtW
-        self%W_2 = matmul(self%Wt,self%W)
-
-        ! EVAL REC ERR
-        p = 0.
-        do i=1,self%N
-            ! read data vec
-            read(self%funit, rec=i) self%X(:,1)
-            tmp = matmul(self%W,self%E_zn(i,:,:))
-            p = p + sqrt(sum((self%X(:,1)-tmp(:,1))**2.))
-        end do
+        self%M  = matmul(self%Wt, self%W) + self%sigma2 * self%Iq
+        call matinv(self%M, self%Minv, self%Q, err)
+        if( err == -1 )then
+            self%Minv = 0.
+            do i = 1,self%Q
+                self%Minv(i,i) = 1.
+            enddo
+        endif
+        self%MinvWt = matmul(self%Minv, self%Wt)
+        self%S_xz = 0.
+        self%S_zz = 0.
+        nblk = max(1, (self%N + BLOCKSZ - 1) / BLOCKSZ)
+        call system_clock(t0, trate)
+        write(logfhandle,'(A,I8,A)') 'PPCA blocked E-step: blocks=', nblk, ''
+        call flush(logfhandle)
+        !$omp parallel default(shared) private(i,ibeg,iend)
+        block
+            real, allocatable :: ez_blk(:,:), sxz_blk(:,:), szz_blk(:,:)
+            allocate(ez_blk(self%Q,BLOCKSZ), sxz_blk(self%D,self%Q), szz_blk(self%Q,self%Q), source=0.)
+            !$omp do schedule(dynamic)
+            do i = 1, self%N, BLOCKSZ
+                ibeg = i
+                iend = min(self%N, i + BLOCKSZ - 1)
+                ez_blk(:,1:iend-ibeg+1) = matmul(self%MinvWt, pcavecs(:,ibeg:iend))
+                self%E_zn(:,ibeg:iend) = ez_blk(:,1:iend-ibeg+1)
+                sxz_blk = matmul(pcavecs(:,ibeg:iend), transpose(ez_blk(:,1:iend-ibeg+1)))
+                szz_blk = matmul(ez_blk(:,1:iend-ibeg+1), transpose(ez_blk(:,1:iend-ibeg+1)))
+                !$omp critical(ppca_accum)
+                self%S_xz = self%S_xz + sxz_blk
+                self%S_zz = self%S_zz + szz_blk
+                !$omp end critical(ppca_accum)
+            enddo
+            !$omp end do
+            deallocate(ez_blk, sxz_blk, szz_blk)
+        end block
+        !$omp end parallel
+        self%S_zz = self%S_zz + real(self%N,kind(self%sigma2)) * self%sigma2 * self%Minv
+        call system_clock(t1)
+        write(logfhandle,'(A,F8.3,A)') 'PPCA blocked E-step total: ', real(t1-t0)/real(trate), ' s'
+        call flush(logfhandle)
+        call matinv(self%S_zz, self%M, self%Q, err)
+        if( err == -1 )then
+            self%M = 0.
+            do i = 1,self%Q
+                self%M(i,i) = 1.
+            enddo
+        endif
+        self%W = matmul(self%S_xz, self%M)
+        self%Wt = transpose(self%W)
+        wt_w = matmul(self%Wt, self%W)
+        call system_clock(t0)
+        term2 = real(self%N,dp) * real(self%sigma2,dp) * sum(real(self%Minv,dp) * transpose(real(wt_w,dp))) + &
+            sum(real(self%E_zn,dp) * real(matmul(wt_w, self%E_zn),dp))
+        sigma_num = self%xnorm2_total - 2._dp * sum(real(self%E_zn,dp) * real(matmul(self%Wt, pcavecs),dp)) + term2
+        self%sigma2 = real(max(sigma_num / real(max(1,self%N*self%D),dp), sigma_floor))
+        call system_clock(t1)
+        write(logfhandle,'(A,F8.3,A)') 'PPCA sigma-step total: ', real(t1-t0)/real(trate), ' s'
+        call flush(logfhandle)
+        w_change = sqrt(sum((real(self%W,dp) - real(w_old,dp))**2) / real(max(1,self%D*self%Q),dp))
+        deallocate(w_old, wt_w)
     end subroutine em_opt
 
-    ! DESTRUCTOR
-
-    !>  \brief  is a destructor
-    subroutine kill( self )
+    subroutine kill_ppca( self )
         class(ppca), intent(inout) :: self
         if( self%existence )then
-            deallocate( self%W, self%E_zn, self%W_1,&
-            self%W_2, self%W_3, self%Wt, self%M, self%Minv,&
-            self%MinvWt, self%X, self%E_znzn )
+            deallocate(self%W, self%E_zn, self%data, self%Wt, self%M, self%Minv, self%MinvWt, self%S_xz, self%S_zz, self%Iq)
             self%existence = .false.
         endif
-    end subroutine kill
+    end subroutine kill_ppca
 
 end module simple_ppca
