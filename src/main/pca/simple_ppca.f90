@@ -15,12 +15,16 @@ type, extends(pca) :: ppca
     real, allocatable :: Wt(:,:), M(:,:), Minv(:,:), MinvWt(:,:), S_xz(:,:), S_zz(:,:), Iq(:,:)
     real              :: sigma2 = 1.
     real(dp)          :: xnorm2_total = 0._dp
+    logical           :: verbose = .true.
     logical           :: existence = .false.
   contains
     procedure :: new      => new_ppca
     procedure :: get_feat => get_feat_ppca
     procedure :: generate => generate_ppca
     procedure :: master   => master_ppca
+    procedure :: set_verbose => set_verbose_ppca
+    procedure :: calc_bic => calc_bic_ppca
+    procedure :: suggest_rank => suggest_rank_ppca
     procedure, private :: init
     procedure, private :: em_opt
     procedure :: kill     => kill_ppca
@@ -74,30 +78,130 @@ contains
             maxits = MAX_ITS_DEFAULT
         endif
         call system_clock(t0, trate)
-        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'PPCA start: N=', self%N, ' D=', self%D, ' Q=', self%Q, ' maxits=', maxits
-        call flush(logfhandle)
+        if( self%verbose )then
+            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'PPCA start: N=', self%N, ' D=', self%D, ' Q=', self%Q, ' maxits=', maxits
+            call flush(logfhandle)
+        endif
         call self%init(pcavecs)
         sigma_prev = huge(1._dp)
         do it = 1, maxits
             call self%em_opt(pcavecs, w_change)
             sigma_rel = abs(real(self%sigma2,dp) - sigma_prev) / max(1.e-8_dp, sigma_prev)
-            if( it == 1 .or. mod(it,5) == 0 .or. it == maxits )then
+            if( self%verbose .and. (it == 1 .or. mod(it,5) == 0 .or. it == maxits) )then
                 write(logfhandle,'(A,I4,A,ES10.3,A,ES10.3,A,ES10.3)') &
                     'PPCA iter=', it, ' sigma2=', real(self%sigma2,dp), ' dW=', w_change, ' dsigma=', sigma_rel
                 call flush(logfhandle)
             endif
             if( sigma_rel <= TOL_SIGMA .and. w_change <= TOL_WREL )then
-                write(logfhandle,'(A,I4,A)') 'PPCA converged at iter=', it, ''
-                call flush(logfhandle)
+                if( self%verbose )then
+                    write(logfhandle,'(A,I4,A)') 'PPCA converged at iter=', it, ''
+                    call flush(logfhandle)
+                endif
                 exit
             endif
             sigma_prev = real(self%sigma2,dp)
         enddo
         self%data = matmul(self%W, self%E_zn)
         call system_clock(t1)
-        write(logfhandle,'(A,F8.3,A,ES10.3)') 'PPCA total: ', real(t1-t0)/real(trate), ' s; sigma2=', real(self%sigma2,dp)
-        call flush(logfhandle)
+        if( self%verbose )then
+            write(logfhandle,'(A,F8.3,A,ES10.3)') 'PPCA total: ', real(t1-t0)/real(trate), ' s; sigma2=', real(self%sigma2,dp)
+            call flush(logfhandle)
+        endif
     end subroutine master_ppca
+
+    subroutine set_verbose_ppca( self, verbose )
+        class(ppca), intent(inout) :: self
+        logical,     intent(in)    :: verbose
+        self%verbose = verbose
+    end subroutine set_verbose_ppca
+
+    real(dp) function calc_bic_ppca( self, pcavecs ) result(bic)
+        class(ppca), intent(inout) :: self
+        real,        intent(in)    :: pcavecs(self%D,self%N)
+        real, allocatable :: zeroavg(:), recon(:)
+        real(dp) :: rss
+        integer :: i, pcount
+        allocate(zeroavg(self%D), recon(self%D))
+        zeroavg = 0.
+        recon   = 0.
+        rss = 0._dp
+        do i = 1, self%N
+            call self%generate(i, zeroavg, recon)
+            rss = rss + sum((real(pcavecs(:,i),dp) - real(recon,dp))**2)
+        enddo
+        rss = max(rss, real(DTINY,dp))
+        pcount = self%D * self%Q + 1
+        bic = real(self%D*self%N,dp) * log(rss / real(self%D*self%N,dp)) + real(pcount,dp) * log(real(self%D*self%N,dp))
+        deallocate(zeroavg, recon)
+    end function calc_bic_ppca
+
+    integer function suggest_rank_ppca( self, pcavecs, candidates, maxpcaits, qs_out, bics_out, sigma2_out ) result(best_q)
+        class(ppca),       intent(inout) :: self
+        real,              intent(in)    :: pcavecs(:,:)
+        integer,           intent(in)    :: candidates(:)
+        integer, optional, intent(in)    :: maxpcaits
+        integer,  optional, allocatable, intent(out) :: qs_out(:)
+        real(dp), optional, allocatable, intent(out) :: bics_out(:)
+        real(dp), optional, allocatable, intent(out) :: sigma2_out(:)
+        real(dp), parameter :: BIC_TOL = 2._dp
+        integer :: i, q, nloc, dloc, maxits, best_idx
+        real(dp) :: bic, best_bic
+        real(dp), allocatable :: bics(:), sigma2s(:)
+        integer,  allocatable :: qs(:)
+
+        dloc = size(pcavecs,1)
+        nloc = size(pcavecs,2)
+        if( present(maxpcaits) )then
+            maxits = min(max(maxpcaits, 1), 10)
+        else
+            maxits = 10
+        endif
+        allocate(bics(size(candidates)), qs(size(candidates)), sigma2s(size(candidates)))
+        bics = huge(1._dp)
+        qs   = 0
+        sigma2s = huge(1._dp)
+        best_bic = huge(1._dp)
+        best_idx = 0
+        do i = 1, size(candidates)
+            q = min(max(candidates(i), 1), max(nloc-1, 1))
+            if( i > 1 )then
+                if( q == qs(i-1) ) cycle
+            endif
+            qs(i) = q
+            call self%new(nloc, dloc, q)
+            call self%set_verbose(.false.)
+            call self%master(pcavecs, maxits)
+            bic = self%calc_bic(pcavecs)
+            bics(i) = bic
+            sigma2s(i) = real(self%sigma2, dp)
+            if( bic < best_bic )then
+                best_bic = bic
+                best_idx = i
+            endif
+            call self%kill()
+        enddo
+        best_q = max(1, qs(best_idx))
+        do i = 1, size(candidates)
+            if( qs(i) <= 0 ) cycle
+            if( bics(i) <= best_bic + BIC_TOL )then
+                best_q = qs(i)
+                exit
+            endif
+        enddo
+        if( present(qs_out) )then
+            allocate(qs_out(size(qs)))
+            qs_out = qs
+        endif
+        if( present(bics_out) )then
+            allocate(bics_out(size(bics)))
+            bics_out = bics
+        endif
+        if( present(sigma2_out) )then
+            allocate(sigma2_out(size(sigma2s)))
+            sigma2_out = sigma2s
+        endif
+        deallocate(bics, qs, sigma2s)
+    end function suggest_rank_ppca
 
     subroutine init( self, pcavecs )
         use simple_rnd, only: ran3
@@ -149,8 +253,10 @@ contains
         self%S_zz = 0.
         nblk = max(1, (self%N + BLOCKSZ - 1) / BLOCKSZ)
         call system_clock(t0, trate)
-        write(logfhandle,'(A,I8,A)') 'PPCA blocked E-step: blocks=', nblk, ''
-        call flush(logfhandle)
+        if( self%verbose )then
+            write(logfhandle,'(A,I8,A)') 'PPCA blocked E-step: blocks=', nblk, ''
+            call flush(logfhandle)
+        endif
         !$omp parallel default(shared) private(i,ibeg,iend)
         block
             real, allocatable :: ez_blk(:,:), sxz_blk(:,:), szz_blk(:,:)
@@ -174,8 +280,10 @@ contains
         !$omp end parallel
         self%S_zz = self%S_zz + real(self%N,kind(self%sigma2)) * self%sigma2 * self%Minv
         call system_clock(t1)
-        write(logfhandle,'(A,F8.3,A)') 'PPCA blocked E-step total: ', real(t1-t0)/real(trate), ' s'
-        call flush(logfhandle)
+        if( self%verbose )then
+            write(logfhandle,'(A,F8.3,A)') 'PPCA blocked E-step total: ', real(t1-t0)/real(trate), ' s'
+            call flush(logfhandle)
+        endif
         call matinv(self%S_zz, self%M, self%Q, err)
         if( err == -1 )then
             self%M = 0.
@@ -192,8 +300,10 @@ contains
         sigma_num = self%xnorm2_total - 2._dp * sum(real(self%E_zn,dp) * real(matmul(self%Wt, pcavecs),dp)) + term2
         self%sigma2 = real(max(sigma_num / real(max(1,self%N*self%D),dp), sigma_floor))
         call system_clock(t1)
-        write(logfhandle,'(A,F8.3,A)') 'PPCA sigma-step total: ', real(t1-t0)/real(trate), ' s'
-        call flush(logfhandle)
+        if( self%verbose )then
+            write(logfhandle,'(A,F8.3,A)') 'PPCA sigma-step total: ', real(t1-t0)/real(trate), ' s'
+            call flush(logfhandle)
+        endif
         w_change = sqrt(sum((real(self%W,dp) - real(w_old,dp))**2) / real(max(1,self%D*self%Q),dp))
         deallocate(w_old, wt_w)
     end subroutine em_opt

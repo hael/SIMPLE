@@ -73,7 +73,7 @@ contains
         type(ctfparams)  :: ctfparms
         type(parameters) :: params
         type(builder)    :: build
-        integer          :: nptcls, ldim(3), iptcl
+        integer          :: nptcls, ldim(3), iptcl, ndone, report_freq
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'phaseflipped'//STK_EXT)
         call build%init_params_and_build_general_tbox(cline,params)
@@ -85,7 +85,10 @@ contains
                 call imgs(iptcl)%read(params%stk, iptcl)
             enddo
             call memoize_ft_maps(imgs(1)%get_ldim(), imgs(1)%get_smpd())
-            print *, 'FINISHED READING...'
+            write(logfhandle,'(A,I0,A)') '>>> PHASE-FLIPPING ', nptcls, ' PARTICLES'
+            call flush(logfhandle)
+            ndone       = 0
+            report_freq = max(1, nptcls / 10)
             !$omp parallel do private(iptcl,ctfparms,tfun) default(shared) proc_bind(close) schedule(static)
             do iptcl = 1, nptcls
                 call imgs(iptcl)%fft
@@ -93,9 +96,15 @@ contains
                 tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
                 call imgs(iptcl)%apply_ctf(tfun, 'flip', ctfparms)
                 call imgs(iptcl)%ifft
+                !$omp critical(phaseflip_progress)
+                ndone = ndone + 1
+                if( mod(ndone, report_freq) == 0 .or. ndone == nptcls )then
+                    write(logfhandle,'(A,I3,A)') '>>> ', nint(100.0 * real(ndone) / real(nptcls)), '% done'
+                    call flush(logfhandle)
+                endif
+                !$omp end critical(phaseflip_progress)
             end do
             !$omp end parallel do
-            print *, 'START WRITING...'
             do iptcl = 1, nptcls
                 call imgs(iptcl)%write(params%outstk, iptcl)
                 call imgs(iptcl)%kill
@@ -104,17 +113,37 @@ contains
         else
             nptcls = build%spproj%get_nptcls()
             ldim   = build%img%get_ldim()
-            call memoize_ft_maps(build%img%get_ldim(), build%img%get_smpd())
-            call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
+            allocate(imgs(nptcls))
             do iptcl = 1, nptcls
-                call read_imgbatch(params, build, iptcl, build%img)
-                call build%img%fft
+                call imgs(iptcl)%new([ldim(1),ldim(2),1], params%smpd)
+                call read_imgbatch(params, build, iptcl, imgs(iptcl))
+            enddo
+            call memoize_ft_maps(ldim, params%smpd)
+            write(logfhandle,'(A,I0,A)') '>>> PHASE-FLIPPING ', nptcls, ' PARTICLES'
+            call flush(logfhandle)
+            ndone       = 0
+            report_freq = max(1, nptcls / 10)
+            !$omp parallel do private(iptcl,ctfparms,tfun) default(shared) proc_bind(close) schedule(static)
+            do iptcl = 1, nptcls
+                call imgs(iptcl)%fft
                 ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
                 tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
                 call imgs(iptcl)%apply_ctf(tfun, 'flip', ctfparms)
-                call build%img%ifft
-                call stkio_w%write(iptcl, build%img)
+                call imgs(iptcl)%ifft
+                !$omp critical(phaseflip_progress)
+                ndone = ndone + 1
+                if( mod(ndone, report_freq) == 0 .or. ndone == nptcls )then
+                    write(logfhandle,'(A,I3,A)') '>>> ', nint(100.0 * real(ndone) / real(nptcls)), '% done'
+                    call flush(logfhandle)
+                endif
+                !$omp end critical(phaseflip_progress)
             end do
+            !$omp end parallel do
+            call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1))
+            do iptcl = 1, nptcls
+                call stkio_w%write(iptcl, imgs(iptcl))
+                call imgs(iptcl)%kill
+            enddo
             call stkio_w%close
             call forget_ft_maps
         endif

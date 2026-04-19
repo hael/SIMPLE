@@ -778,6 +778,7 @@ contains
         use simple_imgproc,     only: make_pcavol
         use simple_pca,         only: pca
         use simple_ppca,        only: ppca
+        use simple_mppca,       only: mppca
         use simple_pca_svd,     only: pca_svd
         use simple_kpca_svd,    only: kpca_svd, suggest_kpca_nystrom_neigs
         class(commander_ppca_volvar), intent(inout) :: self
@@ -808,12 +809,16 @@ contains
         select case(trim(params%pca_mode))
             case('ppca')
                 allocate(ppca :: pca_ptr)
+            case('mppca')
+                allocate(mppca :: pca_ptr)
             case('pca_svd')
                 allocate(pca_svd    :: pca_ptr)
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
         end select
         select type(pca_ptr)
+            type is(mppca)
+                call pca_ptr%set_params(params%mppca_k, params%nthr)
             type is(kpca_svd)
                 call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_backend,&
                 &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)

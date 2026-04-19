@@ -763,7 +763,7 @@ contains
         use simple_sp_project,          only: sp_project
         use simple_matcher_ptcl_io,     only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
-        class(parameters),                  intent(in)    :: params
+        class(parameters), target,          intent(in)    :: params
         class(builder),                     target, intent(inout) :: build
         class(sp_project),                  intent(inout) :: spproj
         character(len=*),                   intent(in)    :: oritype
@@ -785,6 +785,7 @@ contains
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
         integer :: i,iptcl, l,m, pop, h,k, hh,kk, ithr, iwinsz, wdim, physh,physk
         logical :: l_phflip, l_imgs, l_conjg
+        p_ptr => params
         b_ptr => build
         l_imgs = .false.
         if( allocated(timgs) )then
@@ -816,6 +817,8 @@ contains
         if( .not.(allocated(pinds)) ) return
         pop = size(pinds)
         if( pop == 0 ) return
+        write(logfhandle,'(A,I8,A,I8)') 'transform_ptcls: class=', icls, ' pop=', pop
+        call flush(logfhandle)
         l_phflip = .false.
         if( present(phflip) ) l_phflip = phflip
         if( l_phflip )then
@@ -832,6 +835,10 @@ contains
             end select
         endif
         allocate(timgs(pop))
+        write(logfhandle,'(A,I8)') 'transform_ptcls: allocated timgs, pop=', pop
+        call flush(logfhandle)
+        write(logfhandle,'(A,I8,A,F10.4,A,I8)') 'transform_ptcls: image new params box=', p_ptr%box, ' smpd=', p_ptr%smpd, ' boxpd=', p_ptr%boxpd
+        call flush(logfhandle)
         do i = 1,size(timgs)
             call timgs(i)%new([p_ptr%box,p_ptr%box,1],p_ptr%smpd, wthreads=.false.)
         enddo
@@ -846,18 +853,26 @@ contains
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim),source=0.)
+        write(logfhandle,'(A,I8,A,I8)') 'transform_ptcls: interp setup done, wdim=', wdim, ' nthr_glob=', nthr_glob
+        call flush(logfhandle)
         ! temporary objects
         call prepimgbatch(p_ptr, b_ptr, pop)
+        write(logfhandle,'(A)') 'transform_ptcls: prepimgbatch done'
+        call flush(logfhandle)
         do ithr = 1, nthr_glob
             call  img(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
             call timg(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
         end do
+        write(logfhandle,'(A)') 'transform_ptcls: thread-local image buffers ready'
+        call flush(logfhandle)
         call memoize_ft_maps(img(1)%get_ldim(), img(1)%get_smpd())
         logi_lims      = img(1)%loop_lims(2)
         cyc_lims       = img(1)%loop_lims(3)
         cyc_limsR(:,1) = cyc_lims(1,:)
         cyc_limsR(:,2) = cyc_lims(2,:)
         call discrete_read_imgbatch(p_ptr, b_ptr, pop, pinds(:), [1,pop])
+        write(logfhandle,'(A)') 'transform_ptcls: discrete_read_imgbatch done'
+        call flush(logfhandle)
         !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,h,k,hh,kk,loc,win,l,m,physh,physk,kbw,fcomp,fcompl,l_conjg) &
         !$omp default(shared) schedule(static) proc_bind(close)
         do i = 1,pop

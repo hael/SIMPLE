@@ -118,12 +118,20 @@ contains
         use simple_pca_svd,       only: pca_svd
         use simple_kpca_svd,      only: kpca_svd, suggest_kpca_nystrom_neigs
         use simple_ppca,          only: ppca
+        use simple_mppca,         only: mppca
         class(commander_ppca_denoise_classes), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         integer,          parameter   :: MAXPCAITS = 15
+        ! Denoising-by-class is intentionally biased toward low-rank PPCA. A broad rank
+        ! search tends to select pathological edge models (q=1 or q~n-1), which is both
+        ! slow and visually inconsistent. Keep the reusable PPCA selector general, but
+        ! hand this workflow a small denoising-oriented candidate grid.
+        integer,          parameter   :: PPCA_AUTO_NCAND = 10
+        integer,          parameter   :: PPCA_AUTO_CAND(PPCA_AUTO_NCAND) = [1,2,3,4,5,6,8,10,12,16]
         class(pca),       pointer     :: pca_ptr  => null()
         type(parameters)              :: params
         type(builder)                 :: build
+        type(ppca)                    :: ppca_rank_selector
         type(image),      allocatable :: imgs(:), imgs_ori(:)
         type(image)                   :: cavg, img, timg
         type(oris)                    :: os
@@ -132,6 +140,8 @@ contains
         type(string)                  :: fname_oris, fname_denoised_ori, fname_ori, fname_class_ptcls_den
         integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:)
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
+        integer,          allocatable :: rank_scan_qs(:)
+        real(dp),         allocatable :: rank_scan_bics(:), rank_scan_sigma2(:)
         real    :: shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)
         complex :: fcompl, fcompll
         integer :: npix, i, j, ncls, nptcls, cnt1, cnt2, neigs, h, k, win_corner(2),&
@@ -172,6 +182,7 @@ contains
             cls_inds = pack(cls_inds, mask=(cls_inds == params%class))
         endif
         ncls = size(cls_inds)
+        nptcls = 0
         if( cline%defined('ncls') )then
             ncls     = params%ncls
             cls_inds = cls_inds(1:ncls)
@@ -203,18 +214,24 @@ contains
         select case(trim(params%pca_mode))
             case('ppca')
                 allocate(ppca :: pca_ptr)
+            case('mppca')
+                allocate(mppca :: pca_ptr)
             case('pca_svd')
                 allocate(pca_svd    :: pca_ptr)
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
         end select
         select type(pca_ptr)
+            type is(mppca)
+                call pca_ptr%set_params(params%mppca_k, params%nthr)
             type is(kpca_svd)
                 call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_backend,&
                     &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
         end select
         do i = 1, ncls
             call progress_gfortran(i,ncls)
+            write(logfhandle,'(A,I8,A,I8)') 'ppca_denoise_classes entering class loop: iclass=', i, ' cls_id=', cls_inds(i)
+            call flush(logfhandle)
             if( trim(params%pca_img_ori) .eq. 'yes' )then
                 call transform_ptcls(params, build, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg, imgs_ori=imgs_ori)
                 do j = 1, size(imgs)
@@ -223,6 +240,8 @@ contains
             else
                 call transform_ptcls(params, build, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
             endif
+            write(logfhandle,'(A,I8,A,I8)') 'ppca_denoise_classes transform_ptcls done: iclass=', i, ' nimgs=', size(imgs)
+            call flush(logfhandle)
             nptcls = size(imgs)
             if( trim(params%neigs_per).eq.'yes' )then
                 if( params%neigs >= 99 )then
@@ -253,6 +272,15 @@ contains
                 call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, avg_pix=avg_pix)
             else
                 call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
+            endif
+            if( trim(params%pca_mode) .eq. 'ppca' .and. params%neigs <= 0 )then
+                if( allocated(rank_scan_qs) )     deallocate(rank_scan_qs)
+                if( allocated(rank_scan_bics) )   deallocate(rank_scan_bics)
+                if( allocated(rank_scan_sigma2) ) deallocate(rank_scan_sigma2)
+                neigs = ppca_rank_selector%suggest_rank(pcavecs, PPCA_AUTO_CAND, MAXPCAITS, rank_scan_qs, rank_scan_bics, rank_scan_sigma2)
+                write(logfhandle,'(A,I8,A,I8,A,I8)') 'PPCA classes auto-selected neigs: class=', cls_inds(i), ' size=', nptcls, ' neigs=', neigs
+                call flush(logfhandle)
+                call log_ppca_rank_scan(cls_inds(i), nptcls, neigs, rank_scan_qs, rank_scan_bics, rank_scan_sigma2)
             endif
             if( trim(params%pca_mode) .eq. 'kpca' .and. trim(params%kpca_backend) .eq. 'nystrom' .and. neigs <= 0 )then
                 neigs = suggest_kpca_nystrom_neigs(pcavecs, params%kpca_ker, params%kpca_nystrom_npts, params%kpca_rbf_gamma)
@@ -311,7 +339,7 @@ contains
                     call cavg%add(imgs(j))
                     call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
                     call imgs(j)%write(fname_class_ptcls_den, j)
-                    ! call imgs(j)%write(fname_denoised, cnt2)
+                    call imgs(j)%write(fname_denoised, cnt2)
                     if( trim(params%pca_ori_stk) .eq. 'yes' ) ori_map(pinds(j)) = cnt2
                     call imgs(j)%kill
                 end do
@@ -399,6 +427,60 @@ contains
         call os%kill
         ! end gracefully
         call simple_end('**** SIMPLE_PPCA_DENOISE_CLASSES NORMAL STOP ****')
+
+    contains
+
+        subroutine log_ppca_rank_scan(cls_id, cls_size, selected_q, qs, bics, sigma2s)
+            integer,  intent(in) :: cls_id, cls_size, selected_q
+            integer,  intent(in) :: qs(:)
+            real(dp), intent(in) :: bics(:), sigma2s(:)
+            real(dp), parameter :: SIGMA_FLOOR_WARN = 1.1e-8_dp
+            logical, allocatable :: used(:)
+            integer :: k, i, idx
+            real(dp) :: best_bic, delta_bic, selected_sigma2
+            if( size(qs) == 0 ) return
+            best_bic = huge(1._dp)
+            do i = 1, size(qs)
+                if( qs(i) <= 0 ) cycle
+                if( bics(i) < best_bic ) best_bic = bics(i)
+            enddo
+            if( best_bic >= huge(1._dp) / 2._dp ) return
+            allocate(used(size(qs)), source=.false.)
+            do k = 1, min(3, count(qs > 0))
+                idx = 0
+                do i = 1, size(qs)
+                    if( qs(i) <= 0 .or. used(i) ) cycle
+                    if( idx == 0 )then
+                        idx = i
+                    else if( bics(i) < bics(idx) )then
+                        idx = i
+                    endif
+                enddo
+                if( idx == 0 ) exit
+                used(idx) = .true.
+                delta_bic = bics(idx) - best_bic
+                write(logfhandle,'(A,I8,A,I8,A,I1,A,I8,A,ES10.3,A,ES10.3)') &
+                    'PPCA rank scan top: class=', cls_id, ' size=', cls_size, ' rank=', k, ' q=', qs(idx), ' dBIC=', delta_bic, ' sigma2=', sigma2s(idx)
+                call flush(logfhandle)
+            enddo
+            deallocate(used)
+            selected_sigma2 = -1._dp
+            do i = 1, size(qs)
+                if( qs(i) == selected_q )then
+                    selected_sigma2 = sigma2s(i)
+                    exit
+                endif
+            enddo
+            if( selected_q >= max(1, cls_size - 1) )then
+                write(logfhandle,'(A,I8,A,I8,A)') 'PPCA rank scan warning: class=', cls_id, ' selected q hit class ceiling at ', selected_q, ''
+                call flush(logfhandle)
+            endif
+            if( selected_sigma2 > 0._dp .and. selected_sigma2 <= SIGMA_FLOOR_WARN )then
+                write(logfhandle,'(A,I8,A,ES10.3,A)') 'PPCA rank scan warning: class=', cls_id, ' selected sigma2 is near floor: ', selected_sigma2, ''
+                call flush(logfhandle)
+            endif
+        end subroutine log_ppca_rank_scan
+
     end subroutine exec_ppca_denoise_classes
 
 end module simple_commanders_cluster2D

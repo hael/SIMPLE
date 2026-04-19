@@ -2,6 +2,7 @@ program simple_test_pca_all
 use simple_core_module_api
 !$ use omp_lib
 use simple_ppca,       only: ppca
+use simple_mppca,      only: mppca
 use simple_pca_svd,    only: pca_svd
 use simple_kpca_svd,   only: kpca_svd
 use simple_cmdline,    only: cmdline
@@ -9,6 +10,7 @@ use simple_parameters, only: parameters
 implicit none
 integer, parameter :: NP = 3, NS = 4, NC = 3, MAXPCAITS = 15
 type(ppca)         :: prob_pca
+type(mppca)        :: mix_prob_pca
 type(pca_svd)      :: pca_obj
 type(kpca_svd)     :: kpca_obj
 type(kpca_svd)     :: kpca_nystrom_obj
@@ -52,6 +54,27 @@ enddo
 print *, 'Feature vecs using PPCA:'
 do j = 1, NS
     E_zn(:,j) = prob_pca%get_feat(j)
+enddo
+do j = 1, NC
+    print *, E_zn(j, :)
+enddo
+print *, '---------------------------------------------------'
+call mix_prob_pca%new(NS, NP, NC)
+call mix_prob_pca%set_params(2, params%nthr)
+call mix_prob_pca%master(data_cen, MAXPCAITS)
+!$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+do j = 1, NS
+    call mix_prob_pca%generate(j, avg, tmpvec)
+    data_pca(:,j) = tmpvec
+end do
+!$omp end parallel do
+print *, 'Pre-imaged data using mPPCA:'
+do j = 1, NP
+    print *, data_pca(j,:)
+enddo
+print *, 'Feature vecs using mPPCA:'
+do j = 1, NS
+    E_zn(:,j) = mix_prob_pca%get_feat(j)
 enddo
 do j = 1, NC
     print *, E_zn(j, :)

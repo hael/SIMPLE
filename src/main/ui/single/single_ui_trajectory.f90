@@ -148,7 +148,8 @@ contains
         ! <empty>
         ! filter controls
         call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .false., 160.0)
-        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca){ppca}', .false., 'ppca')
+        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, mixture PPCA, PPCA plus residual kPCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|mppca|ppca_kpca_resid|pca_svd|kpca){ppca}', .false., 'ppca')
+        call trajectory_denoise%add_input(UI_FILT, 'mppca_k', 'num', 'mPPCA mixture components (default 4; try 2, 4, 8)', 'mPPCA mixture components (default 4; try 2, 4, 8)', '# mPPCA comps', .false., 4.0)
         call trajectory_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)

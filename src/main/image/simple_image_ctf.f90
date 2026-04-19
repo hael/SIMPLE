@@ -247,10 +247,11 @@ contains
                     if (l_ctf) then
                         ker = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
                         if (l_flip) then
-                            ! Consistent with norm_noise_fft_clip_shift_ctf_flip:
-                            ! flip sign only; ctfsq is 1 (then ML weighting may scale it)
-                            tval   = sign(1.0, ker)
-                            tvalsq = 1.0
+                            ! Input images are already phase-flipped, so the Fourier signal is
+                            ! proportional to |CTF| * signal. Use |CTF| in the numerator and
+                            ! CTF^2 in the denominator to avoid reintroducing the CTF phase.
+                            tval   = abs(ker)
+                            tvalsq = ker * ker
                             c      = tval * c
                         else
                             tval   = ker

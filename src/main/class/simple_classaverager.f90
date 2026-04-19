@@ -359,7 +359,7 @@ interface
         use simple_sp_project,          only: sp_project
         use simple_matcher_ptcl_io,      only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
-        class(parameters),                  intent(in)    :: params
+        class(parameters), target,          intent(in)    :: params
         class(builder),             target, intent(inout) :: build
         class(sp_project),                  intent(inout) :: spproj
         character(len=*),                   intent(in)    :: oritype

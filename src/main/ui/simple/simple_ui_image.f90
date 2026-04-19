@@ -128,7 +128,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        ! <empty>
+        call ctf_phaseflip%add_input(UI_COMP, nthr)
         ! add to ui_hash
         call add_ui_program('ctf_phaseflip', ctf_phaseflip, prgtab)
     end subroutine new_ctf_phaseflip
