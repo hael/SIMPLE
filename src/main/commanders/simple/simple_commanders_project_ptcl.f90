@@ -10,6 +10,11 @@ type, extends(commander_base) :: commander_import_particles
     procedure :: execute      => exec_import_particles
 end type commander_import_particles
 
+type, extends(commander_base) :: commander_reimport_particles
+    contains
+        procedure :: execute      => exec_reimport_particles
+end type commander_reimport_particles
+
 type, extends(commander_base) :: commander_import_boxes
   contains
     procedure :: execute      => exec_import_boxes
@@ -294,6 +299,83 @@ contains
         call nice_comm%terminate()
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_import_particles
+
+    subroutine exec_reimport_particles( self, cline )
+        class(commander_reimport_particles), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(oris)       :: os_ptcl2D_tmp, os_ptcl3D_tmp
+        type(ctfparams)  :: ctfparms
+        integer          :: ldim(3), nimgs, nstks, nptcls_active, iptcl
+        real             :: smpd_new
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call cline%set('oritype', 'stk')
+        call params%new(cline)
+        if( .not. cline%defined('stk') )then
+            THROW_HARD('need stk (denoised stack) on command line; reimport_particles')
+        endif
+        call spproj%read(params%projfile)
+        nstks = spproj%os_stk%get_noris()
+        if( nstks < 1 ) THROW_HARD('No stack could be detected in the project; reimport_particles')
+        if( spproj%os_ptcl2D%get_noris() < 1 ) THROW_HARD('Project has no ptcl2D field entries; reimport_particles')
+        call find_ldim_nptcls(params%stk, ldim, nimgs, smpd=smpd_new)
+        ldim(3) = 1
+        if( spproj%get_box() /= ldim(1) .or. spproj%get_box() /= ldim(2) )then
+            THROW_HARD('Incompatible box dimensions between input stack and project; reimport_particles')
+        endif
+        if( nimgs /= spproj%os_ptcl2D%get_noris() )then
+            nptcls_active = 0
+            do iptcl = 1,spproj%os_ptcl2D%get_noris()
+                if( spproj%os_ptcl2D%get_state(iptcl) > 0 ) nptcls_active = nptcls_active + 1
+            enddo
+            if( nimgs == nptcls_active )then
+                write(logfhandle,'(A)') '>>> reimport_particles: pruning state=0 particles to match input stack size'
+                call spproj%prune_particles
+                call spproj%map_ptcls_state_to_cls
+                nstks = spproj%os_stk%get_noris()
+            else
+                THROW_HARD('Incompatible nptcls between input stack and project ptcl2D (total/active); reimport_particles')
+            endif
+        endif
+        if( spproj%os_ptcl3D%get_noris() > 0 )then
+            if( nimgs /= spproj%os_ptcl3D%get_noris() )then
+                THROW_HARD('Incompatible nptcls between input stack and project ptcl3D; reimport_particles')
+            endif
+        endif
+        ctfparms = spproj%get_ctfparams('stk', 1)
+        if( cline%defined('ctf') )then
+            select case(trim(params%ctf))
+                case('yes')
+                    ctfparms%ctfflag = CTFFLAG_YES
+                case('no')
+                    ctfparms%ctfflag = CTFFLAG_NO
+                case('flip')
+                    ctfparms%ctfflag = CTFFLAG_FLIP
+                case DEFAULT
+                    THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; reimport_particles')
+            end select
+        endif
+        if( abs(smpd_new - ctfparms%smpd) > 1.e-6 )then
+            THROW_HARD('Incompatible sampling distance between input stack and project; reimport_particles')
+        endif
+        os_ptcl2D_tmp = spproj%os_ptcl2D
+        os_ptcl3D_tmp = spproj%os_ptcl3D
+        call spproj%os_stk%kill
+        call spproj%os_ptcl2D%kill
+        call spproj%os_ptcl3D%kill
+        call spproj%add_stk(params%stk, ctfparms)
+        spproj%os_ptcl2D = os_ptcl2D_tmp
+        spproj%os_ptcl3D = os_ptcl3D_tmp
+        call os_ptcl2D_tmp%kill
+        call os_ptcl3D_tmp%kill
+        if( nstks > 1 )then
+            if( spproj%os_ptcl2D%get_noris() > 0 ) call spproj%os_ptcl2D%set_all2single('stkind', 1)
+            if( spproj%os_ptcl3D%get_noris() > 0 ) call spproj%os_ptcl3D%set_all2single('stkind', 1)
+        endif
+        call spproj%write(params%projfile)
+        call simple_end('**** REIMPORT_PARTICLES NORMAL STOP ****')
+    end subroutine exec_reimport_particles
 
     subroutine exec_import_boxes( self, cline )
         class(commander_import_boxes), intent(inout) :: self

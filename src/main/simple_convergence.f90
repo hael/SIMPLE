@@ -77,7 +77,7 @@ contains
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
         type(oris)           :: ostats
-        type(string) :: s_ratio
+        type(string) :: s_ratio, numstr
         real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         integer :: n, nptcls, nsampled, nactive
@@ -137,7 +137,8 @@ contains
         write(logfhandle,609) '>>> | GAU REGULARIZATION            | off'
         endif
         if( params%l_ml_reg )then
-        write(logfhandle,'(A,F8.2)') '>>> | ML  REGULARIZATION            | on, TAU: ', params%tau
+        numstr = string(params%tau)
+        write(logfhandle,609) '>>> | ML  REGULARIZATION            | on, TAU: '//numstr%to_char()
         else
         write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
         endif
@@ -241,6 +242,7 @@ contains
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
+        type(string) :: numstr
         logical :: converged
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         601 format(A,1X,F12.3)
@@ -306,12 +308,14 @@ contains
         write(logfhandle,609) '>>> | GAU REGULARIZATION            | off'
         endif
         if( params%l_ml_reg )then
-        write(logfhandle,'(A,F8.2)') '>>> | ML  REGULARIZATION            | on, TAU: ', params%tau
+        numstr = string(params%tau)
+        write(logfhandle,609) '>>> | ML  REGULARIZATION            | on, TAU: '//numstr%to_char()
         else
         write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
         endif
         if( params%l_icm )then
-        write(logfhandle,'(A,F8.2)') '>>> | ICM REGULARIZATION            | on, LAMBDA: ', params%lambda
+        numstr = string(params%lambda)
+        write(logfhandle,609) '>>> | ICM REGULARIZATION            | on, LAMBDA: '//numstr%to_char()
         else
         write(logfhandle,609) '>>> | ICM REGULARIZATION            | off'
         endif
@@ -323,10 +327,12 @@ contains
         write(logfhandle,609) '>>> | FILTER MODE                   | '//trim(params%filt_mode)
         if( params%l_update_frac )then
         if( cline%defined('ufrac_trec') )then
-        write(logfhandle,'(A,F8.2)') '>>> | TRAILING REC UPDATE FRACTION  | ', params%ufrac_trec
+        numstr = string(params%ufrac_trec)
+        write(logfhandle,609) '>>> | TRAILING REC UPDATE FRACTION  | '//numstr%to_char()
         else
         trail_rec_ufrac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
-        write(logfhandle,'(A,F8.2)') '>>> | TRAILING REC UPDATE FRACTION  | ', trail_rec_ufrac
+        numstr = string(trail_rec_ufrac)
+        write(logfhandle,609) '>>> | TRAILING REC UPDATE FRACTION  | '//numstr%to_char()
         endif
         if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
         write(logfhandle,609) '>>> | FILLIN PARTICLE SAMPLING      | on'

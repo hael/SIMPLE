@@ -10,6 +10,7 @@ type(ui_program), target :: import_boxes
 type(ui_program), target :: import_cavgs
 type(ui_program), target :: import_movies
 type(ui_program), target :: import_particles
+type(ui_program), target :: reimport_particles
 type(ui_program), target :: import_starproject
 type(ui_program), target :: merge_projects
 type(ui_program), target :: new_project
@@ -33,6 +34,7 @@ contains
         call new_import_cavgs(prgtab)
         call new_import_movies(prgtab)
         call new_import_particles(prgtab)
+        call new_reimport_particles(prgtab)
         call new_import_starproject(prgtab)
         call new_merge_projects(prgtab)
         call new_new_project(prgtab)
@@ -56,6 +58,7 @@ contains
         write(logfhandle,'(A)') import_cavgs%name%to_char()
         write(logfhandle,'(A)') import_movies%name%to_char()
         write(logfhandle,'(A)') import_particles%name%to_char()
+        write(logfhandle,'(A)') reimport_particles%name%to_char()
         write(logfhandle,'(A)') import_starproject%name%to_char()
         write(logfhandle,'(A)') merge_projects%name%to_char()
         write(logfhandle,'(A)') new_project%name%to_char()
@@ -292,6 +295,23 @@ contains
         ! add to ui_hash
         call add_ui_program('import_particles', import_particles, prgtab)
     end subroutine new_import_particles
+
+    subroutine new_reimport_particles( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call reimport_particles%new(&
+        &'reimport_particles',&                                    ! name
+        &'Re-import denoised particle stack',&                     ! descr_short
+        &'is a program for replacing the project particle stack while preserving particle/class metadata',&
+        &'all',&                                                   ! executable
+        &.true.)                                                   ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        call reimport_particles%add_input(UI_PARM, 'stk', 'file', 'Denoised particle stack',&
+        &'Denoised particle stack to replace the project stack', 'e.g. denoised.mrcs', .true., '')
+        call reimport_particles%add_input(UI_PARM, ctf_yes)
+        ! add to ui_hash
+        call add_ui_program('reimport_particles', reimport_particles, prgtab)
+    end subroutine new_reimport_particles
 
     subroutine new_import_starproject( prgtab )
         class(ui_hash), intent(inout) :: prgtab

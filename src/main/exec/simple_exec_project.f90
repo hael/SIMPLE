@@ -8,7 +8,7 @@ commander_print_project_field, commander_replace_project_field, commander_select
 commander_extract_subproj
 use simple_commanders_project_mov,  only: commander_import_movies, commander_write_mic_filetab
 use simple_commanders_project_ptcl, only: commander_zero_project_shifts, commander_import_boxes,&
-commander_import_particles, commander_prune_project_distr
+commander_import_particles, commander_reimport_particles, commander_prune_project_distr
 use simple_commanders_project_cls,  only: commander_import_cavgs
 implicit none
 
@@ -22,6 +22,7 @@ type(commander_import_boxes)          :: ximport_boxes
 type(commander_import_cavgs)          :: ximport_cavgs
 type(commander_import_movies)         :: ximport_movies
 type(commander_import_particles)      :: ximport_particles
+type(commander_reimport_particles)    :: xreimport_particles
 type(commander_import_starproject)    :: ximport_starproject
 type(commander_merge_projects)        :: xmerge_projects
 type(commander_new_project)           :: xnew_project
@@ -59,6 +60,8 @@ contains
                 call ximport_movies%execute(cline)
             case( 'import_particles' )
                 call ximport_particles%execute(cline)
+            case( 'reimport_particles' )
+                call xreimport_particles%execute(cline)
             case( 'import_starproject' )
                 call ximport_starproject%execute(cline)
             case( 'merge_projects' )
