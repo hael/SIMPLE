@@ -14,7 +14,9 @@ type :: srchspace_map
     integer, allocatable :: full2sub_map(:)  ! size(nspace)
     integer, allocatable :: sub2full_map(:)  ! size(nsub)
 contains
-    procedure :: new
+    procedure, private :: new_from_distmat
+    procedure, private :: new_from_maps
+    generic   :: new => new_from_distmat, new_from_maps
     procedure :: get_inds_in_full
     procedure :: get_sub2full_map
     procedure :: get_full2sub_map
@@ -22,16 +24,19 @@ contains
     procedure :: sub2full
     procedure :: get_nspace
     procedure :: get_nsub
+    procedure :: has_data
     procedure :: kill
 end type srchspace_map
 
 contains
 
-    subroutine new(self, nspace, nspace_sub, distmat)
+    subroutine new_from_distmat(self, nspace, nspace_sub, distmat)
         class(srchspace_map), intent(inout) :: self
         integer,              intent(in)    :: nspace, nspace_sub
         real,                 intent(in)    :: distmat(nspace_sub, nspace)
         call self%kill()
+        if (nspace < 1) THROW_HARD('full space size must be >= 1')
+        if (nspace_sub < 1) THROW_HARD('subspace size must be >= 1')
         if (nspace_sub > nspace) THROW_HARD('subspace size cannot be larger than full space size')
         self%nspace = nspace
         self%nsub   = nspace_sub
@@ -40,7 +45,29 @@ contains
         self%full2sub_map = minloc(distmat, dim=1)
         ! For each sub-space point (row), pick closest full-space point (column)
         self%sub2full_map = minloc(distmat, dim=2)
-    end subroutine new
+    end subroutine new_from_distmat
+
+    subroutine new_from_maps(self, full2sub_map, sub2full_map)
+        class(srchspace_map), intent(inout) :: self
+        integer,              intent(in)    :: full2sub_map(:)
+        integer,              intent(in)    :: sub2full_map(:)
+        integer :: nspace, nspace_sub
+        call self%kill()
+        nspace     = size(full2sub_map)
+        nspace_sub = size(sub2full_map)
+        if (nspace < 1) THROW_HARD('full2sub_map cannot be empty')
+        if (nspace_sub < 1) THROW_HARD('sub2full_map cannot be empty')
+        if (minval(full2sub_map) < 1 .or. maxval(full2sub_map) > nspace_sub) then
+            THROW_HARD('full2sub_map has values outside [1,nsub]')
+        endif
+        if (minval(sub2full_map) < 1 .or. maxval(sub2full_map) > nspace) then
+            THROW_HARD('sub2full_map has values outside [1,nspace]')
+        endif
+        self%nspace = nspace
+        self%nsub   = nspace_sub
+        allocate(self%full2sub_map(nspace), source=full2sub_map)
+        allocate(self%sub2full_map(nspace_sub), source=sub2full_map)
+    end subroutine new_from_maps
 
     pure function get_inds_in_full(self, sub_idx) result(inds)
         class(srchspace_map), intent(in) :: self
@@ -102,6 +129,11 @@ contains
         class(srchspace_map), intent(in) :: self
         get_nsub = self%nsub
     end function get_nsub
+
+    pure logical function has_data(self)
+        class(srchspace_map), intent(in) :: self
+        has_data = allocated(self%full2sub_map) .and. allocated(self%sub2full_map) .and. self%nspace > 0 .and. self%nsub > 0
+    end function has_data
 
     subroutine kill(self)
         class(srchspace_map), intent(inout) :: self

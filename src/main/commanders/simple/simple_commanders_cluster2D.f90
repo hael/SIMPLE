@@ -622,25 +622,34 @@ contains
         integer,          parameter   :: MAXPCAITS = 15
         integer,          parameter   :: PPCA_AUTO_NCAND = 10
         integer,          parameter   :: PPCA_AUTO_CAND(PPCA_AUTO_NCAND) = [1,2,3,4,5,6,8,10,12,16]
-        type(parameters)              :: params
+        type(parameters)              :: params, params_mask
         type(builder)                 :: build
         type(sp_project), target      :: spproj
         type(ppca)                    :: ppca_obj, ppca_rank_selector
-        type(image),      allocatable :: imgs(:), imgs_ppca(:)
+        type(image),      allocatable :: imgs(:), imgs_ppca(:), class_mask(:)
         type(image)                   :: cavg_raw, cavg_den
         type(string)                  :: label
         real,             allocatable :: avg(:), pcavecs(:,:), tmpvec(:), feats(:,:), dmat(:,:), feat(:), feat_mean(:), feat_std(:)
+        real,             allocatable :: class_diams(:), class_shifts(:,:)
         integer,          allocatable :: cls_inds(:), pinds(:), labels(:), i_medoids(:), cls_pops(:)
         integer,          allocatable :: parent_of_subcls(:), pop_of_subcls(:), local_of_subcls(:)
         integer,          allocatable :: new_class(:), new_parent(:)
         integer                       :: ncls, nptcls, npix, neigs, i, j, k, nsplit, iglob, nsubcls_max, max_subcls
+        integer                       :: class_box, class_ldim(3)
         logical                       :: l_phflip, l_pre_norm
         integer                       :: funit
-        real                          :: dval, sdev_noise
+        real                          :: class_moldiam, class_mskdiam, class_mskrad, dval, sdev_noise
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',    0)
+        call set_automask2D_defaults(cline)
         call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
+        params_mask%ngrow   = params%ngrow
+        params_mask%winsz   = params%winsz
+        params_mask%edge    = params%edge
+        params_mask%amsklp  = params%amsklp
+        params_mask%automsk = params%automsk
+        params_mask%part    = params%part
         call spproj%read(params%projfile)
         nsubcls_max = max(2, params%nsubcls_max)
         select case(trim(params%oritype))
@@ -707,9 +716,24 @@ contains
             if( nptcls < 3 ) cycle
             imgs_ppca = copy_imgarr(imgs)
             call imgs_ppca(1)%memoize_mask_coords()
+            if( allocated(class_mask) ) call dealloc_imgarr(class_mask)
+            allocate(class_mask(1))
+            call class_mask(1)%copy(cavg_raw)
+            class_ldim        = cavg_raw%get_ldim()
+            params_mask%box   = class_ldim(1)
+            params_mask%smpd  = cavg_raw%get_smpd()
+            params_mask%msk   = real(class_ldim(1) / 2) - COSMSKHALFWIDTH
+            call automask2D(params_mask, class_mask, params_mask%ngrow, nint(params_mask%winsz), params_mask%edge, class_diams, class_shifts)
+            class_box     = min(round2even(class_diams(1) / params_mask%smpd + 2. * COSMSKHALFWIDTH), class_ldim(1))
+            class_moldiam = params_mask%smpd * real(class_box)
+            class_mskdiam = class_moldiam * MSK_EXP_FAC
+            class_mskrad  = min(real(class_ldim(1) / 2) - COSMSKHALFWIDTH - 1., 0.5 * class_mskdiam / params_mask%smpd)
+            write(logfhandle,'(A,I8,A,F8.2,A,F8.2,A,F8.2)') 'PPCA split mask update: class=', cls_inds(i), &
+                ' automask_diam=', class_diams(1), ' mskdiam=', class_mskdiam, ' mskrad=', class_mskrad
+            call flush(logfhandle)
             do j = 1, nptcls
                 call imgs_ppca(j)%norm_noise(build%lmsk, sdev_noise)
-                call imgs_ppca(j)%mask2D_softavg(params%msk)
+                call imgs_ppca(j)%mask2D_softavg(class_mskrad)
             enddo
             if( l_pre_norm )then
                 do j = 1, nptcls
@@ -783,6 +807,7 @@ contains
             call ppca_obj%kill()
             call cavg_raw%kill
             call cavg_den%kill
+            if( allocated(class_mask) ) call dealloc_imgarr(class_mask)
             if( allocated(imgs_ppca) ) call dealloc_imgarr(imgs_ppca)
             if( allocated(imgs) ) call dealloc_imgarr(imgs)
             if( allocated(avg) ) deallocate(avg)

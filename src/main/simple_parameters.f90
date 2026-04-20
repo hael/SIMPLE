@@ -189,6 +189,7 @@ type :: parameters
     type(string)              :: refs_even
     type(string)              :: refs_odd
     type(string)              :: snapshot             !< path to write snapshot project file to
+    type(string)              :: srchspacemap        !< search-space map binary file (.bin)
     type(string)              :: star_datadir         !< STAR-generated data directory
     type(string)              :: star_mic             !< STAR-formatted EM file (micrographs.star)
     type(string)              :: star_model           !< STAR-formatted EM file (model.star)
@@ -613,6 +614,7 @@ contains
         self%refs_even=''
         self%refs_odd=''
         self%snapshot=''          !< path to write snapshot project file to
+        self%srchspacemap=''      !< search-space map binary file (.bin)
         self%star_datadir=''      !< STAR-generated data directory
         self%star_mic=''          !< STAR-formatted EM file (micrographs.star)
         self%star_model=''        !< STAR-formatted EM file (model.star)
@@ -872,6 +874,7 @@ contains
         call check_file('projfile_ref',   self%projfile_ref,    'O')
         call check_file('projfile_target',self%projfile_target, 'O')
         call check_file('refs',           self%refs,         notAllowed='T')
+        call check_file('srchspacemap',   self%srchspacemap, 'B')
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_mic',       self%star_mic,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_model',     self%star_model,   'R')  ! R for relion, S taken by SPIDER
