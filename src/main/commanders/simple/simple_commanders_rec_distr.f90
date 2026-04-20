@@ -221,6 +221,8 @@ contains
                 if( allocated(nu_aux_even) ) deallocate(nu_aux_even)
                 if( allocated(nu_aux_odd) )  deallocate(nu_aux_odd)
                 if( params%l_ml_reg ) then
+                    call vol_nu_base_even%new(ldim, params%smpd_crop)
+                    call vol_nu_base_odd%new( ldim, params%smpd_crop)
                     call vol_nu_base_even%read(add2fbody(eonames(1), params%ext, '_unfil'))
                     call vol_nu_base_odd%read( add2fbody(eonames(2), params%ext, '_unfil'))
                     allocate(nu_aux_even(1), nu_aux_odd(1))
