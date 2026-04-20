@@ -235,7 +235,7 @@ type :: parameters
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|mppca|ppca_kpca_resid|pca_svd|kpca){ppca}
+    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_local_mix|mppca|ppca_kpca_resid|pca_svd|kpca){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -317,6 +317,7 @@ type :: parameters
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
     integer :: ncls_sub=10         !< # sub-clusters
+    integer :: nsubcls_max=8       !< maximum subclasses per parent class before AP fallback merge
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors {0=>auto for Nyström kPCA}
@@ -933,6 +934,7 @@ contains
         call check_iarg('nchunksperset',  self%nchunksperset)
         call check_iarg('ncls',           self%ncls)
         call check_iarg('ncls_sub',       self%ncls_sub)
+        call check_iarg('nsubcls_max',    self%nsubcls_max)
         call check_iarg('ncls_start',     self%ncls_start)
         call check_iarg('ncunits',        self%ncunits)
         call check_iarg('ndiscrete',      self%ndiscrete)

@@ -25,6 +25,8 @@ type, extends(pca) :: ppca
     procedure :: set_verbose => set_verbose_ppca
     procedure :: calc_bic => calc_bic_ppca
     procedure :: suggest_rank => suggest_rank_ppca
+    procedure :: slim => slim_ppca
+    procedure :: reconstruct_external => reconstruct_external_ppca
     procedure, private :: init
     procedure, private :: em_opt
     procedure :: kill     => kill_ppca
@@ -114,6 +116,38 @@ contains
         logical,     intent(in)    :: verbose
         self%verbose = verbose
     end subroutine set_verbose_ppca
+
+    subroutine slim_ppca( self )
+        class(ppca), intent(inout) :: self
+        if( allocated(self%E_zn)   ) deallocate(self%E_zn)
+        if( allocated(self%data)   ) deallocate(self%data)
+        if( allocated(self%MinvWt) ) deallocate(self%MinvWt)
+        if( allocated(self%S_xz)   ) deallocate(self%S_xz)
+        if( allocated(self%S_zz)   ) deallocate(self%S_zz)
+    end subroutine slim_ppca
+
+    subroutine reconstruct_external_ppca( self, centered_in, centered_out )
+        use simple_math, only: matinv
+        class(ppca), intent(inout) :: self
+        real,        intent(in)    :: centered_in(self%D)
+        real,        intent(inout) :: centered_out(self%D)
+        real, allocatable :: wt_w(:,:), mloc(:,:), minvloc(:,:), z(:)
+        integer :: i, err
+
+        allocate(wt_w(self%Q,self%Q), mloc(self%Q,self%Q), minvloc(self%Q,self%Q), z(self%Q), source=0.)
+        wt_w = matmul(self%Wt, self%W)
+        mloc = wt_w + self%sigma2 * self%Iq
+        call matinv(mloc, minvloc, self%Q, err)
+        if( err == -1 )then
+            minvloc = 0.
+            do i = 1,self%Q
+                minvloc(i,i) = 1.
+            enddo
+        endif
+        z = matmul(matmul(minvloc, self%Wt), centered_in)
+        centered_out = matmul(self%W, z)
+        deallocate(wt_w, mloc, minvloc, z)
+    end subroutine reconstruct_external_ppca
 
     real(dp) function calc_bic_ppca( self, pcavecs ) result(bic)
         class(ppca), intent(inout) :: self
@@ -311,7 +345,16 @@ contains
     subroutine kill_ppca( self )
         class(ppca), intent(inout) :: self
         if( self%existence )then
-            deallocate(self%W, self%E_zn, self%data, self%Wt, self%M, self%Minv, self%MinvWt, self%S_xz, self%S_zz, self%Iq)
+            if( allocated(self%W)      ) deallocate(self%W)
+            if( allocated(self%E_zn)   ) deallocate(self%E_zn)
+            if( allocated(self%data)   ) deallocate(self%data)
+            if( allocated(self%Wt)     ) deallocate(self%Wt)
+            if( allocated(self%M)      ) deallocate(self%M)
+            if( allocated(self%Minv)   ) deallocate(self%Minv)
+            if( allocated(self%MinvWt) ) deallocate(self%MinvWt)
+            if( allocated(self%S_xz)   ) deallocate(self%S_xz)
+            if( allocated(self%S_zz)   ) deallocate(self%S_zz)
+            if( allocated(self%Iq)     ) deallocate(self%Iq)
             self%existence = .false.
         endif
     end subroutine kill_ppca

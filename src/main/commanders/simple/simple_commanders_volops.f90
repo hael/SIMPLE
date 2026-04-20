@@ -794,6 +794,7 @@ contains
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_volvar_out'//STK_EXT)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         if( .not.file_exists(params%vols(1)) ) THROW_HARD('cannot find the inputvolume')
+        if( trim(params%pca_mode) .eq. 'ppca_local_mix' ) THROW_HARD('ppca_local_mix is currently only supported by ppca_denoise_classes')
         call build%vol%read(params%vols(1))
         ! masking
         if(cline%defined('mskdiam')) call build%vol%mask3D_soft(params%msk, backgr=0.)

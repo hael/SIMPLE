@@ -381,6 +381,7 @@ contains
         if(cline%defined('projfile')) call cline%delete('projfile')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
+        if( trim(params%pca_mode) .eq. 'ppca_local_mix' ) THROW_HARD('ppca_local_mix is currently only supported by ppca_denoise_classes')
         l_hybrid_resid = trim(params%pca_mode) .eq. 'ppca_kpca_resid'
         l_profile_pca = trim(params%pca_mode) .eq. 'kpca' .or. trim(params%pca_mode) .eq. 'ppca' .or. trim(params%pca_mode) .eq. 'mppca' .or. l_hybrid_resid
         ! nice communicator init

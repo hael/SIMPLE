@@ -28,6 +28,11 @@ type, extends(commander_base) :: commander_ppca_denoise_classes
     procedure :: execute      => exec_ppca_denoise_classes
 end type commander_ppca_denoise_classes
 
+type, extends(commander_base) :: commander_ppca_class_splitting
+  contains
+    procedure :: execute      => exec_ppca_class_splitting
+end type commander_ppca_class_splitting
+
 contains
 
     !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.
@@ -113,12 +118,14 @@ contains
     end subroutine exec_cluster2D_distr_worker
 
     subroutine exec_ppca_denoise_classes( self, cline )
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         use simple_imgproc,       only: make_pcavecs
         use simple_pca,           only: pca
         use simple_pca_svd,       only: pca_svd
         use simple_kpca_svd,      only: kpca_svd, suggest_kpca_nystrom_neigs
         use simple_ppca,          only: ppca
         use simple_mppca,         only: mppca
+        use simple_strategy2D_utils, only: prep_cavgs4clust, calc_cluster_cavgs_dmat
         class(commander_ppca_denoise_classes), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         integer,          parameter   :: MAXPCAITS = 15
@@ -132,24 +139,37 @@ contains
         type(parameters)              :: params
         type(builder)                 :: build
         type(ppca)                    :: ppca_rank_selector
+        type(ppca),       allocatable :: ppca_local_models(:)
         type(image),      allocatable :: imgs(:), imgs_ori(:)
+        type(image),      allocatable :: mix_cavg_imgs(:)
         type(image)                   :: cavg, img, timg
         type(oris)                    :: os
         type(sp_project), target      :: spproj
         type(string)                  :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised
         type(string)                  :: fname_oris, fname_denoised_ori, fname_ori, fname_class_ptcls_den
-        integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:)
+        integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:), ori_map(:), cls_inds_mix(:), clspops_mix(:), mix_neigh(:)
+        logical,          allocatable :: mix_mask(:)
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
         integer,          allocatable :: rank_scan_qs(:)
         real(dp),         allocatable :: rank_scan_bics(:), rank_scan_sigma2(:)
+        real,             allocatable :: avg_store(:,:), rawvec(:), selfvec(:), neighvec(:), blendvec(:)
+        real,             allocatable :: mix_dmat(:,:), mm_mix(:,:)
         real    :: shift(2), loc(2), dist(2), e3, kw, mat(2,2), mat_inv(2,2)
         complex :: fcompl, fcompll
         integer :: npix, i, j, ncls, nptcls, cnt1, cnt2, neigs, h, k, win_corner(2),&
                   &l, ll, m, mm, phys(2), logi_lims(3,2), cyc_lims(3,2), cyc_limsR(2,2), errflg
-        logical :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
+        logical :: l_phflip, l_transp_pca, l_pre_norm, l_ppca_local_mix ! pixel-wise learning
+        integer :: ineigh
+        integer :: mix_ldim(3)
+        real    :: oa_min, oa_max, mix_w_neigh, mix_w_self
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',    10)
+        if( cline%get_carg('pca_mode') .eq. 'ppca_local_mix' )then
+            if( .not. cline%defined('objfun') ) call cline%set('objfun', 'cc')
+            if( .not. cline%defined('trs')    ) call cline%set('trs',    10.)
+            if( .not. cline%defined('lp')     ) call cline%set('lp',      6.)
+        endif
         call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
         call spproj%read(params%projfile)
         select case(trim(params%oritype))
@@ -163,6 +183,11 @@ contains
         end select
         l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
         l_pre_norm   = (trim(params%pre_norm)   .eq. 'yes')
+        l_ppca_local_mix = trim(params%pca_mode) .eq. 'ppca_local_mix'
+        if( l_ppca_local_mix )then
+            if( trim(params%pca_img_ori) .eq. 'yes' ) THROW_HARD('ppca_local_mix currently supports pca_img_ori=no only')
+            if( l_transp_pca ) THROW_HARD('ppca_local_mix currently supports transp_pca=no only')
+        endif
         l_phflip     = .false.
         select case( spproj%get_ctfflag_type(params%oritype) )
             case(CTFFLAG_NO)
@@ -210,9 +235,41 @@ contains
         fname_denoised_ori   = 'ptcls_denoised_ori_order.mrcs'
         cnt1 = 0
         cnt2 = 0
+        if( l_ppca_local_mix )then
+            allocate(mix_mask(spproj%os_cls2D%get_noris()), source=.false.)
+            mix_mask(cls_inds) = .true.
+            call prep_cavgs4clust(spproj, mix_cavg_imgs, params%mskdiam, clspops_mix, cls_inds_mix, mix_mask, mm_mix)
+            if( size(cls_inds_mix) /= ncls ) THROW_HARD('ppca_local_mix class subset mismatch after cavg preparation')
+            if( any(cls_inds_mix /= cls_inds) ) THROW_HARD('ppca_local_mix expected class ordering to match current class subset')
+            mix_ldim = mix_cavg_imgs(1)%get_ldim()
+            params%smpd = mix_cavg_imgs(1)%get_smpd()
+            params%box  = mix_ldim(1)
+            params%msk  = min(real(params%box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam / params%smpd)
+            oa_min = minval(mm_mix(:,1))
+            oa_max = maxval(mm_mix(:,2))
+            mix_dmat = calc_cluster_cavgs_dmat(params, mix_cavg_imgs, [oa_min,oa_max], params%clust_crit)
+            allocate(mix_neigh(ncls), source=0)
+            do i = 1, ncls
+                ineigh = 0
+                do j = 1, ncls
+                    if( i == j ) cycle
+                    if( ineigh == 0 )then
+                        ineigh = j
+                    else if( mix_dmat(i,j) < mix_dmat(i,ineigh) )then
+                        ineigh = j
+                    endif
+                enddo
+                mix_neigh(i) = ineigh
+                if( ineigh > 0 )then
+                    write(logfhandle,'(A,I8,A,I8,A,F7.4)') 'PPCA local mix neighborhood: class=', cls_inds(i), ' neigh=', cls_inds(ineigh), ' d=', mix_dmat(i,ineigh)
+                    call flush(logfhandle)
+                endif
+            enddo
+            allocate(ppca_local_models(ncls))
+        endif
         ! pca allocation
         select case(trim(params%pca_mode))
-            case('ppca')
+            case('ppca','ppca_local_mix')
                 allocate(ppca :: pca_ptr)
             case('mppca')
                 allocate(mppca :: pca_ptr)
@@ -273,7 +330,7 @@ contains
             else
                 call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
             endif
-            if( trim(params%pca_mode) .eq. 'ppca' .and. params%neigs <= 0 )then
+            if( (trim(params%pca_mode) .eq. 'ppca' .or. l_ppca_local_mix) .and. params%neigs <= 0 )then
                 if( allocated(rank_scan_qs) )     deallocate(rank_scan_qs)
                 if( allocated(rank_scan_bics) )   deallocate(rank_scan_bics)
                 if( allocated(rank_scan_sigma2) ) deallocate(rank_scan_sigma2)
@@ -294,7 +351,22 @@ contains
                 neigs = min(max(neigs, 1), max(nptcls-1, 1))
             endif
             if( allocated(tmpvec) ) deallocate(tmpvec)
-            if( l_transp_pca )then
+            if( l_ppca_local_mix )then
+                if( allocated(avg_store) )then
+                    if( size(avg_store,1) /= npix )then
+                        deallocate(avg_store)
+                        allocate(avg_store(npix,ncls), source=0.)
+                    endif
+                else
+                    allocate(avg_store(npix,ncls), source=0.)
+                endif
+                avg_store(:,i) = avg
+                call ppca_local_models(i)%new(nptcls, npix, neigs)
+                call ppca_local_models(i)%set_verbose(.false.)
+                call ppca_local_models(i)%master(pcavecs, MAXPCAITS)
+                call ppca_local_models(i)%slim()
+                cycle
+            else if( l_transp_pca )then
                 call pca_ptr%new(npix, nptcls, neigs)
                 call pca_ptr%master(pcavecs, MAXPCAITS)
                 allocate(tmpvec(nptcls))
@@ -347,6 +419,56 @@ contains
             endif
             call cavg%write(fname_cavgs_denoised, i)
         end do
+        if( l_ppca_local_mix )then
+            write(logfhandle,'(A)') 'PPCA local mix reconstruct/write pass'
+            call flush(logfhandle)
+            do i = 1, ncls
+                call progress_gfortran(i,ncls)
+                call transform_ptcls(params, build, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
+                nptcls = size(imgs)
+                if( l_pre_norm )then
+                    do j = 1, nptcls
+                        call imgs(j)%norm
+                    end do
+                endif
+                if( trim(params%projstats).eq.'yes' )then
+                    call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, avg_pix=avg_pix)
+                else
+                    call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
+                endif
+                if( .not. allocated(rawvec) ) then
+                    allocate(rawvec(npix), selfvec(npix), neighvec(npix), blendvec(npix), source=0.)
+                else if( size(rawvec) /= npix ) then
+                    deallocate(rawvec, selfvec, neighvec, blendvec)
+                    allocate(rawvec(npix), selfvec(npix), neighvec(npix), blendvec(npix), source=0.)
+                endif
+                ineigh = mix_neigh(i)
+                call cavg%zero_and_unflag_ft
+                fname_class_ptcls_den = 'class'//int2str_pad(i,4)//'ptcls.mrcs'
+                do j = 1, nptcls
+                    rawvec = avg + pcavecs(:,j)
+                    call ppca_local_models(i)%reconstruct_external(pcavecs(:,j), selfvec)
+                    blendvec = avg + selfvec
+                    if( ineigh > 0 )then
+                        neighvec = rawvec - avg_store(:,ineigh)
+                        call ppca_local_models(ineigh)%reconstruct_external(neighvec, neighvec)
+                        mix_w_neigh = 0.20 * max(0., 1.0 - mix_dmat(i,ineigh))
+                        mix_w_self  = 1.0 - mix_w_neigh
+                        blendvec = mix_w_self * blendvec + mix_w_neigh * (avg_store(:,ineigh) + neighvec)
+                    endif
+                    cnt2 = cnt2 + 1
+                    call imgs(j)%unserialize(blendvec)
+                    call cavg%add(imgs(j))
+                    call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
+                    call imgs(j)%write(fname_class_ptcls_den, j)
+                    call imgs(j)%write(fname_denoised, cnt2)
+                    if( trim(params%pca_ori_stk) .eq. 'yes' ) ori_map(pinds(j)) = cnt2
+                    call imgs(j)%kill
+                enddo
+                call cavg%div(real(nptcls))
+                call cavg%write(fname_cavgs_denoised, i)
+            enddo
+        endif
         if( trim(params%pca_ori_stk) .eq. 'yes' )then
             call  img%new([params%boxpd,params%boxpd,1],params%smpd, wthreads=.false.)
             call timg%new([params%boxpd,params%boxpd,1],params%smpd, wthreads=.false.)
@@ -422,6 +544,13 @@ contains
         call os%write(fname_oris)
         if( trim(params%projstats).eq.'yes' ) call build%spproj_field%write(string('ptcl_field.txt'))
         ! cleanup
+        if( allocated(ppca_local_models) )then
+            do i = 1, size(ppca_local_models)
+                call ppca_local_models(i)%kill()
+            enddo
+            deallocate(ppca_local_models)
+        endif
+        if( allocated(mix_cavg_imgs) ) call dealloc_imgarr(mix_cavg_imgs)
         deallocate(imgs)
         call build%kill_general_tbox
         call os%kill
@@ -482,5 +611,217 @@ contains
         end subroutine log_ppca_rank_scan
 
     end subroutine exec_ppca_denoise_classes
+
+    subroutine exec_ppca_class_splitting( self, cline )
+        use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
+        use simple_imgproc,          only: make_pcavecs
+        use simple_ppca,             only: ppca
+        use simple_clustering_utils, only: cluster_dmat
+        class(commander_ppca_class_splitting), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        integer,          parameter   :: MAXPCAITS = 15
+        integer,          parameter   :: PPCA_AUTO_NCAND = 10
+        integer,          parameter   :: PPCA_AUTO_CAND(PPCA_AUTO_NCAND) = [1,2,3,4,5,6,8,10,12,16]
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(sp_project), target      :: spproj
+        type(ppca)                    :: ppca_obj, ppca_rank_selector
+        type(image),      allocatable :: imgs(:), imgs_ppca(:)
+        type(image)                   :: cavg_raw, cavg_den
+        type(string)                  :: label
+        real,             allocatable :: avg(:), pcavecs(:,:), tmpvec(:), feats(:,:), dmat(:,:), feat(:), feat_mean(:), feat_std(:)
+        integer,          allocatable :: cls_inds(:), pinds(:), labels(:), i_medoids(:), cls_pops(:)
+        integer,          allocatable :: parent_of_subcls(:), pop_of_subcls(:), local_of_subcls(:)
+        integer,          allocatable :: new_class(:), new_parent(:)
+        integer                       :: ncls, nptcls, npix, neigs, i, j, k, nsplit, iglob, nsubcls_max, max_subcls
+        logical                       :: l_phflip, l_pre_norm
+        integer                       :: funit
+        real                          :: dval, sdev_noise
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    0)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
+        call spproj%read(params%projfile)
+        nsubcls_max = max(2, params%nsubcls_max)
+        select case(trim(params%oritype))
+            case('ptcl2D')
+                label = 'class'
+            case('ptcl3D')
+                label = 'proj'
+                call build%spproj_field%proj2class
+            case DEFAULT
+                THROW_HARD('ppca_class_splitting only supports ORITYPE=ptcl2D or ptcl3D')
+        end select
+        l_pre_norm = (trim(params%pre_norm) .eq. 'yes')
+        l_phflip   = .false.
+        select case( spproj%get_ctfflag_type(params%oritype) )
+            case(CTFFLAG_NO)
+                THROW_WARN('No CTF information could be found, phase flipping is deactivated')
+            case(CTFFLAG_FLIP)
+                THROW_WARN('Images have already been phase-flipped, phase flipping is deactivated')
+            case(CTFFLAG_YES)
+                l_phflip = .true.
+            case DEFAULT
+                THROW_HARD('UNSUPPORTED CTF FLAG')
+        end select
+        cls_inds = build%spproj_field%get_label_inds(label%to_char())
+        if( cline%defined('class') ) cls_inds = pack(cls_inds, mask=(cls_inds == params%class))
+        if( size(cls_inds) < 1 ) THROW_HARD('No classes selected for ppca_class_splitting')
+        allocate(cls_pops(size(cls_inds)), source=0)
+        ncls = 0
+        do i = 1, size(cls_inds)
+            call build%spproj_field%get_pinds(cls_inds(i), label%to_char(), pinds)
+            if( allocated(pinds) )then
+                cls_pops(i) = size(pinds)
+                if( cls_pops(i) > 2 ) ncls = ncls + 1
+                deallocate(pinds)
+            endif
+        enddo
+        cls_inds = pack(cls_inds, mask=cls_pops > 2)
+        cls_pops = pack(cls_pops, mask=cls_pops > 2)
+        ncls = size(cls_inds)
+        if( ncls < 1 ) THROW_HARD('No classes with enough particles to split')
+        max_subcls = sum(cls_pops)
+        allocate(parent_of_subcls(max_subcls), pop_of_subcls(max_subcls), local_of_subcls(max_subcls), source=0)
+        select case(trim(params%oritype))
+            case('ptcl2D')
+                allocate(new_class(spproj%os_ptcl2D%get_noris()), new_parent(spproj%os_ptcl2D%get_noris()), source=0)
+            case('ptcl3D')
+                allocate(new_class(spproj%os_ptcl3D%get_noris()), new_parent(spproj%os_ptcl3D%get_noris()), source=0)
+        end select
+        open(newunit=funit, file='split_class_map.txt', status='replace', action='write')
+        write(funit,'(A)') '# global_subclass parent_class local_subclass pop'
+        iglob = 0
+        do i = 1, ncls
+            write(logfhandle,'(A,I8,A,I8,A,A)') 'ppca_class_splitting: splitting parent class ', cls_inds(i), ' pop=', cls_pops(i), ' oritype=', trim(params%oritype)
+            call flush(logfhandle)
+            if( allocated(imgs) ) call dealloc_imgarr(imgs)
+            if( allocated(pinds) ) deallocate(pinds)
+            call transform_ptcls(params, build, spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg_raw)
+            if( .not.allocated(imgs) )then
+                write(logfhandle,'(A,I8)') 'PPCA class splitting warning: no transformed images returned for parent class ', cls_inds(i)
+                call flush(logfhandle)
+                cycle
+            endif
+            nptcls = size(imgs)
+            if( nptcls < 3 ) cycle
+            imgs_ppca = copy_imgarr(imgs)
+            call imgs_ppca(1)%memoize_mask_coords()
+            do j = 1, nptcls
+                call imgs_ppca(j)%norm_noise(build%lmsk, sdev_noise)
+                call imgs_ppca(j)%mask2D_softavg(params%msk)
+            enddo
+            if( l_pre_norm )then
+                do j = 1, nptcls
+                    call imgs_ppca(j)%norm
+                enddo
+            endif
+            call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
+            neigs = params%neigs
+            if( neigs <= 0 )then
+                neigs = ppca_rank_selector%suggest_rank(pcavecs, PPCA_AUTO_CAND, MAXPCAITS)
+                write(logfhandle,'(A,I8,A,I8,A,I8)') 'PPCA split auto-selected neigs: class=', cls_inds(i), ' size=', nptcls, ' neigs=', neigs
+                call flush(logfhandle)
+            endif
+            neigs = min(max(neigs, 1), max(nptcls-1, 1))
+            call ppca_obj%new(nptcls, npix, neigs)
+            call ppca_obj%master(pcavecs, MAXPCAITS)
+            allocate(feats(neigs,nptcls), feat(neigs), feat_mean(neigs), feat_std(neigs), source=0.)
+            do j = 1, nptcls
+                feat = ppca_obj%get_feat(j)
+                feats(:,j) = feat
+                deallocate(feat)
+            enddo
+            feat_mean = sum(feats, dim=2) / real(nptcls)
+            do j = 1, neigs
+                feat_std(j) = sqrt(sum((feats(j,:) - feat_mean(j))**2) / real(max(nptcls-1, 1)))
+                if( feat_std(j) < 1.e-6 ) feat_std(j) = 1.0
+                feats(j,:) = (feats(j,:) - feat_mean(j)) / feat_std(j)
+            enddo
+            allocate(dmat(nptcls,nptcls), source=0.)
+            do j = 1, nptcls - 1
+                do k = j + 1, nptcls
+                    dval = euclid(feats(:,j), feats(:,k))
+                    dmat(j,k) = dval
+                    dmat(k,j) = dval
+                enddo
+            enddo
+            call normalize_minmax(dmat)
+            if( cline%defined('ncls') .and. params%ncls > 1 )then
+                nsplit = params%ncls
+                call cluster_dmat(dmat, 'kmed', nsplit, i_medoids, labels)
+            else
+                call cluster_dmat(dmat, 'aprop', nsplit, i_medoids, labels, nclust_max=nsubcls_max)
+            endif
+            write(logfhandle,'(A,I8,A,I8,A,I8)') 'PPCA split summary: class=', cls_inds(i), ' nptcls=', nptcls, ' nsubcls=', nsplit
+            call flush(logfhandle)
+            allocate(tmpvec(npix))
+            call cavg_den%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
+            do j = 1, nsplit
+                iglob = iglob + 1
+                parent_of_subcls(iglob) = cls_inds(i)
+                local_of_subcls(iglob)  = j
+                pop_of_subcls(iglob)    = count(labels == j)
+                write(funit,'(I8,1X,I8,1X,I8,1X,I8)') iglob, cls_inds(i), j, pop_of_subcls(iglob)
+                call cavg_raw%zero_and_unflag_ft
+                call cavg_den%zero_and_unflag_ft
+                do k = 1, size(labels)
+                    if( labels(k) /= j ) cycle
+                    call cavg_raw%add(imgs(k))
+                    call ppca_obj%generate(k, avg, tmpvec)
+                    call imgs(k)%unserialize(tmpvec)
+                    call cavg_den%add(imgs(k))
+                    new_class(pinds(k))  = iglob
+                    new_parent(pinds(k)) = cls_inds(i)
+                enddo
+                call cavg_raw%div(real(max(pop_of_subcls(iglob), 1)))
+                call cavg_den%div(real(max(pop_of_subcls(iglob), 1)))
+                call cavg_raw%write(string('split_subclass_avgs.mrcs'), iglob)
+                call cavg_den%write(string('split_subclass_avgs_denoised.mrcs'), iglob)
+            enddo
+            deallocate(tmpvec, feats, feat_mean, feat_std, dmat, labels, i_medoids)
+            call ppca_obj%kill()
+            call cavg_raw%kill
+            call cavg_den%kill
+            if( allocated(imgs_ppca) ) call dealloc_imgarr(imgs_ppca)
+            if( allocated(imgs) ) call dealloc_imgarr(imgs)
+            if( allocated(avg) ) deallocate(avg)
+            if( allocated(pcavecs) ) deallocate(pcavecs)
+        enddo
+        close(funit)
+        nsplit = count(pop_of_subcls > 0)
+        select case(trim(params%oritype))
+            case('ptcl2D')
+                call spproj%os_ptcl2D%set_all2single('class',   0)
+                call spproj%os_ptcl2D%set_all2single('cluster', 0)
+                do i = 1, size(new_class)
+                    if( new_class(i) <= 0 ) cycle
+                    call spproj%os_ptcl2D%set(i, 'class',   new_class(i))
+                    call spproj%os_ptcl2D%set(i, 'cluster', new_parent(i))
+                enddo
+            case('ptcl3D')
+                call spproj%os_ptcl3D%set_all2single('class',   0)
+                call spproj%os_ptcl3D%set_all2single('cluster', 0)
+                do i = 1, size(new_class)
+                    if( new_class(i) <= 0 ) cycle
+                    call spproj%os_ptcl3D%set(i, 'class',   new_class(i))
+                    call spproj%os_ptcl3D%set(i, 'cluster', new_parent(i))
+                enddo
+        end select
+        call spproj%os_cls2D%new(nsplit, is_ptcl=.false.)
+        call spproj%os_cls3D%new(nsplit, is_ptcl=.false.)
+        do i = 1, nsplit
+            call spproj%os_cls2D%set(i, 'cluster', parent_of_subcls(i))
+            call spproj%os_cls2D%set(i, 'pop',     pop_of_subcls(i))
+            call spproj%os_cls2D%set(i, 'accept',  1)
+            call spproj%os_cls2D%set(i, 'state',   1)
+            call spproj%os_cls3D%set(i, 'cluster', parent_of_subcls(i))
+            call spproj%os_cls3D%set(i, 'accept',  1)
+            call spproj%os_cls3D%set(i, 'state',   1)
+        enddo
+        call spproj%write(params%projfile)
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_PPCA_CLASS_SPLITTING NORMAL STOP ****')
+    end subroutine exec_ppca_class_splitting
 
 end module simple_commanders_cluster2D
