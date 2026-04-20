@@ -13,7 +13,8 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! need to implement support for adding extra volumes to the filter bank
+! supports optional auxiliary candidate pairs that can compete with the
+! base low-pass bank during voxelwise optimization
 !
 module simple_nu_filter
 use simple_core_module_api
@@ -36,9 +37,11 @@ character(len=*), parameter   :: NU_FILTER_CACHE_ODD  = 'nu_filter_cache_odd'
 real,             allocatable :: dmats(:,:,:,:)
 real,             allocatable :: bwfilters(:,:)
 integer,          allocatable :: filtmap(:,:,:)
+integer,          allocatable :: srcmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
 real,             allocatable :: dmat_finest_cached(:,:,:)
 logical,          allocatable :: nu_lmask(:,:,:)
+type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 real    :: smpd
 
@@ -108,13 +111,58 @@ contains
         if( allocated(dmats) )        deallocate(dmats)
         if( allocated(bwfilters) )    deallocate(bwfilters)
         if( allocated(filtmap) )      deallocate(filtmap)
+        if( allocated(srcmap) )       deallocate(srcmap)
         if( allocated(cutoff_finds) ) deallocate(cutoff_finds)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(nu_lmask) )     deallocate(nu_lmask)
+        call cleanup_aux_bank
         ldim = 0
         box  = 0
         smpd = 0.
     end subroutine cleanup_nu_filter
+
+    subroutine cleanup_aux_bank
+        integer :: i
+        if( allocated(aux_even_bank) ) then
+            do i = 1, size(aux_even_bank)
+                call aux_even_bank(i)%kill
+            end do
+            deallocate(aux_even_bank)
+        end if
+        if( allocated(aux_odd_bank) ) then
+            do i = 1, size(aux_odd_bank)
+                call aux_odd_bank(i)%kill
+            end do
+            deallocate(aux_odd_bank)
+        end if
+    end subroutine cleanup_aux_bank
+
+    subroutine validate_aux_volumes( aux_even, aux_odd )
+        type(image), intent(in) :: aux_even(:), aux_odd(:)
+        integer :: i
+        if( size(aux_even) /= size(aux_odd) ) THROW_HARD('Auxiliary even/odd banks differ in size; validate_aux_volumes')
+        do i = 1, size(aux_even)
+            if( any(aux_even(i)%get_ldim() /= ldim) ) THROW_HARD('Auxiliary even volume dimensions differ; validate_aux_volumes')
+            if( any(aux_odd(i)%get_ldim()  /= ldim) ) THROW_HARD('Auxiliary odd volume dimensions differ; validate_aux_volumes')
+            if( abs(aux_even(i)%get_smpd() - smpd) > TINY ) THROW_HARD('Auxiliary even volume smpd differs; validate_aux_volumes')
+            if( abs(aux_odd(i)%get_smpd()  - smpd) > TINY ) THROW_HARD('Auxiliary odd volume smpd differs; validate_aux_volumes')
+        end do
+    end subroutine validate_aux_volumes
+
+    subroutine stash_aux_volumes( aux_even, aux_odd )
+        type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
+        integer :: i
+        call cleanup_aux_bank
+        if( .not. present(aux_even) ) return
+        if( .not. present(aux_odd)  ) THROW_HARD('Auxiliary odd bank missing; stash_aux_volumes')
+        call validate_aux_volumes(aux_even, aux_odd)
+        allocate(aux_even_bank(size(aux_even)))
+        allocate(aux_odd_bank(size(aux_odd)))
+        do i = 1, size(aux_even)
+            call aux_even_bank(i)%copy(aux_even(i))
+            call aux_odd_bank(i)%copy(aux_odd(i))
+        end do
+    end subroutine stash_aux_volumes
 
     subroutine cache_filtered_vols( vol_even, vol_odd, initialized )
         class(image), intent(in) :: vol_even, vol_odd
@@ -205,25 +253,29 @@ contains
         deallocate(bwfilter)
     end subroutine generate_single_filtered_pair
 
-    subroutine setup_nu_dmats( vol_even, vol_odd, l_mask )
+    subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_even, aux_odd )
         class(image), intent(in) :: vol_even, vol_odd
         logical,      intent(in) :: l_mask(:,:,:)
+        type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         type(image) :: vol_even_filt, vol_odd_filt
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:)
-        integer :: i
+        integer :: i, n_candidates
         real    :: x
         call init_nu_filter(vol_even, vol_odd)
         if( any(shape(l_mask) /= ldim) ) THROW_HARD('l_mask shape mismatch in setup_nu_dmats')
         if( allocated(nu_lmask) ) deallocate(nu_lmask)
         allocate(nu_lmask(ldim(1),ldim(2),ldim(3)), source=l_mask)
         if( .not. any(nu_lmask) ) THROW_HARD('l_mask has no true voxels in setup_nu_dmats')
+        call stash_aux_volumes(aux_even, aux_odd)
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd, initialized=.true.)
         if( allocated(dmats) ) deallocate(dmats)
-        allocate(dmats(ldim(1),ldim(2),ldim(3),size(cutoff_finds)), source=huge(x))
-        allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),                 source=0.)
+        n_candidates = size(cutoff_finds)
+        if( allocated(aux_even_bank) ) n_candidates = n_candidates + size(aux_even_bank)
+        allocate(dmats(ldim(1),ldim(2),ldim(3),n_candidates), source=huge(x))
+        allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),           source=0.)
         do i = 1, size(cutoff_finds)
             even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(i))
             odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(i))
@@ -235,45 +287,71 @@ contains
             call tent_smooth_3d(dmats(:,:,:,i), dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
             ! dmat_tmp is never just a temporary buffer, the result is in dmats(:,:,:,i)
         end do
+        if( allocated(aux_even_bank) ) then
+            do i = 1, size(aux_even_bank)
+                call vol_even%nu_objective(aux_even_bank(i), vol_odd, aux_odd_bank(i), &
+                    &dmats(:,:,:,size(cutoff_finds)+i), nu_lmask)
+                call tent_smooth_3d(dmats(:,:,:,size(cutoff_finds)+i), dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+            end do
+        end if
         call vol_even_filt%kill
         call vol_odd_filt%kill
     end subroutine setup_nu_dmats
 
     ! this is where the mask goes in
     subroutine optimize_nu_cutoff_finds
-        integer :: nx, ny, nz, i, j, k, icut, best_icut, sz
+        integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates
         real    :: best_dmat
         if( .not.allocated(dmats) ) THROW_HARD('dmats not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         nx = ldim(1)
         ny = ldim(2)
         nz = ldim(3)
-        sz  = size(cutoff_finds)
+        n_base       = size(cutoff_finds)
+        ! dmats is laid out as [base low-pass bank | auxiliary pre-filtered pairs].
+        ! The first n_base entries correspond to cutoff_finds(:); any remaining
+        ! entries are caller-supplied auxiliary sources.
+        n_candidates = size(dmats, 4)
         if( allocated(filtmap) ) deallocate(filtmap)
+        if( allocated(srcmap) )  deallocate(srcmap)
         allocate(filtmap(nx,ny,nz), source=1)
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,icut,best_icut,best_dmat) proc_bind(close)
+        allocate(srcmap(nx,ny,nz),  source=1)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,icand,best_icand,best_dmat) proc_bind(close)
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
                     if( .not. nu_lmask(i,j,k) )then
                         filtmap(i,j,k) = 1
+                        srcmap(i,j,k)  = 1
                         cycle
                     endif
-                    best_icut = 1
+                    best_icand = 1
                     best_dmat = dmats(i,j,k,1)
-                    do icut = 2, sz
-                        if( dmats(i,j,k,icut) < best_dmat ) then
-                            best_dmat = dmats(i,j,k,icut)
-                            best_icut = icut
+                    do icand = 2, n_candidates
+                        if( dmats(i,j,k,icand) < best_dmat ) then
+                            best_dmat = dmats(i,j,k,icand)
+                            best_icand = icand
                         end if
                     end do
-                    filtmap(i,j,k) = best_icut
+                    ! Base-bank winners preserve their low-pass index in filtmap.
+                    ! Auxiliary winners are tracked through srcmap only, because
+                    ! they do not correspond to one of cutoff_finds(:).
+                    if( best_icand <= n_base ) then
+                        srcmap(i,j,k)  = 1
+                        filtmap(i,j,k) = best_icand
+                    else
+                        ! srcmap numbering:
+                        !   1   -> base low-pass bank
+                        !   2+  -> auxiliary pair 1, 2, ...
+                        srcmap(i,j,k)  = best_icand - n_base + 1
+                        filtmap(i,j,k) = 1
+                    end if
                 end do
             end do
         end do
         !$omp end parallel do
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        allocate(dmat_finest_cached(nx,ny,nz), source=dmats(:,:,:,sz))
+        allocate(dmat_finest_cached(nx,ny,nz), source=dmats(:,:,:,n_base))
         ! this is the big memory consumer, so deallocate it here
         if( allocated(dmats) ) deallocate(dmats)
     end subroutine optimize_nu_cutoff_finds
@@ -294,7 +372,7 @@ contains
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated')
         sz_old    = size(cutoff_finds)
         n_total   = size(filtmap)
-        n_finest  = count(filtmap == sz_old)
+        n_finest  = count(srcmap == 1 .and. filtmap == sz_old)
         pct_finest = 100. * real(n_finest) / real(n_total)
         if( pct_finest < threshold_pct ) return   ! trigger not met, nothing to do
         new_find = calc_fourier_index(new_limit, box, smpd)
@@ -314,7 +392,7 @@ contains
         do k = 1, ldim(3)
         do j = 1, ldim(2)
             do i = 1, ldim(1)
-                extend_mask(i,j,k) = (filtmap(i,j,k) == sz_old)
+                extend_mask(i,j,k) = (srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == sz_old)
             end do
         end do
         end do
@@ -353,7 +431,8 @@ contains
                 do i = 1, ldim(1)
                     if( .not.extend_mask(i,j,k) ) cycle
                     if( dmat_new(i,j,k) < dmat_finest(i,j,k) ) then
-                        filtmap(i,j,k) = sz_old + 1   ! new extended index
+                        srcmap(i,j,k)  = 1
+                        filtmap(i,j,k) = sz_old + 1
                         n_extended = n_extended + 1
                     end if
                 end do
@@ -393,9 +472,11 @@ contains
         type(string) :: even_cache_fname, odd_cache_fname
         real(kind=c_float), pointer :: rmat_even_filt(:,:,:), rmat_odd_filt(:,:,:)
         real(kind=c_float), pointer :: rmat_even_out(:,:,:),  rmat_odd_out(:,:,:)
-        integer :: i, j, k, icut
+        real(kind=c_float), pointer :: rmat_aux_even(:,:,:), rmat_aux_odd(:,:,:)
+        integer :: i, j, k, icut, iaux
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_filter_vols')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
+        if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
         call vol_even_filt%set_wthreads(.false.)
@@ -419,7 +500,7 @@ contains
             do k = 1, ldim(3)
                 do j = 1, ldim(2)
                     do i = 1, ldim(1)
-                        if( filtmap(i,j,k) == icut ) then
+                        if( srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == icut ) then
                             rmat_even_out(i,j,k) = rmat_even_filt(i,j,k)
                             rmat_odd_out(i,j,k)  = rmat_odd_filt(i,j,k)
                         end if
@@ -428,6 +509,24 @@ contains
             end do
             !$omp end parallel do
         end do
+        if( allocated(aux_even_bank) ) then
+            do iaux = 1, size(aux_even_bank)
+                call aux_even_bank(iaux)%get_rmat_ptr(rmat_aux_even)
+                call aux_odd_bank(iaux)%get_rmat_ptr(rmat_aux_odd)
+                !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+                do k = 1, ldim(3)
+                    do j = 1, ldim(2)
+                        do i = 1, ldim(1)
+                            if( srcmap(i,j,k) == iaux + 1 ) then
+                                rmat_even_out(i,j,k) = rmat_aux_even(i,j,k)
+                                rmat_odd_out(i,j,k)  = rmat_aux_odd(i,j,k)
+                            end if
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
+            end do
+        end if
         call vol_even_filt%kill
         call vol_odd_filt%kill
     end subroutine nu_filter_vols
@@ -442,13 +541,25 @@ contains
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before pack_filtmap_lowpass_limits')
         if( present(mask) ) then
             if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in pack_filtmap_lowpass_limits')
-            nvals = count(mask)
+            if( allocated(srcmap) ) then
+                nvals = count(mask .and. srcmap == 1)
+            else
+                nvals = count(mask)
+            end if
             l_mask_present = .true.
         else if( allocated(nu_lmask) ) then
-            nvals = count(nu_lmask)
+            if( allocated(srcmap) ) then
+                nvals = count(nu_lmask .and. srcmap == 1)
+            else
+                nvals = count(nu_lmask)
+            end if
             l_mask_present = .true.
         else
-            nvals = size(filtmap)
+            if( allocated(srcmap) ) then
+                nvals = count(srcmap == 1)
+            else
+                nvals = size(filtmap)
+            end if
             l_mask_present = .false.
         end if
         if( allocated(lowpass_vals) ) deallocate(lowpass_vals)
@@ -463,6 +574,9 @@ contains
                         else
                             if( .not.nu_lmask(i,j,k) ) cycle
                         end if
+                    end if
+                    if( allocated(srcmap) ) then
+                        if( srcmap(i,j,k) /= 1 ) cycle
                     end if
                     ival = ival + 1
                     lowpass_vals(ival) = cutoff_find_to_lowpass_limit(filtmap(i,j,k))
@@ -493,26 +607,88 @@ contains
         if( size(percentages) /= size(cutoff_finds) ) THROW_HARD('percentages size mismatch in calc_filtmap_lowpass_histogram')
         if( present(mask) ) then
             if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in calc_filtmap_lowpass_histogram')
-            nselected = count(mask)
+            if( allocated(srcmap) ) then
+                nselected = count(mask .and. srcmap == 1)
+            else
+                nselected = count(mask)
+            end if
         else if( allocated(nu_lmask) ) then
-            nselected = count(nu_lmask)
+            if( allocated(srcmap) ) then
+                nselected = count(nu_lmask .and. srcmap == 1)
+            else
+                nselected = count(nu_lmask)
+            end if
         else
-            nselected = size(filtmap)
+            if( allocated(srcmap) ) then
+                nselected = count(srcmap == 1)
+            else
+                nselected = size(filtmap)
+            end if
         end if
         if( nselected == 0 ) THROW_HARD('No local resolution values selected in calc_filtmap_lowpass_histogram')
         counts       = 0
         percentages  = 0.
         do icut = 1, size(cutoff_finds)
             if( present(mask) ) then
-                counts(icut) = count(filtmap == icut .and. mask)
+                if( allocated(srcmap) ) then
+                    counts(icut) = count(filtmap == icut .and. srcmap == 1 .and. mask)
+                else
+                    counts(icut) = count(filtmap == icut .and. mask)
+                end if
             else if( allocated(nu_lmask) ) then
-                counts(icut) = count(filtmap == icut .and. nu_lmask)
+                if( allocated(srcmap) ) then
+                    counts(icut) = count(filtmap == icut .and. srcmap == 1 .and. nu_lmask)
+                else
+                    counts(icut) = count(filtmap == icut .and. nu_lmask)
+                end if
             else
-                counts(icut) = count(filtmap == icut)
+                if( allocated(srcmap) ) then
+                    counts(icut) = count(filtmap == icut .and. srcmap == 1)
+                else
+                    counts(icut) = count(filtmap == icut)
+                end if
             end if
             percentages(icut) = 100. * real(counts(icut)) / real(nselected)
         end do
     end subroutine calc_filtmap_lowpass_histogram
+
+    subroutine print_nu_filter_source_histogram( mask )
+        logical, optional, intent(in) :: mask(:,:,:)
+        integer :: isrc, nselected, nvox
+        real    :: pct
+        if( .not. allocated(srcmap) ) return
+        if( present(mask) ) then
+            nselected = count(mask)
+        else if( allocated(nu_lmask) ) then
+            nselected = count(nu_lmask)
+        else
+            nselected = size(srcmap)
+        end if
+        if( nselected == 0 ) return
+        write(logfhandle,'(A)') '>>> FILTER SOURCE USAGE'
+        if( present(mask) ) then
+            nvox = count(srcmap == 1 .and. mask)
+        else if( allocated(nu_lmask) ) then
+            nvox = count(srcmap == 1 .and. nu_lmask)
+        else
+            nvox = count(srcmap == 1)
+        end if
+        pct = 100. * real(nvox) / real(nselected)
+        write(logfhandle,'(A,I12,A,F8.3,A)') 'Base low-pass bank : ', nvox, ' voxels, ', pct, '%'
+        if( allocated(aux_even_bank) ) then
+            do isrc = 1, size(aux_even_bank)
+                if( present(mask) ) then
+                    nvox = count(srcmap == isrc + 1 .and. mask)
+                else if( allocated(nu_lmask) ) then
+                    nvox = count(srcmap == isrc + 1 .and. nu_lmask)
+                else
+                    nvox = count(srcmap == isrc + 1)
+                end if
+                pct = 100. * real(nvox) / real(nselected)
+                write(logfhandle,'(A,I0,A,I12,A,F8.3,A)') 'Auxiliary pair ', isrc, ' : ', nvox, ' voxels, ', pct, '%'
+            end do
+        end if
+    end subroutine print_nu_filter_source_histogram
 
     subroutine print_filtmap_lowpass_histogram( mask, title )
         logical,          optional, intent(in) :: mask(:,:,:)
@@ -538,6 +714,21 @@ contains
         logical, optional, intent(in) :: mask(:,:,:)
         character(len=*), optional, intent(in) :: title
         type(stats_struct) :: statvars
+        integer :: nbase
+        call print_nu_filter_source_histogram(mask)
+        if( allocated(srcmap) ) then
+            if( present(mask) ) then
+                nbase = count(srcmap == 1 .and. mask)
+            else if( allocated(nu_lmask) ) then
+                nbase = count(srcmap == 1 .and. nu_lmask)
+            else
+                nbase = count(srcmap == 1)
+            end if
+            if( nbase == 0 ) then
+                write(logfhandle,'(A)') '>>> No base low-pass selections remain after auxiliary-source optimization'
+                return
+            end if
+        end if
         call calc_filtmap_lowpass_stats(statvars, mask)
         if( present(title) ) then
             write(logfhandle,'(A)') trim(title)

@@ -31,8 +31,9 @@ This is intentional. The expensive shared-memory volume work now happens in one 
 
 The nonuniform filter consumes:
 
-- the current even volume
-- the current odd volume
+- the current unfiltered even volume
+- the current unfiltered odd volume
+- optionally, auxiliary pre-filtered even/odd candidate pairs supplied by `volassemble`
 - a logical support mask
 
 Mask precedence is:
@@ -54,11 +55,12 @@ These are derived products. The base even/odd and merged volumes remain the prim
 
 The filter currently:
 
-1. builds a bank of low-pass filtered even/odd volumes
-2. caches those filtered volumes on disk
-3. computes voxelwise objective maps across candidate cutoffs
-4. chooses the best cutoff per voxel
-5. synthesizes filtered even/odd outputs from the chosen cutoff map
+1. builds a bank of low-pass filtered even/odd volumes from the unfiltered pair
+2. optionally appends auxiliary pre-filtered even/odd pairs to that candidate bank
+3. caches the low-pass-filtered base bank on disk
+4. computes voxelwise objective maps across all candidates
+5. chooses the best candidate per voxel
+6. synthesizes filtered even/odd outputs from the selected candidate map
 
 This design is scientifically reasonable and easy to debug, but it pays a large I/O and memory-traffic cost.
 
@@ -78,20 +80,13 @@ This design is scientifically reasonable and easy to debug, but it pays a large 
 
 ## Recommended direction
 
-Near-term improvements:
-
-- Replace the disk cache with a caller-owned in-memory cache when sufficient RAM is available.
-- Make mask compatibility checks identical to the automasking compatibility checks.
-- Factor mask selection into a helper so `volassemble` does not duplicate mask-loading policy.
-- Add a regression test that covers `automsk + filt_mode=nonuniform` across at least two states.
-
 Medium-term improvements:
 
-- Wrap the filter-bank state in a derived type instead of module globals.
+- Option to dynamically change the filter bank?
 - Return both the selected cutoff map and summary statistics as explicit outputs.
-- Consider blockwise or tiled synthesis to reduce cache-miss-heavy full-volume rescans.
 
 Architectural target:
 
 - `volassemble` should orchestrate nonuniform filtering.
 - A dedicated volume postprocessing service should own the filter-bank setup, objective evaluation, and output synthesis.
+- When `ml_reg=yes`, `volassemble` should feed the `_unfil` pair as the base nonuniform input and may add the ML-regularized pair as an auxiliary candidate source.

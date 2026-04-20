@@ -23,7 +23,8 @@ contains
         type(reconstructor_eo)        :: eorecvol_read
         type(image)                   :: vol_prev_even, vol_prev_odd, gridcorr_img, vol_merged
         type(image)                   :: vol_even_nu, vol_odd_nu, vol_msk
-        type(image)                   :: vol_e
+        type(image)                   :: vol_e, vol_nu_base_even, vol_nu_base_odd
+        type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
         type(image_msk)               :: mskvol
         type(image_bin)               :: state_mask_bin
         type(string)                  :: recname, volname, volname_prev, fsc_txt_file
@@ -217,8 +218,19 @@ contains
                     mskrad_px = 0.5 * params%mskdiam / params%smpd_crop
                     call vol_msk%disc(ldim, params%smpd_crop, mskrad_px, l_mask)
                 endif
-                ! build%vol/build%vol2 hold the current even/odd pair in memory.
-                call setup_nu_dmats(build%vol, build%vol2, l_mask)
+                if( allocated(nu_aux_even) ) deallocate(nu_aux_even)
+                if( allocated(nu_aux_odd) )  deallocate(nu_aux_odd)
+                if( params%l_ml_reg ) then
+                    call vol_nu_base_even%read(add2fbody(eonames(1), params%ext, '_unfil'))
+                    call vol_nu_base_odd%read( add2fbody(eonames(2), params%ext, '_unfil'))
+                    allocate(nu_aux_even(1), nu_aux_odd(1))
+                    call nu_aux_even(1)%copy(build%vol)
+                    call nu_aux_odd(1)%copy(build%vol2)
+                    call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, nu_aux_even, nu_aux_odd)
+                else
+                    ! build%vol/build%vol2 hold the current even/odd pair in memory.
+                    call setup_nu_dmats(build%vol, build%vol2, l_mask)
+                end if
                 call optimize_nu_cutoff_finds()
                 call nu_filter_vols(vol_even_nu, vol_odd_nu)
                 call print_nu_filtmap_lowpass_stats(l_mask)
@@ -233,6 +245,16 @@ contains
                 call wait_for_closure(volname_nu)
                 call vol_even_nu%kill
                 call vol_odd_nu%kill
+                call vol_nu_base_even%kill
+                call vol_nu_base_odd%kill
+                if( allocated(nu_aux_even) ) then
+                    call nu_aux_even(1)%kill
+                    deallocate(nu_aux_even)
+                end if
+                if( allocated(nu_aux_odd) ) then
+                    call nu_aux_odd(1)%kill
+                    deallocate(nu_aux_odd)
+                end if
                 call vol_msk%kill
                 deallocate(l_mask)
                 call cleanup_nu_filter()
@@ -250,6 +272,16 @@ contains
         call vol_prev_even%kill
         call vol_prev_odd%kill
         call vol_merged%kill
+        call vol_nu_base_even%kill
+        call vol_nu_base_odd%kill
+        if( allocated(nu_aux_even) ) then
+            call nu_aux_even(1)%kill
+            deallocate(nu_aux_even)
+        end if
+        if( allocated(nu_aux_odd) ) then
+            call nu_aux_odd(1)%kill
+            deallocate(nu_aux_odd)
+        end if
         if( allocated(l_mask) ) deallocate(l_mask)
         if( allocated(imat) ) deallocate(imat)
         call cleanup_nu_filter()
