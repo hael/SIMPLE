@@ -90,7 +90,6 @@ contains
                 &self%heap_vars(self%p_ptr%nthr))
         do ithr=1,self%p_ptr%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%argvec(self%pftsz),&
                     &self%heap_vars(ithr)%shvec(self%pftsz),&
                     &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%interpklim),&
@@ -127,8 +126,7 @@ contains
         integer :: ithr
         if( self%existence )then
             do ithr=1,self%p_ptr%nthr
-                deallocate(self%heap_vars(ithr)%pft_ref,self%heap_vars(ithr)%pft_ref_tmp,&
-                    &self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
+                deallocate(self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_ref_tmp2_8,&

@@ -26,7 +26,6 @@ end type fftw_crmat
 
 type heap_vars
     complex(sp), pointer :: pft_ref(:,:)        => null()
-    complex(sp), pointer :: pft_ref_tmp(:,:)    => null()
     real(dp),    pointer :: argvec(:)           => null()
     complex(sp), pointer :: shmat(:,:)          => null()
     real(dp),    pointer :: kcorrs(:)           => null()
@@ -169,6 +168,8 @@ type :: polarft_calc
     procedure, private :: gen_euclid_for_rot_8
     procedure, private :: gen_euclid_grad_for_rot_8
     procedure          :: gen_sigma_contrib
+    procedure          :: gen_objfun_vals_mirr_vals
+    procedure, private :: gen_corrs_mirr_corrs, gen_euclids_mirr_euclids
     ! ===== STATE: simple_polarft_ops_state.f90
     procedure          :: polar_cavger_new
     procedure          :: polar_cavger_zero_pft_refs
@@ -656,6 +657,24 @@ interface
         real(sp),                    intent(in)    :: shvec(2)
         real(sp), optional,          intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
     end subroutine gen_sigma_contrib
+
+    module subroutine gen_objfun_vals_mirr_vals( self, iref, iptcl, vals, mvals )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        real(sp),            intent(out)   :: vals(self%nrots), mvals(self%nrots)
+    end subroutine gen_objfun_vals_mirr_vals
+
+    module subroutine gen_corrs_mirr_corrs( self, iref, iptcl, ccs, mccs )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(out)   :: ccs(self%nrots), mccs(self%nrots)
+    end subroutine gen_corrs_mirr_corrs
+
+    module subroutine gen_euclids_mirr_euclids( self, iref, iptcl, euclids, meuclids )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(out)   :: euclids(self%nrots), meuclids(self%nrots)
+    end subroutine gen_euclids_mirr_euclids
 
     ! The below routines were previoulsy implemented as an independent set of submodules.
     ! This design decision was incorrect and forced the use of pointers to access encapsulated data.
