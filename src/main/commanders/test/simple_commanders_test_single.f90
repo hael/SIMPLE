@@ -76,7 +76,7 @@ subroutine exec_test_detect_atoms( self, cline )
     type(commander_simulate_nanoparticle) :: xsim_nptcl
     type(commander_detect_atoms)          :: xdetat
     write(logfhandle,'(a)') '>>> TEST_DETECT_ATOMS:'
-    call params%new(cline_sim)
+    call params%new(cline)
     call cline_sim%set('prg',      'simulate_nanoparticle')
     call cline_sim%set('box',                          BOX)
     call cline_sim%set('smpd',                 params%smpd)
