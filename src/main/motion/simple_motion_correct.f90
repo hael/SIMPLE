@@ -8,7 +8,7 @@ use simple_opt_image_weights,    only: opt_image_weights
 use simple_image,                only: image
 use simple_eer_factory,          only: eer_decoder
 use simple_parameters,           only: parameters
-use simple_motion_correct_utils, only: correct_gain, apply_dose_weighing, calc_eer_fraction
+use simple_motion_correct_utils, only: correct_gain, calc_eer_fraction
 implicit none
 
 ! Stage drift
@@ -351,9 +351,8 @@ contains
     end subroutine motion_correct_calc_opt_weights
 
     !>  Generates sums, movie_frames_scaled are assumed shifted
-    subroutine motion_correct_iso_calc_sums( movie_sum_corrected, movie_sum_ctf)
+    subroutine motion_correct_iso_calc_sums( movie_sum_corrected, movie_sum_ctf )
         type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
-        complex,           pointer :: pcmat(:,:,:)
         real                       :: scalar_weight
         integer                    :: iframe
         ! for CTF estimation
@@ -377,7 +376,8 @@ contains
         ! dose-weighting
         if( l_BENCH ) t_dose = tic()
         if( p_ptr%l_dose_weight )then
-            call apply_dose_weighing(nframes, movie_frames_scaled(:), [1,nframes], total_dose, kV)
+            call movie_frames_scaled(1)%apply_dose_weighing(nframes,&
+                &movie_frames_scaled(:), [1,nframes], total_dose, kV)
         endif
         if( l_BENCH ) rt_dose = toc(t_dose)
         ! Micrograph
@@ -388,7 +388,6 @@ contains
             call movie_sum_corrected%add_workshare(movie_frames_scaled(iframe))
         end do
         call movie_sum_corrected%ifft
-        nullify(pcmat)
         if( l_BENCH ) rt_mic = toc(t_mic)
         if( L_BENCH )then
             print *,'t_forctf:     ',rt_forctf
@@ -604,7 +603,8 @@ contains
             end do
             !$omp end parallel do
             if( p_ptr%l_dose_weight )then
-                call apply_dose_weighing(nframes, movie_frames_scaled(:), [1,nframes], total_dose, kV)
+                call movie_frames_scaled(1)%apply_dose_weighing(nframes,&
+                    &movie_frames_scaled(:), [1,nframes], total_dose, kV)
             endif
             !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(guided)
             do iframe=1,nframes

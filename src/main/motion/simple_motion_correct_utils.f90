@@ -6,7 +6,7 @@ use simple_image,       only: image
 use simple_eer_factory, only: eer_decoder
 implicit none
 
-public :: correct_gain, flip_gain, apply_dose_weighing, calc_eer_fraction
+public :: correct_gain, flip_gain, calc_eer_fraction
 private
 #include "simple_local_flags.inc"
 
@@ -92,53 +92,6 @@ contains
         call new_fname%kill
         call ext%kill
     end subroutine flip_gain
-
-    ! Following Grant & Grigorieff; eLife 2015;4:e06980
-    ! Frames assumed in fourier space
-    subroutine apply_dose_weighing( nframes, frames, frange, total_dose, voltage )
-        integer,      intent(in)    :: nframes
-        class(image), intent(inout) :: frames(nframes)
-        integer,      intent(in)    :: frange(2)
-        real,         intent(in)    :: total_dose   ! in e-/A2
-        real,         intent(in)    :: voltage      ! in kV
-        real, parameter   :: A=0.245, B=-1.665, C=2.81
-        real    :: qs(frange(1):frange(2)), acc_doses(nframes)
-        real    :: spaFreqk, dose_per_frame, twoNe, smpd, spafreq, limhsq,limksq
-        integer :: nrflims(3,2), ldim(3), hphys,kphys, i, h,k
-        if( .not.frames(1)%is_ft() ) THROW_HARD('Frames should be in in the Fourier domain')
-        nrflims = frames(frange(1))%loop_lims(2)
-        smpd    = frames(frange(1))%get_smpd()
-        qs      = 0.
-        ldim    = frames(frange(1))%get_ldim()
-        limhsq  = (real(ldim(1))*smpd)**2.
-        limksq  = (real(ldim(2))*smpd)**2.
-        ! Accumulated frame dosess
-        dose_per_frame = total_dose / real(nframes)
-        acc_doses      = (/(real(i)*dose_per_frame, i=1,nframes)/)
-        if( is_equal(voltage,200.) )then
-            acc_doses = acc_doses / 0.8
-        else if( is_equal(voltage,100.) )then
-            acc_doses = acc_doses / 0.64
-        endif
-        ! dose normalization
-        !$omp parallel do private(h,k,spafreq,spafreqk,twone,kphys,hphys,i,qs)&
-        !$omp default(shared) schedule(static) proc_bind(close)
-        do k = nrflims(2,1),nrflims(2,2)
-            kphys    = k + 1 + merge(ldim(2),0,k<0)
-            spaFreqk = real(k*k)/limksq
-            do h = nrflims(1,1),nrflims(1,2)
-                hphys   = h + 1
-                spaFreq = sqrt( real(h*h)/limhsq + spaFreqk )
-                twoNe   = 2.*(A*spaFreq**B + C)
-                qs = exp(-acc_doses(frange(1):frange(2))/twoNe)
-                qs = qs / sqrt(sum(qs*qs))
-                do i = frange(1),frange(2)
-                    call frames(i)%mul_cmat_at(hphys, kphys, 1, qs(i))
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine apply_dose_weighing
 
     !>  Utility to calculate the number fractions, # eer frames per fraction and adjusted total_dose
     !   while minimizing the number of leftover frames given total dose, total # of eer frames & a dose target

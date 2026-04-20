@@ -355,6 +355,8 @@ contains
     ! gridding correction
     procedure          :: init_gridcorr_mats
     procedure          :: iter_gridcorr
+    ! dose weighing
+    procedure          :: apply_dose_weighing
     ! POLARIZATION, file: simple_image_polar.f90
     procedure          :: memoize4polarize
     procedure          :: memoize4polarize_oversamp
@@ -2215,6 +2217,17 @@ interface
         real(kind=c_float), intent(in)    :: rho(self_W%array_shape(1),self_W%array_shape(2),self_W%array_shape(3))
         logical,            intent(in)    :: skip_prevW_update
     end subroutine iter_gridcorr
+
+    !--- Dose weighing ---!
+
+    module subroutine apply_dose_weighing( self, nframes, frames, frange, total_dose, voltage )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: nframes
+        class(image), intent(inout) :: frames(nframes)
+        integer,      intent(in)    :: frange(2)
+        real,         intent(in)    :: total_dose
+        real,         intent(in)    :: voltage
+    end subroutine apply_dose_weighing
 
     ! ===== polarization procedure interfaces =====
 

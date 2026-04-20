@@ -3,7 +3,7 @@ module simple_micrograph_generator
 use simple_core_module_api
 use simple_eer_factory,          only: eer_decoder
 use simple_image,                only: image
-use simple_motion_correct_utils, only: correct_gain, apply_dose_weighing
+use simple_motion_correct_utils, only: correct_gain
 use simple_string,               only: string
 use simple_starfile_wrappers
 implicit none
@@ -337,7 +337,8 @@ contains
                     call local_frames(iframe)%fft
                 end do
                 !$omp end parallel do
-                call apply_dose_weighing(self%nframes, local_frames, self%fromtof, self%total_dose, self%kv)
+                call local_frames(self%fromtof(1))%apply_dose_weighing(self%nframes,&
+                    &local_frames(1:self%nframes), self%fromtof, self%total_dose, self%kv)
                 !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
                 do iframe = self%fromtof(1),self%fromtof(2)
                     call local_frames(iframe)%ifft
@@ -375,7 +376,8 @@ contains
                         &self%fromtof, local_frames, self%weights, POLYDIM, polynomial2d)
                 ! dose-weighted
                 if( self%l_doseweighing )then
-                    call apply_dose_weighing(self%nframes, local_frames, self%fromtof, self%total_dose, self%kv)
+                    call local_frames(self%fromtof(1))%apply_dose_weighing(self%nframes,&
+                        &local_frames(1:self%nframes), self%fromtof, self%total_dose, self%kv)
                     !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
                     do iframe = self%fromtof(1),self%fromtof(2)
                         call local_frames(iframe)%copy_fast(self%frames(iframe))
@@ -402,7 +404,8 @@ contains
                 end do
                 call micrograph_nodw%ifft
                 if( self%l_doseweighing )then
-                    call apply_dose_weighing(self%nframes, self%frames, self%fromtof, self%total_dose, self%kv)
+                    call local_frames(self%fromtof(1))%apply_dose_weighing(self%nframes,&
+                        &self%frames(1:self%nframes), self%fromtof, self%total_dose, self%kv)
                     call micrograph_dw%new(ldim, self%smpd_out)
                     call micrograph_dw%zero_and_flag_ft
                     do iframe = self%fromtof(1),self%fromtof(2)
