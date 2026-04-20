@@ -32,7 +32,8 @@ Accordingly, for each component \(u_d(x,y,t)\), with \(d \in \{x,y\}\),
 u_d(x,y,t) = \sum_{k=1}^{18} c_{d,k}\,\phi_k(x,y,t),
 \]
 
-where the coefficients \(c_{d,k}\) come from a least-squares fit to the measured patch trajectories.
+where the coefficients \(c_{d,k}\) come from a least-squares fit to the measured patch trajectories. This is the model first put forward in
+MotionCor2 (Nat Methods 14, 331–332 (2017). https://doi.org/10.1038/nmeth.4193)
 
 ## Patch-Refine Variant
 
@@ -44,7 +45,7 @@ SIMPLE evaluates the adequacy of the fitted deformation model by computing the r
 
 ## Final Frame Integration
 
-When the local model passes the acceptance test, SIMPLE uses the fitted deformation field to warp the full movie frames and generate both an unweighted integrated image for CTF estimation and a frame-weighted corrected micrograph. If dose weighting is enabled, it applies dose weighting before computing the final corrected sum.
+When the local model passes the acceptance test, SIMPLE uses the fitted deformation field to warp the full movie frames and generate both an unweighted integrated image for CTF estimation and a frame-weighted corrected micrograph. If dose weighting is enabled, it applies dose weighting before warping the individual movie frames.
 
 ## Compact Summary
 
