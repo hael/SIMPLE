@@ -281,7 +281,9 @@ contains
         inds_all = (/(i,i=1,icls_max)/)
         allocate(isthere(icls_max), source=.false.)
         do i = 1, self%n
+            if( self%o(i)%isstatezero() ) cycle ! excluded
             icls = self%get_class(i)
+            if( icls < 1 ) cycle                ! has not been classified
             isthere(icls) = .true.
         end do
         inds = pack(inds_all, mask=isthere)
