@@ -156,7 +156,7 @@ contains
         integer,                       allocatable :: i_arr(:)
         type(json_value),              pointer     :: json_child_ptr
         logical                                    :: l_terminate=.false., l_last_loop=.false., l_found, l_test=.false., l_terminate_loop=.false.
-        integer                                    :: stat, i, rc, max_msgsize, i_val, snapshot_id
+        integer                                    :: stat, rc, max_msgsize, i_val, snapshot_id
         real(kind=dp)                              :: r_val
         ! init params
         call params%new(cline)
@@ -392,7 +392,6 @@ contains
     contains
 
         subroutine sigterm_handler()
-            integer :: my_rc
             write(logfhandle, '(A)') 'SIGTERM RECEIVED (MASTER)'
             l_terminate_loop = .true.
         end subroutine sigterm_handler

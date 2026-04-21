@@ -212,7 +212,7 @@ contains
     module subroutine polar_cavger_write_eo_pftcrefs( self, tmpl_fname )
         class(polarft_calc), intent(inout) :: self
         class(string),       intent(in)    :: tmpl_fname
-        integer :: funit_e, funit_o, funit_m, i
+        integer :: funit_e, funit_o, i
         call open_pft_or_ctf2_array_for_write(tmpl_fname//'_even'//BIN_EXT, funit_e)
         call open_pft_or_ctf2_array_for_write(tmpl_fname//'_odd'//BIN_EXT, funit_o)
         !$omp parallel do default(shared) private(i) num_threads(2) schedule(static)

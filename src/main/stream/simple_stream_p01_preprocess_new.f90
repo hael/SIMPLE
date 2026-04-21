@@ -31,7 +31,7 @@ contains
         type(sp_project)               :: spproj_glob    ! global project
         type(starproject_stream)       :: starproj_stream
         type(string), allocatable      :: movies(:), dir_movies(:)
-        type(string)                   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, str_dir, projfile
+        type(string)                   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, projfile
         type(gui_metadata_stream_update)     :: meta_update
         type(gui_metadata_stream_preprocess) :: meta_preprocess
         type(gui_metadata_micrograph)        :: meta_preprocess_micrograph
@@ -47,13 +47,12 @@ contains
         integer                      :: fromto(2)
 
         character(len=STDLEN)          :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
-        real        :: avg_tmp, stat_dfx_threshold, stat_dfy_threshold
+        real        :: stat_dfx_threshold, stat_dfy_threshold
         real        :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
         integer     :: movies_set_counter, import_counter, nwaits, nmovs2importperiter
         integer     :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
         integer     :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
         logical     :: l_movies_left, l_haschanged, l_restart, SJ_directory_structure, l_dir_found, l_terminate=.false.
-        logical(LK) :: found
         call signal(SIGTERM, sigterm_handler)
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')

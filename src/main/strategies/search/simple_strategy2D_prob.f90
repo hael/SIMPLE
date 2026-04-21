@@ -36,7 +36,7 @@ contains
         class(strategy2D_prob), intent(inout) :: self
         class(oris),            intent(inout) :: os
         integer :: iptcl_map, icls, inpl
-        real    :: corr, assigned_shift(2)
+        real    :: corr
         if( os%get_state(self%s%iptcl) > 0 )then
             if( .not. associated(self%spec%eulprob_obj_part2D) ) THROW_HARD('strategy2D_prob requires eulprob_obj_part2D')
             call self%s%prep4srch(os)

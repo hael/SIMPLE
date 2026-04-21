@@ -55,7 +55,7 @@ contains
         type(string)              :: cmd, str, fname, key, val
         type(chash)               :: job_descr
         character(len=LONGSTRLEN) :: line
-        integer  :: nrepeats, i,j, irepeat, nargs, nvals, npairs, njobs, n
+        integer  :: nrepeats, i, j, irepeat, nvals, npairs, njobs, n
         if( .not. cline%defined('projfile') )then
             THROW_HARD('projfile needs to be defined on command line for exec_screens')
         endif

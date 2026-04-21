@@ -1015,7 +1015,7 @@ contains
         type(atoms)         :: molecule
         type(molecule_data) :: mol
         integer             :: i, j, nimgs
-        real                :: hp, lp, cen(3)
+        real                :: cen(3)
         integer, parameter  :: NPROJ = 5
         params%smpd   = 3.
         params%lp     = 6.

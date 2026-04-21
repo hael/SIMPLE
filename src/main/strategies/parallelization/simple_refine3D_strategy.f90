@@ -392,7 +392,6 @@ contains
         type(cmdline) :: cline_tmp
         type(string)  :: prev_refine_path, target_name, fname_vol, vol, str_state, fsc_file
         type(string), allocatable :: list(:)
-        integer, allocatable :: state_pops(:)
         real    :: smpd
         integer :: state, box, nfiles, i
         logical :: err, fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
@@ -616,8 +615,7 @@ contains
         type(string)  :: fname_vol, volpproc, vollp, volname, vol_in
         real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:)
-        real    :: smpd
-        integer :: state, iter, box
+        integer :: state, iter
         logical :: l_prob_state_mode, l_prob_neigh_mode
         if( L_BENCH_GLOB )then
             t_init = tic()

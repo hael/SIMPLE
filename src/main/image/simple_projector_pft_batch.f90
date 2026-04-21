@@ -68,7 +68,7 @@ contains
         real(sp),         intent(in)    :: polar_x(:,:), polar_y(:,:)
         complex(sp),      intent(inout) :: refs_state(:,:,:)
         complex(sp) :: pftm(size(polar_x,1), kfromto(1):kfromto(2))
-        integer     :: iproj, irot, k, kloc, kfrom, kto, m, nm, l, pftsz
+        integer     :: iproj, irot, k, kloc, kfrom, kto, m, l, pftsz
         real        :: e_rotmat(3,3), loc(3), px, py, psi
         kfrom = kfromto(1)
         kto   = kfromto(2)

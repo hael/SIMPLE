@@ -549,7 +549,7 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(ori)      :: o_mic
         type(string)   :: mic_name, imgkind, boxfile_name
-        integer        :: boxcoords(2), lfoo(3)
+        integer        :: lfoo(3)
         integer        :: nframes, imic, nmics_tot, nmics, state
         type(string)   :: boxfile_from_dir
         call params%new(cline)
@@ -630,10 +630,10 @@ contains
         type(ori)                  :: o_mic, o_tmp
         type(oris)                 :: os_stk
         type(string), allocatable  :: stktab(:), parts_fname(:)
-        integer                    :: boxcoords(2), lfoo(3)
+        integer                    :: boxcoords(2)
         type(string)               :: partsfile
         real                       :: dfx, dfy, ogid, gid
-        integer                    :: imic, i, nmics_tot, cnt, state, istk, nstks, ipart, numlen
+        integer                    :: imic, i, nmics_tot, cnt, istk, nstks, ipart, numlen
         ! schedule jobs
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), &
             &array=L_USE_SLURM_ARR, extra_params=params)

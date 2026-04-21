@@ -384,7 +384,6 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(builder) :: build_tmp
         integer       :: ncls_here
-        logical       :: l_shmem
         ! Master threads (original intent)
         call set_master_num_threads(self%nthr_master, string('CLUSTER2D'))
         ! Parse parameters & project-field to set ncls default for ptcl2D

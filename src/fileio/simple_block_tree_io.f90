@@ -19,7 +19,7 @@ contains
         integer, allocatable :: bigmat(:,:), trees_meta(:,:), offsets(:), lengths(:), map_int(:,:), tree_pops(:)
         integer, allocatable :: outmat(:,:)
         integer :: n_trees, n_refs, total_nodes, mat_cols, meta_cols, map_cols
-        integer :: ncols, nrows, row, pos, i, r, c
+        integer :: ncols, nrows, pos, r
         ! Serialize the object into component integer matrices
         call serialize_multi_dendro(block_tree, bigmat, trees_meta, offsets, lengths, map_int, tree_pops)
         ! Gather sizes (handle empty)
@@ -129,7 +129,7 @@ contains
         integer, allocatable :: bigmat(:,:), trees_meta(:,:), offsets(:), lengths(:), map_int(:,:), tree_pops(:)
         integer :: nrows, ncols
         integer :: n_trees, n_refs, total_nodes, mat_cols, meta_cols, map_cols
-        integer :: pos, r, c, required_rows
+        integer :: pos, r, required_rows
         ! Read full integer matrix from file
         call file2imat(fname, inmat)
         nrows = size(inmat,1)

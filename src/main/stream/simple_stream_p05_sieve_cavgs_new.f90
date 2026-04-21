@@ -76,7 +76,6 @@ contains
         character(len=:), allocatable :: meta_buffer
         integer,          allocatable :: jpeg_inds(:), jpeg_pops(:), ref_selection(:)
         real,             allocatable :: jpeg_res(:)
-        type(oris)                    :: moldiamori
         type(string)                  :: refs_jpeg, refs_stk 
         type(string)                  :: match_jpeg, match_stk 
         type(rec_list)                :: project_list

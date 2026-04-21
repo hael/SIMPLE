@@ -636,7 +636,7 @@ contains
         logical, parameter   :: L_BENCH = .false.
         logical :: ll_print
         real    :: ts(NBIN_THRESH)
-        integer :: fnr, low, high, mid, ithres
+        integer :: fnr, low, high, mid
         real    :: corr, max_corr, thresh_opt
         real(timer_int_kind)    :: rt_find_ccs, rt_find_centers, rt_gen_sim, rt_real_corr, rt_tot
         integer(timer_int_kind) ::  t_find_ccs,  t_find_centers,  t_gen_sim,  t_real_corr,  t_tot

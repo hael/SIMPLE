@@ -114,7 +114,7 @@ contains
         type(string)              :: frames2align
         type(image)               :: img
         type(sp_project)          :: spproj
-        type(parameters)          :: params, params_mc
+        type(parameters)          :: params
         type(cmdline)             :: cline_mcorr
         type(motion_correct_iter) :: mciter
         type(ctfparams)           :: ctfvars
@@ -211,7 +211,7 @@ contains
         type(tvfilter)            :: tvfilt
         type(image)               :: img_intg, img_frame
         integer                   :: istart, istop, period, win_start, win_stop, nwin, win_nframes
-        integer                   :: i, nframes, frame_counter, ldim(3), ifoo, cnt, numlen_nframes, iwin
+        integer                   :: i, nframes, frame_counter, ldim(3), ifoo, numlen_nframes, iwin
         real                      :: smpd_win
         logical                   :: l_periodic
         type(string)              :: stkname, fname_intg, fname_denoised, fbody_mc

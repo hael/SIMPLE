@@ -873,8 +873,6 @@ contains
     subroutine writepdb( self, fname )
         class(atoms),  intent(in) :: self
         class(string), intent(in) :: fname
-        character(len=4) :: n
-        character(len=2) :: e
         integer      :: i, funit, io_stat
         logical      :: long
         long  = self%n >= 99999

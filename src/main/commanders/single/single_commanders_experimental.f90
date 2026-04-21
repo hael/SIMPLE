@@ -517,7 +517,7 @@ contains
         type(string)                  :: cavgs_stk, fname_cvags_vs_reprojs
         real,             allocatable :: rstates(:)
         logical,          allocatable :: state_mask(:)
-        integer :: ncavgs, i, j, cnt, cnt2, tmax, tmin, tstamp
+        integer :: ncavgs, i, cnt
         real    :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes

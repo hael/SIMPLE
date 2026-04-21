@@ -506,7 +506,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(ori)      :: o_mic
         type(string)   :: mic_name, imgkind
-        integer        :: imic, nmics_tot, nmics, state, ipart
+        integer        :: imic, nmics_tot, state, ipart
         integer        :: nmics_valid
         call validate_reextract_cline(cline)
         call set_reextract_defaults(cline)
@@ -570,7 +570,6 @@ contains
         type(string), allocatable     :: stktab(:), parts_fname(:)
         integer                       :: numlen, ipart, imic, istk
         integer                       :: nmics, cnt, nstks, nptcls, i, stkind
-        type(string)                  :: partsfile
         if( self%skip_run ) return
         ! schedule & run
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), &

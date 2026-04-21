@@ -28,11 +28,11 @@ contains
         type(gui_metadata_optics_group)             :: meta_optics_group
         type(starproject_stream)       :: starproj_stream 
         type(string),      allocatable :: projects(:)
-        type(string)                   :: str_dir, projfile
+        type(string)                   :: projfile
         character(len=:),        allocatable :: meta_buffer
         real,                    allocatable :: xshifts(:), yshifts(:)
         integer                        :: nprojects, iproj, iori, new_oris, nimported, i, j, map_count, imap, last_micrograph_imported, i_point
-        logical                        :: found, l_terminate=.false.
+        logical                        :: l_terminate=.false.
         call signal(SIGTERM, sigterm_handler)
         call cline%printline()
         call flush(logfhandle)

@@ -299,7 +299,7 @@ contains
         real, optional,   intent(in)    :: backgr
         real(dp) :: sumv, sv
         real     :: rad_sq, ave, r2, e, cjs2
-        integer  :: minlen, npix, i, j, np, n1l, n2l
+        integer  :: minlen, npix, i, j, np
         integer  :: n1, n2
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
         if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')

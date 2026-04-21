@@ -95,7 +95,7 @@ contains
         type(polarft_calc) :: pftc
         type(string)       :: fname
         real, allocatable  :: states(:)
-        integer            :: iterstr_start, iterstr_end, iter, io_stat, icls
+        integer            :: iterstr_start, iterstr_end, iter, io_stat
         integer            :: pftsz, kfromto(2), ncls
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)

@@ -209,8 +209,6 @@ contains
         subroutine set_lplims( local_nstages )
             use simple_class_frcs, only: class_frcs
             integer, intent(in) :: local_nstages
-            type(class_frcs) :: clsfrcs
-            type(string)     :: frcs
             real    :: lpstart, lpstop, cenlp
             integer :: istage
             ! Resolution limits
@@ -255,7 +253,6 @@ contains
         end subroutine set_lplims
 
         subroutine set_sampling
-            integer :: i
             nptcls_eff = spproj%count_state_gt_zero()
             stage_parms(:)%max_cls_pop = 0
             stage_parms(:)%nptcls      = nptcls_eff

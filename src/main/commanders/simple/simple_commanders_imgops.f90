@@ -367,7 +367,7 @@ contains
         type(ppca),        pointer     :: ppca_ptr_typed  => null()
         type(kpca_svd),    pointer     :: kpca_ptr        => null()
         type(image),       allocatable :: imgs(:)
-        real,              allocatable :: avg(:), gen(:), pcavecs(:,:), tmpvec(:), zavg(:), corrvec(:)
+        real,              allocatable :: avg(:), pcavecs(:, :), tmpvec(:), zavg(:), corrvec(:)
         type(simple_nice_comm)         :: nice_comm
         type(parameters)               :: params
         type(builder)                  :: build

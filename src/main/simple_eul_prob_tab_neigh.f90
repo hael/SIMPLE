@@ -74,7 +74,6 @@ contains
 
         type(eulspace_neigh_map) :: neigh_map
         type(pftc_shsrch_grad)   :: grad_shsrch_obj(nthr_glob)
-        type(ori)                :: o_prev
         type(coarse_search_ws)   :: coarse_ws
         type(eval_ws)            :: eval_work
         integer, allocatable     :: inds_sorted(:,:)
@@ -516,7 +515,7 @@ contains
         type(assign_frontier_ws) :: frontier
         real,    allocatable :: dists_inpl(:), dists_inpl_sorted(:)
         integer, allocatable :: inds_sorted(:)
-        integer   :: i, iref, ri, assigned_iref, assigned_ptcl, istate, fallback_ref
+        integer   :: i, iref, assigned_iref, assigned_ptcl, istate, fallback_ref
         integer   :: k, idx, nactive, total, m, start, maxref, nleft, assigned_idx, nsel, pos, last_ref
         real      :: projs_athres
         real      :: huge_val

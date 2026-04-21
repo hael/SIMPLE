@@ -120,7 +120,7 @@ subroutine exec_test_single_workflow( self, cline )
     use single_commanders_nano3D,       only: commander_autorefine3D_nano
     class(commander_test_single_workflow), intent(inout) :: self
     class(cmdline),                        intent(inout) :: cline
-    type(cmdline)                         :: cline_sim, cline_simptcls, cline_nproj, cline_imptrj, cline_imptcls, cline_an2Dnano, cline_aref3Dnano
+    type(cmdline)                         :: cline_sim, cline_simptcls, cline_nproj, cline_imptrj, cline_aref3Dnano
     type(parameters)                      :: params
     type(commander_simulate_nanoparticle) :: xsim_nptcl
     type(commander_reproject)             :: xsim_ptcls

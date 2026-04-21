@@ -60,7 +60,6 @@ contains
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: s
         type(string)         :: vol_even, vol_odd, vol_avg
-        logical, allocatable :: l_msk(:,:,:)
         real    :: cur_fil(params%box_crop)
         integer :: filtsz
         logical :: have_even, have_odd, l_nonuniform_mode
