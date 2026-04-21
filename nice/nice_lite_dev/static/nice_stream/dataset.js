@@ -1,144 +1,109 @@
 let lastinteraction = Date.now();
 
-submitUpdate = (element, event) => {
-  if(event.key === 'Enter') {
-    element.form.submit()       
-  }
-}
+const submitUpdate = (element, event) => {
+    if (event.key === 'Enter') element.form.submit();
+};
 
-enableDatasetRename = () => {
-    const datasetrename = document.querySelector("#datasetrename")
-    datasetrename.disabled = false
-    datasetrename.focus()
-    lastinteraction = Date.now()
-}
-
-enableDatasetDescription = () => {
-    const datasetdescription = document.querySelector("#datasetdescription")
-    datasetdescription.disabled = false
-    datasetdescription.focus()
-    lastinteraction = Date.now()
-}
-
-enableStreamDescription = (element) => {
-    const new_stream_description = element.parentElement.querySelector('input[name="new_stream_description"]')
-    new_stream_description.disabled = false
-    new_stream_description.focus()
-    lastinteraction = Date.now()
-}
-
-deleteStream = (element, jobid) => {
-  const confirmed = confirm("Please confirm that you wish to delete stream " + jobid);
-  if(confirmed){
-    element.form.submit()
-  }
-}
-
-// deleteDataset = (element, datasetid) => {
-//   const confirmed = confirm("Please confirm that you wish to delete dataset " + datasetid + " and all jobs within. If this is the last workspace or dataset in a project, the project will also be deleted");
-//   if(confirmed){
-//     element.form.submit()
-//   }
-// }
-
-terminateStream = (element, jobid) => {
-  const confirmed = confirm("Please confirm that you wish to terminate all processes in stream " + jobid);
-  if(confirmed){
-    element.form.submit()
-  }
-}
-
-window.addEventListener("load", () =>{
-    /* loads the current dataset on page load */
-    for(const movies_pie_chart of document.getElementsByClassName("movies_pie_chart")){
-        const ctx = movies_pie_chart.getContext("2d");
-        new Chart(ctx, {
-            type: 'doughnut',
-            options:{
-              maintainAspectRatio : false,
-              plugins:{
-                legend:{
-                    position : "right",
-                    labels:{
-                      boxWidth: 10,
-                      padding:  2,
-                      font :{
-                        size: 9
-                      }
-                    }
-                }
-              }
-            },
-            data: {
-              labels: [
-                  'imported',
-                  'processed',
-                  'rejected'
-              ],
-              datasets: [{
-                  data: [Number(movies_pie_chart.dataset.imported), Number(movies_pie_chart.dataset.processed), Number(movies_pie_chart.dataset.rejected)],
-                  backgroundColor: [
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
-                  ],
-                  hoverOffset: 4
-              }]
-            }
-        })
-    }
-},false);
-
-window.addEventListener("load", () =>{
-    /* loads the current dataset on page load */
-    for(const particles_pie_chart of document.getElementsByClassName("particles_pie_chart")){
-        const ctx = particles_pie_chart.getContext("2d");
-        new Chart(ctx, {
-            type: 'doughnut',
-            options:{
-              maintainAspectRatio : false,
-              plugins:{
-                legend:{
-                    position : "right",
-                    labels:{
-                      boxWidth: 10,
-                      padding:  2,
-                      font :{
-                        size: 9
-                      }
-                    }
-                }
-              }
-            },
-            data: {
-              labels: [
-                  'imported',
-                  'accepted',
-                  'rejected'
-              ],
-              datasets: [{
-                  data: [Number(particles_pie_chart.dataset.imported) - Number(particles_pie_chart.dataset.accepted) - Number(particles_pie_chart.dataset.rejected), Number(particles_pie_chart.dataset.accepted), Number(particles_pie_chart.dataset.rejected)],
-                  backgroundColor: [
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
-                  ],
-                  hoverOffset: 4
-              }]
-            }
-        })
-    }
-},false);
-
-window.addEventListener("visibilitychange", (event) => {
-  if(document.visibilityState !== "hidden"){
-    location.reload();
-  }
-})
-
-setInterval(function () {
-  if((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden"){
+const enableDatasetRename = () => {
+    const el = document.querySelector('#datasetrename');
+    el.disabled = false;
+    el.focus();
     lastinteraction = Date.now();
-    location.reload();
-  }
+};
+
+const enableDatasetDescription = () => {
+    const el = document.querySelector('#datasetdescription');
+    el.disabled = false;
+    el.focus();
+    lastinteraction = Date.now();
+};
+
+const enableStreamDescription = (button) => {
+    const input = button.parentElement.querySelector('input[name="new_stream_description"]');
+    input.disabled = false;
+    input.focus();
+    lastinteraction = Date.now();
+};
+
+// Read job id from data-job-id attribute; submit the enclosing form on confirm.
+const deleteStream = (button) => {
+    const jobid = button.dataset.jobId;
+    if (confirm('Please confirm that you wish to delete stream ' + jobid)) {
+        button.closest('form').submit();
+    }
+};
+
+const terminateStream = (button) => {
+    const jobid = button.dataset.jobId;
+    if (confirm('Please confirm that you wish to terminate all processes in stream ' + jobid)) {
+        button.closest('form').submit();
+    }
+};
+
+// Build a doughnut chart.  Chart.js legend is suppressed — the HTML card
+// legend (imported/processed/rejected swatches) serves that purpose instead.
+const buildDonut = (canvas, dataValues, labels) => {
+    const style = getComputedStyle(document.body);
+    new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        options: {
+            responsive: false,
+            plugins: { legend: { display: false } }
+        },
+        data: {
+            labels,
+            datasets: [{
+                data: dataValues,
+                backgroundColor: [
+                    style.getPropertyValue('--color-streamring').trim(),     // imported / accepted
+                    style.getPropertyValue('--color-streamicon').trim(),     // processed
+                    style.getPropertyValue('--color-streamrejected').trim()  // rejected
+                ],
+                hoverOffset: 4
+            }]
+        }
+    });
+};
+
+window.addEventListener('load', () => {
+
+    for (const canvas of document.getElementsByClassName('movies_pie_chart')) {
+        // Skip when preprocessing stats are not yet populated (empty string = no data).
+        if (!canvas.dataset.imported) continue;
+        buildDonut(
+            canvas,
+            [
+                Number(canvas.dataset.imported),
+                Number(canvas.dataset.processed || 0),
+                Number(canvas.dataset.rejected  || 0)
+            ],
+            ['imported', 'processed', 'rejected']
+        );
+    }
+
+    for (const canvas of document.getElementsByClassName('particles_pie_chart')) {
+        if (!canvas.dataset.imported) continue;
+        const imported = Number(canvas.dataset.imported);
+        const accepted = Number(canvas.dataset.accepted || 0);
+        const rejected = Number(canvas.dataset.rejected || 0);
+        buildDonut(
+            canvas,
+            [imported - accepted - rejected, accepted, rejected],
+            ['unclassified', 'accepted', 'rejected']
+        );
+    }
+
+}, false);
+
+// Reload when the tab becomes visible again (data may have changed while hidden).
+window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') location.reload();
+});
+
+// Also poll every 10 s while the user is idle.
+setInterval(() => {
+    if ((Date.now() - lastinteraction) > 10_000 && document.visibilityState !== 'hidden') {
+        lastinteraction = Date.now();
+        location.reload();
+    }
 }, 1000);

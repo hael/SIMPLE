@@ -1,64 +1,102 @@
+{% comment %}
+  stream.html — outer shell for the SIMPLE Stream interface.
+
+  Structure:
+    - Fixed header bar: logo, project/dataset selectors, classic/logout actions.
+    - Full-height iframe: loads the dataset view (stream list and details) at
+      iframeurl, or remains blank until a project and dataset are selected.
+    - messages.html: renders any Django flash messages.
+
+  Context variables:
+    projects           — queryset of all projects available to this user
+    datasets           — queryset of datasets for the selected project
+    current_project_id — id of the currently selected project (0 = none)
+    current_dataset_id — id of the currently selected dataset (0 = none)
+    iframeurl          — URL to load inside the content iframe, or None
+
+  Selecting a project or dataset submits a GET form, reloading the page with
+  the new selection reflected in the URL query string.
+{% endcomment %}
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="shortcut icon" type="image/png" href="{% static 'nice_lite/simple_stream_min.png' %}">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src={% static 'nice_stream/stream.js' %}></script>
+    <script src="{% static 'nice_stream/stream.js' %}"></script>
     <title>SIMPLE Stream</title>
 </head>
-<body class="w-full h-screen bg-white flex flex-col">
-    <div class="bg-nice4header w-full flex flex-row items-center">
-        <img src={% static 'images/simple_stream.png' %} class="h-[40px] mr-[20px]"/>
-        <div class="flex flex-row">
-            <div class="font-bold text-white">project</div>
-            <form method="GET">
-                {% csrf_token %}
-                <select name="selected_project_id" onchange="this.form.submit()" class="bg-white rounded ml-[5px] pl-[5px]">
-                    {% if current_project_id == 0 %}
-                        <option disabled selected value="">select</option>
-                    {% endif %}
-                    <option value="-1">✚ create new</option>
-                    {% for project in projects %}
-                        {% if project.id == current_project_id %}
-                            <option selected value={{ project.id }}>{{ project.name }}</option>
-                        {% else %}
-                            <option value={{ project.id }}>{{ project.name }}</option>
+<body class="bg-streambg h-screen flex flex-col font-sans">
+
+    <!-- Header -->
+    <header class="bg-streambar border-b border-streamline h-13 flex items-center px-5 gap-5 flex-shrink-0">
+
+        <!-- Logo -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+            <div class="w-6 h-6 rounded-md bg-streamaccent flex items-center justify-center flex-shrink-0">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1,8 3,4 5,11 7,6 9,10 11,3 13,8 15,8"/>
+                </svg>
+            </div>
+            <span class="text-xs font-medium tracking-widest text-streamtext uppercase">Simple Stream</span>
+        </div>
+
+        <!-- Selectors -->
+        <div class="flex items-center gap-4">
+
+            <!-- Project -->
+            <div class="flex items-center gap-1.5">
+                <span class="text-xs text-streamlabel">project</span>
+                <form method="GET">
+                    <select name="selected_project_id" onchange="this.form.submit()"
+                            class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                        {% if current_project_id == 0 %}
+                            <option disabled selected value="">select</option>
                         {% endif %}
-                    {% endfor %}
-                </select>
-            </form>
-        </div>
-         <div class="flex flex-row mx-[20px]">
-            <div class="font-bold text-white">dataset</div>
-            <form method="GET">
-                {% csrf_token %}
-                <select name="selected_dataset_id" onchange="this.form.submit()" class="bg-white rounded ml-[5px] pl-[5px]">
-                    {% if current_dataset_id == 0 %}
-                        <option disabled selected value="">select</option>
-                    {% endif %}
-                    <option value="-1">✚ create new</option>
-                    {% for dataset in datasets %}
-                        {% if dataset.id == current_dataset_id %}
-                            <option selected value={{ dataset.id }}>{{ dataset.name }}</option>
-                        {% else %}
-                            <option value={{ dataset.id }}>{{ dataset.name }}</option>
+                        <option value="-1">✚ create new</option>
+                        {% for project in projects %}
+                            <option value="{{ project.id }}" {% if project.id == current_project_id %}selected{% endif %}>{{ project.name }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+
+            <!-- Dataset -->
+            <div class="flex items-center gap-1.5">
+                <span class="text-xs text-streamlabel">dataset</span>
+                <form method="GET">
+                    <select name="selected_dataset_id" onchange="this.form.submit()"
+                            class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                        {% if current_dataset_id == 0 %}
+                            <option disabled selected value="">select</option>
                         {% endif %}
-                    {% endfor %}
-                </select>
-            </form>
+                        <option value="-1">✚ create new</option>
+                        {% for dataset in datasets %}
+                            <option value="{{ dataset.id }}" {% if dataset.id == current_dataset_id %}selected{% endif %}>{{ dataset.name }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+
         </div>
-        <div class="flex flex-1 justify-end">
-            <a href={% url 'nice_lite:classic'%} class="mx-[10px] text-white" title="switch to classic">classic</a>
-            <a href={% url 'nice_lite:logout'%} class="mx-[10px] text-white" title="logout">logout</a>
+
+        <!-- Right actions -->
+        <div class="flex items-center gap-2 ml-auto">
+            <a href="{% url 'nice_lite:classic' %}"
+               class="text-xs px-3 py-1 border border-streamline rounded-lg text-streamsubtle hover:bg-streamsurface transition-colors">classic</a>
+            <a href="{% url 'nice_lite:logout' %}"
+               class="text-xs px-3 py-1 border border-streamline rounded-lg text-streamsubtle hover:bg-streamsurface transition-colors">logout</a>
         </div>
+
+    </header>
+
+    <!-- Content -->
+    <div class="flex-1 min-h-0">
+        <iframe id="workspace_iframe" {% if iframeurl is not None %}src="{{ iframeurl }}"{% endif %} height="100%" width="100%"></iframe>
     </div>
-    <div class="h-full w-full flex-1">
-        <iframe id="workspace_iframe" {% if iframeurl is not None %}src={{ iframeurl }}{% endif %} height="100%" width="100%"></iframe>
-    </div>
+
     {% include 'messages.html' %}
 </body>
 </html>
-

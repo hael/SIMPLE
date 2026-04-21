@@ -1,30 +1,56 @@
 let lastinteraction = Date.now();
 
-restartProcess = (element) => {
+// Build a doughnut chart with stream* CSS colour variables.
+const buildDonut = (canvas, dataValues, labels) => {
+    const style = getComputedStyle(document.body);
+    new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        options: {
+            responsive: false,
+            plugins: { legend: { display: false } }
+        },
+        data: {
+            labels,
+            datasets: [{
+                data: dataValues,
+                backgroundColor: [
+                    style.getPropertyValue('--color-streamring').trim(),
+                    style.getPropertyValue('--color-streamicon').trim(),
+                    style.getPropertyValue('--color-streamrejected').trim()
+                ],
+                hoverOffset: 4
+            }]
+        }
+    });
+};
+
+const restartProcess = (element)  => {
   const confirmed = confirm("Please confirm that you wish to restart this process");
   if(confirmed){
     element.form.submit()
   }
 }
 
-stopProcess = (element) => {
+const stopProcess = (element)  => {
   const confirmed = confirm("Please confirm that you wish to stop this process");
   if(confirmed){
     element.form.submit()
   }
 }
 
-scrlMicRight = () => {
-  const micrograph_slider = document.getElementById("micrographs_slider")
-  const rect = micrograph_slider.getBoundingClientRect();
-  micrograph_slider.scrollLeft += rect.width;
+const scrlMicRight = (element, event) => {
+  event.preventDefault();
+  const slider = element.previousElementSibling;
+  const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
+  slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + 235;
   lastinteraction = Date.now();
 }
 
-scrlMicLeft = () => {
-  const micrograph_slider = document.getElementById("micrographs_slider")
-  const rect = micrograph_slider.getBoundingClientRect();
-  micrograph_slider.scrollLeft -= rect.width;
+const scrlMicLeft = (element, event) => {
+  event.preventDefault();
+  const slider = element.nextElementSibling;
+  const atStart = slider.scrollLeft <= 0;
+  slider.scrollLeft = atStart ? slider.scrollWidth - slider.clientWidth : slider.scrollLeft - 235;
   lastinteraction = Date.now();
 }
 
@@ -47,24 +73,29 @@ var pick_observer = new IntersectionObserver(
   }
 )
 
-draw_overlay_coordinates = () => {
+const draw_overlay_coordinates = ()  => {
     const boxes_overlay = document.getElementById("boxes_overlay")
     if(boxes_overlay ==  null) return
-    const scale = boxes_overlay.width  / Number(boxes_overlay.dataset.xdim)
+    const xdim = Number(boxes_overlay.dataset.xdim)
+    const ydim = Number(boxes_overlay.dataset.ydim)
+    const scale = xdim > ydim
+        ? boxes_overlay.width  / xdim
+        : boxes_overlay.height / ydim
     // account for rectangular images
-    var yoffset = (boxes_overlay.height - (scale * Number(boxes_overlay.dataset.ydim))) / 2
+    const xoffset = (boxes_overlay.width  - (scale * xdim)) / 2
+    const yoffset = (boxes_overlay.height - (scale * ydim)) / 2
     const boxes = JSON.parse(boxes_overlay.dataset.boxes.replaceAll("'", '"'))
     const ctx = boxes_overlay.getContext("2d");
     ctx.clearRect(0, 0, boxes_overlay.width, boxes_overlay.height)
     for(const box of boxes){
-      ctx.strokeStyle = "yellow";
+      ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--color-streamaction').trim();
       ctx.beginPath();
-      ctx.arc(box["x"] * scale, (box["y"] * scale) + yoffset, 0.5, 0, 2 * Math.PI);
+      ctx.arc((box["x"] * scale) + xoffset, (box["y"] * scale) + yoffset, 1, 0, 2 * Math.PI);
       ctx.stroke();
     }
 }
 
-showMenu = (element, event) => {
+const showMenu = (element, event)  => {
   event.preventDefault()
   const selectmenu    = element.parentElement.parentElement.querySelector("[name='selectmenu']")
   const selectmenubox = selectmenu.querySelector("[name='selectmenubox']")
@@ -74,24 +105,24 @@ showMenu = (element, event) => {
   lastinteraction = Date.now();
 }
 
-hideMenu = () => {
+const hideMenu = ()  => {
   for(const selectmenu of document.querySelectorAll("[name='selectmenu']")){
     selectmenu.style.display = "none"
   }
   lastinteraction = Date.now();
 }
 
-updateBrightness = (element) => {
+const updateBrightness = (element)  => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--refpick-brightness', element.value / 100);
 }
 
-updateContrast = (element) => {
+const updateContrast = (element)  => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--refpick-contrast', element.value / 100);
 }
 
-updateScale = (element) => {
+const updateScale = (element)  => {
   const micrographs_slider = document.querySelector("#micrographs_slider")
   const boxes_overlay      = document.querySelector("#boxes_overlay")
   if(micrographs_slider != undefined) micrographs_slider.style.width = element.value + "px"
@@ -122,7 +153,7 @@ window.addEventListener("load", () => {
 
 window.addEventListener("load", () => {
   const logtext = document.querySelector(".logtext")
-  logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
+  if (logtext) logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
 })
 
 /* draw boxes on load */
@@ -143,7 +174,7 @@ window.addEventListener("load", () =>{
       const boxes = JSON.parse(miccontainer.dataset.boxes.replaceAll("'", '"'))
       const ctx = box_overlay.getContext("2d");
       for(const box of boxes){
-        ctx.strokeStyle = "yellow";
+        ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--color-streamaction').trim();
         ctx.beginPath();
         ctx.arc((box["x"] * scale) + xoffset, (box["y"] * scale) + yoffset, 1, 0, 2 * Math.PI);
         ctx.stroke();
@@ -152,45 +183,11 @@ window.addEventListener("load", () =>{
 },false);
 
 window.addEventListener("load", () =>{
-    for(const micrographs_pie_chart of document.getElementsByClassName("micrographs_pie_chart")){
-        const ctx = micrographs_pie_chart.getContext("2d");
-        const n_imported  = Number(micrographs_pie_chart.dataset.imported) 
-        const n_processed = Number(micrographs_pie_chart.dataset.processed)
-        const n_rejected  = Number(micrographs_pie_chart.dataset.rejected)
-        new Chart(ctx, {
-            type: 'doughnut',
-            options:{
-              maintainAspectRatio : false,
-              plugins:{
-                legend:{
-                    position : "right",
-                    labels:{
-                      boxWidth: 10,
-                      padding:  2,
-                      font :{
-                        size: 9
-                      }
-                    }
-                }
-              }
-            },
-            data: {
-              labels: [
-                  'queued',
-                  'processed',
-                  'rejected'
-              ],
-              datasets: [{
-                  data: [n_imported - n_processed - n_rejected, n_processed, n_rejected],
-                  backgroundColor: [
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
-                  ],
-                  hoverOffset: 4
-              }]
-            }
-        })
+    for(const canvas of document.getElementsByClassName("micrographs_pie_chart")){
+        const n_imported  = Number(canvas.dataset.imported)
+        const n_processed = Number(canvas.dataset.processed)
+        const n_rejected  = Number(canvas.dataset.rejected)
+        buildDonut(canvas, [n_imported - n_processed - n_rejected, n_processed, n_rejected], ['queued', 'accepted', 'rejected'])
     }
 },false);
 
@@ -214,7 +211,7 @@ window.addEventListener("visibilitychange", (event) => {
 })
 
 setInterval(function () {
-  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+  if((Date.now() - lastinteraction) > 10_000 && document.visibilityState !== "hidden"){
     lastinteraction = Date.now();
     location.reload();
   }

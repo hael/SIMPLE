@@ -1,0 +1,45 @@
+{% comment %}
+  _count_tile.html — stat tile with dot, label, and large count.
+  Use inside a `flex gap-2 px-4` container.
+
+  Parameters:
+    count      — numeric value
+    count_unit — (optional) unit appended after count (e.g. "px", "Å")
+    label      — display label (shown in header row with dot)
+    sublabel   — (optional) secondary value shown after count, separated by ·
+    variant    — "neutral" | "rejected" | "action" | omit for default (streamring accent)
+{% endcomment %}
+{% load humanize %}
+{% if variant == "neutral" %}
+<div class="flex-1 bg-streambg border border-streamline rounded-lg pl-2 pr-0 py-1">
+    <div class="flex items-center gap-1.5 mb-1.5">
+        <div class="w-1.5 h-1.5 rounded-full bg-streamlabel flex-shrink-0"></div>
+        <p class="text-[10px] font-medium text-streamlabel">{{ label }}</p>
+    </div>
+    <p class="text-[10px] font-medium text-streamtext leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
+</div>
+{% elif variant == "action" %}
+<div class="flex-1 bg-streamaction/10 border border-streamaction/20 rounded-lg pl-2 pr-0 py-1">
+    <div class="flex items-center gap-1.5 mb-1.5">
+        <div class="w-1.5 h-1.5 rounded-full bg-streamaction flex-shrink-0"></div>
+        <p class="text-[10px] font-medium text-streamaction">{{ label }}</p>
+    </div>
+    <p class="text-[10px] font-medium text-streamaction leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
+</div>
+{% elif variant == "rejected" %}
+<div class="flex-1 bg-streamrejected/10 border border-streamrejected/20 rounded-lg pl-2 pr-0 py-1">
+    <div class="flex items-center gap-1.5 mb-1.5">
+        <div class="w-1.5 h-1.5 rounded-full bg-streamrejected flex-shrink-0"></div>
+        <p class="text-[10px] font-medium text-streamrejected">{{ label }}</p>
+    </div>
+    <p class="text-[10px] font-medium text-streamrejected leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
+</div>
+{% else %}
+<div class="flex-1 bg-streamring/10 border border-streamring/20 rounded-lg pl-2 pr-0 py-1">
+    <div class="flex items-center gap-1.5 mb-1.5">
+        <div class="w-1.5 h-1.5 rounded-full bg-streamring flex-shrink-0"></div>
+        <p class="text-[10px] font-medium text-streamring">{{ label }}</p>
+    </div>
+    <p class="text-[10px] font-medium text-streamring leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
+</div>
+{% endif %}

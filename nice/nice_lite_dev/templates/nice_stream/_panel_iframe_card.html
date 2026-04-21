@@ -1,0 +1,17 @@
+{% comment %}
+  _panel_iframe_card.html — wrapper card for a pipeline-stage iframe in streamview.html.
+
+  Pass via {% include 'nice_stream/_panel_iframe_card.html' with key=value ... %}:
+
+    frame_id     — id attribute on the iframe (e.g. "preprocess_iframe")
+    frame_url    — URL name for the iframe src (e.g. "nice_lite:view_stream_preprocess")
+    frame_height — Tailwind height class for the iframe; default "h-96"
+
+  These variables are read directly from the parent context (no need to pass):
+    jobid
+{% endcomment %}
+<div class="bg-streambar rounded-xl border border-streamline w-75 h-[410px]">
+    <iframe id="{{ frame_id }}" class="w-full {{ frame_height|default:'h-96' }} border-none rounded-xl"
+            src="{% url frame_url %}?selected_job_id={{ jobid }}">
+    </iframe>
+</div>

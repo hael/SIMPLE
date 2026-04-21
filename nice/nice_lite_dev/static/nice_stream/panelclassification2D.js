@@ -1,34 +1,60 @@
 let lastinteraction = Date.now();
 
-restartProcess = (element) => {
+// Build a doughnut chart with stream* CSS colour variables.
+const buildDonut = (canvas, dataValues, labels) => {
+    const style = getComputedStyle(document.body);
+    new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        options: {
+            responsive: false,
+            plugins: { legend: { display: false } }
+        },
+        data: {
+            labels,
+            datasets: [{
+                data: dataValues,
+                backgroundColor: [
+                    style.getPropertyValue('--color-streamring').trim(),
+                    style.getPropertyValue('--color-streamicon').trim(),
+                    style.getPropertyValue('--color-streamrejected').trim()
+                ],
+                hoverOffset: 4
+            }]
+        }
+    });
+};
+
+const restartProcess = (element)  => {
   const confirmed = confirm("Please confirm that you wish to restart this process");
   if(confirmed){
     element.form.submit()
   }
 }
 
-stopProcess = (element) => {
+const stopProcess = (element)  => {
   const confirmed = confirm("Please confirm that you wish to stop this process");
   if(confirmed){
     element.form.submit()
   }
 }
 
-scrlRight = (element, event) => {
+const scrlRight = (element, event)  => {
   event.preventDefault()
-  const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
-  accepted_cls2D_slider.parentElement.scrollLeft += 77;
+  const slider = document.getElementById("accepted_cls2D_slider").parentElement;
+  const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
+  slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + 77;
   lastinteraction = Date.now();
 }
 
-scrlLeft = (element, event) => {
+const scrlLeft = (element, event)  => {
   event.preventDefault()
-  const accepted_cls2D_slider = document.getElementById("accepted_cls2D_slider")
-  accepted_cls2D_slider.parentElement.scrollLeft -= 77;
+  const slider = document.getElementById("accepted_cls2D_slider").parentElement;
+  const atStart = slider.scrollLeft <= 0;
+  slider.scrollLeft = atStart ? slider.scrollWidth - slider.clientWidth : slider.scrollLeft - 77;
   lastinteraction = Date.now();
 }
 
-toggleCls = (element) => {
+const toggleCls = (element)  => {
     element.classList.toggle("disabledbutton")
     const mskcanvas = element.querySelector('.mskcanvas')
     const xmark     = element.querySelector('.xmark')
@@ -43,7 +69,7 @@ toggleCls = (element) => {
     updateCounts()
 }
 
-selectCls = (element) => {
+const selectCls = (element)  => {
     const selected = []
     for(const cls2D of document.getElementsByClassName("cls2D")){
         const idx  = Number(cls2D.dataset.idx)
@@ -57,14 +83,14 @@ selectCls = (element) => {
     loadinggauze.classList.remove("hidden")
     loadinggauze.style.opacity = "1";
     element.form.submit()
-    timeout = setTimeout(() => { 
+    const timeout1 = setTimeout(() => {
       // we know submit doesnt return for at least 2 seconds
       const psets_iframe = window.parent.document.querySelector("#psets_iframe")
       psets_iframe.src = psets_iframe.src
     }, 1500);
 }
 
-selectClsFinal = (element) => {
+const selectClsFinal = (element)  => {
     const deselected = []
     for(const cls2D of document.getElementsByClassName("cls2D")){
         const idx  = Number(cls2D.dataset.idx)
@@ -78,14 +104,14 @@ selectClsFinal = (element) => {
     loadinggauze.classList.remove("hidden")
     loadinggauze.style.opacity = "1";
     element.form.submit()
-    timeout = setTimeout(() => { 
+    const timeout2 = setTimeout(() => {
       // we know submit doesnt return for at least 2 seconds
       const psets_iframe = window.parent.document.querySelector("#psets_iframe")
       psets_iframe.src = psets_iframe.src
     }, 1500);
 }
 
-drawMask = () => {
+const drawMask = ()  => {
   const selected_mskdiam = document.getElementById("selected_mskdiam")
   if(selected_mskdiam.value == "") return
   for(const cls2D of document.getElementsByClassName("cls2D")){
@@ -101,7 +127,7 @@ drawMask = () => {
   }
 }
 
-updateMskdiam = (element) => {
+const updateMskdiam = (element)  => {
   const current_mskdiam     = document.getElementById("current_mskdiam")
   const selected_mskdiam    = document.getElementById("selected_mskdiam")
   const mskdiam             = element.value * 2 // multiply by 2 to ensure even
@@ -110,7 +136,7 @@ updateMskdiam = (element) => {
   drawMask()
 }
 
-updateMskdiamSubmit = (element) => {
+const updateMskdiamSubmit = (element)  => {
   const loadinggauze = document.getElementById("loadinggauze")
   loadinggauze.innerHTML = "updating mask diameter ..."
   loadinggauze.classList.remove("hidden")
@@ -118,7 +144,7 @@ updateMskdiamSubmit = (element) => {
   element.form.submit()
 }
 
-showMenu = (element, event) => {
+const showMenu = (element, event)  => {
   event.preventDefault()
   const selectmenu    = element.parentElement.parentElement.parentElement.querySelector("[name='selectmenu']")
   const selectmenubox = selectmenu.querySelector("[name='selectmenubox']")
@@ -136,7 +162,7 @@ showMenu = (element, event) => {
   lastinteraction = Date.now();
 }
 
-hideMenu = () => {
+const hideMenu = ()  => {
   for(const selectmenu of document.querySelectorAll("[name='selectmenu']")){
     const sortpop     = selectmenu.querySelector("#sortpop")
     const sortres     = selectmenu.querySelector("#sortres")
@@ -151,7 +177,7 @@ hideMenu = () => {
   lastinteraction = Date.now();
 }
 
-sortPop = () => {
+const sortPop = ()  => {
   const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
   const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".cls2dcontainer"))
   acceptedtemplates.sort((a, b) => {
@@ -163,7 +189,7 @@ sortPop = () => {
   hideMenu()
 }
 
-sortRes = () => {
+const sortRes = ()  => {
   const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
   const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".cls2dcontainer"))
   acceptedtemplates.sort((a, b) => {
@@ -175,7 +201,7 @@ sortRes = () => {
   hideMenu()
 }
 
-selectAbove = (element) => {
+const selectAbove = (element)  => {
   let threshold = true
   for(const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")){
     const mskcanvas = clscontainer.querySelector('.mskcanvas')
@@ -200,7 +226,7 @@ selectAbove = (element) => {
   hideMenu()
 }
 
-selectBelow = (element) => {
+const selectBelow = (element)  => {
   let threshold = false
   for(const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")){
     const mskcanvas = clscontainer.querySelector('.mskcanvas')
@@ -225,14 +251,14 @@ selectBelow = (element) => {
   hideMenu()
 }
 
-updateCounts = () => {
+const updateCounts = ()  => {
   const clustercount          = document.querySelector("#clustercount")
   const particlecount         = document.querySelector("#particlecount")
   const final_selection_ptcls = document.querySelector("#final_selection_ptcls")
   const cls2dcontainers       = document.querySelectorAll(".cls2dcontainer")
-  ncls       = 0
-  nptcls     = 0
-  nptcls_tot = 0
+  let ncls       = 0
+  let nptcls     = 0
+  let nptcls_tot = 0
   for(const cls2dcontainer of cls2dcontainers){
     const deselected = cls2dcontainer.querySelector(".disabledbutton")
     const pop = Number(cls2dcontainer.dataset.pop)
@@ -248,17 +274,17 @@ updateCounts = () => {
   if(final_selection_ptcls != undefined) final_selection_ptcls.value = nptcls
 }
 
-updateBrightness = (element) => {
+const updateBrightness = (element)  => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--classification2D-brightness', element.value / 100);
 }
 
-updateContrast = (element) => {
+const updateContrast = (element)  => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--classification2D-contrast', element.value / 100);
 }
 
-updateScale = (element) => {
+const updateScale = (element)  => {
   const scale = element.value
   for(const cls2D of document.querySelectorAll(".cls2D")){
     cls2D.style.width  = scale + "px"
@@ -282,50 +308,15 @@ window.addEventListener("load", () => {
 
 window.addEventListener("load", () => {
   const logtext = document.querySelector(".logtext")
-  logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
+  if (logtext) logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
 })
 
 window.addEventListener("load", () =>{
-    for(const movies_pie_chart of document.getElementsByClassName("particles_pie_chart")){
-        const ctx = movies_pie_chart.getContext("2d");
-        const n_imported = Number(movies_pie_chart.dataset.imported) 
-        const n_accepted = Number(movies_pie_chart.dataset.accepted)
-        const n_rejected = Number(movies_pie_chart.dataset.rejected)
-        new Chart(ctx, {
-            type: 'doughnut',
-            options:{
-              maintainAspectRatio : false,
-              plugins:{
-                legend:{
-                    position : "right",
-                    labels:{
-                      boxWidth: 10,
-                      padding:  2,
-                      font :{
-                        size: 9
-                      }
-                    }
-                }
-              }
-            },
-            data: {
-            labels: [
-         //       'queued',
-                'accepted',
-                'rejected'
-            ],
-            datasets: [{
-             //   data: [n_imported - n_accepted - n_rejected, n_accepted, n_rejected],
-                data: [n_accepted, n_rejected],
-                backgroundColor: [
-               //     window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4success'),
-                    window.getComputedStyle(document.body).getPropertyValue('--color-nice4alert'),
-                ],
-                hoverOffset: 4
-            }]
-            }
-        })
+    for(const canvas of document.getElementsByClassName("particles_pie_chart")){
+        const n_imported = Number(canvas.dataset.imported)
+        const n_accepted = Number(canvas.dataset.accepted)
+        const n_rejected = Number(canvas.dataset.rejected)
+        buildDonut(canvas, [n_imported - n_accepted - n_rejected, n_accepted, n_rejected], ['unclassified', 'accepted', 'rejected'])
     }
 },false);
 
@@ -361,7 +352,7 @@ window.addEventListener("visibilitychange", (event) => {
 })
 
 setInterval(function () {
-  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+  if((Date.now() - lastinteraction) > 10_000 && document.visibilityState !== "hidden"){
     lastinteraction = Date.now();
     location.reload();
   }

@@ -1,0 +1,13 @@
+{% comment %}
+  _kv_row.html — label/value pair as two direct grid children.
+  Must be used inside a `grid grid-cols-[max-content_1fr]` container.
+  Each pair gets a top border (divide-y equivalent) except if it is the
+  first child (handled via border-t on every row; the container has no top
+  border, so the first row's border-t lands on the container edge).
+
+  Parameters:
+    label — left-hand label text
+    value — right-hand value (long strings scroll hidden)
+{% endcomment %}
+<span class="text-[10px] text-streamlabel py-1">{{ label }}</span>
+<span class="text-[9px] font-medium text-streaminput font-mono truncate overflow-x-scroll scrollbar-hidden py-1 pl-4">{{ value }}{% if unit %}{{ unit }}{% endif %}</span>

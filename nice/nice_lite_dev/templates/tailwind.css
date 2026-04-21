@@ -46,6 +46,24 @@
 @theme { 
     --color-nice4dark : #022b3a;
 }
+@theme { --color-streambg      : #f5f5f5; } /* page background          */
+@theme { --color-streambar     : #ffffff; } /* header background        */
+@theme { --color-streamline    : #e5e7eb; } /* borders                  */
+@theme { --color-streamaccent  : #059669; } /* logo accent / primary    */
+@theme { --color-streamring    : #10b981; } /* focus ring               */
+@theme { --color-streamtext    : #262626; } /* primary text             */
+@theme { --color-streamlabel   : #a3a3a3; } /* muted labels             */
+@theme { --color-streamsurface : #fafafa; } /* input / select bg        */
+@theme { --color-streaminput   : #404040; } /* input text               */
+@theme { --color-streamsubtle  : #737373; } /* subtle / action text     */
+@theme { --color-streamdivider : #f5f5f5; } /* card inner dividers      */
+@theme { --color-streamicon    : #d4d4d4; } /* default icon colour      */
+@theme { --color-streamerror   : #ef4444; } /* error / danger           */
+@theme { --color-streamerrorline    : #fee2e2; } /* error card border   */
+@theme { --color-streamerrorsurface : #fef2f2; } /* error icon bg       */
+@theme { --color-streamrejected     : #fca5a5; } /* rejected segment    */
+@theme { --color-streamaction      : #60a5fa; } /* action / info blue  */
+
 @layer components {
   .nicebutton {
     @apply rounded-full bg-nicecontrast text-white h-min px-[10px] hover:bg-niceheader hover:text-nicecontrast;

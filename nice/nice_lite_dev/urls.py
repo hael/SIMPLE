@@ -70,18 +70,6 @@ urlpatterns = [
     # Stream sub-process control (terminate / restart)
     path("termstreamprocess",                               views_stream.terminate_stream_process,          name="term_stream_process"),
     path("restartstreamprocess",                            views_stream.restart_stream_process,            name="restart_stream_process"),
-    path("termstreamoptics/<int:jobid>",                    views_stream.term_stream_optics,                name="term_stream_optics"),
-    path("termstreaminitialpick/<int:jobid>",               views_stream.term_stream_initial_pick,          name="term_stream_initial_pick"),
-    path("termstreamgeneratepickrefs/<int:jobid>",          views_stream.term_stream_generate_pickrefs,     name="term_stream_generate_pickrefs"),
-    path("termstreamreferencepicking/<int:jobid>",          views_stream.term_stream_reference_picking,     name="term_stream_reference_picking"),
-    path("termstreamsieveparticles/<int:jobid>",            views_stream.term_stream_sieve_particles,       name="term_stream_sieve_particles"),
-    path("termstreamclassification2D/<int:jobid>",          views_stream.term_stream_classification_2D,     name="term_stream_classification_2D"),
-    path("restartstreamoptics/<int:jobid>",                 views_stream.restart_stream_optics,             name="restart_stream_optics"),
-    path("restartstreaminitialpick/<int:jobid>",            views_stream.restart_stream_initial_pick,       name="restart_stream_initial_pick"),
-    path("restartstreamgeneratepickrefs/<int:jobid>",       views_stream.restart_stream_generate_pickrefs,  name="restart_stream_generate_pickrefs"),
-    path("restartstreamreferencepicking/<int:jobid>",       views_stream.restart_stream_reference_picking,  name="restart_stream_reference_picking"),
-    path("restartstreamsieveparticles/<int:jobid>",         views_stream.restart_stream_sieve_particles,    name="restart_stream_sieve_particles"),
-    path("restartstreamclassification2D/<int:jobid>",       views_stream.restart_stream_classification_2D,  name="restart_stream_classification_2D"),
 
     # Stream stage views (panel + zoom)
     path("viewstream/<int:jobid>",          views_stream.view_stream,                        name="view_stream"),

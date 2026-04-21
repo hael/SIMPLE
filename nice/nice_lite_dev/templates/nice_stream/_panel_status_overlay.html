@@ -1,0 +1,17 @@
+{% comment %}
+  _panel_status_overlay.html — full-panel overlay shown during transient states.
+  Uses `status` directly from the parent template context — no variables to pass.
+
+  States handled:
+    restarting  — process is being restarted; all panels.
+    terminating — process is being killed; all panels.
+    skipped     — stage was intentionally skipped; only some panels (harmless for others
+                  because the backend never sets irrelevant stages to "skipped").
+{% endcomment %}
+{% if status == "restarting" %}
+    <div class="absolute inset-0 flex items-center justify-center text-[10px] text-streamlabel bg-streambar z-10">restarting&hellip;</div>
+{% elif status == "terminating" %}
+    <div class="absolute inset-0 flex items-center justify-center text-[10px] text-streamlabel bg-streambar z-10">terminating&hellip;</div>
+{% elif status == "skipped" %}
+    <div class="absolute inset-0 flex items-center justify-center text-[10px] text-streamlabel bg-streambar z-10">skipped</div>
+{% endif %}

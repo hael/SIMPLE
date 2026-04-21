@@ -1,13 +1,13 @@
 let lastinteraction = Date.now();
 
-restartProcess = (element) => {
+const restartProcess = (element)  => {
   const confirmed = confirm("Please confirm that you wish to restart this process");
   if(confirmed){
     element.form.submit()
   }
 }
 
-stopProcess = (element) => {
+const stopProcess = (element)  => {
   const confirmed = confirm("Please confirm that you wish to stop this process");
   if(confirmed){
     element.form.submit()
@@ -49,7 +49,7 @@ window.addEventListener("load", () =>{
                         display : false
                     },
                 },
-                maintainAspectRatio : false,
+                responsive: false,
             },
             data: {
                 datasets:datasets 
@@ -77,7 +77,7 @@ window.addEventListener("visibilitychange", (event) => {
 })
 
 setInterval(function () {
-  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+  if((Date.now() - lastinteraction) > 10_000 && document.visibilityState !== "hidden"){
     lastinteraction = Date.now();
     location.reload();
   }

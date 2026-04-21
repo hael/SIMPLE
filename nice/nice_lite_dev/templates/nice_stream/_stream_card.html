@@ -1,0 +1,199 @@
+{% comment %}
+  _stream_card.html — one stream card, included by dataset.html for each job.
+  Expects `job` in context (passed automatically by the parent template loop).
+  Uses {% with %} to cache the two stats dicts as `ms` and `cs`,
+  avoiding repeated dict key lookups per template render.
+{% endcomment %}
+{% load humanize %}
+{% with ms=job.preprocessing_stats cs=job.classification_2D_stats %}
+<div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamring/10{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden">
+
+    <!-- Header: status dot · stream name · open-detail button -->
+    <div class="flex items-center justify-between px-3 pt-3 pb-1">
+        <div class="flex items-center gap-1.5">
+            {% if job.status == "running" %}
+                <span class="w-2 h-2 rounded-full bg-streamring animate-pulse"></span>
+            {% elif job.status == "finished" or job.status == "alarm" %}
+                <span class="w-2 h-2 rounded-full bg-streamring"></span>
+            {% else %}
+                <span class="w-2 h-2 rounded-full bg-streamerror"></span>
+            {% endif %}
+            <span class="text-xs font-medium text-streaminput">{{ job.disp }} stream</span>
+        </div>
+    </div>
+
+    <!-- Body -->
+    <div class="px-3 pb-2 flex-1 flex flex-col">
+
+        <!-- Editable description -->
+        <div class="flex items-center gap-1 pb-1">
+            <form method="POST" action="{% url 'nice_lite:update_stream_description' %}" class="flex flex-1 min-w-0">
+                {% csrf_token %}
+                <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                <input name="new_stream_description" value="{{ job.desc }}"
+                       onblur="this.form.submit()" disabled
+                       class="w-full text-[10px] text-streamlabel bg-transparent border-none outline-none truncate disabled:cursor-default">
+            </form>
+            <button onclick="enableStreamDescription(this)" title="edit description"
+                    class="flex-shrink-0 text-streamicon hover:text-streamsubtle transition-colors">
+                <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.262a1.75 1.75 0 0 0 0-2.474Z"/>
+                    <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9A.75.75 0 0 1 14 9v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z"/>
+                </svg>
+            </button>
+        </div>
+
+        {% if job.status == "failed" or job.status == "stopped" %}
+
+            <!-- Error state -->
+            <div class="flex-1 flex items-center justify-center py-6">
+                <div class="text-center">
+                    <div class="w-8 h-8 rounded-full bg-streamerrorsurface flex items-center justify-center mx-auto mb-2">
+                        <svg class="w-4 h-4 text-streamerror" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                            <circle cx="8" cy="8" r="6"/>
+                            <line x1="8" y1="5" x2="8" y2="8"/>
+                            <circle cx="8" cy="11" r="0.5" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <p class="text-[10px] text-streamerror font-medium">{{ job.status }}</p>
+                </div>
+            </div>
+
+        {% else %}
+
+            <!-- Chart row: badge + donut per stat type, shared legend -->
+            <div class="flex items-center gap-3 mb-2">
+                {% if "movies_imported" in ms and ms.movies_imported > 0 %}
+                    <div class="flex flex-col items-center gap-1 flex-shrink-0">
+                        <span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamaccent">
+                            <span class="w-1.5 h-1.5 rounded-full bg-streamaccent"></span>
+                            {{ ms.movies_imported|intcomma }} movies
+                        </span>
+                        <canvas class="movies_pie_chart"
+                                width="40" height="40"
+                                data-imported="{{ ms.movies_imported }}"
+                                data-processed="{{ ms.movies_processed|default:'' }}"
+                                data-rejected="{{ ms.movies_rejected|default:'' }}">
+                        </canvas>
+                    </div>
+                {% endif %}
+                {% if "particles_imported" in cs and cs.particles_imported > 0 %}
+                    <div class="flex flex-col items-center gap-1 flex-shrink-0">
+                        <span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamaccent">
+                            <span class="w-1.5 h-1.5 rounded-full bg-streamaccent"></span>
+                            {{ cs.particles_imported|intcomma }} particles
+                        </span>
+                        <canvas class="particles_pie_chart"
+                                width="40" height="40"
+                                data-imported="{{ cs.particles_imported }}"
+                                data-accepted="{{ cs.particles_accepted|default:'' }}"
+                                data-rejected="{{ cs.particles_rejected|default:'' }}">
+                        </canvas>
+                    </div>
+                {% endif %}
+                <!-- Legend (always shown; colours match JS chart colours) -->
+                <div class="flex flex-col self-end">
+                    <div class="flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-sm bg-streamring"></span>
+                        <span class="text-[10px] text-streamsubtle">imported</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-sm bg-streamicon"></span>
+                        <span class="text-[10px] text-streamsubtle">processed</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-sm bg-streamrejected"></span>
+                        <span class="text-[10px] text-streamsubtle">rejected</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thumbnail: 2D class grid or latest micrograph -->
+            {% if "latest_cls2D" in cs and cs.latest_cls2D|length > 0 %}
+                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1">latest 2D classes</div>
+                <div class="grid grid-cols-4 gap-0.5">
+                    {% for cls2D in cs.latest_cls2D %}
+                        {% if forloop.counter <= 16 %}
+                            <div class="aspect-square overflow-hidden bg-black rounded-sm">
+                                <div onclick="toggleCls(this)" data-idx="{{ cls2D.mrcidx }}"
+                                     style="background:url({% url 'nice_lite:image' cls2D.path %});background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%;background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%"
+                                     class="cls2D w-full h-full">
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% elif "latest_micrographs" in ms and ms.latest_micrographs|length > 0 %}
+                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1">latest micrograph</div>
+                <!-- Show right half of the double-width composite image -->
+                <div class="rounded-md overflow-hidden aspect-square w-full bg-black relative">
+                    <img src="{% url 'nice_lite:image' ms.latest_micrographs.0.path %}"
+                         loading="lazy" alt="latest micrograph"
+                         class="absolute h-full object-cover" style="width:200%;right:0;top:0;object-fit:cover;object-position:100%;">
+                </div>
+            {% endif %}
+
+        {% endif %}
+    </div>
+
+    <!-- Footer: view · restart · delete/terminate -->
+    <div class="mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2">
+
+        <!-- View -->
+        <form method="POST" action="{% url 'nice_lite:view_stream' job.id %}">
+            {% csrf_token %}
+            <button type="submit" title="view stream"
+                    class="text-streamicon hover:text-streamsubtle transition-colors p-1">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <circle cx="8" cy="8" r="3"/>
+                    <path d="M1 8c1.5-4 5.5-6 7-6s5.5 2 7 6c-1.5 4-5.5 6-7 6s-5.5-2-7-6z"/>
+                </svg>
+            </button>
+        </form>
+
+        <!-- Restart -->
+        <form method="POST" action="{% url 'nice_lite:new_stream' %}">
+            {% csrf_token %}
+            <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+            <button type="submit" title="restart stream"
+                    class="text-streamicon hover:text-streamsubtle transition-colors p-1">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 8a6 6 0 1 1-1.76-4.24"/>
+                    <polyline points="14,2 14,6 10,6"/>
+                </svg>
+            </button>
+        </form>
+
+        <!-- Delete (finished/failed/stopped) -->
+        {% if job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
+            <form method="POST" action="{% url 'nice_lite:delete_stream' %}">
+                {% csrf_token %}
+                <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                <button type="button" data-job-id="{{ job.id }}" onclick="deleteStream(this)"
+                        title="delete stream"
+                        class="text-streamicon hover:text-streamerror transition-colors p-1">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <polyline points="3,3 13,13"/>
+                        <polyline points="13,3 3,13"/>
+                    </svg>
+                </button>
+            </form>
+        <!-- Terminate (running/alarm) -->
+        {% elif job.status == "running" or job.status == "alarm" %}
+            <form method="POST" action="{% url 'nice_lite:terminate_stream' %}">
+                {% csrf_token %}
+                <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                <button type="button" data-job-id="{{ job.id }}" onclick="terminateStream(this)"
+                        title="terminate stream"
+                        class="text-streamicon hover:text-streamerror transition-colors p-1">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <circle cx="8" cy="8" r="6"/>
+                        <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" stroke="none"/>
+                    </svg>
+                </button>
+            </form>
+        {% endif %}
+
+    </div>
+</div>
+{% endwith %}

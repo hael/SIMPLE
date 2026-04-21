@@ -1,167 +1,127 @@
+{% comment %}
+  panelgeneratepickrefs.html — generate pick references panel ("opening 2D classification"),
+  loaded inside an iframe by streamview.html.
+
+  Structure:
+    - Loading / waiting / status gauzes.
+    - Header bar: status indicator · title · zoom · stop/restart.
+    - Particles pie chart + box size / mask diameter stats.
+    - Selected references gallery (scrollable class grid).
+    - Available templates gallery (user-input mode only).
+    - "select references" action button (user-input + running).
+
+  Context variables:
+    jobstats — dict with particles_imported/accepted/rejected, box_size, mask_diam,
+               mskscale, final_cls2D, latest_cls2D, stage.
+    jobid    — primary key of the job.
+    status   — "running" | "finished" | "failed" | "skipped" | "terminating" | "restarting".
+{% endcomment %}
 {% load static %}
 {% load humanize %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src={% static 'nice_stream/panelgeneratepickrefs.js' %}></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+            crossorigin="anonymous" defer></script>
+    <script src="{% static 'nice_stream/panelgeneratepickrefs.js' %}" defer></script>
 </head>
-<body class="w-full h-screen bg-nice4bubble text-nice4dark overflow-hidden">
-    <div id="loadinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
+<body class="bg-streambar h-screen overflow-hidden font-sans">
+
+    <!-- Loading gauze -->
+    {% include 'nice_stream/_panel_gauze_loading.html' %}
+
+    <!-- Waiting gauze: shown until particles arrive -->
     {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
-        <div id="waitinggauze" class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">waiting for particles ...</div>
-    {% endif %}
-    {% if status == "restarting" %}
-        <div class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">restarting ...</div>
-    {% elif status == "skipped" %}
-    <div class="absolute text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">skipped ...</div>
-    {% elif status == "terminating" %}
-        <div class="absolute z-2 text-[10px] flex h-full w-full bg-nice4bubble top-[20px] items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">terminating ...</div>
-    {% endif %}
-    <div class="h-full flex-col flex justify-start">
-        <div class="flex flex-row justify-end items-center">
-            {% if status == "running" %}
-                <div class="rounded-full mr-[5px] text-nice4success" title="{{ jobstats.stage }}&#013;last import: {{ jobstats.last_micrograph_imported }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                        <path fill-rule="evenodd" d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0ZM6 8c.552 0 1-.672 1-1.5S6.552 5 6 5s-1 .672-1 1.5S5.448 8 6 8Zm5-1.5c0 .828-.448 1.5-1 1.5s-1-.672-1-1.5S9.448 5 10 5s1 .672 1 1.5Zm.005 4.245a.75.75 0 0 0-1.06 0 2.75 2.75 0 0 1-3.89 0 .75.75 0 0 0-1.06 1.06 4.25 4.25 0 0 0 6.01 0 .75.75 0 0 0 0-1.06Z" clip-rule="evenodd" />
-                    </svg>
-                </div>
-            {% elif status == "finished" %}
-                <div class="rounded-full mr-[5px] text-nice4success" title="finished">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                        <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
-                    </svg>
-                </div>
-            {% elif status == "skipped" %}
-                <div class="rounded-full mr-[5px] text-nice4success" title="skipped">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                        <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
-                    </svg>
-                </div>   
-            {% elif status == "failed" %}
-                <div class="rounded-full text-nice4alert mr-[5px]" title="failed">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                        <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm2.78-4.22a.75.75 0 0 1-1.06 0L8 9.06l-1.72 1.72a.75.75 0 1 1-1.06-1.06L6.94 8 5.22 6.28a.75.75 0 0 1 1.06-1.06L8 6.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L9.06 8l1.72 1.72a.75.75 0 0 1 0 1.06Z" clip-rule="evenodd" />
-                    </svg>
-                </div>
-            {% else %}
-                    <div class="rounded-full bg-nice4header h-[10px] w-[10px] mr-[5px]" title="{{ status }}"></div>
-            {% endif %}
-            <div class="flex-1 font-bold text-[12px]">opening 2D classification</div>
-            <form class="flex" method="GET" action={% url 'nice_lite:view_stream_generate_pickrefs_zoom' %} target="_parent">
-                {% csrf_token %}
-                <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
-                <button class="h-[16px] w-[16px] text-nice4header cursor-pointer"" onclick="this.form.submit()" title="view full screen">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                        <path d="M6.25 8.75v-1h-1a.75.75 0 0 1 0-1.5h1v-1a.75.75 0 0 1 1.5 0v1h1a.75.75 0 0 1 0 1.5h-1v1a.75.75 0 0 1-1.5 0Z" />
-                        <path fill-rule="evenodd" d="M7 12c1.11 0 2.136-.362 2.965-.974l2.755 2.754a.75.75 0 1 0 1.06-1.06l-2.754-2.755A5 5 0 1 0 7 12Zm0-1.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </form>
-            {% if status == "running" %}    
-               <form class="flex" method="POST" action={% url 'nice_lite:term_stream_process' %}>
-                    {% csrf_token %}
-                    <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
-                    <input name="terminate_generate_pickrefs" type="hidden"></input>
-                    <button type="submit" class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="return confirm('please confirm that you wish to terminate this process')" title="stop">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14ZM6.5 5.5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-3Z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-                </form>
-            {% elif status == "finished" or status == "failed" %} 
-                <form class="flex" method="POST" action={% url 'nice_lite:restart_stream_process' %}>
-                    {% csrf_token %}
-                    <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
-                    <input name="restart_generate_pickrefs" type="hidden"></input>
-                    <button type="submit" class="h-[16px] w-[16px] text-nice4header cursor-pointer" onclick="return confirm('please confirm that you wish to restart this process')" title="restart">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
-                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm-.847-9.766A.75.75 0 0 0 6 5.866v4.268a.75.75 0 0 0 1.153.633l3.353-2.134a.75.75 0 0 0 0-1.266L7.153 5.234Z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-                </form>
-            {% endif %}
+        <div id="waitinggauze"
+             class="absolute inset-0 flex items-center justify-center text-[10px] text-streamlabel bg-streambar transition-opacity duration-300 delay-300 ease-in-out z-10">
+            waiting for particles&hellip;
         </div>
-        <div class="flex flex-col">
-            <div class="flex flex-row w-full overflow-hidden">
-                {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
-                    <div class="flex flex-col">
-                        <div class="font-bold text-[10px] pl-[10px]">particles</div>
-                        <div class="h-[40px] w-[150px]">
-                            <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-processed={{ jobstats.particles_accepted }} data-rejected={{ jobstats.particles_rejected }}></canvas>
-                        </div>
-                    </div>
-                {% endif %}
-            </div>
-            <div class="flex flex-row w-full">
-                <div class="grid grid-cols-2 gap-0 text-[10px] pl-[10px] mt-[10px] w-full">
-                    {% if "box_size" in jobstats and jobstats.box_size > 0 %}
-                        <div class="font-bold">box size</div>
-                        <div>{{ jobstats.box_size|intcomma }} px</div>
-                    {% endif %}
-                    {% if "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
-                        <div class="font-bold">mask diameter</div>
-                        <div>{{ jobstats.mask_diam|intcomma }} Å</div>
-                    {% endif %}
-                </div>
-            </div>
-            {% if "final_cls2D" in jobstats and jobstats.final_cls2D|length > 0 %}
-                <div class="flex flex-col flex-2">
-                    <div class="font-bold text-[10px] pl-[10px]">selected references</div>
-                    <div class="flex flex-row items-center m-auto">
-                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft(this, event)">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                                <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
-                            </svg>
-                        </div>
-                        <div id="picking_references" class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                            <div id="picking_references" class="grid grid-flow-col grid-rows-3 gap-[2px]">
+    {% endif %}
+
+    <!-- Transient status overlays -->
+    {% include 'nice_stream/_panel_status_overlay.html' %}
+
+    <div class="flex flex-col h-full">
+
+        <!-- Header: status · title · zoom · stop/restart -->
+        {% include 'nice_stream/_panel_header.html' with panel_title="opening 2D classification" zoom_url="nice_lite:view_stream_generate_pickrefs_zoom" terminate_field="terminate_generate_pickrefs" restart_field="restart_generate_pickrefs" last_import=jobstats.last_micrograph_imported has_skipped=True user_input_url="nice_lite:view_stream_generate_pickrefs_zoom" user_input_title="select references" %}
+        
+        <!-- Stats row -->
+        <div class="flex flex-row flex-wrap px-4 pt-2 gap-1">
+                        
+            {% include 'nice_stream/_count_tile.html' with count=jobstats.particles_imported label="particles" sublabel=jobstats.micrographs_accepted sublabel_sep="/" variant="action"%}
+            {% include 'nice_stream/_count_tile.html' with count=jobstats.box_size  label="box size" count_unit="px" %}
+            {% include 'nice_stream/_count_tile.html' with count=jobstats.mask_diam label="mask"     count_unit="Å" %}
+        </div>
+
+        <!-- Selected references gallery -->
+        {% if "final_cls2D" in jobstats and jobstats.final_cls2D|length > 0 %}
+            <div class="flex flex-col px-4 pt-2 flex-shrink-0">
+                <span class="text-[10px] text-streamlabel mb-2">selected references</span>
+                <div class="flex items-center gap-1">
+
+                    {% include 'nice_stream/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
+
+                    <div class="flex flex-row flex-1 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+                        <div id="picking_references_final" class="grid grid-flow-col grid-rows-3 gap-[2px]">
                             {% for template in jobstats.final_cls2D %}
-                                <div class="snap-center picktemplatecontainer rounded bg-black relative" oncontextmenu="showMenu(this, event)" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
+                                <div class="snap-center picktemplatecontainer rounded bg-black relative"
+                                     oncontextmenu="showMenu(this, event)"
+                                     data-res="{{ template.res|floatformat:1 }}"
+                                     data-pop="{{ template.pop }}"
+                                    >
                                     {% if "mskscale" in jobstats and "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
-                                        <canvas class="mskcanvas z-1 absolute" height=70 width=70 data-mskscale="{{ jobstats.mskscale }}" data-mskdiam="{{ jobstats.mask_diam }}"></canvas>
+                                        <canvas class="mskcanvas z-1 absolute" height="60" width="60"
+                                                data-mskscale="{{ jobstats.mskscale }}"
+                                                data-mskdiam="{{ jobstats.mask_diam }}"></canvas>
                                     {% endif %}
-                                    <div data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}" style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplate h-[70px] w-[70px] rounded m-auto"></div>
+                                    <div data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}"
+                                         style="background:url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%"
+                                         class="picktemplate h-[60px] w-[60px] rounded m-auto"></div>
                                 </div>
                             {% endfor %}
-                            </div>
-                            <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                            <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
-                                <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
-                                <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
-                                <div id="selectabove" class="hidden userbutton w-auto text-center">select above</div>
-                                <div id="selectbelow" class="hidden userbutton w-auto text-center">select below</div>
-                            </div>
                         </div>
-                        </div>
-                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight(this, event)">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                                <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
-                            </svg>
+
+                        <!-- Context menu -->
+                        <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
+                            <div name="selectmenubox"
+                                 class="absolute flex flex-col bg-streambar border border-streamline rounded-lg shadow-sm text-[11px] text-streamtext p-1">
+                                <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
+                                <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
+                            </div>
                         </div>
                     </div>
-                </div>        
-            {% endif %}
-        </div>
+
+                    {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
+
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Available templates gallery (user-input mode) -->
         {% if status == "running" and jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
-            <div class="flex flex-col flex-1">
-                <div class="font-bold text-[10px] pl-[10px]">available templates</div>
-                <div class="flex flex-row items-center m-auto">
-                    <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft(this, event)">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                            <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
-                    <div class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                        <div id="picking_references" class="grid grid-flow-col grid-rows-3 gap-[2px]">
+            <div class="flex flex-col px-4 pt-2 flex-1">
+                <span class="text-[10px] text-streamlabel mb-2">available templates</span>
+                <div class="flex items-center gap-1">
+
+                    {% include 'nice_stream/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
+
+                    <div class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+                        <div id="picking_references_available" class="grid grid-flow-col grid-rows-3 gap-[2px]">
                             {% for template in jobstats.latest_cls2D %}
-                                <div class="snap-center picktemplatecontainer rounded bg-black" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
-                                    <div {%comment%}onclick="toggleTemplate(this)"{%endcomment%} oncontextmenu="showMenu(this, event)" data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}" style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%" class="picktemplate picktemplateimg h-[70px] w-[70px] rounded m-auto">
-                                        <div class="xmark hidden h-[70px] w-[70px] text-nice4alert flex items-center justify-center">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                                <div class="snap-center picktemplatecontainer rounded bg-black"
+                                     data-res="{{ template.res|floatformat:1 }}"
+                                     data-pop="{{ template.pop }}"
+                                    >
+                                    <div oncontextmenu="showMenu(this, event)"
+                                         data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}"
+                                         style="background:url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%"
+                                         class="picktemplate picktemplateimg h-[70px] w-[70px] rounded m-auto">
+                                        <div class="xmark hidden h-[70px] w-[70px] text-streamerror flex items-center justify-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
                                                 <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                             </svg>
                                         </div>
@@ -169,41 +129,34 @@
                                 </div>
                             {% endfor %}
                         </div>
-                        <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                            <div name="selectmenubox" class="absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
-                                <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
-                                <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
-                                <div id="selectabove" class="hidden userbutton w-auto text-center">select above</div>
-                                <div id="selectbelow" class="hidden userbutton w-auto text-center">select below</div>
+
+                        <!-- Context menu -->
+                        <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
+                            <div name="selectmenubox"
+                                 class="absolute flex flex-col bg-streambar border border-streamline rounded-lg shadow-sm text-[11px] text-streamtext p-1">
+                                <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
+                                <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
                             </div>
                         </div>
                     </div>
-                    <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight(this, event)">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                            <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
+
+                    {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
+
                 </div>
             </div>
+
         {% elif status == "running" and "stage" in jobstats and jobstats.stage == "saving selection" %}
-            <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
-                saving selection ...
-            </div> 
+            <div class="flex flex-1 items-center justify-center text-[11px] text-streamlabel">
+                saving selection&hellip;
+            </div>
         {% elif status == "running" %}
-            <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
-                generating references ...
-            </div> 
-        {% else %}    
-        {% endif %}
-        {% if status == "running" and jobstats.user_input is True %}
-            <div class="flex flex-row justify-center">
-                <form method="GET" action={% url 'nice_lite:view_stream_generate_pickrefs_zoom' %} target="_parent">
-                    {% csrf_token %}
-                    <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
-                    <button class="userbutton animate-bounce" type="submit">select references</button>
-                </form>
+            <div class="flex flex-1 items-center justify-center text-[11px] text-streamlabel">
+                generating references&hellip;
             </div>
         {% endif %}
+
+
     </div>
+
 </body>
 </html>
