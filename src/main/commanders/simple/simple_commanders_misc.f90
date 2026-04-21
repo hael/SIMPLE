@@ -189,7 +189,8 @@ contains
     end subroutine exec_mkdir
 
     subroutine exec_fractionate_movies_distr( self, cline )
-        use simple_starproject, only: starproject
+        use simple_starproject,          only: starproject
+        use simple_motion_correct_utils, only: flip_gain
         class(commander_fractionate_movies_distr), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         type(parameters)  :: params
@@ -212,6 +213,8 @@ contains
         call spproj%kill
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
+        ! processing gain reference if needed
+        call flip_gain(cline, params%gainref, params%flipgain)
         ! setup the environment for distributed execution
         params%nparts = min(nmovies, params%nparts)
         call cline%set('nparts', params%nparts)

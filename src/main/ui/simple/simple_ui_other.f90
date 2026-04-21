@@ -69,6 +69,7 @@ contains
         & 'Starting movie frame for micrograph re-generation', 'frame index{1}', .false., 1.0)
         call fractionate_movies%add_input(UI_PARM, 'tof', 'num', 'Final frame', &
         & 'Final movie frame for micrograph re-generation(0=all)', 'frame index{0}', .false., 0.0)
+        call fractionate_movies%add_input(UI_PARM, flipgain)
         call fractionate_movies%add_input(UI_PARM, 'mcconvention', 'str', 'Movie alignment convention', &
         & 'Movie alignment and naming convention(simple|unblur|relion|motioncorr|cryosparc|cs){simple}', &
         & '(simple|unblur|relion|motioncorr|cryosparc|cs){simple}', .false., 'simple')

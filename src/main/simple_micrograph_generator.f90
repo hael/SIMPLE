@@ -68,7 +68,7 @@ contains
         if( .not. omic%isthere('mc_starfile') )then
             THROW_HARD('Movie star doc is absent 1')
         endif
-        self%docname = omic%get('mc_starfile')
+        self%docname = omic%get_str('mc_starfile')
         if( .not.file_exists(self%docname) )then
             THROW_HARD('Movie star doc is absent 2')
         endif
@@ -209,8 +209,8 @@ contains
                 self%moviename      = buffer
                 self%l_eer          = fname2format(self%moviename) == 'K'
                 call parse_string(table, EMDL_MICROGRAPH_GAIN_NAME, buffer, err)
-                self%gainrefname    = buffer
                 self%l_gain         = .not.err
+                if( self%l_gain) self%gainrefname = buffer
                 self%scale          = 1./ parse_double(table, EMDL_MICROGRAPH_BINNING, err)
                 self%l_scale        = (.not.err) .and. (abs(self%scale - 1.0) > 0.001)
                 self%smpd           = parse_double(table, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, err)
@@ -286,14 +286,15 @@ contains
         class(mic_generator),  intent(inout) :: self
         type(image),           intent(inout) :: micrograph_dw, micrograph_nodw
         type(image), optional, intent(inout) :: background
-        real,        pointer     :: rmatin(:,:,:), rmatout(:,:,:)
         type(image), allocatable :: local_frames(:)
         type(image)              :: backgr
         real(dp)                 :: polynomial2d(POLYDIM,2)
         integer                  :: ldim(3), iframe, n
         ldim = self%ldim_sc
         n    = self%fromtof(2)-self%fromtof(1)+1
-        allocate(local_frames(self%fromtof(1):self%fromtof(2)))
+        ! Local frames use the original movie # number of frames
+        ! but only the fromf-tof range is initialized and processed
+        allocate(local_frames(1:self%nframes))
         if( self%l_poly )then
             polynomial2d = reshape([self%polyx,self%polyy], [POLYDIM,2])
         endif
@@ -328,7 +329,8 @@ contains
             ! Non dose-weighted beam-induced correction
             if( self%l_poly )then
                 call micrograph_nodw%warp_frames_and_sum(self%align_frame, self%align_frame,&
-                        &self%fromtof, local_frames, self%weights, POLYDIM, polynomial2d)
+                    &self%fromtof, local_frames(self%fromtof(1):self%fromtof(2)),&
+                    & self%weights(self%fromtof(1):self%fromtof(2)), POLYDIM, polynomial2d)
             endif
             ! Dose-weighing
             if( self%l_doseweighing )then
@@ -338,19 +340,20 @@ contains
                 end do
                 !$omp end parallel do
                 call local_frames(self%fromtof(1))%apply_dose_weighing(self%nframes,&
-                    &local_frames(1:self%nframes), self%fromtof, self%total_dose, self%kv)
+                    &local_frames, self%fromtof, self%total_dose, self%kv)
                 !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
                 do iframe = self%fromtof(1),self%fromtof(2)
                     call local_frames(iframe)%ifft
                 end do
                 !$omp end parallel do
+                call micrograph_dw%new(ldim, self%smpd_out)
                 if( self%l_poly )then
                     ! Dose-weighted beam-induced correction
                     call micrograph_dw%warp_frames_and_sum(self%align_frame, self%align_frame,&
-                            &self%fromtof, local_frames, self%weights, POLYDIM, polynomial2d)
+                            &self%fromtof, local_frames(self%fromtof(1):self%fromtof(2)),&
+                            & self%weights(self%fromtof(1):self%fromtof(2)), POLYDIM, polynomial2d)
                 else
                     ! Dose-weighted stage-drift correction
-                    call micrograph_dw%new(ldim, self%smpd_out)
                     call micrograph_dw%zero_and_unflag_ft
                     do iframe = self%fromtof(1),self%fromtof(2)
                         call micrograph_dw%add_workshare(local_frames(iframe))
@@ -367,28 +370,41 @@ contains
                     call self%frames(iframe)%fft
                     call self%frames(iframe)%shift2Dserial(-self%isoshifts(:,iframe))
                     call local_frames(iframe)%copy(self%frames(iframe))
-                    call local_frames(iframe)%ifft
                 end do
                 !$omp end parallel do
                 ! Beam-induced motion
-                ! non dose-weighted
-                call micrograph_nodw%warp_frames_and_sum(self%align_frame, self%align_frame,&
-                        &self%fromtof, local_frames, self%weights, POLYDIM, polynomial2d)
-                ! dose-weighted
+                ! dose-weighting
                 if( self%l_doseweighing )then
                     call local_frames(self%fromtof(1))%apply_dose_weighing(self%nframes,&
-                        &local_frames(1:self%nframes), self%fromtof, self%total_dose, self%kv)
+                        &local_frames, self%fromtof, self%total_dose, self%kv)
                     !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
                     do iframe = self%fromtof(1),self%fromtof(2)
-                        call local_frames(iframe)%copy_fast(self%frames(iframe))
                         call local_frames(iframe)%ifft
                     end do
                     !$omp end parallel do
+                    call micrograph_dw%new(ldim, self%smpd_out)
                     call micrograph_dw%warp_frames_and_sum(self%align_frame, self%align_frame,&
-                            &self%fromtof, local_frames, self%weights, POLYDIM, polynomial2d)
+                            &self%fromtof, local_frames(self%fromtof(1):self%fromtof(2)),&
+                            & self%weights(self%fromtof(1):self%fromtof(2)), POLYDIM, polynomial2d)
+                    ! restore frames for non dose-weighted summation
+                    !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+                    do iframe = self%fromtof(1),self%fromtof(2)
+                        call local_frames(iframe)%copy_fast(self%frames(iframe))
+                    end do
+                    !$omp end parallel do
                 else
                     call micrograph_dw%kill
                 endif
+                ! non dose-weighted
+                !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+                do iframe = self%fromtof(1),self%fromtof(2)
+                    call local_frames(iframe)%ifft
+                end do
+                !$omp end parallel do
+                call micrograph_nodw%new(ldim, self%smpd_out)
+                call micrograph_nodw%warp_frames_and_sum(self%align_frame, self%align_frame,&
+                    &self%fromtof, local_frames(self%fromtof(1):self%fromtof(2)),&
+                    & self%weights(self%fromtof(1):self%fromtof(2)), POLYDIM, polynomial2d)
             else
                 ! STAGE DRIFT ONLY
                 !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
@@ -404,10 +420,10 @@ contains
                 end do
                 call micrograph_nodw%ifft
                 if( self%l_doseweighing )then
-                    call local_frames(self%fromtof(1))%apply_dose_weighing(self%nframes,&
-                        &self%frames(1:self%nframes), self%fromtof, self%total_dose, self%kv)
                     call micrograph_dw%new(ldim, self%smpd_out)
                     call micrograph_dw%zero_and_flag_ft
+                    call local_frames(self%fromtof(1))%apply_dose_weighing(self%nframes,&
+                        &local_frames, self%fromtof, self%total_dose, self%kv)
                     do iframe = self%fromtof(1),self%fromtof(2)
                         call micrograph_dw%add_workshare(self%frames(iframe), self%weights(iframe))
                     end do
@@ -419,7 +435,7 @@ contains
         endif
         ! Cleanup
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
-        do iframe = self%fromtof(1),self%fromtof(2)
+        do iframe = 1,self%nframes
             call local_frames(iframe)%kill
         end do
         !$omp end parallel do

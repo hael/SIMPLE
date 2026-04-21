@@ -630,7 +630,7 @@ contains
         real     :: smpd, limhsq, limksq, dose_per_frame
         integer  :: ldim(3), hphys, kphys, h, k, i, j, nsel
         integer  :: nxphys, nyphys, ldimx, ldimy, ldimx_half, ldimy_half
-        if (.not. frames(frange(1))%is_ft()) error stop 'Frames should be in Fourier space'
+        if (.not. frames(frange(1))%is_ft()) THROW_HARD('Frames should be in Fourier space')
         smpd       = frames(frange(1))%smpd
         ldim       = frames(frange(1))%ldim
         limhsq     = (real(ldim(1)) * smpd)**2
