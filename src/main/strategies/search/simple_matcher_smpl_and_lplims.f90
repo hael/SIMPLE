@@ -216,21 +216,32 @@ contains
         integer,              intent(in)    :: pfromto(2)
         integer,              intent(inout) :: nptcls
         integer, allocatable, intent(inout) :: pinds(:)
+        logical :: l_has_been_sampled
+        l_has_been_sampled = build%spproj_field%has_been_sampled()
         if( l_updatefrac )then
             ! abinitio2D controller policy:
             ! startit==1  -> sticky sampled subset stage
             ! startit>1   -> stochastic resampling biased toward low updatecnt
+            write(logfhandle,'(A,2I5,L2,F8.3,L2,A,2I8)') &
+                '>>> ABINITIO2D SAMPLING DEBUG: startit/which_iter=', params%startit, params%which_iter, &
+                l_updatefrac, params%update_frac, l_has_been_sampled, ' pfromto=', pfromto(1), pfromto(2)
             if( params%startit == 1 )then
-                if( build%spproj_field%has_been_sampled() )then
+                if( l_has_been_sampled )then
+                    write(logfhandle,'(A)') '>>> ABINITIO2D SAMPLING DEBUG: using sample4update_reprod'
                     call build%spproj_field%sample4update_reprod(pfromto, nptcls, pinds)
                 else
+                    write(logfhandle,'(A)') '>>> ABINITIO2D SAMPLING DEBUG: using sample4update_rnd'
                     call build%spproj_field%sample4update_rnd(pfromto, params%update_frac, nptcls, pinds, .true.)
                     call build%spproj_field%set_updatecnt(1, pinds)
                 endif
             else
+                write(logfhandle,'(A)') '>>> ABINITIO2D SAMPLING DEBUG: using sample4update_cnt'
                 call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, nptcls, pinds, .true.)
             endif
         else
+            write(logfhandle,'(A,2I5,L2,F8.3,A,2I8)') &
+                '>>> ABINITIO2D SAMPLING DEBUG: startit/which_iter=', params%startit, params%which_iter, &
+                l_updatefrac, params%update_frac, ' using sample4update_all pfromto=', pfromto(1), pfromto(2)
             call build%spproj_field%sample4update_all(pfromto, nptcls, pinds, .true.)
         endif
     end subroutine sample_ptcls4update2D
