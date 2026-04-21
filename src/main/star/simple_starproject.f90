@@ -903,7 +903,9 @@ contains
         write(fhandle, *) "loop_"
         do iflag=1, size(flags)
             excludeflag = .false.
-            if(present(exclude) .and. index(trim(adjustl(flags(iflag)%rlnflag)), exclude) > 0 ) excludeflag = .true.
+            if( present(exclude) )then
+                if( index(trim(adjustl(flags(iflag)%rlnflag)), exclude) > 0 ) excludeflag = .true.
+            endif
             if(flags(iflag)%present .and. .not. excludeflag) then
                 write(fhandle, *) "_" // flags(iflag)%rlnflag
             end if
@@ -918,7 +920,9 @@ contains
             if(sporis%get_state(iori) > 0) then
                 do iflag=1, size(flags)
                     excludeflag = .false.
-                    if(present(exclude) .and. index(trim(adjustl(flags(iflag)%rlnflag)), exclude) > 0 ) excludeflag = .true.
+                    if( present(exclude) )then
+                        if( index(trim(adjustl(flags(iflag)%rlnflag)), exclude) > 0 ) excludeflag = .true.
+                    endif
                     if(flags(iflag)%present .and. .not. excludeflag) then
                         if(flags(iflag)%imagesplit) then
                             rval = sporis%get(iori, trim(adjustl(flags(iflag)%splflag2)))
@@ -960,21 +964,23 @@ contains
                         end if
                     end if
                 end do
-                if(present(mapstks) .and. mapstks) then
-                    call spproj%get_stkname_and_ind('ptcl2D', iori, stkname, stkindex)
-                    if(stkname%substr_ind('../') == 1) then ! Relative path. Adjust to base directory
-                        end = stkname%strlen_trim()
-                        write(fhandle, "(I7,A,A,A)", advance="no") int(stkindex), '@', stkname%to_char([4,end]), ' '
-                    else
-                        write(fhandle, "(I7,A,A,A)", advance="no") int(stkindex), '@', stkname%to_char(), ' '
-                    end if
-                    stkind = spproj%os_ptcl2D%get(iori, "stkind")
-                    if(stkind <= spproj%os_mic%get_noris()) then
-                        strtmp = spproj%os_mic%get_str(int(stkind), "intg")
-                        if(strtmp%substr_ind('../') == 1) then ! Relative path. Adjust to base directory
-                            write(fhandle, "(A)", advance="no")  strtmp%to_char([4,strtmp%strlen_trim()]) // " "
+                if( present(mapstks) ) then
+                    if( mapstks )then
+                        call spproj%get_stkname_and_ind('ptcl2D', iori, stkname, stkindex)
+                        if(stkname%substr_ind('../') == 1) then ! Relative path. Adjust to base directory
+                            end = stkname%strlen_trim()
+                            write(fhandle, "(I7,A,A,A)", advance="no") int(stkindex), '@', stkname%to_char([4,end]), ' '
                         else
-                            write(fhandle, "(A)", advance="no") strtmp%to_char() // " "
+                            write(fhandle, "(I7,A,A,A)", advance="no") int(stkindex), '@', stkname%to_char(), ' '
+                        end if
+                        stkind = spproj%os_ptcl2D%get(iori, "stkind")
+                        if(stkind <= spproj%os_mic%get_noris()) then
+                            strtmp = spproj%os_mic%get_str(int(stkind), "intg")
+                            if(strtmp%substr_ind('../') == 1) then ! Relative path. Adjust to base directory
+                                write(fhandle, "(A)", advance="no")  strtmp%to_char([4,strtmp%strlen_trim()]) // " "
+                            else
+                                write(fhandle, "(A)", advance="no") strtmp%to_char() // " "
+                            end if
                         end if
                     end if
                 end if
