@@ -235,7 +235,11 @@ contains
                 end if
                 call optimize_nu_cutoff_finds()
                 call nu_filter_vols(vol_even_nu, vol_odd_nu)
-                call print_nu_filtmap_lowpass_stats(l_mask)
+                if( allocated(nu_aux_even) ) then
+                    call print_nu_filtmap_lowpass_stats(l_mask, aux_resolutions=[res0143s(state)])
+                else
+                    call print_nu_filtmap_lowpass_stats(l_mask)
+                endif
                 eonames_nu(1) = add2fbody(eonames(1), params%ext, NUFILT_SUFFIX)
                 eonames_nu(2) = add2fbody(eonames(2), params%ext, NUFILT_SUFFIX)
                 volname_nu    = add2fbody(volname,    params%ext, NUFILT_SUFFIX)

@@ -63,7 +63,7 @@ contains
         if( any(vol_odd%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; init_nu_filter')
         if( abs(vol_odd%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; init_nu_filter')
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        if( allocated(cutoff_finds) ) deallocate(cutoff_finds)
+        if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         allocate(cutoff_finds(size(lowpass_limits)))
         do i = 1, size(lowpass_limits)
             cutoff_finds(i) = calc_fourier_index(lowpass_limits(i), box, smpd)
@@ -108,13 +108,13 @@ contains
     subroutine cleanup_nu_filter
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_EVEN))
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
-        if( allocated(dmats) )        deallocate(dmats)
-        if( allocated(bwfilters) )    deallocate(bwfilters)
-        if( allocated(filtmap) )      deallocate(filtmap)
-        if( allocated(srcmap) )       deallocate(srcmap)
-        if( allocated(cutoff_finds) ) deallocate(cutoff_finds)
+        if( allocated(dmats)              ) deallocate(dmats)
+        if( allocated(bwfilters)          ) deallocate(bwfilters)
+        if( allocated(filtmap)            ) deallocate(filtmap)
+        if( allocated(srcmap)             ) deallocate(srcmap)
+        if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        if( allocated(nu_lmask) )     deallocate(nu_lmask)
+        if( allocated(nu_lmask)           ) deallocate(nu_lmask)
         call cleanup_aux_bank
         ldim = 0
         box  = 0
@@ -165,7 +165,7 @@ contains
     end subroutine stash_aux_volumes
 
     subroutine cache_filtered_vols( vol_even, vol_odd, initialized )
-        class(image), intent(in) :: vol_even, vol_odd
+        class(image),      intent(in) :: vol_even, vol_odd
         logical, optional, intent(in) :: initialized
         type(image) :: vol_even_filt, vol_odd_filt
         type(image) :: vol_even_copy_cmat, vol_odd_copy_cmat
@@ -213,8 +213,8 @@ contains
     end subroutine cache_filtered_vols
 
     subroutine generate_single_filtered_pair( vol_even, vol_odd, cutoff_find, even_cache_fname, odd_cache_fname )
-        class(image), intent(in) :: vol_even, vol_odd
-        integer,      intent(in) :: cutoff_find
+        class(image),  intent(in) :: vol_even, vol_odd
+        integer,       intent(in) :: cutoff_find
         class(string), intent(in) :: even_cache_fname, odd_cache_fname
         type(image) :: vol_even_filt, vol_odd_filt
         type(image) :: vol_even_copy_cmat, vol_odd_copy_cmat
@@ -254,8 +254,8 @@ contains
     end subroutine generate_single_filtered_pair
 
     subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_even, aux_odd )
-        class(image), intent(in) :: vol_even, vol_odd
-        logical,      intent(in) :: l_mask(:,:,:)
+        class(image),          intent(in) :: vol_even, vol_odd
+        logical,               intent(in) :: l_mask(:,:,:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         type(image) :: vol_even_filt, vol_odd_filt
         type(string) :: even_cache_fname, odd_cache_fname
@@ -597,9 +597,9 @@ contains
     end subroutine calc_filtmap_lowpass_stats
 
     subroutine calc_filtmap_lowpass_histogram( counts, percentages, mask )
-        integer,          intent(out) :: counts(:)
-        real,             intent(out) :: percentages(:)
-        logical, optional, intent(in) :: mask(:,:,:)
+        integer,           intent(out) :: counts(:)
+        real,              intent(out) :: percentages(:)
+        logical, optional, intent(in)  :: mask(:,:,:)
         integer :: icut, nselected
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_histogram')
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before calc_filtmap_lowpass_histogram')
@@ -690,12 +690,14 @@ contains
         end if
     end subroutine print_nu_filter_source_histogram
 
-    subroutine print_filtmap_lowpass_histogram( mask, title )
+    subroutine print_filtmap_lowpass_histogram( mask, title, aux_resolutions )
         logical,          optional, intent(in) :: mask(:,:,:)
         character(len=*), optional, intent(in) :: title
+        real,             optional, intent(in) :: aux_resolutions(:)
         integer, allocatable :: counts(:)
         real,    allocatable :: percentages(:)
-        integer :: icut
+        integer :: icut, iaux, nselected, nvox
+        real    :: pct
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before print_filtmap_lowpass_histogram')
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
@@ -707,15 +709,42 @@ contains
         do icut = 1, size(cutoff_finds)
             write(logfhandle,'(F8.3,A,I12,A,F8.3,A)') cutoff_find_to_lowpass_limit(icut), ' A : ', counts(icut), ' voxels, ', percentages(icut), '%'
         end do
+        ! Print auxiliary pair assignments if present
+        if( allocated(aux_even_bank) .and. present(aux_resolutions) ) then
+            if( size(aux_resolutions) /= size(aux_even_bank) ) THROW_HARD('aux_resolutions size mismatch in print_filtmap_lowpass_histogram')
+            ! Determine nselected for percentage calculation
+            if( present(mask) ) then
+                if( allocated(srcmap) ) then
+                    nselected = count(mask)
+                else
+                    nselected = count(mask)
+                end if
+            else if( allocated(nu_lmask) ) then
+                nselected = count(nu_lmask)
+            else
+                nselected = size(filtmap)
+            end if
+            do iaux = 1, size(aux_even_bank)
+                if( present(mask) ) then
+                    nvox = count(srcmap == iaux + 1 .and. mask)
+                else if( allocated(nu_lmask) ) then
+                    nvox = count(srcmap == iaux + 1 .and. nu_lmask)
+                else
+                    nvox = count(srcmap == iaux + 1)
+                end if
+                pct = 100. * real(nvox) / real(nselected)
+                write(logfhandle,'(F8.3,A,I12,A,F8.3,A)') aux_resolutions(iaux), ' A : ', nvox, ' voxels, ', pct, '%'
+            end do
+        end if
         deallocate(counts, percentages)
     end subroutine print_filtmap_lowpass_histogram
 
-    subroutine print_nu_filtmap_lowpass_stats( mask, title )
-        logical, optional, intent(in) :: mask(:,:,:)
+    subroutine print_nu_filtmap_lowpass_stats( mask, title, aux_resolutions )
+        logical,          optional, intent(in) :: mask(:,:,:)
         character(len=*), optional, intent(in) :: title
+        real,             optional, intent(in) :: aux_resolutions(:)
         type(stats_struct) :: statvars
         integer :: nbase
-        call print_nu_filter_source_histogram(mask)
         if( allocated(srcmap) ) then
             if( present(mask) ) then
                 nbase = count(srcmap == 1 .and. mask)
@@ -740,7 +769,7 @@ contains
         write(logfhandle,'(A,F8.4)') 'Sigma  : ', statvars%sdev
         write(logfhandle,'(A,F8.4)') 'Max    : ', statvars%maxv
         write(logfhandle,'(A,F8.4)') 'Min    : ', statvars%minv
-        call print_filtmap_lowpass_histogram(mask, '>>> LOCAL RESOLUTION HISTOGRAM')
+        call print_filtmap_lowpass_histogram(mask, '>>> LOCAL RESOLUTION HISTOGRAM', aux_resolutions)
     end subroutine print_nu_filtmap_lowpass_stats
 
 end module simple_nu_filter

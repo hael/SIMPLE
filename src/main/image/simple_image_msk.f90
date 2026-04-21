@@ -109,6 +109,8 @@ contains
         real,    parameter :: LAM = 100.
         if( vol_even%is_2d() )THROW_HARD('automask3D_filter is intended for volumes only')
         self%amsklp = params%amsklp
+        ! ensure vol_filt is constructed
+        if( all(vol_filt%get_ldim() == 0) ) call vol_filt%new(vol_even%get_ldim(), vol_even%get_smpd())
         ! ICM filter on local copies to preserve input volumes
         call vol_even_icm%copy(vol_even)
         call vol_odd_icm%copy(vol_odd)
