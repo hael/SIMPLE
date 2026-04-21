@@ -422,8 +422,8 @@ contains
                 if( self%l_doseweighing )then
                     call micrograph_dw%new(ldim, self%smpd_out)
                     call micrograph_dw%zero_and_flag_ft
-                    call local_frames(self%fromtof(1))%apply_dose_weighing(self%nframes,&
-                        &local_frames, self%fromtof, self%total_dose, self%kv)
+                    call self%frames(self%fromtof(1))%apply_dose_weighing(self%nframes,&
+                        &self%frames, self%fromtof, self%total_dose, self%kv)
                     do iframe = self%fromtof(1),self%fromtof(2)
                         call micrograph_dw%add_workshare(self%frames(iframe), self%weights(iframe))
                     end do
