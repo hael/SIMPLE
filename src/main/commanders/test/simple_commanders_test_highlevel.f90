@@ -44,10 +44,10 @@ type, extends(commander_base) :: commander_test_subproject_distr
     procedure :: execute      => exec_test_subproject_distr
 end type commander_test_subproject_distr
 
-type, extends(commander_base) :: commander_test_movie_ppca_subproject_distr
+type, extends(commander_base) :: commander_test_ptcls_ppca_subproject_distr
     contains
-        procedure :: execute      => exec_test_movie_ppca_subproject_distr
-end type commander_test_movie_ppca_subproject_distr
+        procedure :: execute      => exec_test_ptcls_ppca_subproject_distr
+end type commander_test_ptcls_ppca_subproject_distr
 
 contains
 
@@ -761,8 +761,8 @@ subroutine exec_test_subproject_distr( self, cline )
     endif
 end subroutine exec_test_subproject_distr
 
-subroutine exec_test_movie_ppca_subproject_distr( self, cline )
-    class(commander_test_movie_ppca_subproject_distr), intent(inout) :: self
+subroutine exec_test_ptcls_ppca_subproject_distr( self, cline )
+    class(commander_test_ptcls_ppca_subproject_distr), intent(inout) :: self
     class(cmdline),                                    intent(inout) :: cline
     integer,          parameter :: MAXKEYS = 20
     type(parameters)            :: params
@@ -774,39 +774,31 @@ subroutine exec_test_movie_ppca_subproject_distr( self, cline )
     type(string), allocatable   :: subproj_dirs(:), denoised_all(:)
     type(string)                :: cwd_root, chunk_filetab, chunk_stk, denoised_stk
     character(len=8)            :: subid
-    integer                     :: nmovies, nsub, isub, i, fromp, top, nchunk
+    integer                     :: nptcls, nsub, isub, i, fromp, top, nchunk
     integer                     :: nptcls_in, ldim(3)
-    ! if( .not. cline%defined('filetab') )then
-    !     THROW_HARD('filetab is required; '//'test_movie_ppca_subproject_distr')
-    ! endif
-    ! if( .not. cline%defined('smpd') )then
-    !     THROW_HARD('smpd is required; '//'test_movie_ppca_subproject_distr')
-    ! endif
-    !if( .not. cline%defined('nthr')    ) call cline%set('nthr', 1)
     call params%new(cline)
     call read_filetable(params%filetab, movie_fnames)
-    nmovies = size(movie_fnames)
-    if( nmovies < 1 )then
-        THROW_HARD('empty filetab; test_movie_ppca_subproject_distr')
+    nptcls = size(movie_fnames)
+    if( nptcls < 1 )then
+        THROW_HARD('empty filetab; test_ptcls_ppca_subproject_distr')
     endif
-    nsub = min(nmovies, params%nparts)
+    nsub = min(nptcls, params%nparts)
     call simple_getcwd(cwd_root)
     allocate(jobs_descr(nsub), subproj_dirs(nsub), denoised_all(nsub))
     write(logfhandle,'(a)') '>>> Step 1: split movie list into equal chunks and generate chunk stacks'
     do isub = 1, nsub
-        fromp = ((isub - 1) * nmovies) / nsub + 1
-        top   = (isub * nmovies) / nsub
+        fromp = ((isub - 1) * nptcls) / nsub + 1
+        top   = (isub * nptcls) / nsub
         nchunk = top - fromp + 1
         write(subid,'(I8.8)') isub
-        subproj_dirs(isub) = cwd_root%to_char()//'/'//&
-            &'movie_denoise_subproj_'//trim(adjustl(subid))
+        subproj_dirs(isub) = cwd_root%to_char()//'/'//'ptcls_denoise_subproj_'//trim(adjustl(subid))
         call simple_mkdir(subproj_dirs(isub))
         allocate(chunk_fnames(nchunk))
         do i = 1, nchunk
             chunk_fnames(i) = movie_fnames(fromp + i - 1)
         enddo
-        chunk_filetab = subproj_dirs(isub)%to_char()//'/'//'chunk_movies_'//trim(adjustl(subid))//'.txt'
-        chunk_stk     = subproj_dirs(isub)%to_char()//'/'//'chunk_movies_'//trim(adjustl(subid))//'.mrcs'
+        chunk_filetab = subproj_dirs(isub)%to_char()//'/'//'chunk_ptcls_'//trim(adjustl(subid))//'.txt'
+        chunk_stk     = subproj_dirs(isub)%to_char()//'/'//'chunk_ptcls_'//trim(adjustl(subid))//'.mrcs'
         denoised_stk  = 'ppca_denoised_chunk_'//trim(adjustl(subid))//'.mrcs'
         call write_filetable(chunk_filetab, chunk_fnames)
         call cline_stack%set('prg',           'stack')
@@ -822,7 +814,7 @@ subroutine exec_test_movie_ppca_subproject_distr( self, cline )
         call jobs_descr(isub)%new(MAXKEYS)
         call jobs_descr(isub)%set('prg',                                      'ppca_denoise')
         call jobs_descr(isub)%set('mkdir',                                              'no')
-        call jobs_descr(isub)%set('stk',      'chunk_movies_'//trim(adjustl(subid))//'.mrcs')
+        call jobs_descr(isub)%set('stk',      'chunk_ptcls_'//trim(adjustl(subid))//'.mrcs')
         call jobs_descr(isub)%set('outstk',                                     denoised_stk)
         call jobs_descr(isub)%set('smpd',                              real2str(params%smpd))
         call jobs_descr(isub)%set('nthr',                               int2str(params%nthr))
@@ -851,7 +843,7 @@ subroutine exec_test_movie_ppca_subproject_distr( self, cline )
     end do
     deallocate(jobs_descr, subproj_dirs, denoised_all)
     call qenv%kill
-    call simple_end('**** TEST_MOVIE_PPCA_SUBPROJECT_DISTR NORMAL STOP ****')
-end subroutine exec_test_movie_ppca_subproject_distr
+    call simple_end('**** TEST_PTCLS_PPCA_SUBPROJECT_DISTR NORMAL STOP ****')
+end subroutine exec_test_ptcls_ppca_subproject_distr
 
 end module simple_commanders_test_highlevel

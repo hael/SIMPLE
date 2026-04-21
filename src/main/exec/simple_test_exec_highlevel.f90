@@ -3,7 +3,7 @@ module simple_test_exec_highlevel
 use simple_cmdline,                   only: cmdline
 use simple_commanders_test_highlevel, only: commander_test_mini_stream, commander_test_simulate_particles, commander_test_reproject, &
                                             commander_test_simulated_workflow, commander_test_subproject_distr, &
-                                            commander_test_movie_ppca_subproject_distr
+                                            commander_test_ptcls_ppca_subproject_distr
 implicit none
 
 public :: exec_test_highlevel_commander
@@ -14,7 +14,7 @@ type(commander_test_simulated_workflow)          :: xsimulated_workflow
 type(commander_test_simulate_particles)          :: xsimulate_particles
 type(commander_test_reproject)                   :: xreproject
 type(commander_test_subproject_distr)            :: xsubproject_distr
-type(commander_test_movie_ppca_subproject_distr) :: xmovie_ppca_subproject_distr
+type(commander_test_ptcls_ppca_subproject_distr) :: xptcls_ppca_subproject_distr
 
 contains
 
@@ -37,8 +37,8 @@ contains
                 call xsimulated_workflow%execute(cline)
             case( 'subproject_distr' )
                 call xsubproject_distr%execute(cline)
-            case( 'movie_ppca_subproject_distr' )
-                call xmovie_ppca_subproject_distr%execute(cline)
+            case( 'ptcls_ppca_subproject_distr' )
+                call xptcls_ppca_subproject_distr%execute(cline)
             case default
                 l_did_execute = .false.
         end select

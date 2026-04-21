@@ -8,7 +8,7 @@ type(ui_program), target :: simulated_workflow
 type(ui_program), target :: simulate_particles
 type(ui_program), target :: reproject
 type(ui_program), target :: subproject_distr
-type(ui_program), target :: movie_ppca_subproject_distr
+type(ui_program), target :: ptcls_ppca_subproject_distr
 
 contains
 
@@ -19,7 +19,7 @@ contains
         call new_simulated_workflow(tsttab)
         call new_reproject(tsttab)
         call new_subproject_distr(tsttab)
-        call new_movie_ppca_subproject_distr(tsttab)
+        call new_ptcls_ppca_subproject_distr(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -30,7 +30,7 @@ contains
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
         write(logfhandle,'(A)') reproject%name%to_char()
         write(logfhandle,'(A)') subproject_distr%name%to_char()
-        write(logfhandle,'(A)') movie_ppca_subproject_distr%name%to_char()
+        write(logfhandle,'(A)') ptcls_ppca_subproject_distr%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -129,21 +129,21 @@ contains
         call add_ui_program('subproject_distr', subproject_distr, tsttab)
     end subroutine new_subproject_distr
 
-    subroutine new_movie_ppca_subproject_distr( tsttab )
+    subroutine new_ptcls_ppca_subproject_distr( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call movie_ppca_subproject_distr%new(&
-        &'movie_ppca_subproject_distr',&                                  ! name
-        &'split movie chunks + ppca denoise in parallel',&                ! descr_short
-        &'Integration test: split filetab movies into equal chunks, build chunk stacks, denoise each chunk with '&
+        call ptcls_ppca_subproject_distr%new(&
+        &'ptcls_ppca_subproject_distr',&                                  ! name
+        &'split particle chunks + ppca denoise in parallel',&                ! descr_short
+        &'Integration test: split filetab particles into equal chunks, build chunk stacks, denoise each chunk with '&
         &'ppca_denoise in parallel subprojects, merge outputs',&
         &'simple_test_exec',&                                             ! executable
         &.false.)   
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call movie_ppca_subproject_distr%add_input(UI_IMG, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
-        call movie_ppca_subproject_distr%add_input(UI_PARM, 'smpd', 'real', 'SMPD', 'SMPD parameter', 'e.g. 1.3', .true., '')
-        call movie_ppca_subproject_distr%add_input(UI_COMP, 'nparts', 'integer', 'Number of parts', 'Number of parts to split the movie frames into', 'e.g. 4', .true., '')
-        call add_ui_program('movie_ppca_subproject_distr', movie_ppca_subproject_distr, tsttab)
-    end subroutine new_movie_ppca_subproject_distr
+        call ptcls_ppca_subproject_distr%add_input(UI_IMG, 'filetab', 'file', 'List of individual particle files', 'List of particle files (*.mrcs) to import', 'e.g. particle_frames.txt', .true., '')
+        call ptcls_ppca_subproject_distr%add_input(UI_PARM, 'smpd', 'real', 'SMPD', 'SMPD parameter', 'e.g. 1.3', .true., '')
+        call ptcls_ppca_subproject_distr%add_input(UI_COMP, 'nparts', 'integer', 'Number of parts', 'Number of parts to split the particle files into', 'e.g. 4', .true., '')
+        call add_ui_program('ptcls_ppca_subproject_distr', ptcls_ppca_subproject_distr, tsttab)
+    end subroutine new_ptcls_ppca_subproject_distr
 
 end module simple_test_ui_highlevel
