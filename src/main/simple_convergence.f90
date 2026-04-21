@@ -148,7 +148,7 @@ contains
         write(logfhandle,609) '>>> | REQUESTED UPDATE FRACTION     | '//numstr%to_char()
         realized_update_frac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
         numstr = string(realized_update_frac)
-        write(logfhandle,609) '>>> | REALIZED  UPDATE FRACTION      | '//numstr%to_char()
+        write(logfhandle,609) '>>> | REALIZED  UPDATE FRACTION     | '//numstr%to_char()
         endif
         write(logfhandle,609) '>>> --------------------------------------------------'
         ! dynamic shift search range update
