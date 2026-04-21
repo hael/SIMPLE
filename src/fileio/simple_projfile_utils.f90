@@ -27,11 +27,12 @@ contains
         type(class_frcs) :: frcs, frcs_chunk
         type(image)      :: img
         type(string)     :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
+        character(len=STDLEN) :: imgkind_here
         type(string)     :: cavgs_tmp, evenname_tmp, oddname_tmp, sigma2_fname
         real             :: smpd
         integer          :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
         integer          :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
-        logical          :: l_write_proj, l_cavgs_replace, l_update_classno
+        logical          :: l_write_proj, l_cavgs_replace, l_update_classno, l_merge_evenodd, l_merge_frcs, l_merge_sigma2
         l_write_proj     = .true.
         l_cavgs_replace  = .false.
         l_update_classno = .true.
@@ -75,6 +76,9 @@ contains
         nallstks  = 0
         nallmics  = 0
         icls      = 0
+        l_merge_evenodd = .true.
+        l_merge_frcs    = .true.
+        l_merge_sigma2  = .true.
         do ic = 1,nchunks
             projname = chunk_fnames(ic)
             call chunks(ic)%read_data_info(projname, nmics, nstks, nptcls)
@@ -90,17 +94,32 @@ contains
             call img%new(ldim, smpd)
             evenname = add2fbody(stkname, MRC_EXT, '_even')
             oddname  = add2fbody(stkname, MRC_EXT, '_odd')
+            l_merge_evenodd = l_merge_evenodd .and. file_exists(evenname) .and. file_exists(oddname)
+            call chunks(ic)%get_frcs(frc_fname, 'frc2D', fail=.false.)
+            l_merge_frcs = l_merge_frcs .and. frc_fname /= NIL .and. file_exists(frc_fname)
+            do i = 1,chunks(ic)%os_out%get_noris()
+                if( chunks(ic)%os_out%isthere(i,'imgkind') )then
+                    call chunks(ic)%os_out%get_static(i, 'imgkind', imgkind_here)
+                    if( trim(imgkind_here) == 'sigma2' ) exit
+                endif
+            end do
+            if( i > chunks(ic)%os_out%get_noris() ) l_merge_sigma2 = .false.
             do i = 1,ncls
                 icls = icls+1
                 call img%read(stkname,i)
                 call img%write(cavgs,icls)
-                call img%read(evenname,i)
-                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//MRC_EXT,icls)
-                call img%read(oddname,i)
-                call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//MRC_EXT,icls)
+                if( l_merge_evenodd )then
+                    call img%read(evenname,i)
+                    call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//MRC_EXT,icls)
+                    call img%read(oddname,i)
+                    call img%write(dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//MRC_EXT,icls)
+                endif
             enddo
         enddo
         call img%kill
+        if( .not. l_merge_evenodd ) THROW_WARN('merge_chunk_projfiles: missing even/odd class-average stacks; skipping even/odd merge')
+        if( .not. l_merge_frcs )    THROW_WARN('merge_chunk_projfiles: missing frc2D data; skipping FRC merge')
+        if( .not. l_merge_sigma2 )  THROW_WARN('merge_chunk_projfiles: missing sigma2 data; skipping sigma2 merge')
         ncls_tot = icls
         ! micrographs
         if( nallmics > 0 )then
@@ -129,12 +148,14 @@ contains
             call chunks(ic)%read_segment('stk', projname)
             call chunks(ic)%read_segment('ptcl2D',projname)
             ! classes frcs & info
-            call chunks(ic)%get_frcs(frc_fname, 'frc2D')
             ncls = chunks(ic)%os_cls2D%get_noris()
-            call frcs_chunk%read(frc_fname)
-            if( ic == 1 )then
-                box4frc = frcs_chunk%get_box()
-                call frcs%new(ncls_tot, box4frc, smpd)
+            if( l_merge_frcs )then
+                call chunks(ic)%get_frcs(frc_fname, 'frc2D')
+                call frcs_chunk%read(frc_fname)
+                if( ic == 1 )then
+                    box4frc = frcs_chunk%get_box()
+                    call frcs%new(ncls_tot, box4frc, smpd)
+                endif
             endif
             allocate(clsmap(ncls),source=0)
             do i = 1,ncls
@@ -144,7 +165,7 @@ contains
                 call merged_proj%os_cls2D%set_class(icls, icls)
                 call merged_proj%os_cls2D%set(icls,'origclass',i)
                 call merged_proj%os_cls2D%set(icls,'chunk',    projname)
-                if( chunks(ic)%os_cls2D%get_state(i) > 0 )then
+                if( l_merge_frcs .and. chunks(ic)%os_cls2D%get_state(i) > 0 )then
                     call frcs%set_frc(icls, frcs_chunk%get_frc(i,  box4frc))
                 endif
             enddo
@@ -169,7 +190,11 @@ contains
             enddo
             deallocate(clsmap)
             ! sigma2
-            call chunks(ic)%get_sigma2(chunks_sigma2(ic))
+            if( l_merge_sigma2 )then
+                call chunks(ic)%get_sigma2(chunks_sigma2(ic))
+            else
+                chunks_sigma2(ic) = NIL
+            endif
             ! making sure the compenv is informed
             if( (ic == 1) .and. (merged_proj%compenv%get_noris() == 0) )then
                 call chunks(1)%read_non_data_segments(chunk_fnames(1))
@@ -181,20 +206,26 @@ contains
         enddo
         deallocate(chunks)
         ! add classes, frcs
-        call frcs%write(dir//trim(FRCS_FILE))
-        call merged_proj%add_frcs2os_out(dir//trim(FRCS_FILE), 'frc2D')
+        if( l_merge_frcs )then
+            call frcs%write(dir//trim(FRCS_FILE))
+            call merged_proj%add_frcs2os_out(dir//trim(FRCS_FILE), 'frc2D')
+        endif
         if( l_cavgs_replace ) then
-            evenname = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//MRC_EXT
-            oddname  = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//MRC_EXT
             call simple_rename( cavgs,    cavgs_tmp,    overwrite=.true. )
-            call simple_rename( evenname, evenname_tmp, overwrite=.true. )
-            call simple_rename( oddname,  oddname_tmp,  overwrite=.true. )
+            if( l_merge_evenodd )then
+                evenname = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//MRC_EXT
+                oddname  = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//MRC_EXT
+                call simple_rename( evenname, evenname_tmp, overwrite=.true. )
+                call simple_rename( oddname,  oddname_tmp,  overwrite=.true. )
+            endif
             cavgs = cavgs_tmp
         endif
         call merged_proj%add_cavgs2os_out(cavgs, smpd, imgkind='cavg')
         ! merge and add sigmas
-        call average_sigma2_groups(sigma2_fname, chunks_sigma2)
-        if( file_exists(sigma2_fname) ) call merged_proj%add_sigma22os_out(sigma2_fname)
+        if( l_merge_sigma2 )then
+            call average_sigma2_groups(sigma2_fname, chunks_sigma2)
+            if( file_exists(sigma2_fname) ) call merged_proj%add_sigma22os_out(sigma2_fname)
+        endif
         deallocate(chunks_sigma2)
         ! propagate 2D states to 3D
         states = merged_proj%os_cls2D%get_all('state')
@@ -205,8 +236,10 @@ contains
         ! write
         if(l_write_proj) call merged_proj%write(projfile_out)
         ! cleanup
-        call frcs%kill
-        call frcs_chunk%kill
+        if( l_merge_frcs )then
+            call frcs%kill
+            call frcs_chunk%kill
+        endif
     end subroutine merge_chunk_projfiles
 
 end module simple_projfile_utils

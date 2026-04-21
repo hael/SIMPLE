@@ -589,12 +589,10 @@ subroutine exec_test_subproject_distr( self, cline )
     use simple_commanders_project_ptcl, only: commander_import_particles
     class(commander_test_subproject_distr), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    ! integer, parameter :: NPTCLS_SIM  = 5000   ! particles to simulate
-    ! integer, parameter :: NCLS_COARSE = 50     ! coarse classes
-    integer, parameter :: NPTCLS_SIM  = 500      ! particles to simulate
-    integer, parameter :: NCLS_COARSE = 2        ! coarse classes
-    integer, parameter :: MAXKEYS     = 20       ! chash capacity
-    real,    parameter :: SMPD        = 1.3
+    integer,          parameter :: NPTCLS_SIM  = 500      ! particles to simulate
+    integer,          parameter :: NCLS_COARSE = 2        ! coarse classes
+    integer,          parameter :: MAXKEYS     = 20       ! chash capacity
+    real,             parameter :: SMPD        = 1.3
     character(len=*), parameter :: PROJNAME = 'test_subproj_distr'
     type(parameters)                    :: params
     type(sp_project)                    :: spproj, spproj_sub, spproj_merged
@@ -722,6 +720,7 @@ subroutine exec_test_subproject_distr( self, cline )
     call cline%set('mskdiam',                 180.)
     call cline%set('smpd',                    SMPD)
     call cline%set('nthr',                     16.)
+    call cline%set('ncunits',                 nsub)
     call params%new(cline)
     call qenv%new(params, nsub)
     call qenv%gen_subproject_scripts_and_schedule(jobs_descr, subproj_dirs=subproj_dirs)

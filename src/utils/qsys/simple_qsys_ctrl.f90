@@ -62,6 +62,7 @@ type qsys_ctrl
     procedure, private :: update_queue
     ! THE MASTER SCHEDULERS
     procedure          :: schedule_jobs
+    procedure          :: schedule_subproject_jobs
     procedure          :: schedule_array_jobs
     ! STREAMING
     procedure          :: schedule_streaming
@@ -208,7 +209,7 @@ contains
     !    call qctrl%schedule_jobs
     subroutine generate_scripts_subprojects( self, jobs_descr, q_descr, exec_bin, subproj_dirs )
         class(qsys_ctrl),        intent(inout) :: self
-        type(chash),             intent(in)    :: jobs_descr(:)   !< one job description per subproject
+        type(chash),             intent(inout) :: jobs_descr(:)   !< one job description per subproject
         class(chash),            intent(in)    :: q_descr         !< queue system description
         class(string), optional, intent(in)    :: exec_bin        !< override executable binary
         class(string), optional, intent(in)    :: subproj_dirs(:) !< per-subproject working directories
@@ -231,12 +232,16 @@ contains
             execution_binary = self%exec_binary
         endif
         do isub = 1, nsub
+            if( present(subproj_dirs) )then
+                self%jobs_done_fnames(isub)      = trim(subproj_dirs(isub)%to_char())//'/'//SUBPROJECT_JOB_FINISHED_FBODY//int2str_pad(isub,self%numlen)
+            else
+                self%jobs_done_fnames(isub)      = SUBPROJECT_JOB_FINISHED_FBODY//int2str_pad(isub,self%numlen)
+            endif
             call fopen(funit, file=self%script_names(isub), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
             call fileiochk('simple_qsys_ctrl :: generate_scripts_subprojects; Error when opening file for writing: '&
                 &//self%script_names(isub)%to_char()//' ; '//trim(io_msg), ios)
             ! specify shell
             write(funit,'(a)') '#!/bin/bash'
-            stop
             ! write qsys-specific instructions (run-time polymorphic)
             if( q_descr%get('qsys_name') .ne. 'local' )then
                 call self%myqsys%write_instr(q_descr, fhandle=funit)
@@ -250,15 +255,24 @@ contains
                 write(funit,'(a)') 'cd '//trim(CWD_GLOB)
             endif
             write(funit,'(a)') ''
+            write(funit,'(a)') 'set -o pipefail'
+            write(funit,'(a)') ''
             ! compose the command line from the subproject's job description
+            call jobs_descr(isub)%set('part',   int2str(isub))
+            call jobs_descr(isub)%set('numlen', int2str(self%numlen))
             job_str = jobs_descr(isub)%chash2str()
-            write(funit,'(a)',advance='no') execution_binary%to_char()//' '//job_str%to_char()
+            write(funit,'(a)',advance='no') 'if '//execution_binary%to_char()//' '//job_str%to_char()
             ! direct output
             write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
-            ! exit shell when done
-            write(funit,'(a)') ''
-            write(funit,'(a)') 'exit'
+            write(funit,'(a)') 'then'
+            write(funit,'(a)') '  touch '//self%jobs_done_fnames(isub)%to_char()
+            write(funit,'(a)') '  exit 0'
+            write(funit,'(a)') 'else'
+            write(funit,'(a)') '  exit 1'
+            write(funit,'(a)') 'fi'
             call fclose(funit)
+            call jobs_descr(isub)%delete('part')
+            call jobs_descr(isub)%delete('numlen')
             if( q_descr%get('qsys_name') .eq. 'local' )then
                 ios = simple_chmod(self%script_names(isub), '+x')
                 if( ios /= 0 )then
@@ -270,6 +284,7 @@ contains
             ! reset job tracking flags for this subproject
             self%jobs_done(isub)      = .false.
             self%jobs_submitted(isub) = .false.
+            call del_file(self%jobs_done_fnames(isub))
             call wait_for_closure(self%script_names(isub))
         end do
         ! reset available computing units
@@ -767,6 +782,16 @@ contains
             call sleep(SHORTTIME)
         end do
     end subroutine schedule_jobs
+
+    subroutine schedule_subproject_jobs( self )
+        class(qsys_ctrl), intent(inout) :: self
+        do
+            if( all(self%jobs_done) ) exit
+            call self%update_queue
+            call self%submit_scripts
+            call sleep(SHORTTIME)
+        end do
+    end subroutine schedule_subproject_jobs
 
     subroutine schedule_array_jobs( self )
         class(qsys_ctrl), intent(inout) :: self

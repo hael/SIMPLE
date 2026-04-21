@@ -38,6 +38,7 @@ contains
         call del_files('algndoc_',             nparts, ext=trim(METADATA_EXT))
         call del_files('algndoc_cavgs_',       nparts, ext=trim(METADATA_EXT))
         call del_files(JOB_FINISHED_FBODY,     nparts)
+        call del_files(SUBPROJECT_JOB_FINISHED_FBODY, nparts)
         call del_files('distr_simple_script_', nparts)
         ! optionally deletes 2D analysis temporary files
         if( .not.l_keep2D )then
@@ -62,6 +63,12 @@ contains
             call simple_touch(JOB_FINISHED_FBODY//int2str_pad(params%part,params%numlen))
         endif
     end subroutine qsys_job_finished
+
+    subroutine qsys_subproject_job_finished( params, source )
+        class(parameters), intent(in) :: params
+        class(string),     intent(in) :: source
+        call simple_touch(SUBPROJECT_JOB_FINISHED_FBODY//int2str_pad(params%part,params%numlen))
+    end subroutine qsys_subproject_job_finished
 
     !>  returns when the inputted file exists in cwd
     subroutine qsys_watcher_1( fname, wtime )
