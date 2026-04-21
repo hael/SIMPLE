@@ -81,7 +81,7 @@ contains
         real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         integer :: n, nptcls, nsampled, nactive
-        real    :: overlap_lim, fracsrch_lim
+        real    :: overlap_lim, fracsrch_lim, realized_update_frac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged, chk4conv
         601 format(A,1X,F12.3)
@@ -143,6 +143,13 @@ contains
         write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
         endif
         write(logfhandle,609) '>>> | FILTER MODE                   | '//trim(params%filt_mode)
+        if( params%l_update_frac )then
+        numstr = string(params%update_frac)
+        write(logfhandle,609) '>>> | REQUESTED UPDATE FRACTION     | '//numstr%to_char()
+        realized_update_frac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
+        numstr = string(realized_update_frac)
+        write(logfhandle,609) '>>> | REALIZED  UPDATE FRACTION      | '//numstr%to_char()
+        endif
         write(logfhandle,609) '>>> --------------------------------------------------'
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
@@ -220,6 +227,10 @@ contains
         call ostats%set(1,'PERCEN_PARTICLES_SAMPLED', percen_sampled)
         call ostats%set(1,'PERCEN_PARTICLES_UPDATED', percen_updated)
         call ostats%set(1,'PERCEN_PARTICLES_AVERAGED',percen_avg)
+        if( params%l_update_frac )then
+            call ostats%set(1,'REQUESTED_UPDATE_FRACTION', params%update_frac)
+            call ostats%set(1,'REALIZED_UPDATE_FRACTION',  realized_update_frac)
+        endif
         call ostats%set(1,'IN-PLANE_DIST',            self%dist_inpl%avg)
         call ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
         call ostats%set(1,'SCORE',                    self%score%avg)

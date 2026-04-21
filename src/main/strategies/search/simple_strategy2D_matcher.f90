@@ -46,7 +46,8 @@ type(string)               :: benchfname
 type :: cluster2D_ctrl
     character(len=:), allocatable :: refine_flag
     logical :: l_partial_sums
-    logical :: l_update_frac
+    logical :: l_sample_updates
+    logical :: l_frac_restore
     logical :: l_ctf
     logical :: l_snhc
     logical :: l_stream
@@ -185,28 +186,37 @@ contains
             ctrl%l_snhc          = str_has_substr(ctrl%refine_flag, 'snhc')
             ctrl%l_greedy        = str_has_substr(ctrl%refine_flag, 'greedy')
             ctrl%l_stream        = (trim(p_ptr%stream2d) == 'yes')
-            ctrl%l_update_frac   = p_ptr%l_update_frac
-            ctrl%l_partial_sums  = ctrl%l_update_frac
+            ctrl%l_sample_updates= p_ptr%l_update_frac
+            ctrl%l_frac_restore  = ctrl%l_sample_updates
+            ctrl%l_partial_sums  = ctrl%l_frac_restore
             ctrl%l_prob_align    = p_ptr%l_prob_align_mode
             ctrl%l_polar         = p_ptr%l_polar
             ctrl%l_restore_cavgs = (trim(p_ptr%restore_cavgs) == 'yes')
             ctrl%l_np_cls_defined= cline%defined('nptcls_per_cls')
             ctrl%do_bench        = L_BENCH_GLOB
+            if( p_ptr%startit == 1 )then
+                ctrl%l_frac_restore = .false.
+                ctrl%l_partial_sums = .false.
+            endif
             if( p_ptr%extr_iter == 1 )then
                 ctrl%l_greedy       = .true.
                 ctrl%l_snhc         = .false.
-                ctrl%l_partial_sums = .false.
             else if( p_ptr%extr_iter > p_ptr%extr_lim )then
                 if( trim(ctrl%refine_flag) == 'snhc_smpl' ) ctrl%refine_flag = 'snhc'
             endif
             if( ctrl%l_stream )then
-                ctrl%l_update_frac = .false.
+                ctrl%l_sample_updates = .false.
+                ctrl%l_frac_restore   = .false.
                 if( (which_iter > 1) .and. (p_ptr%update_frac < 0.99) )then
                     p_ptr%l_update_frac = .true.
+                    ctrl%l_sample_updates = .true.
+                    ctrl%l_frac_restore   = .true.
                     ctrl%l_partial_sums = .true.
                 else
                     p_ptr%update_frac   = 1.0
                     p_ptr%l_update_frac = .false.
+                    ctrl%l_sample_updates = .false.
+                    ctrl%l_frac_restore   = .false.
                     ctrl%l_partial_sums = .false.
                 endif
                 if( trim(ctrl%refine_flag) == 'snhc' ) ctrl%refine_flag = 'snhc_smpl'
@@ -217,9 +227,11 @@ contains
         subroutine sample_particles_for_update()
             if( allocated(pinds) ) deallocate(pinds)
             if( ctrl%l_prob_align )then
+                ! prob_align2D owns the outer subset sampling in probabilistic mode;
+                ! cluster2D only reproduces that same subset for the downstream update.
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds)
             else
-                call sample_ptcls4update2D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], ctrl%l_update_frac, nptcls2update, pinds)
+                call sample_ptcls4update2D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], ctrl%l_sample_updates, nptcls2update, pinds)
             endif
         end subroutine sample_particles_for_update
 
@@ -265,7 +277,8 @@ contains
                     call cavger_read_all
                 endif
             endif
-            if( .not. ctrl%l_polar ) call cavger_init_online(batchsz_max, ctrl%l_partial_sums)
+            ctrl%l_partial_sums = ctrl%l_frac_restore
+            if( .not. ctrl%l_polar ) call cavger_init_online(batchsz_max, ctrl%l_frac_restore)
         end subroutine prepare_class_averages_and_restoration
 
         subroutine prepare_alignment_references(batchsz_max)

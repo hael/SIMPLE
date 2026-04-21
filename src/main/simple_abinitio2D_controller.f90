@@ -5,7 +5,8 @@ use simple_parameters, only: parameters
 implicit none
 
 public :: stage_params, determine_abinitio2D_stages, mskdiam2lplimits_cluster2D, set_cline_cluster2D_stage
-public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE
+public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE, NPTCLS2SAMPLE_2D
+public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE
 private
 #include "simple_local_flags.inc"
 
@@ -18,13 +19,19 @@ integer,          parameter :: ITS_INCR         = 5
 integer,          parameter :: PHASES(2)        = [4, 6]
 integer,          parameter :: EXTR_LIM_LOCAL   = 20
 integer,          parameter :: PROBREFINE_STAGE = 5
+integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE ! switch from sticky to stochastic sampling when prob starts
+integer,          parameter :: STICKY_SAMPL_STAGE = 1               ! sticky random subset stage
+integer,          parameter :: FRAC_UPDATE_STAGE = 2                ! fractional class-average carry-over starts here
+integer,          parameter :: NPTCLS2SAMPLE_2D = 200000
 character(len=3), parameter :: EO_STAGE         = 'yes'
 
 ! convenience type
 type stage_params
     real    :: lp=0., smpd_crop=0., trslim=0.
+    real    :: update_frac=1.
     integer :: box_crop = 0, max_cls_pop=0, nptcls=0
-    logical :: l_lpset=.false.
+    logical :: l_lpset=.false., l_update_frac=.false.
+    logical :: l_sticky_sampling=.false., l_frac_restore=.false.
 end type stage_params
 
 contains
@@ -149,7 +156,7 @@ contains
             call cline_cluster2D%delete('gaufreq')
         endif
         if( params%l_prob_align_mode )then
-            if( istage < PROBREFINE_STAGE )then
+            if( istage < STOCH_SAMPL_STAGE )then
                 refine = 'snhc_smpl'
             else
                 refine = 'prob'
@@ -166,7 +173,11 @@ contains
         call cline_cluster2D%set('center',    center)
         call cline_cluster2D%set('box_crop',  stage_parms(istage)%box_crop)
         call cline_cluster2D%set('smpd_crop', stage_parms(istage)%smpd_crop)
-        call cline_cluster2D%delete('update_frac')
+        if( stage_parms(istage)%l_update_frac )then
+            call cline_cluster2D%set('update_frac', stage_parms(istage)%update_frac)
+        else
+            call cline_cluster2D%delete('update_frac')
+        endif
         call cline_cluster2D%delete('endit')
     end subroutine set_cline_cluster2D_stage
 

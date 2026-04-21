@@ -217,7 +217,19 @@ contains
         integer,              intent(inout) :: nptcls
         integer, allocatable, intent(inout) :: pinds(:)
         if( l_updatefrac )then
-            call build%spproj_field%sample4update_rnd(pfromto, params%update_frac, nptcls, pinds, .true.)
+            ! abinitio2D controller policy:
+            ! startit==1  -> sticky sampled subset stage
+            ! startit>1   -> stochastic resampling biased toward low updatecnt
+            if( params%startit == 1 )then
+                if( build%spproj_field%has_been_sampled() )then
+                    call build%spproj_field%sample4update_reprod(pfromto, nptcls, pinds)
+                else
+                    call build%spproj_field%sample4update_rnd(pfromto, params%update_frac, nptcls, pinds, .true.)
+                    call build%spproj_field%set_updatecnt(1, pinds)
+                endif
+            else
+                call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, nptcls, pinds, .true.)
+            endif
         else
             call build%spproj_field%sample4update_all(pfromto, nptcls, pinds, .true.)
         endif

@@ -146,14 +146,14 @@ contains
         type(starproject) :: starproj
         type(cmdline)     :: cline_prob_align
         call self%conv%print_iteration(params%which_iter)
-        call cline%set('startit',    params%which_iter)
+        call cline%set('startit',    params%startit)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
-            call cline_prob_align%set('startit',    params%which_iter)
+            call cline_prob_align%set('startit',    params%startit)
             call build%spproj%write_segment_inside(params%oritype)
             call xprob_align2D%execute(cline_prob_align)
             call build%spproj%read_segment(params%oritype, params%projfile)
@@ -251,12 +251,12 @@ contains
         call self%conv%print_iteration(params%which_iter)
         ! Update job description
         call cline%set('nparts',     params%nparts)
-        call cline%set('startit',    params%which_iter)
+        call cline%set('startit',    params%startit)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
         call self%job_descr%set('refs',       params%refs)
         call self%job_descr%set('nparts',     int2str(params%nparts))
-        call self%job_descr%set('startit',    int2str(params%which_iter))
+        call self%job_descr%set('startit',    int2str(params%startit))
         call self%job_descr%set('which_iter', int2str(params%which_iter))
         call self%job_descr%set('extr_iter',  int2str(params%extr_iter))
         call self%job_descr%set('frcs',       FRCS_FILE)
@@ -264,7 +264,7 @@ contains
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
-            call cline_prob_align%set('startit',    params%which_iter)
+            call cline_prob_align%set('startit',    params%startit)
             call build%spproj%write_segment_inside(params%oritype)
             call xprob_align2D%execute(cline_prob_align)
             call build%spproj%read_segment(params%oritype, params%projfile)

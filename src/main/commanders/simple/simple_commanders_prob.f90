@@ -369,8 +369,12 @@ contains
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
-        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        ! sample particles for this iteration
+        if( params%startit == 1 .and. params%which_iter == params%startit )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
+        ! Mirror the 3D workflow: sampled-update is active from the first stage onward.
+        ! In probabilistic mode the sampled subset is reused within the current iteration
+        ! by prob_tab2D/cluster2D_exec, but it is redrawn on later iterations.
         call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
         ! write sampling to project
         call build%spproj%write_segment_inside(params%oritype)

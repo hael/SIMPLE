@@ -151,16 +151,22 @@ contains
         integer, intent(in) :: maxbatchsz
         logical, intent(in) :: do_frac_update
         integer :: fdims_croppd(3), cshape_crop(2), wdim
+        real, allocatable :: class_update_fracs(:)
         ! Zero sums or set to previous with weight
         if( l_alloc_read_cavgs )then
             call cavgs%zero_set(.true.)
             if( do_frac_update )then
                 call cavger_readwrite_partial_sums('read')
-                call apply_weights2cavgs(1.0-p_ptr%update_frac)
+                call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
+                call apply_weights2cavgs(class_update_fracs)
             endif
         else
-            if( do_frac_update ) call apply_weights2cavgs(1.0-p_ptr%update_frac)
-            call cavgs%zero_set(.true.)
+            if( do_frac_update )then
+                call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
+                call apply_weights2cavgs(class_update_fracs)
+            else
+                call cavgs%zero_set(.true.)
+            endif
         endif
         ! Interpolation variables
         kbwin  = kbinterpol(KBWINSZ, KBALPHA)
@@ -632,14 +638,19 @@ contains
         call ca%kill; call ct%kill
     end subroutine cavger_pad_partial_sums
 
-    module subroutine apply_weights2cavgs( w )
-        real, intent(in) :: w
-        !$omp parallel workshare proc_bind(close)
-        cavgs%even%cmat  = w * cavgs%even%cmat
-        cavgs%even%ctfsq = w * cavgs%even%ctfsq
-        cavgs%odd%cmat   = w * cavgs%odd%cmat
-        cavgs%odd%ctfsq  = w * cavgs%odd%ctfsq
-        !$omp end parallel workshare
+    module subroutine apply_weights2cavgs( class_update_fracs )
+        real, intent(in) :: class_update_fracs(:)
+        real :: w
+        integer :: icls
+        !$omp parallel do default(shared) private(icls,w) schedule(static) proc_bind(close)
+        do icls = 1, min(ncls, size(class_update_fracs))
+            w = 1.0 - max(0.0, min(1.0, class_update_fracs(icls)))
+            cavgs%even%cmat(:,:,icls)  = w * cavgs%even%cmat(:,:,icls)
+            cavgs%even%ctfsq(:,:,icls) = w * cavgs%even%ctfsq(:,:,icls)
+            cavgs%odd%cmat(:,:,icls)   = w * cavgs%odd%cmat(:,:,icls)
+            cavgs%odd%ctfsq(:,:,icls)  = w * cavgs%odd%ctfsq(:,:,icls)
+        enddo
+        !$omp end parallel do
     end subroutine apply_weights2cavgs
 
     !>  \brief  generates the cavgs parts after distributed execution
@@ -661,6 +672,7 @@ contains
             if( b_ptr%spproj_field%get(iptcl,'w') < SMALL )cycle
             eo   = b_ptr%spproj_field%get_eo(iptcl) + 1
             icls = b_ptr%spproj_field%get_class(iptcl)
+            if( icls < 1 .or. icls > ncls ) cycle
             eo_pops(eo, icls) = eo_pops(eo, icls) + 1
         enddo
         !$omp end parallel do

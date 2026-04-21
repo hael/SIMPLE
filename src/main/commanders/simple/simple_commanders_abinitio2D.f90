@@ -33,7 +33,7 @@ contains
         type(parameters)           :: params
         type(sp_project)           :: spproj
         class(oris),       pointer :: spproj_field
-        integer :: maxits, istage, last_iter, nptcls_eff, nstages
+        integer :: maxits, istage, last_iter, nptcls_eff, nstages, nsample_target_2D
         logical :: l_shmem
         call cline%set('oritype',   'ptcl2D')
         call cline%set('sigma_est', 'global')
@@ -74,9 +74,10 @@ contains
         call set_sampling               ! sampling
         ! summary
         do istage = 1,nstages
-            write(logfhandle,'(A,I2,A,L1,F6.1,2I8)')'>>> STAGE ', istage,' LPSET LP MAXCLSPOP NPTCLS: ',&
+            write(logfhandle,'(A,I2,A,L1,F6.1,2I8,F7.3,2L2)')'>>> STAGE ', istage,' LPSET LP MAXCLSPOP NPTCLS UFRAC ST FR: ',&
             &stage_parms(istage)%l_lpset,stage_parms(istage)%lp, stage_parms(istage)%max_cls_pop,&
-            &stage_parms(istage)%nptcls
+            &stage_parms(istage)%nptcls, stage_parms(istage)%update_frac,&
+            &stage_parms(istage)%l_sticky_sampling, stage_parms(istage)%l_frac_restore
         end do
         ! prep particles field
         call spproj_field%set_all2single('w',1.)
@@ -253,9 +254,30 @@ contains
         end subroutine set_lplims
 
         subroutine set_sampling
-            nptcls_eff = spproj%count_state_gt_zero()
+            if( cline%defined('nsample') )then
+                if( params%nsample < 1 ) THROW_HARD('nsample must be >= 1 for abinitio2D sampled update')
+                nsample_target_2D = params%nsample
+            else
+                nsample_target_2D = NPTCLS2SAMPLE_2D
+            endif
+            nptcls_eff                 = spproj%count_state_gt_zero()
             stage_parms(:)%max_cls_pop = 0
-            stage_parms(:)%nptcls      = nptcls_eff
+            stage_parms(:)%nptcls      = min(nptcls_eff, nsample_target_2D)
+            if( nptcls_eff > 0 )then
+                stage_parms(:)%update_frac   = min(1.0, real(stage_parms(1)%nptcls) / real(nptcls_eff))
+                stage_parms(:)%l_update_frac = stage_parms(:)%update_frac < 0.99
+            else
+                stage_parms(:)%update_frac   = 1.0
+                stage_parms(:)%l_update_frac = .false.
+            endif
+            stage_parms(:)%l_sticky_sampling = .false.
+            stage_parms(:)%l_frac_restore    = stage_parms(:)%l_update_frac
+            if( nstages >= STICKY_SAMPL_STAGE )then
+                stage_parms(STICKY_SAMPL_STAGE:min(STOCH_SAMPL_STAGE-1,nstages))%l_sticky_sampling = stage_parms(STICKY_SAMPL_STAGE:min(STOCH_SAMPL_STAGE-1,nstages))%l_update_frac
+            endif
+            if( FRAC_UPDATE_STAGE > 1 )then
+                stage_parms(1:min(FRAC_UPDATE_STAGE-1,nstages))%l_frac_restore = .false.
+            endif
         end subroutine set_sampling
 
         subroutine prep_command_lines( cline )

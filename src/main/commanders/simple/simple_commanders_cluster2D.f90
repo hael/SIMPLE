@@ -109,7 +109,11 @@ contains
         if( .not. cline%defined('outfile') ) THROW_HARD('OUTFILE must be defined for distributed worker execution')
         ! Worker needs the alignment toolboxes
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        params%which_iter = max(1, params%startit)
+        if( cline%defined('which_iter') )then
+            params%which_iter = max(1, params%which_iter)
+        else
+            params%which_iter = max(1, params%startit)
+        endif
         if( .not. cline%defined('extr_iter') ) params%extr_iter = params%which_iter
         call cline%set('which_iter', int2str(params%which_iter))
         call cluster2D_exec(params, build, cline, params%which_iter, converged)

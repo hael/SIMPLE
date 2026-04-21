@@ -83,6 +83,7 @@ contains
             else
                 icls = ptcl_field%get_class(iptcl)
             endif
+            if( icls < 1 .or. icls > self%ncls ) cycle
             eo_pops(eo,icls) = eo_pops(eo,icls) + 1
         enddo
         !$omp end parallel do
