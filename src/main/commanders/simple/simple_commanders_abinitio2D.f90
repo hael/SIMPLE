@@ -82,6 +82,7 @@ contains
         ! prep particles field
         call spproj_field%set_all2single('w',1.)
         call spproj_field%delete_2Dclustering
+        call spproj_field%clean_entry('updatecnt', 'sampled')
         if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
         call spproj%write_segment_inside(params%oritype, params%projfile)
         call spproj%split_stk(params%nparts, dir=string(PATH_PARENT))

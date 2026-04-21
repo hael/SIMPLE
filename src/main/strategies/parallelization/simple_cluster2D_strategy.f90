@@ -226,6 +226,9 @@ contains
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
+        if( params%startit == 1 )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
         call set_master_num_threads(self%nthr_master, string('CLUSTER2D'))
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)
