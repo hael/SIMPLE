@@ -5,17 +5,30 @@
 ! accumulate: a class rejected by any criterion remains rejected.
 !
 ! Rejection strategies:
-!   reject_pop            — removes under-populated classes (< POP_PERCENT_THRESHOLD of total)
+!   reject_pop            — removes under-populated classes (< POP_PERCENT_THRESHOLD of total);
+!                           optional thres overrides POP_PERCENT_THRESHOLD for that call
 !   reject_res            — removes classes with poor FSC resolution (> RES_THRESHOLD Å)
 !   reject_mask           — removes classes with Otsu foreground signal outside the mask disc
-!   reject_local_variance — removes structurally flat classes with low fg/bg local variance
+!   reject_local_variance — removes structurally flat classes: zero inside/outside variance
+!                           scores are rejected unconditionally; remaining classes are rejected
+!                           when robust z-scores in both regions fall below the dual threshold;
+!                           optional strong_thresh/weak_thresh override the defaults
+!
+! Constants:
+!   POP_PERCENT_THRESHOLD — minimum population fraction to keep a class          (0.005)
+!   RES_THRESHOLD         — maximum FSC resolution to keep a class, Å            (40.0)
+!   MASK_THRESHOLD        — maximum pixels outside mask disc for the largest CC  (10.0)
+!   LOCVAR_STRONG_THRESH  — strong z-score cut for local-variance rejection       (-0.5)
+!   LOCVAR_WEAK_THRESH    — weak z-score cut for local-variance rejection         (-0.1)
 !
 ! Typical usage:
 !   call rejector%new(cavg_imgs, mskdiam)
 !   call rejector%reject_pop(os_cls2D)
 !   call rejector%reject_res(os_cls2D)
 !   call rejector%reject_mask()
-!   states = rejector%get_states()   ! 1 = kept, 0 = rejected
+!   call rejector%reject_local_variance()
+!   l_rejected = rejector%get_rejected()   ! .true. = rejected, .false. = kept
+!   states     = rejector%get_states()     ! 0 = rejected, 1 = kept
 
 module simple_cluster2D_rejector
   use simple_stream_api
@@ -60,6 +73,9 @@ module simple_cluster2D_rejector
 
 contains
 
+  ! Initialises the rejector from an allocated image array and a mask diameter in
+  ! Angstroms. Kills any previous state, copies the images, and clears all
+  ! rejection flags so each class starts as kept.
   subroutine new( self, imgs, mskdiam )
     class(cluster2D_rejector),    intent(inout) :: self
     type(image),     allocatable, intent(in)    :: imgs(:)
@@ -73,6 +89,7 @@ contains
     call timer_stop(t0, string('new'))
   end subroutine new
 
+  ! Deallocates the image array and rejection mask and resets mskdiam to 0.
   subroutine kill( self )
     class(cluster2D_rejector), intent(inout) :: self
     integer(timer_int_kind) :: t0
@@ -83,12 +100,15 @@ contains
     call timer_stop(t0, string('kill'))
   end subroutine kill
 
+  ! Returns a copy of the per-class rejection mask (.true. = rejected, .false. = kept).
   function get_rejected( self ) result( rejected )
     class(cluster2D_rejector), intent(in) :: self
     logical, allocatable :: rejected(:)
     allocate(rejected, source=self%l_rejected)
   end function get_rejected
 
+  ! Returns per-class states as integers (0 = rejected, 1 = kept), matching the
+  ! convention used by sp_project os_cls2D.
   function get_states( self ) result( states )
     class(cluster2D_rejector), intent(in) :: self
     integer, allocatable :: states(:)
@@ -97,26 +117,35 @@ contains
   end function get_states
 
   ! Rejects classes whose particle count falls below POP_PERCENT_THRESHOLD of the
-  ! total, eliminating junk classes that attracted almost no particles.
-  subroutine reject_pop( self, cls_oris )
+  ! total, eliminating junk classes that attracted almost no particles. Optional
+  ! thres overrides POP_PERCENT_THRESHOLD for this call only.
+  subroutine reject_pop( self, cls_oris, thres )
     class(cluster2D_rejector), intent(inout) :: self
     type(oris),                intent(in)    :: cls_oris
+    real,    optional,         intent(in)    :: thres
     integer, allocatable    :: pop(:)
     integer                 :: i, noris, nrejected, threshold
     integer(timer_int_kind) :: t0
     t0 = timer_start()
     noris = cls_oris%get_noris()
     if( noris /= size(self%l_rejected) ) THROW_HARD("number cls oris does not match rejected")
-    if( noris == 0 ) return
+    if( noris == 0 ) then
+      call timer_stop(t0, string('reject_pop'))
+      return
+    end if
     pop = cls_oris%get_all_asint('pop')
-    threshold = ceiling(sum(pop) * POP_PERCENT_THRESHOLD)
+    if( present(thres) ) then
+      threshold = ceiling(sum(pop) * thres)
+    else
+      threshold = ceiling(sum(pop) * POP_PERCENT_THRESHOLD)
+    end if
     if( DEBUG ) write(logfhandle,'(A,I4)') '>>> POPULATION REJECTION THRESHOLD :', threshold
     nrejected = 0
     do i = 1, noris
       if( pop(i) < threshold ) then
         self%l_rejected(i) = .true.
         nrejected = nrejected + 1
-        if( DEBUG ) write(logfhandle,'(A,I4)') '>>> POPULATION REJECTION OF CLASS :', i
+        if( DEBUG ) write(logfhandle,'(A,I4,I4)') '>>> POPULATION REJECTION OF CLASS :', i, pop(i)
       end if
     end do
     if( DEBUG ) write(logfhandle,'(A,I4)') '>>> # CLASSES REJECTED ON POPULATION :', nrejected
@@ -135,7 +164,10 @@ contains
     t0 = timer_start()
     noris = cls_oris%get_noris()
     if( noris /= size(self%l_rejected) ) THROW_HARD("number cls oris does not match rejected")
-    if( noris == 0 ) return
+    if( noris == 0 ) then
+      call timer_stop(t0, string('reject_res'))
+      return
+    end if
     res = cls_oris%get_all('res')
     if( DEBUG ) write(logfhandle,'(A,F4.1)') '>>> RESOLUTION REJECTION THRESHOLD :', RES_THRESHOLD
     nrejected = 0
@@ -167,7 +199,10 @@ contains
     t0 = timer_start()
     noris = size(self%imgs)
     if( noris /= size(self%l_rejected) ) THROW_HARD("number cls oris does not match rejected")
-    if( noris == 0 ) return
+    if( noris == 0 ) then
+      call timer_stop(t0, string('reject_mask'))
+      return
+    end if
     ldim      = self%imgs(1)%get_ldim()
     smpd      = self%imgs(1)%get_smpd()
     rad_px    = (self%mskdiam / smpd) / 2.0
@@ -197,7 +232,8 @@ contains
           nccs_updated = nccs_updated - 1
         end if
       end do
-      ! default to rejected; only keep if the largest surviving CC fits within the mask
+      ! reject if any CC's centroid lies outside the mask radius, or if the
+      ! largest CC has more than MASK_THRESHOLD pixels outside the disc
       if( nccs_updated > 0 ) then
         l_rejected = .false.
         call cc_img%order_ccs()
@@ -233,19 +269,27 @@ contains
   ! Rejects classes where local variance is anomalously low in both the foreground and
   ! background simultaneously, indicating a structurally flat class average with no real
   ! signal (e.g. pure noise or empty classes). Requiring low z-scores in BOTH regions
-  ! avoids rejecting valid low-variance particles on a single weak signal.
-  subroutine reject_local_variance( self )
+  ! avoids rejecting valid low-variance particles on a single weak signal. Classes with
+  ! zero scores in both regions are rejected unconditionally and excluded from z-score
+  ! computation so they do not skew the distribution for the remaining classes.
+  subroutine reject_local_variance( self, strong_thresh, weak_thresh )
     class(cluster2D_rejector), intent(inout) :: self
-    real, allocatable       :: scores_inside(:), scores_outside(:)
-    real, allocatable       :: zscores_inside(:), zscores_outside(:)
-    real, allocatable       :: bin_mask(:,:,:)
+    real,    optional,         intent(in)    :: strong_thresh, weak_thresh
+    real,    allocatable    :: scores_inside(:), scores_outside(:)
+    real,    allocatable    :: zscores_inside(:), zscores_outside(:)
+    real,    allocatable    :: bin_mask(:,:,:)
+    logical, allocatable    :: l_zero(:)
     type(image)             :: img, img1
     integer                 :: i, noris, nrejected, ldim(3)
     integer(timer_int_kind) :: t0
+    real                    :: strong_threshold, weak_threshold
     t0 = timer_start()
     noris = size(self%imgs)
     if( noris /= size(self%l_rejected) ) THROW_HARD("number cls oris does not match rejected")
-    if( noris == 0 ) return
+    if( noris == 0 ) then
+      call timer_stop(t0, string('reject_local_variance'))
+      return
+    end if
     ldim = self%imgs(1)%get_ldim()
     allocate(bin_mask(ldim(1), ldim(2), 1))
     allocate(scores_inside(noris), scores_outside(noris))
@@ -260,12 +304,34 @@ contains
       call img%kill()
       call img1%kill()
     end do
-    zscores_inside  = robust_z_scores(scores_inside)
-    zscores_outside = robust_z_scores(scores_outside)
+    strong_threshold = LOCVAR_STRONG_THRESH
+    weak_threshold   = LOCVAR_WEAK_THRESH
+    if( present(strong_thresh) ) strong_threshold = strong_thresh
+    if( present(weak_thresh)   ) weak_threshold   = weak_thresh
+    ! Unconditionally reject classes with zero variance in both regions and exclude
+    ! them from z-scoring so blank/empty classes do not skew the distribution.
+    allocate(l_zero(noris),         source=.false.)
+    allocate(zscores_inside(noris), source=0.0)
+    allocate(zscores_outside(noris),source=0.0)
     nrejected = 0
     do i = 1, noris
-      if( (zscores_inside(i) < LOCVAR_STRONG_THRESH .and. zscores_outside(i) < LOCVAR_WEAK_THRESH) .or. &
-          (zscores_inside(i) < LOCVAR_WEAK_THRESH   .and. zscores_outside(i) < LOCVAR_STRONG_THRESH) ) then
+      if( scores_inside(i) == 0.0 .and. scores_outside(i) == 0.0 ) then
+        l_zero(i)          = .true.
+        self%l_rejected(i) = .true.
+        nrejected          = nrejected + 1
+        if( DEBUG ) write(logfhandle,'(A,I4)') '>>> ZERO-VARIANCE REJECTION OF CLASS :', i
+      end if
+    end do
+    if( count(.not. l_zero) > 1 ) then
+      zscores_inside( pack([(i,i=1,noris)], .not. l_zero) ) = &
+        robust_z_scores(pack(scores_inside,  .not. l_zero))
+      zscores_outside(pack([(i,i=1,noris)], .not. l_zero) ) = &
+        robust_z_scores(pack(scores_outside, .not. l_zero))
+    end if
+    do i = 1, noris
+      if( l_zero(i) ) cycle
+      if( (zscores_inside(i) < strong_threshold .and. zscores_outside(i) < weak_threshold  ) .or. &
+          (zscores_inside(i) < weak_threshold   .and. zscores_outside(i) < strong_threshold) ) then
         self%l_rejected(i) = .true.
         nrejected = nrejected + 1
         if( DEBUG ) write(logfhandle,'(A,I4,4F8.4)') '>>> LOCAL VARIANCE REJECTION OF CLASS :', &
@@ -273,7 +339,7 @@ contains
       end if
     end do
     if( DEBUG ) write(logfhandle,'(A,I4)') '>>> # CLASSES REJECTED ON LOCAL VARIANCE :', nrejected
-    deallocate(bin_mask, scores_inside, scores_outside, zscores_inside, zscores_outside)
+    deallocate(bin_mask, scores_inside, scores_outside, zscores_inside, zscores_outside, l_zero)
     call timer_stop(t0, string('reject_local_variance'))
   end subroutine reject_local_variance
 

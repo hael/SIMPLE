@@ -57,6 +57,8 @@ subroutine exec_test_units( self, cline )
     use simple_ori_tester
     use simple_oris_tester
     use simple_rec_list_tester
+    use simple_microchunked2D_tester,     only: run_all_microchunked2D_tests
+    use simple_cluster2D_rejector_tester, only: run_all_cluster2D_rejector_tests
     ! hand-written unit tests
     use simple_ipc_mq_tester,         only: run_all_ipc_mq_tests
     use simple_forked_process_tester, only: run_all_forked_process_tests
@@ -98,6 +100,8 @@ subroutine exec_test_units( self, cline )
     call run_all_gui_metadata_tests
     call run_all_gui_assembler_tests
     call run_all_http_post_tests
+    call run_all_microchunked2D_tests
+    call run_all_cluster2D_rejector_tests
     call report_summary()
     ! hand-written unit tests
     write(*,*)'VALIDATING UI JSON FILE:'

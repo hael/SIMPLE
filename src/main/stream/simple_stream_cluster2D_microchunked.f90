@@ -45,7 +45,7 @@ contains
         type(parameters)     :: params
         type(sp_project)     :: spproj_glob
         type(microchunked2D) :: chunked_2D
-        integer              :: nstks, nptcls, nptcls_tot, ntot_chunks
+        integer              :: nstks, nptcls_tot, ntot_chunks
         ! --- default command-line parameters ---
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
         if( .not. cline%defined('nmics')     ) call cline%set('nmics',      5)
@@ -58,13 +58,12 @@ contains
         call spproj_glob%read_segment('ptcl2D', params%projfile)
         ! --- sanity checks ---
         nstks  = spproj_glob%os_stk%get_noris()
-        nptcls = spproj_glob%get_nptcls()
         if( spproj_glob%os_mic%get_noris() > 0 )then
             if( spproj_glob%os_mic%get_noris() /= nstks )&
                 THROW_HARD('Inconsistent # of micrographs and stacks, use prune_project.')
         endif
-        if( nptcls == 0 )&
-            THROW_HARD('No particles found in project file: '//params%projfile%to_char()//'; exec_cluster2d_subsets')
+        if( spproj_glob%get_nptcls() == 0 )&
+            THROW_HARD('No particles found in project file: '//params%projfile%to_char())
         ! --- partition dataset into per-chunk sub-projects ---
         call generate_chunk_projects()
         if( ntot_chunks == 0 )then
@@ -89,7 +88,7 @@ contains
         call del_file(POOL_DIR//POOL_PROJFILE)
         call simple_rmdir(SIGMAS_DIR)
         call qsys_cleanup(params)
-        call simple_end('**** SIMPLE_CLUSTER2D_SUBSETS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CLUSTER2D_MICROCHUNKED NORMAL STOP ****')
 
     contains
 
@@ -97,17 +96,17 @@ contains
         !   pass 1 — counts active particles per stack; determines ntot_chunks
         !   pass 2 — records [first_stk, last_stk] boundaries for each chunk
         !   pass 3 — writes one self-contained sub-project per chunk and registers
-        !             each micrograph in project_list for microchunked2D tracking
-        ! Only stacks with state > 0 and nptcls > 0 are considered; zero-state
-        ! stacks are skipped in all three passes.
+        !             each active micrograph in project_list for microchunked2D tracking
+        ! Only stacks with state > 0 and nptcls > 0 are considered; inactive stacks
+        ! are skipped in all three passes. The selected-particle count logged per
+        ! chunk is summed directly from stk_nptcls.
         subroutine generate_chunk_projects
             type(sp_project)     :: spproj
             type(project_rec)    :: prec
             integer, allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
-            type(rec_list)       :: project_list_slice
             type(string)         :: fname, absfname, path, projname, projfile
             integer              :: cnt, cnt_stk, ichunk, istk, iptcl, jptcl, kptcl
-            integer              :: fromp, top, cfromp, ctop, n, nstks_chunk, nptcls_chunk
+            integer              :: fromp, top, cfromp, ctop, n, nstks_chunk, nptcls_chunk, nptcls
             logical              :: has_mic
             call simple_mkdir(DIR_PROJS)
 
@@ -135,11 +134,13 @@ contains
                 endif
             enddo
             nptcls_tot = sum(stk_nptcls)
-            write(logfhandle,'(A,I8)') '>>> # OF STACKS          : ', nstks
-            write(logfhandle,'(A,I8)') '>>> # OF PARTICLES       : ', nptcls_tot
-            write(logfhandle,'(A,I8)') '>>> # OF AVAILABLE CHUNKS: ', ntot_chunks
+            write(logfhandle,'(A,I8)') '>>> # OF STACKS            : ', nstks
+            write(logfhandle,'(A,I8)') '>>> # OF SELECTED PARTICLES: ', nptcls_tot
+            write(logfhandle,'(A,I8)') '>>> # OF AVAILABLE CHUNKS  : ', ntot_chunks
             if( cline%defined('maxnchunks') ) ntot_chunks = min(params%maxnchunks, ntot_chunks)
             if( ntot_chunks == 0 ) return
+            if( cline%defined('maxnchunks') ) &
+                write(logfhandle,'(A,I8)') '>>> # OF CHUNKS (CAPPED)   : ', ntot_chunks
 
             ! --- pass 2: record [first_stk, last_stk] boundaries for each chunk ---
             ! The tail (stacks beyond the last complete chunk) is intentionally abandoned.
@@ -174,8 +175,13 @@ contains
                 projfile = path//projname//METADATA_EXT
                 call spproj%projinfo%set(1,'projname', projname)
                 call spproj%projinfo%set(1,'projfile', projfile)
-                ! size the oris objects for this chunk's stack range
-                nstks_chunk = chunks_map(ichunk,2) - chunks_map(ichunk,1) + 1
+                ! size the oris objects for this chunk's active stacks only
+                nstks_chunk = 0
+                do istk = chunks_map(ichunk,1), chunks_map(ichunk,2)
+                    if( spproj_glob%os_stk%get_state(istk) == 0        ) cycle
+                    if( spproj_glob%os_stk%get_int(istk,'nptcls') == 0 ) cycle
+                    nstks_chunk = nstks_chunk + 1
+                end do
                 nptcls      = sum(stk_all_nptcls(chunks_map(ichunk,1):chunks_map(ichunk,2)))
                 call spproj%os_stk%new(nstks_chunk, is_ptcl=.false.)
                 call spproj%os_mic%new(nstks_chunk, is_ptcl=.false.)
@@ -184,6 +190,8 @@ contains
                 ctop  = 0
                 jptcl = 0
                 do istk = chunks_map(ichunk,1), chunks_map(ichunk,2)
+                    if( spproj_glob%os_stk%get_state(istk) == 0        ) cycle
+                    if( spproj_glob%os_stk%get_int(istk,'nptcls') == 0 ) cycle
                     cnt = cnt + 1
                     n   = stk_all_nptcls(istk)
                     ! transfer micrograph metadata (or synthesise from stack if absent)
@@ -227,11 +235,12 @@ contains
                 call spproj%os_ptcl2D%delete_2Dclustering(keepshifts=.false., keepcls=.false.)
                 call spproj%write(projfile)
                 ! report selected-particle count for this chunk
-                call project_list%slice(chunks_map(ichunk,1), chunks_map(ichunk,2), project_list_slice)
-                nptcls_chunk = project_list_slice%get_nptcls_sel_tot()
+                nptcls_chunk = 0
+                do istk = chunks_map(ichunk,1), chunks_map(ichunk,2)
+                    nptcls_chunk = nptcls_chunk + stk_nptcls(istk)
+                end do
                 write(logfhandle,'(A,I6,A,I8,A,I8)') &
                     '>>> CHUNK ', ichunk, ' : ', nptcls_chunk, ' / ', nptcls_tot, ' SELECTED PARTICLES'
-                call project_list_slice%kill
             enddo
             call spproj%kill
             deallocate(stk_all_nptcls, stk_nptcls, chunks_map)

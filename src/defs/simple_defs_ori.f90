@@ -49,8 +49,8 @@ enum, bind(c)
     enumerator :: I_BETTER_L    = 44
     enumerator :: I_SAMPLED     = 45
     enumerator :: I_CLUSTER     = 46
+    enumerator :: I_CLASS_MATCH = 47
     ! empties
-    enumerator :: I_EMPTY7      = 47
     enumerator :: I_EMPTY8      = 48
     enumerator :: I_EMPTY9      = 49
     enumerator :: I_EMPTY10     = 50
@@ -157,6 +157,8 @@ contains
                 get_oriparam_ind = I_SAMPLED
             case('cluster')
                 get_oriparam_ind = I_CLUSTER
+            case('class_match')
+                get_oriparam_ind = I_CLASS_MATCH
         end select
     end function get_oriparam_ind
 
@@ -256,6 +258,8 @@ contains
                 flag ='sampled'
             case(I_CLUSTER)
                 flag ='cluster'
+            case(I_CLASS_MATCH)
+                flag ='class_match'   
             case DEFAULT
                 flag = 'empty'
         end select
@@ -311,6 +315,8 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_CLUSTER)
                 oriparam_isthere = abs(val) > TINY
+            case(I_CLASS_MATCH)
+                oriparam_isthere = abs(val) > TINY    
             case DEFAULT
                 ! default case is defined
                 oriparam_isthere = .true.
