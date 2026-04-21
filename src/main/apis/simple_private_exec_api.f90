@@ -28,6 +28,9 @@ commander_pick, commander_make_pickrefs
 use simple_commanders_preprocess, only: commander_preprocess, commander_motion_correct,&
 commander_gen_pspecs_and_thumbs, commander_ctf_estimate
 
+! shape commanders, for operations on 2D shapes
+use simple_commanders_imgops, only: commander_ppca_denoise
+
 ! cluster2D commanders, for simultanous 2D alignment and clustering of single-particle images
 use simple_commanders_cluster2D, only: commander_make_cavgs, commander_cluster2D_distr_worker, commander_cluster2D,&
 commander_cavgassemble

@@ -11,6 +11,7 @@ use simple_commanders_sim,          only: commander_simulate_particles, commande
 use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct, commander_preprocess
 use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_cluster2D,    only: commander_cluster2D
+use simple_commanders_stkops,       only: commander_stack
 use simple_micproc,                 only: sample_filetab
 use simple_commanders_validate,     only: commander_mini_stream
 use simple_qsys_env,                only: qsys_env
@@ -42,6 +43,11 @@ type, extends(commander_base) :: commander_test_subproject_distr
   contains
     procedure :: execute      => exec_test_subproject_distr
 end type commander_test_subproject_distr
+
+type, extends(commander_base) :: commander_test_movie_ppca_subproject_distr
+    contains
+        procedure :: execute      => exec_test_movie_ppca_subproject_distr
+end type commander_test_movie_ppca_subproject_distr
 
 contains
 
@@ -590,7 +596,7 @@ subroutine exec_test_subproject_distr( self, cline )
     class(commander_test_subproject_distr), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
     integer,          parameter :: NPTCLS_SIM  = 500      ! particles to simulate
-    integer,          parameter :: NCLS_COARSE = 2        ! coarse classes
+    integer,          parameter :: NCLS_COARSE = 4        ! coarse classes
     integer,          parameter :: MAXKEYS     = 20       ! chash capacity
     real,             parameter :: SMPD        = 1.3
     character(len=*), parameter :: PROJNAME = 'test_subproj_distr'
@@ -754,5 +760,98 @@ subroutine exec_test_subproject_distr( self, cline )
         THROW_HARD('TEST_SUBPROJECT_DISTR FAILED')
     endif
 end subroutine exec_test_subproject_distr
+
+subroutine exec_test_movie_ppca_subproject_distr( self, cline )
+    class(commander_test_movie_ppca_subproject_distr), intent(inout) :: self
+    class(cmdline),                                    intent(inout) :: cline
+    integer,          parameter :: MAXKEYS = 20
+    type(parameters)            :: params
+    type(qsys_env)              :: qenv
+    type(commander_stack)       :: xstack
+    type(cmdline)               :: cline_stack
+    type(chash),  allocatable   :: jobs_descr(:)
+    type(string), allocatable   :: movie_fnames(:), chunk_fnames(:)
+    type(string), allocatable   :: subproj_dirs(:), denoised_all(:)
+    type(string)                :: cwd_root, chunk_filetab, chunk_stk, denoised_stk
+    character(len=8)            :: subid
+    integer                     :: nmovies, nsub, isub, i, fromp, top, nchunk
+    integer                     :: nptcls_in, ldim(3)
+    ! if( .not. cline%defined('filetab') )then
+    !     THROW_HARD('filetab is required; '//'test_movie_ppca_subproject_distr')
+    ! endif
+    ! if( .not. cline%defined('smpd') )then
+    !     THROW_HARD('smpd is required; '//'test_movie_ppca_subproject_distr')
+    ! endif
+    !if( .not. cline%defined('nthr')    ) call cline%set('nthr', 1)
+    call params%new(cline)
+    call read_filetable(params%filetab, movie_fnames)
+    nmovies = size(movie_fnames)
+    if( nmovies < 1 )then
+        THROW_HARD('empty filetab; test_movie_ppca_subproject_distr')
+    endif
+    nsub = min(nmovies, params%nparts)
+    call simple_getcwd(cwd_root)
+    allocate(jobs_descr(nsub), subproj_dirs(nsub), denoised_all(nsub))
+    write(logfhandle,'(a)') '>>> Step 1: split movie list into equal chunks and generate chunk stacks'
+    do isub = 1, nsub
+        fromp = ((isub - 1) * nmovies) / nsub + 1
+        top   = (isub * nmovies) / nsub
+        nchunk = top - fromp + 1
+        write(subid,'(I8.8)') isub
+        subproj_dirs(isub) = cwd_root%to_char()//'/'//&
+            &'movie_denoise_subproj_'//trim(adjustl(subid))
+        call simple_mkdir(subproj_dirs(isub))
+        allocate(chunk_fnames(nchunk))
+        do i = 1, nchunk
+            chunk_fnames(i) = movie_fnames(fromp + i - 1)
+        enddo
+        chunk_filetab = subproj_dirs(isub)%to_char()//'/'//'chunk_movies_'//trim(adjustl(subid))//'.txt'
+        chunk_stk     = subproj_dirs(isub)%to_char()//'/'//'chunk_movies_'//trim(adjustl(subid))//'.mrcs'
+        denoised_stk  = 'ppca_denoised_chunk_'//trim(adjustl(subid))//'.mrcs'
+        call write_filetable(chunk_filetab, chunk_fnames)
+        call cline_stack%set('prg',           'stack')
+        call cline_stack%set('mkdir',            'no')
+        call cline_stack%set('filetab', chunk_filetab)
+        call cline_stack%set('outstk',      chunk_stk)
+        call cline_stack%set('smpd',      params%smpd)
+        call xstack%execute(cline_stack)
+        call cline_stack%kill()
+        call find_ldim_nptcls(chunk_stk, ldim, nptcls_in)
+        write(logfhandle,'(a,i4,a,i8,a,i8,a,i8)') '    subproject ', isub,&
+            &': chunk imgs=', nptcls_in, ' box=', ldim(1), 'x', ldim(2)
+        call jobs_descr(isub)%new(MAXKEYS)
+        call jobs_descr(isub)%set('prg',                                      'ppca_denoise')
+        call jobs_descr(isub)%set('mkdir',                                              'no')
+        call jobs_descr(isub)%set('stk',      'chunk_movies_'//trim(adjustl(subid))//'.mrcs')
+        call jobs_descr(isub)%set('outstk',                                     denoised_stk)
+        call jobs_descr(isub)%set('smpd',                              real2str(params%smpd))
+        call jobs_descr(isub)%set('nthr',                               int2str(params%nthr))
+        call jobs_descr(isub)%set('neigs',                                             '160')
+        call jobs_descr(isub)%set('pca_mode',                                        'mppca')
+        call jobs_descr(isub)%set('mppca_k',                                             '4')
+        denoised_all(isub)        = subproj_dirs(isub)%to_char()//'/'//denoised_stk%to_char()
+        deallocate(chunk_fnames)
+    enddo
+    write(logfhandle,'(a)') '>>> Step 2: run ppca_denoise in parallel across subprojects'
+    call params%new(cline)
+    call qenv%new(params, nsub)
+    call qenv%gen_subproject_scripts_and_schedule(jobs_descr, subproj_dirs=subproj_dirs)
+    write(logfhandle,'(a)') '    all denoising subprojects completed'
+    write(logfhandle,'(a)') '>>> Step 3: merge denoised chunk stacks'
+    call write_filetable(string('ppca_denoised_chunks.txt'), denoised_all)
+    call cline_stack%set('prg',     'stack')
+    call cline_stack%set('mkdir',      'no')
+    call cline_stack%set('filetab', 'ppca_denoised_chunks.txt')
+    call cline_stack%set('outstk',  'ppca_denoised_all.mrcs')
+    call cline_stack%set('smpd',    params%smpd)
+    call xstack%execute(cline_stack)
+    call cline_stack%kill()
+    do isub = 1, nsub
+        call jobs_descr(isub)%kill
+    end do
+    deallocate(jobs_descr, subproj_dirs, denoised_all)
+    call qenv%kill
+    call simple_end('**** TEST_MOVIE_PPCA_SUBPROJECT_DISTR NORMAL STOP ****')
+end subroutine exec_test_movie_ppca_subproject_distr
 
 end module simple_commanders_test_highlevel
