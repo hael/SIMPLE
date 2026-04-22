@@ -209,8 +209,9 @@ contains
         call ppca_class_splitting%add_input(UI_PARM, 'nsubcls_max', 'num', 'Maximum subclasses per parent class for AP before k-medoids fallback', 'Maximum subclasses per parent class for AP before k-medoids fallback', '# max subclasses', .false., 8.0)
         call ppca_class_splitting%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
         call ppca_class_splitting%add_input(UI_FILT, 'neigs', 'num', 'Number of PPCA latent dimensions (0 => auto low-rank scan)', 'Number of PPCA latent dimensions (0 => auto low-rank scan)', '# eigenvecs', .false., 5.0)
-        call ppca_class_splitting%add_input(UI_MASK, mskdiam)
-        call ppca_class_splitting%add_input(UI_COMP, nthr)
+        call ppca_class_splitting%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
+        call ppca_class_splitting%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
+        call ppca_class_splitting%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
         call add_ui_program('ppca_class_splitting', ppca_class_splitting, prgtab)
     end subroutine new_ppca_class_splitting
 

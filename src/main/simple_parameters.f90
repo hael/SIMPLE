@@ -133,6 +133,7 @@ type :: parameters
     type(string)              :: boxfile              !< file with EMAN particle coordinates(.txt)
     type(string)              :: boxtab               !< table (text file) of files with EMAN particle coordinates(.txt)
     type(string)              :: ciffile              !< xPDB/mmCIF file          
+    type(string)              :: class_assignment     !< text file listing class ids assigned to a worker
     type(string)              :: classdoc             !< doc with per-class stats(.txt)
     type(string)              :: cwd
     type(string)              :: deftab               !< file with CTF info(.txt|.simple)
@@ -559,6 +560,7 @@ contains
         self%boxfile=''           !< file with EMAN particle coordinates(.txt)
         self%boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
         self%ciffile=''           !< PDBx/mmCIF file
+        self%class_assignment=''  !< text file listing class ids assigned to a worker
         self%classdoc=''          !< doc with per-class stats(.txt)
         self%cwd=''
         self%deftab=''            !< file with CTF info(.txt|.simple)
@@ -689,6 +691,7 @@ contains
         call check_carg('center_pdb',     self%center_pdb)
         call check_carg('center_type',    self%center_type)
         call check_carg('chunk',          self%chunk)
+        call check_carg('class_assignment', self%class_assignment)
         call check_carg('classtats',      self%classtats)
         call check_carg('clear',          self%clear)
         call check_carg('cls_init',       self%cls_init)

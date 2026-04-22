@@ -23,6 +23,7 @@ type(commander_cluster2D)               :: xcluster2D
 type(commander_cavgassemble)            :: xcavgassemble
 type(commander_rank_cavgs)              :: xrank_cavgs
 type(commander_export_cavgs)            :: xexport_cavgs
+type(commander_ppca_class_splitting)    :: xppca_class_splitting
 
 ! REFINE3D PROGRAMS
 type(commander_refine3D_distr_worker)   :: xrefine3D_worker
@@ -148,6 +149,8 @@ select case(prg)
         call xrank_cavgs%execute(cline)
     case( 'export_cavgs' )
         call xexport_cavgs%execute(cline)
+    case( 'ppca_class_splitting' )
+        call xppca_class_splitting%execute(cline)
 
     ! REFINE3D PROGRAMS
     case( 'refine3D' )
