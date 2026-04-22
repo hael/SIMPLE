@@ -263,7 +263,10 @@ contains
         end subroutine ensure_even_odd_partition
 
         subroutine prepare_class_averages_and_restoration()
-            if( ctrl%l_assignment_only ) return
+            logical :: l_need_cavgs_for_alignment
+            ! For fillin: need to read cavgs even if not restoring them (needed for alignment)
+            l_need_cavgs_for_alignment = p_ptr%l_fillin .and. (.not. ctrl%l_restore_cavgs)
+            if( ctrl%l_assignment_only .and. (.not. l_need_cavgs_for_alignment) ) return
             ctrl%l_alloc_read_cavgs = l_distr_worker_glob .or. (which_iter == 1)
             call cavger_new(p_ptr, b_ptr, alloccavgs=ctrl%l_alloc_read_cavgs)
             if( ctrl%l_alloc_read_cavgs )then
@@ -272,6 +275,7 @@ contains
                 endif
                 call cavger_read_all
             endif
+            if( ctrl%l_assignment_only ) return
             ctrl%l_partial_sums = ctrl%l_frac_restore
             call cavger_init_online(batchsz_max, ctrl%l_frac_restore)
         end subroutine prepare_class_averages_and_restoration

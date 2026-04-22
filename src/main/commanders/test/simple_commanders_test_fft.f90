@@ -302,7 +302,6 @@ subroutine exec_test_polarops( self, cline )
     call cline%set('lp',      3.)
     call cline%set('nthr',    8)
     call cline%set('mskdiam', real(N)/2-10.)
-    call cline%set('ref_type', 'polar_cavg')
     ! Calculators
     call b%init_params_and_build_strategy2D_tbox(cline, p)
     call pftc%new(p, NCLS, [1,NIMGS], p%kfromto)

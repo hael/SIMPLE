@@ -51,7 +51,6 @@ contains
         if( .not. cline%defined('rank_cavgs')    ) call cline%set('rank_cavgs',    'yes')
         if( .not. cline%defined('stats')         ) call cline%set('stats',         'no')
         if( .not. cline%defined('refine')        ) call cline%set('refine',        'snhc_smpl')
-        if( .not. cline%defined('ref_type')      ) call cline%set('ref_type',      'polar_cavg')
         if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',        'yes')
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
@@ -334,6 +333,7 @@ contains
             call cline_fillin%set('minits',        1)
             call cline_fillin%set('maxits',        1)
             call cline_fillin%set('extr_iter',     params%extr_lim + 1)
+            call cline_fillin%delete('endit')
             call xcluster2D%execute(cline_fillin)
             n_unassigned = count_unassigned_active()
             write(logfhandle,'(A,I8)') '>>> ABINITIO2D FILLIN: REMAINING UNASSIGNED PARTICLES =', n_unassigned

@@ -256,7 +256,6 @@ type :: parameters
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree|tree_neigh_states|shc_ptree){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
-    character(len=STDLEN)     :: ref_type='comlin'    !< polar reference type(polar_cavg|comlin){comlin}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
@@ -803,7 +802,6 @@ contains
         call check_carg('ranked_parts',   self%ranked_parts)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('recthres',       self%recthres)
-        call check_carg('ref_type',       self%ref_type)
         call check_carg('refine',         self%refine)
         call check_carg('refine_type',    self%refine_type)
         call check_carg('reject_mics',    self%reject_mics)
@@ -1611,13 +1609,7 @@ contains
                 THROW_HARD('Unsupported POLAR argument: '//trim(self%polar))
         end select
         if( self%l_polar )then
-            select case(trim(self%ref_type))
-                case('comlin', 'polar_cavg')
-                    ! supported
-                case DEFAULT
-                    THROW_HARD('Unsupported REF_TYPE argument: '//trim(self%ref_type))
-            end select
-            ! deactivates post-alignment cartesian reconstruction
+            ! deactivate post-alignment cartesian reconstruction
             self%volrec = 'no'
         endif
         ! set lpset flag

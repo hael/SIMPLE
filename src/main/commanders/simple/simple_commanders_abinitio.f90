@@ -69,7 +69,6 @@ contains
         if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',            'no')
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart', LPSTART_INI3D)
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',   LPSTOP_INI3D)
-        if( .not. cline%defined('ref_type')         ) call cline%set('ref_type',     'comlin')
         if( .not. cline%defined('gauref')           ) call cline%set('gauref',          'yes')
         ! make master parameters
         call params%new(cline)
@@ -87,8 +86,6 @@ contains
             endif
             ! end comment to activate lpauto
             l_polar = .true. ! global parameter
-        else
-            call cline%delete('ref_type')
         endif
         ! Test tree-based search
         l_tree = trim(params%test_tree).eq.'yes'
@@ -429,7 +426,6 @@ contains
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',                    'none')
-        if( .not. cline%defined('ref_type')            ) call cline%set('ref_type',                   'comlin')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                        'yes')
@@ -468,8 +464,6 @@ contains
                 THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
             endif
             l_polar = .true. ! global parameter
-        else
-            call cline%delete('ref_type')
         endif
         ! Test tree-based search
         l_tree = trim(params%test_tree).eq.'yes'

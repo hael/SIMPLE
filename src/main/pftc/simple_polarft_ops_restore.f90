@@ -66,11 +66,6 @@ contains
         real(dp)    :: fsc(self%kfromto(1):self%interpklim), ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
         integer     :: find4eoavg, i
-        select case(trim(self%p_ptr%ref_type))
-        case('comlin')
-        case DEFAULT
-            THROW_HARD('Invalid REF_TYPE='//trim(self%p_ptr%ref_type)//' in polar_cavger_merge_eos_and_norm')
-        end select
         ! Mirror Fourier & CTF2 slices
         call self%mirror_slices( reforis )
         ! Common-lines conribution
