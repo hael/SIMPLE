@@ -1,4 +1,4 @@
-module simple_ppca_class_splitting_strategy
+module simple_ppca_cls_split_strategy
 use simple_core_module_api
 use simple_builder,      only: builder
 use simple_parameters,   only: parameters
@@ -10,40 +10,40 @@ use simple_image_msk,    only: automask2D
 use simple_classaverager, only: transform_ptcls
 implicit none
 
-public :: ppca_class_splitting_strategy
-public :: ppca_class_splitting_shmem_strategy
-public :: ppca_class_splitting_worker_strategy
-public :: ppca_class_splitting_master_strategy
-public :: create_ppca_class_splitting_strategy
+public :: ppca_cls_split_strategy
+public :: ppca_cls_split_shmem_strategy
+public :: ppca_cls_split_worker_strategy
+public :: ppca_cls_split_master_strategy
+public :: create_ppca_cls_split_strategy
 
 private
 #include "simple_local_flags.inc"
 
-type, abstract :: ppca_class_splitting_strategy
+type, abstract :: ppca_cls_split_strategy
 contains
     procedure(init_interface),     deferred :: initialize
     procedure(exec_interface),     deferred :: execute
     procedure(finalize_interface), deferred :: finalize_run
     procedure(cleanup_interface),  deferred :: cleanup
-end type ppca_class_splitting_strategy
+end type ppca_cls_split_strategy
 
-type, extends(ppca_class_splitting_strategy) :: ppca_class_splitting_shmem_strategy
+type, extends(ppca_cls_split_strategy) :: ppca_cls_split_shmem_strategy
 contains
     procedure :: initialize   => shmem_initialize
     procedure :: execute      => shmem_execute
     procedure :: finalize_run => shmem_finalize_run
     procedure :: cleanup      => shmem_cleanup
-end type ppca_class_splitting_shmem_strategy
+end type ppca_cls_split_shmem_strategy
 
-type, extends(ppca_class_splitting_strategy) :: ppca_class_splitting_worker_strategy
+type, extends(ppca_cls_split_strategy) :: ppca_cls_split_worker_strategy
 contains
     procedure :: initialize   => worker_initialize
     procedure :: execute      => worker_execute
     procedure :: finalize_run => worker_finalize_run
     procedure :: cleanup      => worker_cleanup
-end type ppca_class_splitting_worker_strategy
+end type ppca_cls_split_worker_strategy
 
-type, extends(ppca_class_splitting_strategy) :: ppca_class_splitting_master_strategy
+type, extends(ppca_cls_split_strategy) :: ppca_cls_split_master_strategy
     type(qsys_env)                :: qenv
     type(chash)                   :: job_descr
     type(chash), allocatable      :: part_params(:)
@@ -54,45 +54,45 @@ contains
     procedure :: execute      => master_execute
     procedure :: finalize_run => master_finalize_run
     procedure :: cleanup      => master_cleanup
-end type ppca_class_splitting_master_strategy
+end type ppca_cls_split_master_strategy
 
 abstract interface
     subroutine init_interface(self, params, build, cline)
-        import :: ppca_class_splitting_strategy, parameters, builder, cmdline
-        class(ppca_class_splitting_strategy), intent(inout) :: self
+        import :: ppca_cls_split_strategy, parameters, builder, cmdline
+        class(ppca_cls_split_strategy), intent(inout) :: self
         type(parameters),                     intent(inout) :: params
         type(builder),                        intent(inout) :: build
         class(cmdline),                       intent(inout) :: cline
     end subroutine init_interface
 
     subroutine exec_interface(self, params, build, cline)
-        import :: ppca_class_splitting_strategy, parameters, builder, cmdline
-        class(ppca_class_splitting_strategy), intent(inout) :: self
+        import :: ppca_cls_split_strategy, parameters, builder, cmdline
+        class(ppca_cls_split_strategy), intent(inout) :: self
         type(parameters),                     intent(inout) :: params
         type(builder),                        intent(inout) :: build
         class(cmdline),                       intent(inout) :: cline
     end subroutine exec_interface
 
     subroutine finalize_interface(self, params, build, cline)
-        import :: ppca_class_splitting_strategy, parameters, builder, cmdline
-        class(ppca_class_splitting_strategy), intent(inout) :: self
+        import :: ppca_cls_split_strategy, parameters, builder, cmdline
+        class(ppca_cls_split_strategy), intent(inout) :: self
         type(parameters),                     intent(in)    :: params
         type(builder),                        intent(inout) :: build
         class(cmdline),                       intent(inout) :: cline
     end subroutine finalize_interface
 
     subroutine cleanup_interface(self, params)
-        import :: ppca_class_splitting_strategy, parameters
-        class(ppca_class_splitting_strategy), intent(inout) :: self
+        import :: ppca_cls_split_strategy, parameters
+        class(ppca_cls_split_strategy), intent(inout) :: self
         type(parameters),                     intent(in)    :: params
     end subroutine cleanup_interface
 end interface
 
 contains
 
-    function create_ppca_class_splitting_strategy(cline) result(strategy)
+    function create_ppca_cls_split_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
-        class(ppca_class_splitting_strategy), allocatable :: strategy
+        class(ppca_cls_split_strategy), allocatable :: strategy
         integer :: nparts
         logical :: is_worker, is_master
         nparts = 1
@@ -100,16 +100,16 @@ contains
         is_worker = cline%defined('part')
         is_master = (nparts > 1) .and. (.not. is_worker)
         if( is_master )then
-            allocate(ppca_class_splitting_master_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED PPCA_CLASS_SPLITTING (MASTER)'
+            allocate(ppca_cls_split_master_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED PPCA_CLS_SPLIT (MASTER)'
         else if( is_worker )then
-            allocate(ppca_class_splitting_worker_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> PPCA_CLASS_SPLITTING (WORKER)'
+            allocate(ppca_cls_split_worker_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> PPCA_CLS_SPLIT (WORKER)'
         else
-            allocate(ppca_class_splitting_shmem_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> PPCA_CLASS_SPLITTING (SHARED-MEMORY)'
+            allocate(ppca_cls_split_shmem_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> PPCA_CLS_SPLIT (SHARED-MEMORY)'
         endif
-    end function create_ppca_class_splitting_strategy
+    end function create_ppca_cls_split_strategy
 
     subroutine apply_defaults(cline)
         use simple_default_clines, only: set_automask2D_defaults
@@ -132,7 +132,7 @@ contains
     end subroutine init_common
 
     subroutine shmem_initialize(self, params, build, cline)
-        class(ppca_class_splitting_shmem_strategy), intent(inout) :: self
+        class(ppca_cls_split_shmem_strategy), intent(inout) :: self
         type(parameters),                           intent(inout) :: params
         type(builder),                              intent(inout) :: build
         class(cmdline),                             intent(inout) :: cline
@@ -140,7 +140,7 @@ contains
     end subroutine shmem_initialize
 
     subroutine shmem_execute(self, params, build, cline)
-        class(ppca_class_splitting_shmem_strategy), intent(inout) :: self
+        class(ppca_cls_split_shmem_strategy), intent(inout) :: self
         type(parameters),                           intent(inout) :: params
         type(builder),                              intent(inout) :: build
         class(cmdline),                             intent(inout) :: cline
@@ -151,29 +151,29 @@ contains
     end subroutine shmem_execute
 
     subroutine shmem_finalize_run(self, params, build, cline)
-        class(ppca_class_splitting_shmem_strategy), intent(inout) :: self
+        class(ppca_cls_split_shmem_strategy), intent(inout) :: self
         type(parameters),                           intent(in)    :: params
         type(builder),                              intent(inout) :: build
         class(cmdline),                             intent(inout) :: cline
     end subroutine shmem_finalize_run
 
     subroutine shmem_cleanup(self, params)
-        class(ppca_class_splitting_shmem_strategy), intent(inout) :: self
+        class(ppca_cls_split_shmem_strategy), intent(inout) :: self
         type(parameters),                           intent(in)    :: params
     end subroutine shmem_cleanup
 
     subroutine worker_initialize(self, params, build, cline)
-        class(ppca_class_splitting_worker_strategy), intent(inout) :: self
+        class(ppca_cls_split_worker_strategy), intent(inout) :: self
         type(parameters),                            intent(inout) :: params
         type(builder),                               intent(inout) :: build
         class(cmdline),                              intent(inout) :: cline
         call init_common(params, build, cline)
-        if( .not. cline%defined('part') ) THROW_HARD('PART must be defined for ppca_class_splitting worker execution')
-        if( .not. cline%defined('class_assignment') ) THROW_HARD('CLASS_ASSIGNMENT must be defined for ppca_class_splitting worker execution')
+        if( .not. cline%defined('part') ) THROW_HARD('PART must be defined for ppca_cls_split worker execution')
+        if( .not. cline%defined('class_assignment') ) THROW_HARD('CLASS_ASSIGNMENT must be defined for ppca_cls_split worker execution')
     end subroutine worker_initialize
 
     subroutine worker_execute(self, params, build, cline)
-        class(ppca_class_splitting_worker_strategy), intent(inout) :: self
+        class(ppca_cls_split_worker_strategy), intent(inout) :: self
         type(parameters),                            intent(inout) :: params
         type(builder),                               intent(inout) :: build
         class(cmdline),                              intent(inout) :: cline
@@ -185,21 +185,21 @@ contains
 
     subroutine worker_finalize_run(self, params, build, cline)
         use simple_qsys_funs, only: qsys_job_finished
-        class(ppca_class_splitting_worker_strategy), intent(inout) :: self
+        class(ppca_cls_split_worker_strategy), intent(inout) :: self
         type(parameters),                            intent(in)    :: params
         type(builder),                               intent(inout) :: build
         class(cmdline),                              intent(inout) :: cline
-        call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_ppca_class_splitting'))
+        call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_ppca_cls_split'))
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup(self, params)
-        class(ppca_class_splitting_worker_strategy), intent(inout) :: self
+        class(ppca_cls_split_worker_strategy), intent(inout) :: self
         type(parameters),                            intent(in)    :: params
     end subroutine worker_cleanup
 
     subroutine master_initialize(self, params, build, cline)
         use simple_exec_helpers, only: set_master_num_threads
-        class(ppca_class_splitting_master_strategy), intent(inout) :: self
+        class(ppca_cls_split_master_strategy), intent(inout) :: self
         type(parameters),                            intent(inout) :: params
         type(builder),                               intent(inout) :: build
         class(cmdline),                              intent(inout) :: cline
@@ -214,7 +214,7 @@ contains
             write(logfhandle,'(A)') 'PPCA split note: reducing worker count because classes are the scheduling unit.'
             call flush(logfhandle)
         endif
-        call set_master_num_threads(self%nthr_master, string('PPCA_CLASS_SPLITTING'))
+        call set_master_num_threads(self%nthr_master, string('PPCA_CLS_SPLIT'))
         call prepare_class_partitions(self, params, cline, cls_inds, cls_pops)
         call self%qenv%new(params, self%nparts_run, numlen=params%numlen)
         ! Keep distributed workers inside the master's execution directory so
@@ -229,7 +229,7 @@ contains
     end subroutine master_initialize
 
     subroutine master_execute(self, params, build, cline)
-        class(ppca_class_splitting_master_strategy), intent(inout) :: self
+        class(ppca_cls_split_master_strategy), intent(inout) :: self
         type(parameters),                            intent(inout) :: params
         type(builder),                               intent(inout) :: build
         class(cmdline),                              intent(inout) :: cline
@@ -239,7 +239,7 @@ contains
     end subroutine master_execute
 
     subroutine master_finalize_run(self, params, build, cline)
-        class(ppca_class_splitting_master_strategy), intent(inout) :: self
+        class(ppca_cls_split_master_strategy), intent(inout) :: self
         type(parameters),                            intent(in)    :: params
         type(builder),                               intent(inout) :: build
         class(cmdline),                              intent(inout) :: cline
@@ -247,7 +247,7 @@ contains
 
     subroutine master_cleanup(self, params)
         use simple_qsys_funs, only: qsys_cleanup
-        class(ppca_class_splitting_master_strategy), intent(inout) :: self
+        class(ppca_cls_split_master_strategy), intent(inout) :: self
         type(parameters),                            intent(in)    :: params
         integer :: ipart
         call self%qenv%kill
@@ -262,7 +262,7 @@ contains
     end subroutine master_cleanup
 
     subroutine prepare_class_partitions(self, params, cline, cls_inds, cls_pops)
-        class(ppca_class_splitting_master_strategy), intent(inout) :: self
+        class(ppca_cls_split_master_strategy), intent(inout) :: self
         type(parameters),                            intent(in)    :: params
         class(cmdline),                              intent(inout) :: cline
         integer,                                     intent(in)    :: cls_inds(:), cls_pops(:)
@@ -318,7 +318,7 @@ contains
             deallocate(keep_mask)
             if( allocated(assigned_classes) ) deallocate(assigned_classes)
         endif
-        if( size(cls_inds) < 1 ) THROW_HARD('No classes selected for ppca_class_splitting')
+        if( size(cls_inds) < 1 ) THROW_HARD('No classes selected for ppca_cls_split')
         allocate(cls_pops(size(cls_inds)), source=0)
         do i = 1, size(cls_inds)
             call build%spproj_field%get_pinds(cls_inds(i), label%to_char(), pinds)
@@ -344,7 +344,7 @@ contains
                 label = 'proj'
                 call build%spproj_field%proj2class
             case DEFAULT
-                THROW_HARD('ppca_class_splitting only supports ORITYPE=ptcl2D or ptcl3D')
+                THROW_HARD('ppca_cls_split only supports ORITYPE=ptcl2D or ptcl3D')
         end select
     end subroutine determine_split_label
 
@@ -666,7 +666,7 @@ contains
             total = total + nlocal
             call map_fname%kill
         end do
-        if( total < 1 ) THROW_HARD('No subclass outputs produced by distributed ppca_class_splitting workers')
+        if( total < 1 ) THROW_HARD('No subclass outputs produced by distributed ppca_cls_split workers')
         max_count = maxval(part_counts)
         allocate(part_localstack(max_count, nparts_run), part_parent(max_count, nparts_run), part_local(max_count, nparts_run), &
                  part_pop(max_count, nparts_run), part_global(max_count, nparts_run), source=0)
@@ -700,7 +700,7 @@ contains
         do idx = 1, total
             if( idx > 1 )then
                 if( comb_parent(idx) == comb_parent(idx-1) .and. comb_local(idx) == comb_local(idx-1) )then
-                    THROW_HARD('Duplicate parent/local subclass pair detected while merging ppca_class_splitting outputs')
+                    THROW_HARD('Duplicate parent/local subclass pair detected while merging ppca_cls_split outputs')
                 endif
             endif
             part_global(comb_row(idx), comb_part(idx)) = idx
@@ -908,4 +908,4 @@ contains
         fname = string('split_subclass_avgs_denoised_part')//int2str_pad(part, numlen)//'.mrcs'
     end function part_den_stack_fname
 
-end module simple_ppca_class_splitting_strategy
+end module simple_ppca_cls_split_strategy

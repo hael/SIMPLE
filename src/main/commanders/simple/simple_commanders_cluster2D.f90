@@ -28,10 +28,15 @@ type, extends(commander_base) :: commander_ppca_denoise_classes
     procedure :: execute      => exec_ppca_denoise_classes
 end type commander_ppca_denoise_classes
 
-type, extends(commander_base) :: commander_ppca_class_splitting
+type, extends(commander_base) :: commander_ppca_cls_split
   contains
-    procedure :: execute      => exec_ppca_class_splitting
-end type commander_ppca_class_splitting
+    procedure :: execute      => exec_ppca_cls_split
+end type commander_ppca_cls_split
+
+type, extends(commander_base) :: commander_diffusion_cls_split
+  contains
+    procedure :: execute      => exec_diffusion_cls_split
+end type commander_diffusion_cls_split
 
 contains
 
@@ -628,21 +633,38 @@ contains
 
     end subroutine exec_ppca_denoise_classes
 
-    subroutine exec_ppca_class_splitting( self, cline )
-        use simple_ppca_class_splitting_strategy
-        class(commander_ppca_class_splitting), intent(inout) :: self
+    subroutine exec_ppca_cls_split( self, cline )
+        use simple_ppca_cls_split_strategy
+        class(commander_ppca_cls_split), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        class(ppca_class_splitting_strategy), allocatable :: strategy
+        class(ppca_cls_split_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
-        strategy = create_ppca_class_splitting_strategy(cline)
+        strategy = create_ppca_cls_split_strategy(cline)
         call strategy%initialize(params, build, cline)
         call strategy%execute(params, build, cline)
         call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params)
         if( allocated(strategy) ) deallocate(strategy)
         call build%kill_general_tbox
-        call simple_end('**** SIMPLE_PPCA_CLASS_SPLITTING NORMAL STOP ****')
-    end subroutine exec_ppca_class_splitting
+        call simple_end('**** SIMPLE_PPCA_CLS_SPLIT NORMAL STOP ****')
+    end subroutine exec_ppca_cls_split
+
+    subroutine exec_diffusion_cls_split( self, cline )
+        use simple_diffusion_cls_split_strategy
+        class(commander_diffusion_cls_split), intent(inout) :: self
+        class(cmdline),                             intent(inout) :: cline
+        class(diffusion_cls_split_strategy), allocatable :: strategy
+        type(parameters) :: params
+        type(builder)    :: build
+        strategy = create_diffusion_cls_split_strategy(cline)
+        call strategy%initialize(params, build, cline)
+        call strategy%execute(params, build, cline)
+        call strategy%finalize_run(params, build, cline)
+        call strategy%cleanup(params)
+        if( allocated(strategy) ) deallocate(strategy)
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_DIFFUSION_CLS_SPLIT NORMAL STOP ****')
+    end subroutine exec_diffusion_cls_split
 
 end module simple_commanders_cluster2D
