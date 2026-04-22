@@ -202,7 +202,7 @@ contains
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     n = size(selection)
     if( n > size(self%sieverefs_selection) ) THROW_HARD('sieverefs_selection exceeds maximum size')
-    self%l_assigned              = .true.
+    self%l_assigned                 = .true.
     self%sieverefs_selection_length = n
     self%sieverefs_selection(1:n)   = selection  ! only 1:n is ever read back
   end subroutine set_sieverefs_selection
@@ -222,7 +222,7 @@ contains
     class(gui_metadata_stream_update), intent(inout) :: self
     integer,                           intent(in)    :: n
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    self%l_assigned              = .true.
+    self%l_assigned                 = .true.
     self%sieverefs_selection_length = n
   end subroutine set_sieverefs_selection_length
 

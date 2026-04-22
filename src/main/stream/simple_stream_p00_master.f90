@@ -156,6 +156,7 @@ contains
         integer,                       allocatable :: i_arr(:)
         type(json_value),              pointer     :: json_child_ptr
         logical                                    :: l_terminate=.false., l_last_loop=.false., l_found, l_test=.false., l_terminate_loop=.false.
+        logical                                    :: got_snapshot_id, got_snapshot_iter, got_snapshot_sel, got_snapshot_file
         integer                                    :: stat, rc, max_msgsize, i_val, snapshot_id
         real(kind=dp)                              :: r_val
         ! init params
@@ -193,6 +194,7 @@ contains
                                 attr          = c_null_ptr, &
                                 start_routine = c_funloc(metadata_listener), &
                                 arg           = c_null_ptr)
+        if( stat /= 0 ) THROW_HARD('failed to create metadata listener thread')
         ! fork and test stream processes
         call fork_preprocess%start(       name=string(PREPROC_JOB_NAME),    logfile=string(PREPROC_JOB_NAME//'.log'),   cline=cline_preprocess,       restart=.true.)
         call fork_assign_optics%start(    name=string(OPTICS_JOB_NAME),    logfile=string(OPTICS_JOB_NAME//'.log'),    cline=cline_assign_optics,    restart=.true.)
@@ -265,6 +267,10 @@ contains
                         if( l_found .and. l_test ) then
                             if( fork_particle_sieving%status() == FORK_STATUS_RUNNING ) call fork_particle_sieving%terminate()
                         endif
+                        call json%get(json_response_ptr, 'terminate_pool2D', l_test, l_found)
+                        if( l_found .and. l_test ) then
+                            if( fork_pool2D%status() == FORK_STATUS_RUNNING ) call fork_pool2D%terminate()
+                        endif
                         ! check for forked process restart
                         call json%get(json_response_ptr, 'restart_preprocess', l_test, l_found)
                         if( l_found .and. l_test ) then
@@ -296,6 +302,12 @@ contains
                                 call fork_particle_sieving%start(name=string(SIEVING_JOB_NAME), logfile=string(SIEVING_JOB_NAME//'.log'),  cline=cline_particle_sieving, restart=.true.)
                             endif
                         endif
+                        call json%get(json_response_ptr, 'restart_pool2D', l_test, l_found)
+                        if( l_found .and. l_test ) then
+                            if( fork_pool2D%status() /= FORK_STATUS_RUNNING ) then
+                                call fork_pool2D%start(name=string(CLASS2D_JOB_NAME), logfile=string(CLASS2D_JOB_NAME//'.log'),  cline=cline_pool2D, restart=.true.)
+                            endif
+                        endif
                         ! wait to get update message from outbound queue and destroy
                         if( mq_stream_master_out%is_active() ) then
                             if( mq_stream_master_out%receive_timed(meta_buffer, 1) ) then
@@ -314,18 +326,21 @@ contains
                         if(l_found) call meta_update%set_increase_nmics(i_val)
                         call json%get(json_response_ptr, 'pickrefs_selection', i_arr, l_found)
                         if(l_found) call meta_update%set_pickrefs_selection(i_arr)
-                        call json%get(json_response_ptr, 'refs_selection', i_arr, l_found)
+                        call json%get(json_response_ptr, 'ref_selection', i_arr, l_found)
                         if(l_found) call meta_update%set_sieverefs_selection(i_arr)
                         call json%get(json_response_ptr, 'mskdiam2D', r_val, l_found)
                         if(l_found) call meta_update%set_mskdiam2D_update(real(r_val))
                         nullify(json_child_ptr)
                         call json%get(json_response_ptr, 'snapshot2D', json_child_ptr, l_found)
                         if( l_found .and. associated(json_child_ptr) ) then
-                            call json%get(json_child_ptr, 'id',        snapshot_id, l_found)
-                            call json%get(json_child_ptr, 'iteration', i_val,       l_found)
-                            call json%get(json_child_ptr, 'selection', i_arr,       l_found)
-                            call json%get(json_child_ptr, 'filename',  str_val,     l_found)
-                            if( allocated(i_arr) .and. allocated(str_val) ) &
+                            if( allocated(i_arr) )   deallocate(i_arr)
+                            if( allocated(str_val) ) deallocate(str_val)
+                            call json%get(json_child_ptr, 'id',        snapshot_id, got_snapshot_id)
+                            call json%get(json_child_ptr, 'iteration', i_val,       got_snapshot_iter)
+                            call json%get(json_child_ptr, 'selection', i_arr,       got_snapshot_sel)
+                            call json%get(json_child_ptr, 'filename',  str_val,     got_snapshot_file)
+                            if( got_snapshot_id .and. got_snapshot_iter .and. got_snapshot_sel .and. got_snapshot_file .and. &
+                                & allocated(i_arr) .and. allocated(str_val) ) &
                                 call meta_update%set_snapshot2D_update(snapshot_id, i_val, i_arr, string(str_val))
                             if( allocated(str_val) ) deallocate(str_val)
                             if( allocated(i_arr)   ) deallocate(i_arr)
@@ -404,9 +419,7 @@ contains
             my_rc = c_pthread_mutex_lock(terminate_mutex)
             l_terminate = .true.
             my_rc = c_pthread_mutex_unlock(terminate_mutex)
-            ! join listener
-            if( c_pthread_join(meta_listener_thread, ptr) /= 0) THROW_WARN('failed to join metadata listener thread' )
-            call exit(1)
+            l_terminate_loop = .true.
         end subroutine sigint_handler
 
         subroutine metadata_listener()
@@ -676,8 +689,8 @@ contains
                 if( c_pthread_mutex_lock(terminate_mutex) /= 0 ) THROW_HARD('failed to lock terminate mutex')
                 if( l_terminate ) my_l_continue = .false.
                 if( c_pthread_mutex_unlock(terminate_mutex) /= 0 ) THROW_HARD('failed to unlock terminate mutex')
-                ! sleep for 1us to save cpu cycles
-                rc = c_usleep(1)
+                ! sleep briefly to avoid busy-polling when queue is idle
+                rc = c_usleep(10000)
             end do
         end subroutine metadata_listener
 

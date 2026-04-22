@@ -249,6 +249,7 @@ contains
                             end if
                             if( allocated(snapshot_selection) ) deallocate(snapshot_selection)
                         endif
+                        deallocate(meta_buffer)
                     endif
                 endif
             endif
@@ -282,7 +283,7 @@ contains
                 type(chunk_rec)                :: crec
                 logical, allocatable :: l_processed(:), l_imported(:)
                 integer :: nsets2import, iset, nptcls2import, nmics2import, nmics, nptcls
-                integer :: i, fromp, imic, ind, iptcl, jptcl, jmic, nptcls_sel, nptcls_sel_tot
+                integer :: i, fromp, imic, ind, iptcl, jptcl, jmic, nptcls_sel, nptcls_sel_tot, ptcl_match_class
                 nimported = 0
                 if( setslist%size()== 0 ) return
                 ! at other times only import when the pool is free
@@ -348,7 +349,7 @@ contains
                         call pool%os_stk%set(imic, 'fromp', fromp)
                         call pool%os_stk%set(imic, 'top',   fromp+nptcls-1)
                         ! particles
-                        !$omp parallel do private(i,iptcl,jptcl) default(shared) proc_bind(close)
+                        !$omp parallel do private(i,iptcl,jptcl,ptcl_match_class) default(shared) proc_bind(close)
                         do i = 1,nptcls
                             iptcl = fromp + i - 1
                             jptcl = ind   + i - 1
@@ -358,6 +359,13 @@ contains
                             call pool%os_ptcl2D%set(iptcl, 'updatecnt', 0)
                             call pool%os_ptcl2D%set(iptcl, 'frac',      0.)
                             call pool%os_ptcl2D%delete_2Dclustering(iptcl, keepshifts=.true.)
+                            ! apply sieverefs-based selection state
+                            if( allocated(match_selection) ) then
+                                ptcl_match_class = pool%os_ptcl2D%get_int(iptcl, 'class_match')
+                                if( .not. any(match_selection == ptcl_match_class) ) then
+                                    call pool%os_ptcl2D%set(iptcl, 'state', 0)
+                                end if
+                            end if
                         enddo
                         !$omp end parallel do
                         ind   = ind   + nptcls
@@ -491,8 +499,8 @@ contains
                     pop     = pool_jpeg_pop(my_i),                       &
                     idx     = my_idx,                                    &
                     sprite  = sprite_sheet_pos(                                                           &
-                                    x = merge(0.0, my_xtile * (100.0 / (my_xtiles - 1)), my_xtiles == 1), &
-                                    y = merge(0.0, my_ytile * (100.0 / (my_ytiles - 1)), my_ytiles == 1), &
+                                    x = my_xtile * (100.0 / max(1, my_xtiles - 1)),                       &
+                                    y = my_ytile * (100.0 / max(1, my_ytiles - 1)),                       &
                                     h = 100 * my_ytiles,                                                  &
                                     w = 100 * my_xtiles))
                 if( meta_cavg2D%assigned() .and. mq_stream_master_in%is_active() ) then

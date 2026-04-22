@@ -241,9 +241,9 @@ contains
                             do i=0, size(jpg_cls_map) - 1
                                 if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                     call add_cls2D_accepted_to_json(selection_jpeg%to_char(),&
-                                        &i + 1,&
-                                        &xtile * (100.0 / (jpg_nxtiles - 1)),&
-                                        &ytile * (100.0 / (jpg_nytiles - 1)),&
+                                        &jpg_cls_map(i + 1),&
+                                        &xtile * (100.0 / max(1, jpg_nxtiles - 1)),&
+                                        &ytile * (100.0 / max(1, jpg_nytiles - 1)),&
                                         &100 * jpg_nytiles,&
                                         &100 * jpg_nxtiles,&
                                         &latest=.true.,&
@@ -251,9 +251,9 @@ contains
                                         &pop=nint(cls_pop(jpg_cls_map(i+1))))
                                 else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
                                     call add_cls2D_rejected_to_json(selection_jpeg%to_char(),&
-                                        &i + 1,&
-                                        &xtile * (100.0 / (jpg_nxtiles - 1)),&
-                                        &ytile * (100.0 / (jpg_nytiles - 1)),&
+                                        &jpg_cls_map(i + 1),&
+                                        &xtile * (100.0 / max(1, jpg_nxtiles - 1)),&
+                                        &ytile * (100.0 / max(1, jpg_nytiles - 1)),&
                                         &100 * jpg_nytiles,&
                                         &100 * jpg_nxtiles,&
                                         &latest=.true.,&
@@ -291,8 +291,8 @@ contains
                                     if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                         call add_cls2D_accepted_to_json(selection_jpeg%to_char(),&
                                             &jpg_cls_map(i + 1),&
-                                            &xtile * (100.0 / (jpg_nxtiles - 1)),&
-                                            &ytile * (100.0 / (jpg_nytiles - 1)),&
+                                            &xtile * (100.0 / max(1, jpg_nxtiles - 1)),&
+                                            &ytile * (100.0 / max(1, jpg_nytiles - 1)),&
                                             &100 * jpg_nytiles,&
                                             &100 * jpg_nxtiles,&
                                             &res=cls_res(jpg_cls_map(i+1)),&
@@ -300,8 +300,8 @@ contains
                                     else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
                                         call add_cls2D_rejected_to_json(selection_jpeg%to_char(),&
                                             &jpg_cls_map(i + 1),&
-                                            &xtile * (100.0 / (jpg_nxtiles - 1)),&
-                                            &ytile * (100.0 / (jpg_nytiles - 1)),&
+                                            &xtile * (100.0 / max(1, jpg_nxtiles - 1)),&
+                                            &ytile * (100.0 / max(1, jpg_nytiles - 1)),&
                                             &100 * jpg_nytiles,&
                                             &100 * jpg_nxtiles,&
                                             &res=cls_res(jpg_cls_map(i+1)),&
@@ -329,7 +329,7 @@ contains
                             if(found) then
                                 call http_communicator%update_json("user_input", .false., found)
                                 ! apply interactive selection
-                                write(logfhandle,'(A)') '>>> RECEIVED USER SELECTIONS', rejected_cls_ids
+                                write(logfhandle,'(A)') '>>> RECEIVED USER SELECTIONS'
                                 call user_select_reference_set( rejected_cls_ids )
                                 ! http stats
                                 call json%remove(accepted_cls2D, destroy=.true.)
@@ -347,23 +347,23 @@ contains
                                         if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                             call add_cls2D_accepted_to_json(selection_jpeg%to_char(),&
                                                 &jpg_cls_map(i + 1),&
-                                                &xtile * (100.0 / (jpg_nxtiles - 1)),&
-                                                &ytile * (100.0 / (jpg_nytiles - 1)),&
+                                                &xtile * (100.0 / max(1, jpg_nxtiles - 1)),&
+                                                &ytile * (100.0 / max(1, jpg_nytiles - 1)),&
                                                 &100 * jpg_nytiles,&
                                                 &100 * jpg_nxtiles,&
                                                 &latest=.true.,&
-                                                &res=cls_res(i+1),&
-                                                &pop=nint(cls_pop(i+1)))
+                                                &res=cls_res(jpg_cls_map(i+1)),&
+                                                &pop=nint(cls_pop(jpg_cls_map(i+1))))
                                         else if(any( rejected_cls_ids == jpg_cls_map(i + 1))) then
                                             call add_cls2D_rejected_to_json(selection_jpeg%to_char(),&
                                                 &jpg_cls_map(i + 1),&
-                                                &xtile * (100.0 / (jpg_nxtiles - 1)),&
-                                                &ytile * (100.0 / (jpg_nytiles - 1)),&
+                                                &xtile * (100.0 / max(1, jpg_nxtiles - 1)),&
+                                                &ytile * (100.0 / max(1, jpg_nytiles - 1)),&
                                                 &100 * jpg_nytiles,&
                                                 &100 * jpg_nxtiles,&
                                                 &latest=.true.,&
-                                                &res=cls_res(i+1),&
-                                                &pop=nint(cls_pop(i+1)))                      
+                                                &res=cls_res(jpg_cls_map(i+1)),&
+                                                &pop=nint(cls_pop(jpg_cls_map(i+1))))                      
                                         endif
                                         xtile = xtile + 1  
                                         if(xtile .eq. jpg_nxtiles) then
@@ -455,7 +455,13 @@ contains
                     nmics = nmics + spprojs(iproj)%os_mic%get_noris()
                     if( (first == 0) .and. (nmics > 0) ) first = iproj
                 enddo
-                if( nmics == 0 ) return
+                if( nmics == 0 ) then
+                    do iproj = 1,n_spprojs
+                        call spprojs(iproj)%kill
+                    enddo
+                    deallocate(spprojs)
+                    return
+                endif
                 ! import micrographs
                 n_completed = n_recs_prev + nmics
                 n_imported  = nmics
@@ -525,7 +531,7 @@ contains
 
             subroutine communicator_init()
                 call http_communicator%add_to_json( "stage",                   "initialising")
-                call http_communicator%add_to_json( "particles_imported ",     0)
+                call http_communicator%add_to_json( "particles_imported",      0)
                 call http_communicator%add_to_json( "particles_accepted",      0)
                 call http_communicator%add_to_json( "particles_rejected",      0)
                 call http_communicator%add_to_json( "user_input",              .false.)
@@ -590,9 +596,11 @@ contains
                 call set1_proj%read_segment('stk',   crec%projfile)
                 call set1_proj%get_cavgs_stk(selection_jpeg, ncls, smpd, box=stkbox)
                 call mrc2jpeg_tiled(selection_jpeg, swap_suffix(selection_jpeg, JPG_EXT, params%ext%to_char()), ntiles=jpg_ntiles, n_xtiles=jpg_nxtiles, n_ytiles=jpg_nytiles, mskdiam_px=ceiling((params%mskdiam * stkbox) / (smpd * set1_proj%get_box())))
-                if(allocated(cls_res))     deallocate(cls_res)
-                if(allocated(cls_pop))     deallocate(cls_pop)
-                if(allocated(jpg_cls_map)) deallocate(jpg_cls_map)
+                if(allocated(cls_res))          deallocate(cls_res)
+                if(allocated(cls_pop))          deallocate(cls_pop)
+                if(allocated(jpg_cls_map))      deallocate(jpg_cls_map)
+                if(allocated(accepted_cls_ids)) deallocate(accepted_cls_ids)
+                if(allocated(rejected_cls_ids)) deallocate(rejected_cls_ids)
                 allocate(jpg_cls_map(0))
                 allocate(accepted_cls_ids(0))
                 allocate(rejected_cls_ids(0))
@@ -705,7 +713,7 @@ contains
                 type(sp_project)                 :: my_spproj
                 type(chunk_rec)                  :: my_ref_srec
                 integer, allocatable             :: my_states(:)
-                integer                          :: my_i, my_ncls
+                integer                          :: my_i, my_ncls, my_icls
                 if( .not.allocated(my_cls2reject) )then
                     write(logfhandle, *) ">>> cls2reject not allocated"
                     return  ! gui must return an non empty vector
@@ -717,18 +725,17 @@ contains
                 my_ncls = my_spproj%os_cls2D%get_noris()
                 if( my_ncls == 0 )then
                     write(logfhandle, *) ">>> no cls2D information in project file"
+                    call my_spproj%kill()
                     return 
                 endif
-                ! allocate states
-                allocate( my_states(my_ncls) )
-                ! set all state flags to 1
-                my_states = 1
-                call my_spproj%os_cls2D%set_all2single('state', 1)
-                ! set all rejected cls state flags to 0
-                do my_i=1,size(my_cls2reject)
-                    my_states( my_cls2reject(my_i) ) = 0
-                    call my_spproj%os_cls2D%set(my_cls2reject(my_i), 'state', 0)
+                ! set all state flags to 1, then zero out rejected classes
+                allocate( my_states(my_ncls), source=1 )
+                do my_i = 1, size(my_cls2reject)
+                    my_icls = my_cls2reject(my_i)
+                    if( my_icls < 1 .or. my_icls > my_ncls ) cycle
+                    my_states(my_icls) = 0
                 enddo
+                call my_spproj%os_cls2D%set_all('state', my_states)
                 ! write project file -> state particle mapping and junk rejection handled by cluster_cavgs_selection
                 call my_spproj%write(my_ref_srec%projfile)
                 ! cleanup
