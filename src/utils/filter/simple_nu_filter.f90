@@ -605,12 +605,13 @@ contains
         real,    allocatable :: percentages(:)
         integer :: icut, iaux, nselected, nvox
         real    :: pct
+        character(len=8) :: auxtag
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before print_filtmap_lowpass_histogram')
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
         write(logfhandle,'(A)') '>>> LOCAL RESOLUTION HISTOGRAM'
         do icut = 1, size(cutoff_finds)
-            write(logfhandle,'(F8.3,A,I12,A,F8.3,A)') cutoff_find_to_lowpass_limit(icut), ' A : ', counts(icut), ' voxels, ', percentages(icut), '%'
+            write(logfhandle,'(F8.1,A,I12,A,F8.1,A)') cutoff_find_to_lowpass_limit(icut), ' A : ', counts(icut), ' voxels, ', percentages(icut), '%'
         end do
         ! Print auxiliary pair assignments if present
         if( allocated(aux_even_bank) .and. present(aux_resolutions) ) then
@@ -620,7 +621,8 @@ contains
             do iaux = 1, size(aux_even_bank)
                 nvox = count(srcmap == iaux + 1 .and. mask)
                 pct = 100. * real(nvox) / real(nselected)
-                write(logfhandle,'(A,I0,A,F8.3,A,I12,A,F8.3,A)') 'Auxiliary map ', iaux, ' @ ', aux_resolutions(iaux), ' A : ', nvox, ' voxels, ', pct, '%'
+                write(auxtag,'(A,I0,A)') 'Aux', iaux, '@'
+                write(logfhandle,'(A8,1X,F8.1,A,I12,A,F8.1,A)') auxtag, aux_resolutions(iaux), ' A : ', nvox, ' voxels, ', pct, '%'
             end do
         end if
         deallocate(counts, percentages)
