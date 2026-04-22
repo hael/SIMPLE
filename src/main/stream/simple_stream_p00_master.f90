@@ -314,6 +314,8 @@ contains
                         if(l_found) call meta_update%set_increase_nmics(i_val)
                         call json%get(json_response_ptr, 'pickrefs_selection', i_arr, l_found)
                         if(l_found) call meta_update%set_pickrefs_selection(i_arr)
+                        call json%get(json_response_ptr, 'refs_selection', i_arr, l_found)
+                        if(l_found) call meta_update%set_sieverefs_selection(i_arr)
                         call json%get(json_response_ptr, 'mskdiam2D', r_val, l_found)
                         if(l_found) call meta_update%set_mskdiam2D_update(real(r_val))
                         nullify(json_child_ptr)

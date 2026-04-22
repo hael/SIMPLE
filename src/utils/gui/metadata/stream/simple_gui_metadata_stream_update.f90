@@ -10,6 +10,8 @@
 ! FIELDS:
 !   pickrefs_selection        — per-class selection array (1 = selected, 0 = not)
 !   pickrefs_selection_length — number of valid entries in pickrefs_selection
+!   sieverefs_selection        — per-class selection for sieve refchunk (1 = selected, 0 = not)
+!   sieverefs_selection_length — number of valid entries in sieverefs_selection
 !   increase_nmics            — additional micrographs to use before re-picking (0 = none)
 !   ctfresupdate              — CTF resolution threshold (A); 0 = unset
 !   astigmatismupdate         — astigmatism threshold (A);   0 = unset
@@ -25,6 +27,7 @@
 !   set/get_ctfres_update, set/get_astigmatism_update, set/get_icescore_update
 !   set/get_increase_nmics
 !   set/get_pickrefs_selection, set/get_pickrefs_selection_length
+!   set/get_sieverefs_selection, set/get_sieverefs_selection_length
 !   set/get_mskdiam2D_update
 !   set/get_snapshot2D_update, has_snapshot2D_update
 !
@@ -49,6 +52,8 @@ type, extends(gui_metadata_base) :: gui_metadata_stream_update
   private
   integer(kind=2)       :: pickrefs_selection(1000)     = 0    ! per-class selection; 1 = selected, 0 = not selected
   integer               :: pickrefs_selection_length    = 0    ! number of classes in the selection
+  integer(kind=2)       :: sieverefs_selection(1000)    = 0    ! per-class selection for sieve refchunk; 1 = selected, 0 = not selected
+  integer               :: sieverefs_selection_length   = 0    ! number of sieve-ref classes in the selection
   integer               :: increase_nmics               = 0    ! additional micrographs requested before re-picking; 0 = no request
   real                  :: ctfresupdate                 = 0.0  ! CTF resolution threshold (A); 0 = unset
   real                  :: astigmatismupdate            = 0.0  ! astigmatism threshold (A);   0 = unset
@@ -56,7 +61,7 @@ type, extends(gui_metadata_base) :: gui_metadata_stream_update
   real                  :: mskdiam2D                    = 0.0  ! mask diameter for 2D classification (pixels); 0 = unset
   integer               :: snapshot2D_id                = 0    ! snapshot set ID; 0 = unset
   integer               :: snapshot2D_iteration         = 0    ! 2D classification iteration to snapshot; 0 = unset
-  integer(kind=2)       :: snapshot2D_selection(2000)   = 0    ! class indices included in the snapshot
+  integer(kind=2)       :: snapshot2D_selection(1000)   = 0    ! class indices included in the snapshot
   integer               :: snapshot2D_selection_length  = 0    ! number of valid entries in snapshot2D_selection
   character(len=STDLEN) :: snapshot2D_filename          = ''   ! project file name for the snapshot
 contains
@@ -72,6 +77,10 @@ contains
   procedure :: get_pickrefs_selection
   procedure :: set_pickrefs_selection_length
   procedure :: get_pickrefs_selection_length
+  procedure :: set_sieverefs_selection
+  procedure :: get_sieverefs_selection
+  procedure :: set_sieverefs_selection_length
+  procedure :: get_sieverefs_selection_length
   procedure :: set_mskdiam2D_update
   procedure :: get_mskdiam2D_update
   procedure :: set_snapshot2D_update
@@ -183,6 +192,46 @@ contains
     integer                                       :: n
     n = self%pickrefs_selection_length
   end function get_pickrefs_selection_length
+
+  ! Store the user's sieve-reference class selection as an integer array
+  ! Called when the GUI returns a refs_selection array from the particle-sieving stage.
+  subroutine set_sieverefs_selection( self, selection )
+    class(gui_metadata_stream_update), intent(inout) :: self
+    integer,                           intent(in)    :: selection(:)
+    integer :: n
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    n = size(selection)
+    if( n > size(self%sieverefs_selection) ) THROW_HARD('sieverefs_selection exceeds maximum size')
+    self%l_assigned              = .true.
+    self%sieverefs_selection_length = n
+    self%sieverefs_selection(1:n)   = selection  ! only 1:n is ever read back
+  end subroutine set_sieverefs_selection
+
+  ! Retrieve the sieve-reference class selection as an integer array
+  function get_sieverefs_selection( self ) result( selection )
+    class(gui_metadata_stream_update), intent(in)  :: self
+    integer, allocatable                           :: selection(:)
+    integer :: n
+    n = self%sieverefs_selection_length
+    allocate(selection(n))
+    selection = self%sieverefs_selection(1:n)
+  end function get_sieverefs_selection
+
+  ! Set the number of sieve-reference classes in the selection.
+  subroutine set_sieverefs_selection_length( self, n )
+    class(gui_metadata_stream_update), intent(inout) :: self
+    integer,                           intent(in)    :: n
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    self%l_assigned              = .true.
+    self%sieverefs_selection_length = n
+  end subroutine set_sieverefs_selection_length
+
+  ! Retrieve the number of sieve-reference classes in the selection.
+  function get_sieverefs_selection_length( self ) result( n )
+    class(gui_metadata_stream_update), intent(in) :: self
+    integer                                       :: n
+    n = self%sieverefs_selection_length
+  end function get_sieverefs_selection_length
 
   ! Assign the mask diameter for 2D classification received from the GUI.
   subroutine set_mskdiam2D_update( self, mskdiam2D )

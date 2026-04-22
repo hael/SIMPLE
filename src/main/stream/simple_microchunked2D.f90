@@ -93,11 +93,11 @@
 !   DEFAULT_MICRO_P2_LP                   — pass-2 / match low-pass stop, Å   (10.0)
 !   DEFAULT_MICRO_P2_POP_THRESH           — pass-2 population outlier floor  (0.0035)
 !   DEFAULT_MICRO_P2_LOCVAR_STRONG_THRESH — pass-2 local-variance strong cut   (-1.0)
-!   DEFAULT_MICRO_P2_LOCVAR_WEAK_THRESH   — pass-2 local-variance weak cut     (-0.5)
+!   DEFAULT_MICRO_P2_LOCVAR_WEAK_THRESH   — pass-2 local-variance weak cut     (-1.0)
 !   DEFAULT_REF_LP                        — refchunk low-pass stop cutoff, Å    (8.0)
 !   DEFAULT_REF_POP_THRESH                — ref/match population outlier floor (0.0025)
 !   DEFAULT_REF_LOCVAR_STRONG_THRESH      — ref/match local-variance strong    (-2.0)
-!   DEFAULT_REF_LOCVAR_WEAK_THRESH        — ref/match local-variance weak      (-1.0)
+!   DEFAULT_REF_LOCVAR_WEAK_THRESH        — ref/match local-variance weak      (-2.0)
 !   DEFAULT_WALLTIME                      — per-chunk job time limit, s  (1740 / 29 min)
 !
 ! ENVIRONMENT:
@@ -113,6 +113,7 @@
 !==============================================================================
 module simple_microchunked2D
   use simple_defs,         only: logfhandle, STDLEN, CWD_GLOB
+  use simple_error,        only: simple_exception
   use simple_image,        only: image
   use simple_timer,        only: timer_int_kind, tic, toc
   use simple_string,       only: string
@@ -158,6 +159,7 @@ module simple_microchunked2D
   character(len=*), parameter :: LABEL_PASS_2 = 'MICROCHUNK PASS 2'
   character(len=*), parameter :: LABEL_MATCH  = 'MICROCHUNK MATCH'
   character(len=*), parameter :: LABEL_REF    = 'REFCHUNK'
+  character(len=*), parameter :: REJECTION_FAILED = 'REJECTION_FAILED'
 
   type :: chunk2D
     private
@@ -171,6 +173,7 @@ module simple_microchunked2D
     logical :: abinitio2D_complete = .false.
     logical :: rejection_complete  = .false.
     logical :: complete            = .false.
+    logical :: failed              = .false.
   end type chunk2D
 
   type :: microchunked2D
@@ -368,10 +371,11 @@ contains
       new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
       new_chunk%abinitio2D_running  = .false.
       new_chunk%abinitio2D_complete = file_exists(new_chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED)
-      new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED')
-      new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE')
+      new_chunk%failed              = file_exists(new_chunk%folder%to_char() // '/' // REJECTION_FAILED)
+      new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED') .or. new_chunk%failed
+      new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE') .or. new_chunk%failed
       call chunk_project%kill()
-      if( .not. new_chunk%abinitio2D_complete ) call self%generate_microchunk_pass_1_cline(new_chunk)
+      if( .not. new_chunk%abinitio2D_complete .and. .not. new_chunk%failed ) call self%generate_microchunk_pass_1_cline(new_chunk)
       call self%append_microchunk_pass_1(new_chunk)
       write(logfhandle,'(A,I6,A,I8,A)') &
         '>>> IMPORTED EXISTING MICROCHUNK PASS 1 # ', chunk_id, ' WITH ', new_chunk%nptcls, ' PARTICLES'
@@ -410,10 +414,11 @@ contains
       new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
       new_chunk%abinitio2D_running  = .false.
       new_chunk%abinitio2D_complete = file_exists(new_chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED)
-      new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED')
-      new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE')
+      new_chunk%failed              = file_exists(new_chunk%folder%to_char() // '/' // REJECTION_FAILED)
+      new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED') .or. new_chunk%failed
+      new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE') .or. new_chunk%failed
       call chunk_project%kill()
-      if( .not. new_chunk%abinitio2D_complete ) call self%generate_microchunk_pass_2_cline(new_chunk)
+      if( .not. new_chunk%abinitio2D_complete .and. .not. new_chunk%failed ) call self%generate_microchunk_pass_2_cline(new_chunk)
       call self%append_microchunk_pass_2(new_chunk)
       write(logfhandle,'(A,I6,A,I8,A)') &
         '>>> IMPORTED EXISTING MICROCHUNK PASS 2 # ', chunk_id, ' WITH ', new_chunk%nptcls, ' PARTICLES'
@@ -456,9 +461,10 @@ contains
       new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
       new_chunk%abinitio2D_running  = .false.
       new_chunk%abinitio2D_complete = file_exists(new_chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED)
-      new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED')
-      new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE')
-      if( new_chunk%complete ) then
+      new_chunk%failed              = file_exists(new_chunk%folder%to_char() // '/' // REJECTION_FAILED)
+      new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED') .or. new_chunk%failed
+      new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE') .or. new_chunk%failed
+      if( new_chunk%complete .and. .not. new_chunk%failed ) then
         self%match_stk  = stkname
         self%match_jpeg = swap_suffix(self%match_stk, JPG_EXT, MRC_EXT)
         call chunk_project%cavgs2jpg(self%match_jpeg_inds, self%match_jpeg, self%match_jpeg_xtiles, self%match_jpeg_ytiles)
@@ -471,7 +477,7 @@ contains
         deallocate(cls_msk)
       end if
       call chunk_project%kill()
-      if( .not. new_chunk%abinitio2D_complete ) call self%generate_microchunk_match_cline(new_chunk)
+      if( .not. new_chunk%abinitio2D_complete .and. .not. new_chunk%failed ) call self%generate_microchunk_match_cline(new_chunk)
       call self%append_microchunk_match(new_chunk)
       write(logfhandle,'(A,I6,A,I8,A)') &
         '>>> IMPORTED EXISTING MICROCHUNK MATCH # ', chunk_id, ' WITH ', new_chunk%nptcls, ' PARTICLES'
@@ -518,9 +524,10 @@ contains
     self%refchunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
     self%refchunk%abinitio2D_running  = .false.
     self%refchunk%abinitio2D_complete = file_exists(self%refchunk%folder%to_char() // '/' // ABINITIO2D_FINISHED)
-    self%refchunk%rejection_complete  = file_exists(self%refchunk%folder%to_char() // '/REJECTION_FINISHED')
-    self%refchunk%complete            = file_exists(self%refchunk%folder%to_char() // '/COMPLETE')
-    if( .not. self%refchunk%abinitio2D_complete ) call self%generate_refchunk_cline(self%refchunk)
+    self%refchunk%failed              = file_exists(self%refchunk%folder%to_char() // '/' // REJECTION_FAILED)
+    self%refchunk%rejection_complete  = file_exists(self%refchunk%folder%to_char() // '/REJECTION_FINISHED') .or. self%refchunk%failed
+    self%refchunk%complete            = file_exists(self%refchunk%folder%to_char() // '/COMPLETE') .or. self%refchunk%failed
+    if( .not. self%refchunk%abinitio2D_complete .and. .not. self%refchunk%failed ) call self%generate_refchunk_cline(self%refchunk)
     ! Restore self%refs and self%box from the full class-average stack so
     ! generate_microchunks_match can proceed on restart
     if( self%refchunk%rejection_complete .and. file_exists(stkname) ) then
@@ -532,7 +539,7 @@ contains
     end if
     ! Guard: self%refs must be set before computing the JPEG path; if the
     ! stack file was absent above, skip metadata restoration entirely.
-    if( self%refchunk%complete .and. self%refs%strlen() > 0 ) then
+    if( self%refchunk%complete .and. .not. self%refchunk%failed .and. self%refs%strlen() > 0 ) then
       self%refs_jpeg = swap_suffix(self%refs, JPG_EXT, MRC_EXT)
       call chunk_project%cavgs2jpg(self%refs_jpeg_inds, self%refs_jpeg, self%refs_jpeg_xtiles, self%refs_jpeg_ytiles)
       self%ref_selection  = self%refs_jpeg_inds
@@ -627,7 +634,7 @@ contains
     get_n_pass_1_non_rejected_ptcls = 0
     do i = 1, self%get_n_microchunks_pass_1()
       associate( chunk => self%microchunks_pass_1(i) )
-        if( chunk%rejection_complete .and. .not. chunk%complete ) &
+        if( chunk%rejection_complete .and. .not. chunk%complete .and. .not. chunk%failed ) &
           get_n_pass_1_non_rejected_ptcls = &
             get_n_pass_1_non_rejected_ptcls + chunk%nptcls_selected
       end associate
@@ -643,7 +650,7 @@ contains
     get_n_pass_2_non_rejected_ptcls = 0
     do i = 1, self%get_n_microchunks_pass_2()
       associate( chunk => self%microchunks_pass_2(i) )
-        if( chunk%rejection_complete .and. .not. chunk%complete ) &
+        if( chunk%rejection_complete .and. .not. chunk%complete .and. .not. chunk%failed ) &
           get_n_pass_2_non_rejected_ptcls = &
             get_n_pass_2_non_rejected_ptcls + chunk%nptcls_selected
       end associate
@@ -674,20 +681,20 @@ contains
     ! pass-1: must have at least one chunk and all must be complete
     get_finished = self%get_n_microchunks_pass_1() > 0
     if( .not. get_finished ) return
-    get_finished = all(self%microchunks_pass_1(:)%complete)
+    get_finished = all(self%microchunks_pass_1(:)%complete .or. self%microchunks_pass_1(:)%failed)
     if( .not. get_finished ) return
     ! pass-2: must have at least one chunk and all must be complete
     get_finished = self%get_n_microchunks_pass_2() > 0
     if( .not. get_finished ) return
-    get_finished = all(self%microchunks_pass_2(:)%complete)
+    get_finished = all(self%microchunks_pass_2(:)%complete .or. self%microchunks_pass_2(:)%failed)
     if( .not. get_finished ) return
-    ! refchunk: the reference class-average chunk must be done
-    get_finished = self%refchunk%complete
+    ! refchunk: the reference class-average chunk must be done and not failed
+    get_finished = self%refchunk%complete .and. .not. self%refchunk%failed
     if( .not. get_finished ) return
     ! match: must have at least one chunk and all must be complete
     get_finished = self%get_n_microchunks_match() > 0
     if( .not. get_finished ) return
-    get_finished = all(self%microchunks_match(:)%complete)
+    get_finished = all(self%microchunks_match(:)%complete .or. self%microchunks_match(:)%failed)
   end function get_finished
 
   ! Returns .true. and populates the reference class-average outputs when the
@@ -938,7 +945,7 @@ contains
       ! Accumulate rejection-complete pass-1 chunks until threshold is reached
       do i = 1, self%get_n_microchunks_pass_1()
         associate( src => self%microchunks_pass_1(i) )
-          if( src%rejection_complete .and. .not. src%complete ) then
+          if( src%rejection_complete .and. .not. src%complete .and. .not. src%failed ) then
             n_consumed            = n_consumed            + 1
             chunk_nptcls_selected = chunk_nptcls_selected + src%nptcls_selected
             chunk_nptcls          = chunk_nptcls          + src%nptcls
@@ -1024,7 +1031,7 @@ contains
     ! Consume all rejection-complete pass-2 chunks (marked complete after match)
     do i = 1, self%get_n_microchunks_pass_2()
       associate( src => self%microchunks_pass_2(i) )
-        if( src%rejection_complete .and. .not. src%complete ) then
+        if( src%rejection_complete .and. .not. src%complete .and. .not. src%failed ) then
           n_consumed            = n_consumed            + 1
           chunk_nptcls_selected = chunk_nptcls_selected + src%nptcls_selected
           chunk_nptcls          = chunk_nptcls          + src%nptcls
@@ -1077,6 +1084,7 @@ contains
 
     do i = 1, self%get_n_microchunks_pass_2()
       associate( src => self%microchunks_pass_2(i) )
+        if( src%failed )                 cycle
         if( .not. src%rejection_complete ) cycle
         if( src%complete )                 cycle
         chunk_id                  = self%get_n_microchunks_match() + 1
@@ -1290,7 +1298,7 @@ contains
     call simple_getcwd(cwd)
 
     ! Submit reference chunk first — highest priority
-    if( self%refchunk%nptcls > 0 .and. self%get_n_chunks_running() < self%nparallel .and. &
+    if( self%refchunk%nptcls > 0 .and. .not. self%refchunk%failed .and. self%get_n_chunks_running() < self%nparallel .and. &
         .not. (self%refchunk%abinitio2D_running .or. self%refchunk%abinitio2D_complete) ) then
       call simple_chdir(self%refchunk%folder)
       CWD_GLOB = self%refchunk%folder%to_char()
@@ -1305,6 +1313,7 @@ contains
     do i = 1, self%get_n_microchunks_match()
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%microchunks_match(i) )
+        if( chunk%failed ) cycle
         if( chunk%abinitio2D_running .or. chunk%abinitio2D_complete ) cycle
         call simple_chdir(chunk%folder)
         CWD_GLOB = chunk%folder%to_char()
@@ -1320,6 +1329,7 @@ contains
     do i = 1, self%get_n_microchunks_pass_2()
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%microchunks_pass_2(i) )
+        if( chunk%failed ) cycle
         if( chunk%abinitio2D_running .or. chunk%abinitio2D_complete ) cycle
         call simple_chdir(chunk%folder)
         CWD_GLOB = chunk%folder%to_char()
@@ -1335,6 +1345,7 @@ contains
     do i = 1, self%get_n_microchunks_pass_1()
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%microchunks_pass_1(i) )
+        if( chunk%failed ) cycle
         if( chunk%abinitio2D_running .or. chunk%abinitio2D_complete ) cycle
         call simple_chdir(chunk%folder)
         CWD_GLOB = chunk%folder%to_char()
@@ -1369,6 +1380,7 @@ contains
 
     do i = 1, self%get_n_microchunks_pass_1()
       associate( chunk => self%microchunks_pass_1(i) )
+        if( chunk%failed ) cycle
         if( chunk%abinitio2D_running ) then
           if( file_exists(chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED) ) then
             chunk%abinitio2D_running  = .false.
@@ -1382,6 +1394,7 @@ contains
 
     do i = 1, self%get_n_microchunks_pass_2()
       associate( chunk => self%microchunks_pass_2(i) )
+        if( chunk%failed ) cycle
         if( chunk%abinitio2D_running ) then
           if( file_exists(chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED) ) then
             chunk%abinitio2D_running  = .false.
@@ -1395,6 +1408,7 @@ contains
 
     do i = 1, self%get_n_microchunks_match()
       associate( chunk => self%microchunks_match(i) )
+        if( chunk%failed ) cycle
         if( chunk%abinitio2D_running ) then
           if( file_exists(chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED) ) then
             chunk%abinitio2D_running  = .false.
@@ -1430,6 +1444,7 @@ contains
     end do
 
     if( self%refchunk%projfile%strlen() > 0 ) then
+      if( self%refchunk%failed ) THROW_HARD('reference chunk marked failed (REJECTION_FAILED)')
       if( self%refchunk%abinitio2D_running ) then
         if( file_exists(self%refchunk%folder%to_char() // '/' // ABINITIO2D_FINISHED) ) then
           self%refchunk%abinitio2D_running  = .false.
@@ -1438,6 +1453,7 @@ contains
         end if
       end if
       call self%reject_cavgs(self%refchunk, string(LABEL_REF))
+      if( self%refchunk%failed ) THROW_HARD('reference chunk rejection failed')
       if( self%refchunk%rejection_complete .and. .not. self%refchunk%complete ) then
         call spproj%read_segment('cls2D', self%refchunk%projfile)
         call spproj%read_segment('out',   self%refchunk%projfile)
@@ -1492,6 +1508,7 @@ contains
     real                                 :: smpd, smpd_dummy
 
     if( .not. chunk%abinitio2D_complete ) return
+    if( chunk%failed )                    return
     if( chunk%rejection_complete )        return
 
     t0 = timer_start()
@@ -1503,6 +1520,11 @@ contains
     if( size(cavg_imgs) == 0 ) then
       write(logfhandle,'(A,A,A,I6)') '>>> WARNING: no class averages found for ', &
         label%to_char(), ' chunk #', chunk%id
+      call simple_touch(chunk%folder%to_char() // '/' // REJECTION_FAILED)
+      call simple_touch(chunk%folder%to_char() // '/COMPLETE')
+      chunk%failed             = .true.
+      chunk%rejection_complete = .true.
+      chunk%complete           = .true.
       call spproj%kill()
       call timer_stop(t0, string('reject_cavgs'))
       return
@@ -1511,6 +1533,11 @@ contains
       write(logfhandle,'(A,A,A,I6,A,I4,A,I4)') '>>> WARNING: cavg count mismatch for ', &
         label%to_char(), ' chunk #', chunk%id, &
         ' (ncls=', ncls, ', cavgs=', size(cavg_imgs), '), skipping rejection'
+      call simple_touch(chunk%folder%to_char() // '/' // REJECTION_FAILED)
+      call simple_touch(chunk%folder%to_char() // '/COMPLETE')
+      chunk%failed             = .true.
+      chunk%rejection_complete = .true.
+      chunk%complete           = .true.
       call dealloc_imgarr(cavg_imgs)
       call spproj%kill()
       call timer_stop(t0, string('reject_cavgs'))

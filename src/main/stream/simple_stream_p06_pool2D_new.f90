@@ -227,6 +227,12 @@ contains
                             time_last_import = time8()
                             call unpause_pool()
                         endif
+                        if( meta_update%get_sieverefs_selection_length() > 0 ) then
+                            call update_match_class_states(meta_update%get_sieverefs_selection())
+                            if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
+                            time_last_import = time8()
+                            call unpause_pool()
+                        end if
                         if( meta_update%has_snapshot2D_update() ) then
                             call meta_update%get_snapshot2D_update(snapshot_id, snapshot_iteration, &
                                                                    snapshot_selection, snapshot_filename)                                  

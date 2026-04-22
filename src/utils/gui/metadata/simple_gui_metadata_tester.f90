@@ -701,7 +701,7 @@ contains
   !---------------- stream update ----------------
 
   ! Verify that each stream-update threshold field can be set and retrieved independently,
-  ! including the snapshot2D compound field.
+  ! including pickrefs_selection, sieverefs_selection, and the snapshot2D compound field.
   subroutine test_set_get_stream_update()
     type(gui_metadata_stream_update) :: meta
     integer,          allocatable    :: sel_out(:)
@@ -720,6 +720,26 @@ contains
     call assert_true(meta%get_icescore_update() == 0.3, 'icescore_update set/get correctly')
     call meta%set_mskdiam2D_update(180.0)
     call assert_true(meta%get_mskdiam2D_update() == 180.0, 'mskdiam2D_update set/get correctly')
+    ! pickrefs_selection
+    call assert_int(meta%get_pickrefs_selection_length(), 0, 'pickrefs_selection_length zero before set')
+    call meta%set_pickrefs_selection([1, 0, 1, 1, 0, 1])
+    call assert_int(meta%get_pickrefs_selection_length(), 6, 'pickrefs_selection_length set/get correctly')
+    sel_out = meta%get_pickrefs_selection()
+    call assert_int(size(sel_out), 6,   'pickrefs_selection size correct')
+    call assert_int(sel_out(1),    1,   'pickrefs_selection(1) correct')
+    call assert_int(sel_out(2),    0,   'pickrefs_selection(2) correct')
+    call assert_int(sel_out(6),    1,   'pickrefs_selection(6) correct')
+    deallocate(sel_out)
+    ! sieverefs_selection
+    call assert_int(meta%get_sieverefs_selection_length(), 0, 'sieverefs_selection_length zero before set')
+    call meta%set_sieverefs_selection([3, 7, 42, 100])
+    call assert_int(meta%get_sieverefs_selection_length(), 4, 'sieverefs_selection_length set/get correctly')
+    sel_out = meta%get_sieverefs_selection()
+    call assert_int(size(sel_out), 4,   'sieverefs_selection size correct')
+    call assert_int(sel_out(1),    3,   'sieverefs_selection(1) correct')
+    call assert_int(sel_out(2),    7,   'sieverefs_selection(2) correct')
+    call assert_int(sel_out(4),    100, 'sieverefs_selection(4) correct')
+    deallocate(sel_out)
     call assert_true(.not.meta%has_snapshot2D_update(), 'has_snapshot2D_update false before set')
     call meta%set_snapshot2D_update(snapshot_id=3, iteration=5, &
                                     selection=[23,171,200,46,142], filename=string('snapshot_3.simple'))
@@ -737,7 +757,7 @@ contains
   end subroutine test_set_get_stream_update
 
   ! Verify that the stream-update serialise buffer is the expected size, including
-  ! the snapshot2D fields.
+  ! pickrefs_selection, sieverefs_selection, and the snapshot2D fields.
   subroutine test_serialise_stream_update()
     character(len=:),                allocatable :: buffer
     type(gui_metadata_stream_update)             :: meta
@@ -749,6 +769,8 @@ contains
     call meta%set_astigmatism_update(0.4)
     call meta%set_icescore_update(0.3)
     call meta%set_mskdiam2D_update(180.0)
+    call meta%set_pickrefs_selection([1, 0, 1, 1, 0])
+    call meta%set_sieverefs_selection([3, 7, 42])
     call meta%set_snapshot2D_update(snapshot_id=3, iteration=5, &
                                     selection=[23,171,200,46,142], filename=string('snapshot_3.simple'))
     call assert_true(meta%assigned(), 'metadata object is set')

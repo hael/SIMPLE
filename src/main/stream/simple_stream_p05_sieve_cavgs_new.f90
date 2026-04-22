@@ -44,7 +44,10 @@ use simple_stream_mq_defs,       only: mq_stream_master_in, mq_stream_master_out
 use simple_microchunked2D,       only: microchunked2D
 use simple_stream_pool2D_utils,  only: set_lpthres_type
 use simple_gui_metadata_api,     only: gui_metadata_cavg2D,                                    &
-                                       gui_metadata_stream_particle_sieving, sprite_sheet_pos, &
+                                       gui_metadata_stream_particle_sieving,                   &
+                                       gui_metadata_stream_update,                             &
+                                       sprite_sheet_pos,                                       &
+                                       GUI_METADATA_STREAM_UPDATE_TYPE,                        &
                                        GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE,              &
                                        GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE,        &
                                        GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE
@@ -187,10 +190,13 @@ contains
             end if
             call sleep(WAITTIME)
         end do
-        ! TODO: kill spproj_glob, qenv, project_list, project_buff before exit
         call meta_particle_sieving%set_user_input(.false.)
         call send_meta(string('terminating'))
         call chunked_2D%kill()
+        call project_buff%kill()
+        call project_list%kill()
+        call qenv%kill()
+        call spproj_glob%kill()
         call meta_cavg2D%kill()
         call meta_particle_sieving%kill()
         
@@ -217,7 +223,18 @@ contains
             type(string), intent(in) :: my_path, my_stk
             integer,      intent(in) :: my_i, my_i_max, my_xtile, my_ytile
             integer                  :: my_idx
+            real                     :: x_sprite, y_sprite
             my_idx = jpeg_inds(my_i)
+            if( xtiles > 1 ) then
+                x_sprite = my_xtile * (100.0 / real(xtiles - 1))
+            else
+                x_sprite = 0.0
+            endif
+            if( ytiles > 1 ) then
+                y_sprite = my_ytile * (100.0 / real(ytiles - 1))
+            else
+                y_sprite = 0.0
+            endif
             call meta_cavg2D%set(                                    &
                 path    = my_path,                                   &
                 mrcpath = my_stk,                                    &
@@ -227,8 +244,8 @@ contains
                 pop     = jpeg_pops(my_i),                           &
                 idx     = my_idx,                                    &
                 sprite  = sprite_sheet_pos(                                        &
-                                x = merge(0.0, my_xtile * (100.0 / (xtiles - 1)), xtiles == 1), &
-                                y = merge(0.0, my_ytile * (100.0 / (ytiles - 1)), ytiles == 1), &
+                                x = x_sprite,                        &
+                                y = y_sprite,                        &
                                 h = 100 * ytiles,                      &
                                 w = 100 * xtiles))
             if( meta_cavg2D%assigned() .and. mq_stream_master_in%is_active() ) then

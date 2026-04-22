@@ -22,6 +22,7 @@ public :: set_lpthres_type
 public :: set_pool_resolution_limits
 ! UPDATERS
 public :: update_mskdiam
+public :: update_match_class_states
 public :: update_pool
 public :: update_pool_aln_params
 public :: update_pool_status
@@ -568,13 +569,62 @@ contains
 
     ! UPDATERS
 
-    subroutine update_mskdiam( params, new_mskdiam)
+    subroutine update_mskdiam( params, new_mskdiam )
         class(parameters), intent(inout) :: params
         integer, intent(in) :: new_mskdiam
-        write(*,'(A,I4,A)')'>>> UPDATED MASK DIAMETER TO',new_mskdiam ,'Å'
+        write(*,'(A,I4,A)')'>>> UPDATED MASK DIAMETER TO', new_mskdiam ,'Å'
         params%mskdiam = real(new_mskdiam)
         call cline_cluster2D_pool%set('mskdiam',   params%mskdiam)
     end subroutine update_mskdiam
+
+    !> Queues a GUI-driven match-class selection update for the next pool iteration.
+    !! @p selection  Array of selected match_class indices,
+    !!               as received via the GUI metadata stream (sieverefs_selection).
+    !! If the incoming mask differs from the cached @p match_selection — or if no
+    !! selection has been recorded yet — the cache is overwritten and
+    !! @p l_match_selection_update is raised so the next pool iteration applies it.
+    subroutine update_match_class_states( selection )
+        integer, intent(in) :: selection(:)
+        logical :: changed
+        ! A missing or differently-sized cache counts as changed; avoids an
+        ! illegal conformance check in the elemental `==` below.
+        if( .not. allocated(match_selection) )then
+            changed = .true.
+        else if( size(selection) /= size(match_selection) )then
+            changed = .true.
+        else
+            changed = .not. all(selection == match_selection)
+        end if
+        if( changed )then
+            match_selection          = selection    ! intrinsic reallocation on assignment
+            l_match_selection_update = .true.
+            write(logfhandle,'(A)') '>>> QUEUED UPDATE TO MATCH CLASS STATES'
+        end if
+    end subroutine update_match_class_states
+
+    !> Applies the cached @p match_selection mask to @p pool_proj%%os_ptcl2D.
+    !! For each particle, if its class_match value is present in @p match_selection
+    !! its state is set to 1 (accepted); otherwise it is set to 0 (rejected).
+    !! The updated state vector is written back to @p pool_proj%%os_ptcl2D.
+    !! Called from update_pool once per flagged update cycle.
+    subroutine update_match_class_states_in_pool
+        integer, allocatable :: class_match(:), state(:)
+        integer              :: i, nptcls
+        ! Nothing to do if no selection has been received yet
+        if( .not. allocated(match_selection) ) return
+        nptcls      = pool_proj%os_ptcl2D%get_noris()
+        state       = pool_proj%os_ptcl2D%get_all_asint('state')
+        class_match = pool_proj%os_ptcl2D%get_all_asint('class_match')
+        do i = 1, nptcls
+            if( any(match_selection == class_match(i)) ) then
+                state(i) = 1
+            else
+                state(i) = 0
+            end if
+        end do
+        call pool_proj%os_ptcl2D%set_all('state', state)
+        write(logfhandle,'(A)') '>>> APPLIED MATCH CLASS SELECTION TO POOL'
+    end subroutine update_match_class_states_in_pool
 
     ! Reports alignment info from completed iteration of subset
     ! of particles back to the pool
@@ -675,6 +725,11 @@ contains
             current_resolution = frcs%estimate_lp_for_align()
             write(logfhandle,'(A,F5.1)')'>>> CURRENT POOL RESOLUTION: ',current_resolution
             call frcs%kill
+            ! update match_class states if needed
+            if( l_match_selection_update )then
+                call update_match_class_states_in_pool()
+                l_match_selection_update = .false.
+            end if
             ! deal with dimensions/resolution update
             call update_pool_dims(params)
             ! for gui

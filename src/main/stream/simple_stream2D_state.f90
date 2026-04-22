@@ -71,7 +71,13 @@ integer, allocatable      :: snapshot_selection(:)
 type(json_value), pointer :: snapshot_json => null()
 
 !===========================
-! 8. Global filenames
+! 8. Match classes rejection/selection
+!===========================
+integer, allocatable      :: match_selection(:)
+logical                   :: l_match_selection_update = .false.
+
+!===========================
+! 9. Global filenames
 !===========================
 type(string)              :: refs_glob
 type(string)              :: orig_projfile

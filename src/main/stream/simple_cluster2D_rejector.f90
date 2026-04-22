@@ -54,6 +54,8 @@ module simple_cluster2D_rejector
   ! Reject classes where local variance z-scores are below these thresholds in both regions.
   real, parameter :: LOCVAR_STRONG_THRESH  = -0.5
   real, parameter :: LOCVAR_WEAK_THRESH    = -0.1
+  ! Tolerance used to classify near-zero local-variance scores as zero.
+  real, parameter :: ZERO_SCORE_EPS        = 1.0e-6
 
   type :: cluster2D_rejector
     private
@@ -315,7 +317,7 @@ contains
     allocate(zscores_outside(noris),source=0.0)
     nrejected = 0
     do i = 1, noris
-      if( scores_inside(i) == 0.0 .and. scores_outside(i) == 0.0 ) then
+      if( abs(scores_inside(i)) <= ZERO_SCORE_EPS .and. abs(scores_outside(i)) <= ZERO_SCORE_EPS ) then
         l_zero(i)          = .true.
         self%l_rejected(i) = .true.
         nrejected          = nrejected + 1
