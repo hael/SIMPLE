@@ -8,6 +8,8 @@ use simple_sp_project,   only: sp_project
 use simple_image,        only: image
 use simple_image_msk,    only: automask2D
 use simple_classaverager, only: transform_ptcls
+use simple_fileio,       only: fopen, fclose, nlines
+use simple_srch_sort_loc, only: hpsort, reverse
 implicit none
 
 public :: ppca_cls_split_strategy
@@ -205,6 +207,11 @@ contains
         class(cmdline),                              intent(inout) :: cline
         integer, allocatable :: cls_inds(:), cls_pops(:)
         call init_common(params, build, cline)
+        if( trim(params%oritype).eq.'ptcl3D' )then
+            call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
+        else
+            call build%spproj%split_stk(params%nparts)
+        endif
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
         self%nparts_run = min(max(1, params%nparts), size(cls_inds))
         write(logfhandle,'(A,I8,A,I8,A,I8)') 'PPCA split worker planning: requested_nparts=', params%nparts, &
@@ -267,13 +274,16 @@ contains
         class(cmdline),                              intent(inout) :: cline
         integer,                                     intent(in)    :: cls_inds(:), cls_pops(:)
         integer, allocatable :: order(:), part_counts(:), part_cls(:,:)
+        integer, allocatable :: cls_pops_sorted(:)
         integer(kind=8), allocatable :: part_weights(:)
         integer :: ncls, ipart, iord, icls, lightest
         type(string) :: fname
         ncls = size(cls_inds)
         allocate(order(ncls), part_counts(self%nparts_run), part_cls(ncls, self%nparts_run), part_weights(self%nparts_run))
         order = [(icls, icls=1,ncls)]
-        call sort_order_by_weight_desc(order, cls_pops)
+        allocate(cls_pops_sorted(ncls), source=cls_pops)
+        call hpsort(cls_pops_sorted, order)
+        call reverse(order)
         part_counts  = 0
         part_weights = 0_8
         part_cls     = 0
@@ -286,14 +296,14 @@ contains
         end do
         allocate(self%part_params(self%nparts_run))
         do ipart = 1, self%nparts_run
-            if( part_counts(ipart) > 1 ) call sort_ints_asc(part_cls(1:part_counts(ipart), ipart))
-            fname = part_assignment_fname(ipart, params%numlen)
+            if( part_counts(ipart) > 1 ) call hpsort(part_cls(1:part_counts(ipart), ipart))
+            fname = string('ppca_split_classes_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
             call arr2txtfile(part_cls(1:part_counts(ipart), ipart), fname)
             call self%part_params(ipart)%new(1)
             call self%part_params(ipart)%set('class_assignment', fname%to_char())
             call fname%kill
         end do
-        deallocate(order, part_counts, part_cls, part_weights)
+        deallocate(order, part_counts, part_cls, part_weights, cls_pops_sorted)
     end subroutine prepare_class_partitions
 
     subroutine collect_split_classes(cline, params, build, cls_inds, cls_pops)
@@ -384,9 +394,11 @@ contains
         l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
         call determine_phase_flip(spproj, params, l_phflip)
         if( l_write_project )then
-            map_fname = final_map_fname()
-            call del_file(final_raw_stack_fname())
-            call del_file(final_den_stack_fname())
+            map_fname = string('split_class_map.txt')
+            raw_fname = string('split_subclass_avgs.mrcs')
+            den_fname = string('split_subclass_avgs_denoised.mrcs')
+            call del_file(raw_fname)
+            call del_file(den_fname)
             open(newunit=funit_map, file=map_fname%to_char(), status='replace', action='write')
             write(funit_map,'(A)') '# global_subclass parent_class local_subclass pop'
             select case(trim(params%oritype))
@@ -397,10 +409,10 @@ contains
             end select
             allocate(parent_of_subcls(sum(cls_pops)), pop_of_subcls(sum(cls_pops)), source=0)
         else
-            map_fname    = part_map_fname(part, params%numlen)
-            assign_fname = part_assign_fname(part, params%numlen)
-            raw_fname    = part_raw_stack_fname(part, params%numlen)
-            den_fname    = part_den_stack_fname(part, params%numlen)
+            map_fname    = string('split_class_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
+            assign_fname = string('split_assignments_part')//int2str_pad(part, params%numlen)//TXT_EXT
+            raw_fname    = string('split_subclass_avgs_part')//int2str_pad(part, params%numlen)//'.mrcs'
+            den_fname    = string('split_subclass_avgs_denoised_part')//int2str_pad(part, params%numlen)//'.mrcs'
             call del_file(raw_fname)
             call del_file(den_fname)
             open(newunit=funit_map,    file=map_fname%to_char(),    status='replace', action='write')
@@ -423,8 +435,8 @@ contains
                     parent_of_subcls(iglob) = cls_inds(i)
                     pop_of_subcls(iglob)    = count(labels == j)
                     write(funit_map,'(I8,1X,I8,1X,I8,1X,I8)') iglob, cls_inds(i), j, count(labels == j)
-                    call raw_subavgs(j)%write(final_raw_stack_fname(), iglob)
-                    call den_subavgs(j)%write(final_den_stack_fname(), iglob)
+                    call raw_subavgs(j)%write(raw_fname, iglob)
+                    call den_subavgs(j)%write(den_fname, iglob)
                 else
                     write(funit_map,'(I8,1X,I8,1X,I8,1X,I8)') iglob, cls_inds(i), j, count(labels == j)
                     call raw_subavgs(j)%write(raw_fname, iglob)
@@ -651,6 +663,7 @@ contains
         type(image)      :: img
         integer, allocatable :: part_counts(:), part_localstack(:,:), part_parent(:,:), part_local(:,:), part_pop(:,:), part_global(:,:)
         integer, allocatable :: comb_part(:), comb_row(:), comb_parent(:), comb_local(:), comb_pop(:)
+        integer, allocatable :: order(:)
         integer, allocatable :: new_class(:), new_parent(:)
         type(string) :: map_fname, assign_fname, raw_fname, den_fname
         integer :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, global_cls, ldim(3), nstk
@@ -660,8 +673,8 @@ contains
         allocate(part_counts(nparts_run), source=0)
         total = 0
         do ipart = 1, nparts_run
-            map_fname = part_map_fname(ipart, params%numlen)
-            call count_data_lines(map_fname, nlocal)
+            map_fname = string('split_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
+            nlocal = nlines(map_fname)
             part_counts(ipart) = nlocal
             total = total + nlocal
             call map_fname%kill
@@ -673,7 +686,7 @@ contains
         allocate(comb_part(total), comb_row(total), comb_parent(total), comb_local(total), comb_pop(total), source=0)
         idx = 0
         do ipart = 1, nparts_run
-            map_fname = part_map_fname(ipart, params%numlen)
+            map_fname = string('split_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
             call read_part_map(map_fname, part_counts(ipart), part_localstack(1:part_counts(ipart), ipart), &
                                part_parent(1:part_counts(ipart), ipart), part_local(1:part_counts(ipart), ipart), &
                                part_pop(1:part_counts(ipart), ipart))
@@ -687,16 +700,28 @@ contains
             end do
             call map_fname%kill
         end do
-        call sort_combined_maps(comb_part, comb_row, comb_parent, comb_local, comb_pop)
-        call del_file(final_raw_stack_fname())
-        call del_file(final_den_stack_fname())
-        raw_fname = part_raw_stack_fname(comb_part(1), params%numlen)
+        allocate(order(total))
+        order = [(i, i=1,total)]
+        call hpsort(order, combined_map_lt)
+        comb_part   = comb_part(order)
+        comb_row    = comb_row(order)
+        comb_parent = comb_parent(order)
+        comb_local  = comb_local(order)
+        comb_pop    = comb_pop(order)
+        raw_fname = string('split_subclass_avgs.mrcs')
+        den_fname = string('split_subclass_avgs_denoised.mrcs')
+        call del_file(raw_fname)
+        call del_file(den_fname)
+        map_fname = string('split_subclass_avgs_part')//int2str_pad(comb_part(1), params%numlen)//'.mrcs'
+        raw_fname = map_fname
         call find_ldim_nptcls(raw_fname, ldim, nstk, smpd=smpd)
         ldim(3) = 1
         call img%new(ldim, smpd)
-        map_fname = final_map_fname()
+        map_fname = string('split_class_map.txt')
         open(newunit=funit, file=map_fname%to_char(), status='replace', action='write')
         write(funit,'(A)') '# global_subclass parent_class local_subclass pop'
+        raw_fname = string('split_subclass_avgs.mrcs')
+        den_fname = string('split_subclass_avgs_denoised.mrcs')
         do idx = 1, total
             if( idx > 1 )then
                 if( comb_parent(idx) == comb_parent(idx-1) .and. comb_local(idx) == comb_local(idx-1) )then
@@ -705,12 +730,12 @@ contains
             endif
             part_global(comb_row(idx), comb_part(idx)) = idx
             write(funit,'(I8,1X,I8,1X,I8,1X,I8)') idx, comb_parent(idx), comb_local(idx), comb_pop(idx)
-            raw_fname = part_raw_stack_fname(comb_part(idx), params%numlen)
-            den_fname = part_den_stack_fname(comb_part(idx), params%numlen)
-            call img%read(raw_fname, part_localstack(comb_row(idx), comb_part(idx)))
-            call img%write(final_raw_stack_fname(), idx)
-            call img%read(den_fname, part_localstack(comb_row(idx), comb_part(idx)))
-            call img%write(final_den_stack_fname(), idx)
+            assign_fname = string('split_subclass_avgs_part')//int2str_pad(comb_part(idx), params%numlen)//'.mrcs'
+            map_fname    = string('split_subclass_avgs_denoised_part')//int2str_pad(comb_part(idx), params%numlen)//'.mrcs'
+            call img%read(assign_fname, part_localstack(comb_row(idx), comb_part(idx)))
+            call img%write(raw_fname, idx)
+            call img%read(map_fname, part_localstack(comb_row(idx), comb_part(idx)))
+            call img%write(den_fname, idx)
         end do
         close(funit)
         if( trim(params%oritype) .eq. 'ptcl2D' )then
@@ -719,8 +744,8 @@ contains
             allocate(new_class(spproj%os_ptcl3D%get_noris()), new_parent(spproj%os_ptcl3D%get_noris()), source=0)
         endif
         do ipart = 1, nparts_run
-            assign_fname = part_assign_fname(ipart, params%numlen)
-            open(newunit=funit, file=assign_fname%to_char(), status='old', action='read', iostat=ios)
+            assign_fname = string('split_assignments_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
+            call fopen(funit, assign_fname, status='old', action='read', iostat=ios)
             call fileiochk('merge_worker_outputs opening '//assign_fname%to_char(), ios)
             do
                 read(funit,'(A)',iostat=ios) line
@@ -735,15 +760,24 @@ contains
                 new_class(pind)  = global_cls
                 new_parent(pind) = parent_cls
             end do
-            close(funit)
+            call fclose(funit)
             call assign_fname%kill
         end do
         call apply_split_project_updates(spproj, params, total, new_class, new_parent, comb_parent, comb_pop)
         call spproj%kill
         call img%kill
         deallocate(new_class, new_parent, part_counts, part_localstack, part_parent, part_local, part_pop, part_global, &
-                   comb_part, comb_row, comb_parent, comb_local, comb_pop)
+                   comb_part, comb_row, comb_parent, comb_local, comb_pop, order)
         call map_fname%kill
+        call raw_fname%kill
+        call den_fname%kill
+        call assign_fname%kill
+    contains
+        logical function combined_map_lt(irow1, irow2)
+            integer, intent(in) :: irow1, irow2
+            combined_map_lt = (comb_parent(irow1) < comb_parent(irow2)) .or. &
+                ((comb_parent(irow1) == comb_parent(irow2)) .and. (comb_local(irow1) < comb_local(irow2)))
+        end function combined_map_lt
     end subroutine merge_worker_outputs
 
     integer function lookup_part_global(nrows, parents, locals, globals, parent_cls, local_cls) result(global_cls)
@@ -758,31 +792,13 @@ contains
         end do
     end function lookup_part_global
 
-    subroutine count_data_lines(fname, nlines)
-        type(string), intent(in)  :: fname
-        integer,      intent(out) :: nlines
-        integer :: funit, ios
-        character(len=XLONGSTRLEN) :: line
-        nlines = 0
-        open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
-        call fileiochk('count_data_lines opening '//fname%to_char(), ios)
-        do
-            read(funit,'(A)',iostat=ios) line
-            if( ios /= 0 ) exit
-            if( len_trim(line) == 0 ) cycle
-            if( line(1:1) == '#' ) cycle
-            nlines = nlines + 1
-        end do
-        close(funit)
-    end subroutine count_data_lines
-
     subroutine read_part_map(fname, nrows, localstack, parents, locals, pops)
         type(string), intent(in)  :: fname
         integer,      intent(in)  :: nrows
         integer,      intent(out) :: localstack(:), parents(:), locals(:), pops(:)
         integer :: funit, ios, irow
         character(len=XLONGSTRLEN) :: line
-        open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
+        call fopen(funit, fname, status='old', action='read', iostat=ios)
         call fileiochk('read_part_map opening '//fname%to_char(), ios)
         irow = 0
         do
@@ -794,7 +810,7 @@ contains
             if( irow > nrows ) exit
             read(line,*) localstack(irow), parents(irow), locals(irow), pops(irow)
         end do
-        close(funit)
+        call fclose(funit)
     end subroutine read_part_map
 
     subroutine read_int_file(fname, vals)
@@ -802,9 +818,9 @@ contains
         integer, allocatable, intent(out) :: vals(:)
         integer :: nvals, funit, ios, i
         character(len=XLONGSTRLEN) :: line
-        call count_data_lines(fname, nvals)
+        nvals = nlines(fname)
         allocate(vals(nvals))
-        open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
+        call fopen(funit, fname, status='old', action='read', iostat=ios)
         call fileiochk('read_int_file opening '//fname%to_char(), ios)
         i = 0
         do
@@ -815,97 +831,7 @@ contains
             i = i + 1
             read(line,*) vals(i)
         end do
-        close(funit)
+        call fclose(funit)
     end subroutine read_int_file
-
-    subroutine sort_order_by_weight_desc(order, weights)
-        integer, intent(inout) :: order(:)
-        integer, intent(in)    :: weights(:)
-        integer :: i, j, tmp
-        do i = 1, size(order) - 1
-            do j = i + 1, size(order)
-                if( weights(order(j)) > weights(order(i)) )then
-                    tmp = order(i)
-                    order(i) = order(j)
-                    order(j) = tmp
-                endif
-            end do
-        end do
-    end subroutine sort_order_by_weight_desc
-
-    subroutine sort_ints_asc(vals)
-        integer, intent(inout) :: vals(:)
-        integer :: i, j, tmp
-        do i = 1, size(vals) - 1
-            do j = i + 1, size(vals)
-                if( vals(j) < vals(i) )then
-                    tmp = vals(i)
-                    vals(i) = vals(j)
-                    vals(j) = tmp
-                endif
-            end do
-        end do
-    end subroutine sort_ints_asc
-
-    subroutine sort_combined_maps(parts, rows, parents, locals, pops)
-        integer, intent(inout) :: parts(:), rows(:), parents(:), locals(:), pops(:)
-        integer :: i, j, tmp
-        do i = 1, size(parts) - 1
-            do j = i + 1, size(parts)
-                if( parents(j) < parents(i) .or. (parents(j) == parents(i) .and. locals(j) < locals(i)) )then
-                    tmp = parts(i);   parts(i)   = parts(j);   parts(j)   = tmp
-                    tmp = rows(i);    rows(i)    = rows(j);    rows(j)    = tmp
-                    tmp = parents(i); parents(i) = parents(j); parents(j) = tmp
-                    tmp = locals(i);  locals(i)  = locals(j);  locals(j)  = tmp
-                    tmp = pops(i);    pops(i)    = pops(j);    pops(j)    = tmp
-                endif
-            end do
-        end do
-    end subroutine sort_combined_maps
-
-    function final_map_fname() result(fname)
-        type(string) :: fname
-        fname = string('split_class_map.txt')
-    end function final_map_fname
-
-    function final_raw_stack_fname() result(fname)
-        type(string) :: fname
-        fname = string('split_subclass_avgs.mrcs')
-    end function final_raw_stack_fname
-
-    function final_den_stack_fname() result(fname)
-        type(string) :: fname
-        fname = string('split_subclass_avgs_denoised.mrcs')
-    end function final_den_stack_fname
-
-    function part_assignment_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('ppca_split_classes_part')//int2str_pad(part, numlen)//TXT_EXT
-    end function part_assignment_fname
-
-    function part_map_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('split_class_map_part')//int2str_pad(part, numlen)//TXT_EXT
-    end function part_map_fname
-
-    function part_assign_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('split_assignments_part')//int2str_pad(part, numlen)//TXT_EXT
-    end function part_assign_fname
-
-    function part_raw_stack_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('split_subclass_avgs_part')//int2str_pad(part, numlen)//'.mrcs'
-    end function part_raw_stack_fname
-
-    function part_den_stack_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('split_subclass_avgs_denoised_part')//int2str_pad(part, numlen)//'.mrcs'
-    end function part_den_stack_fname
 
 end module simple_ppca_cls_split_strategy
