@@ -141,9 +141,9 @@ contains
         integer,     allocatable :: pinds(:)
         real,        allocatable :: sigma2(:,:), sigma2_batch(:,:)
         integer :: batchlims(2), kfromto(2)
-        integer :: i, iptcl, imatch, nyq, nptcls_part_sel, batchsz_max, nbatch
+        integer :: i, iptcl, imatch, nyq, nptcls_part_sel, nptcls_active, batchsz_max, nbatch
         logical :: l_scale_update_frac
-        real    :: sig2_mul
+        real    :: sig2_mul, update_frac_eff
         ! Sampling
         ! Because this is always run prior to reconstruction/search, sampling is not always informed
         ! or may change with workflows. Instead of setting a sampling for the following operations when
@@ -153,6 +153,17 @@ contains
             call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, nptcls_part_sel, pinds, .false. )
             l_scale_update_frac = .true.
             sig2_mul = 1.0 / (2.0 * params%update_frac)
+        else if( params%nsample > 0 )then
+            ! Keep calc_pspec independent of project sampling metadata: sampling is compute-only.
+            call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_active, pinds, .false.)
+            nptcls_part_sel = nptcls_active
+            if( nptcls_active > params%nsample )then
+                update_frac_eff = real(params%nsample) / real(nptcls_active)
+                call build%spproj_field%sample4update_rnd([params%fromp,params%top], update_frac_eff, nptcls_part_sel, pinds, .false. )
+            endif
+            l_scale_update_frac = nptcls_active > 0 .and. nptcls_part_sel < nptcls_active
+            update_frac_eff = real(nptcls_part_sel) / real(max(1,nptcls_active))
+            sig2_mul = 1.0 / (2.0 * max(update_frac_eff, tiny(update_frac_eff)))
         else
             call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, .false.)
             sig2_mul = 0.5
