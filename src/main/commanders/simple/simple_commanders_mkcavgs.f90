@@ -92,11 +92,8 @@ contains
         type(parameters)   :: params
         type(builder)      :: build
         type(starproject)  :: starproj
-        type(polarft_calc) :: pftc
-        type(string)       :: fname
         real, allocatable  :: states(:)
         integer            :: iterstr_start, iterstr_end, iter, io_stat
-        integer            :: pftsz, kfromto(2), ncls
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( cline%defined('which_iter') )then
@@ -108,27 +105,12 @@ contains
             params%refs_even = 'start2Drefs_even'//params%ext%to_char()
             params%refs_odd  = 'start2Drefs_odd'//params%ext%to_char()
         endif
-        if( params%l_polar )then
-            fname = 'cavgs_even_part'//int2str_pad(1,params%numlen)//BIN_EXT
-            call polarft_dims_from_file_header(fname, pftsz, kfromto, ncls)
-            call fname%kill
-            call pftc%new(params, 1, [1,1], kfromto)
-            call pftc%polar_cavger_new(.false., nrefs=params%ncls)
-            call pftc%polar_cavger_calc_pops(build%spproj)
-            call pftc%polar_cavger_assemble_sums_from_parts
-            call pftc%polar_cavger_merge_eos_and_norm2D(build%clsfrcs, params%frcs)
-            call pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call pftc%polar_cavger_gen2Dclassdoc(build%spproj, build%clsfrcs)
-            call pftc%kill
-            call pftc%polar_cavger_kill
-        else
-            call cavger_new(params, build)
-            call cavger_assemble_sums_from_parts
-            call cavger_gen2Dclassdoc
-            call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP')
-            call cavger_write_all(params%refs, params%refs_even, params%refs_odd)
-            call cavger_kill
-        endif
+        call cavger_new(params, build)
+        call cavger_assemble_sums_from_parts
+        call cavger_gen2Dclassdoc
+        call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP')
+        call cavger_write_all(params%refs, params%refs_even, params%refs_odd)
+        call cavger_kill
         ! get iteration from which_iter else from refs filename and write cavgs starfile
         if( cline%defined('which_iter') ) then
             call starproj%export_cls2D(build%spproj, params%which_iter)
@@ -145,9 +127,7 @@ contains
         call build%spproj%os_cls3D%set_all('state',states)
         deallocate(states)
         call build%spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
-        if( .not. params%l_polar )then ! no Cartesian class averages in the polar version
-            call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
-        endif
+        call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
         ! multiple fields updated, do a full write
         call build%spproj%write(params%projfile)
         ! end gracefully

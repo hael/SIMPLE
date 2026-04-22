@@ -287,7 +287,7 @@ contains
         use simple_matcher_smpl_and_lplims, only: set_bp_range2D
         use simple_strategy2D_matcher,  only: set_b_p_ptrs2D, &
                                               ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
-        use simple_matcher_pftc_prep,      only: prep_pftc4align2D, prep_pftc4align2D_polar
+        use simple_matcher_pftc_prep,      only: prep_pftc4align2D
         use simple_matcher_ptcl_batch,  only: prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
         use simple_classaverager,       only: cavger_new, cavger_read_all, cavger_kill
         use simple_eul_prob_tab2D,      only: eul_prob_tab2D
@@ -300,14 +300,13 @@ contains
         type(eul_prob_tab2D)     :: eulprob_obj_part
         real    :: frac_srch_space
         integer :: nptcls
-        logical :: l_use_polar_refs, l_alloc_read_cavgs
+        logical :: l_alloc_read_cavgs
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
-        l_use_polar_refs = params%l_polar .and. (params%which_iter > 1)
         frac_srch_space  = build%spproj_field%get_avg('frac')
         call set_bp_range2D(params, build, cline, params%which_iter, frac_srch_space)
         ! reproduce particle sampling from exec_prob_align2D
@@ -319,15 +318,11 @@ contains
         call set_b_p_ptrs2D(params, build)
         call prep_batch_particles2D(params, build, nptcls, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         ! mirror cluster2D_exec reference setup: polar refs only for polar=yes and iter>1
-        if( l_use_polar_refs )then
-            call prep_pftc4align2D_polar(params, build, nptcls, params%which_iter, .false.)
-        else
-            l_alloc_read_cavgs = l_distr_worker_glob .or. (params%which_iter==1)
-            call cavger_new(params, build, alloccavgs=l_alloc_read_cavgs)
-            if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
-            call cavger_read_all
-            call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, nptcls, params%which_iter, .false.)
-        endif
+        l_alloc_read_cavgs = l_distr_worker_glob .or. (params%which_iter==1)
+        call cavger_new(params, build, alloccavgs=l_alloc_read_cavgs)
+        if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
+        call cavger_read_all
+        call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, nptcls, params%which_iter, .false.)
         ! build polar particle images
         call build_batch_particles2D(params, build, nptcls, pinds, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         ! fill and write the 2D probability table
@@ -337,7 +332,7 @@ contains
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
         call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
-        if( (.not.l_use_polar_refs).and.l_distr_worker_glob ) call cavger_kill
+        if( l_distr_worker_glob ) call cavger_kill
         call build%pftc%kill
         call build%kill_general_tbox
         call qsys_job_finished(params, string('simple_commanders_prob :: exec_prob_tab2D'))
@@ -364,6 +359,7 @@ contains
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        if( params%l_polar ) THROW_HARD('polar=yes is no longer supported for 2D workflows; use cartesian prob_align2D')
         call set_b_p_ptrs2D(params, build)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo

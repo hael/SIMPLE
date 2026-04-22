@@ -99,7 +99,6 @@ end subroutine new
   - `prep_strategy2D_batch(p_ptr, spproj, which_iter, ...)` - removed `pftc` parameter
   - `build_batch_particles2D(nptcls_here, pinds_here, ...)` - removed `pftc` parameter
   - `prep_pftc4align2D(batchsz_max, which_iter, l_stream)` - removed `pftc` parameter
-  - `prep_pftc4align2D_polar(batchsz_max, which_iter, l_stream)` - removed `pftc` parameter
 
 **Method Implementations:**
 - All `pftc%method_name()` calls replaced with `b_ptr%pftc%method_name()`

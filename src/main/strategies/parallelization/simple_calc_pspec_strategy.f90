@@ -158,7 +158,7 @@ contains
             update_frac_eff = min(1.0, real(params%nsample) / real(max(1, nptcls_active_tot)))
             call build%spproj_field%sample4update_rnd([params%fromp,params%top], update_frac_eff, nptcls_part_sel, pinds, .false. )
             l_scale_update_frac = .true.
-            sig2_mul = 1.0 / (2.0 * max(update_frac_eff, tiny(update_frac_eff)))
+            sig2_mul = 1.0 / (2.0 * max(update_frac_eff, TINY))
         else
             call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, .false.)
             sig2_mul = 0.5

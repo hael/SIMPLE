@@ -194,11 +194,9 @@ contains
             if( file_exists(FRCS_FILE) )then
                 call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
             endif
-            if( .not. params%l_polar )then
-                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
-                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
-                call finalcavgs%kill
-            endif
+            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
+            call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+            call finalcavgs%kill
             call build%spproj%write_segment_inside('out', params%projfile)
         endif
         call cline%set('endit', params%which_iter)
@@ -345,11 +343,9 @@ contains
             if( file_exists(FRCS_FILE) )then
                 call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
             endif
-            if( .not. params%l_polar )then
-                finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
-                call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
-                call finalcavgs%kill
-            endif
+            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
+            call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+            call finalcavgs%kill
             call build%spproj%write_segment_inside('out', params%projfile)
         endif
         call cline%set('endit', params%which_iter)

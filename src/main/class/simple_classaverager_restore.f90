@@ -1,6 +1,7 @@
 !@descr: Routines to perform the classes restoration and processing
 submodule (simple_classaverager) simple_classaverager_restore
 use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
+use simple_strategy2D_utils, only: calc_cavg_offset
 implicit none
 #include "simple_local_flags.inc"
 
@@ -157,11 +158,13 @@ contains
             call cavgs%zero_set(.true.)
             if( do_frac_update )then
                 call cavger_readwrite_partial_sums('read')
+                call center_cavgs_for_frac_update
                 call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
                 call apply_weights2cavgs(class_update_fracs)
             endif
         else
             if( do_frac_update )then
+                call center_cavgs_for_frac_update
                 call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
                 call apply_weights2cavgs(class_update_fracs)
             else
@@ -193,6 +196,105 @@ contains
                 &interp_cmats(cshape_crop(1),cshape_crop(2),maxbatchsz),&
                 &interp_rhos(cshape_crop(1),cshape_crop(2),maxbatchsz))
     end subroutine cavger_init_online
+
+    subroutine center_cavgs_for_frac_update
+        real :: xyz(3)
+        integer :: icls, pop
+        logical :: has_been_searched
+        if( trim(p_ptr%center) /= 'yes' ) return
+        if( p_ptr%which_iter <= 2 ) return
+        if( .not. allocated(cavgs_merged) ) return
+        has_been_searched = .not. b_ptr%spproj%is_virgin_field(p_ptr%oritype)
+        if( .not. has_been_searched ) return
+        !$omp parallel do default(shared) private(icls,pop,xyz) schedule(static) proc_bind(close)
+        do icls = 1, ncls
+            pop = b_ptr%spproj_field%get_pop(icls, 'class')
+            if( pop <= MINCLSPOPLIM ) cycle
+            call calc_class_center_shift(icls, cavgs_merged(icls), xyz)
+            if( arg(xyz) <= CENTHRESH ) cycle
+            call shift_stack_slice2D(cavgs%even, icls, xyz(1:2))
+            call shift_stack_slice2D(cavgs%odd,  icls, xyz(1:2))
+        enddo
+        !$omp end parallel do
+    end subroutine center_cavgs_for_frac_update
+
+    subroutine calc_class_center_shift( icls, cavg_img, xyz )
+        integer,      intent(in)    :: icls
+        class(image), intent(inout) :: cavg_img
+        real,         intent(out)   :: xyz(3)
+        real :: xy_cavg(2), shift2d(2), crop_factor
+        crop_factor = real(p_ptr%box_crop) / real(p_ptr%box)
+        select case(trim(p_ptr%center_type))
+        case('params')
+            call b_ptr%spproj_field%calc_avg_offset2D(icls, xy_cavg)
+            if( arg(xy_cavg) < CENTHRESH )then
+                xyz = 0.
+            else if( arg(xy_cavg) > MAXCENTHRESH2D )then
+                xyz(1:2) = xy_cavg * crop_factor
+                xyz(3)   = 0.
+            else
+                xyz = cavg_img%calc_shiftcen_serial(p_ptr%cenlp, p_ptr%msk_crop)
+                if( arg(xyz(1:2)/crop_factor - xy_cavg) > MAXCENTHRESH2D ) xyz = 0.
+            endif
+        case('seg')
+            call calc_cavg_offset(cavg_img, p_ptr%cenlp, p_ptr%msk_crop, shift2d)
+            xyz = [shift2d(1), shift2d(2), 0.]
+        case('mass')
+            xyz = cavg_img%calc_shiftcen_serial(p_ptr%cenlp, p_ptr%msk_crop)
+        case default
+            xyz = 0.
+        end select
+        if( arg(xyz) < CENTHRESH ) xyz = 0.0
+    end subroutine calc_class_center_shift
+
+    subroutine shift_stack_slice2D( cavg_stack, icls, shift2d )
+        class(stack), intent(inout) :: cavg_stack
+        integer,      intent(in)    :: icls
+        real,         intent(in)    :: shift2d(2)
+        real(dp), allocatable :: hcos(:), hsin(:)
+        real(dp) :: sh(2), phase, ck, sk
+        integer  :: h, k, hphys, kphys, lims(3,2)
+        if( arg(shift2d) <= CENTHRESH ) return
+        lims = cavg_stack%fit%loop_lims(2)
+        sh   = real(shift2d,dp)
+        if( cavg_stack%ldim(1) > 1 )then
+            if( is_even(cavg_stack%ldim(1)) )then
+                sh(1) = sh(1) * PI / real(cavg_stack%ldim(1) / 2, dp)
+            else
+                sh(1) = sh(1) * PI / real((cavg_stack%ldim(1) - 1) / 2, dp)
+            endif
+        else
+            sh(1) = 0.0_dp
+        endif
+        if( cavg_stack%ldim(2) > 1 )then
+            if( is_even(cavg_stack%ldim(2)) )then
+                sh(2) = sh(2) * PI / real(cavg_stack%ldim(2) / 2, dp)
+            else
+                sh(2) = sh(2) * PI / real((cavg_stack%ldim(2) - 1) / 2, dp)
+            endif
+        else
+            sh(2) = 0.0_dp
+        endif
+        allocate(hcos(lims(1,1):lims(1,2)), hsin(lims(1,1):lims(1,2)))
+        do h = lims(1,1), lims(1,2)
+            phase = real(h,dp) * sh(1)
+            hcos(h) = dcos(phase)
+            hsin(h) = dsin(phase)
+        enddo
+        do k = lims(2,1), lims(2,2)
+            kphys = k + 1 + merge(cavg_stack%ldim(2),0,k<0)
+            phase = real(k,dp) * sh(2)
+            ck    = dcos(phase)
+            sk    = dsin(phase)
+            do h = lims(1,1), lims(1,2)
+                hphys = h + 1
+                cavg_stack%cmat(hphys,kphys,icls) = cavg_stack%cmat(hphys,kphys,icls) * &
+                    cmplx(ck*hcos(h)-sk*hsin(h), ck*hsin(h)+sk*hcos(h), sp)
+            end do
+        end do
+        cavg_stack%slices(icls)%ft     = .true.
+        deallocate(hcos, hsin)
+    end subroutine shift_stack_slice2D
 
     ! Deallocate objects  on-the-fly classes update
     module subroutine cavger_dealloc_online()

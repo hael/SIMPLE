@@ -8,7 +8,7 @@ use simple_strategy2D_alloc,        only: clean_strategy2D, prep_strategy2D_batc
 use simple_builder,                 only: builder
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_strategy2D,              only: strategy2D, strategy2D_per_ptcl
-use simple_matcher_pftc_prep,       only: prep_pftc4align2D, prep_pftc4align2D_polar
+use simple_matcher_pftc_prep,       only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims, only: set_bp_range2d, sample_ptcls4update2D
 use simple_matcher_ptcl_batch,      only: prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
 use simple_strategy2D_greedy,       only: strategy2D_greedy
@@ -55,7 +55,6 @@ type :: cluster2D_ctrl
     logical :: l_np_cls_defined
     logical :: l_alloc_read_cavgs
     logical :: l_prob_align
-    logical :: l_polar
     logical :: l_restore_cavgs
     logical :: do_bench
 end type cluster2D_ctrl
@@ -117,10 +116,6 @@ contains
         endif
         call prepare_alignment_references(batchsz_max)
         if( ctrl%do_bench ) rt_prep_pftc_refs2D = toc(t_prep_pftc_refs2D)
-        if( ctrl%l_polar )then
-            if( which_iter == 1 ) call b_ptr%pftc%polar_cavger_new(.false.)
-            call b_ptr%pftc%polar_cavger_zero_pft_refs
-        endif
         call prep_strategy2D_glob(p_ptr, b_ptr%spproj, b_ptr%pftc%get_nrots(), neigh_frac)
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
         if( ctrl%l_prob_align )then
@@ -190,7 +185,6 @@ contains
             ctrl%l_frac_restore  = ctrl%l_sample_updates
             ctrl%l_partial_sums  = ctrl%l_frac_restore
             ctrl%l_prob_align    = p_ptr%l_prob_align_mode
-            ctrl%l_polar         = p_ptr%l_polar
             ctrl%l_restore_cavgs = (trim(p_ptr%restore_cavgs) == 'yes')
             ctrl%l_np_cls_defined= cline%defined('nptcls_per_cls')
             ctrl%do_bench        = L_BENCH_GLOB
@@ -265,29 +259,21 @@ contains
         end subroutine ensure_even_odd_partition
 
         subroutine prepare_class_averages_and_restoration()
-            if( ctrl%l_polar .and. which_iter > 1 )then
-                ! references are read in prep_pftc4align2D_polar below
-            else
-                ctrl%l_alloc_read_cavgs = l_distr_worker_glob .or. (which_iter == 1)
-                call cavger_new(p_ptr, b_ptr, alloccavgs=ctrl%l_alloc_read_cavgs)
-                if( ctrl%l_alloc_read_cavgs )then
-                    if( .not. cline%defined('refs') )then
-                        THROW_HARD('need refs to be part of command line for cluster2D execution')
-                    endif
-                    call cavger_read_all
+            ctrl%l_alloc_read_cavgs = l_distr_worker_glob .or. (which_iter == 1)
+            call cavger_new(p_ptr, b_ptr, alloccavgs=ctrl%l_alloc_read_cavgs)
+            if( ctrl%l_alloc_read_cavgs )then
+                if( .not. cline%defined('refs') )then
+                    THROW_HARD('need refs to be part of command line for cluster2D execution')
                 endif
+                call cavger_read_all
             endif
             ctrl%l_partial_sums = ctrl%l_frac_restore
-            if( .not. ctrl%l_polar ) call cavger_init_online(batchsz_max, ctrl%l_frac_restore)
+            call cavger_init_online(batchsz_max, ctrl%l_frac_restore)
         end subroutine prepare_class_averages_and_restoration
 
         subroutine prepare_alignment_references(batchsz_max)
             integer, intent(in) :: batchsz_max
-            if( ctrl%l_polar .and. which_iter > 1 )then
-                call prep_pftc4align2D_polar(p_ptr, b_ptr, batchsz_max, which_iter, ctrl%l_stream)
-            else
-                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream)
-            endif
+            call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream)
         end subroutine prepare_alignment_references
 
         subroutine build_batch_particles_local()
@@ -364,13 +350,8 @@ contains
         end subroutine allocate_strategy_for_particle
 
         subroutine restore_class_averages_for_batch()
-            if( ctrl%l_polar )then
-                call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), &
-                    b_ptr%spproj, incr_shifts(:,1:batchsz))
-            else
-                call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end))
-                call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz))
-            endif
+            call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end))
+            call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz))
         end subroutine restore_class_averages_for_batch
 
         subroutine cleanup_search_state(strategy2Dsrch, pinds, batches, eulprob_obj_part, batchsz_max, orientation)
@@ -410,14 +391,9 @@ contains
             logical, intent(inout) :: converged
             if( l_distr_worker_glob )then
                 if( ctrl%l_restore_cavgs )then
-                    if( ctrl%l_polar )then
-                        call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
-                    else
-                        call cavger_readwrite_partial_sums('write')
-                    endif
+                    call cavger_readwrite_partial_sums('write')
                 endif
                 call cavger_kill
-                call b_ptr%pftc%polar_cavger_kill
             else
                 converged = conv%check_conv2D(p_ptr, cline, b_ptr%spproj_field, b_ptr%spproj_field%get_n('class'), p_ptr%msk)
                 converged = converged .and. (p_ptr%which_iter >= p_ptr%minits)
@@ -431,23 +407,14 @@ contains
                     else
                         THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                     endif
-
-                    if( ctrl%l_polar )then
-                        if( which_iter == 1 ) call cavger_kill
-                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm2D(b_ptr%clsfrcs, string(FRCS_FILE))
-                        call b_ptr%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                        call b_ptr%pftc%polar_cavger_gen2Dclassdoc(b_ptr%spproj, b_ptr%clsfrcs)
-                        call b_ptr%pftc%polar_cavger_kill
-                    else
-                        call cavger_restore_cavgs( p_ptr%frcs )
-                        call cavger_gen2Dclassdoc
-                        call cavger_write_merged( p_ptr%refs )
-                        if( ctrl%l_stream )then
-                            call cavger_write_eo( p_ptr%refs_even, p_ptr%refs_odd )
-                            call cavger_readwrite_partial_sums( 'write' )
-                        endif
-                        call cavger_kill(dealloccavgs=.false.)
+                    call cavger_restore_cavgs( p_ptr%frcs )
+                    call cavger_gen2Dclassdoc
+                    call cavger_write_merged( p_ptr%refs )
+                    if( ctrl%l_stream )then
+                        call cavger_write_eo( p_ptr%refs_even, p_ptr%refs_odd )
+                        call cavger_readwrite_partial_sums( 'write' )
                     endif
+                    call cavger_kill(dealloccavgs=.false.)
                     call cline%set('refs', p_ptr%refs)
                     call b_ptr%spproj%os_cls3D%new(p_ptr%ncls, is_ptcl=.false.)
                     states = b_ptr%spproj%os_cls2D%get_all('state')

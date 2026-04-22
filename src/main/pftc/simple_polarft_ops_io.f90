@@ -232,27 +232,6 @@ contains
         call self%polar_cavger_zero_pft_refs !! removed after writing
     end subroutine polar_cavger_write_eo_pftcrefs
 
-    ! Converts cavgs PFTS to cartesian grids and writes them
-    !! this should be removed in performance critical code beacause it is costly
-    !! and the outputted averages suffer from severe interpolation artefacts
-    !! if we need Cartesian class averages we should generate them properly periodically
-    module subroutine polar_cavger_write_cartrefs( self, tmpl_fname, which )
-        class(polarft_calc), intent(in) :: self
-        class(string),       intent(in) :: tmpl_fname
-        character(len=*),    intent(in) :: which
-        type(image), allocatable :: imgs(:)
-        call alloc_imgarr(self%ncls, [self%p_ptr%box_crop, self%p_ptr%box_crop,1], self%p_ptr%smpd_crop, imgs)
-        select case(trim(which))
-            case('even','odd')
-                call self%polar_cavger_refs2cartesian(imgs, trim(which) )
-                call write_imgarr(imgs, tmpl_fname//'_'//trim(which)//MRC_EXT)
-            case('merged')
-                call self%polar_cavger_refs2cartesian(imgs, 'merged' )
-                call write_imgarr(imgs, tmpl_fname//MRC_EXT)
-        end select
-        call dealloc_imgarr(imgs)
-    end subroutine polar_cavger_write_cartrefs
-
     ! Reads all cavgs PFT arrays
     !! performance critical code
     module subroutine polar_cavger_read_all( self, fname )

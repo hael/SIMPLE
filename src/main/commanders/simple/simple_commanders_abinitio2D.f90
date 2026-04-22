@@ -35,6 +35,7 @@ contains
         class(oris),       pointer :: spproj_field
         integer :: maxits, istage, last_iter, nptcls_eff, nstages, nsample_target_2D
         logical :: l_shmem
+        call enforce_cartesian_abinitio2D()
         call cline%set('oritype',   'ptcl2D')
         call cline%set('sigma_est', 'global')
         if( .not. cline%defined('autoscale')     ) call cline%set('autoscale',     'yes')
@@ -125,6 +126,15 @@ contains
         call simple_end('**** SIMPLE_ABINITIO2D NORMAL STOP ****')
         
       contains
+
+        subroutine enforce_cartesian_abinitio2D()
+            if( cline%defined('polar') )then
+                if( cline%get_carg('polar') .ne. 'no' )then
+                    THROW_HARD('polar=yes is no longer supported for abinitio2D; use cartesian abinitio2D')
+                endif
+            endif
+            call cline%set('polar', 'no')
+        end subroutine enforce_cartesian_abinitio2D
 
         ! Downscaling/cropping dimensions used throughout
         subroutine set_dims
