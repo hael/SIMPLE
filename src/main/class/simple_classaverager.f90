@@ -280,10 +280,11 @@ interface
 
     ! Book-keeping & metadata
 
-    module subroutine cavger_transf_oridat( nptcls, pinds )
+    module subroutine cavger_transf_oridat( nptcls, pinds, updated_only )
         use simple_sp_project, only: sp_project
         integer, intent(in) :: nptcls
         integer, intent(in) :: pinds(nptcls)
+        logical, optional, intent(in) :: updated_only
     end subroutine cavger_transf_oridat
 
     module subroutine cavger_read_euclid_sigma2

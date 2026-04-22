@@ -100,6 +100,7 @@ contains
             ! classify
             call execute_cluster2D
         enddo
+        call execute_fillin_assignment_pass()
         ! transfer 2D shifts to 3D field
         call spproj%read_segment(params%oritype,params%projfile)
         call spproj%read_segment('ptcl3D',params%projfile)
@@ -315,6 +316,40 @@ contains
             ! clustering
             call xcluster2D%execute(cline_cluster2D)
         end subroutine execute_cluster2D
+
+        subroutine execute_fillin_assignment_pass()
+            type(cmdline) :: cline_fillin
+            integer       :: fillin_iter, n_unassigned
+            n_unassigned = count_unassigned_active()
+            write(logfhandle,'(A,I8)') '>>> ABINITIO2D FILLIN: UNASSIGNED ACTIVE PARTICLES BEFORE FILLIN =', n_unassigned
+            if( n_unassigned == 0 ) return
+            fillin_iter = cline_cluster2D%get_iarg('endit') + 1
+            write(logfhandle,'(A,I8)') '>>> ABINITIO2D FILLIN: ASSIGNING REMAINING PARTICLES =', n_unassigned
+            cline_fillin = cline_cluster2D
+            call cline_fillin%set('fillin',        'yes')
+            call cline_fillin%set('restore_cavgs', 'no')
+            call cline_fillin%set('refine',        'snhc_smpl')
+            call cline_fillin%set('refs',          CAVGS_ITER_FBODY//int2str_pad(fillin_iter-1,3)//params%ext%to_char())
+            call cline_fillin%set('startit',       fillin_iter)
+            call cline_fillin%set('minits',        1)
+            call cline_fillin%set('maxits',        1)
+            call cline_fillin%set('extr_iter',     params%extr_lim + 1)
+            call xcluster2D%execute(cline_fillin)
+            n_unassigned = count_unassigned_active()
+            write(logfhandle,'(A,I8)') '>>> ABINITIO2D FILLIN: REMAINING UNASSIGNED PARTICLES =', n_unassigned
+            cline_cluster2D = cline_fillin
+        end subroutine execute_fillin_assignment_pass
+
+        function count_unassigned_active() result(n_unassigned)
+            integer :: n_unassigned
+            integer :: iptcl
+            call spproj%read_segment(params%oritype, params%projfile)
+            n_unassigned = 0
+            do iptcl = 1, params%nptcls
+                if( spproj_field%get_state(iptcl) == 0 ) cycle
+                if( spproj_field%get_updatecnt(iptcl) == 0 ) n_unassigned = n_unassigned + 1
+            end do
+        end function count_unassigned_active
 
         subroutine output_stats( prefix )
             character(len=*) :: prefix

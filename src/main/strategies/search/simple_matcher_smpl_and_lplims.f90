@@ -5,7 +5,7 @@ use simple_builder, only: builder
 implicit none
 
 public :: set_bp_range3D, set_bp_range2D
-public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4update2D
+public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4fillin_all, sample_ptcls4update2D
 private
 #include "simple_local_flags.inc"
 
@@ -208,6 +208,17 @@ contains
         integer, allocatable, intent(inout) :: pinds(:)
         call build%spproj_field%sample4update_fillin(pfromto, params%update_frac, nptcls2update, pinds, l_incr_sampl)
     end subroutine sample_ptcls4fillin
+
+    subroutine sample_ptcls4fillin_all( params, build, pfromto, l_incr_sampl, nptcls2update, pinds )
+        class(parameters),    intent(in)    :: params
+        class(builder),       intent(inout) :: build
+        integer,              intent(in)    :: pfromto(2)
+        logical,              intent(in)    :: l_incr_sampl
+        integer,              intent(inout) :: nptcls2update
+        integer, allocatable, intent(inout) :: pinds(:)
+        call build%spproj_field%sample4update_fillin(pfromto, params%update_frac, nptcls2update, pinds, &
+            l_incr_sampl, all_min_updatecnt=.true.)
+    end subroutine sample_ptcls4fillin_all
 
     subroutine sample_ptcls4update2D( params, build, pfromto, l_updatefrac, nptcls, pinds )
         class(parameters),    intent(in)    :: params

@@ -37,12 +37,16 @@ contains
     ! setters/getters
 
     !>  \brief  transfers metadata to the instance for a subset of particles
-    module subroutine cavger_transf_oridat( nptcls, pinds )
+    module subroutine cavger_transf_oridat( nptcls, pinds, updated_only )
         integer,  intent(in) :: nptcls
         integer,  intent(in) :: pinds(nptcls)
+        logical,  optional, intent(in) :: updated_only
         class(oris), pointer :: spproj_field
         type(ctfparams)      :: ctfparms(nthr_glob)
         integer              :: i, iptcl, ithr, stkind
+        logical              :: l_updated_only
+        l_updated_only = .false.
+        if( present(updated_only) ) l_updated_only = updated_only
         ! indices
         precs(1:nptcls)%pind = pinds(:)
         if( nptcls < size(precs) ) precs(nptcls+1:)%pind = 0
@@ -53,6 +57,12 @@ contains
             iptcl = pinds(i)
             if( iptcl == 0 ) cycle
             precs(i)%pw = spproj_field%get(iptcl,'w')
+            if( l_updated_only )then
+                if( spproj_field%get_updatecnt(iptcl) == 0 )then
+                    precs(i)%pind = 0
+                    cycle
+                endif
+            endif
             if( (spproj_field%get_state(iptcl)==0).or.(precs(i)%pw<SMALL) )then
                 precs(i)%pind = 0
             else

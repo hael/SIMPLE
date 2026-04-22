@@ -240,16 +240,17 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_updated
 
-    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled )
+    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled, all_min_updatecnt )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
+        logical, optional,    intent(in)    :: all_min_updatecnt
         type(ran_tabu)       :: rt
         integer, allocatable :: updatecnts(:), states(:), updatecnts_active(:), inds_pool(:), inds_fill(:)
-        integer :: i, cnt, nptcls, nptcls_active, maxucnt, nfill, ucnt
+        integer :: i, cnt, nptcls, nptcls_active, maxucnt, minucnt, nfill, ucnt
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), states(nptcls), updatecnts(nptcls), source=0)
@@ -262,9 +263,19 @@ contains
         end do
         nptcls_active = count(states > 0)
         if( nptcls_active == 0 ) THROW_HARD('no active particles to sample for fill-in')
-        nsamples          = min(nptcls_active, max(1, nint(update_frac * real(nptcls_active))))
         updatecnts_active = pack(updatecnts, mask=states > 0)
+        minucnt           = minval(updatecnts_active)
         maxucnt           = maxval(updatecnts_active)
+        if( present(all_min_updatecnt) )then
+            if( all_min_updatecnt )then
+                inds = pack(inds, mask=states > 0 .and. updatecnts == minucnt)
+                nsamples = size(inds)
+                call hpsort(inds)
+                call self%incr_sampled_updatecnt(inds, incr_sampled)
+                return
+            endif
+        endif
+        nsamples          = min(nptcls_active, max(1, nint(update_frac * real(nptcls_active))))
         allocate(inds_pool(0), source=0)
         ! Prefer never-updated particles first (updatecnt==0), then 1, 2, ...
         do ucnt = 0, maxucnt

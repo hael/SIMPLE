@@ -9,7 +9,7 @@ use simple_builder,                 only: builder
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_strategy2D,              only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,       only: prep_pftc4align2D
-use simple_matcher_smpl_and_lplims, only: set_bp_range2d, sample_ptcls4update2D
+use simple_matcher_smpl_and_lplims, only: set_bp_range2d, sample_ptcls4fillin_all, sample_ptcls4update2D
 use simple_matcher_ptcl_batch,      only: prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
 use simple_strategy2D_greedy,       only: strategy2D_greedy
 use simple_strategy2D_greedy_tree,  only: strategy2D_greedy_tree
@@ -56,6 +56,7 @@ type :: cluster2D_ctrl
     logical :: l_alloc_read_cavgs
     logical :: l_prob_align
     logical :: l_restore_cavgs
+    logical :: l_assignment_only
     logical :: do_bench
 end type cluster2D_ctrl
 
@@ -186,6 +187,7 @@ contains
             ctrl%l_partial_sums  = ctrl%l_frac_restore
             ctrl%l_prob_align    = p_ptr%l_prob_align_mode
             ctrl%l_restore_cavgs = (trim(p_ptr%restore_cavgs) == 'yes')
+            ctrl%l_assignment_only = p_ptr%l_fillin .and. (.not. ctrl%l_restore_cavgs)
             ctrl%l_np_cls_defined= cline%defined('nptcls_per_cls')
             ctrl%do_bench        = L_BENCH_GLOB
             if( p_ptr%startit == 1 )then
@@ -220,7 +222,9 @@ contains
 
         subroutine sample_particles_for_update()
             if( allocated(pinds) ) deallocate(pinds)
-            if( ctrl%l_prob_align )then
+            if( p_ptr%l_fillin )then
+                call sample_ptcls4fillin_all(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
+            else if( ctrl%l_prob_align )then
                 ! prob_align2D owns the outer subset sampling in probabilistic mode;
                 ! cluster2D only reproduces that same subset for the downstream update.
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds)
@@ -259,6 +263,7 @@ contains
         end subroutine ensure_even_odd_partition
 
         subroutine prepare_class_averages_and_restoration()
+            if( ctrl%l_assignment_only ) return
             ctrl%l_alloc_read_cavgs = l_distr_worker_glob .or. (which_iter == 1)
             call cavger_new(p_ptr, b_ptr, alloccavgs=ctrl%l_alloc_read_cavgs)
             if( ctrl%l_alloc_read_cavgs )then
@@ -350,7 +355,8 @@ contains
         end subroutine allocate_strategy_for_particle
 
         subroutine restore_class_averages_for_batch()
-            call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end))
+            if( ctrl%l_assignment_only ) return
+            call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end), updated_only=.true.)
             call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz))
         end subroutine restore_class_averages_for_batch
 
@@ -369,7 +375,7 @@ contains
             call clean_batch_particles2D(b_ptr, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
             deallocate(strategy2Dsrch, pinds, batches)
             if( ctrl%l_prob_align ) call eulprob_obj_part%kill
-            call cavger_dealloc_online
+            if( .not. ctrl%l_assignment_only ) call cavger_dealloc_online
         end subroutine cleanup_search_state
 
         subroutine write_orientations()
@@ -389,6 +395,10 @@ contains
             type(convergence), intent(inout) :: conv
             integer, intent(in) :: which_iter
             logical, intent(inout) :: converged
+            if( ctrl%l_assignment_only )then
+                converged = .true.
+                return
+            endif
             if( l_distr_worker_glob )then
                 if( ctrl%l_restore_cavgs )then
                     call cavger_readwrite_partial_sums('write')
