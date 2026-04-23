@@ -286,6 +286,7 @@ type :: parameters
     integer :: cn_min=4            !< min std coord number for atoms in nanos
     integer :: cn_stop=10          !< rotational symmetry order stop index{10}
     integer :: cs_thres=2          !< contact score threshold for discarding atoms during autorefine3D_nano
+    integer :: device=-1           !< Device id for OpenMP offloading
     integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
     integer :: eer_fraction=20     !< # of EER raw frames to sum into a movie fraction
     integer :: eer_upsampling=1    !< Controls the movie desired output sampling: 1 = 4K x 4K pixels; 2 = 8K x 8K pixels
@@ -912,6 +913,8 @@ contains
         call check_iarg('cn_min',         self%cn_min)
         call check_iarg('cn_stop',        self%cn_stop)
         call check_iarg('cs_thres',       self%cs_thres)
+        call check_iarg('cs_thres',       self%cs_thres)
+        call check_iarg('device',         self%device)
         call check_iarg('edge',           self%edge)
         call check_iarg('eer_fraction',   self%eer_fraction)
         call check_iarg('eer_upsampling', self%eer_upsampling)
