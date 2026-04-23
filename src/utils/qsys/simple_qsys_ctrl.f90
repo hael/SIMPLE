@@ -6,6 +6,7 @@ use simple_qsys_slurm,        only: qsys_slurm
 use simple_qsys_lsf,          only: qsys_lsf
 use simple_cmdline,           only: cmdline
 use simple_parameters,        only: parameters
+use simple_syslib,            only: simple_rmfile
 use simple_mem_estimator
 implicit none
 
@@ -830,8 +831,10 @@ contains
                         call self%stream_cline_submitted(ipart)%gen_job_descr(job_descr)
                         self%jobs_submitted(ipart) = .true.
                         self%jobs_done(ipart)      = .false.
-                        call del_file(self%jobs_done_fnames(ipart))
-                        call del_file(self%jobs_exit_code_fnames(ipart))
+                        ! call del_file(self%jobs_done_fnames(ipart))
+                        call simple_rmfile(self%jobs_done_fnames(ipart))
+                        ! call del_file(self%jobs_exit_code_fnames(ipart))
+                        call simple_rmfile(self%jobs_exit_code_fnames(ipart))
                         call self%generate_script_2(job_descr, q_descr, self%exec_binary, self%script_names(ipart),&
                         &exit_code_fname=self%jobs_exit_code_fnames(ipart) )
                         call self%submit_script( self%script_names(ipart) )
