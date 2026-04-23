@@ -173,6 +173,8 @@ contains
     integer, allocatable                           :: selection(:)
     integer :: n
     n = self%pickrefs_selection_length
+    if( n < 0 ) THROW_HARD('pickrefs_selection_length is negative')
+    if( n > size(self%pickrefs_selection) ) THROW_HARD('pickrefs_selection_length exceeds maximum size')
     allocate(selection(n))
     selection = self%pickrefs_selection(1:n)
   end function get_pickrefs_selection
@@ -182,6 +184,8 @@ contains
     class(gui_metadata_stream_update), intent(inout) :: self
     integer,                           intent(in)    :: n
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( n < 0 ) THROW_HARD('pickrefs_selection_length must be non-negative')
+    if( n > size(self%pickrefs_selection) ) THROW_HARD('pickrefs_selection_length exceeds maximum size')
     self%l_assigned             = .true.
     self%pickrefs_selection_length = n
   end subroutine set_pickrefs_selection_length
@@ -213,6 +217,8 @@ contains
     integer, allocatable                           :: selection(:)
     integer :: n
     n = self%sieverefs_selection_length
+    if( n < 0 ) THROW_HARD('sieverefs_selection_length is negative')
+    if( n > size(self%sieverefs_selection) ) THROW_HARD('sieverefs_selection_length exceeds maximum size')
     allocate(selection(n))
     selection = self%sieverefs_selection(1:n)
   end function get_sieverefs_selection
@@ -222,6 +228,8 @@ contains
     class(gui_metadata_stream_update), intent(inout) :: self
     integer,                           intent(in)    :: n
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( n < 0 ) THROW_HARD('sieverefs_selection_length must be non-negative')
+    if( n > size(self%sieverefs_selection) ) THROW_HARD('sieverefs_selection_length exceeds maximum size')
     self%l_assigned                 = .true.
     self%sieverefs_selection_length = n
   end subroutine set_sieverefs_selection_length
@@ -278,6 +286,8 @@ contains
     snapshot_id = self%snapshot2D_id
     iteration   = self%snapshot2D_iteration
     n           = self%snapshot2D_selection_length
+    if( n < 0 ) THROW_HARD('snapshot2D_selection_length is negative')
+    if( n > size(self%snapshot2D_selection) ) THROW_HARD('snapshot2D_selection_length exceeds maximum size')
     allocate(selection(n))
     selection   = self%snapshot2D_selection(1:n)
     filename    = trim(self%snapshot2D_filename)

@@ -542,7 +542,6 @@ contains
     if( self%refchunk%complete .and. .not. self%refchunk%failed .and. self%refs%strlen() > 0 ) then
       self%refs_jpeg = swap_suffix(self%refs, JPG_EXT, MRC_EXT)
       call chunk_project%cavgs2jpg(self%refs_jpeg_inds, self%refs_jpeg, self%refs_jpeg_xtiles, self%refs_jpeg_ytiles)
-      self%ref_selection  = self%refs_jpeg_inds
       self%refs_jpeg_pops = chunk_project%os_cls2D%get_all_asint('pop')
       self%refs_jpeg_res  = chunk_project%os_cls2D%get_all('res')
       allocate(cls_msk, source=self%refs_jpeg_inds /= 0)
@@ -550,6 +549,7 @@ contains
       self%refs_jpeg_pops = pack(self%refs_jpeg_pops, cls_msk)
       self%refs_jpeg_res  = pack(self%refs_jpeg_res,  cls_msk)
       deallocate(cls_msk)
+      self%ref_selection = self%refs_jpeg_inds
       states = chunk_project%os_cls2D%get_all_asint('state')
       allocate(cls_msk, source=states /= 0)
       self%ref_selection = pack(self%ref_selection, cls_msk)
@@ -1459,7 +1459,6 @@ contains
         call spproj%read_segment('out',   self%refchunk%projfile)
         self%refs_jpeg = swap_suffix(self%refs, JPG_EXT, MRC_EXT)
         call spproj%cavgs2jpg(self%refs_jpeg_inds, self%refs_jpeg, self%refs_jpeg_xtiles, self%refs_jpeg_ytiles)
-        self%ref_selection  = self%refs_jpeg_inds
         self%refs_jpeg_pops = spproj%os_cls2D%get_all_asint('pop')
         self%refs_jpeg_res  = spproj%os_cls2D%get_all('res')
         allocate(cls_msk, source=self%refs_jpeg_inds /= 0)
@@ -1467,6 +1466,7 @@ contains
         self%refs_jpeg_pops = pack(self%refs_jpeg_pops, cls_msk)
         self%refs_jpeg_res  = pack(self%refs_jpeg_res,  cls_msk)
         deallocate(cls_msk)
+        self%ref_selection = self%refs_jpeg_inds
         states = spproj%os_cls2D%get_all_asint('state')
         allocate(cls_msk, source=states /= 0)
         self%ref_selection = pack(self%ref_selection, cls_msk)

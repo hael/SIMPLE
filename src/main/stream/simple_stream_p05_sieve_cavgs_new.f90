@@ -74,22 +74,22 @@ contains
         class(cmdline),                intent(inout) :: cline
         
         ! Hard-coded classification and import parameters
-        integer,            parameter :: MAX_MOVIE_IMPORT    = 20   ! max movies imported per cycle
-        type(string),     allocatable :: projects(:)
-        character(len=:), allocatable :: meta_buffer
-        integer,          allocatable :: jpeg_inds(:), jpeg_pops(:), ref_selection(:)
-        real,             allocatable :: jpeg_res(:)
-        type(string)                  :: refs_jpeg, refs_stk 
-        type(string)                  :: match_jpeg, match_stk 
-        type(rec_list)                :: project_list
-        type(parameters)              :: params
-        type(qsys_env)                :: qenv
-        type(sp_project)              :: spproj_glob, spproj_tmp
-        type(project_rec)             :: prec
-        type(rec_iterator)            :: it
-        type(microchunked2D)          :: chunked_2D
-        type(stream_watcher)          :: project_buff
-        type(gui_metadata_cavg2D)                  :: meta_cavg2D
+        integer,            parameter   :: MAX_MOVIE_IMPORT = 20   ! max movies imported per cycle
+        type(string),       allocatable :: projects(:)
+        character(len=:),   allocatable :: meta_buffer
+        integer,            allocatable :: jpeg_inds(:), jpeg_pops(:), ref_selection(:)
+        real,               allocatable :: jpeg_res(:)
+        type(string)                    :: refs_jpeg, refs_stk
+        type(string)                    :: match_jpeg, match_stk
+        type(rec_list)                  :: project_list
+        type(parameters)                :: params
+        type(qsys_env)                  :: qenv
+        type(sp_project)                :: spproj_glob, spproj_tmp
+        type(project_rec)               :: prec
+        type(rec_iterator)              :: it
+        type(microchunked2D)            :: chunked_2D
+        type(stream_watcher)            :: project_buff
+        type(gui_metadata_cavg2D)       :: meta_cavg2D
         type(gui_metadata_stream_particle_sieving) :: meta_particle_sieving
         integer :: nprojects, n_mics_imported, n_ptcls_imported, i, xtiles, ytiles
         logical :: l_refs_complete, l_terminate, l_once
@@ -243,10 +243,10 @@ contains
                 res     = jpeg_res(my_i),                            &
                 pop     = jpeg_pops(my_i),                           &
                 idx     = my_idx,                                    &
-                sprite  = sprite_sheet_pos(                                        &
+                sprite  = sprite_sheet_pos(                          &
                                 x = x_sprite,                        &
                                 y = y_sprite,                        &
-                                h = 100 * ytiles,                      &
+                                h = 100 * ytiles,                    &
                                 w = 100 * xtiles))
             if( meta_cavg2D%assigned() .and. mq_stream_master_in%is_active() ) then
                 call meta_cavg2D%serialise(meta_buffer)

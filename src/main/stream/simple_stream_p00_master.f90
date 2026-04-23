@@ -196,12 +196,12 @@ contains
                                 arg           = c_null_ptr)
         if( stat /= 0 ) THROW_HARD('failed to create metadata listener thread')
         ! fork and test stream processes
-        call fork_preprocess%start(       name=string(PREPROC_JOB_NAME),    logfile=string(PREPROC_JOB_NAME//'.log'),   cline=cline_preprocess,       restart=.true.)
+        call fork_preprocess%start(       name=string(PREPROC_JOB_NAME),   logfile=string(PREPROC_JOB_NAME//'.log'),   cline=cline_preprocess,       restart=.true.)
         call fork_assign_optics%start(    name=string(OPTICS_JOB_NAME),    logfile=string(OPTICS_JOB_NAME//'.log'),    cline=cline_assign_optics,    restart=.true.)
         call fork_opening2D%start(        name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'), cline=cline_opening2D,        restart=.true.)
         call fork_reference_picking%start(name=string(REFPICK_JOB_NAME),   logfile=string(REFPICK_JOB_NAME//'.log'),   cline=cline_reference_picking,restart=.true.)
         call fork_particle_sieving%start( name=string(SIEVING_JOB_NAME),   logfile=string(SIEVING_JOB_NAME//'.log'),   cline=cline_particle_sieving, restart=.true.)
-        call fork_pool2D%start( name=string(CLASS2D_JOB_NAME),   logfile=string(CLASS2D_JOB_NAME//'.log'),   cline=cline_pool2D, restart=.true.)
+        call fork_pool2D%start(           name=string(CLASS2D_JOB_NAME),   logfile=string(CLASS2D_JOB_NAME//'.log'),   cline=cline_pool2D,           restart=.true.)
     !    
         if( fork_preprocess%status()        /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork preprocessing'    )
         if( fork_assign_optics%status()     /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork assign optics'    )
@@ -419,7 +419,10 @@ contains
             my_rc = c_pthread_mutex_lock(terminate_mutex)
             l_terminate = .true.
             my_rc = c_pthread_mutex_unlock(terminate_mutex)
-            l_terminate_loop = .true.
+            ! this is needed to prevent complete node death
+            if( c_pthread_join(meta_listener_thread, ptr) /= 0) THROW_WARN('failed to join metadata listener thread')
+            call exit(1)
+            !l_terminate_loop = .true.
         end subroutine sigint_handler
 
         subroutine metadata_listener()

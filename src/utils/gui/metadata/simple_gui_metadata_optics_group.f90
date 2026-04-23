@@ -53,7 +53,8 @@ contains
     class(gui_metadata_optics_group), intent(inout) :: self
     integer,                          intent(in)    :: i, i_max, n_shifts
     real,                allocatable, intent(in)    :: xshifts(:), yshifts(:)
-    if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( .not.self%l_initialized   ) THROW_HARD('gui metadata object is uninitialised')
+    if( n_shifts < 0              ) THROW_HARD('n_shifts must be non-negative')
     if( n_shifts > max_points     ) THROW_HARD('n_shifts exceeds max_points')
     if( n_shifts > size(xshifts)  ) THROW_HARD('n_shifts exceeds size of xshifts')
     if( n_shifts > size(yshifts)  ) THROW_HARD('n_shifts exceeds size of yshifts')

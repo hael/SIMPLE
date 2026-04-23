@@ -62,7 +62,10 @@ contains
     self%data(1:self%n_labels)   = data
     self%data2                   = 0.0
     if( present(data2) ) then
-      if( allocated(data2) ) self%data2(1:self%n_labels) = data2(1:self%n_labels)
+      if( allocated(data2) ) then
+        if( size(data2) < self%n_labels ) THROW_HARD('data2 is smaller than labels')
+        self%data2(1:self%n_labels) = data2(1:self%n_labels)
+      end if
     endif
   end subroutine set
 

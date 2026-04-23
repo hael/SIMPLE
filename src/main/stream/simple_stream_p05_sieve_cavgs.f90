@@ -237,7 +237,7 @@ contains
                         call json%remove(latest_rejected_cls2D, destroy=.true.)
                         call json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
                         call http_communicator%add_to_json(latest_rejected_cls2D)
-                        if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
+                        if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids) .and. allocated(jpg_cls_map) .and. allocated(cls_res) .and. allocated(cls_pop)) then
                             do i=0, size(jpg_cls_map) - 1
                                 if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                     call add_cls2D_accepted_to_json(selection_jpeg%to_char(),&
@@ -286,7 +286,7 @@ contains
                             call json%remove(rejected_cls2D, destroy=.true.)
                             call json%create_array(rejected_cls2D, "rejected_cls2D")
                             call http_communicator%add_to_json( rejected_cls2D)
-                            if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
+                            if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids) .and. allocated(jpg_cls_map) .and. allocated(cls_res) .and. allocated(cls_pop)) then
                                 do i=0, size(jpg_cls_map) - 1
                                     if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                         call add_cls2D_accepted_to_json(selection_jpeg%to_char(),&
@@ -342,7 +342,7 @@ contains
                                 call json%remove(latest_rejected_cls2D, destroy=.true.)
                                 call json%create_array(latest_rejected_cls2D, "latest_rejected_cls2D")
                                 call http_communicator%add_to_json( latest_rejected_cls2D)
-                                if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids)) then
+                                if(allocated(accepted_cls_ids) .and. allocated(rejected_cls_ids) .and. allocated(jpg_cls_map) .and. allocated(cls_res) .and. allocated(cls_pop)) then
                                     do i=0, size(jpg_cls_map) - 1
                                         if(any( accepted_cls_ids == jpg_cls_map(i + 1))) then
                                             call add_cls2D_accepted_to_json(selection_jpeg%to_char(),&

@@ -78,6 +78,7 @@ contains
     class(gui_metadata_micrograph), intent(inout) :: self
     integer,                        intent(in)    :: i_coord, x, y, xdim, ydim
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( i_coord < 1 ) THROW_HARD('i_coord is out of range')
     if( i_coord > size(self%x_coordinates) ) THROW_HARD('i_coord is out of range')
     self%l_assigned = .true.
     self%xdim       = xdim

@@ -207,6 +207,7 @@ contains
     end if
     ldim      = self%imgs(1)%get_ldim()
     smpd      = self%imgs(1)%get_smpd()
+    if( smpd <= 0.0 ) THROW_HARD("reject_mask: non-positive sampling distance (smpd)")
     rad_px    = (self%mskdiam / smpd) / 2.0
     nrejected = 0
     ! construct image buffers once; img_bin%copy reinitialises content each iteration
