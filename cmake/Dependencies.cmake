@@ -38,6 +38,18 @@ if(USE_OPENMP)
             "Compiler is not GNU and FindOpenMP failed."
         )
     endif()
+    # Openmp device offloading - EXPERIMENTAL
+    if( USE_OPENMP )
+        if( USE_OPENMP_OFFLOAD )
+            if(APPLE)
+                set(USE_OPENMP_OFFLOAD OFF)
+            else()
+                string(APPEND CMAKE_Fortran_FLAGS " -foffload=nvptx-none")
+            endif()
+        endif()
+    else()
+        set(USE_OPENMP_OFFLOAD OFF)
+    endif()
 endif()
 
 # ------------------------------------------------------------------------------

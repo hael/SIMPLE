@@ -80,6 +80,14 @@ if(BUILD_TESTS)
         ${SIMPLELIB}
         ${SIMPLE_LIBRARIES}
     )
+    if( USE_OPENMP )
+      # open mp required at linking time
+      target_link_options(${test_exe} PUBLIC -fopenmp)
+      if( USE_OPENMP_OFFLOAD )
+        # path to binary: x86_64-linux-gnu-accel-nvptx-none-gcc (from package gcc-offload-nvptx)
+        #target_link_options(${test_exe} PUBLIC -B/usr/local/gcc-15-nvptx/usr/local/bin)
+      endif()
+    endif()
     install(TARGETS ${test_exe}
       RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )

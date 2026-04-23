@@ -22,7 +22,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Build options
 # ------------------------------------------------------------------------------
 # OpenMP is effectively required (always ON by default)
-option(USE_OPENMP   "Use OpenMP for parallelization" ON)
+option(USE_OPENMP         "Use OpenMP for parallelization" ON)
+option(USE_OPENMP_OFFLOAD "Use OpenMP device offloading" OFF)
 
 # Future / optional parallel models
 option(USE_OPENACC  "Use OpenACC for GPU acceleration (experimental)" OFF)
@@ -157,6 +158,7 @@ message(STATUS "C compiler:           ${CMAKE_C_COMPILER} (${CMAKE_C_COMPILER_ID
 message(STATUS "C++ compiler:         ${CMAKE_CXX_COMPILER} (${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
 message(STATUS "----------------------------------------")
 message(STATUS "OpenMP:               ${USE_OPENMP}")
+message(STATUS "OpenMP offloading:    ${USE_OPENMP_OFFLOAD}")
 message(STATUS "NICE:                 ${NICE}")
 message(STATUS "OpenACC:              ${USE_OPENACC}")
 message(STATUS "Coarrays:             ${USE_COARRAYS}")
