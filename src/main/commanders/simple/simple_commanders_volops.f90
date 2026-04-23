@@ -778,7 +778,6 @@ contains
         use simple_imgproc,     only: make_pcavol
         use simple_pca,         only: pca
         use simple_ppca,        only: ppca
-        use simple_mppca,       only: mppca
         use simple_pca_svd,     only: pca_svd
         use simple_kpca_svd,    only: kpca_svd, suggest_kpca_nystrom_neigs
         class(commander_ppca_volvar), intent(inout) :: self
@@ -794,7 +793,6 @@ contains
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_volvar_out'//STK_EXT)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         if( .not.file_exists(params%vols(1)) ) THROW_HARD('cannot find the inputvolume')
-        if( trim(params%pca_mode) .eq. 'ppca_local_mix' ) THROW_HARD('ppca_local_mix is currently only supported by ppca_denoise_classes')
         call build%vol%read(params%vols(1))
         ! masking
         if(cline%defined('mskdiam')) call build%vol%mask3D_soft(params%msk, backgr=0.)
@@ -810,16 +808,14 @@ contains
         select case(trim(params%pca_mode))
             case('ppca')
                 allocate(ppca :: pca_ptr)
-            case('mppca')
-                allocate(mppca :: pca_ptr)
             case('pca_svd')
                 allocate(pca_svd    :: pca_ptr)
             case('kpca')
                 allocate(kpca_svd   :: pca_ptr)
+            case DEFAULT
+                THROW_HARD('pca_mode must be ppca, pca_svd, or kpca')
         end select
         select type(pca_ptr)
-            type is(mppca)
-                call pca_ptr%set_params(params%mppca_k, params%nthr)
             type is(kpca_svd)
                 call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_backend,&
                 &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)

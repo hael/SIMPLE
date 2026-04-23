@@ -7,8 +7,7 @@ type(ui_program), target :: icm2D
 type(ui_program), target :: icm3D
 type(ui_program), target :: ppca_denoise
 type(ui_program), target :: ppca_denoise_classes
-type(ui_program), target :: ppca_cls_split
-type(ui_program), target :: diffusion_cls_split
+type(ui_program), target :: cls_split
 type(ui_program), target :: ppca_volvar
 
 contains
@@ -19,8 +18,7 @@ contains
         call new_icm3D(prgtab)
         call new_ppca_denoise(prgtab)
         call new_ppca_denoise_classes(prgtab)
-        call new_ppca_cls_split(prgtab)
-        call new_diffusion_cls_split(prgtab)
+        call new_cls_split(prgtab)
         call new_ppca_volvar(prgtab)
     end subroutine construct_denoise_programs
 
@@ -31,8 +29,7 @@ contains
         write(logfhandle,'(A)') icm3D%name%to_char()
         write(logfhandle,'(A)') ppca_denoise%name%to_char()
         write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
-        write(logfhandle,'(A)') ppca_cls_split%name%to_char()
-        write(logfhandle,'(A)') diffusion_cls_split%name%to_char()
+        write(logfhandle,'(A)') cls_split%name%to_char()
         write(logfhandle,'(A)') ppca_volvar%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_denoise_programs
@@ -117,8 +114,7 @@ contains
         ! <empty>
         ! filter controls
         call ppca_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .true., 160.0)
-        call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, mixture PPCA, PPCA plus residual kPCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|mppca|ppca_kpca_resid|pca_svd|kpca){ppca}', .false., 'ppca')
-        call ppca_denoise%add_input(UI_FILT, 'mppca_k', 'num', 'mPPCA mixture components (default 4; try 2, 4, 8)', 'mPPCA mixture components (default 4; try 2, 4, 8)', '# mPPCA comps', .false., 4.0)
+        call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca){ppca}', .false., 'ppca')
         call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call ppca_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
@@ -154,12 +150,10 @@ contains
         ! filter controls
         call ppca_denoise_classes%add_input(UI_FILT, 'neigs', 'num', '# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .false., 160.0)
         call ppca_denoise_classes%add_input(UI_FILT, 'transp_pca', 'binary', 'transpose for pixel-wise learning', 'transpose for pixel-wise learning(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call ppca_denoise_classes%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, local class-informed PPCA mix, mixture PPCA, PPCA plus residual kPCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|ppca_local_mix|mppca|ppca_kpca_resid|pca_svd|kpca){ppca}', .false., 'ppca')
-        call ppca_denoise_classes%add_input(UI_FILT, 'mppca_k', 'num', 'mPPCA mixture components (default 4; try 2, 4, 8)', 'mPPCA mixture components (default 4; try 2, 4, 8)', '# mPPCA comps', .false., 4.0)
+        call ppca_denoise_classes%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){ppca}', .false., 'ppca')
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
-        call ppca_denoise_classes%add_input(UI_FILT, 'ppca_kpca_resid_alpha', 'num', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'hybrid alpha', .false., 0.5)
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
         call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (default 96; try 96, 128)', 'Nyström max local support neighbors (default 96; try 96, 128)', '# max local nbrs', .false., 96.0)
         ! mask controls
@@ -198,45 +192,32 @@ contains
         call add_ui_program('ppca_volvar', ppca_volvar, prgtab)
     end subroutine new_ppca_volvar
 
-    subroutine new_ppca_cls_split( prgtab )
+    subroutine new_cls_split( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call ppca_cls_split%new(&
-        &'ppca_cls_split',&
-        &'Split classes with shared PPCA latent clustering',&
-        &'is a program for splitting 2D/3D particle classes into subclasses using shared PPCA latent spaces and affinity propagation',&
+        call cls_split%new(&
+        &'cls_split',&
+        &'Split classes with latent clustering',&
+        &'is a program for splitting 2D/3D particle classes into subclasses using PPCA, kPCA, or diffusion-map embeddings and k-medoids clustering',&
         &'all',&
         &.true.)
-        call ppca_cls_split%add_input(UI_PARM, 'class', 'num', 'Optional class index to split', 'Optional 2D class index or 3D projection/class index to split; omit to process all classes', 'e.g. 5', .false., 0.0)
-        call ppca_cls_split%add_input(UI_PARM, 'pre_norm', 'binary', 'Pre-normalize images', 'Statistical normalization(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call ppca_cls_split%add_input(UI_PARM, 'ncls', 'num', 'Fixed number of subclasses (0 => affinity propagation)', 'Fixed number of subclasses (0 => affinity propagation)', '# subclasses', .false., 0.0)
-        call ppca_cls_split%add_input(UI_PARM, 'nsubcls_max', 'num', 'Maximum subclasses per parent class for AP before k-medoids fallback', 'Maximum subclasses per parent class for AP before k-medoids fallback', '# max subclasses', .false., 8.0)
-        call ppca_cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
-        call ppca_cls_split%add_input(UI_FILT, 'neigs', 'num', 'Number of PPCA latent dimensions (0 => auto low-rank scan)', 'Number of PPCA latent dimensions (0 => auto low-rank scan)', '# eigenvecs', .false., 5.0)
-        call ppca_cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
-        call ppca_cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call ppca_cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('ppca_cls_split', ppca_cls_split, prgtab)
-    end subroutine new_ppca_cls_split
-
-    subroutine new_diffusion_cls_split( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        call diffusion_cls_split%new(&
-        &'diffusion_cls_split',&
-        &'Split classes with diffusion-map latent clustering',&
-        &'is a program for splitting 2D/3D particle classes into subclasses using diffusion-map embeddings and affinity propagation',&
-        &'all',&
-        &.true.)
-        call diffusion_cls_split%add_input(UI_PARM, 'class', 'num', 'Optional class index to split', 'Optional 2D class index or 3D projection/class index to split; omit to process all classes', 'e.g. 5', .false., 0.0)
-        call diffusion_cls_split%add_input(UI_PARM, 'pre_norm', 'binary', 'Pre-normalize images', 'Statistical normalization(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call diffusion_cls_split%add_input(UI_PARM, 'ncls', 'num', 'Fixed number of subclasses (0 => affinity propagation)', 'Fixed number of subclasses (0 => affinity propagation)', '# subclasses', .false., 0.0)
-        call diffusion_cls_split%add_input(UI_PARM, 'nsubcls_max', 'num', 'Maximum subclasses per parent class for AP before k-medoids fallback', 'Maximum subclasses per parent class for AP before k-medoids fallback', '# max subclasses', .false., 8.0)
-        call diffusion_cls_split%add_input(UI_PARM, 'k_nn', 'num', 'Local nearest neighbors for diffusion graph', 'Local nearest neighbors for diffusion graph construction', '# neighbors', .false., 10.0)
-        call diffusion_cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
-        call diffusion_cls_split%add_input(UI_FILT, 'neigs', 'num', 'Number of diffusion coordinates (0 => default 4)', 'Number of diffusion coordinates (0 => default 4)', '# eigenvecs', .false., 4.0)
-        call diffusion_cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
-        call diffusion_cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call diffusion_cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('diffusion_cls_split', diffusion_cls_split, prgtab)
-    end subroutine new_diffusion_cls_split
+        call cls_split%add_input(UI_PARM, 'class', 'num', 'Optional class index to split', 'Optional 2D class index or 3D projection/class index to split; omit to process all classes', 'e.g. 5', .false., 0.0)
+        call cls_split%add_input(UI_PARM, 'ncls', 'num', 'Fixed number of subclasses (0 => auto)', 'Fixed number of subclasses (0 => auto)', '# subclasses', .false., 0.0)
+        call cls_split%add_input(UI_PARM, 'nsubcls_min', 'num', 'Minimum subclasses per parent class in auto mode (default 3)', 'Used only when ncls=0: lower bound for the automatically selected number of subclasses per parent class', '# min subclasses', .false., 3.0)
+        call cls_split%add_input(UI_PARM, 'nsubcls_max', 'num', 'Maximum subclasses per parent class in auto mode (default 10)', 'Used only when ncls=0: upper bound for the automatically selected number of subclasses per parent class', '# max subclasses', .false., 10.0)
+        call cls_split%add_input(UI_PARM, 'nptcls_per_subcls', 'num', 'Target particles/subclass in auto mode (default 300)', 'Used only when ncls=0: auto mode chooses about one subclass per 300 particles, bounded by nsubcls_min and nsubcls_max', '# particles/subclass', .false., 300.0)
+        call cls_split%add_input(UI_PARM, 'k_nn', 'num', 'Diffusion graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used only for pca_mode=diffusion_maps; larger values make the graph smoother, smaller values emphasize local structure', '# neighbors', .false., 10.0)
+        call cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
+        call cls_split%add_input(UI_FILT, 'pca_mode', 'multi', 'Embedding method for class splitting', 'Embedding method for class splitting(ppca|kpca|diffusion_maps){diffusion_maps}', '(ppca|kpca|diffusion_maps){diffusion_maps}', .false., 'diffusion_maps')
+        call cls_split%add_input(UI_FILT, 'neigs', 'num', 'Number of embedding dimensions (0 => method default)', 'Number of embedding dimensions (0 => method default)', '# eigenvecs', .false., 0.0)
+        call cls_split%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
+        call cls_split%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
+        call cls_split%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
+        call cls_split%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (default 512; try 256-1024)', 'Used only for pca_mode=kpca with kpca_backend=nystrom: increase for better kernel fidelity/stability, decrease for speed and lower memory use', '# landmarks', .false., 512.0)
+        call cls_split%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström local support neighbors (default 96; try 64-128)', 'Used only for pca_mode=kpca with kpca_backend=nystrom: increase for smoother/more stable local reconstruction, decrease for speed and sharper locality', '# max local nbrs', .false., 96.0)
+        call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
+        call cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
+        call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
+        call add_ui_program('cls_split', cls_split, prgtab)
+    end subroutine new_cls_split
 
 end module simple_ui_denoise

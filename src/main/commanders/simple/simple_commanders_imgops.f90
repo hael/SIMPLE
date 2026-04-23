@@ -357,7 +357,6 @@ contains
         use simple_imgproc,     only: make_pcavecs
         use simple_pca,         only: pca
         use simple_ppca,        only: ppca
-        use simple_mppca,       only: mppca
         use simple_pca_svd,     only: pca_svd
         use simple_kpca_svd,    only: kpca_svd, suggest_kpca_nystrom_neigs
         class(commander_ppca_denoise), intent(inout) :: self
@@ -381,9 +380,8 @@ contains
         if(cline%defined('projfile')) call cline%delete('projfile')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
-        if( trim(params%pca_mode) .eq. 'ppca_local_mix' ) THROW_HARD('ppca_local_mix is currently only supported by ppca_denoise_classes')
         l_hybrid_resid = trim(params%pca_mode) .eq. 'ppca_kpca_resid'
-        l_profile_pca = trim(params%pca_mode) .eq. 'kpca' .or. trim(params%pca_mode) .eq. 'ppca' .or. trim(params%pca_mode) .eq. 'mppca' .or. l_hybrid_resid
+        l_profile_pca = trim(params%pca_mode) .eq. 'kpca' .or. trim(params%pca_mode) .eq. 'ppca' .or. l_hybrid_resid
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)
         call nice_comm%cycle()
@@ -561,18 +559,16 @@ contains
         select case(trim(params%pca_mode))
             case('ppca')
                 allocate(ppca :: pca_ptr)
-            case('mppca')
-                allocate(mppca :: pca_ptr)
             case('pca_svd')
                 allocate(pca_svd     :: pca_ptr)
             case('kpca')
                 allocate(kpca_svd    :: pca_ptr)
+            case DEFAULT
+                THROW_HARD('pca_mode must be ppca, ppca_kpca_resid, pca_svd, or kpca')
         end select
         if( l_transp_pca )then
             call pca_ptr%new(npix, params%nptcls, neigs)
             select type(pca_ptr)
-                type is(mppca)
-                    call pca_ptr%set_params(params%mppca_k, params%nthr)
                 type is(kpca_svd)
                     call pca_ptr%set_params(params%nthr, params%kpca_ker,&
                     &params%kpca_backend, params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
@@ -588,8 +584,6 @@ contains
             if( l_profile_pca )then
                 if( trim(params%pca_mode) .eq. 'kpca' )then
                     write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
-                else if( trim(params%pca_mode) .eq. 'mppca' )then
-                    write(logfhandle,'(A,F8.3,A)') 'mPPCA denoise master: ', real(t1-t0)/real(trate), ' s'
                 else
                     write(logfhandle,'(A,F8.3,A)') 'PPCA denoise master: ', real(t1-t0)/real(trate), ' s'
                 endif
@@ -612,8 +606,6 @@ contains
             if( l_profile_pca )then
                 if( trim(params%pca_mode) .eq. 'kpca' )then
                     write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
-                else if( trim(params%pca_mode) .eq. 'mppca' )then
-                    write(logfhandle,'(A,F8.3,A)') 'mPPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
                 else
                     write(logfhandle,'(A,F8.3,A)') 'PPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
                 endif
@@ -621,8 +613,6 @@ contains
         else
             call pca_ptr%new(params%nptcls, npix, neigs)
             select type(pca_ptr)
-                type is(mppca)
-                    call pca_ptr%set_params(params%mppca_k, params%nthr)
                 type is(kpca_svd)
                     call pca_ptr%set_params(params%nthr, params%kpca_ker, params%kpca_backend,&
                     &params%kpca_nystrom_npts, params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
@@ -638,8 +628,6 @@ contains
             if( l_profile_pca )then
                 if( trim(params%pca_mode) .eq. 'kpca' )then
                     write(logfhandle,'(A,F8.3,A)') 'kPCA denoise master: ', real(t1-t0)/real(trate), ' s'
-                else if( trim(params%pca_mode) .eq. 'mppca' )then
-                    write(logfhandle,'(A,F8.3,A)') 'mPPCA denoise master: ', real(t1-t0)/real(trate), ' s'
                 else
                     write(logfhandle,'(A,F8.3,A)') 'PPCA denoise master: ', real(t1-t0)/real(trate), ' s'
                 endif
@@ -659,8 +647,6 @@ contains
             if( l_profile_pca )then
                 if( trim(params%pca_mode) .eq. 'kpca' )then
                     write(logfhandle,'(A,F8.3,A)') 'kPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
-                else if( trim(params%pca_mode) .eq. 'mppca' )then
-                    write(logfhandle,'(A,F8.3,A)') 'mPPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
                 else
                     write(logfhandle,'(A,F8.3,A)') 'PPCA denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
                 endif

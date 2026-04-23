@@ -33,7 +33,7 @@ use simple_commanders_imgops, only: commander_ppca_denoise
 
 ! cluster2D commanders, for simultanous 2D alignment and clustering of single-particle images
 use simple_commanders_cluster2D, only: commander_make_cavgs, commander_cluster2D_distr_worker, commander_cluster2D,&
-commander_cavgassemble, commander_ppca_cls_split
+commander_cavgassemble, commander_cls_split
 
 ! cavgs commanders, for operations on class averages
 use simple_commanders_cavgs, only: commander_rank_cavgs, commander_shape_rank_cavgs

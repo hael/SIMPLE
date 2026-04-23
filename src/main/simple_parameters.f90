@@ -237,7 +237,7 @@ type :: parameters
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_local_mix|mppca|ppca_kpca_resid|pca_svd|kpca){ppca}
+    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -319,7 +319,8 @@ type :: parameters
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
     integer :: ncls_sub=10         !< # sub-clusters
-    integer :: nsubcls_max=8       !< maximum subclasses per parent class before AP fallback merge
+    integer :: nsubcls_min=3       !< minimum subclasses per parent class for class splitting
+    integer :: nsubcls_max=10      !< maximum subclasses per parent class for class splitting
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors {0=>auto for Nyström kPCA}
@@ -345,8 +346,8 @@ type :: parameters
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
+    integer :: nptcls_per_subcls=300 !< target particle count per subclass for class splitting
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
-    integer :: mppca_k=4           !< # mixture components for mPPCA
     integer :: nquanta=0           !< # quanta in quantization
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
@@ -942,6 +943,7 @@ contains
         call check_iarg('nchunksperset',  self%nchunksperset)
         call check_iarg('ncls',           self%ncls)
         call check_iarg('ncls_sub',       self%ncls_sub)
+        call check_iarg('nsubcls_min',    self%nsubcls_min)
         call check_iarg('nsubcls_max',    self%nsubcls_max)
         call check_iarg('ncls_start',     self%ncls_start)
         call check_iarg('ncunits',        self%ncunits)
@@ -983,8 +985,8 @@ contains
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nptcls_per_cls', self%nptcls_per_cls)
+        call check_iarg('nptcls_per_subcls', self%nptcls_per_subcls)
         call check_iarg('nptcls_per_part',self%nptcls_per_part)
-        call check_iarg('mppca_k',        self%mppca_k)
         call check_iarg('nquanta',        self%nquanta)
         call check_iarg('nthr',           self%nthr)
         call check_iarg('nthr2D',         self%nthr2D)

@@ -3,7 +3,7 @@ module simple_exec_denoise
 use simple_cmdline,              only: cmdline
 use simple_commanders_resolest,  only: commander_icm2D, commander_icm3D
 use simple_commanders_volops,    only: commander_ppca_volvar
-use simple_commanders_cluster2D, only: commander_ppca_denoise_classes, commander_ppca_cls_split, commander_diffusion_cls_split
+use simple_commanders_cluster2D, only: commander_ppca_denoise_classes, commander_cls_split
 use simple_commanders_imgops,    only: commander_ppca_denoise
 implicit none
 
@@ -14,8 +14,7 @@ type(commander_icm2D)                     :: xicm2D
 type(commander_icm3D)                     :: xicm3D
 type(commander_ppca_denoise)              :: xppca_denoise
 type(commander_ppca_denoise_classes)      :: xppca_denoise_classes
-type(commander_ppca_cls_split)            :: xppca_cls_split
-type(commander_diffusion_cls_split)       :: xdiffusion_cls_split
+type(commander_cls_split)                 :: xcls_split
 type(commander_ppca_volvar)               :: xppca_volvar
 
 contains
@@ -37,10 +36,8 @@ contains
                 call xppca_denoise%execute(cline)
             case( 'ppca_denoise_classes' )
                 call xppca_denoise_classes%execute(cline)
-            case( 'ppca_cls_split' )
-                call xppca_cls_split%execute(cline)
-            case( 'diffusion_cls_split' )
-                call xdiffusion_cls_split%execute(cline)
+            case( 'cls_split' )
+                call xcls_split%execute(cline)
             case( 'ppca_volvar' )
                 call xppca_volvar%execute(cline)
             case default

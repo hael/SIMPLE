@@ -4,6 +4,7 @@ use simple_pftc_srch_api
 use simple_builder,           only: builder
 use simple_discrete_stack_io, only: dstack_io
 implicit none
+#include "simple_local_flags.inc"
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
 private
@@ -124,10 +125,28 @@ contains
         type(dstack_io) :: dstkio_r
         type(string) :: stkname
         integer :: ind_in_stk, i, ii
+        logical :: l_verbose
+        if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
+            write(logfhandle,*) 'batchlims: ', batchlims
+            write(logfhandle,*) 'n        : ', n
+            THROW_HARD('invalid batchlims; discrete_read_imgbatch')
+        endif
+        l_verbose = params%prg .eq. 'cls_split'
+        if( l_verbose )then
+            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'discrete_read_imgbatch: n=', n, &
+                &' pinds[min,max]=', minval(pinds(batchlims(1):batchlims(2))), &
+                &' ', maxval(pinds(batchlims(1):batchlims(2))), ' batch_to=', batchlims(2)
+            call flush(logfhandle)
+        endif
         call dstkio_r%new(params%smpd, params%box)
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
             call build%spproj%get_stkname_and_ind(params%oritype, pinds(i), stkname, ind_in_stk)
+            if( l_verbose .and. n <= 32 )then
+                write(logfhandle,'(A,I8,A,I8,A,I8,A,A)') 'discrete_read_imgbatch item: batch_i=', i, &
+                    &' iptcl=', pinds(i), ' indstk=', ind_in_stk, ' stk=', trim(stkname%to_char())
+                call flush(logfhandle)
+            endif
             call dstkio_r%read(stkname, ind_in_stk, build%imgbatch(ii))
         end do
         call dstkio_r%kill

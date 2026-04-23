@@ -485,6 +485,8 @@ contains
             if( eig_q(i) > real(DTINY) ) alpha(:,i) = alpha(:,i) / sqrt(eig_q(i))
         enddo
         !$omp end parallel do
+        self%E_zn = 0.
+        if( q_used > 0 ) self%E_zn(1:q_used,1:self%N) = transpose(alpha(:,1:q_used))
         if( PROFILE )then
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A,I8)') 'kPCA Nyström reduced eigensolve/proj: ', real(t1-t0)/real(trate), ' s; q=', q_used

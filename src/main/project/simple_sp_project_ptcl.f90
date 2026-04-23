@@ -13,7 +13,7 @@ contains
         integer,                   intent(out)   :: ind_in_stk
         class(oris), pointer                     :: ptcl_field
         real    :: smpd
-        integer :: nptcls, fromp, top, box
+        integer :: nptcls, fromp, top, box, nstks
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
@@ -47,6 +47,13 @@ contains
             THROW_HARD('stkind not present in field: '//trim(oritype)//'; map_ptcl_ind2stk_ind')
         endif
         stkind = ptcl_field%get_int(iptcl, 'stkind')
+        nstks  = self%os_stk%get_noris()
+        if( stkind < 1 .or. stkind > nstks )then
+            write(logfhandle,*) 'iptcl : ', iptcl
+            write(logfhandle,*) 'stkind: ', stkind
+            write(logfhandle,*) 'nstks : ', nstks
+            THROW_HARD('stkind index out of range; map_ptcl_ind2stk_ind')
+        endif
         if( ptcl_field%isthere(iptcl, 'indstk') )then
             ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
         else
