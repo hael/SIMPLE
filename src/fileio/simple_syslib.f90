@@ -20,6 +20,14 @@ interface
         character(c_char),dimension(*),intent(in)  ::  dirname
     end function rmdir
 
+    !! unlink() deletes a name from the filesystem. On success, zero is
+    !! returned. On error, -1 is returned and errno is set.
+    function unlink(pathname) bind(C, name="unlink")
+        use, intrinsic :: iso_c_binding
+        integer(c_int) :: unlink
+        character(c_char),dimension(*),intent(in) :: pathname
+    end function unlink
+
     !! mkdir() attempts to create a directory named pathname. mkdir returns zero
     !! on success, or -1 if an error occurred (in which case, errno is set
     !! appropriately). If errno equals EEXIST pathname already exists (not
@@ -543,6 +551,37 @@ contains
         end if
         if(present(status)) status = io_status
     end subroutine simple_rmdir
+
+    !> \brief Remove a file using POSIX unlink(2).
+    !! return optional status 0=success for removed file or file not present;
+    !! return non-zero status for unlink errors.
+    subroutine simple_rmfile( f, status )
+        class(*),          intent(in)  :: f
+        integer, optional, intent(out) :: status
+        character(kind=c_char,len=:), allocatable :: path
+        integer :: io_status
+        logical :: file_e
+        file_e    = .false.
+        io_status = 0
+        select type(f)
+            type is(string)
+                inquire(file=f%to_char(), exist=file_e)
+                if( file_e ) allocate(path, source=f%to_char()//c_null_char)
+            type is(character(*))
+                inquire(file=trim(adjustl(f)), exist=file_e)
+                if( file_e ) allocate(path, source=trim(adjustl(f))//c_null_char)
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
+        if( file_e ) then
+            io_status = unlink(trim(adjustl(path)))
+            if( io_status /= 0 ) then
+                call simple_error_check(io_status, 'syslib:: simple_rmfile failed to remove '//trim(adjustl(path)))
+            end if
+            deallocate(path)
+        end if
+        if( present(status) ) status = io_status
+    end subroutine simple_rmfile
 
     !> ensure C-strings get converted to fortran-style strings
     subroutine syslib_c2fortran_string( str, len )

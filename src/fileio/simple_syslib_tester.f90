@@ -18,6 +18,7 @@ contains
         call test_simple_touch_and_file_exists()
         call test_simple_mkdir_dir_exists_rmdir()
         call test_simple_rename_and_del_file()
+        call test_simple_rmfile()
         call test_syslib_symlink()
         call test_simple_file_stat()
         call test_is_io_and_is_open()
@@ -110,6 +111,22 @@ contains
         call del_file(dst)
         call assert_true(.not. file_exists(dst), 'rename: dst deleted with del_file')
     end subroutine test_simple_rename_and_del_file
+
+    !---------------- simple_rmfile ----------------
+
+    subroutine test_simple_rmfile()
+        type(string) :: fname
+        integer :: istat
+        write(*,'(A)') 'test_simple_rmfile'
+        fname = 'rmfile_test.txt'
+        call simple_touch(fname)
+        call assert_true(file_exists(fname), 'rmfile: file exists before remove')
+        call simple_rmfile(fname, status=istat)
+        call assert_int(0, istat, 'rmfile: remove existing file status')
+        call assert_true(.not. file_exists(fname), 'rmfile: existing file removed')
+        call simple_rmfile(fname, status=istat)
+        call assert_int(0, istat, 'rmfile: missing file returns success')
+    end subroutine test_simple_rmfile
 
     !---------------- syslib_symlink ----------------
 
