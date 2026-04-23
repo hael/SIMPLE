@@ -8,8 +8,7 @@ use simple_sp_project,   only: sp_project
 use simple_image,        only: image
 use simple_image_msk,    only: automask2D
 use simple_classaverager, only: transform_ptcls
-use simple_fileio,       only: fopen, fclose, nlines, file_exists
-use simple_ori,          only: ori
+use simple_fileio,       only: fopen, fclose, nlines
 use simple_srch_sort_loc, only: hpsort, reverse
 implicit none
 
@@ -208,7 +207,6 @@ contains
         class(cmdline),                              intent(inout) :: cline
         integer, allocatable :: cls_inds(:), cls_pops(:)
         call init_common(params, build, cline)
-        call ensure_stack_parts(params)
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
         self%nparts_run = min(max(1, params%nparts), size(cls_inds))
         write(logfhandle,'(A,I8,A,I8,A,I8)') 'PPCA split worker planning: requested_nparts=', params%nparts, &
@@ -264,58 +262,6 @@ contains
         endif
         call self%job_descr%kill
     end subroutine master_cleanup
-
-    subroutine ensure_stack_parts(params)
-        type(parameters), intent(inout) :: params
-        type(sp_project) :: spproj
-        type(string) :: stkkind, stkname
-        type(ori)    :: orig_stk
-        integer      :: n_os_stk, nptcls, iptcl, istk
-        logical      :: has_indstk, missing_split_parts
-        if( params%nparts < 2 ) return
-        call spproj%read(params%projfile)
-        n_os_stk = spproj%os_stk%get_noris()
-        if( n_os_stk < 1 )then
-            call spproj%kill
-            return
-        endif
-        call spproj%os_stk%getter(1, 'stkkind', stkkind)
-        missing_split_parts = .false.
-        if( trim(stkkind%to_char()) == 'split' )then
-            do istk = 1, n_os_stk
-                stkname = spproj%os_stk%get_str(istk, 'stk')
-                if( .not. file_exists(stkname) )then
-                    missing_split_parts = .true.
-                    call stkname%kill
-                    exit
-                endif
-                call stkname%kill
-            end do
-        endif
-        if( missing_split_parts )then
-            call spproj%os_stk%get_ori(1, orig_stk)
-            nptcls = spproj%get_nptcls()
-            has_indstk = spproj%os_ptcl2D%isthere('indstk')
-            call spproj%os_stk%new(1, is_ptcl=.false.)
-            call spproj%os_stk%set_ori(1, orig_stk)
-            call spproj%os_stk%set(1, 'fromp',   1)
-            call spproj%os_stk%set(1, 'top',     nptcls)
-            call spproj%os_stk%set(1, 'nptcls',  nptcls)
-            call spproj%os_stk%set(1, 'stkkind', 'single')
-            call spproj%os_ptcl2D%set_all2single('stkind', 1)
-            call spproj%os_ptcl3D%set_all2single('stkind', 1)
-            if( has_indstk )then
-                do iptcl = 1, nptcls
-                    call spproj%os_ptcl2D%set(iptcl, 'indstk', iptcl)
-                    call spproj%os_ptcl3D%set(iptcl, 'indstk', iptcl)
-                end do
-            endif
-            call orig_stk%kill
-        endif
-        call stkkind%kill
-        call spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
-        call spproj%kill
-    end subroutine ensure_stack_parts
 
     subroutine prepare_class_partitions(self, params, cline, cls_inds, cls_pops)
         class(ppca_cls_split_master_strategy), intent(inout) :: self
