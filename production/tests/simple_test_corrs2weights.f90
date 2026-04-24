@@ -16,6 +16,12 @@ corrs(10) = 0.52
 corrs(11) = 0.53
 corrs(12) = 0.6
 weights = corrs2weights(corrs, CORRW_CRIT)
+print *, 'CORRW_CRIT:'
+do i=1,size(corrs)
+    print *, 'corr/weight: ', corrs(i), weights(i)
+end do
+print *, 'UNIFORM_CRIT:'
+weights = corrs2weights(corrs, UNIFORM_CRIT)
 do i=1,size(corrs)
     print *, 'corr/weight: ', corrs(i), weights(i)
 end do

@@ -975,6 +975,9 @@ contains
                 ! convert to rank-based weights
                 weights = corrs_copy
                 call conv2rank_weights(ncorrs, weights, crit, p)
+            case(UNIFORM_CRIT)
+                ! uniform distribution
+                weights = 1. / real(ncorrs)
             case DEFAULT
                 THROW_HARD('Unsupported conversion criterion; corrs2weights')
         end select
@@ -1514,6 +1517,8 @@ contains
                 endif
             case(RANK_INV_CRIT)
                 call rank_inverse_weights(n_nonzero, weights_tmp)
+            case(UNIFORM_CRIT)
+                weights_tmp = 1.0
             case DEFAULT
                 THROW_HARD('unsupported rank ordering criteria weighting method; conv2rank_weights')
         end select

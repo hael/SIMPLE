@@ -480,7 +480,7 @@ contains
         call cmd_dict%push('voltab',        'table (text file) of volume files(.txt)')
         call cmd_dict%push('voltab2',       'table 2(text file) of volume files(.txt)')
         call cmd_dict%push('walltime',      'Walltime in seconds for workload management systems{86340}')
-        call cmd_dict%push('wcrit',         'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}')
+        call cmd_dict%push('wcrit',         'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}')
         call cmd_dict%push('which_iter',    'iteration nr')
         call cmd_dict%push('width',         'falloff of inner mask or filter(in pixels){10}')
         call cmd_dict%push('wiener',        'Wiener restoration mode(yes|no){no}')

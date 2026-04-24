@@ -264,7 +264,7 @@ type :: parameters
     character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: tag=''               !< just a tag
-    character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
+    character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|uniformno){sum}
     character(len=STDLEN)     :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
@@ -1643,6 +1643,8 @@ contains
                     self%wcrit_enum = RANK_EXP_CRIT
                 case('inv')
                     self%wcrit_enum = RANK_INV_CRIT
+                case('uniform')
+                    self%wcrit_enum = UNIFORM_CRIT
                 case DEFAULT
                     THROW_HARD('unsupported correlation weighting method')
             end select

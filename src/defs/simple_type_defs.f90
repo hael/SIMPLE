@@ -33,6 +33,7 @@ enum, bind(c)
     enumerator :: RANK_INV_CRIT     = 4
     enumerator :: CORRW_CRIT        = 5
     enumerator :: CORRW_ZSCORE_CRIT = 6
+    enumerator :: UNIFORM_CRIT      = 7
 end enum
 
 ! specimen centering method enumeration
