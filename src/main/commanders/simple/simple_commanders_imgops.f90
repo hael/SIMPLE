@@ -24,6 +24,11 @@ type, extends(commander_base) :: commander_ppca_denoise
     procedure :: execute      => exec_ppca_denoise
 end type commander_ppca_denoise
 
+type, extends(commander_base) :: commander_ppca_denoise_polarft_lines
+  contains
+    procedure :: execute      => exec_ppca_denoise_polarft_lines
+end type commander_ppca_denoise_polarft_lines
+
 type, extends(commander_base) :: commander_normalize
   contains
     procedure :: execute      => exec_normalize
@@ -659,6 +664,48 @@ contains
         call nice_comm%terminate()
         call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
     end subroutine exec_ppca_denoise
+
+    subroutine exec_ppca_denoise_polarft_lines( self, cline )
+        use simple_complex_ppca,               only: complex_ppca
+        use simple_matcher_pftc_prep,          only: prep_pftc4align2D
+        use simple_matcher_ptcl_batch,         only: prep_batch_particles2D, clean_batch_particles2D
+        use simple_polarft_lines_ppca_stream,  only: stream_pft_lines_ppca, denoise_write_pft_lines_ppca
+        class(commander_ppca_denoise_polarft_lines), intent(inout) :: self
+        class(cmdline),                              intent(inout) :: cline
+        type(parameters)               :: params
+        type(builder)                  :: build
+        type(complex_ppca)             :: model
+        type(image), allocatable       :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+        real(dp),    allocatable       :: eigvals(:)
+        integer                        :: batchsz_max, qfit, which_iter
+        integer                        :: nptcls_total
+        integer(kind=8)                :: nlines_fit, nlines_den
+        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'ppca_denoised_polarfts'//BIN_EXT)
+        if( .not. cline%defined('neigs') )   call cline%set('neigs', 16.0)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        nptcls_total = params%top - params%fromp + 1
+        batchsz_max = min(nptcls_total, params%nthr * BATCHTHRSZ)
+        qfit = max(1, params%neigs)
+        which_iter = 1
+        if( cline%defined('which_iter') ) which_iter = max(1, params%which_iter)
+        call prep_batch_particles2D(params, build, batchsz_max, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+        call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, .false.)
+        call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+        call stream_pft_lines_ppca(params, build, qfit, model, nlines_fit)
+        eigvals = model%get_eigvals()
+        write(logfhandle,'(A,I12)')      'PPCA polarft line fit count: ', nlines_fit
+        write(logfhandle,'(A,F12.5)')    'PPCA polarft sigma2: ', model%get_sigma2()
+        write(logfhandle,'(A,10(1X,ES12.5))') 'PPCA polarft leading eigvals:', eigvals(1:min(10,size(eigvals)))
+        deallocate(eigvals)
+        call denoise_write_pft_lines_ppca(params, build, model, params%outfile, nlines_den)
+        write(logfhandle,'(A,I12)')   'PPCA polarft denoised line count: ', nlines_den
+        write(logfhandle,'(A,A)')     'PPCA polarft output: ', params%outfile%to_char()
+        call model%kill()
+        call build%pftc%kill()
+        call build%esig%kill()
+        call build%kill_general_tbox()
+        call simple_end('**** SIMPLE_PPCA_DENOISE_POLARFT_LINES NORMAL STOP ****')
+    end subroutine exec_ppca_denoise_polarft_lines
 
     !> normalize is a program for normalization of MRC or SPIDER stacks and volumes.
     !! If you want to normalize your images inputted with stk, set norm=yes.

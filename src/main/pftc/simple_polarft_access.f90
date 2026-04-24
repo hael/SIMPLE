@@ -89,6 +89,35 @@ contains
         endif
     end subroutine get_ref_pft
 
+    module subroutine get_ptcl_pft(self, iptcl, pft)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iptcl
+        complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) )then
+            write(logfhandle,*) 'iptcl: ', iptcl
+            write(logfhandle,*) 'pfromto: ', self%pfromto
+            THROW_HARD('iptcl is out of range; get_ptcl_pft')
+        endif
+        pft = self%pfts_ptcls(:,self%kfromto(1):self%kfromto(2),self%pinds(iptcl))
+    end subroutine get_ptcl_pft
+
+    module subroutine get_ptcl_line(self, iptcl, irot, line)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iptcl, irot
+        complex(sp),         intent(inout) :: line(self%kfromto(1):self%kfromto(2))
+        if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) )then
+            write(logfhandle,*) 'iptcl: ', iptcl
+            write(logfhandle,*) 'pfromto: ', self%pfromto
+            THROW_HARD('iptcl is out of range; get_ptcl_line')
+        endif
+        if( irot < 1 .or. irot > self%pftsz )then
+            write(logfhandle,*) 'irot: ', irot
+            write(logfhandle,*) 'pftsz: ', self%pftsz
+            THROW_HARD('irot is out of range; get_ptcl_line')
+        endif
+        line = self%pfts_ptcls(irot,self%kfromto(1):self%kfromto(2),self%pinds(iptcl))
+    end subroutine get_ptcl_line
+
     module pure integer function get_nrefs(self)
         class(polarft_calc), intent(in) :: self
         get_nrefs = self%nrefs

@@ -122,6 +122,8 @@ type :: polarft_calc
     procedure          :: get_dang
     procedure          :: get_coord
     procedure          :: get_ref_pft
+    procedure          :: get_ptcl_pft
+    procedure          :: get_ptcl_line
     procedure          :: get_nrefs
     procedure          :: exists
     procedure          :: ptcl_iseven
@@ -199,6 +201,7 @@ type :: polarft_calc
     procedure          :: polar_cavger_write
     procedure          :: polar_cavger_writeall
     procedure          :: polar_cavger_write_eo_pftcrefs
+    procedure          :: write_ptcl_pft_range
     procedure          :: polar_cavger_read_all
     procedure          :: polar_cavger_readwrite_partial_sums
     procedure          :: polar_cavger_assemble_sums_from_parts
@@ -383,6 +386,18 @@ interface
         logical,             intent(in)    :: iseven
         complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
     end subroutine get_ref_pft
+
+    module subroutine get_ptcl_pft(self, iptcl, pft)
+        class(polarft_calc), intent(in)    :: self
+        integer,             intent(in)    :: iptcl
+        complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+    end subroutine get_ptcl_pft
+
+    module subroutine get_ptcl_line(self, iptcl, irot, line)
+        class(polarft_calc), intent(in)    :: self
+        integer,             intent(in)    :: iptcl, irot
+        complex(sp),         intent(inout) :: line(self%kfromto(1):self%kfromto(2))
+    end subroutine get_ptcl_line
 
     module pure integer function get_nrefs(self)
         class(polarft_calc), intent(in) :: self
@@ -861,6 +876,13 @@ interface
         class(polarft_calc), intent(inout) :: self
         class(string),       intent(in)    :: tmpl_fname
     end subroutine polar_cavger_write_eo_pftcrefs
+
+    module subroutine write_ptcl_pft_range( self, fname, nptcls_total, iwrite_from, iwrite_to )
+        class(polarft_calc), intent(in) :: self
+        class(string),       intent(in) :: fname
+        integer,             intent(in) :: nptcls_total
+        integer,             intent(in) :: iwrite_from, iwrite_to
+    end subroutine write_ptcl_pft_range
 
     module subroutine polar_cavger_read_all( self, fname )
         class(polarft_calc), intent(inout) :: self

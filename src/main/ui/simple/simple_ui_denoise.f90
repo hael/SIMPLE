@@ -6,6 +6,7 @@ implicit none
 type(ui_program), target :: icm2D
 type(ui_program), target :: icm3D
 type(ui_program), target :: ppca_denoise
+type(ui_program), target :: ppca_denoise_polarft_lines
 type(ui_program), target :: ppca_denoise_classes
 type(ui_program), target :: cls_split
 type(ui_program), target :: ppca_volvar
@@ -17,6 +18,7 @@ contains
         call new_icm2D(prgtab)
         call new_icm3D(prgtab)
         call new_ppca_denoise(prgtab)
+        call new_ppca_denoise_polarft_lines(prgtab)
         call new_ppca_denoise_classes(prgtab)
         call new_cls_split(prgtab)
         call new_ppca_volvar(prgtab)
@@ -28,6 +30,7 @@ contains
         write(logfhandle,'(A)') icm2D%name%to_char()
         write(logfhandle,'(A)') icm3D%name%to_char()
         write(logfhandle,'(A)') ppca_denoise%name%to_char()
+        write(logfhandle,'(A)') ppca_denoise_polarft_lines%name%to_char()
         write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
         write(logfhandle,'(A)') cls_split%name%to_char()
         write(logfhandle,'(A)') ppca_volvar%name%to_char()
@@ -163,6 +166,21 @@ contains
         ! add to ui_hash
         call add_ui_program('ppca_denoise_classes', ppca_denoise_classes, prgtab)
     end subroutine new_ppca_denoise_classes
+
+    subroutine new_ppca_denoise_polarft_lines( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call ppca_denoise_polarft_lines%new(&
+        &'ppca_denoise_polarft_lines',&
+        &'Denoise polar Fourier lines',&
+        &'is a program for two-pass PPCA denoising of particle polar Fourier transforms using streaming line statistics',&
+        &'simple_exec',&
+        &.true.)
+        call ppca_denoise_polarft_lines%add_input(UI_IMG,  'outfile', 'file', 'Output polar Fourier stack', 'Binary file with denoised particle polar Fourier transforms', 'e.g. ppca_denoised_polarfts.bin', .false., 'ppca_denoised_polarfts.bin')
+        call ppca_denoise_polarft_lines%add_input(UI_PARM, 'which_iter', 'num', 'Reference iteration index', 'Reference iteration index for pftc preparation; default 1', 'iteration', .false., 1.0)
+        call ppca_denoise_polarft_lines%add_input(UI_FILT, 'neigs', 'num', 'Number of retained PPCA line components', 'Number of retained PPCA line components', '# eigenvecs', .false., 16.0)
+        call ppca_denoise_polarft_lines%add_input(UI_COMP, nthr)
+        call add_ui_program('ppca_denoise_polarft_lines', ppca_denoise_polarft_lines, prgtab)
+    end subroutine new_ppca_denoise_polarft_lines
 
     subroutine new_ppca_volvar( prgtab )
         class(ui_hash), intent(inout) :: prgtab
