@@ -383,9 +383,10 @@ contains
         type(image), allocatable :: raw_subavgs(:), den_subavgs(:)
         integer, allocatable :: cls_inds(:), cls_pops(:), pinds(:), labels(:), new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
         integer :: i, j, k, iglob, nsplit, funit_map, funit_assign
-        logical :: l_phflip, l_fixed_nsubcls
+        logical :: l_phflip, l_pre_norm, l_fixed_nsubcls
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
         call determine_split_label(params, build, label)
+        l_pre_norm = (trim(params%pre_norm) .eq. 'yes')
         l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
         call determine_phase_flip(spproj, params, l_phflip)
         if( l_write_project )then
@@ -419,7 +420,7 @@ contains
         do i = 1, size(cls_inds)
             write(logfhandle,'(A,I8,A,I8)') 'Cls split starting: class=', cls_inds(i), ' nptcls=', cls_pops(i)
             call flush(logfhandle)
-            call split_one_parent_class(params, build, spproj, cls_inds(i), l_phflip, l_fixed_nsubcls, &
+            call split_one_parent_class(params, build, spproj, cls_inds(i), l_phflip, l_pre_norm, l_fixed_nsubcls, &
                                         nsplit, pinds, labels, raw_subavgs, den_subavgs)
             if( nsplit < 1 ) cycle
             write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls split summary: class=', cls_inds(i), ' nptcls=', size(labels), ' nsubcls=', nsplit
@@ -470,7 +471,7 @@ contains
         if( den_fname%is_allocated() ) call den_fname%kill
     end subroutine run_local_split
 
-    subroutine split_one_parent_class(params, build, spproj, cls_id, l_phflip, l_fixed_nsubcls, nsplit, pinds, labels, raw_subavgs, den_subavgs)
+    subroutine split_one_parent_class(params, build, spproj, cls_id, l_phflip, l_pre_norm, l_fixed_nsubcls, nsplit, pinds, labels, raw_subavgs, den_subavgs)
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
         use simple_imgproc,          only: make_pcavecs
         use simple_clustering_utils, only: cluster_dmat
@@ -478,7 +479,7 @@ contains
         type(builder),            intent(inout) :: build
         type(sp_project),         intent(inout) :: spproj
         integer,                  intent(in)    :: cls_id
-        logical,                  intent(in)    :: l_phflip, l_fixed_nsubcls
+        logical,                  intent(in)    :: l_phflip, l_pre_norm, l_fixed_nsubcls
         integer,                  intent(out)   :: nsplit
         integer,     allocatable, intent(out)   :: pinds(:), labels(:)
         type(image), allocatable, intent(out)   :: raw_subavgs(:), den_subavgs(:)
@@ -530,6 +531,11 @@ contains
             call imgs_ppca(j)%norm_noise(build%lmsk, sdev_noise)
             call imgs_ppca(j)%mask2D_softavg(class_mskrad)
         end do
+        if( l_pre_norm )then
+            do j = 1, nptcls
+                call imgs_ppca(j)%norm
+            end do
+        endif
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
         call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, coords, eigvals)
         call sanitize_embedding_coords(trim(params%pca_mode), cls_id, coords)
@@ -547,12 +553,13 @@ contains
             call cluster_dmat(dmat, 'kmed', nsplit, i_medoids, labels)
         else
             nsplit_count = particle_count_nsplit(nptcls, params%nptcls_per_subcls, params%nsubcls_min, params%nsubcls_max)
-            if( allocated(eigvals) )then
-                nsplit_spec = spectral_nsplit(eigvals, params%nsubcls_min, params%nsubcls_max)
-            else
-                nsplit_spec = params%nsubcls_max
-            endif
-            nsplit       = max(params%nsubcls_min, min(params%nsubcls_max, min(nsplit_count, nsplit_spec)))
+            !!!! THIS ALWAYS FALLS BACK ON THE LOWER BOUND
+            ! if( allocated(eigvals) )then
+            !     nsplit_spec = spectral_nsplit(eigvals, params%nsubcls_min, params%nsubcls_max)
+            ! else
+            !     nsplit_spec = params%nsubcls_max
+            ! endif
+            nsplit       = max(params%nsubcls_min, min(params%nsubcls_max, nsplit_count))
             write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto ncls: class=', cls_id, &
                 ' size=', nptcls, ' count_suggest=', nsplit_count, ' spectral_suggest=', nsplit_spec, ' selected=', nsplit
             call flush(logfhandle)

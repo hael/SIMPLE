@@ -2,6 +2,8 @@
 module simple_diffusion_maps
 use simple_core_module_api
 use simple_linalg, only: eigh
+use simple_srch_sort_loc, only: hpsort
+use simple_stat,          only: median
 implicit none
 #include "simple_local_flags.inc"
 
@@ -29,8 +31,8 @@ contains
         class(diffusion_map_embedder), intent(inout) :: self
         real,                          intent(in)    :: pcavecs(:,:)
         real, allocatable,             intent(out)   :: coords(:,:)
-        real, allocatable, optional,    intent(out)   :: eigvals(:)
-        real, allocatable :: d2(:,:), aff(:,:), evals(:), evecs(:,:), row(:), kth_d2(:), deg(:), norm_aff(:,:)
+        real, allocatable, optional,   intent(out)   :: eigvals(:)
+        real, allocatable :: d2(:,:), aff(:,:), evals(:), evecs(:,:), kth_d2(:), deg(:), norm_aff(:,:)
         real, allocatable :: diff_evals(:)
         real :: eps, scale
         integer :: nptcls, npix, i, j, k, ndiff_used, ndiff_scan, k_used, nev
@@ -53,35 +55,32 @@ contains
         call flush(logfhandle)
         allocate(d2(nptcls,nptcls), aff(nptcls,nptcls), kth_d2(nptcls), deg(nptcls), source=0.)
         call system_clock(t0)
+        !$omp parallel default(shared) private(i,j)
+        !$omp do schedule(dynamic)
         do i = 1, nptcls - 1
             do j = i + 1, nptcls
-                scale   = euclid(pcavecs(:,i), pcavecs(:,j))
-                d2(i,j) = scale * scale
+                d2(i,j) = sum(pcavecs(:,i)-pcavecs(:,j))**2
                 d2(j,i) = d2(i,j)
             end do
         end do
+        !$omp end do
+        !$omp do schedule(static)
+        do i = 1, nptcls
+            call kth_distance_for_point(d2(i,:), i, k_used, kth_d2(i))
+        end do
+        !$omp end do
+        !$omp end parallel
         call system_clock(t1)
         write(logfhandle,'(A,F8.3,A)') 'Diffusion maps pairwise distances: ', real(t1-t0)/real(trate), ' s'
         call flush(logfhandle)
         call system_clock(t0)
-        do i = 1, nptcls
-            allocate(row(nptcls-1))
-            k = 0
-            do j = 1, nptcls
-                if( j == i ) cycle
-                k = k + 1
-                row(k) = d2(i,j)
-            end do
-            call sort_reals_asc(row)
-            kth_d2(i) = row(k_used)
-            deallocate(row)
-        end do
-        eps = median_real(kth_d2)
+        eps = median(kth_d2)
         if( eps < DTINY ) eps = max(sum(kth_d2) / real(max(size(kth_d2),1)), 1.e-6)
         call system_clock(t1)
         write(logfhandle,'(A,F8.3,A,ES10.3)') 'Diffusion maps local scale selection: ', real(t1-t0)/real(trate), ' s; eps=', eps
         call flush(logfhandle)
         call system_clock(t0)
+        !$omp parallel do default(shared) private(i,j) schedule(static)
         do i = 1, nptcls
             do j = 1, nptcls
                 if( i == j ) cycle
@@ -90,6 +89,7 @@ contains
                 endif
             end do
         end do
+        !$omp end parallel do
         aff = 0.5 * (aff + transpose(aff))
         deg = sum(aff, dim=2)
         do i = 1, nptcls
@@ -100,12 +100,14 @@ contains
         end do
         deg = sum(aff, dim=2)
         allocate(norm_aff(nptcls,nptcls), source=0.)
+        !$omp parallel do default(shared) private(i,j) schedule(static)
         do i = 1, nptcls
             do j = 1, nptcls
                 if( aff(i,j) <= DTINY ) cycle
                 norm_aff(i,j) = aff(i,j) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
             end do
         end do
+        !$omp end parallel do
         call system_clock(t1)
         write(logfhandle,'(A,F8.3,A)') 'Diffusion maps graph/normalization: ', real(t1-t0)/real(trate), ' s'
         call flush(logfhandle)
@@ -124,10 +126,12 @@ contains
         if( self%ndiff <= 0 ) ndiff_used = auto_ndiff_from_eigengap(diff_evals)
         allocate(coords(ndiff_used, nptcls), source=0.)
         if( present(eigvals) ) allocate(eigvals(ndiff_scan), source=diff_evals)
+        !$omp parallel do default(shared) private(k,j) schedule(static)
         do k = 1, ndiff_used
             j = nev - k
             coords(k,:) = evals(j) * evecs(:,j)
         end do
+        !$omp end parallel do
         call normalize_coords(coords)
         call system_clock(t1)
         write(logfhandle,'(A,F8.3,A,I8)') 'Diffusion maps embedding build: ', real(t1-t0)/real(trate), ' s; dims=', ndiff_used
@@ -188,34 +192,20 @@ contains
         end do
     end function nearest_neighbor_index
 
-    real function median_real(vals) result(med)
-        real, intent(in) :: vals(:)
-        real, allocatable :: work(:)
-        integer :: n
-        n = size(vals)
-        allocate(work(n), source=vals)
-        call sort_reals_asc(work)
-        if( mod(n,2) == 0 )then
-            med = 0.5 * (work(n/2) + work(n/2 + 1))
-        else
-            med = work((n + 1) / 2)
-        endif
-        deallocate(work)
-    end function median_real
-
-    subroutine sort_reals_asc(vals)
-        real, intent(inout) :: vals(:)
-        integer :: i, j
-        real :: tmp
-        do i = 1, size(vals) - 1
-            do j = i + 1, size(vals)
-                if( vals(j) < vals(i) )then
-                    tmp = vals(i)
-                    vals(i) = vals(j)
-                    vals(j) = tmp
-                endif
-            end do
+    subroutine kth_distance_for_point(d2row, self_idx, k_used, kth)
+        real,    intent(in)  :: d2row(:)
+        integer, intent(in)  :: self_idx, k_used
+        real,    intent(out) :: kth
+        real    :: work(size(d2row)-1)
+        integer :: j, k
+        k = 0
+        do j = 1, size(d2row)
+            if( j == self_idx ) cycle
+            k = k + 1
+            work(k) = d2row(j)
         end do
-    end subroutine sort_reals_asc
+        call hpsort(work)
+        kth = work(k_used)
+    end subroutine kth_distance_for_point
 
 end module simple_diffusion_maps

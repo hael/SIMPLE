@@ -74,11 +74,11 @@ contains
         integer :: order(self%n), i, icls
         call medoid_from_dmat(self%ptr_dmat, self%i_medoid_glob)
         ! order according to similarity to medoid
-        !$omp parallel do default(shared) private(i) proc_bind(close)
+        !omp parallel do default(shared) private(i) proc_bind(close)
         do i = 1, self%n
             medoid_dists(i) = self%ptr_dmat(i,self%i_medoid_glob)
         end do
-        !$omp end parallel do
+        !omp end parallel do
         order = (/(i,i=1,self%n)/)
         call hpsort(medoid_dists, order)
         parts = split_nobjs_even(self%n, self%ncls)
