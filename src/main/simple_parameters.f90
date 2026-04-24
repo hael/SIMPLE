@@ -244,6 +244,7 @@ type :: parameters
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: polar='no'           !< To use polar FT representation(yes|no|new){no}
+    character(len=3)          :: polar_inpl='yes'    !< include in-plane particle contributions in polar=new(yes|no){yes}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
@@ -538,6 +539,7 @@ type :: parameters
     logical :: l_neigh           = .false.
     logical :: l_phaseplate      = .false.
     logical :: l_polar           = .false. 
+    logical :: l_polar_inpl      = .true.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
     logical :: l_sigma_glob      = .false.
@@ -780,6 +782,7 @@ contains
         call check_carg('platonic',       self%platonic)
         call check_carg('plot_key',       self%plot_key)
         call check_carg('polar',          self%polar)
+        call check_carg('polar_inpl',     self%polar_inpl)
         call check_carg('pre_norm',       self%pre_norm)
         call check_carg('prg',            self%prg)
         call check_carg('print_corrs',    self%print_corrs)
@@ -1823,6 +1826,7 @@ contains
             self%l_doshift = .false.
         endif
         self%l_prob_inpl = trim(self%prob_inpl).eq.'yes'
+        self%l_polar_inpl = trim(self%polar_inpl).eq.'yes'
         ! motion correction
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then

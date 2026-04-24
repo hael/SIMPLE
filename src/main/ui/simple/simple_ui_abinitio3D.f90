@@ -53,6 +53,8 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         call abinitio3D%add_input(UI_SRCH, pgrp, gui_submenu="model", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, pgrp_start, gui_submenu="model")
+        call abinitio3D%add_input(UI_SRCH, 'polar_inpl', 'binary', 'Use in-plane contributions (polar=new)', &
+        &'Include particles in the projection plane in polar=new reconstruction updates(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="model")
         call abinitio3D%add_input(UI_SRCH, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         call abinitio3D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, 'nsample_start', 'num', 'Dynamic particle sampling lower bound', 'Dynamic particle sampling lower bound', 'min # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
@@ -108,6 +110,8 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call abinitio3D_cavgs%add_input(UI_SRCH, pgrp)
         call abinitio3D_cavgs%add_input(UI_SRCH, pgrp_start)
+        call abinitio3D_cavgs%add_input(UI_SRCH, 'polar_inpl', 'binary', 'Use in-plane contributions (polar=new)', &
+        &'Include particles in the projection plane in polar=new reconstruction updates(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! filter controls
         call abinitio3D_cavgs%add_input(UI_FILT, hp, gui_submenu="filter")
         call abinitio3D_cavgs%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
