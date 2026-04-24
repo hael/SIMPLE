@@ -35,9 +35,12 @@ my @rows;
 # For wrapped "SHIFT INCR ARG" line
 my $pending_shift = 0;
 
+# Track detected states for per-state resolution columns
+my %detected_states = ();  # $state => 1 if seen
+
 sub new_record {
   my ($iter) = @_;
-  return {
+  my $r = {
     stage => defined($stage) ? $stage : 'NA',
     lp    => defined($lp)    ? $lp    : 'NA',
     iteration => $iter,
@@ -63,6 +66,12 @@ sub new_record {
     trailing_rec_update_fraction => 'NA',
     converged => 'NA',
   };
+  # Initialize per-state resolution fields for all previously detected states
+  foreach my $state (sort {$a <=> $b} keys %detected_states) {
+    my $key = 'res_state_' . sprintf('%02d', $state);
+    $r->{$key} = 'NA';
+  }
+  return $r;
 }
 
 sub finalize_record {
@@ -171,6 +180,28 @@ while (my $line = <$IN>) {
     if (@q) { @{$cur}{qw(fsc143_avg fsc143_sdev fsc143_min fsc143_max)} = @q; }
     next;
   }
+
+  # Per-state resolution: >>> RESOLUTION @ FSC=0.143 STATE 01 AVG/SDEV/MIN/MAX: ...
+  if ($line =~ /^>>>\s*RESOLUTION\s+\@\s*FSC=0\.143\s+STATE\s+(\d+)\s+AVG\/SDEV\/MIN\/MAX:/) {
+    my $state = $1;
+    my @q = parse_quad($line);
+    if (@q) {
+      # Register this state if new
+      if (!exists $detected_states{$state}) {
+        $detected_states{$state} = 1;
+        # Backfill all existing rows with this new state key
+        my $key = 'res_state_' . sprintf('%02d', $state);
+        foreach my $r (@rows) {
+          $r->{$key} = 'NA' if !exists $r->{$key};
+        }
+      }
+      # Store the resolution value
+      my $key = 'res_state_' . sprintf('%02d', $state);
+      $cur->{$key} = $q[0];  # Use AVG value
+    }
+    next;
+  }
+
   if ($line =~ /^>>>\s*SCORE\s+\[0,1\].*AVG\/SDEV\/MIN\/MAX:/) {
     my @q = parse_quad($line);
     if (@q) { @{$cur}{qw(score_avg score_sdev score_min score_max)} = @q; }
@@ -192,6 +223,9 @@ while (my $line = <$IN>) {
 finalize_record($cur);
 close $IN;
 
+# Build dynamic state-wise resolution header columns
+my @state_cols = map { 'res_state_' . sprintf('%02d', $_) } sort {$a <=> $b} keys %detected_states;
+
 my @header = qw(
   stage lp iteration
   overlap pct_sampled pct_updated pct_used_model pct_greedy
@@ -206,6 +240,9 @@ my @header = qw(
   score_avg score_sdev score_min score_max
   refinement_mode trailing_rec_update_fraction converged
 );
+
+# Append per-state resolution columns to header
+push @header, @state_cols;
 
 print {$OUT} join($sep, @header) . "\n";
 for my $r (@rows) {

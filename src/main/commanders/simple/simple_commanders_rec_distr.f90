@@ -14,7 +14,8 @@ contains
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_gridding,         only: prep3D_inv_instrfun4mul
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
-                                         &cleanup_nu_filter, print_nu_filtmap_lowpass_stats
+                                         &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, &
+                                         &analyze_filtmap_neighbor_continuity
         use simple_volume_postprocess_policy, only: volume_postprocess_plan, plan_state_postprocess
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
@@ -36,7 +37,7 @@ contains
         integer, allocatable          :: imat(:,:,:)
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
         real                          :: weight_prev, update_frac_trail_rec, mskrad_px
-        integer                       :: part, state, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part, which_iter
+        integer                       :: part, state, iptcl, istate, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part, which_iter
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_automask, t_nonuniform, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
@@ -240,6 +241,7 @@ contains
                 else
                     call print_nu_filtmap_lowpass_stats(l_mask)
                 endif
+                call analyze_filtmap_neighbor_continuity(l_mask)
                 eonames_nu(1) = add2fbody(eonames(1), params%ext, NUFILT_SUFFIX)
                 eonames_nu(2) = add2fbody(eonames(2), params%ext, NUFILT_SUFFIX)
                 volname_nu    = add2fbody(volname,    params%ext, NUFILT_SUFFIX)
@@ -269,6 +271,18 @@ contains
             call recname%kill
             call volname%kill
         end do
+        ! Update per-particle FSC(0.143) resolution using the values computed in volassemble.
+        if( params%nstates == 1 )then
+            call build%spproj_field%set_all2single('res', res0143s(1))
+        else
+            do iptcl = 1, build%spproj_field%get_noris()
+                istate = build%spproj_field%get_state(iptcl)
+                if( istate > 0 .and. istate <= params%nstates )then
+                    call build%spproj_field%set(iptcl, 'res', res0143s(istate))
+                endif
+            end do
+        endif
+        call build%spproj%write_segment_inside(params%oritype, params%projfile)
         ! destruct
         call gridcorr_img%kill
         call build%kill_general_tbox

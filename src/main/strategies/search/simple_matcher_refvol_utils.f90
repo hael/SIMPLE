@@ -8,7 +8,7 @@ use simple_image,      only: image
 implicit none
 
 public :: read_mask_filter_reproject_refvols
-public :: report_resolution, estimate_lp_from_refs
+public :: pick_lp_est_state, estimate_lp_from_refs
 private
 #include "simple_local_flags.inc"
 
@@ -160,23 +160,30 @@ contains
         endif
     end subroutine read_mask_filter_refvols
 
-    subroutine report_resolution( params, build, state )
+    subroutine pick_lp_est_state( params, build, state )
         class(parameters), intent(in)  :: params
         class(builder),    intent(in)  :: build
         integer,           intent(out) :: state
-        real :: res_fsc05, res_fsc0143
-        real, allocatable  :: res(:)
         integer :: s
-        real    :: lpest(params%nstates)
-        res = get_resarr(params%box_crop, params%smpd_crop)
+        real    :: res_avg(params%nstates), res_val
+        integer :: n_particles
+        logical, allocatable :: mask(:)
+        integer, allocatable :: states(:)
+        res_avg = huge(res_avg(1))
+        states = build%spproj_field%get_all_asint('state')
         do s = 1, params%nstates
-            call get_resolution_at_fsc(build%fsc(s,:), res, 0.5, lpest(s))
+            ! Create mask for particles in this state
+            mask = states == s
+            n_particles = count(mask)
+            if( n_particles > 0 )then
+                ! Get average res for this state
+                res_avg(s) = sum(build%spproj_field%get_all('res'), mask=mask) / real(n_particles)
+            endif
         end do
-        state = minloc(lpest,dim=1)
-        call get_resolution_at_fsc(build%fsc(state,:), res, 0.50,  res_fsc05)
-        call get_resolution_at_fsc(build%fsc(state,:), res, 0.143, res_fsc0143)
-        call build%spproj_field%set_all2single('res', res_fsc0143)
-    end subroutine report_resolution
+        deallocate(mask,states)
+        ! Select state with best (minimum) resolution
+        state = minloc(res_avg, dim=1)
+    end subroutine pick_lp_est_state
 
     subroutine estimate_lp_from_refs( params, build, cline, lpstart, lpstop, state )
         use simple_opt_filter,   only: estimate_lplim3D
@@ -223,7 +230,7 @@ contains
         real      :: xyz(3)
         integer   :: s, nrefs, state
         logical   :: do_center
-        call report_resolution(params, build, state)
+        call pick_lp_est_state(params, build, state)
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
         endif

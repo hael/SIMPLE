@@ -681,17 +681,6 @@ contains
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge alignment docs
         call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
-        ! convergence
-        converged = .false.
-        select case(trim(params%refine))
-            case('eval')
-                ! nothing
-            case DEFAULT
-                converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
-                converged = converged .and. (iter >= params%startit + 2)
-        end select
-        ! Force termination at requested number of iterations (maxits is run-length)
-        if( (iter - params%startit + 1) >= params%maxits ) converged = .true.
         ! assemble volumes, postprocess, automask
         if( L_BENCH_GLOB )then
             rt_sched   = toc(t_sched)
@@ -774,6 +763,22 @@ contains
             end select
             if( L_BENCH_GLOB ) rt_assemble = toc(t_assemble)
         endif
+        ! convergence
+        ! For strict same-iteration metrics, evaluate convergence after volassemble
+        ! and re-read the updated project segment (including res field updates).
+        converged = .false.
+        select case(trim(params%refine))
+            case('eval')
+                ! nothing
+            case DEFAULT
+                if( trim(params%volrec).eq.'yes' )then
+                    call build%spproj%read_segment(params%oritype, params%projfile)
+                endif
+                converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
+                converged = converged .and. (iter >= params%startit + 2)
+        end select
+        ! Force termination at requested number of iterations (maxits is run-length)
+        if( (iter - params%startit + 1) >= params%maxits ) converged = .true.
         ! polar references assembly
         if( params%l_polar )then
             params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()

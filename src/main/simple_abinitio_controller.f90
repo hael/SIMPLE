@@ -302,7 +302,6 @@ contains
             call cline_refine3D%set('update_frac',        update_frac)
             call cline_refine3D%delete('fillin')
         endif
-        call cline_refine3D%set('lp',                     lpinfo(istage)%lp)
         call cline_refine3D%set('smpd_crop',              lpinfo(istage)%smpd_crop)
         call cline_refine3D%set('box_crop',               lpinfo(istage)%box_crop)
         call cline_refine3D%set('startit',                cfg%iter)
@@ -320,6 +319,14 @@ contains
             call cline_refine3D%delete('lpstop')
         endif
         call cline_refine3D%set('automsk',                cfg%automsk)
+        if( cfg%automsk.eq.'no' )then
+            ! frequency-limited refinement
+            call cline_refine3D%set('lp',                 lpinfo(istage)%lp)
+        else
+            ! gold-standard refinement
+            call cline_refine3D%delete('lp')
+            write(logfhandle,'(A,I0,A)') 'emit_refine3D_stage_cfg: stage=', istage, ' automsk active, deleting lp for gold-standard refinement'
+        endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
         if( cfg%inspace_sub > 0 )then
             call cline_refine3D%set('nspace_sub',         cfg%inspace_sub)

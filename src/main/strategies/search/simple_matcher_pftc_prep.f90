@@ -4,7 +4,7 @@ use simple_pftc_srch_api
 use simple_builder,              only: builder
 use simple_classaverager,        only: cavgs_merged, cavgs_even, cavgs_odd
 use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun
-use simple_matcher_refvol_utils, only: report_resolution, estimate_lp_from_refs
+use simple_matcher_refvol_utils, only: pick_lp_est_state, estimate_lp_from_refs
 implicit none
 
 public :: prep_pftc4align3D_polar, prep_pftc4align2D
@@ -120,7 +120,7 @@ contains
         integer           :: iproj, nrefs, filtsz, state
         logical           :: l_filtrefs
         ! Resolution limit estimation
-        call report_resolution(params, build, state)
+        call pick_lp_est_state(params, build, state)
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
         endif

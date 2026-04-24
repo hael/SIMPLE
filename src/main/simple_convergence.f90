@@ -249,11 +249,14 @@ contains
         real,               intent(in)    :: msk
         type(oris)           :: ostats
         type(string) :: s_ratio
+        type(stats_struct) :: res_state
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
-        logical, allocatable :: mask(:)
+        real,    allocatable :: res_state_avg(:)
+        logical, allocatable :: mask(:), state_mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         type(string) :: numstr
+        character(len=KEYLEN) :: res_key
         logical :: converged
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         601 format(A,1X,F12.3)
@@ -287,6 +290,7 @@ contains
         call os%stats('lp',         self%lp,         mask=mask)
         call os%stats('lp_est',     self%lp_est,     mask=mask)
         call os%stats('res',        self%res,        mask=mask)
+        allocate(res_state_avg(params%nstates), source=0.)
         self%mi_proj     = os%get_avg('mi_proj',     mask=mask)
         self%mi_state    = os%get_avg('mi_state',    mask=mask)
         self%frac_greedy = os%get_avg('frac_greedy', mask=mask)
@@ -309,6 +313,19 @@ contains
         write(logfhandle,604) '>>> MATCHING  LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
+        allocate(state_mask(n), source=.false.)
+        do istate = 1, params%nstates
+            state_mask = mask .and. (nint(states) == istate)
+            if( count(state_mask) < 1 ) cycle
+            call os%stats('res', res_state, mask=state_mask)
+            res_state_avg(istate) = res_state%avg
+            if( params%nstates > 1 )then
+                write(logfhandle,'(A,1X,I3,1X,A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)') &
+                    '>>> RESOLUTION @ FSC=0.143 STATE', istate, 'AVG/SDEV/MIN/MAX:', &
+                    res_state%avg, res_state%sdev, res_state%minv, res_state%maxv
+            endif
+        end do
+        deallocate(state_mask)
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
@@ -436,6 +453,10 @@ contains
         call ostats%set(1,'LP_MATCHING',                 self%lp%avg)
         call ostats%set(1,'LP_ESTIMATED',                self%lp_est%avg)
         call ostats%set(1,'RESOLUTION',                  self%res%avg)
+        do istate = 1, params%nstates
+            write(res_key,'(A,I2.2)') 'RESOLUTION_STATE', istate
+            call ostats%set(1, trim(res_key),            res_state_avg(istate))
+        end do
         call ostats%set(1,'SCORE',                       self%score%avg)
         if( params%l_ml_reg )then
             call ostats%set(1,'ML_REGULARIZATION',                    1.0)
@@ -456,6 +477,7 @@ contains
         ! destruct
         if( allocated(state_mi_joint) ) deallocate(state_mi_joint)
         if( allocated(statepops)      ) deallocate(statepops)
+        if( allocated(res_state_avg)  ) deallocate(res_state_avg)
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
     end function check_conv3D

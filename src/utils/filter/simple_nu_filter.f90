@@ -26,12 +26,13 @@ implicit none
 
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
-          print_filtmap_lowpass_histogram, extend_nu_filter_highres, extend_nu_filter_highres_iterative
+          print_filtmap_lowpass_histogram, extend_nu_filter_highres, extend_nu_filter_highres_iterative,&
+          analyze_filtmap_neighbor_continuity
 private
 
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
 real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
-integer,          parameter   :: WINSZ_TENT = 1
+integer,          parameter   :: WINSZ_TENT = 3
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD  = 'nu_filter_cache_odd'
 real,             allocatable :: dmats(:,:,:,:)
@@ -611,7 +612,7 @@ contains
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
         write(logfhandle,'(A)') '>>> LOCAL RESOLUTION HISTOGRAM'
         do icut = 1, size(cutoff_finds)
-            write(logfhandle,'(F8.1,A,I12,A,F8.1,A)') cutoff_find_to_lowpass_limit(icut), ' A : ', counts(icut), ' voxels, ', percentages(icut), '%'
+            write(logfhandle,'(A8,1X,F8.1,A,I12,A,F8.1,A)') '', cutoff_find_to_lowpass_limit(icut), ' A : ', counts(icut), ' voxels, ', percentages(icut), '%'
         end do
         ! Print auxiliary pair assignments if present
         if( allocated(aux_even_bank) .and. present(aux_resolutions) ) then
@@ -649,5 +650,134 @@ contains
         write(logfhandle,'(A,F8.4)') 'Min    : ', statvars%minv
         call print_filtmap_lowpass_histogram(mask, aux_resolutions)
     end subroutine print_nu_filtmap_lowpass_stats
+
+    subroutine analyze_filtmap_neighbor_continuity( mask, discontinuity_threshold )
+        logical, intent(in) :: mask(:,:,:)
+        integer, optional, intent(in) :: discontinuity_threshold
+        integer :: i, j, k, di, dj, dk, ni, nj, nk
+        integer :: lp_i, lp_j, lp_diff, max_diff, n_neighbors, n_discontinuous_neighbors
+        integer :: n_total_neighbor_pairs, n_discontinuous_pairs, n_voxels_with_discontinuity, nx, ny, nz, ii, thresh
+        integer, allocatable :: discontinuity_counts(:)
+        real :: pct
+        if( .not.allocated(filtmap)            ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before analyze_filtmap_neighbor_continuity')
+        if( .not.allocated(cutoff_finds)       ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before analyze_filtmap_neighbor_continuity')
+        if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in analyze_filtmap_neighbor_continuity')
+        ! Use threshold of 1 by default (neighbors differ by more than 1 step)
+        thresh = 1
+        if( present(discontinuity_threshold) ) thresh = discontinuity_threshold
+        nx = ldim(1)
+        ny = ldim(2)
+        nz = ldim(3)
+        allocate(discontinuity_counts(8), source=0)
+        n_voxels_with_discontinuity = 0
+        n_total_neighbor_pairs      = 0
+        n_discontinuous_pairs       = 0
+        ! Iterate through all voxels
+        !$omp parallel do collapse(3) schedule(static) default(shared) &
+        !$omp private(i,j,k,di,dj,dk,ni,nj,nk,lp_i,lp_j,lp_diff,n_neighbors,n_discontinuous_neighbors,max_diff) &
+        !$omp reduction(+:n_total_neighbor_pairs, n_discontinuous_pairs, n_voxels_with_discontinuity, discontinuity_counts)
+        do k = 1, nz
+            do j = 1, ny
+                do i = 1, nx
+                    if( .not.mask(i,j,k) ) cycle
+                    if( allocated(srcmap) ) then
+                        if( srcmap(i,j,k) /= 1 ) cycle  ! only check base bank voxels
+                    end if
+                    lp_i = filtmap(i,j,k)
+                    n_neighbors = 0
+                    n_discontinuous_neighbors = 0
+                    max_diff = 0
+                    ! Check 26-connected neighborhood (3x3x3 cube centered at (i,j,k))
+                    do dk = -1, 1
+                        do dj = -1, 1
+                            do di = -1, 1
+                                if( di == 0 .and. dj == 0 .and. dk == 0 ) cycle  ! skip self
+                                ni = i + di
+                                nj = j + dj
+                                nk = k + dk
+                                ! Check bounds
+                                if( ni < 1 .or. ni > nx ) cycle
+                                if( nj < 1 .or. nj > ny ) cycle
+                                if( nk < 1 .or. nk > nz ) cycle
+                                ! Check mask
+                                if( .not.mask(ni,nj,nk) ) cycle
+                                if( allocated(srcmap) ) then
+                                    if( srcmap(ni,nj,nk) /= 1 ) cycle
+                                end if
+                                lp_j = filtmap(ni,nj,nk)
+                                lp_diff = abs(lp_i - lp_j)
+                                n_neighbors = n_neighbors + 1
+                                n_total_neighbor_pairs = n_total_neighbor_pairs + 1
+                                if( lp_diff > thresh ) then
+                                    n_discontinuous_neighbors = n_discontinuous_neighbors + 1
+                                    n_discontinuous_pairs     = n_discontinuous_pairs + 1
+                                end if
+                                max_diff = max(max_diff, lp_diff)
+                                if( lp_diff >= 1 .and. lp_diff <= 8 ) then
+                                    discontinuity_counts(lp_diff) = discontinuity_counts(lp_diff) + 1
+                                end if
+                            end do
+                        end do
+                    end do
+                    ! Check if this voxel has any discontinuous neighbors
+                    if( n_discontinuous_neighbors > 0 ) then
+                        n_voxels_with_discontinuity = n_voxels_with_discontinuity + 1
+                    end if
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! Print diagnostics
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') '>>> NONUNIFORM FILTER NEIGHBOR CONTINUITY ANALYSIS'
+        write(logfhandle,'(A,I0,A)') '>>> Threshold: neighbors differing by > ', thresh, ' step(s) in LP ordering'
+        write(logfhandle,'(A)') ''
+        ! Count total masked voxels
+        if( allocated(srcmap) ) then
+            ii = count(mask .and. srcmap == 1)
+        else
+            ii = count(mask)
+        end if
+        write(logfhandle,'(A,I12)') 'Total voxels analyzed:                   ', ii
+        write(logfhandle,'(A,I12)') 'Voxels with discontinuous neighbors:     ', n_voxels_with_discontinuity
+        if( ii > 0 ) then
+            pct = 100. * real(n_voxels_with_discontinuity) / real(ii)
+            write(logfhandle,'(A,F8.2,A)') 'Percentage of voxels with discontinuity: ', pct, '%'
+        end if
+        write(logfhandle,'(A)') ''
+        if( n_total_neighbor_pairs > 0 ) then
+            pct = 100. * real(n_discontinuous_pairs) / real(n_total_neighbor_pairs)
+            write(logfhandle,'(A,I14)') 'Total neighbor pairs examined:            ', n_total_neighbor_pairs
+            write(logfhandle,'(A,I0,A,I14)') 'Neighbor pairs with discontinuity (>', thresh, ' step): ', n_discontinuous_pairs
+            write(logfhandle,'(A,F8.2,A)') 'Percentage of discontinuous pairs:        ', pct, '%'
+        end if
+        write(logfhandle,'(A)') ''
+        ! Print distribution of all pair step-differences
+        write(logfhandle,'(A)') '>>> DISCONTINUITY MAGNITUDE DISTRIBUTION (all LP step differences)'
+        do ii = 1, 8
+            if( discontinuity_counts(ii) > 0 ) then
+                pct = 100. * real(discontinuity_counts(ii)) / real(n_total_neighbor_pairs)
+                write(logfhandle,'(A,I1,A,I14,A,F7.3,A)') &
+                    'LP step diff = ', ii, ': ', discontinuity_counts(ii), ' pairs (', pct, '%)'
+            end if
+        end do
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') '>>> INTERPRETATION'
+        if( n_voxels_with_discontinuity > 0 ) then
+            pct = 100. * real(n_voxels_with_discontinuity) / real(max(ii,1))
+            if( pct > 50. ) then
+                write(logfhandle,'(A)') '>>> Very high discontinuity rate — tent regularization kernel likely too narrow'
+                write(logfhandle,'(A,I0,A)') '    Current WINSZ_TENT = ', WINSZ_TENT, '; consider increasing to reduce spatial noise in LP map'
+            else if( pct > 20. ) then
+                write(logfhandle,'(A)') '>>> Moderate discontinuity rate — tent regularization may benefit from widening'
+            else
+                write(logfhandle,'(A)') '>>> Low discontinuity rate — local resolution map is spatially smooth'
+            end if
+        else
+            write(logfhandle,'(A)') '>>> No discontinuities found — local resolution map is perfectly smooth'
+        end if
+        write(logfhandle,'(A)') ''
+        deallocate(discontinuity_counts)
+    end subroutine analyze_filtmap_neighbor_continuity
 
 end module simple_nu_filter
