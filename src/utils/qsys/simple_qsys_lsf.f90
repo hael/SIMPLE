@@ -60,9 +60,11 @@ contains
         if( write2file )then
             write(fhandle,'(a)') '#BSUB -q cryoem'
             write(fhandle,'(a)') '#BSUB -R "span[hosts=1]"'
+            write(fhandle,'(a)') '#BSUB -rn'
         else
             write(logfhandle,'(a)') '#BSUB -q cryoem'
             write(logfhandle,'(a)') '#BSUB -R "span[hosts=1]"'
+            write(logfhandle,'(a)') '#BSUB -rn'
         endif
         do i=1,q_descr%size_of()
             key   = q_descr%get_key(i)
