@@ -978,6 +978,7 @@ contains
         n = size(order)
         if( n <= 1 ) return
         idx = order
+        perm = [(i, i=1, n)]
         do i = 1, n
             sortable(i) = weights(idx(i))
         end do
@@ -994,9 +995,10 @@ contains
         integer, intent(inout) :: parts(:), rows(:), parents(:), locals(:), pops(:)
         integer :: keys(size(parts)), perm(size(parts))
         integer :: parts_in(size(parts)), rows_in(size(parts)), parents_in(size(parts)), locals_in(size(parts)), pops_in(size(parts))
-        integer :: n, max_local, scale, max_parent
+        integer :: n, max_local, scale, max_parent, i
         n = size(parts)
         if( n <= 1 ) return
+        perm = [(i, i=1, n)]
         max_local  = maxval(locals)
         max_parent = maxval(parents)
         scale = max_local + 1
