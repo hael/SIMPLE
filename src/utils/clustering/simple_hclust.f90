@@ -194,7 +194,7 @@ contains
                 D(j,i) = D(i,j)
             end do
         end do
-        call hc%new(300, D, LINK_AVERAGE)
+        call hc%new(300, D, LINK_COMPLETE)
         call hc%cluster(merge_mat, height, labels, 3)
         nerr = 0
         do i=1,99

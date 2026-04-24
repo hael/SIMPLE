@@ -124,6 +124,7 @@ character(len=3), parameter :: NIL                           = 'nil'
 character(len=*), parameter :: STDERR2STDOUT                 = '2>&1'
 character(len=*), parameter :: CLUST_MEDIODS_FNAME           = 'clust_medoids.bin'
 character(len=*), parameter :: TMP_STK_FNAME                 = 'temp.mrc'
+character(len=*), parameter :: SRCHSPACE_MAP_FNAME           = 'srchspace_map.bin'
 ! character constants
 character(len=*), parameter :: NEWLINE                       = new_line('a')
 character(len=*), parameter :: SUPPRESS_MSG                  = '2>/dev/null'

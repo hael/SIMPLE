@@ -134,7 +134,6 @@ type(ui_param) :: sigma_est
 type(ui_param) :: smpd
 type(ui_param) :: smpd_downscale
 type(ui_param) :: smpd_target
-type(ui_param) :: srchspacemap
 type(ui_param) :: star_datadir
 type(ui_param) :: star_mic
 type(ui_param) :: star_model
@@ -198,10 +197,6 @@ subroutine set_ui_params
     call blocktree%set_param(      'blocktree',       'file',   'Block tree binary file', &
                                    'Pre-computed block tree binary file (.bin)', &
                                    'e.g. pool_block_tree.bin', .false., '')
-
-    call srchspacemap%set_param(   'srchspacemap',    'file',   'Search-space map binary file', &
-                                   'Pre-computed search-space map binary file (.bin) for reduced neighborhood search', &
-                                   'e.g. srchspace_map.bin', .false., '')
 
     call box%set_param(            'box',             'num',    'Particle box size', &
                                    'Particle box size(in pixels)', &

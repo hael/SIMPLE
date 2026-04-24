@@ -33,6 +33,7 @@ use simple_ftiter,                only: test_ftiter
 use simple_image,                 only: test_image
 use simple_online_var,            only: test_online_var
 use simple_ui,                    only: validate_ui_json
+use simple_srchspace_map2D_io,      only: test_srchspace_map2D_io
 implicit none
 #include "simple_local_flags.inc"
 character(8)          :: datestr
@@ -80,6 +81,7 @@ call test_euler_shift
 call simple_test_fit_line
 call test_aff_prop
 call test_hclust
+call test_srchspace_map2D_io
 call simple_chdir( "../" )
 call simple_end('**** SIMPLE_UNIT_TEST NORMAL STOP ****')
 

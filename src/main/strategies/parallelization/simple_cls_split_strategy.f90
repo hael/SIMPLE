@@ -1,14 +1,17 @@
 module simple_cls_split_strategy
 use simple_core_module_api
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_builder,      only: builder
-use simple_parameters,   only: parameters
-use simple_cmdline,      only: cmdline
-use simple_qsys_env,     only: qsys_env
-use simple_sp_project,   only: sp_project
-use simple_image,        only: image
-use simple_image_msk,    only: automask2D
-use simple_classaverager, only: transform_ptcls
+use simple_builder,            only: builder
+use simple_parameters,         only: parameters
+use simple_cmdline,            only: cmdline
+use simple_defs_fname,         only: SRCHSPACE_MAP_FNAME
+use simple_qsys_env,           only: qsys_env
+use simple_sp_project,         only: sp_project
+use simple_image,              only: image
+use simple_image_msk,          only: automask2D
+use simple_classaverager,      only: transform_ptcls
+use simple_srchspace_map2D_io, only: write_srchspace_map2D
+use simple_srch_sort_loc,      only: hpsort
 implicit none
 
 public :: cls_split_strategy
@@ -61,31 +64,31 @@ abstract interface
     subroutine init_interface(self, params, build, cline)
         import :: cls_split_strategy, parameters, builder, cmdline
         class(cls_split_strategy), intent(inout) :: self
-        type(parameters),                     intent(inout) :: params
-        type(builder),                        intent(inout) :: build
-        class(cmdline),                       intent(inout) :: cline
+        type(parameters),          intent(inout) :: params
+        type(builder),             intent(inout) :: build
+        class(cmdline),            intent(inout) :: cline
     end subroutine init_interface
 
     subroutine exec_interface(self, params, build, cline)
         import :: cls_split_strategy, parameters, builder, cmdline
         class(cls_split_strategy), intent(inout) :: self
-        type(parameters),                     intent(inout) :: params
-        type(builder),                        intent(inout) :: build
-        class(cmdline),                       intent(inout) :: cline
+        type(parameters),          intent(inout) :: params
+        type(builder),             intent(inout) :: build
+        class(cmdline),            intent(inout) :: cline
     end subroutine exec_interface
 
     subroutine finalize_interface(self, params, build, cline)
         import :: cls_split_strategy, parameters, builder, cmdline
         class(cls_split_strategy), intent(inout) :: self
-        type(parameters),                     intent(in)    :: params
-        type(builder),                        intent(inout) :: build
-        class(cmdline),                       intent(inout) :: cline
+        type(parameters),          intent(in)    :: params
+        type(builder),             intent(inout) :: build
+        class(cmdline),            intent(inout) :: cline
     end subroutine finalize_interface
 
     subroutine cleanup_interface(self, params)
         import :: cls_split_strategy, parameters
         class(cls_split_strategy), intent(inout) :: self
-        type(parameters),                     intent(in)    :: params
+        type(parameters),          intent(in)    :: params
     end subroutine cleanup_interface
 end interface
 
@@ -115,9 +118,9 @@ contains
     subroutine apply_defaults(cline)
         use simple_default_clines, only: set_automask2D_defaults
         class(cmdline), intent(inout) :: cline
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    0)
+        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('neigs')    ) call cline%set('neigs',    0)
         if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'diffusion_maps')
         call set_automask2D_defaults(cline)
     end subroutine apply_defaults
@@ -135,17 +138,17 @@ contains
 
     subroutine shmem_initialize(self, params, build, cline)
         class(cls_split_shmem_strategy), intent(inout) :: self
-        type(parameters),                           intent(inout) :: params
-        type(builder),                              intent(inout) :: build
-        class(cmdline),                             intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
         call init_common(params, build, cline)
     end subroutine shmem_initialize
 
     subroutine shmem_execute(self, params, build, cline)
         class(cls_split_shmem_strategy), intent(inout) :: self
-        type(parameters),                           intent(inout) :: params
-        type(builder),                              intent(inout) :: build
-        class(cmdline),                             intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
         call run_local_split(params, build, cline, spproj, part=0, l_write_project=.true.)
@@ -154,21 +157,21 @@ contains
 
     subroutine shmem_finalize_run(self, params, build, cline)
         class(cls_split_shmem_strategy), intent(inout) :: self
-        type(parameters),                           intent(in)    :: params
-        type(builder),                              intent(inout) :: build
-        class(cmdline),                             intent(inout) :: cline
+        type(parameters),                intent(in)    :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
     end subroutine shmem_finalize_run
 
     subroutine shmem_cleanup(self, params)
         class(cls_split_shmem_strategy), intent(inout) :: self
-        type(parameters),                           intent(in)    :: params
+        type(parameters),                intent(in)    :: params
     end subroutine shmem_cleanup
 
     subroutine worker_initialize(self, params, build, cline)
         class(cls_split_worker_strategy), intent(inout) :: self
-        type(parameters),                            intent(inout) :: params
-        type(builder),                               intent(inout) :: build
-        class(cmdline),                              intent(inout) :: cline
+        type(parameters),                 intent(inout) :: params
+        type(builder),                    intent(inout) :: build
+        class(cmdline),                   intent(inout) :: cline
         call init_common(params, build, cline)
         if( .not. cline%defined('part') ) THROW_HARD('PART must be defined for cls_split worker execution')
         if( .not. cline%defined('class_assignment') ) THROW_HARD('CLASS_ASSIGNMENT must be defined for cls_split worker execution')
@@ -176,9 +179,9 @@ contains
 
     subroutine worker_execute(self, params, build, cline)
         class(cls_split_worker_strategy), intent(inout) :: self
-        type(parameters),                            intent(inout) :: params
-        type(builder),                               intent(inout) :: build
-        class(cmdline),                              intent(inout) :: cline
+        type(parameters),                 intent(inout) :: params
+        type(builder),                    intent(inout) :: build
+        class(cmdline),                   intent(inout) :: cline
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
         call run_local_split(params, build, cline, spproj, part=params%part, l_write_project=.false.)
@@ -188,23 +191,23 @@ contains
     subroutine worker_finalize_run(self, params, build, cline)
         use simple_qsys_funs, only: qsys_job_finished
         class(cls_split_worker_strategy), intent(inout) :: self
-        type(parameters),                            intent(in)    :: params
-        type(builder),                               intent(inout) :: build
-        class(cmdline),                              intent(inout) :: cline
+        type(parameters),                 intent(in)    :: params
+        type(builder),                    intent(inout) :: build
+        class(cmdline),                   intent(inout) :: cline
         call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_cls_split'))
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup(self, params)
         class(cls_split_worker_strategy), intent(inout) :: self
-        type(parameters),                            intent(in)    :: params
+        type(parameters),                 intent(in)    :: params
     end subroutine worker_cleanup
 
     subroutine master_initialize(self, params, build, cline)
         use simple_exec_helpers, only: set_master_num_threads
         class(cls_split_master_strategy), intent(inout) :: self
-        type(parameters),                            intent(inout) :: params
-        type(builder),                               intent(inout) :: build
-        class(cmdline),                              intent(inout) :: cline
+        type(parameters),                 intent(inout) :: params
+        type(builder),                    intent(inout) :: build
+        class(cmdline),                   intent(inout) :: cline
         integer, allocatable :: cls_inds(:), cls_pops(:)
         call init_common(params, build, cline)
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
@@ -232,9 +235,9 @@ contains
 
     subroutine master_execute(self, params, build, cline)
         class(cls_split_master_strategy), intent(inout) :: self
-        type(parameters),                            intent(inout) :: params
-        type(builder),                               intent(inout) :: build
-        class(cmdline),                              intent(inout) :: cline
+        type(parameters),                 intent(inout) :: params
+        type(builder),                    intent(inout) :: build
+        class(cmdline),                   intent(inout) :: cline
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, part_params=self%part_params, &
                                                      array=L_USE_SLURM_ARR, extra_params=params)
         call merge_worker_outputs(params, self%nparts_run)
@@ -242,15 +245,15 @@ contains
 
     subroutine master_finalize_run(self, params, build, cline)
         class(cls_split_master_strategy), intent(inout) :: self
-        type(parameters),                            intent(in)    :: params
-        type(builder),                               intent(inout) :: build
-        class(cmdline),                              intent(inout) :: cline
+        type(parameters),                 intent(in)    :: params
+        type(builder),                    intent(inout) :: build
+        class(cmdline),                   intent(inout) :: cline
     end subroutine master_finalize_run
 
     subroutine master_cleanup(self, params)
         use simple_qsys_funs, only: qsys_cleanup
         class(cls_split_master_strategy), intent(inout) :: self
-        type(parameters),                            intent(in)    :: params
+        type(parameters),                 intent(in)    :: params
         integer :: ipart
         call self%qenv%kill
         call qsys_cleanup(params)
@@ -265,15 +268,16 @@ contains
 
     subroutine prepare_class_partitions(self, params, cline, cls_inds, cls_pops)
         class(cls_split_master_strategy), intent(inout) :: self
-        type(parameters),                            intent(in)    :: params
-        class(cmdline),                              intent(inout) :: cline
-        integer,                                     intent(in)    :: cls_inds(:), cls_pops(:)
-        integer, allocatable :: order(:), part_counts(:), part_cls(:,:)
+        type(parameters),                 intent(in)    :: params
+        class(cmdline),                   intent(inout) :: cline
+        integer,                          intent(in)    :: cls_inds(:), cls_pops(:)
+        integer :: order(size(cls_inds))
+        integer, allocatable :: part_counts(:), part_cls(:,:)
         integer(kind=8), allocatable :: part_weights(:)
         integer :: ncls, ipart, iord, icls, lightest
         type(string) :: fname
         ncls = size(cls_inds)
-        allocate(order(ncls), part_counts(self%nparts_run), part_cls(ncls, self%nparts_run), part_weights(self%nparts_run))
+        allocate(part_counts(self%nparts_run), part_cls(ncls, self%nparts_run), part_weights(self%nparts_run))
         order = [(icls, icls=1,ncls)]
         call sort_order_by_weight_desc(order, cls_pops)
         part_counts  = 0
@@ -288,21 +292,21 @@ contains
         end do
         allocate(self%part_params(self%nparts_run))
         do ipart = 1, self%nparts_run
-            if( part_counts(ipart) > 1 ) call sort_ints_asc(part_cls(1:part_counts(ipart), ipart))
-            fname = part_assignment_fname(ipart, params%numlen)
+            if( part_counts(ipart) > 1 ) call hpsort(part_cls(1:part_counts(ipart), ipart))
+            fname = string('cls_split_classes_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
             call arr2txtfile(part_cls(1:part_counts(ipart), ipart), fname)
             call self%part_params(ipart)%new(1)
             call self%part_params(ipart)%set('class_assignment', fname%to_char())
             call fname%kill
         end do
-        deallocate(order, part_counts, part_cls, part_weights)
+        deallocate(part_counts, part_cls, part_weights)
     end subroutine prepare_class_partitions
 
     subroutine collect_split_classes(cline, params, build, cls_inds, cls_pops)
-        class(cmdline),    intent(inout) :: cline
-        type(parameters),  intent(inout) :: params
-        type(builder),     intent(inout) :: build
-        integer, allocatable, intent(out) :: cls_inds(:), cls_pops(:)
+        class(cmdline),       intent(inout) :: cline
+        type(parameters),     intent(inout) :: params
+        type(builder),        intent(inout) :: build
+        integer, allocatable, intent(out)   :: cls_inds(:), cls_pops(:)
         integer, allocatable :: pinds(:), assigned_classes(:)
         logical, allocatable :: keep_mask(:)
         type(string) :: label
@@ -385,9 +389,11 @@ contains
         l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
         call determine_phase_flip(spproj, params, l_phflip)
         if( l_write_project )then
-            map_fname = final_map_fname()
-            call del_file(final_raw_stack_fname())
-            call del_file(final_den_stack_fname())
+            map_fname = string('cls_split_class_map.txt')
+            raw_fname = string('cls_split_subclass_avgs.mrcs')
+            den_fname = string('cls_split_subclass_avgs_conditioned.mrcs')
+            call del_file(raw_fname)
+            call del_file(den_fname)
             open(newunit=funit_map, file=map_fname%to_char(), status='replace', action='write')
             write(funit_map,'(A)') '# global_subclass parent_class local_subclass pop'
             select case(trim(params%oritype))
@@ -398,10 +404,10 @@ contains
             end select
             allocate(parent_of_subcls(sum(cls_pops)), pop_of_subcls(sum(cls_pops)), source=0)
         else
-            map_fname    = part_map_fname(part, params%numlen)
-            assign_fname = part_assign_fname(part, params%numlen)
-            raw_fname    = part_raw_stack_fname(part, params%numlen)
-            den_fname    = part_den_stack_fname(part, params%numlen)
+            map_fname    = string('cls_split_class_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
+            assign_fname = string('cls_split_assignments_part')//int2str_pad(part, params%numlen)//TXT_EXT
+            raw_fname    = string('cls_split_subclass_avgs_part')//int2str_pad(part, params%numlen)//'.mrcs'
+            den_fname    = string('cls_split_subclass_avgs_conditioned_part')//int2str_pad(part, params%numlen)//'.mrcs'
             call del_file(raw_fname)
             call del_file(den_fname)
             open(newunit=funit_map,    file=map_fname%to_char(),    status='replace', action='write')
@@ -424,8 +430,8 @@ contains
                     parent_of_subcls(iglob) = cls_inds(i)
                     pop_of_subcls(iglob)    = count(labels == j)
                     write(funit_map,'(I8,1X,I8,1X,I8,1X,I8)') iglob, cls_inds(i), j, count(labels == j)
-                    call raw_subavgs(j)%write(final_raw_stack_fname(), iglob)
-                    call den_subavgs(j)%write(final_den_stack_fname(), iglob)
+                    call raw_subavgs(j)%write(raw_fname, iglob)
+                    call den_subavgs(j)%write(den_fname, iglob)
                 else
                     write(funit_map,'(I8,1X,I8,1X,I8,1X,I8)') iglob, cls_inds(i), j, count(labels == j)
                     call raw_subavgs(j)%write(raw_fname, iglob)
@@ -468,14 +474,14 @@ contains
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
         use simple_imgproc,          only: make_pcavecs
         use simple_clustering_utils, only: cluster_dmat
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: cls_id
-        logical,          intent(in)    :: l_phflip, l_fixed_nsubcls
-        integer,          intent(out)   :: nsplit
-        integer, allocatable, intent(out) :: pinds(:), labels(:)
-        type(image), allocatable, intent(out) :: raw_subavgs(:), den_subavgs(:)
+        type(parameters),         intent(inout) :: params
+        type(builder),            intent(inout) :: build
+        type(sp_project),         intent(inout) :: spproj
+        integer,                  intent(in)    :: cls_id
+        logical,                  intent(in)    :: l_phflip, l_fixed_nsubcls
+        integer,                  intent(out)   :: nsplit
+        integer,     allocatable, intent(out)   :: pinds(:), labels(:)
+        type(image), allocatable, intent(out)   :: raw_subavgs(:), den_subavgs(:)
         type(parameters) :: params_mask
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:)
         type(image) :: cavg_raw, cavg_den
@@ -569,28 +575,28 @@ contains
         end do
         call cavg_raw%kill
         call cavg_den%kill
-        if( allocated(coords) ) deallocate(coords)
-        if( allocated(eigvals) ) deallocate(eigvals)
-        if( allocated(dmat) ) deallocate(dmat)
-        if( allocated(i_medoids) ) deallocate(i_medoids)
-        if( allocated(avg) ) deallocate(avg)
-        if( allocated(pcavecs) ) deallocate(pcavecs)
-        if( allocated(class_diams) ) deallocate(class_diams)
+        if( allocated(coords)       ) deallocate(coords)
+        if( allocated(eigvals)      ) deallocate(eigvals)
+        if( allocated(dmat)         ) deallocate(dmat)
+        if( allocated(i_medoids)    ) deallocate(i_medoids)
+        if( allocated(avg)          ) deallocate(avg)
+        if( allocated(pcavecs)      ) deallocate(pcavecs)
+        if( allocated(class_diams)  ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
-        if( allocated(class_mask) ) call dealloc_imgarr(class_mask)
-        if( allocated(imgs_ppca) ) call dealloc_imgarr(imgs_ppca)
-        if( allocated(imgs) ) call dealloc_imgarr(imgs)
+        if( allocated(class_mask)   ) call dealloc_imgarr(class_mask)
+        if( allocated(imgs_ppca)    ) call dealloc_imgarr(imgs_ppca)
+        if( allocated(imgs)         ) call dealloc_imgarr(imgs)
     end subroutine split_one_parent_class
 
     subroutine make_split_embedding(params, cls_id, nptcls, npix, pcavecs, coords, eigvals)
         use simple_diffusion_maps, only: diffusion_map_embedder
         use simple_kpca_svd,       only: kpca_svd
         use simple_ppca,           only: ppca
-        type(parameters), intent(inout) :: params
-        integer,          intent(in)    :: cls_id, nptcls, npix
-        real,             intent(in)    :: pcavecs(npix,nptcls)
-        real, allocatable, intent(out)  :: coords(:,:)
-        real, allocatable, intent(out)  :: eigvals(:)
+        type(parameters),  intent(inout) :: params
+        integer,           intent(in)    :: cls_id, nptcls, npix
+        real,              intent(in)    :: pcavecs(npix,nptcls)
+        real, allocatable, intent(out)   :: coords(:,:)
+        real, allocatable, intent(out)   :: eigvals(:)
         type(diffusion_map_embedder) :: diffmap
         type(kpca_svd) :: kpca_model
         type(ppca)     :: ppca_model
@@ -784,6 +790,9 @@ contains
             call spproj%os_cls3D%set(i, 'accept',  1)
             call spproj%os_cls3D%set(i, 'state',   1)
         end do
+        if( nsplit > 0 )then
+            call write_srchspace_map2D(parent_of_subcls(1:nsplit), string(SRCHSPACE_MAP_FNAME))
+        endif
         call spproj%write(params%projfile)
     end subroutine apply_split_project_updates
 
@@ -803,7 +812,7 @@ contains
         allocate(part_counts(nparts_run), source=0)
         total = 0
         do ipart = 1, nparts_run
-            map_fname = part_map_fname(ipart, params%numlen)
+            map_fname = string('cls_split_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
             call count_data_lines(map_fname, nlocal)
             part_counts(ipart) = nlocal
             total = total + nlocal
@@ -816,7 +825,7 @@ contains
         allocate(comb_part(total), comb_row(total), comb_parent(total), comb_local(total), comb_pop(total), source=0)
         idx = 0
         do ipart = 1, nparts_run
-            map_fname = part_map_fname(ipart, params%numlen)
+            map_fname = string('cls_split_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
             call read_part_map(map_fname, part_counts(ipart), part_localstack(1:part_counts(ipart), ipart), &
                                part_parent(1:part_counts(ipart), ipart), part_local(1:part_counts(ipart), ipart), &
                                part_pop(1:part_counts(ipart), ipart))
@@ -831,13 +840,13 @@ contains
             call map_fname%kill
         end do
         call sort_combined_maps(comb_part, comb_row, comb_parent, comb_local, comb_pop)
-        call del_file(final_raw_stack_fname())
-        call del_file(final_den_stack_fname())
-        raw_fname = part_raw_stack_fname(comb_part(1), params%numlen)
+        call del_file(string('cls_split_subclass_avgs.mrcs'))
+        call del_file(string('cls_split_subclass_avgs_conditioned.mrcs'))
+        raw_fname = string('cls_split_subclass_avgs_part')//int2str_pad(comb_part(1), params%numlen)//'.mrcs'
         call find_ldim_nptcls(raw_fname, ldim, nstk, smpd=smpd)
         ldim(3) = 1
         call img%new(ldim, smpd)
-        map_fname = final_map_fname()
+        map_fname = string('cls_split_class_map.txt')
         open(newunit=funit, file=map_fname%to_char(), status='replace', action='write')
         write(funit,'(A)') '# global_subclass parent_class local_subclass pop'
         do idx = 1, total
@@ -848,12 +857,12 @@ contains
             endif
             part_global(comb_row(idx), comb_part(idx)) = idx
             write(funit,'(I8,1X,I8,1X,I8,1X,I8)') idx, comb_parent(idx), comb_local(idx), comb_pop(idx)
-            raw_fname = part_raw_stack_fname(comb_part(idx), params%numlen)
-            den_fname = part_den_stack_fname(comb_part(idx), params%numlen)
+            raw_fname = string('cls_split_subclass_avgs_part')//int2str_pad(comb_part(idx), params%numlen)//'.mrcs'
+            den_fname = string('cls_split_subclass_avgs_conditioned_part')//int2str_pad(comb_part(idx), params%numlen)//'.mrcs'
             call img%read(raw_fname, part_localstack(comb_row(idx), comb_part(idx)))
-            call img%write(final_raw_stack_fname(), idx)
+            call img%write(string('cls_split_subclass_avgs.mrcs'), idx)
             call img%read(den_fname, part_localstack(comb_row(idx), comb_part(idx)))
-            call img%write(final_den_stack_fname(), idx)
+            call img%write(string('cls_split_subclass_avgs_conditioned.mrcs'), idx)
         end do
         close(funit)
         if( trim(params%oritype) .eq. 'ptcl2D' )then
@@ -862,7 +871,7 @@ contains
             allocate(new_class(spproj%os_ptcl3D%get_noris()), new_parent(spproj%os_ptcl3D%get_noris()), source=0)
         endif
         do ipart = 1, nparts_run
-            assign_fname = part_assign_fname(ipart, params%numlen)
+            assign_fname = string('cls_split_assignments_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
             open(newunit=funit, file=assign_fname%to_char(), status='old', action='read', iostat=ios)
             call fileiochk('merge_worker_outputs opening '//assign_fname%to_char(), ios)
             do
@@ -941,7 +950,7 @@ contains
     end subroutine read_part_map
 
     subroutine read_int_file(fname, vals)
-        type(string), intent(in) :: fname
+        type(string),         intent(in)  :: fname
         integer, allocatable, intent(out) :: vals(:)
         integer :: nvals, funit, ios, i
         character(len=XLONGSTRLEN) :: line
@@ -964,91 +973,51 @@ contains
     subroutine sort_order_by_weight_desc(order, weights)
         integer, intent(inout) :: order(:)
         integer, intent(in)    :: weights(:)
-        integer :: i, j, tmp
-        do i = 1, size(order) - 1
-            do j = i + 1, size(order)
-                if( weights(order(j)) > weights(order(i)) )then
-                    tmp = order(i)
-                    order(i) = order(j)
-                    order(j) = tmp
-                endif
-            end do
+        integer :: idx(size(order)), perm(size(order)), sortable(size(order))
+        integer :: i, n, tmp
+        n = size(order)
+        if( n <= 1 ) return
+        idx = order
+        do i = 1, n
+            sortable(i) = weights(idx(i))
+        end do
+        call hpsort(sortable, perm)
+        order = idx(perm)
+        do i = 1, n / 2
+            tmp = order(i)
+            order(i) = order(n - i + 1)
+            order(n - i + 1) = tmp
         end do
     end subroutine sort_order_by_weight_desc
 
-    subroutine sort_ints_asc(vals)
-        integer, intent(inout) :: vals(:)
-        integer :: i, j, tmp
-        do i = 1, size(vals) - 1
-            do j = i + 1, size(vals)
-                if( vals(j) < vals(i) )then
-                    tmp = vals(i)
-                    vals(i) = vals(j)
-                    vals(j) = tmp
-                endif
-            end do
-        end do
-    end subroutine sort_ints_asc
-
     subroutine sort_combined_maps(parts, rows, parents, locals, pops)
         integer, intent(inout) :: parts(:), rows(:), parents(:), locals(:), pops(:)
-        integer :: i, j, tmp
-        do i = 1, size(parts) - 1
-            do j = i + 1, size(parts)
-                if( parents(j) < parents(i) .or. (parents(j) == parents(i) .and. locals(j) < locals(i)) )then
-                    tmp = parts(i);   parts(i)   = parts(j);   parts(j)   = tmp
-                    tmp = rows(i);    rows(i)    = rows(j);    rows(j)    = tmp
-                    tmp = parents(i); parents(i) = parents(j); parents(j) = tmp
-                    tmp = locals(i);  locals(i)  = locals(j);  locals(j)  = tmp
-                    tmp = pops(i);    pops(i)    = pops(j);    pops(j)    = tmp
-                endif
-            end do
-        end do
+        integer :: keys(size(parts)), perm(size(parts))
+        integer :: parts_in(size(parts)), rows_in(size(parts)), parents_in(size(parts)), locals_in(size(parts)), pops_in(size(parts))
+        integer :: n, max_local, scale, max_parent
+        n = size(parts)
+        if( n <= 1 ) return
+        max_local  = maxval(locals)
+        max_parent = maxval(parents)
+        scale = max_local + 1
+        if( scale <= 0 ) THROW_HARD('sort_combined_maps: invalid local subclass labels')
+        if( max_parent > 0 )then
+            if( max_parent > huge(scale) / scale )then
+                THROW_HARD('sort_combined_maps: key overflow risk for parent/local lexicographic sort')
+            endif
+        endif
+        parts_in   = parts
+        rows_in    = rows
+        parents_in = parents
+        locals_in  = locals
+        pops_in    = pops
+        keys = (parents_in - 1) * scale + locals_in
+        call hpsort(keys, perm)
+        parts   = parts_in(perm)
+        rows    = rows_in(perm)
+        parents = parents_in(perm)
+        locals  = locals_in(perm)
+        pops    = pops_in(perm)
     end subroutine sort_combined_maps
-
-    function final_map_fname() result(fname)
-        type(string) :: fname
-        fname = string('cls_split_class_map.txt')
-    end function final_map_fname
-
-    function final_raw_stack_fname() result(fname)
-        type(string) :: fname
-        fname = string('cls_split_subclass_avgs.mrcs')
-    end function final_raw_stack_fname
-
-    function final_den_stack_fname() result(fname)
-        type(string) :: fname
-        fname = string('cls_split_subclass_avgs_conditioned.mrcs')
-    end function final_den_stack_fname
-
-    function part_assignment_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('cls_split_classes_part')//int2str_pad(part, numlen)//TXT_EXT
-    end function part_assignment_fname
-
-    function part_map_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('cls_split_class_map_part')//int2str_pad(part, numlen)//TXT_EXT
-    end function part_map_fname
-
-    function part_assign_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('cls_split_assignments_part')//int2str_pad(part, numlen)//TXT_EXT
-    end function part_assign_fname
-
-    function part_raw_stack_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('cls_split_subclass_avgs_part')//int2str_pad(part, numlen)//'.mrcs'
-    end function part_raw_stack_fname
-
-    function part_den_stack_fname(part, numlen) result(fname)
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('cls_split_subclass_avgs_conditioned_part')//int2str_pad(part, numlen)//'.mrcs'
-    end function part_den_stack_fname
 
 end module simple_cls_split_strategy
