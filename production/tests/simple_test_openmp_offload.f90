@@ -33,9 +33,10 @@ if( (p%device > ndevices) .or. (p%device < 0) ) then
 endif
 
 ! Host device sanity checks
-host_device    = omp_get_device_num()
+! omp_get_device_num() on the host equals omp_get_initial_device();
+! use omp_get_initial_device() to avoid missing Fortran binding in libgomp.so
 initial_device = omp_get_initial_device()
-print *, 'Host device ID from omp_get_device_num:       ', host_device
+host_device    = initial_device
 print *, 'Host device ID from omp_get_initial_device:   ', initial_device
 if( initial_device /= host_device ) then
     stop 'Fatal error: incompatible device IDs'
