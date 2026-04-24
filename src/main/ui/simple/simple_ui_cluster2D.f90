@@ -4,7 +4,6 @@ use simple_ui_modules
 implicit none
 
 type(ui_program), target :: abinitio2D
-type(ui_program), target :: cleanup2D
 type(ui_program), target :: pool2D_tree
 type(ui_program), target :: cluster2D
 type(ui_program), target :: cluster2D_subsets
@@ -20,7 +19,6 @@ contains
     subroutine construct_cluster2D_programs( prgtab ) 
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D(prgtab)
-        call new_cleanup2D(prgtab)
         call new_pool2D_tree(prgtab)
         call new_cluster2D_subsets(prgtab)
         call new_cluster2D_subsets_refine(prgtab)
@@ -35,7 +33,6 @@ contains
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)
         write(logfhandle,'(A)') abinitio2D%name%to_char()
-        write(logfhandle,'(A)') cleanup2D%name%to_char()
         write(logfhandle,'(A)') pool2D_tree%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets_refine%name%to_char()
@@ -95,33 +92,6 @@ contains
         ! add to ui_hash
         call add_ui_program('abinitio2D', abinitio2D, prgtab)
     end subroutine new_abinitio2D
-
-    subroutine new_cleanup2D( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call cleanup2D%new(&
-        &'cleanup2D',&                                                           ! name
-        &'Analysis of class averages with affinity propagation',&                ! descr_short
-        &'is a program for analyzing class averages with affinity propagation',& ! descr_long
-        &'simple_exec',&                                                         ! executable
-        &.true.)                                                                 ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call cleanup2D%add_input(UI_SRCH, nptcls_per_cls_cleanup2D)
-        ! filter controls
-        ! mask controls
-        ! computer controls
-         ! computer controls
-        call cleanup2D%add_input(UI_COMP, nparts)
-        call cleanup2D%add_input(UI_COMP, nthr)
-        ! add 2 ui_hash
-        call add_ui_program('cleanup2D', cleanup2D, prgtab)
-    end subroutine new_cleanup2D
 
     subroutine new_pool2D_tree( prgtab )
         class(ui_hash), intent(inout) :: prgtab
