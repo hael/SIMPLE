@@ -36,7 +36,8 @@ module simple_http_post
                   CURLOPT_NOSIGNAL, CURLOPT_COPYPOSTFIELDS,                   &
                   CURLOPT_POSTFIELDSIZE,                                      &
                   CURLOPT_WRITEFUNCTION, CURLOPT_WRITEDATA,                   &
-                  CURLINFO_RESPONSE_CODE, CURLINFO_CONTENT_TYPE
+                  CURLINFO_RESPONSE_CODE, CURLINFO_CONTENT_TYPE,              &
+                  CURLOPT_SSL_VERIFYPEER
   use simple_string, only: string
   use simple_error,  only: simple_exception
 
@@ -46,6 +47,8 @@ module simple_http_post
   public  :: http_response
   private
 #include "simple_local_flags.inc"
+
+  logical, parameter :: VERIFY_PEER = .false.  ! set to .false. to disable SSL peer verification (not recommended)
 
   ! Holds the server's reply after a successful request.
   type :: http_response
@@ -126,6 +129,11 @@ contains
     if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_TIMEOUT')
     rc = curl_easy_setopt(self%curl_ptr, CURLOPT_NOSIGNAL,      1)
     if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_NOSIGNAL')
+    if( .not. VERIFY_PEER ) then
+      THROW_WARN('Warning: SSL peer verification is disabled')
+      rc = curl_easy_setopt(self%curl_ptr, CURLOPT_SSL_VERIFYPEER, 0)
+      if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_SSL_VERIFYPEER')
+    endif
     ! Attach POST body if provided
     if( present(request_str) ) then
       request_body = request_str%to_char()
