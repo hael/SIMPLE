@@ -669,7 +669,7 @@ contains
         use simple_complex_ppca,               only: complex_ppca
         use simple_matcher_pftc_prep,          only: prep_pftc4align2D
         use simple_matcher_ptcl_batch,         only: prep_batch_particles2D, clean_batch_particles2D
-        use simple_polarft_lines_ppca_stream,  only: stream_pft_lines_ppca, denoise_write_pft_lines_ppca
+        ! use simple_polarft_lines_ppca_stream,  only: stream_pft_lines_ppca, denoise_write_pft_lines_ppca
         class(commander_ppca_denoise_polarft_lines), intent(inout) :: self
         class(cmdline),                              intent(inout) :: cline
         type(parameters)               :: params
@@ -691,13 +691,13 @@ contains
         call prep_batch_particles2D(params, build, batchsz_max, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, .false.)
         call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
-        call stream_pft_lines_ppca(params, build, qfit, model, nlines_fit)
+        ! call stream_pft_lines_ppca(params, build, qfit, model, nlines_fit)
         eigvals = model%get_eigvals()
         write(logfhandle,'(A,I12)')      'PPCA polarft line fit count: ', nlines_fit
         write(logfhandle,'(A,F12.5)')    'PPCA polarft sigma2: ', model%get_sigma2()
         write(logfhandle,'(A,10(1X,ES12.5))') 'PPCA polarft leading eigvals:', eigvals(1:min(10,size(eigvals)))
         deallocate(eigvals)
-        call denoise_write_pft_lines_ppca(params, build, model, params%outfile, nlines_den)
+        ! call denoise_write_pft_lines_ppca(params, build, model, params%outfile, nlines_den)
         write(logfhandle,'(A,I12)')   'PPCA polarft denoised line count: ', nlines_den
         write(logfhandle,'(A,A)')     'PPCA polarft output: ', params%outfile%to_char()
         call model%kill()
