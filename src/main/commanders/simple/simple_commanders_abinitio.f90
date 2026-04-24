@@ -87,8 +87,6 @@ contains
             ! end comment to activate lpauto
             l_polar = .true. ! global parameter
         endif
-        ! Test tree-based search
-        l_tree = trim(params%test_tree).eq.'yes'
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES_INI3D_MAX
         if( cline%defined('nstages') )then
@@ -465,8 +463,6 @@ contains
             endif
             l_polar = .true. ! global parameter
         endif
-        ! Test tree-based search
-        l_tree = trim(params%test_tree).eq.'yes'
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)
         call nice_comm%cycle()

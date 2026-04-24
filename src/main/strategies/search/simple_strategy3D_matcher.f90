@@ -19,10 +19,6 @@ use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_prob,         only: strategy3D_prob
-use simple_strategy3D_ptree_neigh_states, only: strategy3D_ptree_neigh_states
-use simple_strategy3D_ptree_neigh,  only: strategy3D_ptree_neigh
-use simple_strategy3D_ptree,        only: strategy3D_ptree
-use simple_strategy3D_shc_ptree,    only: strategy3D_shc_ptree
 use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
 use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_snhc_smpl,    only: strategy3D_snhc_smpl
@@ -414,14 +410,6 @@ contains
                     allocate(strategy3D_greedy             :: strategy3Dsrch(iptcl_batch)%ptr)
                 case('prob','prob_state','prob_neigh')
                     allocate(strategy3D_prob               :: strategy3Dsrch(iptcl_batch)%ptr)
-                case('ptree')
-                    allocate(strategy3D_ptree              :: strategy3Dsrch(iptcl_batch)%ptr)
-                case('ptree_neigh')
-                    allocate(strategy3D_ptree_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
-                case('ptree_neigh_states')
-                    allocate(strategy3D_ptree_neigh_states :: strategy3Dsrch(iptcl_batch)%ptr)
-                case('shc_ptree')
-                    allocate(strategy3D_shc_ptree          :: strategy3Dsrch(iptcl_batch)%ptr)
                 case('sigma')
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call b_ptr%spproj_field%set(iptcl, 'proj', b_ptr%eulspace%find_closest_proj(orientation))

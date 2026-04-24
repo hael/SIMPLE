@@ -364,8 +364,7 @@ contains
             type(commander_make_cavgs_distr) :: xmake_cavgs_distr
             type(commander_make_cavgs)       :: xmake_cavgs
             type(commander_rank_cavgs)       :: xrank_cavgs
-            type(commander_tree_rank_cavgs)  :: xtree_rank_cavgs
-            type(cmdline)                    :: cline_make_cavgs, cline_rank_cavgs, cline_tree_ranked
+            type(cmdline)                    :: cline_make_cavgs, cline_rank_cavgs
             type(string)                     :: finalcavgs, finalcavgs_ranked
             integer :: iter
             finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
@@ -398,13 +397,6 @@ contains
             call cline_rank_cavgs%set('stk',      finalcavgs)
             call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
             call xrank_cavgs%execute( cline_rank_cavgs )
-            ! write tree-based sets for tree-based refinements
-            if( trim(params%refine) .eq. 'snhc_ptree' .or. trim(params%refine) .eq. 'greedy_tree' )then
-                cline_tree_ranked = cline_rank_cavgs
-                call cline_tree_ranked%set('oritype', 'cls2D')
-                call cline_tree_ranked%set('refine',  trim(params%refine))
-                call xtree_rank_cavgs%execute( cline_tree_ranked )
-            endif
         end subroutine gen_final_cavgs
 
     end subroutine exec_abinitio2D

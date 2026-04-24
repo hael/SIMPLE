@@ -115,7 +115,6 @@ type :: parameters
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
     character(len=3)          :: tester='no'          !< write periodic tester-mode tracking outputs(yes|no){no}
-    character(len=3)          :: test_tree='no'       !< test tree-based search(yes|no){no}
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)          :: trail_rec='no'       !< trailing (weighted average) reconstruction when update_frac=yes 
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
@@ -129,7 +128,6 @@ type :: parameters
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     ! default initialization is done in the init_strings method below
-    type(string)              :: blocktree            !< block tree file for pool 2D(.bin)
     type(string)              :: boxfile              !< file with EMAN particle coordinates(.txt)
     type(string)              :: boxtab               !< table (text file) of files with EMAN particle coordinates(.txt)
     type(string)              :: ciffile              !< xPDB/mmCIF file          
@@ -254,7 +252,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs|lsf)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|ptree|tree_neigh_states|shc_ptree){shc}
+    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
@@ -543,7 +541,6 @@ type :: parameters
     logical :: l_polar           = .false. 
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
-    logical :: l_tree_refine     = .false.
     logical :: l_sigma_glob      = .false.
     logical :: l_trail_rec       = .false.
     logical :: l_remap_cls       = .false.
@@ -558,7 +555,6 @@ contains
 
     subroutine init_strings( self )
         class(parameters), intent(inout) :: self
-        self%blocktree=''         !< block tree file for pool 2D(.bin)
         self%boxfile=''           !< file with EMAN particle coordinates(.txt)
         self%boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
         self%ciffile=''           !< PDBx/mmCIF file
@@ -657,7 +653,7 @@ contains
         real             :: smpd, mskdiam_default, msk_default
         integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer          :: idir, nsp_files, box, nptcls, nthr
-        logical          :: nparts_set, ssilent, def_vol1, def_even, def_odd, is_2D, l_tree
+        logical          :: nparts_set, ssilent, def_vol1, def_even, def_odd, is_2D
         ! initialize dynamically allocated strings
         call self%init_strings
         ! set silent flag
@@ -832,7 +828,6 @@ contains
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
         call check_carg('tester',         self%tester)
-        call check_carg('test_tree',      self%test_tree)
         call check_carg('tophat',         self%tophat)
         call check_carg('trail_rec',      self%trail_rec)
         call check_carg('transp_pca',     self%transp_pca)
@@ -848,7 +843,6 @@ contains
         call check_carg('write_imgarr',   self%write_imgarr)
         call check_carg('zero',           self%zero)
         ! File args
-        call check_file('blocktree',      self%blocktree,      'B')
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
         call check_carg('ciffile',        self%ciffile)
@@ -1806,36 +1800,10 @@ contains
         end select
         ! -- neigh defaults
         self%l_neigh = .false.
-        select case(trim(self%refine))
-            case('ptree', 'tree_neigh', 'tree_neigh_states',  'greedy_tree', 'shc_ptree', 'snhc_ptree', 'single_ptree')
-                self%l_tree_refine = .true.
-            case DEFAULT
-                self%l_tree_refine = .false.
-        end select
-        l_tree = self%l_tree_refine
-        if( str_has_substr(self%refine, 'neigh') .or. l_tree )then
-            ! we always do probabilistic in-plane sampling for tree-based approaches
-            if( l_tree )then
-                self%prob_inpl = 'yes'
-                self%l_prob_inpl = .true.
-            endif
-            select case(trim(self%refine))
-                case('greedy_tree','snhc_ptree')
-                    if( .not. cline%defined('ncls_sub') )then
-                        self%ncls_sub = min(round2even(0.025* real(self%ncls)), 10) ! capped at 10
-                        self%ncls_sub = max(self%ncls_sub, 10)                      ! floored at 10
-                    endif
-                case('shc_ptree')
-                    if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 50
-                    if( .not. cline%defined('nspace')     ) self%nspace     = 2000
-                case('ptree','tree_neigh','tree_neigh_states')
-                    if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 126 ! no odd numbers (previously 125)
-                    if( .not. cline%defined('nspace')     ) self%nspace     = 5000
-                case DEFAULT
-                    if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500
-                    if( .not. cline%defined('nspace')     ) self%nspace     = 20000
-                    if( .not. cline%defined('athres')     ) self%athres     = 10.
-            end select
+        if( str_has_substr(self%refine, 'neigh') )then
+            if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500
+            if( .not. cline%defined('nspace')     ) self%nspace     = 20000
+            if( .not. cline%defined('athres')     ) self%athres     = 10.
             ! round nspaces to nearest even number to prevent refspiral bugs
             self%nspace_sub = round2even(real(self%nspace_sub))
             self%nspace     = round2even(real(self%nspace    ))
@@ -1845,7 +1813,7 @@ contains
         ! -- shift defaults
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('snhc','snhc_smpl','greedy_tree','snhc_ptree','single_ptree')
+                case('snhc','snhc_smpl')
                     self%trs = 0.
                 case DEFAULT
                     self%trs = MINSHIFT

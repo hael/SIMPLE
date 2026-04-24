@@ -12,9 +12,6 @@ use simple_parameters,       only: parameters
 use simple_euclid_sigma2,    only: euclid_sigma2
 use simple_polarft_calc,     only: polarft_calc
 use simple_srchspace_map,    only: srchspace_map
-use simple_multi_dendro,     only: multi_dendro
-use simple_block_tree,       only: gen_eulspace_block_tree_map, gen_single_block_index_tree, gen_multi_block_index_tree
-use simple_block_tree_io,    only: read_block_tree
 implicit none
 
 public :: builder
@@ -41,7 +38,6 @@ type :: builder
     ! neighborhood structures
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
     integer,                allocatable :: subspace_full2sub_map(:)!< labels of eulspace in eulspace_sub
-    type(multi_dendro)                  :: block_tree
 
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
@@ -263,31 +259,8 @@ contains
             endif
         endif
         ! generate discrete projection direction spaces
-        if( ddo3d .or. params%l_tree_refine )then
+        if( ddo3d )then
             select case(trim(params%refine))
-                case('single_ptree')
-                    if( cline%defined('blocktree') )then
-                        call read_block_tree(self%block_tree, params%blocktree)
-                    else
-                        self%block_tree = gen_single_block_index_tree(params%ncls)
-                    endif
-                    self%subspace_full2sub_map = self%block_tree%get_full2sub_map()
-                    self%subspace_inds         = self%block_tree%get_sub2full_map()
-                    if( size(self%subspace_full2sub_map) /= params%ncls )then
-                        THROW_HARD('Loaded block tree incompatible with NCLS; build_general_tbox')
-                    endif
-                case('greedy_tree','snhc_ptree')
-                    if( cline%defined('blocktree') )then
-                        call read_block_tree(self%block_tree, params%blocktree)
-                    else
-                        self%block_tree = gen_multi_block_index_tree(params%ncls, params%ncls_sub)
-                    endif
-                    self%subspace_full2sub_map = self%block_tree%get_full2sub_map()
-                    self%subspace_inds         = self%block_tree%get_sub2full_map()
-                    if( size(self%subspace_full2sub_map) /= params%ncls )then
-                        THROW_HARD('Loaded block tree incompatible with NCLS; build_general_tbox')
-                    endif
-                    params%ncls_sub = self%block_tree%get_n_trees()
                 case DEFAULT
                     call self%eulspace%new(params%nspace, is_ptcl=.false.)
                     call self%pgrpsyms%build_refspiral(self%eulspace)
@@ -314,11 +287,6 @@ contains
                         call o%kill
                         call o_sub%kill
                         call osym%kill
-                        if( params%l_tree_refine )then
-                            self%block_tree = &
-                            &gen_eulspace_block_tree_map(self%eulspace%get_noris(), self%eulspace,&
-                            &self%subspace_full2sub_map, self%pgrpsyms)
-                        endif
                     endif
             end select
         endif

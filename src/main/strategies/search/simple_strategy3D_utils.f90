@@ -84,7 +84,7 @@ contains
                     ! already set by the probabilistic strategy in full-space terms.
                     nrefs_tot  = s%nprojs * neff_states
                     nrefs_eval = s%nrefs_eval
-                case('shc_ptree', 'shc_neigh')
+                case('shc_neigh')
                     nrefs_tot  = s%nprojs_sub * neff_states
                     nrefs_eval = s%nrefs_eval
                 case DEFAULT

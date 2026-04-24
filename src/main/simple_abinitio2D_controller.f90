@@ -40,9 +40,7 @@ contains
         class(parameters), intent(in)  :: params
         integer,           intent(out) :: nstages
         select case(trim(params%refine))
-            case('prob')
-                nstages = NSTAGES_CLS
-            case('snhc','snhc_smpl','snhc_ptree','single_ptree', 'greedy_tree')
+            case('snhc','snhc_smpl','prob')
                 nstages = NSTAGES_CLS
             case DEFAULT
                 THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))

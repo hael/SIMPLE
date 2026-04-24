@@ -253,7 +253,7 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        ! refine=prob* pre-step (except ptree, which runs direct tree-guided search)
+        ! refine=prob* pre-step
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then

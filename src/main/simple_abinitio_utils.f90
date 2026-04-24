@@ -35,7 +35,7 @@ integer,          parameter :: MAXITS_BETWEEN        = 10                   ! De
 
 ! singleton variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis    = .false., l_symran        = .false., l_tree               = .false.
+logical          :: l_srch4symaxis    = .false., l_symran        = .false.
 logical          :: l_update_frac_dyn = .false., l_polar         = .false., l_ini3D              = .false.
 logical          :: l_lpauto          = .false., l_nsample_given = .false., l_nsample_stop_given = .false.
 logical          :: l_automsk         = .false.

@@ -4,7 +4,6 @@ use simple_ui_modules
 implicit none
 
 type(ui_program), target :: abinitio2D
-type(ui_program), target :: pool2D_tree
 type(ui_program), target :: cluster2D
 type(ui_program), target :: cluster2D_subsets
 type(ui_program), target :: cluster2D_subsets_refine
@@ -19,7 +18,6 @@ contains
     subroutine construct_cluster2D_programs( prgtab ) 
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D(prgtab)
-        call new_pool2D_tree(prgtab)
         call new_cluster2D_subsets(prgtab)
         call new_cluster2D_subsets_refine(prgtab)
         call new_cluster2D_microchunked(prgtab)
@@ -33,7 +31,6 @@ contains
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)
         write(logfhandle,'(A)') abinitio2D%name%to_char()
-        write(logfhandle,'(A)') pool2D_tree%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets_refine%name%to_char()
         write(logfhandle,'(A)') cluster2D_microchunked%name%to_char()
@@ -67,8 +64,8 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         call abinitio2D%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="model")
-        call abinitio2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|greedy_tree|snhc_ptree|single_ptree|prob){snhc_smpl}',&
-        &'(snhc_smpl|greedy_tree|snhc_ptree|single_ptree|prob){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
+        call abinitio2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|prob){snhc_smpl}',&
+        &'(snhc_smpl|prob){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
         &'Starting # of particles per class to sample', 'min # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
@@ -92,27 +89,6 @@ contains
         ! add to ui_hash
         call add_ui_program('abinitio2D', abinitio2D, prgtab)
     end subroutine new_abinitio2D
-
-    subroutine new_pool2D_tree( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        call pool2D_tree%new(&
-        &'pool2D_tree',&                                                                                      ! name
-        &'Subset-to-full 2D workflow with reusable HAC tree',&                                                ! descr_short
-        &'runs a random subset ab initio-2D pass, builds and stores a HAC block tree, then runs full-data '&
-        &'ab initio-2D with refine=snhc_ptree reusing the stored tree',&                                      ! descr_long
-        &'simple_exec',&                                                                                       ! executable
-        &.true.,&                                                                                              ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "search,compute")
-        call pool2D_tree%add_input(UI_PARM, projfile, gui_submenu="search", gui_advanced=.false.)
-        call pool2D_tree%add_input(UI_SRCH, ncls, gui_submenu="search", gui_advanced=.false.)
-        call pool2D_tree%add_input(UI_SRCH, 'ncls_sub', 'num', 'Number of ptree subtrees', &
-        &'Target number of HAC subtrees used for snhc_ptree', '# trees{10}', .false., 10., gui_submenu="search")
-        call pool2D_tree%add_input(UI_PARM, prune, gui_submenu="search")
-        call pool2D_tree%add_input(UI_MASK, mskdiam, gui_submenu="search", gui_advanced=.false.)
-        call pool2D_tree%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call pool2D_tree%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('pool2D_tree', pool2D_tree, prgtab)
-    end subroutine new_pool2D_tree
 
     subroutine new_cluster2D_subsets( prgtab )
         class(ui_hash), intent(inout) :: prgtab

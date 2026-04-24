@@ -46,11 +46,6 @@ type, extends(commander_base) :: commander_shape_rank_cavgs
     procedure :: execute      => exec_shape_rank_cavgs
 end type commander_shape_rank_cavgs
 
-type, extends(commander_base) :: commander_tree_rank_cavgs
-  contains
-    procedure :: execute      => exec_tree_rank_cavgs
-end type commander_tree_rank_cavgs 
-
 contains
 
     subroutine exec_rank_cavgs( self, cline )
@@ -832,48 +827,5 @@ contains
             end function p1_lt_p2
 
     end subroutine exec_shape_rank_cavgs
-
-    subroutine exec_tree_rank_cavgs( self, cline )
-        use simple_block_tree,    only: gen_single_block_index_tree, gen_multi_block_index_tree
-        use simple_multi_dendro,  only: multi_dendro
-        use simple_block_tree_io, only: read_block_tree
-        class(commander_tree_rank_cavgs), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        type(sp_project)         :: spproj
-        type(parameters)         :: params
-        type(multi_dendro)       :: block_tree
-        type(string)             :: tree_outstk
-        integer, allocatable     :: full2sub_map(:), tree_inds(:)
-        integer                  :: ncls, ntrees, itree, i, group_size, ncls_sub
-        type(image), allocatable :: stk(:), tree_imgs(:)
-        call params%new(cline)
-        call spproj%read(params%projfile)
-        ncls = spproj%os_cls2D%get_noris()
-        if( cline%defined('blocktree') )then
-            call read_block_tree(block_tree, params%blocktree)
-        else
-            ncls_sub = min(round2even(0.025* real(ncls)), 10) ! capped at 10
-            ncls_sub = max(ncls_sub, 10)                      ! floored at 10
-            block_tree = gen_multi_block_index_tree(ncls, ncls_sub)
-        end if
-        ntrees = block_tree%get_n_trees()
-        full2sub_map = block_tree%get_full2sub_map()
-        ! extract cavgs from project
-        stk = read_cavgs_into_imgarr(spproj)
-        do itree = 1, ntrees
-            tree_inds = pack((/(i,i=1,ncls)/), full2sub_map == itree)
-            group_size = size(tree_inds)
-            if( group_size <= 0 ) cycle
-            tree_imgs = extract_imgarr(stk, tree_inds)
-            tree_outstk = 'tree_'//int2str_pad(itree,2)//'.mrcs'
-            call write_imgarr(tree_imgs, tree_outstk)
-            call dealloc_imgarr(tree_imgs)
-        end do
-        call dealloc_imgarr(stk)
-        if( allocated(full2sub_map) ) deallocate(full2sub_map)
-        call spproj%kill
-        call block_tree%kill
-        call simple_end('**** SIMPLE_TREE_RANK_CAVGS NORMAL STOP ****')
-    end subroutine exec_tree_rank_cavgs
 
 end module simple_commanders_cavgs

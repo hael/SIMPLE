@@ -9,7 +9,6 @@ type(ui_program), target :: cluster_stack
 type(ui_program), target :: match_cavgs
 type(ui_program), target :: match_stacks
 type(ui_program), target :: select_clusters
-type(ui_program), target :: tree_rank_cavgs
 
 contains
 
@@ -21,7 +20,6 @@ contains
         call new_match_cavgs(prgtab)
         call new_match_stacks(prgtab)
         call new_select_clusters(prgtab)
-        call new_tree_rank_cavgs(prgtab)
     end subroutine construct_cavgproc_programs
 
     subroutine print_cavgproc_programs(logfhandle)
@@ -33,7 +31,6 @@ contains
         write(logfhandle,'(A)') match_cavgs%name%to_char()
         write(logfhandle,'(A)') match_stacks%name%to_char()
         write(logfhandle,'(A)') select_clusters%name%to_char()
-        write(logfhandle,'(A)') tree_rank_cavgs%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_cavgproc_programs
 
@@ -217,23 +214,5 @@ contains
         ! add to ui_hash
         call add_ui_program('select_clusters', select_clusters, prgtab)
     end subroutine new_select_clusters
-
-    subroutine new_tree_rank_cavgs( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call tree_rank_cavgs%new(&
-        &'tree_rank_cavgs',&                                                ! name
-        &'Split class averages by tree blocks',&                            ! descr_short
-        &'is a program for writing tree-grouped class average stacks',&     ! descr_long
-        &'simple_exec',&                                                    ! executable
-        &.true.)                                                            ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! parameter input/output
-        call tree_rank_cavgs%add_input(UI_PARM, projfile)
-        ! optional pre-computed block tree
-        call tree_rank_cavgs%add_input(UI_PARM, blocktree)
-        ! add to ui_hash
-        call add_ui_program('tree_rank_cavgs', tree_rank_cavgs, prgtab)
-    end subroutine new_tree_rank_cavgs
 
 end module simple_ui_cavgproc

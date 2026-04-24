@@ -196,7 +196,7 @@ subroutine set_ui_params
                                    'B-factor in Angstroms^2', .false., 200.)
 
     call blocktree%set_param(      'blocktree',       'file',   'Block tree binary file', &
-                                   'Pre-computed block tree binary file (.bin) for tree_rank_cavgs', &
+                                   'Pre-computed block tree binary file (.bin)', &
                                    'e.g. pool_block_tree.bin', .false., '')
 
     call srchspacemap%set_param(   'srchspacemap',    'file',   'Search-space map binary file', &

@@ -12,13 +12,10 @@ use simple_matcher_pftc_prep,       only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims, only: set_bp_range2d, sample_ptcls4fillin_all, sample_ptcls4update2D
 use simple_matcher_ptcl_batch,      only: prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
 use simple_strategy2D_greedy,       only: strategy2D_greedy
-use simple_strategy2D_greedy_tree,  only: strategy2D_greedy_tree
 use simple_strategy2D_greedy_smpl,  only: strategy2D_greedy_smpl
 use simple_strategy2D_inpl,         only: strategy2D_inpl
 use simple_strategy2D_inpl_smpl,    only: strategy2D_inpl_smpl
 use simple_strategy2D_snhc,         only: strategy2D_snhc
-use simple_strategy2D_snhc_ptree,   only: strategy2D_snhc_ptree
-use simple_strategy2D_single_ptree, only: strategy2D_single_ptree
 use simple_strategy2D_snhc_smpl,    only: strategy2D_snhc_smpl
 use simple_strategy2D_prob,         only: strategy2D_prob
 use simple_strategy2D_srch,         only: strategy2D_spec
@@ -305,14 +302,8 @@ contains
                     select case(trim(ctrl%refine_flag))
                     case('greedy')
                         allocate(strategy2D_greedy       :: strategy2Dsrch(iptcl_batch)%ptr)
-                    case('greedy_tree')
-                        allocate(strategy2D_greedy_tree  :: strategy2Dsrch(iptcl_batch)%ptr)
                     case('greedy_smpl')
                         allocate(strategy2D_greedy_smpl  :: strategy2Dsrch(iptcl_batch)%ptr)
-                    case('snhc_ptree')
-                        allocate(strategy2D_snhc_ptree   :: strategy2Dsrch(iptcl_batch)%ptr)
-                    case('single_ptree')
-                        allocate(strategy2D_single_ptree :: strategy2Dsrch(iptcl_batch)%ptr)
                     case('snhc_smpl')
                         allocate(strategy2D_snhc_smpl    :: strategy2Dsrch(iptcl_batch)%ptr)
                     case default
@@ -335,8 +326,6 @@ contains
                         endif
                     else
                         select case(trim(ctrl%refine_flag))
-                        case('greedy_tree')
-                            allocate(strategy2D_greedy_tree :: strategy2Dsrch(iptcl_batch)%ptr)
                         case('greedy_smpl')
                             allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
                         case default
@@ -345,10 +334,6 @@ contains
                     endif
                 else
                     select case(trim(ctrl%refine_flag))
-                    case('snhc_ptree')
-                        allocate(strategy2D_snhc_ptree   :: strategy2Dsrch(iptcl_batch)%ptr)
-                    case('single_ptree')
-                        allocate(strategy2D_single_ptree :: strategy2Dsrch(iptcl_batch)%ptr)
                     case('snhc_smpl')
                         allocate(strategy2D_snhc_smpl    :: strategy2Dsrch(iptcl_batch)%ptr)
                     case default
