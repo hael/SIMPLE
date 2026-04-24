@@ -21,6 +21,7 @@ type hclust
   contains
     procedure :: new
     procedure :: cluster
+    procedure :: get_medoids
     procedure :: kill
 end type hclust
 
@@ -115,7 +116,7 @@ contains
                     case (LINK_COMPLETE)
                         dnew = max(self%dmat(y,k), self%dmat(x,k))
                     case (LINK_AVERAGE)
-                        dnew = (real(na)*self%dmat(y,k) + real(nb)*self%dmat(x,k)) / real(na + nb)
+                        dnew = (real(na)*self%dmat(y,k) + real(nb)*self%dmat(x,k)) / (real(na + nb))
                 end select
                 self%dmat(y,k) = dnew
                 self%dmat(k,y) = dnew
@@ -130,6 +131,35 @@ contains
             call cut_tree(self%N, merge_mat, n_clusters, labels)
         endif
     end subroutine cluster
+
+    subroutine get_medoids(self, labels, distmat, i_medoids)
+        class(hclust), intent(in)  :: self
+        integer,       intent(in)  :: labels(:)
+        real,          intent(in)  :: distmat(:,:)
+        integer,       intent(out) :: i_medoids(:)
+        integer, allocatable :: members(:)
+        integer :: iclust, i, imed
+        real    :: score, best_score
+        if( .not. self%exists ) THROW_HARD('hclust not initialized')
+        if( size(labels) /= self%N ) THROW_HARD('hclust get_medoids: inconsistent labels size')
+        if( size(distmat,1) /= self%N .or. size(distmat,2) /= self%N ) THROW_HARD('hclust get_medoids: inconsistent distance matrix size')
+        i_medoids = 0
+        do iclust = 1, size(i_medoids)
+            members = pack((/(i, i=1,size(labels))/), mask=(labels == iclust))
+            if( size(members) < 1 ) cycle
+            imed = members(1)
+            best_score = huge(best_score)
+            do i = 1, size(members)
+                score = sum(distmat(members(i), members))
+                if( score < best_score )then
+                    best_score = score
+                    imed = members(i)
+                endif
+            end do
+            i_medoids(iclust) = imed
+            if( allocated(members) ) deallocate(members)
+        end do
+    end subroutine get_medoids
 
     !===============================================================================
     ! TREE CUT
