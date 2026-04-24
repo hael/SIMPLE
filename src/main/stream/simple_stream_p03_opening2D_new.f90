@@ -60,38 +60,38 @@ contains
         implicit none
         class(stream_p03_opening2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        integer,                  parameter       :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
-        real,                     parameter       :: LPSTOP = 8.            ! low-pass stop resolution (A) for abinitio2D
-        character(len=:),         allocatable     :: meta_buffer            ! serialised GUI metadata message
-        type(string),             allocatable     :: projects(:)            ! batch of new project paths from the watcher
-        integer,                  allocatable     :: cavg_inds(:)           ! shape-ranked class indices into os_cls2D
-        type(oris)                                :: nmics_ori              ! single-ori container for writing STREAM_NMICS
-        type(string)                              :: cavgsstk, mapfileprefix, projfile
-        type(cmdline)                             :: cline_extract, cline_abinitio2D, cline_shape_rank
-        type(parameters)                          :: params
-        type(sp_project)                          :: spproj, spproj_part
-        type(stream_watcher)                      :: project_buff           ! monitors dir_target for new partial projects
-        type(commander_extract)                   :: xextract
-        type(gui_metadata_cavg2D)                 :: meta_cavg2D
-        type(commander_abinitio2D)                :: xabinitio2D
-        type(gui_metadata_micrograph)             :: meta_micrograph
-        type(commander_shape_rank_cavgs)          :: xshape_rank
-        type(gui_metadata_stream_update)          :: meta_update            ! inbound: user selections and threshold updates
-        type(gui_metadata_stream_opening2D)       :: meta_opening2D         ! outbound: 2D stage progress
-        type(gui_metadata_stream_picking) :: meta_initial_picking   ! outbound: micrograph / picking progress
-        integer                                   :: nprojects, i
-        integer                                   :: box_in_pix=0           ! box size (px) set by segdiampick_mics; 0 until known
-        integer                                   :: box_for_pick           ! box size used for reference picking
-        integer                                   :: box_for_extract        ! box size used for particle extraction
-        integer                                   :: ithumb, xtiles, ytiles ! sprite-sheet thumbnail index and grid dims
-        integer                                   :: ncls_stk, iori, i_max, optics_map_id
-        integer                                   :: nmics                  ! local copy of params%nmics passed to callee
-        integer                                   :: n_increase_cycles      ! tracks how many "more mics" requests have been applied
-        integer                                   :: increase_nmics_gui     ! cached value of meta_update%get_increase_nmics()
-        integer                                   :: ncavgs                 ! number of reference classes selected by user
-        logical                                   :: restart_requested
-        real                                      :: mskdiam_estimate=0     ! mask diameter (A) estimated by segdiampick_mics
-        real                                      :: smpd_stk               ! pixel size of the cavgs stack
+        integer,                   parameter       :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
+        real,                      parameter       :: LPSTOP = 8.            ! low-pass stop resolution (A) for abinitio2D
+        character(len=:),          allocatable     :: meta_buffer            ! serialised GUI metadata message
+        type(string),              allocatable     :: projects(:)            ! batch of new project paths from the watcher
+        integer,                   allocatable     :: cavg_inds(:)           ! shape-ranked class indices into os_cls2D
+        type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
+        type(string)                               :: cavgsstk, mapfileprefix, projfile
+        type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_shape_rank
+        type(parameters)                           :: params
+        type(sp_project)                           :: spproj, spproj_part
+        type(stream_watcher)                       :: project_buff           ! monitors dir_target for new partial projects
+        type(commander_extract)                    :: xextract
+        type(gui_metadata_cavg2D)                  :: meta_cavg2D
+        type(commander_abinitio2D)                 :: xabinitio2D
+        type(gui_metadata_micrograph)              :: meta_micrograph
+        type(commander_shape_rank_cavgs)           :: xshape_rank
+        type(gui_metadata_stream_update)           :: meta_update            ! inbound: user selections and threshold updates
+        type(gui_metadata_stream_opening2D)        :: meta_opening2D         ! outbound: 2D stage progress
+        type(gui_metadata_stream_picking)          :: meta_initial_picking   ! outbound: micrograph / picking progress
+        integer                                    :: nprojects, i
+        integer                                    :: box_in_pix=0           ! box size (px) set by segdiampick_mics; 0 until known
+        integer                                    :: box_for_pick           ! box size used for reference picking
+        integer                                    :: box_for_extract        ! box size used for particle extraction
+        integer                                    :: ithumb, xtiles, ytiles ! sprite-sheet thumbnail index and grid dims
+        integer                                    :: ncls_stk, iori, i_max, optics_map_id
+        integer                                    :: nmics                  ! local copy of params%nmics passed to callee
+        integer                                    :: n_increase_cycles      ! tracks how many "more mics" requests have been applied
+        integer                                    :: increase_nmics_gui     ! cached value of meta_update%get_increase_nmics()
+        integer                                    :: ncavgs                 ! number of reference classes selected by user
+        logical                                    :: restart_requested
+        real                                       :: mskdiam_estimate=0     ! mask diameter (A) estimated by segdiampick_mics
+        real                                       :: smpd_stk               ! pixel size of the cavgs stack
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         ! validate required args and apply defaults
         if( .not. cline%defined('dir_target')     ) THROW_HARD('DIR_TARGET must be defined!')
@@ -364,9 +364,11 @@ contains
             ! Broadcast initial-picking progress to the GUI.
             subroutine send_meta( my_stage )
                 type(string), intent(in) :: my_stage
+                integer                  :: my_ntarget
+                my_ntarget = max(params%nmics, spproj%os_mic%count_state_gt_zero())
                 call meta_initial_picking%set(                                   &
                     stage                = my_stage,                             &
-                    micrographs_imported = spproj%os_mic%get_noris(),            &
+                    micrographs_imported = my_ntarget,                           &
                     micrographs_accepted = spproj%os_mic%count_state_gt_zero(),  &
                     particles_extracted  = spproj%os_ptcl2D%get_noris(),         &
                     box_size             = box_in_pix)
@@ -487,7 +489,7 @@ contains
             ! Called asynchronously on SIGTERM. Exits immediately after logging.
             subroutine sigterm_handler()
                 write(logfhandle, '(A)') 'SIGTERM RECEIVED'
-                call exit(1)
+                call exit(0)
             end subroutine sigterm_handler
 
     end subroutine exec_stream_p03_opening2D
