@@ -32,7 +32,7 @@ private
 
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
 real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
-integer,          parameter   :: WINSZ_TENT = 3
+integer,          parameter   :: WINSZ_TENT = 4
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD  = 'nu_filter_cache_odd'
 real,             allocatable :: dmats(:,:,:,:)
@@ -656,9 +656,9 @@ contains
         integer, optional, intent(in) :: discontinuity_threshold
         integer :: i, j, k, di, dj, dk, ni, nj, nk
         integer :: lp_i, lp_j, lp_diff, max_diff, n_neighbors, n_discontinuous_neighbors
-        integer :: n_total_neighbor_pairs, n_discontinuous_pairs, n_voxels_with_discontinuity, nx, ny, nz, ii, thresh
+        integer :: n_total_neighbor_pairs, n_discontinuous_pairs, n_voxels_with_discontinuity, nx, ny, nz, ii, thresh, n_analyzed
         integer, allocatable :: discontinuity_counts(:)
-        real :: pct
+        real :: pct, pct_vox, pct_pairs
         if( .not.allocated(filtmap)            ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before analyze_filtmap_neighbor_continuity')
         if( .not.allocated(cutoff_finds)       ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before analyze_filtmap_neighbor_continuity')
         if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in analyze_filtmap_neighbor_continuity')
@@ -734,22 +734,24 @@ contains
         write(logfhandle,'(A)') ''
         ! Count total masked voxels
         if( allocated(srcmap) ) then
-            ii = count(mask .and. srcmap == 1)
+            n_analyzed = count(mask .and. srcmap == 1)
         else
-            ii = count(mask)
+            n_analyzed = count(mask)
         end if
-        write(logfhandle,'(A,I12)') 'Total voxels analyzed:                   ', ii
+        write(logfhandle,'(A,I12)') 'Total voxels analyzed:                   ', n_analyzed
         write(logfhandle,'(A,I12)') 'Voxels with discontinuous neighbors:     ', n_voxels_with_discontinuity
-        if( ii > 0 ) then
-            pct = 100. * real(n_voxels_with_discontinuity) / real(ii)
-            write(logfhandle,'(A,F8.2,A)') 'Percentage of voxels with discontinuity: ', pct, '%'
+        pct_vox = 0.
+        if( n_analyzed > 0 ) then
+            pct_vox = 100. * real(n_voxels_with_discontinuity) / real(n_analyzed)
+            write(logfhandle,'(A,F8.2,A)') 'Percentage of voxels with discontinuity: ', pct_vox, '%'
         end if
         write(logfhandle,'(A)') ''
+        pct_pairs = 0.
         if( n_total_neighbor_pairs > 0 ) then
-            pct = 100. * real(n_discontinuous_pairs) / real(n_total_neighbor_pairs)
+            pct_pairs = 100. * real(n_discontinuous_pairs) / real(n_total_neighbor_pairs)
             write(logfhandle,'(A,I14)') 'Total neighbor pairs examined:            ', n_total_neighbor_pairs
             write(logfhandle,'(A,I0,A,I14)') 'Neighbor pairs with discontinuity (>', thresh, ' step): ', n_discontinuous_pairs
-            write(logfhandle,'(A,F8.2,A)') 'Percentage of discontinuous pairs:        ', pct, '%'
+            write(logfhandle,'(A,F8.2,A)') 'Percentage of discontinuous pairs:        ', pct_pairs, '%'
         end if
         write(logfhandle,'(A)') ''
         ! Print distribution of all pair step-differences
@@ -763,18 +765,17 @@ contains
         end do
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') '>>> INTERPRETATION'
-        if( n_voxels_with_discontinuity > 0 ) then
-            pct = 100. * real(n_voxels_with_discontinuity) / real(max(ii,1))
-            if( pct > 50. ) then
-                write(logfhandle,'(A)') '>>> Very high discontinuity rate — tent regularization kernel likely too narrow'
-                write(logfhandle,'(A,I0,A)') '    Current WINSZ_TENT = ', WINSZ_TENT, '; consider increasing to reduce spatial noise in LP map'
-            else if( pct > 20. ) then
+        if( n_total_neighbor_pairs > 0 ) then
+            if( pct_pairs <= 5. ) then
+                write(logfhandle,'(A)') '>>> Low discontinuity rate — local resolution map is spatially smooth'
+            else if( pct_pairs <= 10. ) then
                 write(logfhandle,'(A)') '>>> Moderate discontinuity rate — tent regularization may benefit from widening'
             else
-                write(logfhandle,'(A)') '>>> Low discontinuity rate — local resolution map is spatially smooth'
+                write(logfhandle,'(A)') '>>> High discontinuity rate — tent regularization kernel likely too narrow'
+                write(logfhandle,'(A,I0,A)') '    Current WINSZ_TENT = ', WINSZ_TENT, '; consider increasing to reduce spatial noise in LP map'
             end if
         else
-            write(logfhandle,'(A)') '>>> No discontinuities found — local resolution map is perfectly smooth'
+            write(logfhandle,'(A)') '>>> No neighbor pairs found in mask — continuity analysis is inconclusive'
         end if
         write(logfhandle,'(A)') ''
         deallocate(discontinuity_counts)
