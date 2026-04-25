@@ -278,9 +278,9 @@ contains
                 cfg%inspace_sub = NEIGH_NSPACES(1)
                 cfg%inspace     = NEIGH_NSPACES(2)
         end select
-        ! This is a temporary fix because nspace can only be increased after
-        ! a cartesian reconstruction that cannot happen with trail_rec=yes for now
-        if( params%l_polar )then
+        ! Legacy polar trailing reconstruction still expects matching reference
+        ! arrays. polar=new remaps previous references onto the current space.
+        if( params%l_polar .and. trim(params%polar) /= 'new' )then
             select case(cfg%refine%to_char())
                 case('prob_neigh')
                     cfg%inspace = NSPACE(NSTAGES)
