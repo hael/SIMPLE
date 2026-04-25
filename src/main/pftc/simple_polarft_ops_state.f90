@@ -305,7 +305,8 @@ contains
                         l_self      = myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4
                         ptcl_euls   = m2euler(Rptcl)    ! update after symmetry
                     endif
-                    if( l_self .and. self%p_ptr%l_polar_inpl )then
+                    if( l_self )then
+                        if( .not. self%p_ptr%l_polar_inpl ) cycle
                         if( SELFW < 1.d-6 ) cycle
                         ! PARTICLE INSERTION INTO SLICE
                         pw = pw * SELFW / dkb02
@@ -498,9 +499,11 @@ contains
                         l_self      = myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4
                         ptcl_euls   = m2euler(Rptcl)    ! update after symmetry
                     endif
-                    if( l_self .and. self%p_ptr%l_polar_inpl )then
+                    if( l_self )then
+                        if( .not. self%p_ptr%l_polar_inpl ) cycle
                         if( SELFW < 1.d-6 ) cycle
                         ! PARTICLE INSERTION INTO SLICE
+                        pw = pw * SELFW
                         ! in-plane rotation index offset
                         psi  = ptcl_euls(3)
                         drot = self%get_roind_fast(psi)-1
