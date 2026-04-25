@@ -613,16 +613,24 @@ contains
         real(dp),            intent(inout) :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp),            intent(in)    :: fsc(self%kfromto(1):self%interpklim)
         logical, parameter :: DIAG_POLAR_NEW_ML = .true.
+        logical, parameter :: POLAR_NEW_ML_CAP_REG = .true.
+        real(dp), parameter :: POLAR_NEW_ML_CAP_MEAN_FACTOR = 1.d0
         real(dp) :: sig2e(self%kfromto(1):self%interpklim), sig2o(self%kfromto(1):self%interpklim)
         real(dp) :: ssnr(self%kfromto(1):self%interpklim), tau2(self%kfromto(1):self%interpklim)
         real(dp) :: ctf2sum_e(self%kfromto(1):self%interpklim), ctf2sum_o(self%kfromto(1):self%interpklim)
         real(dp) :: invtau2e(self%kfromto(1):self%interpklim), invtau2o(self%kfromto(1):self%interpklim)
-        real(dp) :: cc, fudge, invtau2
+        real(dp) :: invtau2e_raw(self%kfromto(1):self%interpklim), invtau2o_raw(self%kfromto(1):self%interpklim)
+        real(dp) :: cc, fudge, invtau2, shell_n
         integer  :: icls, k, kstart, p
-        logical  :: l_diag
-        l_diag   = DIAG_POLAR_NEW_ML .and. (trim(self%p_ptr%polar) == 'new')
-        invtau2e = 0.d0
-        invtau2o = 0.d0
+        logical  :: l_diag, l_polar_new, l_cap_reg
+        l_polar_new  = trim(self%p_ptr%polar) == 'new'
+        l_diag       = DIAG_POLAR_NEW_ML .and. l_polar_new
+        l_cap_reg    = POLAR_NEW_ML_CAP_REG .and. l_polar_new
+        shell_n      = real(self%ncls,dp) * real(self%pftsz,dp)
+        invtau2e     = 0.d0
+        invtau2o     = 0.d0
+        invtau2e_raw = 0.d0
+        invtau2o_raw = 0.d0
         ! Radial CTF2 sum
         !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k)
         do k = self%kfromto(1),self%interpklim
@@ -643,23 +651,33 @@ contains
         kstart = max(6, calc_fourier_index(self%p_ptr%hp, self%p_ptr%box_crop, self%p_ptr%smpd_crop))
         ! Even
         where( sig2e > DTINY )
-            sig2e = real(self%ncls*self%pftsz,dp) / sig2e
+            sig2e = shell_n / sig2e
         elsewhere
             sig2e = 0.d0
         end where
         tau2 = ssnr * sig2e
         do k = kstart,self%interpklim
-            if( tau2(k) > DTINY ) invtau2e(k) = 1.d0 / (fudge * tau2(k))
+            if( tau2(k) > DTINY )then
+                invtau2 = 1.d0 / (fudge * tau2(k))
+                invtau2e_raw(k) = invtau2
+                if( l_cap_reg ) invtau2 = cap_shell_invtau2(invtau2, ctf2sum_e(k))
+                invtau2e(k) = invtau2
+            endif
         enddo
         ! Odd
         where( sig2o > DTINY )
-            sig2o = real(self%ncls*self%pftsz,dp) / sig2o
+            sig2o = shell_n / sig2o
         elsewhere
             sig2o = 0.d0
         end where
         tau2 = ssnr * sig2o
         do k = kstart,self%interpklim
-            if( tau2(k) > DTINY ) invtau2o(k) = 1.d0 / (fudge * tau2(k))
+            if( tau2(k) > DTINY )then
+                invtau2 = 1.d0 / (fudge * tau2(k))
+                invtau2o_raw(k) = invtau2
+                if( l_cap_reg ) invtau2 = cap_shell_invtau2(invtau2, ctf2sum_o(k))
+                invtau2o(k) = invtau2
+            endif
         enddo
         if( l_diag ) call write_polar_new_ml_reg_diag
         !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
@@ -696,6 +714,19 @@ contains
 
     contains
 
+        function cap_shell_invtau2( invtau2_raw, ctf2_sum ) result( invtau2_capped )
+            real(dp), intent(in) :: invtau2_raw, ctf2_sum
+            real(dp)             :: invtau2_capped, ctf2_mean
+            invtau2_capped = invtau2_raw
+            if( (invtau2_raw <= DTINY) .or. (ctf2_sum <= DTINY) .or. (shell_n <= DTINY) ) return
+            ctf2_mean = ctf2_sum / shell_n
+            if( ctf2_mean > DTINY )then
+                ! polar=new uses common-line densities; cap the scalar ML term
+                ! so it cannot dominate the typical denominator for the shell.
+                invtau2_capped = min(invtau2_raw, POLAR_NEW_ML_CAP_MEAN_FACTOR * ctf2_mean)
+            endif
+        end function cap_shell_invtau2
+
         subroutine write_polar_new_ml_reg_diag
             type(string) :: fname
             integer      :: fnr, kdiag
@@ -705,24 +736,27 @@ contains
             write(fnr,'(A,1X,I0,1X,A,1X,I0,1X,A,1X,I0,1X,A,1X,I0)') &
                 '# iter', self%p_ptr%which_iter, 'pftsz', self%pftsz, 'ncls', self%ncls, 'kstart', kstart
             write(fnr,'(A)') '# shell eo fsc ctf2_sum ctf2_mean ctf2_p10_smpl ctf2_median_smpl ctf2_p90_smpl ctf2_max ' // &
-                'zero_frac invtau2 frac_lt_0p1reg frac_lt_reg frac_lt_10reg'
+                'zero_frac invtau2_raw invtau2_eff frac_lt_0p1reg frac_lt_reg frac_lt_10reg'
             do kdiag = self%kfromto(1),self%interpklim
-                call write_shell_stats(fnr, 'even', kdiag, ctf2_even(:,kdiag,:), ctf2sum_e(kdiag), invtau2e(kdiag))
-                call write_shell_stats(fnr, 'odd ', kdiag, ctf2_odd( :,kdiag,:), ctf2sum_o(kdiag), invtau2o(kdiag))
+                call write_shell_stats(fnr, 'even', kdiag, ctf2_even(:,kdiag,:), ctf2sum_e(kdiag), &
+                    invtau2e_raw(kdiag), invtau2e(kdiag))
+                call write_shell_stats(fnr, 'odd ', kdiag, ctf2_odd( :,kdiag,:), ctf2sum_o(kdiag), &
+                    invtau2o_raw(kdiag), invtau2o(kdiag))
             enddo
             call fclose(fnr)
             call fname%kill
         end subroutine write_polar_new_ml_reg_diag
 
-        subroutine write_shell_stats( funit, eo, kshell, ctf2_shell, ctf2_sum, invtau2_shell )
+        subroutine write_shell_stats( funit, eo, kshell, ctf2_shell, ctf2_sum, invtau2_raw_shell, invtau2_shell )
             integer,          intent(in) :: funit
             character(len=*), intent(in) :: eo
             integer,          intent(in) :: kshell
-            real(dp),         intent(in) :: ctf2_shell(self%pftsz,self%ncls), ctf2_sum, invtau2_shell
+            real(dp),         intent(in) :: ctf2_shell(self%pftsz,self%ncls), ctf2_sum
+            real(dp),         intent(in) :: invtau2_raw_shell, invtau2_shell
             integer, parameter :: NQUANT_SAMPLES = 4096
             real, allocatable :: vals(:)
             real    :: meanv, p10v, medv, p90v, maxv, zero_frac, frac01, frac1, frac10
-            real    :: reg, val
+            real    :: reg_raw, reg, val
             integer :: nsamp, nsamp_quant, stride, idx, isamp, nzero, n01, n1, n10
             integer :: p10_ind, p50_ind, p90_ind, ip, icls_diag
             nsamp = self%pftsz * self%ncls
@@ -737,6 +771,11 @@ contains
             idx       = 0
             isamp     = 0
             stride    = max(1, ceiling(real(nsamp) / real(nsamp_quant)))
+            if( invtau2_raw_shell > DTINY )then
+                reg_raw = real(invtau2_raw_shell)
+            else
+                reg_raw = -1.0
+            endif
             if( invtau2_shell > DTINY )then
                 reg = real(invtau2_shell)
             else
@@ -776,8 +815,9 @@ contains
                 frac1  = -1.0
                 frac10 = -1.0
             endif
-            write(funit,'(I6,1X,A4,1X,7(ES12.4,1X),F8.5,1X,ES12.4,1X,3(F8.5,1X))') &
-                kshell, eo, fsc(kshell), ctf2_sum, meanv, p10v, medv, p90v, maxv, zero_frac, reg, frac01, frac1, frac10
+            write(funit,'(I6,1X,A4,1X,7(ES12.4,1X),F8.5,1X,2(ES12.4,1X),3(F8.5,1X))') &
+                kshell, eo, fsc(kshell), ctf2_sum, meanv, p10v, medv, p90v, maxv, zero_frac, &
+                reg_raw, reg, frac01, frac1, frac10
             deallocate(vals)
         end subroutine write_shell_stats
 
