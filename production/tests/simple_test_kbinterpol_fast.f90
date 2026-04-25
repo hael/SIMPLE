@@ -14,9 +14,12 @@ implicit none
 type(kbinterpol)      :: kbwin
 real,       parameter :: ALPHA = 2.0_sp    !< oversampling factor
 integer,    parameter :: BOX   = 256
+integer,    parameter :: N_APOD_BENCH = 1000
 real,    allocatable  :: kbw(:,:), kbw_fast(:,:), kbw3D(:,:,:), kbw3D_fast(:,:,:)
-integer :: h, k, iwinsz, wdim, i, win(2,2), cnt, win3D(2,3)
+integer :: h, k, iwinsz, wdim, i, j, win(2,2), cnt, win3D(2,3)
 real    :: loc(2), d(2), kbw_diff, kbw_corr, rmat(2, 2), rmat3D(3, 3), dists(3), loc3D(3)
+real    :: x, w_exact, w_fast, max_abs_apod, max_rel_apod
+real(dp):: sum_exact, sum_fast
 real(timer_int_kind)    :: rt_kb, rt_kb_fast
 integer(timer_int_kind) :: t_kb, t_kb_fast
 
@@ -27,6 +30,41 @@ kbwin = kbinterpol(KBWINSZ,ALPHA)
 wdim  = kbwin%get_wdim()
 
 allocate(kbw(wdim,wdim), kbw_fast(wdim,wdim), kbw3D(wdim,wdim,wdim), kbw3D_fast(wdim,wdim,wdim), source=1.)
+
+! 1D sandbox polynomial validation
+max_abs_apod = 0.
+max_rel_apod = 0.
+do i = 0,100000
+    x       = KBWINSZ * real(i) / 100000.
+    w_exact = kbwin%apod(x)
+    w_fast  = kbwin%apod_fast(x)
+    max_abs_apod = max(max_abs_apod, abs(w_exact - w_fast))
+    max_rel_apod = max(max_rel_apod, abs(w_exact - w_fast) / max(abs(w_exact), TINY))
+enddo
+print *, 'apod_fast max abs diff: ', max_abs_apod
+print *, 'apod_fast max rel diff: ', max_rel_apod
+call assert_true(max_abs_apod < 1.e-4, 'apod_fast absolute accuracy')
+call assert_true(max_rel_apod < 1.e-5, 'apod_fast relative accuracy')
+sum_exact = 0.
+t_kb = tic()
+do j = 1,N_APOD_BENCH
+    do i = 0,10000
+        x = KBWINSZ * real(i) / 10000.
+        sum_exact = sum_exact + real(kbwin%apod(x), dp)
+    enddo
+enddo
+rt_kb = toc(t_kb)
+sum_fast = 0.
+t_kb_fast = tic()
+do j = 1,N_APOD_BENCH
+    do i = 0,10000
+        x = KBWINSZ * real(i) / 10000.
+        sum_fast = sum_fast + real(kbwin%apod_fast(x), dp)
+    enddo
+enddo
+rt_kb_fast = toc(t_kb_fast)
+print *, 'apod_fast speedup: ', rt_kb / rt_kb_fast
+print *, 'apod_fast checksum rel diff: ', abs(sum_exact - sum_fast) / max(abs(sum_exact), TINY)
 
 ! rotation & scale
 call rotmat2D(ran3()*180., rmat)

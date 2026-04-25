@@ -265,10 +265,13 @@ contains
         integer     :: flims(2,3), nsym, iproj, i, iptcl, hh, kk, noris, nrefs, sh, irot, jrot, drot, isym
         integer     :: srcproj, best_proj
         logical     :: l_even, l_self, has_mirr
-        ! Interpolation parameters
+        ! Interpolation parameters.  The NN oversampled polar insertion path
+        ! uses kb%apod_fast for both normalization and per-sample KB weights
+        ! so that all factors come from the same degree-14 I0 power-series
+        ! approximation documented in simple_kbinterpol.f90.
         kb          = kbinterpol(KBWINSZ, KBALPHA)
         flims       = transpose(fpls(1)%frlims)
-        dkb01       = real(kb%apod(0.),dp)
+        dkb01       = real(kb%apod_fast(0.),dp)
         dkb02       = dkb01*dkb01
         dkb03       = dkb01*dkb02
         ! Looping over the un-mirrored asymmetric unit
@@ -384,10 +387,10 @@ contains
                             do sh = self%kfromto(1), self%interpklim
                                 ! Particle coordinate
                                 rhk(:) = real(OSMPL_PAD_FAC) * self%polar(:,sh,jrot)
-                                ! NN interpolation with KB weight
+                                ! NN interpolation with fast KB weight
                                 hh = nint(rhk(1))
                                 kk = nint(rhk(2))
-                                w  = real(kb%apod(rhk(1)-real(hh)),dp) * real(kb%apod(rhk(2)-real(kk)),dp)
+                                w  = real(kb%apod_fast(rhk(1)-real(hh)),dp) * real(kb%apod_fast(rhk(2)-real(kk)),dp)
                                 w  = w * pw
                                 if( w > DTINY )then
                                     hh = cyci_1d(flims(:,1), hh)
@@ -457,11 +460,11 @@ contains
                                 if( abs(dz) > DT ) exit
                                 ! 2D mapping
                                 rhk = matmul(hk, R2D)
-                                ! NN interpolation with KB weight
+                                ! NN interpolation with fast KB weight
                                 hh    = nint(rhk(1))
                                 kk    = nint(rhk(2))
-                                w     = real(kb%apod(rhk(1)-real(hh)),dp) * real(kb%apod(rhk(2)-real(kk)),dp)
-                                w     = w * pw * real(kb%apod(dz),dp)
+                                w     = real(kb%apod_fast(rhk(1)-real(hh)),dp) * real(kb%apod_fast(rhk(2)-real(kk)),dp)
+                                w     = w * pw * real(kb%apod_fast(dz),dp)
                                 if( w < DTINY ) cycle
                                 hh    = cyci_1d(flims(:,1), hh)
                                 kk    = cyci_1d(flims(:,2), kk)

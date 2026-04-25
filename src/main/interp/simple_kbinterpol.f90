@@ -32,6 +32,7 @@ type :: kbinterpol
     procedure :: get_alpha
     procedure :: get_wdim
     procedure :: apod
+    procedure :: apod_fast
     procedure :: apod_mat_2d
     procedure :: apod_mat_3d
     procedure :: instr
@@ -98,6 +99,44 @@ contains
         arg = 1. - arg * arg
         r = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod
+
+    !>  \brief  fast KB apodization for the common KBWINSZ=1.5, KBALPHA=2 kernel
+    !!
+    !! Method used:
+    !!   apod(x) = (1/W) * I0(beta * sqrt(u)), u = 1 - (2x/W)^2.
+    !! For beta=7.4 this is evaluated as a degree-14 polynomial in u using
+    !! the modified Bessel I0 power series,
+    !!   I0(beta*sqrt(u)) = sum_k ((beta^2/4)^k / (k!)^2) * u^k.
+    !! The coefficients below are those terms for k=0..14, evaluated with
+    !! Horner's rule in single precision because apod returns real(sp).
+    !! This is not a lookup table and performs no linear interpolation.  For
+    !! any other KB parameters the routine falls back to the original apod.
+    pure elemental function apod_fast( self, x ) result( r )
+        class(kbinterpol), intent(in) :: self
+        real,              intent(in) :: x
+        real :: r
+        real(sp), parameter :: coeffs(0:14) = [&
+            1.0000000_sp, 1.3690000e1_sp, 4.6854025e1_sp, 7.1270178e1_sp, 6.0980546e1_sp,&
+            3.3392947e1_sp, 1.2698596e1_sp, 3.5478321_sp, 7.5890347e-1_sp, 1.2826406e-1_sp,&
+            1.7559349e-2_sp, 1.9866735e-3_sp, 1.8887194e-4_sp, 1.5299745e-5_sp, 1.0686404e-6_sp]
+        real(sp) :: p, q, u
+        integer  :: i
+        if( abs(x) > self%Whalf )then
+            r = 0.
+            return
+        endif
+        if( abs(self%Whalf - 1.5) > 1.e-6 .or. abs(self%alpha - 2.0) > 1.e-6 )then
+            r = self%apod(x)
+            return
+        endif
+        q = self%twooW * x
+        u = max(0._sp, 1._sp - q*q)
+        p = coeffs(14)
+        do i = 13,0,-1
+            p = p * u + coeffs(i)
+        enddo
+        r = self%oneoW * p
+    end function apod_fast
 
     ! generate apodization fuction matrix in window
     pure subroutine apod_mat_2d(self, loc, iwinsz, wdim, kbw)
