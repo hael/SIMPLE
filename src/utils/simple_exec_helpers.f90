@@ -18,9 +18,9 @@ contains
     subroutine restarted_exec( cline, prg, executable )
         class(cmdline), intent(inout) :: cline
         class(string),  intent(in)    :: prg, executable
-        type(string) :: cmd
+        type(string) :: cmd, output_fname
         type(chash)  :: job_descr
-        integer      :: nrestarts, i, istart
+        integer      :: nrestarts, i, istart, exitstat
         if( .not. cline%defined('nrestarts') )then
             THROW_HARD('nrestarts needs to be defined on command line for restarted_exec')
         else
@@ -38,11 +38,23 @@ contains
         call cline%gen_job_descr(job_descr)
         do i = istart, nrestarts
             ! compose the command line
-            cmd = executable//' '//job_descr%chash2str()//' > '//uppercase(prg%to_char())//'_OUTPUT_RESTART'//int2str(i)
+            output_fname = uppercase(prg%to_char())//'_OUTPUT_RESTART'//int2str(i)
+            cmd = executable//' '//job_descr%chash2str()//' > '//output_fname%to_char()//' '//STDERR2STDOUT
+            write(logfhandle,'(A,I0,A,A)') '>>> RESTARTED_EXEC START restart=', i, &
+                ' output=', output_fname%to_char()
+            call flush(logfhandle)
             ! execute
-            call exec_cmdline(cmd)
+            call exec_cmdline(cmd, exitstat=exitstat)
+            write(logfhandle,'(A,I0,A,I0,A,A)') '>>> RESTARTED_EXEC STOP restart=', i, &
+                ' exitstat=', exitstat, ' output=', output_fname%to_char()
+            if( exitstat /= 0 )then
+                write(logfhandle,'(A,I0,A,A)') '>>> RESTARTED_EXEC WARNING non-zero exitstat=', &
+                    exitstat, ' output=', output_fname%to_char()
+            endif
+            call flush(logfhandle)
         end do
         call job_descr%kill
+        call output_fname%kill
     end subroutine restarted_exec
 
     subroutine exec_screen( cline, prg, executable )

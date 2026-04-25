@@ -734,7 +734,11 @@ contains
                 endif
             endif
             ! Executing the refinement with the above settings
+            write(logfhandle,'(A,I0)')'>>> ABINITIO3D ENTERING REFINE3D STAGE ', istage
+            call flush(logfhandle)
             call exec_refine3D(params, istage, xrefine3D)
+            write(logfhandle,'(A,I0)')'>>> ABINITIO3D RETURNED FROM REFINE3D STAGE ', istage
+            call flush(logfhandle)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
                 call symmetrize(params, istage, spproj, params%projfile, xrec3D)
