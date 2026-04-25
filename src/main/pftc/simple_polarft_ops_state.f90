@@ -246,6 +246,8 @@ contains
             integer  :: proj
             integer  :: self_proj
             real(dp) :: w
+            real(dp) :: pw_self  ! cached: w * SELFW / dkb02
+            real(dp) :: pw_cl    ! cached: w / dkb03
             real     :: euls(3)
             real     :: R(3,3)
             real     :: Rsym(3,3)
@@ -285,7 +287,9 @@ contains
             if( ptcl_field%get_state(iptcl) == 0 ) cycle
             ptcls(i)%w = real(ptcl_field%get(iptcl, 'w'), dp)
             if( ptcls(i)%w < 1.d-6 ) cycle
-            ptcls(i)%active = .true.
+            ptcls(i)%active  = .true.
+            ptcls(i)%pw_self = ptcls(i)%w * SELFW / dkb02
+            ptcls(i)%pw_cl   = ptcls(i)%w / dkb03
             ptcls(i)%even   = ptcl_field%get_eo(iptcl) == 0
             ptcls(i)%proj   = ptcl_field%get_proj(iptcl)
             if( ptcls(i)%proj > nrefs .and. ptcls(i)%proj <= noris )then
@@ -357,17 +361,14 @@ contains
                 ! loop over particles
                 do i = 1,nptcls
                     if( .not. ptcls(i)%active ) cycle
-                    ! particle weight
-                    pw = ptcls(i)%w
                     ! e/o flag
                     l_even = ptcls(i)%even
                     ! particle euler angles & rotation matrix
                     Rptcl = ptcls(i)%Rsym
                     l_self = iproj == ptcls(i)%self_proj
                     if( l_self )then
-                        if( SELFW < 1.d-6 ) cycle
-                        ! PARTICLE INSERTION INTO SLICE
-                        pw = pw * SELFW / dkb02
+                        ! PARTICLE INSERTION INTO SLICE (cached weight: w * SELFW / dkb02)
+                        pw = ptcls(i)%pw_self
                         ! in-plane rotation index offset
                         if( isym == 1 )then
                             psi = ptcls(i)%euls(3)
@@ -407,8 +408,8 @@ contains
                             self%ctf2_odd(:,:,iproj)  = self%ctf2_odd(:,:,iproj)  + rot_ctfsq
                         endif
                     else
-                        ! COMMON LINES
-                        pw = pw / dkb03
+                        ! COMMON LINES (cached weight: w / dkb03)
+                        pw = ptcls(i)%pw_cl
                         ! Rotation of both planes by transpose of Rproj => the reference is on the (0,0,0))
                         R = matmul(Rptcl, tRproj)
                         ! Euler triplet identification
