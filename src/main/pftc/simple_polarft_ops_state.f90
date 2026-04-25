@@ -234,69 +234,147 @@ contains
         real,     parameter   :: DT      = KBWINSZ                      ! distance threshold
         real(dp), parameter   :: PF2     = real(OSMPL_PAD_FAC**2,dp)    ! Oversampling factor
         real(dp), parameter   :: SELFW   = 0.1d0                        ! Weights atributed to self
+        type :: ref_cache_type
+            real    :: tR(3,3)
+            real    :: normal(3)
+            integer :: sym_self_proj
+            logical :: sym_done
+        end type ref_cache_type
+        type :: ptcl_cache_type
+            logical  :: active
+            logical  :: even
+            integer  :: proj
+            integer  :: self_proj
+            real(dp) :: w
+            real     :: euls(3)
+            real     :: R(3,3)
+            real     :: Rsym(3,3)
+        end type ptcl_cache_type
         type(kbinterpol)      :: kb
+        type(ref_cache_type)  :: refs(self%ncls)
+        type(ptcl_cache_type) :: ptcls(nptcls)
         complex(dp) :: rot_ptcl(self%pftsz, self%kfromto(1):self%interpklim), fcomp
         real(dp)    :: rot_ctfsq(self%pftsz, self%kfromto(1):self%interpklim)
         real(dp)    :: pw, ctfsq, w, dkb01 ,dkb02, dkb03
         real        :: proj_cl_addr(2,self%kfromto(1):self%interpklim), Rproj(3,3), tRproj(3,3)
         real        :: Rsym(3,3), R(3,3), Rptcl(3,3), R2d(2,2), pol2cart(2), hk(2), proj_euls(3)
-        real        :: ptcl_euls(3), normal_proj(3), normal_ptcl(3), rhk(2), euls(3), phi, theta
-        real        :: dang, sin_dang, dCL, dz, psi, sin_theta
-        integer     :: flims(2,3), nsym, iproj, i, iptcl, hh, kk, nrefs, sh, irot, jrot, drot, isym
-        logical     :: l_even, l_self
+        real        :: normal_ptcl(3), rhk(2), euls(3), phi, theta
+        real        :: dang, sin_dang, dCL, dz, psi, sin_theta, dotp, best_dot
+        integer     :: flims(2,3), nsym, iproj, i, iptcl, hh, kk, noris, nrefs, sh, irot, jrot, drot, isym
+        integer     :: srcproj, best_proj
+        logical     :: l_even, l_self, has_mirr
         ! Interpolation parameters
-        kb    = kbinterpol(KBWINSZ, KBALPHA)
-        flims = transpose(fpls(1)%frlims)
-        dkb01 = real(kb%apod(0.),dp)
-        dkb02 = dkb01*dkb01
-        dkb03 = dkb01*dkb02
+        kb          = kbinterpol(KBWINSZ, KBALPHA)
+        flims       = transpose(fpls(1)%frlims)
+        dkb01       = real(kb%apod(0.),dp)
+        dkb02       = dkb01*dkb01
+        dkb03       = dkb01*dkb02
         ! Looping over the un-mirrored asymmetric unit
-        nrefs = eulspace%get_noris()/2
+        noris       = eulspace%get_noris()
+        nrefs       = noris/2
+        has_mirr    = eulspace%isthere('mirr')
+        ! Batch-level particle and reference geometry
+        ptcls(:)%active    = .false.
+        ptcls(:)%even      = .false.
+        ptcls(:)%w         = 0.d0
+        ptcls(:)%proj      = 0
+        ptcls(:)%self_proj = 0
+        !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+        do i = 1,nptcls
+            iptcl = pinds(i)
+            if( ptcl_field%get_state(iptcl) == 0 ) cycle
+            ptcls(i)%w = real(ptcl_field%get(iptcl, 'w'), dp)
+            if( ptcls(i)%w < 1.d-6 ) cycle
+            ptcls(i)%active = .true.
+            ptcls(i)%even   = ptcl_field%get_eo(iptcl) == 0
+            ptcls(i)%proj   = ptcl_field%get_proj(iptcl)
+            if( ptcls(i)%proj > nrefs .and. ptcls(i)%proj <= noris )then
+                if( has_mirr )then
+                    ptcls(i)%proj = eulspace%get_int(ptcls(i)%proj, 'mirr')
+                else
+                    ptcls(i)%proj = ptcls(i)%proj - nrefs
+                endif
+            endif
+            ptcls(i)%euls = ptcl_field%get_euler(iptcl)
+            ptcls(i)%R    = euler2m(ptcls(i)%euls)
+        enddo
+        !$omp end parallel do
+        do iproj = 1,nrefs
+            proj_euls          = eulspace%get_euler(iproj)
+            Rproj              = euler2m(proj_euls)
+            refs(iproj)%tR     = transpose(Rproj)
+            refs(iproj)%normal = matmul(zvec, Rproj)
+        enddo
         ! Main loop
         nsym = symop%get_nsym()
         do isym = 1,nsym
             call symop%get_sym_rmat(isym, Rsym)
-            !$omp parallel do default(shared) private(iproj,proj_euls,Rproj,tRproj,normal_proj)&
-            !$omp& private(i,iptcl,pw,ptcl_euls,Rptcl,normal_ptcl,R,euls,psi,phi,pol2cart)&
+            ptcls(:)%self_proj     = 0
+            refs(:)%sym_self_proj  = 0
+            refs(:)%sym_done       = .false.
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+            do i = 1,nptcls
+                if( .not. ptcls(i)%active ) cycle
+                if( isym == 1 )then
+                    ptcls(i)%Rsym = ptcls(i)%R
+                else
+                    ptcls(i)%Rsym = matmul(ptcls(i)%R, Rsym)
+                endif
+            enddo
+            !$omp end parallel do
+            do i = 1,nptcls
+                if( .not. ptcls(i)%active ) cycle
+                srcproj = ptcls(i)%proj
+                if( srcproj < 1 .or. srcproj > nrefs ) cycle
+                if( isym == 1 )then
+                    ptcls(i)%self_proj = srcproj
+                else
+                    if( .not. refs(srcproj)%sym_done )then
+                        normal_ptcl = matmul(refs(srcproj)%normal, Rsym)
+                        best_dot = -1.0
+                        best_proj = 0
+                        do iproj = 1,nrefs
+                            dotp = abs(dot_product(refs(iproj)%normal, normal_ptcl))
+                            if( dotp > best_dot )then
+                                best_dot = dotp
+                                best_proj = iproj
+                            endif
+                        enddo
+                        refs(srcproj)%sym_self_proj = best_proj
+                        refs(srcproj)%sym_done      = .true.
+                    endif
+                    ptcls(i)%self_proj = refs(srcproj)%sym_self_proj
+                endif
+            enddo
+            !$omp parallel do default(shared) private(iproj,tRproj)&
+            !$omp& private(i,pw,Rptcl,R,euls,psi,phi,pol2cart)&
             !$omp& private(sh,irot,jrot,R2d,hk,rhk,w,ctfsq,fcomp,hh,kk,theta,sin_theta,dang,dCL)&
             !$omp& private(sin_dang,dz,l_even,proj_cl_addr,rot_ptcl,rot_ctfsq,drot,l_self)&
             !$omp& proc_bind(close) schedule(static)
             do iproj = 1,nrefs
                 ! Retrieves projection rotation matrix
-                proj_euls   = eulspace%get_euler(iproj)
-                Rproj       = euler2m(proj_euls)
-                tRproj      = transpose(Rproj)
-                normal_proj = matmul(zvec, Rproj)
+                tRproj = refs(iproj)%tR
                 ! loop over particles
                 do i = 1,nptcls
-                    iptcl = pinds(i)
-                    if( ptcl_field%get_state(iptcl) == 0 )cycle
+                    if( .not. ptcls(i)%active ) cycle
                     ! particle weight
-                    pw = real(ptcl_field%get(iptcl, 'w'), dp)
-                    if( pw < 1.d-6 ) cycle
+                    pw = ptcls(i)%w
                     ! e/o flag
-                    l_even = ptcl_field%get_eo(iptcl) == 0
+                    l_even = ptcls(i)%even
                     ! particle euler angles & rotation matrix
-                    ptcl_euls = ptcl_field%get_euler(iptcl)
-                    Rptcl     = euler2m(ptcl_euls)
-                    ! Symmetry & interpolation fork
-                    if( isym == 1 )then
-                        normal_ptcl = matmul(zvec, Rptcl)
-                        ! abs() guarantees the identification of the projection direction and its mirror
-                        l_self      = myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4
-                    else
-                        ! Symmetry application
-                        Rptcl       = matmul(Rptcl, Rsym)
-                        normal_ptcl = matmul(zvec, Rptcl)
-                        l_self      = myacos(abs(dot_product(normal_proj, normal_ptcl))) < 1.e-4
-                        ptcl_euls   = m2euler(Rptcl)    ! update after symmetry
-                    endif
+                    Rptcl = ptcls(i)%Rsym
+                    l_self = iproj == ptcls(i)%self_proj
                     if( l_self )then
                         if( SELFW < 1.d-6 ) cycle
                         ! PARTICLE INSERTION INTO SLICE
                         pw = pw * SELFW / dkb02
                         ! in-plane rotation index offset
-                        psi  = ptcl_euls(3)
+                        if( isym == 1 )then
+                            psi = ptcls(i)%euls(3)
+                        else
+                            euls = m2euler(Rptcl)
+                            psi  = euls(3)
+                        endif
                         drot = self%get_roind_fast(psi)-1
                         ! Loop over the PFT and interpolate
                         do irot = 1, self%pftsz
