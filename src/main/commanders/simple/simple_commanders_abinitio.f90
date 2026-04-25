@@ -51,7 +51,9 @@ contains
         type(stack_io)                :: stkio_r, stkio_r2, stkio_w
         type(string)                  :: final_vol, work_projfile
         integer                       :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
-        if( cline%defined('nparts') ) THROW_HARD('abinitio3D_cavgs does not support distributed execution, remove nparts from command line')
+        if( cline%defined('part') )then
+            THROW_HARD('abinitio3D_cavgs distributed execution is master-only; remove part from command line')
+        endif
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -145,6 +147,8 @@ contains
         if( count(states==0) .eq. ncavgs )then
             THROW_HARD('no class averages detected in project file: '//params%projfile%to_char()//'; abinitio3D_cavgs')
         endif
+        params%nptcls = 2 * ncavgs
+        call configure_cavgs_distributed_clines
         ! prepare a temporary project file
         work_proj%projinfo = spproj%projinfo
         work_proj%compenv  = spproj%compenv
@@ -177,6 +181,7 @@ contains
             call work_proj%os_ptcl3D%set_ori(odd_ind, o_odd)
         enddo
         params%nptcls = work_proj%get_nptcls()
+        call configure_cavgs_distributed_clines
         call work_proj%write()
         ! Frequency marching
         call set_cline_refine3D(params, 1, l_cavgs=.true.)
@@ -313,6 +318,8 @@ contains
                 endif
                 call work_proj%write_segment_inside('ptcl3D', work_projfile)
                 local_cline_rec = cline
+                ! Distributed rec3D schedules workers from PRG, so do not inherit refine3D here.
+                call local_cline_rec%set('prg',   'reconstruct3D')
                 call local_cline_rec%set('mkdir', 'no') ! to avoid nested dirs
                 call local_cline_rec%set('objfun', 'cc')
                 call local_cline_rec%set('polar',  'no')
@@ -393,6 +400,38 @@ contains
                 call xrank_cavgs%execute(cline_rank_cavgs)
                 call cline_rank_cavgs%kill
             end subroutine rank_cavgs
+
+            subroutine configure_cavgs_distributed_clines
+                integer :: nparts_eff
+                if( .not. cline%defined('nparts') ) return
+                nparts_eff = min(params%nparts, max(1, params%nptcls))
+                if( nparts_eff < params%nparts )then
+                    write(logfhandle,'(A,I0,A,I0)') '>>> REDUCING NPARTS FROM ', params%nparts, &
+                        ' TO THE NUMBER OF EVEN/ODD CLASS AVERAGE ENTRIES: ', nparts_eff
+                endif
+                params%nparts = nparts_eff
+                params%numlen = len(int2str(params%nparts))
+                call cline%set('nparts', params%nparts)
+                call cline%set('numlen', params%numlen)
+                ! Only refinement/reconstruction are distributed in this workflow.
+                call sync_distributed_child(cline_refine3D)
+                call sync_distributed_child(cline_reconstruct3D)
+                call strip_distributed_child(cline_symmap)
+                call strip_distributed_child(cline_postprocess)
+                call strip_distributed_child(cline_reproject)
+            end subroutine configure_cavgs_distributed_clines
+
+            subroutine sync_distributed_child( child_cline )
+                type(cmdline), intent(inout) :: child_cline
+                call child_cline%set('nparts', params%nparts)
+                call child_cline%set('numlen', params%numlen)
+            end subroutine sync_distributed_child
+
+            subroutine strip_distributed_child( child_cline )
+                type(cmdline), intent(inout) :: child_cline
+                call child_cline%delete('nparts')
+                call child_cline%delete('numlen')
+            end subroutine strip_distributed_child
 
     end subroutine exec_abinitio3D_cavgs
 
@@ -746,7 +785,6 @@ contains
                 call cline_ini3D%delete('nthr_ini3D')
             endif
             call cline_ini3D%delete('nstates') ! cavg_ini under the assumption of one state
-            call cline_ini3D%delete('nparts')
             call cline_ini3D%delete('oritype')
             call cline_ini3D%delete('imgkind')
             call cline_ini3D%delete('prob_athres')

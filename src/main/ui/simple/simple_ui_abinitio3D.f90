@@ -120,6 +120,7 @@ contains
         ! mask controls
         call abinitio3D_cavgs%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
+        call abinitio3D_cavgs%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call abinitio3D_cavgs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         ! add to ui_hash
         call add_ui_program('abinitio3D_cavgs', abinitio3D_cavgs, prgtab)
