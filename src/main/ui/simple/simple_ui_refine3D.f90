@@ -163,8 +163,6 @@ contains
         &.false., 'shc', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
         &'no', gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, 'polar_inpl', 'binary', 'Use in-plane contributions (polar=new)', &
-        &'Include particles in the projection plane in polar=new reconstruction updates(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, sigma_est, gui_submenu="search")
         ! filter controls
         call refine3D%add_input(UI_FILT, hp, gui_submenu="filter")
@@ -215,8 +213,6 @@ contains
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
         call refine3D_auto%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
         &'no', gui_submenu="search")
-        call refine3D_auto%add_input(UI_SRCH, 'polar_inpl', 'binary', 'Use in-plane contributions (polar=new)', &
-        &'Include particles in the projection plane in polar=new reconstruction updates(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="search")
         ! filter controls
         call refine3D_auto%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., gui_submenu="filter")

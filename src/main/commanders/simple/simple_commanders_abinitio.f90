@@ -55,7 +55,7 @@ contains
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        call cline%set('polar',        'yes') ! Always use polar=yes for fast initialization
+        call cline%set('polar',        'new') ! Always use polar=yes for fast initialization
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'yes')
