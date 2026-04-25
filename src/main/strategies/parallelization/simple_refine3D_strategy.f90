@@ -785,7 +785,14 @@ contains
             call build%pftc%polar_cavger_new(.true., nrefs=params%nspace)
             call build%pftc%polar_cavger_calc_pops(build%spproj)
             call build%pftc%polar_cavger_assemble_sums_from_parts
-            call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, build%spproj_field%get_update_frac())
+            select case(trim(params%polar))
+                case('new')
+                    call build%pftc%polar_cavger_merge_eos_and_norm_direct(build%eulspace, cline, &
+                        &build%spproj_field%get_update_frac())
+                case default
+                    call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, &
+                        &build%spproj_field%get_update_frac())
+            end select
             call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call build%pftc%polar_cavger_kill
             call self%job_descr%delete('vol1')
