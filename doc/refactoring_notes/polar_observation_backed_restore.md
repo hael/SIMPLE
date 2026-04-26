@@ -86,13 +86,15 @@ The observation field should be a gridded numerator/density representation, not 
 observation list.
 
 The current fast prototype inserts each mapped particle Fourier sample into its nearest
-native 3D grid cell. No insertion-side KB weighting is applied; interpolation is kept
-on the extraction side where polar central sections are gathered from the field. Each
-grid cell preserves:
+native 3D grid cell. The single-cell update is weighted by a center-normalized KB
+factor computed from the sample's sub-cell offset, but it does not splat into
+neighboring cells. Polar central sections are then gathered from the field. Each grid
+cell preserves:
 
 - The grid address.
 - The accumulated complex numerator.
 - The accumulated CTF2/density denominator.
+- The accumulated nearest-cell KB insertion weight, which also acts as occupancy.
 - The even/odd ownership through separate even and odd fields.
 
 A useful mental model is:
@@ -103,8 +105,8 @@ dense field:
 ```
 
 That is the core of the method. We first assemble the experimental Fourier evidence on
-the expanded 3D grid with nearest-cell deposition only. Afterwards, polar references
-are obtained by interpolating from those accumulated grid-point values.
+the expanded 3D grid with one-cell weighted nearest-cell deposition. Afterwards, polar
+references are obtained by interpolating from those accumulated grid-point values.
 
 This gives up the sparse memory target for the first serious performance test. The
 point is to answer whether the observation-field numerical model is viable when the
@@ -122,6 +124,18 @@ den(q) = sum_g K(q - g) * den(g)
 value(q) = num(q) / regularized_den(q)
 ```
 
+The gather must be evaluated in the same coordinate system as the deposited grid
+cells. In the current prototype, insertion assigns samples to integer native Fourier
+grid cells, so `q`, `g`, the KB stencil origin, and the `apod_mat_3d_fast` location
+argument are all in native grid units. The padded plane is only the source from which
+particle samples are read; it is not the coordinate system of the observation field.
+
+Only occupied grid cells participate in the sums. Unoccupied cells are unknown
+Fourier evidence, not valid zero-valued measurements, so they are masked out during
+the KB gather. This is especially important for the nearest-cell prototype because
+most dense grid cells remain untouched by a particle part. A cell is considered
+occupied when its accumulated insertion weight `grid_w` is positive.
+
 The exact form of `regularized_den(q)` must be compatible with the existing ML
 regularization model. The important distinction is that regularization is applied to
 the extracted query-local denominator, not to a shell-averaged common-line count that
@@ -130,12 +144,20 @@ has already lost the local observation geometry.
 This deliberately has two stages, like `polar=no`: nearest-cell accumulation during
 particle insertion and KB gather during polar extraction.
 
-The insertion loop is parallelized with the same h-stride pattern used by
-`reconstructor%insert_plane_oversamp`: threads own h-classes separated by the KB
-window width, avoiding shared updates to nearby grid cells without putting atomics in
-the hot loop. Observation/rejection counters are reduced across threads. There is no
-finalization or secondary grid build step; extraction reads directly from the
-accumulated dense arrays.
+The insertion loop is parallelized as a single OpenMP work-sharing loop over native
+`h`. This differs from `reconstructor%insert_plane_oversamp`, which must keep whole KB
+splat windows apart. For the observation field, each sample updates only its nearest
+grid cell, so the splat-style h-coloring would mostly serialize useful work. Cell
+collisions are handled with OpenMP atomic updates of numerator, denominator, and
+nearest-cell KB weight. Observation/rejection counters are reduced across
+threads. There is no finalization or secondary grid build step; extraction reads
+directly from the accumulated dense arrays.
+
+The nearest-cell KB factor is applied once, during insertion, to both the complex
+numerator and CTF2 density. Extraction uses `grid_w` only to decide whether a cell has
+observations; multiplying by `grid_w` again during gather would double-apply the
+insertion confidence. `grid_w` is still retained as a useful path toward later
+centroid or normalization variants if those become worth testing.
 
 Insertion also follows the reconstructor's nonredundant first-axis convention: samples
 whose nearest 3D cell lies fully on the redundant negative first-axis side are skipped
@@ -146,6 +168,16 @@ matrix for the assigned orientation and one for each `sym%apply` result, then de
 the particle's Fourier plane through every symmetry-related matrix. Thus the dense
 field contains virtual symmetry-related observations before any polar section is
 queried.
+
+## Reconstructor Coordinate Convention
+The Cartesian reconstructor keeps its established insertion-side KB splat path, but
+`reconstructor%insert_plane_oversamp` now evaluates the destination window and KB
+weights in native destination-grid coordinates. This matches the expanded Fourier
+volume lattice that receives the update. The padded Fourier plane remains only the
+source from which samples are read with `hp=h*pf` and `kp=k*pf`.
+
+This convention matches the coordinate system used by `fgrid_obsfield` extraction and
+avoids weighting native destination cells with a padded-coordinate stencil.
 
 ## Distributed Execution Model
 The design should fit the existing distributed part model. No worker needs to hold all
@@ -218,16 +250,16 @@ avoid.
 
 ## Main Risks
 - Memory pressure is higher than the sparse prototype because even and odd fields are
-  dense expanded-grid arrays.
+  dense expanded-grid numerator, denominator, and cell-weight arrays.
 - If the dense prototype works, a later block-sparse/tiled representation may be needed
   to recover memory without returning to scalar hash-table overhead.
 - The density and regularization model must be made geometry-aware without reproducing
   the failed geometric regularizer behavior.
 - Symmetry expansion increases insertion work by `nsym`, because virtual
   symmetry-related observations are deposited into the field up front.
-- Parallel insertion currently relies on the same h-stride race-avoidance strategy as
-  `reconstructor%insert_plane_oversamp`; that should be benchmarked carefully against
-  the dense-grid write pattern.
+- Parallel insertion currently relies on atomics for nearest-cell write collisions. If
+  insertion-side splatting returns, the wider `insert_plane_oversamp` race-avoidance
+  logic would need to return with it.
 
 ## Possible Implementation Shape
 The numerical backend likely belongs near the polar restore/pftc boundary, while the
@@ -237,11 +269,11 @@ Prototype building block:
 
 - `src/main/pftc/simple_fgrid_obsfield.f90` defines a part-local dense observation
   field and an `insert_plane_oversamp` fill method that assigns particle Fourier
-  samples to their nearest 3D grid cells without insertion-side KB weighting.
+  samples to their nearest 3D grid cells with one-cell KB weighting.
 - Symmetry is handled during insertion by applying every symmetry operator to the
   particle orientation and depositing through the resulting rotation matrices.
-- The current prototype stores accumulated grid-cell numerator and denominator values,
-  not raw observation records.
+- The current prototype stores accumulated grid-cell numerator, denominator, and
+  insertion-weight values, not raw observation records.
 - `polar_cavger_insert_ptcls_obsfield` is wired as the `polar=obsfield` restore mode.
   It fills the dense field, immediately extracts even/odd polar partial sums from the
   accumulated grid arrays, and adds them to the existing `pfts_even/odd` and
@@ -258,7 +290,7 @@ Candidate ownership:
 The first validation should be intentionally limited:
 
 1. C1 symmetry only.
-2. Nearest-cell dense-grid accumulation without insertion-side KB weighting.
+2. Weighted nearest-cell dense-grid accumulation without multi-cell insertion splatting.
 3. Existing interpolation kernel and CTF/noise conventions.
 4. Existing even/odd partial-sum output format.
 5. Class-average code path untouched.
@@ -278,7 +310,7 @@ A useful validation sequence would be:
 2. Add CTF/noise weighting.
 
    Compare numerator and denominator shell statistics against the Cartesian reference
-   and against the current direct-polar diagnostics.
+   and the current direct-polar path.
 
 3. Distributed additivity check.
 

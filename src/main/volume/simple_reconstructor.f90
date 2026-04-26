@@ -217,10 +217,12 @@ contains
         class(fplane_type),   intent(in)    :: fpl
         real,                 intent(in)    :: pwght
         type(ori) :: o_sym
-        complex   :: comp
+        complex   :: comp, cmplx_raw
         real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim), loc(3), ctfval
-        integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, sh, stride, fpllims_pd(3, 2)
+        real      :: ctfsq_raw
+        integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3, 2)
         integer   :: fpllims(3, 2), hp, kp, pf
+        integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
         real      :: pf2
         if( pwght < TINY ) return
         ! window size
@@ -237,10 +239,6 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
-        ! scale the matrix to map to the padded image
-        rotmats = KBALPHA * rotmats
-        ! Plane limits/nyq are for the PADDED plane (input)
-        fpllims_pd = fpl%frlims
         ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
         fpllims_pd = fpl%frlims
         pf         = OSMPL_PAD_FAC
@@ -250,31 +248,42 @@ contains
         fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
         fpllims(2,1) = ceil_div (fpllims_pd(2,1), pf)
         fpllims(2,2) = floor_div(fpllims_pd(2,2), pf)
+        ! integer disk gate: bit-equivalent to nint(sqrt(h*h+k*k)) > nyq
+        nyq_disk = self%nyq * (self%nyq + 1)
         ! KB interpolation / insertion
-        !$omp parallel default(shared) private(h,k,l,sh,comp,ctfval,w,win,loc,hp,kp) proc_bind(close)
+        !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,comp,cmplx_raw,&
+        !$omp& ctfsq_raw,ctfval,w,win,loc,hp,kp) proc_bind(close)
         do isym = 1, nsym
             do l = 0, stride-1
                 !$omp do schedule(static)
                 do h = fpllims(1,1)+l, fpllims(1,2), stride
+                    h_sq = h*h
+                    if( h_sq > nyq_disk ) cycle
+                    k_max_h = int(sqrt(real(nyq_disk - h_sq)))
+                    k_lo    = max(fpllims(2,1), -k_max_h)
+                    k_hi    = min(fpllims(2,2),  k_max_h)
                     hp = h * pf
-                    do k = fpllims(2,1), fpllims(2,2)
+                    do k = k_lo, k_hi
                         kp = k * pf
-                        sh = nint(sqrt(real(h*h + k*k)))
-                        if (sh > self%nyq) cycle
-                        ! non-uniform sampling location on the PADDED lattice
-                        loc = matmul(real([h,k,0]), rotmats(isym,:,:)) 
-                        ! Window in NATIVE voxel indices (destination grid unchanged)
-                        win(1,:) = nint(loc / real(pf)) ! nearest native voxel
+                        ! Fourier component & CTF from PADDED plane
+                        cmplx_raw = fplane_get_cmplx(fpl, hp, kp)
+                        ctfsq_raw = fplane_get_ctfsq(fpl, hp, kp)
+                        if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
+                            ctfsq_raw <= TINY ) cycle
+                        ! The expanded reconstruction volume is indexed by native
+                        ! Fourier-grid cells. Keep the sample location, window, and
+                        ! KB weights in that same coordinate system; padded-coordinate
+                        ! weights narrow/shift the stencil relative to the cells.
+                        loc = matmul(real([h,k,0]), rotmats(isym,:,:))
+                        win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz
                         win(1,:) = win(1,:) - iwinsz
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         if( win(2,1) < self%lims(1,1) ) cycle
-                        ! Fourier component & CTF from PADDED plane
-                        comp   = pwght * pf2 * fplane_get_cmplx(fpl, hp, kp)
+                        comp   = pwght * pf2 * cmplx_raw
                         ! CTF values are calculated analytically, no FFTW/padding scaling to account for
-                        ctfval = pwght * fplane_get_ctfsq(fpl, hp, kp)
-                        ! Evaluate KB weights in PADDED logical units
-                        call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
+                        ctfval = pwght * ctfsq_raw
+                        call self%kbwin%apod_mat_3d_fast(loc, iwinsz, self%wdim, w)
                         ! expanded matrices update (NATIVE volume)
                         self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) = &
                             self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + comp*w
