@@ -24,6 +24,11 @@ There is no insertion-side interpolation, no common-line redistribution, and no
 intermediate reconstructed volume. The accumulated grid values are the object that is
 sampled to make polar references.
 
+Symmetry follows the Cartesian reconstructor convention: each particle plane is
+inserted once for each symmetry-related orientation. Extraction does not apply
+additional symmetry operators; it interpolates from the already symmetry-expanded
+observation field.
+
 ## Motivation
 The current `polar=direct` particle path avoids reprojection from a Cartesian volume, but
 it still scales poorly with particle batch size. In the common-line formulation, each
@@ -136,6 +141,12 @@ Insertion also follows the reconstructor's nonredundant first-axis convention: s
 whose nearest 3D cell lies fully on the redundant negative first-axis side are skipped
 during insertion and recovered by Friedel conjugation during polar extraction.
 
+Symmetry is handled at the same stage. `insert_plane_oversamp` builds one rotation
+matrix for the assigned orientation and one for each `sym%apply` result, then deposits
+the particle's Fourier plane through every symmetry-related matrix. Thus the dense
+field contains virtual symmetry-related observations before any polar section is
+queried.
+
 ## Distributed Execution Model
 The design should fit the existing distributed part model. No worker needs to hold all
 particles.
@@ -212,8 +223,8 @@ avoid.
   to recover memory without returning to scalar hash-table overhead.
 - The density and regularization model must be made geometry-aware without reproducing
   the failed geometric regularizer behavior.
-- Symmetry handling needs a clear policy: either insert virtual symmetry-related
-  observations or transform queries through the symmetry operators.
+- Symmetry expansion increases insertion work by `nsym`, because virtual
+  symmetry-related observations are deposited into the field up front.
 - Parallel insertion currently relies on the same h-stride race-avoidance strategy as
   `reconstructor%insert_plane_oversamp`; that should be benchmarked carefully against
   the dense-grid write pattern.
@@ -227,6 +238,8 @@ Prototype building block:
 - `src/main/pftc/simple_fgrid_obsfield.f90` defines a part-local dense observation
   field and an `insert_plane_oversamp` fill method that assigns particle Fourier
   samples to their nearest 3D grid cells without insertion-side KB weighting.
+- Symmetry is handled during insertion by applying every symmetry operator to the
+  particle orientation and depositing through the resulting rotation matrices.
 - The current prototype stores accumulated grid-cell numerator and denominator values,
   not raw observation records.
 - `polar_cavger_insert_ptcls_obsfield` is wired as the `polar=obsfield` restore mode.
@@ -250,8 +263,8 @@ The first validation should be intentionally limited:
 4. Existing even/odd partial-sum output format.
 5. Class-average code path untouched.
 
-After that, add symmetry and memory-control strategies only once numerical equivalence
-has been established.
+After that, add memory-control strategies only once numerical equivalence has been
+established.
 
 ## Validation Plan
 A useful validation sequence would be:

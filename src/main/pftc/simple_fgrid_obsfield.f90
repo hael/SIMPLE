@@ -40,7 +40,6 @@ type :: fgrid_obs_field
     procedure, public :: get_ncells        => obsfield_get_ncells
     procedure, public :: get_nrejected     => obsfield_get_nrejected
     procedure, private :: compatible_with  => obsfield_compatible_with
-    procedure, private :: apod_mat_3d_fast => obsfield_apod_mat_3d_fast
 end type fgrid_obs_field
 
 ! Even/odd wrapper matching the reconstruction convention:
@@ -119,6 +118,12 @@ contains
     ! Insert one particle Fourier plane by nearest-cell assignment. Coordinates
     ! are computed exactly as in reconstructor%insert_plane_oversamp, but each
     ! experimental component updates only the closest native 3D grid cell.
+    !
+    ! Race-freedom: the outer "do l = 0, stride-1 / do h = ..., stride" pattern
+    ! (stride = wdim) ensures distinct h values within a single !$omp do are at
+    ! least wdim apart in the input lattice. After matmul + division by pf,
+    ! their nearest destination cells differ by wdim*R(1,:) (KBALPHA cancels),
+    ! an L2-distance of wdim>=4, so no two threads collide on the same cell.
     subroutine insert_plane_oversamp( self, se, o, fpl, pwght )
         use simple_math,    only: ceil_div, floor_div
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
@@ -127,19 +132,25 @@ contains
         class(ori),             intent(inout) :: o
         class(fplane_type),     intent(in)    :: fpl
         real,                   intent(in)    :: pwght
-        type(ori) :: o_sym
+        type(ori)   :: o_sym
+        complex(sp) :: cmplx_raw
         complex(dp) :: comp
-        real(dp)    :: ctfval
-        real(sp)    :: loc(3)
+        real(dp)    :: ctfval, pwght_dp, pwght_pf2_dp
+        real(sp)    :: ctfsq_raw
+        real(sp)    :: loc(3), R(3,3)
+        real(sp)    :: inv_pf
         real        :: rotmats(se%get_nsym(),3,3)
-        integer     :: fpllims_pd(3,2), fpllims(3,2), coord(3), addr(3)
-        integer     :: nsym, isym, h, k, hp, kp, sh, l, stride
+        integer     :: fpllims_pd(3,2), fpllims(3,2), coord(3)
+        integer     :: nsym, isym, h, k, hp, kp, l, stride, pf_local
+        integer     :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
+        integer     :: lim1_lo, gl_lo1, gl_lo2, gl_lo3, gl_hi1, gl_hi2, gl_hi3
         integer     :: nobs_add, nrejected_add
         if( .not. self%initialized ) THROW_HARD('obsfield not initialized; insert_plane_oversamp')
         if( pwght < TINY ) return
         nobs_add      = 0
         nrejected_add = 0
         stride        = self%wdim
+        ! rotation matrices (one per sym, in PADDED logical units via KBALPHA)
         nsym = se%get_nsym()
         rotmats(1,:,:) = o%get_mat()
         if( nsym > 1 )then
@@ -148,40 +159,77 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             enddo
         endif
-        rotmats = KBALPHA * rotmats
-        fpllims_pd = fpl%frlims
-        fpllims    = fpllims_pd
-        fpllims(1,1) = ceil_div (fpllims_pd(1,1), self%pf)
-        fpllims(1,2) = floor_div(fpllims_pd(1,2), self%pf)
-        fpllims(2,1) = ceil_div (fpllims_pd(2,1), self%pf)
-        fpllims(2,2) = floor_div(fpllims_pd(2,2), self%pf)
-        !$omp parallel default(shared) private(isym,h,k,l,sh,comp,ctfval,loc,coord,addr,hp,kp)&
+        rotmats      = KBALPHA * rotmats
+        ! native iteration limits so hp=h*pf and kp=k*pf fit the padded plane
+        pf_local     = self%pf
+        fpllims_pd   = fpl%frlims
+        fpllims      = fpllims_pd
+        fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf_local)
+        fpllims(1,2) = floor_div(fpllims_pd(1,2), pf_local)
+        fpllims(2,1) = ceil_div (fpllims_pd(2,1), pf_local)
+        fpllims(2,2) = floor_div(fpllims_pd(2,2), pf_local)
+        ! hoisted constants
+        pwght_dp     = real(pwght, dp)
+        pwght_pf2_dp = pwght_dp * real(pf_local*pf_local, dp)
+        inv_pf       = 1.0_sp / real(pf_local, sp)
+        ! integer disk gate: bit-exact equivalent of original nint(sqrt(h^2+k^2)) > nyq
+        ! since for non-negative integer n,  n > nyq*(nyq+1)  <=>  nint(sqrt(n)) > nyq
+        nyq_disk     = self%nyq * (self%nyq + 1)
+        lim1_lo      = self%lims(1,1)
+        gl_lo1 = self%grid_lims(1,1); gl_hi1 = self%grid_lims(1,2)
+        gl_lo2 = self%grid_lims(2,1); gl_hi2 = self%grid_lims(2,2)
+        gl_lo3 = self%grid_lims(3,1); gl_hi3 = self%grid_lims(3,2)
+        !$omp parallel default(shared) private(isym,R,h,k,l,h_sq,k_max_h,k_lo,k_hi,&
+        !$omp& cmplx_raw,ctfsq_raw,comp,ctfval,loc,coord,hp,kp)&
         !$omp& reduction(+:nobs_add,nrejected_add) proc_bind(close)
         do isym = 1, nsym
+            R = rotmats(isym,:,:)
             do l = 0, stride-1
                 !$omp do schedule(static)
                 do h = fpllims(1,1)+l, fpllims(1,2), stride
-                    hp = h * self%pf
-                    do k = fpllims(2,1), fpllims(2,2)
-                        kp = k * self%pf
-                        sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > self%nyq ) cycle
-                        loc   = matmul(real([h,k,0],sp), real(rotmats(isym,:,:),sp))
-                        coord = nint(loc / real(self%pf,sp))
-                        comp   = real(pwght,dp) * real(self%pf*self%pf,dp) * &
-                            cmplx(fplane_get_cmplx(fpl, hp, kp),kind=dp)
-                        ctfval = real(pwght,dp) * real(fplane_get_ctfsq(fpl, hp, kp),dp)
-                        if( abs(comp) <= DTINY .and. ctfval <= DTINY ) cycle
-                        addr = coord
-                        ! Match reconstructor insertion: skip the fully redundant
-                        ! negative first-axis Friedel mate and recover it on readout.
-                        if( addr(1) < self%lims(1,1) ) cycle
-                        if( any(addr < self%grid_lims(:,1)) .or. any(addr > self%grid_lims(:,2)) )then
+                    h_sq = h*h
+                    if( h_sq > nyq_disk ) cycle
+                    ! tightest k-range satisfying the integer disk gate
+                    k_max_h = int(sqrt(real(nyq_disk - h_sq, sp)))
+                    k_lo    = max(fpllims(2,1), -k_max_h)
+                    k_hi    = min(fpllims(2,2),  k_max_h)
+                    hp = h * pf_local
+                    do k = k_lo, k_hi
+                        kp = k * pf_local
+                        ! raw padded-plane samples (single precision); cheap zero-skip
+                        cmplx_raw = fplane_get_cmplx(fpl, hp, kp)
+                        ctfsq_raw = fplane_get_ctfsq(fpl, hp, kp)
+                        if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
+                            ctfsq_raw <= TINY ) cycle
+                        ! rotated location on PADDED lattice; third h-component is zero,
+                        ! so 6 muls instead of matmul's 9
+                        loc(1) = real(h,sp)*R(1,1) + real(k,sp)*R(2,1)
+                        loc(2) = real(h,sp)*R(1,2) + real(k,sp)*R(2,2)
+                        loc(3) = real(h,sp)*R(1,3) + real(k,sp)*R(2,3)
+                        coord(1) = nint(loc(1) * inv_pf)
+                        ! Friedel-mate skip: redundant negative first-axis cells are
+                        ! recovered inside obsfield_extract_polar (addr -> -addr,
+                        ! conjugate grid_num).
+                        if( coord(1) < lim1_lo ) cycle
+                        if( coord(1) > gl_hi1 )then
                             nrejected_add = nrejected_add + 1
                             cycle
                         endif
-                        self%grid_num(addr(1),addr(2),addr(3)) = self%grid_num(addr(1),addr(2),addr(3)) + comp
-                        self%grid_den(addr(1),addr(2),addr(3)) = self%grid_den(addr(1),addr(2),addr(3)) + ctfval
+                        coord(2) = nint(loc(2) * inv_pf)
+                        if( coord(2) < gl_lo2 .or. coord(2) > gl_hi2 )then
+                            nrejected_add = nrejected_add + 1
+                            cycle
+                        endif
+                        coord(3) = nint(loc(3) * inv_pf)
+                        if( coord(3) < gl_lo3 .or. coord(3) > gl_hi3 )then
+                            nrejected_add = nrejected_add + 1
+                            cycle
+                        endif
+                        ! promote to dp once and accumulate
+                        comp   = pwght_pf2_dp * cmplx(cmplx_raw, kind=dp)
+                        ctfval = pwght_dp * real(ctfsq_raw, dp)
+                        self%grid_num(coord(1),coord(2),coord(3)) = self%grid_num(coord(1),coord(2),coord(3)) + comp
+                        self%grid_den(coord(1),coord(2),coord(3)) = self%grid_den(coord(1),coord(2),coord(3)) + ctfval
                         nobs_add = nobs_add + 1
                     enddo
                 enddo
@@ -191,7 +239,7 @@ contains
         !$omp end parallel
         self%nobs      = self%nobs      + nobs_add
         self%nrejected = self%nrejected + nrejected_add
-        call o_sym%kill
+        if( nsym > 1 ) call o_sym%kill
     end subroutine insert_plane_oversamp
 
     subroutine obsfield_append_field( self, src )
@@ -207,7 +255,12 @@ contains
     end subroutine obsfield_append_field
 
     ! Gather central sections from the dense expanded grid. This keeps the
-    ! polar=no volume-sampling shape: direct array addressing in the 3D KB stencil
+    ! polar=no volume-sampling shape: direct array addressing in the 3D KB stencil.
+    ! Friedel recovery: stencil cells with c1 < lims(1,1) (which were never
+    ! deposited on insertion) are mapped to (-c1,-c2,-c3); grid_num is
+    ! conjugated, grid_den is read as-is. The decision depends only on c1,
+    ! so it is hoisted to the l-loop. c2/c3 grid-bound checks depend only on
+    ! m,n, so they are hoisted to those loops as cheap defensive guards.
     subroutine obsfield_extract_polar( self, eulspace, nrefs, kfromto, polar_x, polar_y, pfts, ctf2 )
         class(fgrid_obs_field), intent(in)    :: self
         class(oris),            intent(inout) :: eulspace
@@ -216,10 +269,14 @@ contains
         complex(dp),            intent(inout) :: pfts(:,:,:)
         real(dp),               intent(inout) :: ctf2(:,:,:)
         complex(dp) :: acc_num, cell_num
-        real(dp)    :: acc_den
-        real(sp)    :: R(3,3), loc(3), px, py, w(self%wdim,self%wdim,self%wdim)
-        integer     :: iproj, irot, k, kloc, pftsz, win(2,3), coord(3), addr(3)
-        integer     :: l, m, n
+        real(dp)    :: acc_den, wd
+        real(sp)    :: R(3,3), loc(3), px, py
+        real(sp), allocatable :: w(:,:,:)
+        real(sp)    :: inv_pf
+        integer     :: iproj, irot, k, kloc, pftsz, kfromto1
+        integer     :: win1_1, win1_2, win1_3, c1, c2, c3, a1, a2, a3
+        integer     :: l, m, n, iwinsz_l, wdim_l, lim1_lo
+        integer     :: gl_lo1, gl_lo2, gl_lo3, gl_hi1, gl_hi2, gl_hi3
         logical     :: l_conj
         if( .not. self%initialized ) THROW_HARD('obsfield not initialized; extract_polar')
         if( nrefs < 1 ) THROW_HARD('invalid nrefs; extract_polar')
@@ -235,40 +292,57 @@ contains
         pfts(:,:,1:nrefs) = DCMPLX_ZERO
         ctf2(:,:,1:nrefs) = 0.d0
         if( self%nobs < 1 ) return
-        !$omp parallel do default(shared) private(iproj,R,k,kloc,irot,px,py,loc,win,w,acc_num,acc_den,coord)&
-        !$omp& private(l,m,n,addr,l_conj,cell_num) schedule(static) proc_bind(close)
+        ! hoisted scalars
+        iwinsz_l = self%iwinsz
+        wdim_l   = self%wdim
+        lim1_lo  = self%lims(1,1)
+        kfromto1 = kfromto(1)
+        inv_pf   = 1.0_sp / real(self%pf, sp)
+        gl_lo1   = self%grid_lims(1,1); gl_hi1 = self%grid_lims(1,2)
+        gl_lo2   = self%grid_lims(2,1); gl_hi2 = self%grid_lims(2,2)
+        gl_lo3   = self%grid_lims(3,1); gl_hi3 = self%grid_lims(3,2)
+        !$omp parallel default(shared) private(iproj,R,k,kloc,irot,px,py,loc,w,acc_num,acc_den,wd,&
+        !$omp& win1_1,win1_2,win1_3,c1,c2,c3,a1,a2,a3,l,m,n,l_conj,cell_num) proc_bind(close)
+        allocate(w(wdim_l,wdim_l,wdim_l))
+        !$omp do schedule(static)
         do iproj = 1, nrefs
             R = eulspace%get_mat(iproj)
-            do k = kfromto(1), kfromto(2)
-                kloc = k - kfromto(1) + 1
+            do k = kfromto1, kfromto(2)
+                kloc = k - kfromto1 + 1
                 do irot = 1, pftsz
-                    px = polar_x(irot,kloc)
-                    py = polar_y(irot,kloc)
+                    px     = polar_x(irot,kloc)
+                    py     = polar_y(irot,kloc)
                     loc(1) = KBALPHA * (px*R(1,1) + py*R(2,1))
                     loc(2) = KBALPHA * (px*R(1,2) + py*R(2,2))
                     loc(3) = KBALPHA * (px*R(1,3) + py*R(2,3))
-                    win(1,:) = nint(loc / real(self%pf,sp)) - self%iwinsz
-                    win(2,:) = win(1,:) + self%wdim - 1
-                    call self%apod_mat_3d_fast(loc, w)
+                    win1_1 = nint(loc(1) * inv_pf) - iwinsz_l
+                    win1_2 = nint(loc(2) * inv_pf) - iwinsz_l
+                    win1_3 = nint(loc(3) * inv_pf) - iwinsz_l
+                    call self%kb%apod_mat_3d_fast(loc, iwinsz_l, wdim_l, w)
                     acc_num = DCMPLX_ZERO
                     acc_den = 0.d0
-                    do n = 1, self%wdim
-                        coord(3) = win(1,3) + n - 1
-                        do m = 1, self%wdim
-                            coord(2) = win(1,2) + m - 1
-                            do l = 1, self%wdim
-                                coord(1) = win(1,1) + l - 1
-                                addr   = coord
-                                l_conj = .false.
-                                if( addr(1) < self%lims(1,1) )then
-                                    addr   = -addr
-                                    l_conj = .true.
+                    do n = 1, wdim_l
+                        c3 = win1_3 + n - 1
+                        ! c3 bound is m,n-invariant within (l,m,n)-triple; hoisted to n-loop
+                        if( c3 < gl_lo3 .or. c3 > gl_hi3 ) cycle
+                        do m = 1, wdim_l
+                            c2 = win1_2 + m - 1
+                            if( c2 < gl_lo2 .or. c2 > gl_hi2 ) cycle
+                            do l = 1, wdim_l
+                                c1     = win1_1 + l - 1
+                                wd     = real(w(l,m,n), dp)
+                                l_conj = c1 < lim1_lo
+                                if( l_conj )then
+                                    a1 = -c1; a2 = -c2; a3 = -c3
+                                    if( a1 < gl_lo1 .or. a1 > gl_hi1 ) cycle
+                                    cell_num = conjg(self%grid_num(a1,a2,a3))
+                                    acc_num  = acc_num + wd * cell_num
+                                    acc_den  = acc_den + wd * self%grid_den(a1,a2,a3)
+                                else
+                                    if( c1 > gl_hi1 ) cycle
+                                    acc_num = acc_num + wd * self%grid_num(c1,c2,c3)
+                                    acc_den = acc_den + wd * self%grid_den(c1,c2,c3)
                                 endif
-                                if( any(addr < self%grid_lims(:,1)) .or. any(addr > self%grid_lims(:,2)) ) cycle
-                                cell_num = self%grid_num(addr(1),addr(2),addr(3))
-                                if( l_conj ) cell_num = conjg(cell_num)
-                                acc_num = acc_num + real(w(l,m,n),dp) * cell_num
-                                acc_den = acc_den + real(w(l,m,n),dp) * self%grid_den(addr(1),addr(2),addr(3))
                             enddo
                         enddo
                     enddo
@@ -277,7 +351,9 @@ contains
                 enddo
             enddo
         enddo
-        !$omp end parallel do
+        !$omp end do
+        deallocate(w)
+        !$omp end parallel
     end subroutine obsfield_extract_polar
 
     integer function obsfield_get_nobs( self )
@@ -307,37 +383,6 @@ contains
             all(self%grid_lims == other%grid_lims) .and. &
             all(self%grid_shape == other%grid_shape)
     end function obsfield_compatible_with
-
-    ! Same normalized separable 3D KB stencil as kbinterpol%apod_mat_3d, but
-    ! using apod_fast to avoid repeated Bessel evaluations during extraction.
-    subroutine obsfield_apod_mat_3d_fast( self, loc, kbw )
-        class(fgrid_obs_field), intent(in)  :: self
-        real(sp),               intent(in)  :: loc(3)
-        real(sp),               intent(out) :: kbw(self%wdim,self%wdim,self%wdim)
-        integer  :: win_lo(3)
-        real(sp) :: base(3), ww(3)
-        real(sp) :: wx(self%wdim), wy(self%wdim), wz(self%wdim)
-        real(sp) :: recip
-        integer  :: i, j
-        win_lo = nint(loc) - self%iwinsz
-        base   = real(win_lo, sp) - loc
-        do i = 1, self%wdim
-            ww    = self%kb%apod_fast(base + real(i-1,sp))
-            wx(i) = ww(1)
-            wy(i) = ww(2)
-            wz(i) = ww(3)
-        enddo
-        wx = wx * (1.0_sp / sum(wx))
-        wy = wy * (1.0_sp / sum(wy))
-        wz = wz * (1.0_sp / sum(wz))
-        do j = 1, self%wdim
-            do i = 1, self%wdim
-                kbw(:,i,j) = wx(:) * (wy(i) * wz(j))
-            enddo
-        enddo
-        recip = 1.0_sp / sum(kbw)
-        kbw   = kbw * recip
-    end subroutine obsfield_apod_mat_3d_fast
 
     subroutine obsfield_eo_new( self, lims, nyq )
         class(fgrid_obs_field_eo), intent(inout) :: self

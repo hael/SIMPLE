@@ -34,7 +34,9 @@ type :: kbinterpol
     procedure :: apod
     procedure :: apod_fast
     procedure :: apod_mat_2d
+    procedure :: apod_mat_2d_fast
     procedure :: apod_mat_3d
+    procedure :: apod_mat_3d_fast
     procedure :: instr
 end type kbinterpol
 
@@ -203,6 +205,62 @@ contains
         recip = 1.0_sp / sum(kbw)
         kbw   = kbw * recip
     end subroutine apod_mat_3d
+
+    !> Fast variant of apod_mat_2d: uses apod_fast (polynomial Bessel) and
+    !! drops the redundant final renormalization (after 1-D normalizations
+    !! sum(wrow)=sum(wcol)=1, so sum(kbw)=1 by construction).
+    pure subroutine apod_mat_2d_fast(self, loc, iwinsz, wdim, kbw)
+        class(kbinterpol), intent(in)  :: self
+        real(sp),          intent(in)  :: loc(2)
+        integer,           intent(in)  :: iwinsz, wdim
+        real(sp),          intent(out) :: kbw(wdim,wdim)
+        integer  :: win_lo(2)
+        real(sp) :: base(2), ww(2)
+        real(sp) :: wrow(wdim), wcol(wdim)
+        integer  :: i
+        win_lo = nint(loc) - iwinsz
+        base   = real(win_lo, sp) - loc
+        do i = 1, wdim
+            ww      = self%apod_fast(base + real(i-1))
+            wrow(i) = ww(1)
+            wcol(i) = ww(2)
+        end do
+        wrow = wrow * (1.0_sp / sum(wrow))
+        wcol = wcol * (1.0_sp / sum(wcol))
+        do i = 1, wdim
+            kbw(:,i) = wrow * wcol(i)
+        end do
+    end subroutine apod_mat_2d_fast
+
+    !> Fast variant of apod_mat_3d: uses apod_fast and drops the redundant
+    !! final renormalization (separable 1-D normalizations already give
+    !! sum(kbw) = sum(wx)*sum(wy)*sum(wz) = 1).
+    pure subroutine apod_mat_3d_fast(self, loc, iwinsz, wdim, kbw)
+        class(kbinterpol), intent(in)  :: self
+        real(sp),          intent(in)  :: loc(3)
+        integer,           intent(in)  :: iwinsz, wdim
+        real(sp),          intent(out) :: kbw(wdim,wdim,wdim)
+        integer  :: win_lo(3)
+        real(sp) :: base(3), ww(3)
+        real(sp) :: wx(wdim), wy(wdim), wz(wdim)
+        integer  :: i, j
+        win_lo = nint(loc) - iwinsz
+        base   = real(win_lo, sp) - loc
+        do i = 1, wdim
+            ww    = self%apod_fast(base + real(i-1))
+            wx(i) = ww(1)
+            wy(i) = ww(2)
+            wz(i) = ww(3)
+        end do
+        wx = wx * (1.0_sp / sum(wx))
+        wy = wy * (1.0_sp / sum(wy))
+        wz = wz * (1.0_sp / sum(wz))
+        do j = 1, wdim
+            do i = 1, wdim
+                kbw(:,i,j) = wx(:) * (wy(i) * wz(j))
+            end do
+        end do
+    end subroutine apod_mat_3d_fast
 
     !>  \brief  is the Kaiser-Bessel instrument function
     elemental function instr( self, x ) result( r )
