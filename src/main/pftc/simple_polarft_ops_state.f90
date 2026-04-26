@@ -1,6 +1,7 @@
 !@descr: submodule for controlling various state-related things in the polarops module
 submodule (simple_polarft_calc) simple_polarft_ops_state
 use simple_memoize_ft_maps, only: memoize_ft_maps
+use simple_fgrid_obsfield,  only: fgrid_obs_field_eo
 implicit none
 #include "simple_local_flags.inc"
 
@@ -221,8 +222,8 @@ contains
         nullify(spproj_field)
     end subroutine polar_cavger_update_sums
 
-    ! Local private interpolation routine
-    module subroutine polar_cavger_insert_ptcls_oversamp( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+    ! Direct particle-to-polar insertion routine
+    module subroutine polar_cavger_insert_ptcls_direct( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
         class(polarft_calc),        intent(inout) :: self
         class(oris),                intent(in)    :: eulspace
@@ -484,7 +485,74 @@ contains
             enddo                   ! slice
             !$omp end parallel do
         enddo                       ! symmetry
-    end subroutine polar_cavger_insert_ptcls_oversamp
+    end subroutine polar_cavger_insert_ptcls_direct
+
+    ! Observation-field restoration experiment. The particle planes are first
+    ! accumulated into a dense expanded 3D Fourier numerator/density field using
+    ! nearest-cell insertion, mirroring the polar=no "insert once, query later"
+    ! split. Polar central sections are then gathered from that field and emitted
+    ! as the usual even/odd partial-sum payload.
+    module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+        class(polarft_calc),        intent(inout) :: self
+        class(oris),                intent(inout) :: eulspace
+        class(oris), pointer,       intent(inout) :: ptcl_field
+        class(sym),                 intent(inout) :: symop
+        integer,                    intent(in)    :: nptcls, pinds(nptcls)
+        class(fplane_type), target, intent(inout) :: fpls(nptcls)
+        type(fgrid_obs_field_eo) :: obs
+        type(ori) :: o
+        complex(dp), allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:)
+        real(dp),    allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
+        real(sp) :: hcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
+        real(sp) :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
+        real :: pw
+        integer :: lims(3,2), kspan(2), kspan_len, nrefs, noris, i, iptcl, eo, box
+        if( nptcls < 1 ) return
+        box = self%p_ptr%box_crop
+        if( is_even(box) )then
+            lims(1,:) = [0, box/2]
+            lims(2,:) = [-box/2, box/2-1]
+            lims(3,:) = [-box/2, box/2-1]
+        else
+            lims(1,:) = [0, (box-1)/2]
+            lims(2,:) = [-(box-1)/2, (box-1)/2]
+            lims(3,:) = [-(box-1)/2, (box-1)/2]
+        endif
+        noris = eulspace%get_noris()
+        if( eulspace%isthere('mirr') )then
+            nrefs = noris / 2
+        else
+            nrefs = noris
+        endif
+        nrefs = min(nrefs, self%ncls)
+        if( nrefs < 1 ) THROW_HARD('no references available; polar_cavger_insert_ptcls_obsfield')
+        call obs%new(lims, self%interpklim)
+        do i = 1, nptcls
+            iptcl = pinds(i)
+            if( ptcl_field%get_state(iptcl) == 0 ) cycle
+            pw = 1.0
+            if( ptcl_field%isthere(iptcl,'w') ) pw = ptcl_field%get(iptcl,'w')
+            if( pw < TINY ) cycle
+            eo = ptcl_field%get_eo(iptcl)
+            call ptcl_field%get_ori(iptcl, o)
+            call obs%insert_plane(symop, o, fpls(i), eo, pw)
+        enddo
+        kspan     = [self%kfromto(1), self%interpklim]
+        kspan_len = kspan(2) - kspan(1) + 1
+        hcoords   = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
+        kcoords   = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
+        allocate(pfts_even(self%pftsz,kspan_len,nrefs), pfts_odd(self%pftsz,kspan_len,nrefs))
+        allocate(ctf2_even(self%pftsz,kspan_len,nrefs), ctf2_odd(self%pftsz,kspan_len,nrefs))
+        call obs%even%extract_polar(eulspace, nrefs, kspan, hcoords, kcoords, pfts_even, ctf2_even)
+        call obs%odd%extract_polar( eulspace, nrefs, kspan, hcoords, kcoords, pfts_odd,  ctf2_odd )
+        self%pfts_even(:,kspan(1):kspan(2),1:nrefs) = self%pfts_even(:,kspan(1):kspan(2),1:nrefs) + pfts_even
+        self%pfts_odd( :,kspan(1):kspan(2),1:nrefs) = self%pfts_odd( :,kspan(1):kspan(2),1:nrefs) + pfts_odd
+        self%ctf2_even(:,kspan(1):kspan(2),1:nrefs) = self%ctf2_even(:,kspan(1):kspan(2),1:nrefs) + ctf2_even
+        self%ctf2_odd( :,kspan(1):kspan(2),1:nrefs) = self%ctf2_odd( :,kspan(1):kspan(2),1:nrefs) + ctf2_odd
+        deallocate(pfts_even, pfts_odd, ctf2_even, ctf2_odd)
+        call obs%kill
+        call o%kill
+    end subroutine polar_cavger_insert_ptcls_obsfield
 
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self

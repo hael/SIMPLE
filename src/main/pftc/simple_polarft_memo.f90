@@ -266,7 +266,7 @@ contains
         class(polarft_calc), intent(inout) :: self
         integer :: ithr
         if( allocated(self%cmat2_many) )then
-            do ithr = 1,nthr_glob
+            do ithr = 1,size(self%drvec)
                 call fftw_free( self%drvec(ithr)%p)
                 call fftwf_free(self%cmat2_many(ithr)%p)
                 call fftwf_free(self%crmat1_many(ithr)%p)

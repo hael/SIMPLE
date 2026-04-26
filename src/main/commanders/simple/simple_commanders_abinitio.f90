@@ -57,7 +57,7 @@ contains
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        call cline%set('polar',        'new') ! Always use polar=yes for fast initialization
+        call cline%set('polar',   'obsfield') ! best mode for class averages
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'yes')
@@ -82,12 +82,12 @@ contains
         params%l_lpauto = .false.; l_lpauto=.false. ! global parameter for low-pass limit estimation
         l_nonuniform = .false.
         ! Polar representation
+        l_polar = params%l_polar ! global parameter
         if( params%l_polar )then
             if( trim(params%multivol_mode).ne.'single' )then
-                THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
+                THROW_HARD('POLAR modes are not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
             endif
             ! end comment to activate lpauto
-            l_polar = .true. ! global parameter
         endif
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES_INI3D_MAX
@@ -496,11 +496,11 @@ contains
             call cline%delete('nstates')
         endif
         ! Polar representation
+        l_polar = params%l_polar ! global parameter
         if( params%l_polar )then
             if( trim(params%multivol_mode).ne.'single' )then
-                THROW_HARD('POLAR=YES not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
+                THROW_HARD('POLAR modes are not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
             endif
-            l_polar = .true. ! global parameter
         endif
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)

@@ -178,7 +178,8 @@ type :: polarft_calc
     procedure          :: polar_cavger_set_ref_pft
     procedure          :: polar_cavger_calc_pops
     procedure          :: polar_cavger_update_sums
-    procedure          :: polar_cavger_insert_ptcls_oversamp
+    procedure          :: polar_cavger_insert_ptcls_direct
+    procedure          :: polar_cavger_insert_ptcls_obsfield
     procedure          :: polar_cavger_kill
     procedure          :: center_3Dpolar_refs
     ! ===== RESTORE: simple_polarft_ops_restore.f90
@@ -194,7 +195,7 @@ type :: polarft_calc
     procedure, private :: calc_comlin_contrib
     procedure, private :: mirror_ctf2
     procedure, private :: mirror_pft
-    procedure, private :: safe_norm
+    procedure, private :: shell_floor_norm
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: polar_cavger_refs2cartesian
     procedure          :: polar_cavger_read
@@ -728,7 +729,7 @@ interface
         logical,           optional, intent(in)    :: is3d
     end subroutine polar_cavger_update_sums
 
-    module subroutine polar_cavger_insert_ptcls_oversamp( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+    module subroutine polar_cavger_insert_ptcls_direct( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
         class(polarft_calc),        intent(inout) :: self
         class(oris),                intent(in)    :: eulspace
@@ -736,7 +737,16 @@ interface
         class(sym),                 intent(in)    :: symop
         integer,                    intent(in)    :: nptcls, pinds(nptcls)
         class(fplane_type), target, intent(inout) :: fpls(nptcls)
-    end subroutine polar_cavger_insert_ptcls_oversamp
+    end subroutine polar_cavger_insert_ptcls_direct
+
+    module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+        class(polarft_calc),        intent(inout) :: self
+        class(oris),                intent(inout) :: eulspace
+        class(oris),  pointer,      intent(inout) :: ptcl_field
+        class(sym),                 intent(inout) :: symop
+        integer,                    intent(in)    :: nptcls, pinds(nptcls)
+        class(fplane_type), target, intent(inout) :: fpls(nptcls)
+    end subroutine polar_cavger_insert_ptcls_obsfield
 
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self
@@ -840,12 +850,12 @@ interface
         complex(dp),         intent(inout) :: pftout(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine mirror_pft
 
-    module pure subroutine safe_norm( self, Mnum, Mdenom, Mout )
+    module pure subroutine shell_floor_norm( self, Mnum, Mdenom, Mout )
         class(polarft_calc), intent(in)    :: self
         complex(dp),         intent(in)    :: Mnum(self%pftsz,self%kfromto(1):self%interpklim)
         real(dp),            intent(inout) :: Mdenom(self%pftsz,self%kfromto(1):self%interpklim)
         complex(dp),         intent(inout) :: Mout(self%pftsz,self%kfromto(1):self%interpklim)
-    end subroutine safe_norm
+    end subroutine shell_floor_norm
 
     ! ===== I/O: simple_polarft_ops_io.f90
 

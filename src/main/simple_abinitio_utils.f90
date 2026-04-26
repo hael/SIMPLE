@@ -30,7 +30,7 @@ integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES              ! fi
 integer,          parameter :: AUTOMSK_STAGE         = 6                    ! switch on automasking when lpauto is switched on
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
-integer,          parameter :: GAUREF_LAST_STAGE     = 2                    ! When to stop using gaussian filtering of the references with polar=yes
+integer,          parameter :: GAUREF_LAST_STAGE     = 2                    ! When to stop gaussian filtering in polar modes
 integer,          parameter :: MAXITS_BETWEEN        = 10                   ! Development
 
 ! singleton variables
@@ -222,7 +222,7 @@ contains
             ! asymmetric/low symmetry reconstruction
             if( l_polar )then
                 if( .not.present(xrec3D) )then
-                    THROW_HARD('Reconstructor required with polar=yes')
+                    THROW_HARD('Reconstructor required in polar mode')
                 endif
                 cline_asymrec = cline_refine3D
                 call cline_asymrec%set('prg',        'reconstruct3D')
@@ -276,7 +276,7 @@ contains
         endif
     end subroutine symmetrize
 
-    ! Performs reconstruction at some set stages when polar=yes
+    ! Performs reconstruction at some set stages when polar mode is enabled
     subroutine calc_rec( params, projfile, xrec3D, istage )
         use simple_class_frcs, only: class_frcs
         class(parameters),       intent(inout) :: params

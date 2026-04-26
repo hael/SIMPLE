@@ -283,8 +283,14 @@ contains
             if( DEBUG ) t_prep = t_prep + toc(t)
             ! insert padded slices into lattice
             if( DEBUG ) t = tic()
-            call build%pftc%polar_cavger_insert_ptcls_oversamp(build%eulspace, build%spproj_field, &
+            select case(trim(params%polar))
+                case('obsfield')
+                    call build%pftc%polar_cavger_insert_ptcls_obsfield(build%eulspace, build%spproj_field, &
                         & build%pgrpsyms, batchsz, pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+                case default
+                    call build%pftc%polar_cavger_insert_ptcls_direct(build%eulspace, build%spproj_field, &
+                        & build%pgrpsyms, batchsz, pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+            end select
             if( DEBUG ) t_grid = t_grid + toc(t)
         end do
         ! Normalize polar references

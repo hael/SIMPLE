@@ -42,6 +42,16 @@ contains
         endif
     end function classify_refine3D_route
 
+    logical function polar_mode_remaps_refs( mode )
+        character(len=*), intent(in) :: mode
+        select case(trim(mode))
+            case('direct','obsfield')
+                polar_mode_remaps_refs = .true.
+            case default
+                polar_mode_remaps_refs = .false.
+        end select
+    end function polar_mode_remaps_refs
+
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
         integer :: route
@@ -279,8 +289,9 @@ contains
                 cfg%inspace     = NEIGH_NSPACES(2)
         end select
         ! Legacy polar trailing reconstruction still expects matching reference
-        ! arrays. polar=new remaps previous references onto the current space.
-        if( params%l_polar .and. trim(params%polar) /= 'new' )then
+        ! arrays. direct and obsfield remap previous references onto the current
+        ! space directly.
+        if( params%l_polar .and. (.not. polar_mode_remaps_refs(params%polar)) )then
             select case(cfg%refine%to_char())
                 case('prob_neigh')
                     cfg%inspace = NSPACE(NSTAGES)

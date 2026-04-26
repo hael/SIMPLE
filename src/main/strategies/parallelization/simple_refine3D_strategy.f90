@@ -786,12 +786,14 @@ contains
             call build%pftc%polar_cavger_calc_pops(build%spproj)
             call build%pftc%polar_cavger_assemble_sums_from_parts
             select case(trim(params%polar))
-                case('new')
+                case('direct','obsfield')
                     call build%pftc%polar_cavger_merge_eos_and_norm_direct(build%eulspace, cline, &
                         &build%spproj_field%get_update_frac())
-                case default
+                case('yes')
                     call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, &
                         &build%spproj_field%get_update_frac())
+                case default
+                    THROW_HARD('unsupported POLAR mode: '//trim(params%polar))
             end select
             call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
             call build%pftc%polar_cavger_kill

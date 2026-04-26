@@ -186,12 +186,14 @@ contains
                 else
                     p_ptr%refs = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//MRC_EXT
                     select case(ctrl%polar_mode)
-                    case('new')
+                    case('direct','obsfield')
                         call b_ptr%pftc%polar_cavger_merge_eos_and_norm_direct(b_ptr%eulspace,&
                             &cline, b_ptr%spproj_field%get_update_frac())
-                    case default
+                    case('yes')
                         call b_ptr%pftc%polar_cavger_merge_eos_and_norm(b_ptr%eulspace,&
                             &b_ptr%pgrpsyms, cline, b_ptr%spproj_field%get_update_frac())
+                    case default
+                        THROW_HARD('unsupported POLAR mode: '//ctrl%polar_mode)
                     end select
                     call b_ptr%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
                     call b_ptr%pftc%polar_cavger_kill
@@ -339,7 +341,7 @@ contains
         subroutine maybe_init_reconstruction()
             if( .not. ctrl%do_restore ) return
             if( ctrl%do_polar )then
-                if( ctrl%polar_mode == 'new' )then
+                if( polar_mode_direct_like() )then
                     call init_rec(params, build, batchsz_max, fpls)
                     call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
                 endif
@@ -353,12 +355,14 @@ contains
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
-                    case('new')
+                    case('direct','obsfield')
                         call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
                             ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
-                    case default
+                    case('yes')
                         call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
                             ptcl_match_imgs, ptcl_match_imgs_pad)
+                    case default
+                        THROW_HARD('unsupported POLAR mode: '//ctrl%polar_mode)
                 end select
             else
                 if( ctrl%do_restore )then
@@ -430,14 +434,21 @@ contains
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
-                    case('new')
+                    case('direct')
                         call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
                             pinds(batch_start:batch_end), fpls(:batchsz))
-                        call b_ptr%pftc%polar_cavger_insert_ptcls_oversamp(b_ptr%eulspace, b_ptr%spproj_field, &
+                        call b_ptr%pftc%polar_cavger_insert_ptcls_direct(b_ptr%eulspace, b_ptr%spproj_field, &
                             b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
-                    case default
+                    case('obsfield')
+                        call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
+                            pinds(batch_start:batch_end), fpls(:batchsz))
+                        call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
+                            b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
+                    case('yes')
                         call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), &
                             b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
+                    case default
+                        THROW_HARD('unsupported POLAR mode: '//ctrl%polar_mode)
                 end select
             else
                 call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
@@ -466,6 +477,15 @@ contains
             p_ptr%oritab = p_ptr%outfile
             if( ctrl%do_bench ) rt_projio = toc(t_projio)
         end subroutine maybe_write_orientations
+
+        logical function polar_mode_direct_like()
+            select case(ctrl%polar_mode)
+                case('direct','obsfield')
+                    polar_mode_direct_like = .true.
+                case default
+                    polar_mode_direct_like = .false.
+            end select
+        end function polar_mode_direct_like
 
     end subroutine refine3D_exec
 

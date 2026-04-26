@@ -440,7 +440,7 @@ contains
     end subroutine mirror_slices_direct
 
     !>  \brief local private routine for trailing reconstruction weighing
-    !!         and dimension checking/editing (polar=new)
+    !!         and dimension checking/editing for direct-like polar modes
     subroutine prepare_trail_rec_arrays_direct( self, reforis, prev_even, prev_odd )
         class(polarft_calc),       intent(in) :: self
         type(oris),                intent(in) :: reforis
@@ -579,10 +579,10 @@ contains
             ! e/o restoration
             pft  = pfts_even(:,:,icls)
             ctf2 = ctf2_even(:,:,icls)
-            call self%safe_norm(pft, ctf2, even)
+            call self%shell_floor_norm(pft, ctf2, even)
             pft  = pfts_odd(:,:,icls)
             ctf2 = ctf2_odd(:,:,icls)
-            call self%safe_norm(pft, ctf2, odd)
+            call self%shell_floor_norm(pft, ctf2, odd)
             if( self%p_ptr%l_trail_rec )then
                 ! adding previous reference
                 even = ufrac_trec * even + (1.d0-ufrac_trec) * prev_even(:,:,icls)
@@ -612,7 +612,7 @@ contains
         real(dp),            intent(inout) :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp),            intent(inout) :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp),            intent(in)    :: fsc(self%kfromto(1):self%interpklim)
-        logical, parameter :: DIAG_POLAR_NEW_ML = .true.
+        logical, parameter :: DIAG_POLAR_NEW_ML = .false.
         logical, parameter :: POLAR_NEW_ML_CAP_REG = .true.
         real(dp), parameter :: POLAR_NEW_ML_CAP_MEAN_FACTOR = 1.d0
         real(dp) :: sig2e(self%kfromto(1):self%interpklim), sig2o(self%kfromto(1):self%interpklim)
@@ -622,10 +622,15 @@ contains
         real(dp) :: invtau2e_raw(self%kfromto(1):self%interpklim), invtau2o_raw(self%kfromto(1):self%interpklim)
         real(dp) :: cc, fudge, invtau2, shell_n
         integer  :: icls, k, kstart, p
-        logical  :: l_diag, l_polar_new, l_cap_reg
-        l_polar_new  = trim(self%p_ptr%polar) == 'new'
-        l_diag       = DIAG_POLAR_NEW_ML .and. l_polar_new
-        l_cap_reg    = POLAR_NEW_ML_CAP_REG .and. l_polar_new
+        logical  :: l_diag, l_direct_restore, l_cap_reg
+        select case(trim(self%p_ptr%polar))
+            case('direct','obsfield')
+                l_direct_restore = .true.
+            case default
+                l_direct_restore = .false.
+        end select
+        l_diag    = DIAG_POLAR_NEW_ML .and. l_direct_restore
+        l_cap_reg = POLAR_NEW_ML_CAP_REG .and. l_direct_restore
         shell_n      = real(self%ncls,dp) * real(self%pftsz,dp)
         invtau2e     = 0.d0
         invtau2o     = 0.d0
@@ -721,8 +726,8 @@ contains
             if( (invtau2_raw <= DTINY) .or. (ctf2_sum <= DTINY) .or. (shell_n <= DTINY) ) return
             ctf2_mean = ctf2_sum / shell_n
             if( ctf2_mean > DTINY )then
-                ! polar=new uses common-line densities; cap the scalar ML term
-                ! so it cannot dominate the typical denominator for the shell.
+                ! Direct-like polar restoration uses sparse polar densities; cap
+                ! the scalar ML term so it cannot dominate a typical denominator.
                 invtau2_capped = min(invtau2_raw, POLAR_NEW_ML_CAP_MEAN_FACTOR * ctf2_mean)
             endif
         end function cap_shell_invtau2
@@ -732,7 +737,7 @@ contains
             integer      :: fnr, kdiag
             fname = 'POLAR_NEW_ML_DIAG_ITER'//int2str_pad(self%p_ptr%which_iter,3)//'.txt'
             call fopen(fnr, FILE=fname, STATUS='REPLACE', action='WRITE')
-            write(fnr,'(A)') '# polar=new ML regularization diagnostics'
+            write(fnr,'(A)') '# direct-like polar ML regularization diagnostics'
             write(fnr,'(A,1X,I0,1X,A,1X,I0,1X,A,1X,I0,1X,A,1X,I0)') &
                 '# iter', self%p_ptr%which_iter, 'pftsz', self%pftsz, 'ncls', self%ncls, 'kstart', kstart
             write(fnr,'(A)') '# shell eo fsc ctf2_sum ctf2_mean ctf2_p10_smpl ctf2_median_smpl ctf2_p90_smpl ctf2_max ' // &
@@ -851,9 +856,9 @@ contains
             ctf2o = ctf2_odd(:,:,icls)
             pft   = pfte  + pfto
             ctf2  = ctf2e + ctf2o
-            call self%safe_norm(pft,  ctf2,  self%pfts_merg(:,:,icls))
-            call self%safe_norm(pfte, ctf2e, self%pfts_even(:,:,icls))
-            call self%safe_norm(pfto, ctf2o, self%pfts_odd(:,:,icls))
+            call self%shell_floor_norm(pft,  ctf2,  self%pfts_merg(:,:,icls))
+            call self%shell_floor_norm(pfte, ctf2e, self%pfts_even(:,:,icls))
+            call self%shell_floor_norm(pfto, ctf2o, self%pfts_odd(:,:,icls))
             ! mirror the restored images (overwrites)
             m = reforis%get_int(icls,'mirr')
             call self%mirror_pft(self%pfts_merg(:,:,icls), self%pfts_merg(:,:,m))
@@ -904,8 +909,11 @@ contains
         pftout(i,:) = pftin(i,:)
     end subroutine mirror_pft
 
-    ! Private utility to perform a numerically stable normalization of PFT by CTF^2
-    module pure subroutine safe_norm( self, Mnum, Mdenom, Mout )
+    ! Private utility to normalize PFTs by the CTF^2/sampling denominator.
+    ! A per-shell floor is added to weak nonzero denominator entries before
+    ! division. This is an empirical regularizer for sparse common-line support
+    ! and CTF zeros, not only a guard against floating point zero division.
+    module pure subroutine shell_floor_norm( self, Mnum, Mdenom, Mout )
         class(polarft_calc), intent(in)    :: self
         complex(dp),         intent(in)    :: Mnum(self%pftsz,self%kfromto(1):self%interpklim)
         real(dp),            intent(inout) :: Mdenom(self%pftsz,self%kfromto(1):self%interpklim)
@@ -926,6 +934,6 @@ contains
         elsewhere
             Mout = DCMPLX_ZERO
         end where
-    end subroutine safe_norm
+    end subroutine shell_floor_norm
 
 end submodule simple_polarft_ops_restore
