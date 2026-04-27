@@ -71,6 +71,7 @@ module simple_forked_process
     logical               :: running    = .false.
     logical               :: failed     = .false.
     logical               :: stopped    = .false.
+    logical               :: skipped    = .false.
     logical               :: restart    = .false. ! enable auto-restart on failure
   contains
     procedure :: execute => execute_test
@@ -78,6 +79,7 @@ module simple_forked_process
     procedure :: terminate
     procedure :: kill
     procedure :: destroy
+    procedure :: skip
     procedure :: status
     procedure :: await_final_status
     procedure :: get_pid
@@ -156,6 +158,14 @@ contains
     if( rc /= 0 ) THROW_HARD('Failed to send SIGKILL to forked child')
   end subroutine kill
 
+  ! Mark the process as skipped, which will cause status() to return FORK_STATUS_SKIPPED
+  ! and prevent any future restarts. Does not send any signals or modify the running child 
+  ! process, so use in conjunction with terminate() or kill() as needed.
+  subroutine skip( self )
+    class(forked_process), intent(inout) :: self
+    self%skipped = .true.
+  end subroutine skip
+
   ! Default execute implementation used for testing. Installs a SIGTERM
   ! handler that flushes the log and exits cleanly, writes a sentinel line
   ! to logfhandle, then sleeps for 20 poll intervals.
@@ -223,6 +233,9 @@ contains
       self%n_restarts = 0
       status_code     = FORK_STATUS_STOPPED
       if( self%stoptime == 0 ) self%stoptime = int(c_time(0_c_long))
+    end if
+    if( self%skipped ) then
+      status_code = FORK_STATUS_SKIPPED
     end if
     if( self%failed ) then
       self%failtime = int(c_time(0_c_long))

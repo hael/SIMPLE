@@ -157,8 +157,14 @@ contains
         type(json_value),              pointer     :: json_child_ptr
         logical                                    :: l_terminate=.false., l_last_loop=.false., l_found, l_test=.false., l_terminate_loop=.false.
         logical                                    :: got_snapshot_id, got_snapshot_iter, got_snapshot_sel, got_snapshot_file
+        logical                                    :: l_existing_pickrefs, l_existing_box
         integer                                    :: stat, rc, max_msgsize, i_val, snapshot_id
         real(kind=dp)                              :: r_val
+        ! check cline arguments 
+        l_existing_pickrefs = .false.
+        l_existing_box      = .false.
+        if( cline%defined('pickrefs') )    l_existing_pickrefs = .true.
+        if( cline%defined('box_extract') ) l_existing_box      = .true.
         ! init params
         call params%new(cline)
         ! init assembler and http handler
@@ -195,20 +201,26 @@ contains
                                 start_routine = c_funloc(metadata_listener), &
                                 arg           = c_null_ptr)
         if( stat /= 0 ) THROW_HARD('failed to create metadata listener thread')
-        ! fork and test stream processes
- !       call fork_preprocess%start(       name=string(PREPROC_JOB_NAME),   logfile=string(PREPROC_JOB_NAME//'.log'),   cline=cline_preprocess,       restart=.false.)
-  !      call fork_assign_optics%start(    name=string(OPTICS_JOB_NAME),    logfile=string(OPTICS_JOB_NAME//'.log'),    cline=cline_assign_optics,    restart=.false.)
-  !      call fork_opening2D%start(        name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'), cline=cline_opening2D,        restart=.false.)
-  !      call fork_reference_picking%start(name=string(REFPICK_JOB_NAME),   logfile=string(REFPICK_JOB_NAME//'.log'),   cline=cline_reference_picking,restart=.false.)
-   !     call fork_particle_sieving%start( name=string(SIEVING_JOB_NAME),   logfile=string(SIEVING_JOB_NAME//'.log'),   cline=cline_particle_sieving, restart=.false.)
+        ! fork stream processes
+        call fork_preprocess%start(       name=string(PREPROC_JOB_NAME),   logfile=string(PREPROC_JOB_NAME//'.log'),   cline=cline_preprocess,       restart=.false.)
+        call fork_assign_optics%start(    name=string(OPTICS_JOB_NAME),    logfile=string(OPTICS_JOB_NAME//'.log'),    cline=cline_assign_optics,    restart=.false.)
+        call fork_reference_picking%start(name=string(REFPICK_JOB_NAME),   logfile=string(REFPICK_JOB_NAME//'.log'),   cline=cline_reference_picking,restart=.false.)
+        call fork_particle_sieving%start( name=string(SIEVING_JOB_NAME),   logfile=string(SIEVING_JOB_NAME//'.log'),   cline=cline_particle_sieving, restart=.false.)
         call fork_pool2D%start(           name=string(CLASS2D_JOB_NAME),   logfile=string(CLASS2D_JOB_NAME//'.log'),   cline=cline_pool2D,           restart=.false.)
-    !    
-  !      if( fork_preprocess%status()        /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork preprocessing'    )
-  !      if( fork_assign_optics%status()     /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork assign optics'    )
-   !     if( fork_opening2D%status()         /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D'        )
-   !     if( fork_reference_picking%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork reference picking')
-  !      if( fork_particle_sieving%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork particle sieving' )
+        if( l_existing_pickrefs ) then
+            call fork_opening2D%skip()
+        else
+            call fork_opening2D%start(name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'), cline=cline_opening2D, restart=.false.)
+        endif
+        ! test stream processes started successfully
+        if( fork_preprocess%status()        /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork preprocessing'    )
+        if( fork_assign_optics%status()     /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork assign optics'    )
+        if( fork_reference_picking%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork reference picking')
+        if( fork_particle_sieving%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork particle sieving' )
         if( fork_pool2D%status()            /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork pool2D'           )
+        if( .not. l_existing_pickrefs ) then
+            if( fork_opening2D%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D')
+        endif
         ! attach signal handlers after fork else propagated to processes
         call signal(SIGTERM, sigterm_handler)
         call signal(SIGINT,   sigint_handler)
@@ -782,7 +794,12 @@ contains
             call cline_reference_picking%set('nthr',                                    8)
             call cline_reference_picking%set('mkdir',                               'yes')
             call cline_reference_picking%set('nparts',                                  8)
-            call cline_reference_picking%set('pickrefs',    '../'//OPENING2D_JOB_NAME//'/selected_references.mrcs') 
+            if( l_existing_pickrefs ) then
+                call cline_reference_picking%set('pickrefs',              params%pickrefs)
+            else
+                call cline_reference_picking%set('pickrefs',    '../'//OPENING2D_JOB_NAME//'/selected_references.mrcs') 
+            end if
+            if( l_existing_box ) call cline_reference_picking%set('box_extract', params%box_extract)
         end subroutine init_cline_reference_picking
 
         subroutine init_metadata_reference_picking()

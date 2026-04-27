@@ -59,6 +59,7 @@ contains
         integer,                     intent(inout) :: n_mics_imported, n_ptcls_imported
         type(project_rec)                          :: prec
         type(sp_project)                           :: spproj
+        type(string)                               :: projabspath
         integer :: iproj, imic
         if( .not.allocated(projects) ) return
         if( size(projects) == 0      ) return
@@ -66,9 +67,20 @@ contains
             call spproj%read(projects(iproj))
             ! because pick_extract purges state=0 and nptcls=0 mics,
             ! all mics can be assumed associated with particles
+            if( spproj%os_mic%get_noris() == 0) then
+                write(logfhandle, *) "ERROR: mic noris 0", projects(iproj)%to_char()
+                call spproj%kill()
+                cycle
+            end if
+            if( spproj%os_stk%get_noris() == 0) then
+                write(logfhandle, *) "ERROR: stk noris 0", projects(iproj)%to_char()
+                call spproj%kill()
+                cycle
+            end if
+            projabspath = simple_abspath(projects(iproj))
             do imic = 1, spproj%os_mic%get_noris()
                 prec%id          = project_list%size() + 1
-                prec%projname    = simple_abspath(projects(iproj))
+                prec%projname    = projabspath
                 prec%micind      = imic
                 prec%nptcls      = spproj%os_mic%get_int(imic,'nptcls')
                 prec%nptcls_sel  = prec%nptcls
