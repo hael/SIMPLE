@@ -390,7 +390,7 @@ contains
                     win(2,:) = win(1,:) + iwinsz
                     win(1,:) = win(1,:) - iwinsz
                     ! kernel window
-                    call kbwin%apod_mat_2d(loc, iwinsz, wdim, kbw(:,:,ithr))
+                    call kbwin%apod_mat_2d_fast(loc, iwinsz, wdim, kbw(:,:,ithr))
                     ! Read from the generated Fourier plane.
                     ! gen_fplane4rec stores only k<=0, so use Friedel symmetry for kp>0.
                     if( kp <= 0 ) then
@@ -1032,7 +1032,7 @@ contains
                     win(2,:) = win(1,:) + iwinsz
                     win(1,:) = win(1,:) - iwinsz
                     ! interpolation kernel
-                    call kbwin%apod_mat_2d(loc, iwinsz, wdim, kbw)
+                    call kbwin%apod_mat_2d_fast(loc, iwinsz, wdim, kbw)
                     ! intepolation
                     fcomp = CMPLX_ZERO
                     do l = 1,wdim

@@ -11,19 +11,19 @@ private
 #include "simple_local_flags.inc"
 
 ! Dimensions
-real,             parameter :: SMPD_TARGET      = 2.67
-integer,          parameter :: MINBOXSZ         = 88
+real,             parameter :: SMPD_TARGET        = 2.67
+integer,          parameter :: MINBOXSZ           = 88
 ! Stages
-integer,          parameter :: NSTAGES_CLS      = 6
-integer,          parameter :: ITS_INCR         = 5
-integer,          parameter :: PHASES(2)        = [4, 6]
-integer,          parameter :: EXTR_LIM_LOCAL   = 20
-integer,          parameter :: PROBREFINE_STAGE = 5
-integer,          parameter :: STOCH_SAMPL_STAGE = PROBREFINE_STAGE ! switch from sticky to stochastic sampling when prob starts
+integer,          parameter :: NSTAGES_CLS        = 6
+integer,          parameter :: ITS_INCR           = 5
+integer,          parameter :: PHASES(2)          = [4, 6]
+integer,          parameter :: EXTR_LIM_LOCAL     = 20
+integer,          parameter :: PROBREFINE_STAGE   = 5
+integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch from sticky to stochastic sampling when prob starts
 integer,          parameter :: STICKY_SAMPL_STAGE = 1               ! sticky random subset stage
-integer,          parameter :: FRAC_UPDATE_STAGE = 2                ! fractional class-average carry-over starts here
-integer,          parameter :: NPTCLS2SAMPLE_2D = 200000
-character(len=3), parameter :: EO_STAGE         = 'yes'
+integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
+integer,          parameter :: NPTCLS2SAMPLE_2D   = 200000
+character(len=3), parameter :: EO_STAGE           = 'yes'
 
 ! convenience type
 type stage_params
@@ -153,14 +153,10 @@ contains
         else
             call cline_cluster2D%delete('gaufreq')
         endif
-        if( params%l_prob_align_mode )then
-            if( istage < STOCH_SAMPL_STAGE )then
-                refine = 'snhc_smpl'
-            else
-                refine = 'prob'
-            endif
+        if( istage < STOCH_SAMPL_STAGE )then
+            refine = 'snhc_smpl'
         else
-            refine = trim(params%refine)
+            refine = 'prob'
         endif
         call cline_cluster2D%set('minits',    minits)
         call cline_cluster2D%set('maxits',    imaxits)
