@@ -27,6 +27,14 @@ contains
         ! set particle PFTs interpolation limit
         self%interpklim =  fdim(self%p_ptr%box_crop) - 1
         ! error check
+        if( self%kfromto(1) < 1 .or. self%kfromto(1) > self%kfromto(2) )then
+            write(logfhandle,*) 'kfromto: ', self%kfromto
+            THROW_HARD('invalid kfromto; new')
+        endif
+        if( self%kfromto(2) > self%interpklim )then
+            write(logfhandle,*) 'kfromto(2), interpklim, box_crop: ', self%kfromto(2), self%interpklim, self%p_ptr%box_crop
+            THROW_HARD('kfromto exceeds cropped interpolation range; new')
+        endif
         if( self%pfromto(2) - self%pfromto(1) + 1 < 1 )then
             write(logfhandle,*) 'pfromto: ', self%pfromto(1), self%pfromto(2)
             THROW_HARD ('nptcls (# of particles) must be > 0; new')

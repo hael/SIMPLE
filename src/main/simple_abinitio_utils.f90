@@ -121,6 +121,12 @@ contains
         call child_cline%delete('filt_mode')
     end subroutine strip_refine3D_planning_keys
 
+    subroutine invalidate_polar_ref_sections
+        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
+        if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
+        if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
+    end subroutine invalidate_polar_ref_sections
+
     subroutine set_symmetry_class_vars( params )
         class(parameters), intent(in) :: params
         type(string) :: pgrp, pgrp_start
@@ -285,6 +291,7 @@ contains
                 call cline_symrec%kill
             endif
             call cline_refine3D%set('vol1', vol_sym)
+            if( l_polar ) call invalidate_polar_ref_sections
         endif
     end subroutine symmetrize
 

@@ -174,10 +174,20 @@ but all `vol1..volN` inputs exist, `simple_refine3D_strategy.f90` calls
 That helper uses the live `params`, `builder`, and `cmdline`, projects the
 starting volumes with `read_mask_filter_reproject_refvols`, and writes the
 initial `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` pair. It does not create a
-second temporary builder. If the reference files are missing and the full
+second temporary builder. Because this bootstrap path can run before matcher
+setup calls `set_bp_range3D`, reference-volume reprojection must enforce the
+same PFTC range contract before constructing `polarft_calc`: the requested
+search high-frequency index cannot exceed the cropped interpolation limit or
+the available resolution mask. If the reference files are missing and the full
 starting-volume set is not available, the run must first create those references
 through reconstruction/assembly; shared-memory polar initialization errors in
 that case.
+
+Symmetry search inside `abinitio3D_cavgs` is a content-changing handoff for
+polar reference sections. After the symmetrized map becomes the next `vol1`,
+existing `POLAR_REFS*` files are stale even when their headers remain
+dimension-compatible, so they must be invalidated and rebuilt from the
+symmetrized reference model.
 
 Multi-state polar references are stored state-major: state 1 occupies local
 projection slots `1:nspace`, state 2 occupies `nspace+1:2*nspace`, and so on.

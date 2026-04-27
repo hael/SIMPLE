@@ -1,10 +1,11 @@
-!@descr: shared helpers for reading, masking and filtering reference volumes for matcher reprojection
+!@descr: shared helpers for reading, masking, filtering and reprojecting reference volumes
 module simple_matcher_refvol_utils
 use simple_core_module_api
 use simple_builder,    only: builder
 use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
 use simple_image,      only: image
+use simple_matcher_smpl_and_lplims, only: enforce_3D_pftc_k_range
 implicit none
 
 public :: read_mask_filter_reproject_refvols
@@ -221,6 +222,9 @@ contains
         call mskvol%kill
     end subroutine estimate_lp_from_refs
 
+    !> Producer-side reference-section reprojection used by Cartesian assembly
+    !> and polar bootstrap. It cannot assume matcher setup already reconciled
+    !> the requested band limit with the cropped PFTC interpolation range.
     subroutine read_mask_filter_reproject_refvols( params, build, cline, batchsz )
         use simple_polarft_calc, only: vol_pad2ref_pfts
         class(parameters), intent(inout) :: params
@@ -234,6 +238,7 @@ contains
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
         endif
+        call enforce_3D_pftc_k_range(params, build, 'read_mask_filter_reproject_refvols')
         nrefs = params%nspace * params%nstates
         call build%pftc%new(params, nrefs, [1, 1], params%kfromto)
         do s = 1, params%nstates

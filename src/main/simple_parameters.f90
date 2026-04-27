@@ -1668,8 +1668,8 @@ contains
         ! set newbox if scale is defined
         self%kfromto             = 2
         if( cline%defined('hp') ) self%kfromto(1) = max(2,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
-        self%kfromto(2)          = int(self%dstep/self%lp)          ! low-pass Fourier index set according to lp
         self%lp                  = max(self%fny,self%lp)            ! lowpass limit
+        self%kfromto(2)          = int(self%dstep/self%lp)          ! low-pass Fourier index set according to lp
         if( .not. cline%defined('ydim') ) self%ydim = self%xdim
         ! set ldim
         if( cline%defined('xdim') ) self%ldim = [self%xdim,self%ydim,1]
