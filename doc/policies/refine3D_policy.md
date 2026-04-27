@@ -8,6 +8,7 @@ It covers:
 
 - command and strategy ownership
 - probabilistic pre-alignment and particle-update flow
+- builder lifetime and stage-dependent derived state
 - the boundary between particle-domain work and volume-domain work
 - the role of explicit assembly pathways in shared-memory and distributed execution
 
@@ -68,6 +69,34 @@ It should remain thin. It is not the place for low-level search logic or assembl
 - orchestration of pre-alignment, matcher execution, partial-reconstruction writing, and assembly-command dispatch
 
 This layer may thread command-line state and workflow state across steps, but it should not absorb numerical postprocessing logic.
+
+### Builder lifetime and derived state
+
+The `builder` owns derived execution state, not durable workflow state. Its
+contents are valid only for the command-line and parameter policy used to build
+that instance. This matters because `refine3D` stage policy can change derived
+state such as reference-grid size, cropped-box geometry, PFTC frequency range,
+symmetry-expanded projection grids, masks, and strategy work arrays.
+
+Shared-memory `refine3D` must therefore rebuild the strategy toolbox at each
+iteration after the iteration command line has the settled stage policy for that
+iteration. It should not keep one builder instance alive across iterations and
+then repair it with ad hoc signature checks. Any particle-state changes made
+during initialization, such as random initial orientations or cleanup of
+sampling counters, must be written to the project before the first per-iteration
+rebuild so the freshly built toolbox sees the intended state.
+
+Distributed `refine3D` naturally follows the same policy because workers and
+assembly commands are launched as fresh command executions. Shared-memory mode
+should mirror that lifecycle explicitly: persistent handoff state lives in the
+project, command-line parameters, and documented artifacts; per-iteration
+builder state is disposable.
+
+When rebuilding, `which_iter` and other iteration-local counters may be threaded
+through the build command line, but the stage-level `startit` must remain
+available in `params`. Planning predicates such as final-stage-iteration checks
+depend on the original stage interval, not on a single-iteration child-command
+view.
 
 ### `simple_commanders_prob` and probability-table modules
 
@@ -327,12 +356,13 @@ The recommended split is:
 - Do not treat the assembly commanders as distributed-only helpers.
 - Do not merge probabilistic particle-update logic with volume postprocessing logic.
 - Do not describe the current `refine3D` implementation as if it were a single undifferentiated Bayesian engine.
+- Do not reuse shared-memory builder-derived state across iterations when stage policy can change; rebuild the toolbox instead.
 - Do preserve parity between shared-memory and distributed workflows.
 
 ## Workflow summary
 
 1. `commander_refine3D` selects the execution strategy.
-2. `refine3D_strategy` manages iteration state and execution mode.
+2. `refine3D_strategy` manages iteration state, execution mode, and per-iteration shared-memory builder rebuilds.
 3. probabilistic pre-alignment may sample particles and write an assignment map.
 4. `refine3D_exec` performs particle-domain search, update, and writes Cartesian partial reconstructions or polar partial sums.
 5. Assembly commanders assemble state volumes for `polar=no` or state-major polar references for `polar=yes|direct|obsfield`.

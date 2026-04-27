@@ -230,16 +230,21 @@ contains
         type(commander_calc_pspec)            :: xcalc_pspec
         type(cmdline)                         :: cline_calc_pspec
         integer                               :: startit, state
+        logical                               :: l_proj_dirty
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! startit
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
+        l_proj_dirty = .false.
         ! Some refine modes manage sampling/updatecnt internally
         if( params%l_prob_align_mode )then
             ! random sampling and updatecnt dealt with in prob_align
         else
-            if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+            if( startit == 1 )then
+                call build%spproj_field%clean_entry('updatecnt', 'sampled')
+                l_proj_dirty = .true.
+            endif
         endif
         if( trim(params%continue) == 'yes' )then
             THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
@@ -265,7 +270,9 @@ contains
         ! Initial orientation parameters
         if( build%spproj%is_virgin_field(params%oritype) )then
             call build%spproj_field%rnd_oris
+            l_proj_dirty = .true.
         endif
+        if( l_proj_dirty ) call build%spproj%write_segment_inside(params%oritype)
         ! objfun=euclid initialisation
         self%l_sigma = (params%cc_objfun == OBJFUN_EUCLID)
         self%cline_calc_group_sigmas = cline
@@ -313,12 +320,28 @@ contains
         type(commander_polar_volassemble) :: xpolar_volassemble
         type(cmdline)                     :: cline_prob_align
         type(cmdline)                     :: cline_volassemble
-        integer                           :: state
+        type(cmdline)                     :: cline_build
+        integer                           :: state, iter, extr_iter
         logical                           :: l_prob_state_mode, l_prob_neigh_mode, l_bootstrap_polar_refs
         logical                           :: l_write_partial_recs
         type(string)                      :: volname
         601 format(A,1X,F12.3)
+        iter      = params%which_iter
+        extr_iter = params%extr_iter
         call self%conv%print_iteration(params%which_iter)
+        ! In shared-memory mode, rebuild the toolbox from the settled
+        ! per-iteration settings. Keep the stage startit in params so
+        ! final-iteration planning still sees the whole refine3D stage.
+        cline_build = cline
+        call cline_build%set('startit',    params%startit)
+        call cline_build%set('which_iter', iter)
+        call cline_build%set('extr_iter',  extr_iter)
+        call build%kill_strategy3D_tbox
+        call build%kill_general_tbox
+        call build%init_params_and_build_strategy3D_tbox(cline_build, params)
+        params%which_iter = iter
+        params%extr_iter  = extr_iter
+        params%outfile    = 'algndoc'//METADATA_EXT
         ! communicate iteration counters
         call cline%set('startit',    params%which_iter)
         call cline%set('which_iter', params%which_iter)
