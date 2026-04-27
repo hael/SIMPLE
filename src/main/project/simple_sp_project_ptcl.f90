@@ -626,21 +626,21 @@ contains
             if( .not. self%os_ptcl2D%isthere(iori,'state') )then
                 THROW_HARD('state flag missing from self%os_ptcl2D; count_state_gt_zero')
             endif
-             if( .not. self%os_ptcl3D%isthere(iori,'state') )then
-                THROW_HARD('state flag missing from self%os_ptcl3D; count_state_gt_zero')
-            endif
+            ! if( .not. self%os_ptcl3D%isthere(iori,'state') )then
+            !     THROW_HARD('state flag missing from self%os_ptcl3D; count_state_gt_zero')
+            ! endif
             if( self%os_ptcl2D%get_state(iori) > 0 )then
                 cnt_s_gt_zero_ptcl2D = cnt_s_gt_zero_ptcl2D + 1
             endif
-            if( self%os_ptcl3D%get_state(iori) > 0 )then
-                cnt_s_gt_zero_ptcl3D = cnt_s_gt_zero_ptcl3D + 1
-            endif
+            ! if( self%os_ptcl3D%get_state(iori) > 0 )then
+            !     cnt_s_gt_zero_ptcl3D = cnt_s_gt_zero_ptcl3D + 1
+            ! endif
         enddo
-        if( cnt_s_gt_zero_ptcl2D == cnt_s_gt_zero_ptcl3D )then
+        ! if( cnt_s_gt_zero_ptcl2D == cnt_s_gt_zero_ptcl3D )then
             count_state_gt_zero = cnt_s_gt_zero_ptcl2D
-        else
-            THROW_HARD('state labelling incosistent between PTCL2D/PTCL3D segments')
-        endif 
+        ! else
+            ! THROW_HARD('state labelling inconsistent between PTCL2D/PTCL3D segments')
+        ! endif
     end function count_state_gt_zero
 
     module integer function get_nptcls( self )
