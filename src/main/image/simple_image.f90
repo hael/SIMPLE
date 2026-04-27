@@ -2241,16 +2241,14 @@ interface
         integer,                intent(in)    :: pdim(3)      !< pftsz,kfrom,kto
     end subroutine memoize4polarize_oversamp
 
-    module subroutine polarize( self, pft, mask )
+    module subroutine polarize( self, pft )
         class(image),      intent(in)    :: self     !< image instance to polarize
         complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft to be filled
-        logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
     end subroutine polarize
 
-    module subroutine polarize_oversamp( self, pft, mask )
+    module subroutine polarize_oversamp( self, pft )
         class(image),      intent(in)    :: self           !< padded image instance to polarize
         complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft (original image dims)
-        logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
     end subroutine polarize_oversamp
 
     ! ===== geometric procedure interfaces =====

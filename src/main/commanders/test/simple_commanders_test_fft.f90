@@ -119,7 +119,7 @@ subroutine exec_test_eval_polarftcc( self, cline )
     call b%vol%mask3D_soft(p%msk)
     call b%vol%fft()
     call b%vol%expand_cmat(p%box)
-    call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true., mask=b%l_resmsk)
+    call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true.)
     call b%pftc%cp_even_ref2ptcl(1,1)
     call b%pftc%set_eo(1, .true. )
     if( o%e3get() < 0.)then
@@ -127,7 +127,7 @@ subroutine exec_test_eval_polarftcc( self, cline )
     else
         call o%e3set(o%e3get() + 29.5)
     endif
-    call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true., mask=b%l_resmsk)
+    call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true.)
     shvec(1) = -2.
     shvec(2) =  2.
     print *,'Ref orientation:'
@@ -199,9 +199,9 @@ subroutine exec_test_gencorrs_fft( self, cline )
         call b%img_crop%read(p%stk, iptcl)
         call b%img_crop%fft()
         ! transfer to polar coordinates
-        call b%img_crop%polarize(pft, mask=b%l_resmsk)
+        call b%img_crop%polarize(pft)
         call b%pftc%set_ref_pft(iptcl, pft, iseven=.true.)
-        call b%img_crop%polarize(pft, mask=b%l_resmsk)
+        call b%img_crop%polarize(pft)
         call b%pftc%set_ptcl_pft(iptcl, pft)
     end do
     allocate(cc(b%pftc%get_nrots()), cc_fft(b%pftc%get_nrots()))
@@ -330,7 +330,7 @@ subroutine exec_test_polarops( self, cline )
         call b%spproj_field%set(i,'class', icls)
         call b%spproj_field%set(i,'eo',eo)
         shifts(:,i) = -shift
-        call img%polarize(pft, mask=b%l_resmsk)
+        call img%polarize(pft)
         call pftc%set_ptcl_pft(i, pft)
     enddo
     call pftc%polar_cavger_new(.false.)

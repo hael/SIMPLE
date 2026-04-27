@@ -43,7 +43,7 @@ call b%vol%read(p%vols(1))
 call b%vol%mask3D_soft(p%msk)
 call b%vol%fft()
 call b%vol%expand_cmat(p%box)
-call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true., mask=b%l_resmsk)
+call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true.)
 call b%pftc%cp_even_ref2ptcl(1,1)
 call b%pftc%set_eo(1, .true. )
 
@@ -52,7 +52,7 @@ if( o%e3get() < 0.)then
 else
     call o%e3set(o%e3get() + 29.5)
 endif
-call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true., mask=b%l_resmsk)
+call fproject_polar(b%vol, 1, o, b%pftc, iseven=.true.)
 shvec(1) = -2.
 shvec(2) =  2.
 print *,'Ref orientation:'

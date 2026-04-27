@@ -308,23 +308,21 @@ interface
         real, allocatable, target, intent(inout) :: sigma2_noise(:,:)
     end subroutine assign_sigma2_noise
 
-    module subroutine vol_pad2ref_pfts(self, vol_pad, eulspace, state, iseven, mask)
+    module subroutine vol_pad2ref_pfts(self, vol_pad, eulspace, state, iseven)
         use simple_projector, only: projector
         class(polarft_calc), intent(inout) :: self
         class(projector),    intent(in)    :: vol_pad
         class(oris),         intent(inout) :: eulspace
         integer,             intent(in)    :: state
         logical,             intent(in)    :: iseven
-        logical,             intent(in)    :: mask(:)
     end subroutine vol_pad2ref_pfts
 
-    module subroutine vol_pad2ref_pfts_write_range(self, vol_pad, eulspace, state, iproj_from, iproj_to, mask, tmpl_fname)
+    module subroutine vol_pad2ref_pfts_write_range(self, vol_pad, eulspace, state, iproj_from, iproj_to, tmpl_fname)
         use simple_projector, only: projector
         class(polarft_calc), intent(inout) :: self
         class(projector),    intent(in)    :: vol_pad
         class(oris),         intent(inout) :: eulspace
         integer,             intent(in)    :: state, iproj_from, iproj_to
-        logical,             intent(in)    :: mask(:)
         class(string),       intent(in)    :: tmpl_fname
     end subroutine vol_pad2ref_pfts_write_range
 

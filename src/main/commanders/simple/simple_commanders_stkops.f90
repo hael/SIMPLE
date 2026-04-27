@@ -235,7 +235,7 @@ contains
             do i = 1, params%nptcls
                 call build%img_crop%read(params%stk, i)
                 call build%img_crop%fft
-                call build%img_crop%polarize(pft, mask=build%l_resmsk)
+                call build%img_crop%polarize(pft)
                 call pftc%set_ref_pft(i, pft, iseven=.true.)
             end do
             call img%new([pftc%get_pftsz(), params%kfromto(2), 1], 1.0)

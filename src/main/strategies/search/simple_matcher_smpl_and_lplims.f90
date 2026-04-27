@@ -15,14 +15,12 @@ contains
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         character(len=*), optional, intent(in) :: context
-        integer :: interp_lim, mask_lim, kto
+        integer :: interp_lim, kto
         interp_lim = fdim(params%box_crop) - 1
-        mask_lim   = interp_lim
-        if( allocated(build%l_resmsk) ) mask_lim = size(build%l_resmsk)
-        kto = min(params%kfromto(2), interp_lim, mask_lim)
+        kto = min(params%kfromto(2), interp_lim)
         if( kto < params%kfromto(1) )then
             if( present(context) ) write(logfhandle,*) 'context: ', trim(context)
-            write(logfhandle,*) 'kfromto, interp_lim, mask_lim: ', params%kfromto, interp_lim, mask_lim
+            write(logfhandle,*) 'kfromto, interp_lim: ', params%kfromto, interp_lim
             THROW_HARD('invalid k-range for 3D PFTC')
         endif
         params%kfromto(2) = kto

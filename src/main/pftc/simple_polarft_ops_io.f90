@@ -4,13 +4,12 @@ implicit none
 #include "simple_local_flags.inc"
 contains
 
-    module subroutine vol_pad2ref_pfts_write_range(self, vol_pad, eulspace, state, iproj_from, iproj_to, mask, tmpl_fname)
+    module subroutine vol_pad2ref_pfts_write_range(self, vol_pad, eulspace, state, iproj_from, iproj_to, tmpl_fname)
         use simple_projector, only: projector
         class(polarft_calc), intent(inout) :: self
         class(projector),    intent(in)    :: vol_pad
         class(oris),         intent(inout) :: eulspace
         integer,             intent(in)    :: state, iproj_from, iproj_to
-        logical,             intent(in)    :: mask(:)
         class(string),       intent(in)    :: tmpl_fname
         integer :: funit_e, funit_o, nprojs_write, iref_from, iref_to, i
         if( .not. self%existence ) THROW_HARD('polarft_calc does not exist; vol_pad2ref_pfts_write_range')
@@ -22,14 +21,10 @@ contains
             write(logfhandle,*) 'iproj_from, iproj_to, nspace: ', iproj_from, iproj_to, self%p_ptr%nspace
             THROW_HARD('projection range out of bounds; vol_pad2ref_pfts_write_range')
         endif
-        if( size(mask) < self%kfromto(2) )then
-            write(logfhandle,*) 'size(mask), kfromto(2): ', size(mask), self%kfromto(2)
-            THROW_HARD('mask too short for requested k-range; vol_pad2ref_pfts_write_range')
-        endif
         iref_from = (state - 1) * self%p_ptr%nspace + iproj_from
         iref_to   = (state - 1) * self%p_ptr%nspace + iproj_to
-        call vol_pad2ref_pfts(self, vol_pad, eulspace, state, .true.,  mask)
-        call vol_pad2ref_pfts(self, vol_pad, eulspace, state, .false., mask)
+        call vol_pad2ref_pfts(self, vol_pad, eulspace, state, .true. )
+        call vol_pad2ref_pfts(self, vol_pad, eulspace, state, .false.)
         nprojs_write = iproj_to - iproj_from + 1
         call open_pft_or_ctf2_array_for_write(tmpl_fname//'_even'//BIN_EXT, funit_e)
         call open_pft_or_ctf2_array_for_write(tmpl_fname//'_odd'//BIN_EXT,  funit_o)

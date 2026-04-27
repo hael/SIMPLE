@@ -177,8 +177,8 @@ initial `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` pair. It does not create a
 second temporary builder. Because this bootstrap path can run before matcher
 setup calls `set_bp_range3D`, reference-volume reprojection must enforce the
 same PFTC range contract before constructing `polarft_calc`: the requested
-search high-frequency index cannot exceed the cropped interpolation limit or
-the available resolution mask. If the reference files are missing and the full
+search high-frequency index cannot exceed the cropped interpolation limit.
+If the reference files are missing and the full
 starting-volume set is not available, the run must first create those references
 through reconstruction/assembly; shared-memory polar initialization errors in
 that case.

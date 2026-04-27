@@ -129,7 +129,7 @@ contains
                     ! merged class average in both even and odd positions
                     call match_imgs(icls)%copy_fast(cavgs_m(icls))
                     call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
-                    call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build%l_resmsk)
+                    call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft)
                     call build%pftc%set_ref_pft(icls, pft, iseven=.true.)
                     call build%pftc%cp_even2odd_ref(icls)
                 else
@@ -137,17 +137,17 @@ contains
                         ! even & odd
                         call match_imgs(icls)%copy_fast(cavgs_e(icls))
                         call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
-                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build%l_resmsk)
+                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft)
                         call build%pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call match_imgs(icls)%copy_fast(cavgs_o(icls))
                         call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
-                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build%l_resmsk)
+                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft)
                         call build%pftc%set_ref_pft(icls, pft, iseven=.false.)
                     else
                         ! merged class average in both even and odd positions
                         call match_imgs(icls)%copy_fast(cavgs_m(icls))
                         call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
-                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft, mask=build%l_resmsk)
+                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft)
                         call build%pftc%set_ref_pft(icls, pft, iseven=.true.)
                         call build%pftc%cp_even2odd_ref(icls)
                     endif

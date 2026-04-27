@@ -49,7 +49,6 @@ type :: builder
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
     logical,                allocatable :: lmsk_crop(:,:,:)       !< logical circular 2D mask for cropped image
-    logical,                allocatable :: l_resmsk(:)            !< logical resolution mask
 
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
@@ -298,8 +297,6 @@ contains
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
             call mskimg%kill
-            ! resolution band mask
-            allocate(self%l_resmsk(fdim(params%box)-1),source=.true.)
             ! mask memoization
             call self%img%memoize_mask_coords
         endif
@@ -354,7 +351,6 @@ contains
             if( allocated(self%fsc)                   ) deallocate(self%fsc)
             if( allocated(self%lmsk)                  ) deallocate(self%lmsk)
             if( allocated(self%lmsk_crop)             ) deallocate(self%lmsk_crop)
-            if( allocated(self%l_resmsk)              ) deallocate(self%l_resmsk)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox

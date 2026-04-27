@@ -70,7 +70,7 @@ do i = 1,NIMGS
     call b%spproj_field%set(i,'class', icls)
     call b%spproj_field%set(i,'eo',eo)
     shifts(:,i) = -shift
-    call img%polarize(pft, mask=b%l_resmsk)
+    call img%polarize(pft)
     call pftc%set_ptcl_pft(i, pft)
 enddo
 call pftc%polar_cavger_new(.false.)

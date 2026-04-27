@@ -32,9 +32,9 @@ do iptcl=1,p%nptcls
     call b%img_crop%read(p%stk, iptcl)
     call b%img_crop%fft()
     ! transfer to polar coordinates
-    call b%img_crop%polarize(pft, mask=b%l_resmsk)
+    call b%img_crop%polarize(pft)
     call pftc%set_ref_pft(iptcl, pft, iseven=.true.)
-    call b%img_crop%polarize(pft, mask=b%l_resmsk)
+    call b%img_crop%polarize(pft)
     call pftc%set_ptcl_pft(iptcl, pft)
 end do
 allocate(cc(pftc%get_nrots()), cc_fft(pftc%get_nrots()))

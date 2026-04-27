@@ -18,6 +18,7 @@ end type commander_polar_volassemble
 contains
 
     subroutine exec_polar_assembly( self, cline )
+        use simple_matcher_smpl_and_lplims, only: enforce_3D_pftc_k_range
         class(commander_polar_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
@@ -33,6 +34,7 @@ contains
         ! (polar=no) or polar partial sums (polar=yes|direct|obsfield), while
         ! the assembly commander owns shared-memory reduction and reference update.
         nrefs = params%nspace * params%nstates
+        call enforce_3D_pftc_k_range(params, build, 'exec_polar_assembly')
         call build%pftc%new(params, nrefs, [1,1], params%kfromto)
         params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
         call build%pftc%polar_cavger_new(.true., nrefs=nrefs)

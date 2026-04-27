@@ -106,10 +106,9 @@ contains
     end subroutine memoize4polarize_oversamp
 
     ! keep serial
-    module subroutine polarize( self, pft, mask )
+    module subroutine polarize( self, pft )
         class(image),      intent(in)    :: self     !< image instance to polarize
         complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft to be filled
-        logical, optional, intent(in)    :: mask(:)  !< interpolation mask, all .false. set to CMPLX_ZERO
         complex(kind=c_float_complex) :: acc, fcomp
         logical :: h_negative
         integer :: i, k, l, m, ind, h_val, k_val, phys1, phys2
@@ -139,20 +138,11 @@ contains
             end do
         end do
         !$OMP END SIMD
-        if( present(mask) )then
-            ! band masking
-            !$OMP SIMD
-            do k=mem_poldim(2),mem_poldim(3)
-                if( .not.mask(k) ) pft(:,k) = CMPLX_ZERO
-            enddo
-            !$OMP END SIMD
-        endif
     end subroutine polarize
 
-    module subroutine polarize_oversamp( self, pft, mask )
+    module subroutine polarize_oversamp( self, pft )
         class(image),      intent(in)    :: self
         complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3))
-        logical, optional, intent(in)    :: mask(:)
         complex(kind=c_float_complex) :: acc, fcomp
         real    :: padding_factor_scaling
         logical :: h_negative
@@ -187,13 +177,6 @@ contains
             end do
         end do
         !$OMP END SIMD
-        if( present(mask) )then
-            !$OMP SIMD
-            do k = mem_poldim(2), mem_poldim(3)
-                if( .not.mask(k) ) pft(:,k) = CMPLX_ZERO
-            end do
-            !$OMP END SIMD
-        endif
     end subroutine polarize_oversamp
 
 end submodule simple_image_polar
