@@ -8,6 +8,7 @@ use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_star_from_iter
+use simple_matcher_pftc_prep, only: polar_ref_sections_available
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -25,6 +26,19 @@ contains
     procedure(finalize_run_interface),  deferred :: finalize_run
     procedure(cleanup_interface),       deferred :: cleanup
 end type refine3D_strategy
+
+type :: refine3D_bench_state
+    integer(timer_int_kind) :: t_init     = 0
+    integer(timer_int_kind) :: t_prob     = 0
+    integer(timer_int_kind) :: t_sched    = 0
+    integer(timer_int_kind) :: t_assemble = 0
+    integer(timer_int_kind) :: t_tot      = 0
+    real(timer_int_kind)    :: rt_init     = 0.
+    real(timer_int_kind)    :: rt_prob     = 0.
+    real(timer_int_kind)    :: rt_sched    = 0.
+    real(timer_int_kind)    :: rt_assemble = 0.
+    real(timer_int_kind)    :: rt_tot      = 0.
+end type refine3D_bench_state
 
 ! ======================================================================
 ! SHARED-MEMORY IMPLEMENTATION
@@ -49,6 +63,7 @@ end type refine3D_inmem_strategy
 type, extends(refine3D_strategy) :: refine3D_distr_strategy
     type(qsys_env) :: qenv
     type(chash)    :: job_descr
+    type(refine3D_bench_state), private :: bench
     integer        :: nthr_master
     logical        :: have_oris
     logical        :: l_multistates
@@ -109,17 +124,6 @@ abstract interface
     end subroutine cleanup_interface
 end interface
 
-! BENCHMARKING VARIABLES
-! initialization
-integer(timer_int_kind) ::  t_init
-real(timer_int_kind)    :: rt_init
-! prob, scheduled jobs assemble
-integer(timer_int_kind) ::  t_prob,   t_sched,  t_assemble
-real(timer_int_kind)    :: rt_prob,  rt_sched, rt_assemble
-! total
-integer(timer_int_kind) ::  t_tot
-real(timer_int_kind)    :: rt_tot
-
 contains
 
     !> Strategy selection based on command-line shape.
@@ -135,6 +139,31 @@ contains
         endif
     end function create_refine3D_strategy
 
+    subroutine prepare_assembly_cline( cline, params, nthr, cline_assembly )
+        type(cmdline),    intent(in)    :: cline
+        type(parameters), intent(in)    :: params
+        integer,          intent(in)    :: nthr
+        type(cmdline),    intent(inout) :: cline_assembly
+        type(string) :: volname, vol_in
+        integer      :: state
+        cline_assembly = cline
+        call cline_assembly%set('which_iter', params%which_iter)
+        call cline_assembly%set('nthr',       nthr)
+        call cline_assembly%set('combine_eo', params%combine_eo)
+        if( params%l_update_frac ) call cline_assembly%set('update_frac', params%update_frac)
+        do state = 1, params%nstates
+            volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+            if( cline_assembly%defined('vol'//int2str(state)) )then
+                vol_in = cline_assembly%get_carg('vol'//int2str(state))
+                if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
+                    if( .not. file_exists(volname) ) call cline_assembly%delete('vol'//int2str(state))
+                endif
+            endif
+        end do
+        call volname%kill
+        call vol_in%kill
+    end subroutine prepare_assembly_cline
+
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
     ! ======================================================================
@@ -147,7 +176,7 @@ contains
         type(cmdline),                  intent(inout) :: cline
         type(commander_calc_pspec)            :: xcalc_pspec
         type(cmdline)                         :: cline_calc_pspec
-        integer                               :: startit
+        integer                               :: startit, state
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! startit
@@ -165,11 +194,13 @@ contains
         ! Input reference validation
         if( params%l_polar )then
             if( cline%defined('vol1') )then
-                if( .not. file_exists(params%vols(1)) ) then
-                    THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
-                endif
+                do state = 1, params%nstates
+                    if( .not. file_exists(params%vols(state)) ) then
+                        THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
+                    endif
+                end do
             else
-                if( .not. file_exists(POLAR_REFS_FBODY//BIN_EXT) ) then
+                if( .not. polar_ref_sections_available() ) then
                     THROW_HARD('polar references are required when VOL1 not provided')
                 endif
             endif
@@ -216,7 +247,7 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         use simple_commanders_euclid,  only: commander_calc_group_sigmas
         use simple_commanders_prob,    only: commander_prob_align, commander_prob_align_neigh
-        use simple_commanders_rec_distr, only: commander_volassemble
+        use simple_commanders_rec_distr, only: commander_cartesian_volassemble, commander_polar_volassemble
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -225,12 +256,14 @@ contains
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_prob_align)        :: xprob_align
         type(commander_prob_align_neigh)  :: xprob_align_neigh
-        type(commander_volassemble)       :: xvolassemble
+        type(commander_cartesian_volassemble) :: xvolassemble
+        type(commander_polar_volassemble) :: xpolar_volassemble
         type(cmdline)                     :: cline_prob_align
         type(cmdline)                     :: cline_volassemble
         integer                           :: state
-        logical                           :: l_prob_state_mode, l_prob_neigh_mode
-        type(string)                      :: volname, vol_in
+        logical                           :: l_prob_state_mode, l_prob_neigh_mode, l_bootstrap_polar_refs
+        logical                           :: l_write_partial_recs
+        type(string)                      :: volname
         601 format(A,1X,F12.3)
         call self%conv%print_iteration(params%which_iter)
         ! communicate iteration counters
@@ -253,6 +286,18 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
+        l_bootstrap_polar_refs = .not. polar_ref_sections_available()
+        if( l_bootstrap_polar_refs )then
+            do state = 1, params%nstates
+                if( .not. file_exists(params%vols(state)) )then
+                    l_bootstrap_polar_refs = .false.
+                    exit
+                endif
+            end do
+        endif
+        if( l_bootstrap_polar_refs )then
+            call write_initial_polar_ref_sections(params, build, cline)
+        endif
         ! refine=prob* pre-step
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
@@ -280,29 +325,28 @@ contains
             if( cline%defined('lp') ) params%lp = cline%get_rarg('lp')
         endif
         ! main refinement step
-        if( trim(params%volrec) .eq. 'yes' ) call cline%set('force_volassemble', 'yes')
-        call refine3D_exec(params, build, cline, params%which_iter, converged)
-        if( trim(params%volrec) .eq. 'yes' )then
-            cline_volassemble = cline
-            call cline_volassemble%set('which_iter', params%which_iter)
-            call cline_volassemble%set('nthr',       params%nthr)
-            call cline_volassemble%set('combine_eo', params%combine_eo)
-            if( params%l_update_frac ) call cline_volassemble%set('update_frac', params%update_frac)
-            do state = 1, params%nstates
-                volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
-                if( cline_volassemble%defined('vol'//int2str(state)) )then
-                    vol_in = cline_volassemble%get_carg('vol'//int2str(state))
-                    if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
-                        if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
-                    endif
-                endif
-            end do
-            call xvolassemble%execute(cline_volassemble)
-            do state = 1, params%nstates
-                volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
-                params%vols(state) = volname
-                call cline%set('vol'//int2str(state), volname)
-            end do
+        l_write_partial_recs = trim(params%volrec) .eq. 'yes' .or. params%l_polar
+        if( l_write_partial_recs )then
+            ! Legacy handshake for rec-writing helpers that still inspect this key.
+            ! The strategy owns the actual assembly dispatch decision.
+            call cline%set('force_volassemble', 'yes')
+        endif
+        call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
+        if( l_write_partial_recs )then
+            call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
+            if( params%l_polar )then
+                call xpolar_volassemble%execute(cline_volassemble)
+            else
+                call xvolassemble%execute(cline_volassemble)
+            endif
+            if( trim(params%volrec) .eq. 'yes' )then
+                do state = 1, params%nstates
+                    volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+                    params%vols(state) = volname
+                    call cline%set('vol'//int2str(state), volname)
+                end do
+            endif
+            if( params%l_polar ) params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
             call cline%delete('force_volassemble')
         endif
         ! input volume should only be used once in polar mode
@@ -401,13 +445,9 @@ contains
         self%l_multistates = cline%defined('nstates')
         ! init project
         call build%init_params_and_build_spproj(cline, params)
-        ! polar toolboxes needed on master for reference assembly
+        ! Keep worker command lines explicit; assembly commanders own polar reference assembly.
         if( params%l_polar )then
-            ! Ensure scheduled worker command lines carry explicit angular-space size.
-            ! This avoids any fallback to parser defaults in downstream private workers.
             call cline%set('nspace', params%nspace)
-            call build%build_general_tbox(params, cline, do3d=.true.)
-            call build%pftc%new(params, 1, [1,1], params%kfromto)
         endif
         ! sanity check
         fall_over = .false.
@@ -533,9 +573,9 @@ contains
                 call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
             endif
             ! check if we have input volume(s) and/or 3D orientations
-            vol_defined = .false.
+            vol_defined = .true.
             do state = 1,params%nstates
-                vol_defined = cline%defined('vol'//int2str(state))
+                if( .not. cline%defined('vol'//int2str(state)) ) vol_defined = .false.
             enddo
             self%have_oris = .not. build%spproj%is_virgin_field(params%oritype)
             if( .not. self%have_oris )then
@@ -545,7 +585,7 @@ contains
             endif
             if( params%l_polar )then
                 if( .not.vol_defined )then
-                    if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) vol_defined = .true.
+                    if( polar_ref_sections_available() ) vol_defined = .true.
                 endif
             endif
             if( .not. vol_defined )then
@@ -590,7 +630,7 @@ contains
     end subroutine distr_initialize
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
-        use simple_commanders_rec_distr, only: commander_volassemble
+        use simple_commanders_rec_distr, only: commander_cartesian_volassemble, commander_polar_volassemble
         use simple_commanders_volops, only: commander_postprocess
         use simple_commanders_euclid, only: commander_calc_group_sigmas
         use simple_commanders_prob,   only: commander_prob_align, commander_prob_align_neigh
@@ -606,18 +646,19 @@ contains
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_prob_align)        :: xprob_align_distr
         type(commander_prob_align_neigh)  :: xprob_align_neigh_distr
-        type(commander_volassemble)       :: xvolassemble
+        type(commander_cartesian_volassemble) :: xvolassemble
+        type(commander_polar_volassemble) :: xpolar_volassemble
         type(cmdline) :: cline_prob_align, cline_volassemble
         type(string)  :: str, str_iter, str_state
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
-        type(string)  :: fname_vol, volpproc, vollp, volname, vol_in
+        type(string)  :: fname_vol, volpproc, vollp
         real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:)
         integer :: state, iter
-        logical :: l_prob_state_mode, l_prob_neigh_mode
+        logical :: l_prob_state_mode, l_prob_neigh_mode, l_bootstrap_polar_refs
         if( L_BENCH_GLOB )then
-            t_init = tic()
-            t_tot  = tic()
+            self%bench%t_init = tic()
+            self%bench%t_tot  = tic()
         endif
         601 format(A,1X,F12.3)
         iter     = params%which_iter
@@ -643,11 +684,23 @@ contains
         endif
         ! prob refinement
         if( L_BENCH_GLOB )then
-            rt_init = toc(t_init)
-            t_prob = tic()
+            self%bench%rt_init = toc(self%bench%t_init)
+            self%bench%t_prob  = tic()
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
+        l_bootstrap_polar_refs = .not. polar_ref_sections_available()
+        if( l_bootstrap_polar_refs )then
+            do state = 1, params%nstates
+                if( .not. file_exists(params%vols(state)) )then
+                    l_bootstrap_polar_refs = .false.
+                    exit
+                endif
+            end do
+        endif
+        if( l_bootstrap_polar_refs )then
+            call write_initial_polar_ref_sections(params, build, cline)
+        endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
@@ -665,8 +718,8 @@ contains
             endif
         endif
         if( L_BENCH_GLOB )then
-            rt_prob = toc(t_prob)
-            t_sched = tic()
+            self%bench%rt_prob = toc(self%bench%t_prob)
+            self%bench%t_sched = tic()
         endif
         ! update job description
         call self%job_descr%set( 'which_iter', int2str(iter))
@@ -681,88 +734,85 @@ contains
         call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
         ! assemble volumes, postprocess, automask
         if( L_BENCH_GLOB )then
-            rt_sched   = toc(t_sched)
-            t_assemble = tic()
+            self%bench%rt_sched   = toc(self%bench%t_sched)
+            self%bench%t_assemble = tic()
         endif
-        if( (trim(params%volrec).eq.'yes') )then
+        if( (trim(params%volrec).eq.'yes') .or. params%l_polar )then
             select case(trim(params%refine))
                 case('eval')
                     ! nothing
                 case DEFAULT
-                    cline_volassemble = cline
-                    call cline_volassemble%set('which_iter', iter)
-                    call cline_volassemble%set('nthr',       self%nthr_master)
-                    call cline_volassemble%set('combine_eo', params%combine_eo)
-                    if( params%l_update_frac ) call cline_volassemble%set('update_frac', params%update_frac)
-                    do state = 1, params%nstates
-                        volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
-                        if( cline_volassemble%defined('vol'//int2str(state)) )then
-                            vol_in = cline_volassemble%get_carg('vol'//int2str(state))
-                            if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
-                                if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
-                            endif
-                        endif
-                    end do
-                    call xvolassemble%execute(cline_volassemble)
-                    ! rename & add volumes to project & update job_descr
-                    call build%spproj_field%get_pops(state_pops, 'state')
-                    do state = 1,params%nstates
-                        str_state = int2str_pad(state,2)
-                        if( state_pops(state) == 0 )then
-                            vol = 'vol'//int2str(state)
-                            call cline%delete(vol%to_char())
-                            call self%job_descr%delete(vol%to_char() )
-                            if( trim(params%oritype).eq.'cls3D' )then
-                                call build%spproj%remove_entry_from_osout('vol_cavg', state)
+                    call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
+                    if( params%l_polar )then
+                        call xpolar_volassemble%execute(cline_volassemble)
+                        params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
+                    else
+                        call xvolassemble%execute(cline_volassemble)
+                    endif
+                    if( trim(params%volrec).eq.'yes' )then
+                        ! rename & add volumes to project & update job_descr
+                        call build%spproj_field%get_pops(state_pops, 'state')
+                        do state = 1,params%nstates
+                            str_state = int2str_pad(state,2)
+                            if( state_pops(state) == 0 )then
+                                vol = 'vol'//int2str(state)
+                                call cline%delete(vol%to_char())
+                                call self%job_descr%delete(vol%to_char() )
+                                if( trim(params%oritype).eq.'cls3D' )then
+                                    call build%spproj%remove_entry_from_osout('vol_cavg', state)
+                                else
+                                    call build%spproj%remove_entry_from_osout('vol', state)
+                                endif
+                                call build%spproj%remove_entry_from_osout('fsc', state)
                             else
-                                call build%spproj%remove_entry_from_osout('vol', state)
+                                vol_iter  = string(VOL_FBODY)//str_state//params%ext
+                                fsc_file  = string(FSC_FBODY)//str_state//BIN_EXT
+                                call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
+                                ! FSC plot
+                                res       = get_resarr(params%box_crop, params%smpd_crop)
+                                fsc       = file2rarr(fsc_file)
+                                fsc_templ = 'fsc_state'//str_state%to_char()//'_iter'//str_iter%to_char()
+                                call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ%to_char())
+                                if( trim(params%oritype).eq.'cls3D' )then
+                                    call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
+                                else
+                                    call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
+                                endif
+                                vol = 'vol'//int2str(state)
+                                call self%job_descr%set( vol, vol_iter )
+                                call cline%set(vol, vol_iter)
                             endif
-                            call build%spproj%remove_entry_from_osout('fsc', state)
-                        else
-                            vol_iter  = string(VOL_FBODY)//str_state//params%ext
-                            fsc_file  = string(FSC_FBODY)//str_state//BIN_EXT
-                            call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
-                            ! FSC plot
-                            res       = get_resarr(params%box_crop, params%smpd_crop)
-                            fsc       = file2rarr(fsc_file)
-                            fsc_templ = 'fsc_state'//str_state%to_char()//'_iter'//str_iter%to_char()
-                            call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ%to_char())
-                            if( trim(params%oritype).eq.'cls3D' )then
-                                call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
-                            else
-                                call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
+                        enddo
+                        call build%spproj%write_segment_inside('out')
+                        ! per-state postprocess (and optional automask)
+                        do state = 1,params%nstates
+                            str_state = int2str_pad(state,2)
+                            if( state_pops(state) == 0 ) cycle
+                            call self%cline_postprocess%set('state', state)
+                            call self%cline_postprocess%set('nthr',  self%nthr_master)
+                            if( cline%defined('lp') ) call self%cline_postprocess%set('lp', params%lp)
+                            call xpostprocess%execute(self%cline_postprocess)
+                            volpproc = string(VOL_FBODY)//str_state//PPROC_SUFFIX//params%ext%to_char()
+                            vollp    = string(VOL_FBODY)//str_state//LP_SUFFIX//params%ext%to_char()
+                            ! keep per-iteration postprocessed copies
+                            vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter,3)//&
+                                &PPROC_SUFFIX//params%ext%to_char()
+                            call simple_copy_file(volpproc, vol_iter)
+                            vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext%to_char()
+                            call simple_copy_file(vollp, vol_iter)
+                            if( iter > 1 .and. params%keepvol.eq.'no' )then
+                                call del_file(string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter-1,3)//&
+                                    &PPROC_SUFFIX//params%ext%to_char())
+                                call del_file(string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter-1,3)//&
+                                    &LP_SUFFIX//params%ext%to_char())
                             endif
-                            vol = 'vol'//int2str(state)
-                            call self%job_descr%set( vol, vol_iter )
-                            call cline%set(vol, vol_iter)
-                        endif
-                    enddo
-                    call build%spproj%write_segment_inside('out')
-                    ! per-state postprocess (and optional automask)
-                    do state = 1,params%nstates
-                        str_state = int2str_pad(state,2)
-                        if( state_pops(state) == 0 ) cycle
-                        call self%cline_postprocess%set('state', state)
-                        call self%cline_postprocess%set('nthr',  self%nthr_master)
-                        if( cline%defined('lp') ) call self%cline_postprocess%set('lp', params%lp)
-                        call xpostprocess%execute(self%cline_postprocess)
-                        volpproc = string(VOL_FBODY)//str_state//PPROC_SUFFIX//params%ext%to_char()
-                        vollp    = string(VOL_FBODY)//str_state//LP_SUFFIX//params%ext%to_char()
-                        ! keep per-iteration postprocessed copies
-                        vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext%to_char()
-                        call simple_copy_file(volpproc, vol_iter)
-                        vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext%to_char()
-                        call simple_copy_file(vollp, vol_iter)
-                        if( iter > 1 .and. params%keepvol.eq.'no' )then
-                            call del_file(string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext%to_char())
-                            call del_file(string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter-1,3)//LP_SUFFIX//params%ext%to_char())
-                        endif
-                    enddo
+                        enddo
+                    endif
             end select
-            if( L_BENCH_GLOB ) rt_assemble = toc(t_assemble)
+            if( L_BENCH_GLOB ) self%bench%rt_assemble = toc(self%bench%t_assemble)
         endif
         ! convergence
-        ! For strict same-iteration metrics, evaluate convergence after volassemble
+        ! For strict same-iteration metrics, evaluate convergence after assembly
         ! and re-read the updated project segment (including res field updates).
         converged = .false.
         select case(trim(params%refine))
@@ -777,30 +827,13 @@ contains
         end select
         ! Force termination at requested number of iterations (maxits is run-length)
         if( (iter - params%startit + 1) >= params%maxits ) converged = .true.
-        ! polar references assembly
+        ! polar reference bookkeeping; the polar assembly commander owns the actual reduction.
         if( params%l_polar )then
-            params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
-            call build%pftc%polar_cavger_new(.true., nrefs=params%nspace)
-            call build%pftc%polar_cavger_calc_pops(build%spproj)
-            call build%pftc%polar_cavger_assemble_sums_from_parts
-            select case(trim(params%polar))
-                case('direct','obsfield')
-                    call build%pftc%polar_cavger_merge_eos_and_norm_direct(build%eulspace, cline, &
-                        &build%spproj_field%get_update_frac())
-                case('yes')
-                    call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, &
-                        &build%spproj_field%get_update_frac())
-                case default
-                    THROW_HARD('unsupported POLAR mode: '//trim(params%polar))
-            end select
-            call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-            call build%pftc%polar_cavger_kill
             call self%job_descr%delete('vol1')
             call cline%delete('vol1')
             if( iter > 1 .and. params%keepvol.eq.'no' )then
                 call del_file(string(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext%to_char())
             endif
-            if( L_BENCH_GLOB ) rt_assemble = toc(t_assemble)
         endif
         ! combine even/odd final iteration
         if ( self%l_combine_eo .and. converged )then
@@ -841,7 +874,7 @@ contains
         if( allocated(res) ) deallocate(res)
         if( allocated(fsc) ) deallocate(fsc)
         if( allocated(state_pops) ) deallocate(state_pops)
-        if( L_BENCH_GLOB ) rt_tot = toc(t_tot)
+        if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine distr_execute_iteration
 
     subroutine distr_finalize_iteration(self, params, build)
@@ -854,19 +887,24 @@ contains
             benchfname = 'DISTR_REFINE3D_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation              : ', rt_init
-            write(fnr,'(a,1x,f9.2)') 'prob tab, distributed       : ', rt_prob
-            write(fnr,'(a,1x,f9.2)') '3D align & rec, distributed : ', rt_sched
-            write(fnr,'(a,1x,f9.2)') 'assemble parts              : ', rt_assemble
-            write(fnr,'(a,1x,f9.2)') 'total time                  : ', rt_tot
+            write(fnr,'(a,1x,f9.2)') 'initialisation              : ', self%bench%rt_init
+            write(fnr,'(a,1x,f9.2)') 'prob tab, distributed       : ', self%bench%rt_prob
+            write(fnr,'(a,1x,f9.2)') '3D align & rec, distributed : ', self%bench%rt_sched
+            write(fnr,'(a,1x,f9.2)') 'assemble parts              : ', self%bench%rt_assemble
+            write(fnr,'(a,1x,f9.2)') 'total time                  : ', self%bench%rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation              : ', (rt_init/rt_tot)     * 100.
-            write(fnr,'(a,1x,f9.2)') 'prob tab, distributed       : ', (rt_prob/rt_tot)     * 100.
-            write(fnr,'(a,1x,f9.2)') '3D align & rec, distributed : ', (rt_sched/rt_tot)    * 100.
-            write(fnr,'(a,1x,f9.2)') 'assemble parts           : ', (rt_assemble/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'initialisation              : ', &
+                &(self%bench%rt_init/self%bench%rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'prob tab, distributed       : ', &
+                &(self%bench%rt_prob/self%bench%rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') '3D align & rec, distributed : ', &
+                &(self%bench%rt_sched/self%bench%rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'assemble parts              : ', &
+                &(self%bench%rt_assemble/self%bench%rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') '% accounted for             : ',&
-                &((rt_init+rt_prob+rt_sched+rt_assemble)/rt_tot) * 100.
+                &((self%bench%rt_init + self%bench%rt_prob + self%bench%rt_sched + &
+                &self%bench%rt_assemble)/self%bench%rt_tot) * 100.
             call fclose(fnr)
         endif
     end subroutine distr_finalize_iteration
@@ -899,5 +937,22 @@ contains
         call qsys_cleanup(params)
         call self%job_descr%kill
     end subroutine distr_cleanup
+
+    subroutine write_initial_polar_ref_sections( params, build, cline )
+        use simple_matcher_refvol_utils, only: read_mask_filter_reproject_refvols
+        type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
+        type(cmdline),    intent(in)    :: cline
+        integer :: nrefs
+        ! Bootstrap exception: before the first matcher pass there are no
+        ! partial reconstructions for assembly, but starting volumes can
+        ! still supply the initial polar reference sections.
+        nrefs = params%nspace * params%nstates
+        call read_mask_filter_reproject_refvols(params, build, cline, 1)
+        call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
+        call build%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+        call build%pftc%polar_cavger_kill
+        call build%pftc%kill
+    end subroutine write_initial_polar_ref_sections
 
 end module simple_refine3D_strategy

@@ -63,9 +63,9 @@ contains
         complex(dp) :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp)    :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        real(dp)    :: fsc(self%kfromto(1):self%interpklim), ufrac_trec
+        real(dp)    :: fsc(self%kfromto(1):self%interpklim), fsc_state(self%kfromto(1):self%interpklim), ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
-        integer     :: find4eoavg, i
+        integer     :: find4eoavg, i, state, base, nprojs
         ! Mirror Fourier & CTF2 slices
         call self%mirror_slices( reforis )
         ! Common-lines conribution
@@ -76,27 +76,43 @@ contains
             ! read previous polar references to be used first for FSC calculation
             call self%read_pft_array(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_even)
             call self%read_pft_array(string(POLAR_REFS_FBODY)//'_odd'//BIN_EXT,  prev_odd)
-            ! Calculate and write global FSC, FRCs
+            ! The per-state FSCs below are written to disk and used for ML
+            ! regularization. This full-range FSC is retained only for the
+            ! legacy even/odd registration cutoff after restoration.
             call self%calc_fsc(pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc,&
                                 &ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd)
         else
             call self%calc_fsc(pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc)
         endif
+        nprojs = self%p_ptr%nspace
+        call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
+        do state = 1,self%p_ptr%nstates
+            base = (state - 1) * nprojs
+            if( self%p_ptr%l_trail_rec )then
+                call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, base+1, base+nprojs, fsc_state, &
+                    &ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd)
+            else
+                call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, base+1, base+nprojs, fsc_state)
+            endif
+            fsc_boxcrop(                 :self%kfromto(1)) = 1.0
+            fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc_state(self%kfromto(1):self%interpklim))
+            if( self%interpklim < size(fsc_boxcrop) )then
+                fsc_boxcrop(self%interpklim+1:)            = 0.0
+            endif
+            call arr2file(fsc_boxcrop, string(FSC_FBODY//int2str_pad(state,2)//BIN_EXT))
+            do i = 1,nprojs
+                ! FRCs are set to the state-local FSC. to check if we are using those
+                call frcs%set_frc(i, fsc_boxcrop, state)
+            enddo
+            if( self%p_ptr%l_ml_reg ) call add_invtausq2rho_range(self, ctf2_even, ctf2_odd, base+1, base+nprojs, fsc_state)
+        enddo
+        call frcs%write(string(FRCS_FILE))
+        call frcs%kill
         fsc_boxcrop(                 :self%kfromto(1)) = 1.0
         fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc(self%kfromto(1):self%interpklim))
         if( self%interpklim < size(fsc_boxcrop) )then
             fsc_boxcrop(self%interpklim+1:)            = 0.0
         endif
-        call arr2file(fsc_boxcrop, string(FSC_FBODY//int2str_pad(1,2)//BIN_EXT))
-        call frcs%new(self%ncls, self%p_ptr%box_crop, self%p_ptr%smpd_crop, 1)
-        do i = 1,self%ncls
-            ! FRCs are set to the FSC. to check if we are using those
-            call frcs%set_frc(i, fsc_boxcrop, 1)
-        enddo
-        call frcs%write(string(FRCS_FILE))
-        call frcs%kill
-        ! ML regularization
-        if( self%p_ptr%l_ml_reg ) call self%add_invtausq2rho(ctf2_even, ctf2_odd, fsc)
         ! Wiener normalization
         call self%restore_references(reforis, pfts_even, pfts_odd, ctf2_even, ctf2_odd)
         ! Keeping e/o in register
@@ -122,15 +138,27 @@ contains
         complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
         real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%interpklim)
         real        :: psi
-        integer     :: iref, m
+        integer     :: iref, m, iloc, mloc, iglob, base, istate, nprojs, nprojs_nomirr, nwork
         logical     :: l_rotm
         if( .not.ref_space%isthere('mirr') )then
             THROW_HARD('Mirror index missing in reference search space')
         endif
-        !$omp parallel do default(shared) proc_bind(close) private(iref,m,pft,ctf2,psi,l_rotm)
-        do iref = 1,self%ncls/2
-            m      = ref_space%get_int(iref,'mirr')
-            psi    = abs(ref_space%get(m, 'psi'))
+        nprojs        = self%p_ptr%nspace
+        nprojs_nomirr = nprojs / 2
+        if( nprojs * self%p_ptr%nstates /= self%ncls )then
+            THROW_HARD('state-major polar reference count mismatch; mirror_slices')
+        endif
+        nwork = nprojs_nomirr * self%p_ptr%nstates
+        !$omp parallel do default(shared) proc_bind(close) private(iref,m,iloc,mloc,iglob,base,istate,pft,ctf2,psi,l_rotm)
+        do iglob = 1,nwork
+            istate = (iglob - 1) / nprojs_nomirr + 1
+            iloc   = mod(iglob - 1, nprojs_nomirr) + 1
+            base   = (istate - 1) * nprojs
+            iref   = base + iloc
+            mloc   = ref_space%get_int(iloc,'mirr')
+            if( mloc < 1 .or. mloc > nprojs ) THROW_HARD('mirror index out of state-local range; mirror_slices')
+            m      = base + mloc
+            psi    = abs(ref_space%get(mloc, 'psi'))
             l_rotm = (psi > 0.1) .and. (psi < 359.9)
             ! Fourier components
             if( l_rotm )then
@@ -176,18 +204,28 @@ contains
         real(dp)    :: ctf2_slice_o(self%kfromto(1):self%interpklim,self%pftsz)
         real(dp)    :: rl_e(self%kfromto(1):self%interpklim), rl_o(self%kfromto(1):self%interpklim)
         real(dp)    :: wl(self%kfromto(1):self%interpklim), wr(self%kfromto(1):self%interpklim)
-        real(dp)    :: R(3,3,self%ncls), Rj(3,3), tRi(3,3), eulers(3), psi
+        real(dp), allocatable :: R(:,:,:)
+        real(dp)    :: Rj(3,3), tRi(3,3), eulers(3), psi
         real        :: Rtmp(3,3)
         integer     :: rotl, rotr, iref, jref, m, isym, nsym
+        integer     :: iloc, jloc, mloc, iglob, base, istate, nprojs, nprojs_nomirr, nwork
         logical     :: l_rotm, conjgl, conjgr
         if( .not.ref_space%isthere('mirr') )then
             THROW_HARD('Mirror index missing in reference search space')
         endif
         ! Symmetry rotation matrices
-        nsym = symop%get_nsym()
+        nsym          = symop%get_nsym()
+        nprojs        = self%p_ptr%nspace
+        nprojs_nomirr = nprojs / 2
+        if( nprojs * self%p_ptr%nstates /= self%ncls )then
+            THROW_HARD('state-major polar reference count mismatch; calc_comlin_contrib')
+        endif
+        nwork = nprojs_nomirr * self%p_ptr%nstates
+        allocate(R(3,3,nprojs),source=0.d0)
         allocate(Rsym(3,3,nsym),source=0.d0)
         !$omp parallel default(shared) proc_bind(close)&
         !$omp private(iref,jref,m,isym,tRi,Rj,Rtmp,eulers,wl,wr,psi,l_rotm,cl_e,cl_o,rl_e,rl_o)&
+        !$omp& private(iloc,jloc,mloc,iglob,base,istate)&
         !$omp& private(rotl,rotr,conjgl,conjgr,pft_slice_e,pft_slice_o,ctf2_slice_e,ctf2_slice_o)
         ! Init
         !$omp workshare
@@ -198,7 +236,7 @@ contains
         !$omp end workshare
         ! Caching rotation matrices
         !$omp do schedule(static)
-        do iref = 1,self%ncls
+        do iref = 1,nprojs
             R(:,:,iref) = real(ref_space%get_mat(iref),dp)
         enddo
         !$omp end do nowait
@@ -208,25 +246,33 @@ contains
             Rsym(:,:,isym) = real(Rtmp,dp)
         end do
         !$omp end do
-        ! Common lines contribution
+        ! Common lines are restricted within a state; cross-state common lines
+        ! are not physically meaningful.
         !$omp do schedule(static)
-        do iref = 1,self%ncls/2
-            tRi = transpose(R(:,:,iref))
-            m   = ref_space%get_int(iref,'mirr')
+        do iglob = 1,nwork
+            istate = (iglob - 1) / nprojs_nomirr + 1
+            iloc   = mod(iglob - 1, nprojs_nomirr) + 1
+            base   = (istate - 1) * nprojs
+            iref   = base + iloc
+            mloc   = ref_space%get_int(iloc,'mirr')
+            if( mloc < 1 .or. mloc > nprojs ) THROW_HARD('mirror index out of state-local range; calc_comlin_contrib')
+            m      = base + mloc
+            tRi = transpose(R(:,:,iloc))
             pft_slice_e  = DCMPLX_ZERO
             pft_slice_o  = DCMPLX_ZERO
             ctf2_slice_e = 0.d0
             ctf2_slice_o = 0.d0
-            do jref = 1,self%ncls/2
+            do jloc = 1,nprojs_nomirr
+                jref = base + jloc
                 do isym = 1,nsym
                     if( isym == 1 )then
                         if( jref == iref ) cycle    ! self   exclusion
                         if( jref == m )    cycle    ! mirror exclusion
                         ! Rotation of both planes by transpose of Ri (tRixRi=I & Rsym=I)
-                        Rj = matmul(R(:,:,jref), tRi)
+                        Rj = matmul(R(:,:,jloc), tRi)
                     else
                         ! Symmetry operator
-                        Rj = matmul(R(:,:,jref), Rsym(:,:,isym))
+                        Rj = matmul(R(:,:,jloc), Rsym(:,:,isym))
                         ! Rotation of both planes by transpose of Ri (tRixRi -> I)
                         Rj = matmul(Rj, tRi)
                     endif
@@ -290,9 +336,15 @@ contains
         !$omp end do
         ! Mirroring contributions
         !$omp do schedule(static)
-        do iref = 1,self%ncls/2
-            m      = ref_space%get_int(iref,'mirr')
-            psi    = abs(ref_space%get(m, 'psi'))
+        do iglob = 1,nwork
+            istate = (iglob - 1) / nprojs_nomirr + 1
+            iloc   = mod(iglob - 1, nprojs_nomirr) + 1
+            base   = (istate - 1) * nprojs
+            iref   = base + iloc
+            mloc   = ref_space%get_int(iloc,'mirr')
+            if( mloc < 1 .or. mloc > nprojs ) THROW_HARD('mirror index out of state-local range; calc_comlin_contrib')
+            m      = base + mloc
+            psi    = abs(ref_space%get(mloc, 'psi'))
             l_rotm = (psi>0.1) .and. (psi<359.9)
             call self%mirror_pft(pfts_cl_even(:,:,iref), pfts_cl_even(:,:,m))
             call self%mirror_pft(pfts_cl_odd(:,:,iref),  pfts_cl_odd(:,:,m))
@@ -305,6 +357,7 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
+        deallocate(R, Rsym)
     contains
 
         pure subroutine update_index( rot, conjugate )
@@ -335,10 +388,11 @@ contains
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
-        real(dp)    :: fsc(self%kfromto(1):self%interpklim), ufrac_trec, density_scale
+        real(dp)    :: fsc(self%kfromto(1):self%interpklim), fsc_state(self%kfromto(1):self%interpklim)
+        real(dp)    :: ufrac_trec, density_scale
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
         real        :: polar_density, cart_density
-        integer     :: find4eoavg, i,k
+        integer     :: find4eoavg, i, k, state, base, nprojs
         ! Mirror Fourier & CTF2 slices
         call mirror_slices_direct( self, reforis )
         ! Scale arrays to reproduce cartesian lattice behaviour after mirroring
@@ -362,7 +416,9 @@ contains
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
             ! read previous polar references to be used first for FSC calculation
             call prepare_trail_rec_arrays_direct( self, reforis, prev_even, prev_odd )
-            ! Calculate and write global FSC, FRCs
+            ! The per-state FSCs below are written to disk and used for ML
+            ! regularization. This full-range FSC is retained only for the
+            ! legacy even/odd registration cutoff after restoration.
             call self%calc_fsc(self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd, fsc,&
                     &ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd )
         else
@@ -370,21 +426,37 @@ contains
             call self%calc_fsc(self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd, fsc)
         endif
         ! write down FRCs
+        nprojs = self%p_ptr%nspace
+        call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
+        do state = 1,self%p_ptr%nstates
+            base = (state - 1) * nprojs
+            if( self%p_ptr%l_trail_rec )then
+                call calc_fsc_range(self, self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd, &
+                    &base+1, base+nprojs, fsc_state, ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd)
+            else
+                call calc_fsc_range(self, self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd, &
+                    &base+1, base+nprojs, fsc_state)
+            endif
+            fsc_boxcrop(                 :self%kfromto(1)) = 1.0
+            fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc_state(self%kfromto(1):self%interpklim))
+            if( self%interpklim < size(fsc_boxcrop) )then
+                fsc_boxcrop(self%interpklim+1:)            = 0.0
+            endif
+            call arr2file(fsc_boxcrop, string(FSC_FBODY//int2str_pad(state,2)//BIN_EXT))
+            do i = 1,nprojs
+                ! FRCs are set to the state-local FSC. to check if we are using those
+                call frcs%set_frc(i, fsc_boxcrop, state)
+            enddo
+            if( self%p_ptr%l_ml_reg ) call add_invtausq2rho_range(self, self%ctf2_even, self%ctf2_odd, &
+                &base+1, base+nprojs, fsc_state)
+        enddo
+        call frcs%write(string(FRCS_FILE))
+        call frcs%kill
         fsc_boxcrop(                 :self%kfromto(1)) = 1.0
         fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc(self%kfromto(1):self%interpklim))
         if( self%interpklim < size(fsc_boxcrop) )then
             fsc_boxcrop(self%interpklim+1:)            = 0.0
         endif
-        call arr2file(fsc_boxcrop, string(FSC_FBODY//int2str_pad(1,2)//BIN_EXT))
-        call frcs%new(self%ncls, self%p_ptr%box_crop, self%p_ptr%smpd_crop, 1)
-        do i = 1,self%ncls
-            ! FRCs are set to the FSC. to check if we are using those
-            call frcs%set_frc(i, fsc_boxcrop, 1)
-        enddo
-        call frcs%write(string(FRCS_FILE))
-        call frcs%kill
-        ! ML regularization
-        if( self%p_ptr%l_ml_reg ) call self%add_invtausq2rho(self%ctf2_even, self%ctf2_odd, fsc)
         ! Wiener normalization
         call self%restore_references(reforis, self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd)
         ! Keeping e/o in register
@@ -412,15 +484,27 @@ contains
         type(oris),          intent(in)    :: ref_space
         complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
         real        :: psi
-        integer     :: iref, m
+        integer     :: iref, m, iloc, mloc, iglob, base, istate, nprojs, nprojs_nomirr, nwork
         logical     :: l_rotm
         if( .not.ref_space%isthere('mirr') )then
             THROW_HARD('Mirror index missing in reference search space')
         endif
-        !$omp parallel do default(shared) proc_bind(close) private(iref,m,pft,psi,l_rotm)
-        do iref = 1,self%ncls/2
-            m      = ref_space%get_int(iref,'mirr')
-            psi    = abs(ref_space%get(m, 'psi'))
+        nprojs        = self%p_ptr%nspace
+        nprojs_nomirr = nprojs / 2
+        if( nprojs * self%p_ptr%nstates /= self%ncls )then
+            THROW_HARD('state-major polar reference count mismatch; mirror_slices_direct')
+        endif
+        nwork = nprojs_nomirr * self%p_ptr%nstates
+        !$omp parallel do default(shared) proc_bind(close) private(iref,m,iloc,mloc,iglob,base,istate,pft,psi,l_rotm)
+        do iglob = 1,nwork
+            istate = (iglob - 1) / nprojs_nomirr + 1
+            iloc   = mod(iglob - 1, nprojs_nomirr) + 1
+            base   = (istate - 1) * nprojs
+            iref   = base + iloc
+            mloc   = ref_space%get_int(iloc,'mirr')
+            if( mloc < 1 .or. mloc > nprojs ) THROW_HARD('mirror index out of state-local range; mirror_slices_direct')
+            m      = base + mloc
+            psi    = abs(ref_space%get(mloc, 'psi'))
             l_rotm = (psi > 0.1) .and. (psi < 359.9)
             ! Fourier components
             if( l_rotm )then
@@ -606,6 +690,62 @@ contains
         end where
     end subroutine calc_fsc
 
+    subroutine calc_fsc_range( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, ref_first, ref_last, fsc, &
+            &ufrac_trec, prev_even, prev_odd )
+        class(polarft_calc),   intent(in)  :: self
+        complex(dp),           intent(in)  :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp),           intent(in)  :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(in)  :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),              intent(in)  :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        integer,               intent(in)  :: ref_first, ref_last
+        real(dp),              intent(out) :: fsc(self%kfromto(1):self%interpklim)
+        real(dp),    optional, intent(in)  :: ufrac_trec
+        complex(dp), optional, intent(in)  :: prev_even(:,:,:)
+        complex(dp), optional, intent(in)  :: prev_odd(:,:,:)
+        complex(dp) :: even(self%pftsz,self%kfromto(1):self%interpklim)
+        complex(dp) :: odd(self%pftsz,self%kfromto(1):self%interpklim)
+        complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
+        real(dp)    :: vare(self%kfromto(1):self%interpklim)
+        real(dp)    :: varo(self%kfromto(1):self%interpklim)
+        real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%interpklim)
+        integer     :: icls, k
+        if( ref_first < 1 .or. ref_last > self%ncls .or. ref_first > ref_last )then
+            THROW_HARD('invalid reference range in calc_fsc_range')
+        endif
+        if( self%p_ptr%l_trail_rec )then
+            if( .not.present(ufrac_trec) .or. .not.present(prev_even) .or. .not.present(prev_odd) )then
+                THROW_HARD('Trailing reconstruction requested but missing arguments in calc_fsc_range')
+            endif
+        endif
+        fsc  = 0.d0; vare = 0.d0; varo = 0.d0
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+        !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo)
+        do icls = ref_first,ref_last
+            pft  = pfts_even(:,:,icls)
+            ctf2 = ctf2_even(:,:,icls)
+            call self%shell_floor_norm(pft, ctf2, even)
+            pft  = pfts_odd(:,:,icls)
+            ctf2 = ctf2_odd(:,:,icls)
+            call self%shell_floor_norm(pft, ctf2, odd)
+            if( self%p_ptr%l_trail_rec )then
+                even = ufrac_trec * even + (1.d0-ufrac_trec) * prev_even(:,:,icls)
+                odd  = ufrac_trec * odd  + (1.d0-ufrac_trec) * prev_odd(:,:,icls)
+            endif
+            do k = self%kfromto(1),self%interpklim
+                fsc(k)   = fsc(k)  + sum(real(even(:,k) * conjg(odd(:,k)), dp))
+                vare(k)  = vare(k) + sum(real(even(:,k) * conjg(even(:,k)),dp))
+                varo(k)  = varo(k) + sum(real(odd(:,k)  * conjg(odd(:,k)), dp))
+            enddo
+        enddo
+        !$omp end parallel do
+        vare = vare * varo
+        where( vare > DTINY )
+            fsc = fsc / sqrt(vare)
+        elsewhere
+            fsc = 0.d0
+        end where
+    end subroutine calc_fsc_range
+
     ! Compute the ML regularization term to be added to the CTF2 in the denominator of the Wiener filter
     module subroutine add_invtausq2rho( self, ctf2_even, ctf2_odd, fsc )
         class(polarft_calc), intent(inout) :: self
@@ -695,6 +835,91 @@ contains
         !$omp end parallel do
     end subroutine add_invtausq2rho
 
+    subroutine add_invtausq2rho_range( self, ctf2_even, ctf2_odd, ref_first, ref_last, fsc )
+        class(polarft_calc), intent(inout) :: self
+        real(dp),            intent(inout) :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(inout) :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        integer,             intent(in)    :: ref_first, ref_last
+        real(dp),            intent(in)    :: fsc(self%kfromto(1):self%interpklim)
+        real(dp) :: sig2e(self%kfromto(1):self%interpklim), sig2o(self%kfromto(1):self%interpklim)
+        real(dp) :: ssnr(self%kfromto(1):self%interpklim), tau2(self%kfromto(1):self%interpklim)
+        real(dp) :: invtau2e(self%kfromto(1):self%interpklim), invtau2o(self%kfromto(1):self%interpklim)
+        real(dp) :: cc, fudge, invtau2, shell_n
+        integer  :: icls, k, kstart, p
+        if( ref_first < 1 .or. ref_last > self%ncls .or. ref_first > ref_last )then
+            THROW_HARD('invalid reference range in add_invtausq2rho_range')
+        endif
+        shell_n      = real(ref_last - ref_first + 1,dp) * real(self%pftsz,dp)
+        invtau2e     = 0.d0
+        invtau2o     = 0.d0
+        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k)
+        do k = self%kfromto(1),self%interpklim
+            sig2e(k) = sum(ctf2_even(:,k,ref_first:ref_last))
+            sig2o(k) = sum(ctf2_odd(:, k,ref_first:ref_last))
+        enddo
+        !$omp end parallel do
+        fudge = real(self%p_ptr%tau,dp)
+        do k = self%kfromto(1),self%interpklim
+            cc = max(0.001d0,min(0.999d0,fsc(k)))
+            ssnr(k) = fudge * cc / (1.d0 - cc)
+        enddo
+        kstart = max(6, calc_fourier_index(self%p_ptr%hp, self%p_ptr%box_crop, self%p_ptr%smpd_crop))
+        where( sig2e > DTINY )
+            sig2e = shell_n / sig2e
+        elsewhere
+            sig2e = 0.d0
+        end where
+        tau2 = ssnr * sig2e
+        do k = kstart,self%interpklim
+            if( tau2(k) > DTINY )then
+                invtau2 = 1.d0 / (fudge * tau2(k))
+                invtau2e(k) = invtau2
+            endif
+        enddo
+        where( sig2o > DTINY )
+            sig2o = shell_n / sig2o
+        elsewhere
+            sig2o = 0.d0
+        end where
+        tau2 = ssnr * sig2o
+        do k = kstart,self%interpklim
+            if( tau2(k) > DTINY )then
+                invtau2 = 1.d0 / (fudge * tau2(k))
+                invtau2o(k) = invtau2
+            endif
+        enddo
+        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
+        do k = kstart,self%interpklim
+            if( invtau2e(k) > 0.d0 )then
+                invtau2 = invtau2e(k)
+                ctf2_even(:,k,ref_first:ref_last) = ctf2_even(:,k,ref_first:ref_last) + invtau2
+            else
+                do icls = ref_first,ref_last
+                    do p = 1,self%pftsz
+                        invtau2 = min(1.d3, 1.d3 * ctf2_even(p,k,icls))
+                        ctf2_even(p,k,icls) = ctf2_even(p,k,icls) + invtau2
+                    enddo
+                enddo
+            endif
+        enddo
+        !$omp end parallel do
+        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
+        do k = kstart,self%interpklim
+            if( invtau2o(k) > 0.d0 )then
+                invtau2 = invtau2o(k)
+                ctf2_odd(:,k,ref_first:ref_last) = ctf2_odd(:,k,ref_first:ref_last) + invtau2
+            else
+                do icls = ref_first,ref_last
+                    do p = 1,self%pftsz
+                        invtau2 = min(1.d3, 1.d3 * ctf2_odd(p,k,icls))
+                        ctf2_odd(p,k,icls) = ctf2_odd(p,k,icls) + invtau2
+                    enddo
+                enddo
+            endif
+        enddo
+        !$omp end parallel do
+    end subroutine add_invtausq2rho_range
+
     ! Performs the final normalization of references: CTF.I / (CTF2 + reg)
     module subroutine restore_references( self, reforis, pfts_even, pfts_odd, ctf2_even, ctf2_odd )
         class(polarft_calc), intent(inout) :: self
@@ -710,12 +935,22 @@ contains
         real(dp)    :: ctf2e(self%pftsz,self%kfromto(1):self%interpklim)
         real(dp)    :: ctf2o(self%pftsz,self%kfromto(1):self%interpklim)
         real        :: psi
-        integer     :: icls, m
+        integer     :: icls, m, iloc, mloc, iglob, base, istate, nprojs, nprojs_nomirr, nwork
         logical     :: l_rotm
+        nprojs        = self%p_ptr%nspace
+        nprojs_nomirr = nprojs / 2
+        if( nprojs * self%p_ptr%nstates /= self%ncls )then
+            THROW_HARD('state-major polar reference count mismatch; restore_references')
+        endif
+        nwork = nprojs_nomirr * self%p_ptr%nstates
         ! Restoration
         !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-        !$omp private(icls,m,pft,ctf2,pfte,pfto,ctf2e,ctf2o,psi,l_rotm)
-        do icls = 1,self%ncls/2
+        !$omp private(icls,m,iloc,mloc,iglob,base,istate,pft,ctf2,pfte,pfto,ctf2e,ctf2o,psi,l_rotm)
+        do iglob = 1,nwork
+            istate = (iglob - 1) / nprojs_nomirr + 1
+            iloc   = mod(iglob - 1, nprojs_nomirr) + 1
+            base   = (istate - 1) * nprojs
+            icls   = base + iloc
             ! merged then e/o
             pfte  = pfts_even(:,:,icls)
             pfto  = pfts_odd(:,:,icls)
@@ -727,11 +962,13 @@ contains
             call self%shell_floor_norm(pfte, ctf2e, self%pfts_even(:,:,icls))
             call self%shell_floor_norm(pfto, ctf2o, self%pfts_odd(:,:,icls))
             ! mirror the restored images (overwrites)
-            m = reforis%get_int(icls,'mirr')
+            mloc = reforis%get_int(iloc,'mirr')
+            if( mloc < 1 .or. mloc > nprojs ) THROW_HARD('mirror index out of state-local range; restore_references')
+            m    = base + mloc
             call self%mirror_pft(self%pfts_merg(:,:,icls), self%pfts_merg(:,:,m))
             call self%mirror_pft(self%pfts_even(:,:,icls), self%pfts_even(:,:,m))
             call self%mirror_pft(self%pfts_odd(:,:,icls),  self%pfts_odd(:,:,m))
-            psi    = abs(reforis%get(m, 'psi'))
+            psi    = abs(reforis%get(mloc, 'psi'))
             l_rotm = (psi > 0.1) .and. (psi < 359.9)
             if( l_rotm )then
                 self%pfts_merg(:,:,m) = conjg(self%pfts_merg(:,:,m))

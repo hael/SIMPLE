@@ -9,7 +9,7 @@ It covers:
 - command and strategy ownership
 - probabilistic pre-alignment and particle-update flow
 - the boundary between particle-domain work and volume-domain work
-- the role of `volassemble` in shared-memory and distributed execution
+- the role of explicit assembly pathways in shared-memory and distributed execution
 
 This document is intentionally broader than a single implementation note. It is the top-level policy for how the `refine3D` workflow is divided conceptually and in code.
 
@@ -18,12 +18,12 @@ This document is intentionally broader than a single implementation note. It is 
 `refine3D` is a layered fixed-point workflow with a strict boundary:
 
 - particle-domain work stays in probabilistic alignment, search strategies, matcher preparation, orientation update, and partial reconstruction
-- assembled-volume work stays in `volassemble` and its postprocessing policy/helpers
+- assembled-reference work stays in the explicit assembly pathways and their postprocessing policy/helpers
 
 In other words:
 
 - `refine3D` decides and updates particle poses
-- `volassemble` builds and postprocesses state volumes from those decisions
+- assembly pathways build and postprocess state references from those decisions
 
 That split should be preserved.
 
@@ -34,8 +34,8 @@ The current public workflow for `refine3D` is:
 1. initialize execution mode and iteration state
 2. optionally run probabilistic pre-alignment
 3. run the particle-update matcher/search pass
-4. write partial reconstructions
-5. assemble and postprocess state volumes in `volassemble`
+4. write partition-local Cartesian partial reconstructions or polar partial sums
+5. assemble Cartesian volumes or polar references through the explicit assembly pathway
 6. persist updated orientation and volume artifacts for the next iteration or downstream programs
 
 The same policy applies to:
@@ -65,7 +65,7 @@ It should remain thin. It is not the place for low-level search logic or assembl
 - shared-memory versus distributed-master execution policy
 - scheduler interaction
 - iteration counters and run-finalization bookkeeping
-- orchestration of pre-alignment, matcher execution, and `volassemble`
+- orchestration of pre-alignment, matcher execution, partial-reconstruction writing, and assembly-command dispatch
 
 This layer may thread command-line state and workflow state across steps, but it should not absorb numerical postprocessing logic.
 
@@ -98,24 +98,74 @@ That includes:
 - candidate evaluation
 - orientation/state/in-plane/shift update
 - Euclidean sigma update during search when applicable
-- writing partial reconstructions for downstream assembly
+- writing partial reconstructions or polar partial sums for downstream assembly when instructed by the strategy
 
 This is the execution center of particle-domain refinement.
 
-### `volassemble`
+### Assembly Commanders
 
-`simple_commanders_rec_distr.f90`, specifically `commander_volassemble`, is the single execution point for shared assembled-volume work used by `refine3D`.
+`simple_commanders_rec_distr.f90` currently exposes two explicit assembly
+commanders:
 
-That includes:
+- the Cartesian assembly commander, whose `execute` procedure is
+  `exec_cartesian_assembly` (`commander_cartesian_volassemble`)
+- the polar assembly commander, whose `execute` procedure is
+  `exec_polar_assembly` (`commander_polar_volassemble`)
 
-- reduction of partial reconstructions
-- even/odd handling
-- gridding correction
-- merged-volume creation
-- automask production
-- nonuniform filtering
+`exec_cartesian_assembly` owns Cartesian volume assembly. It reduces
+partition-local Cartesian reconstruction updates, handles even/odd volumes,
+does gridding correction, writes merged state volumes, updates per-particle
+FSC-derived resolution metadata, and runs shared-memory postprocessing such as
+automasking and nonuniform filtering. Cartesian matching still uses projected
+polar central sections, so this path always projects the prepared Cartesian
+volumes into `POLAR_REFS_even.bin` and `POLAR_REFS_odd.bin` for the next
+matcher/probability-table pass. That projection is accounted for in the
+assembly benchmark as `polar ref projection`.
 
-This policy now applies to both shared-memory and distributed `refine3D`.
+`exec_polar_assembly` owns polar reference assembly for `polar=yes`,
+`polar=direct`, and `polar=obsfield`. The matcher writes partition-local polar
+partial sums. Polar assembly then calculates polar populations, reduces the
+partial sums, dispatches to the common-line restore path for `polar=yes` or the
+direct restore path for `polar=direct|obsfield`, and writes the updated
+`POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` triplet.
+Its benchmark reports this work as `polar reference assembly`.
+
+This policy applies to both shared-memory and distributed `refine3D`. In both
+execution modes, `simple_refine3D_strategy.f90` calls the polar assembly
+commander for polar modes and the Cartesian assembly commander for non-polar
+Cartesian volume assembly. The strategy sets the legacy force-assembly key
+when `volrec=yes` or when any polar mode is active, then deletes that key after
+assembly.
+
+The matcher-side reference contract is file based. `prob_tab`,
+`prob_tab_neigh`, and `refine3D_exec` require polar central sections to be
+available through `POLAR_REFS*` before they prepare references. They do not
+reproject Cartesian volumes themselves. For Cartesian reconstruction this file
+set is generated by `exec_cartesian_assembly`; for polar restoration modes it
+is generated by `exec_polar_assembly`. `polar_ref_sections_available` accepts
+either a merged `POLAR_REFS.bin` file or a complete even/odd pair. The reader
+accepts all three forms currently produced by the assembly code: merged-only,
+even/odd-only, or merged plus even/odd. When `FRCS_FILE` is absent during the
+bootstrap pass, matcher preparation creates neutral in-memory FRCs rather than
+using a silent all-zero FRC model.
+
+There is one explicit bootstrap exception. If polar reference files are missing
+but all `vol1..volN` inputs exist, `simple_refine3D_strategy.f90` calls
+`write_initial_polar_ref_sections` before probabilistic alignment or matching.
+That helper uses the live `params`, `builder`, and `cmdline`, projects the
+starting volumes with `read_mask_filter_reproject_refvols`, and writes the
+initial `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` pair. It does not create a
+second temporary builder. If the reference files are missing and the full
+starting-volume set is not available, the run must first create those references
+through reconstruction/assembly; shared-memory polar initialization errors in
+that case.
+
+Multi-state polar references are stored state-major: state 1 occupies local
+projection slots `1:nspace`, state 2 occupies `nspace+1:2*nspace`, and so on.
+All polar insertion, mirroring, common-line restoration, direct restoration,
+FSC/FRC bookkeeping, and ML regularization preserve that state-local reference
+block structure. Common-line restoration is intra-state only; cross-state
+common lines are not physical.
 
 ## Particle-domain versus volume-domain boundary
 
@@ -128,9 +178,9 @@ Particle-domain work includes:
 - particle sampling for update
 - probabilistic candidate generation
 - state/projection/in-plane/shift assignment
-- reference matching
+- reference matching; 3D matching consumes `POLAR_REFS*` central-section files
 - sigma updates during search
-- writing partial reconstructions
+- writing partition-local Cartesian partial reconstructions or polar partial sums
 
 The key code owners are:
 
@@ -144,7 +194,8 @@ The key code owners are:
 
 Volume-domain work includes:
 
-- summing partial reconstructions into state volumes
+- summing partial Cartesian reconstructions into state volumes
+- reducing partition-local polar partial sums into state-major polar references
 - even/odd averaging and merged-volume generation
 - gridding correction
 - automask generation and reuse
@@ -182,15 +233,17 @@ The workflow depends on conventional artifacts that act as handoff points betwee
 Examples include:
 
 - assignment maps written by probabilistic alignment
-- partition-local partial reconstructions
+- partition-local Cartesian partial reconstructions
+- partition-local polar partial sums for `polar=yes|direct|obsfield`
+- `POLAR_REFS.bin` / `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` central-section files consumed by 3D matcher/search preparation
 - state volumes and even/odd volumes
 - state-specific automasks such as `automask3D_stateNN.mrc`
 
 These artifacts are not incidental. They are part of the current contract between workflow phases and should be treated as stable unless a coordinated policy change is made.
 
-## Why `volassemble` is the right execution point
+## Why Explicit Assembly Pathways Own Shared Reference Work
 
-Keeping assembled-volume work in `volassemble` is good policy because it:
+Keeping assembled-reference work in explicit assembly pathways is good policy because it:
 
 - removes duplicated post-assembly logic from separate `refine3D` routes
 - keeps the expensive shared-memory volume work in one place
@@ -206,27 +259,17 @@ The current implementation has already moved in the right direction.
 
 In particular:
 
-- `simple_refine3D_strategy.f90` now orchestrates probabilistic pre-alignment, matcher execution, and `volassemble`
+- `simple_refine3D_strategy.f90` now orchestrates probabilistic pre-alignment, matcher execution, bootstrap polar-reference projection, and assembly-command dispatch
 - `simple_strategy3D_matcher.f90` is the core particle-update path
-- `simple_volume_postprocess_policy.f90` has started to factor automask and nonuniform-filter decisions out of `volassemble`
+- `simple_commanders_rec_distr.f90` has distinct `commander_cartesian_volassemble` and `commander_polar_volassemble` types
+- `simple_volume_postprocess_policy.f90` factors automask and nonuniform-filter decisions out of `exec_cartesian_assembly`
 
-That newer policy helper is important. It shows the intended refinement of the architecture:
+That policy helper is important. It is now the owner of the postprocessing decision table:
 
-- `volassemble` remains the execution site
-- dedicated helpers own more of the policy branching
-
-## Remaining rough edges
-
-The main rough edge is not the direction of the architecture, but the remaining amount of policy detail still carried in `volassemble`.
-
-Without helper objects, `volassemble` tends to accumulate decisions about:
-
-- when automask regenerates
-- whether an existing mask is compatible
-- whether nonuniform filtering should use a state mask or spherical fallback
-- which artifacts should be reused versus regenerated
-
-That is too much policy density for one commander.
+- `automask_action` says whether the state automask is regenerated, reused, or ignored
+- `automask_tight` preserves the exact `automsk=tight` command-line policy value
+- `nu_mask_source` says whether nonuniform filtering should use the freshly generated automask, an existing compatible automask, or the spherical fallback
+- compatibility checks for state automasks remain centralized in the same module
 
 ## Recommended boundary going forward
 
@@ -240,25 +283,19 @@ The recommended split is:
   Particle-domain candidate generation, assignment, and partial reconstruction.
 - `simple_volume_postprocess_policy.f90`
   Decide automask cadence, compatibility, nonuniform-mask precedence, and related artifact policy.
-- `volassemble`
+- assembly commanders
   Execute the plan for one iteration and state set.
 - numerical modules
   Implement automasking, FSC masking, and nonuniform filtering details.
 
 ## Near-term improvements
 
-The following improvements are consistent with current policy:
-
-- preserve exact policy values end-to-end, including `automsk=tight`
-- keep one compatibility rule for both state-mask production and state-mask consumption
-- make automask cadence explicit and testable
-- continue moving postprocessing branching into `simple_volume_postprocess_policy.f90`
 - add end-to-end regression coverage that compares shared-memory and distributed `refine3D` artifact sets
 
 ## Rules to preserve during refactors
 
 - Do not move assembled-volume postprocessing back into `refine3D_strategy`.
-- Do not treat `volassemble` as a distributed-only helper.
+- Do not treat the assembly commanders as distributed-only helpers.
 - Do not merge probabilistic particle-update logic with volume postprocessing logic.
 - Do not describe the current `refine3D` implementation as if it were a single undifferentiated Bayesian engine.
 - Do preserve parity between shared-memory and distributed workflows.
@@ -268,8 +305,8 @@ The following improvements are consistent with current policy:
 1. `commander_refine3D` selects the execution strategy.
 2. `refine3D_strategy` manages iteration state and execution mode.
 3. probabilistic pre-alignment may sample particles and write an assignment map.
-4. `refine3D_exec` performs particle-domain search, update, and partial reconstruction.
-5. `volassemble` assembles state volumes and performs shared volume-domain postprocessing.
+4. `refine3D_exec` performs particle-domain search, update, and writes Cartesian partial reconstructions or polar partial sums.
+5. Assembly commanders assemble state volumes for `polar=no` or state-major polar references for `polar=yes|direct|obsfield`.
 6. output artifacts are persisted for the next iteration and for downstream FSC/reference consumers.
 
 That is the current `refine3D` policy and the architectural model future changes should follow.

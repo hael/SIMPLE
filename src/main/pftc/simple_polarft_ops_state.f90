@@ -57,7 +57,7 @@ contains
         class(polarft_calc),       intent(inout) :: self
         class(sp_project), target, intent(in)    :: spproj
         class(oris), pointer :: ptcl_field, cls_field
-        integer :: i, icls, iptcl, eo
+        integer :: i, icls, iptcl, eo, state, proj
         integer :: eo_pops(2,self%ncls)
         logical :: l_3D
         l_3D = .false.
@@ -73,15 +73,20 @@ contains
             THROW_HARD('Unsupported ORITYPE: '//trim(self%p_ptr%oritype))
         end select
         eo_pops = 0
+        ! 3D polar references are state-major, while get_proj returns the
+        ! state-local projection index in 1:nspace.
         !$omp parallel do schedule(guided) proc_bind(close) default(shared)&
-        !$omp private(iptcl,eo,icls)&
+        !$omp private(iptcl,eo,icls,state,proj)&
         !$omp reduction(+:eo_pops)
         do iptcl = 1,ptcl_field%get_noris()
-            if( ptcl_field%get_state(iptcl) == 0  ) cycle
+            state = ptcl_field%get_state(iptcl)
+            if( state == 0  ) cycle
             if( ptcl_field%get(iptcl,'w') < SMALL ) cycle
             eo = ptcl_field%get_eo(iptcl)+1
             if( l_3D )then
-                icls = ptcl_field%get_proj(iptcl)
+                proj = ptcl_field%get_proj(iptcl)
+                if( proj < 1 .or. proj > self%p_ptr%nspace ) cycle
+                icls = (state - 1) * self%p_ptr%nspace + proj
             else
                 icls = ptcl_field%get_class(iptcl)
             endif
@@ -113,7 +118,7 @@ contains
         real(dp)    :: rctf2(self%pftsz,self%kfromto(1):self%interpklim), w
         real(sp)    :: rctf(self%pftsz,self%kfromto(1):self%interpklim)
         real        :: sigma2(self%kfromto(1):self%interpklim), incr_shift(2)
-        integer     :: eopops(2,self%ncls), i, icls, iptcl, irot, k
+        integer     :: eopops(2,self%ncls), i, icls, iptcl, irot, k, state, proj
         logical     :: l_ctf, l_even, l_3D, l_shift
         l_3D = .false.
         if( present(is3D) ) l_3D = is3D
@@ -125,16 +130,19 @@ contains
         ! update classes
         eopops = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static) reduction(+:eopops)&
-        !$omp private(i,iptcl,w,l_even,icls,irot,incr_shift,rptcl,rctf,rctf2,k,sigma2)
+        !$omp private(i,iptcl,w,l_even,icls,irot,incr_shift,rptcl,rctf,rctf2,k,sigma2,state,proj)
         do i = 1,nptcls
             ! particles parameters
             iptcl = pinds(i)
-            if( spproj_field%get_state(iptcl) == 0  ) cycle
+            state = spproj_field%get_state(iptcl)
+            if( state == 0  ) cycle
             w = real(spproj_field%get(iptcl,'w'),dp)
             if( w < DSMALL ) cycle
             l_even = spproj_field%get_eo(iptcl)==0
             if( l_3D )then
-                icls = spproj_field%get_proj(iptcl)
+                proj = spproj_field%get_proj(iptcl)
+                if( proj < 1 .or. proj > self%p_ptr%nspace ) cycle
+                icls = (state - 1) * self%p_ptr%nspace + proj
             else
                 icls = spproj_field%get_class(iptcl)
             endif
@@ -244,6 +252,7 @@ contains
         type :: ptcl_cache_type
             logical  :: active
             logical  :: even
+            integer  :: state
             integer  :: proj
             integer  :: self_proj
             real(dp) :: w
@@ -264,6 +273,7 @@ contains
         real        :: normal_ptcl(3), rhk(2), euls(3), phi, theta
         real        :: dang, sin_dang, dCL, dz, psi, sin_theta, dotp, best_dot
         integer     :: flims(2,3), nsym, iproj, i, iptcl, hh, kk, noris, nrefs, sh, irot, jrot, drot, isym
+        integer     :: iref
         integer     :: srcproj, best_proj
         logical     :: l_even, l_self, has_mirr
         ! Interpolation parameters.  The NN oversampled polar insertion path
@@ -283,12 +293,14 @@ contains
         ptcls(:)%active    = .false.
         ptcls(:)%even      = .false.
         ptcls(:)%w         = 0.d0
+        ptcls(:)%state     = 0
         ptcls(:)%proj      = 0
         ptcls(:)%self_proj = 0
         !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
         do i = 1,nptcls
             iptcl = pinds(i)
-            if( ptcl_field%get_state(iptcl) == 0 ) cycle
+            ptcls(i)%state = ptcl_field%get_state(iptcl)
+            if( ptcls(i)%state == 0 ) cycle
             ptcls(i)%w = real(ptcl_field%get(iptcl, 'w'), dp)
             if( ptcls(i)%w < 1.d-6 ) cycle
             ptcls(i)%active  = .true.
@@ -357,7 +369,7 @@ contains
             !$omp parallel do default(shared) private(iproj,tRproj)&
             !$omp& private(i,pw,Rptcl,R,euls,psi,phi,pol2cart)&
             !$omp& private(sh,irot,jrot,R2d,hk,rhk,w,ctfsq,fcomp,hh,kk,theta,sin_theta,dang,dCL)&
-            !$omp& private(sin_dang,dz,l_even,proj_cl_addr,rot_ptcl,rot_ctfsq,drot,l_self)&
+            !$omp& private(sin_dang,dz,l_even,proj_cl_addr,rot_ptcl,rot_ctfsq,drot,l_self,iref)&
             !$omp& proc_bind(close) schedule(static)
             do iproj = 1,nrefs
                 ! Retrieves projection rotation matrix
@@ -370,6 +382,8 @@ contains
                     ! particle euler angles & rotation matrix
                     Rptcl = ptcls(i)%Rsym
                     l_self = iproj == ptcls(i)%self_proj
+                    iref   = (ptcls(i)%state - 1) * noris + iproj
+                    if( iref < 1 .or. iref > self%ncls ) cycle
                     if( l_self )then
                         ! PARTICLE INSERTION INTO SLICE (cached weight: w * SELFW / dkb02)
                         pw = ptcls(i)%pw_self
@@ -405,11 +419,11 @@ contains
                             enddo
                         enddo
                         if( l_even )then
-                            self%pfts_even(:,:,iproj) = self%pfts_even(:,:,iproj) + rot_ptcl
-                            self%ctf2_even(:,:,iproj) = self%ctf2_even(:,:,iproj) + rot_ctfsq
+                            self%pfts_even(:,:,iref) = self%pfts_even(:,:,iref) + rot_ptcl
+                            self%ctf2_even(:,:,iref) = self%ctf2_even(:,:,iref) + rot_ctfsq
                         else
-                            self%pfts_odd(:,:,iproj)  = self%pfts_odd(:,:,iproj)  + rot_ptcl
-                            self%ctf2_odd(:,:,iproj)  = self%ctf2_odd(:,:,iproj)  + rot_ctfsq
+                            self%pfts_odd(:,:,iref)  = self%pfts_odd(:,:,iref)  + rot_ptcl
+                            self%ctf2_odd(:,:,iref)  = self%ctf2_odd(:,:,iref)  + rot_ctfsq
                         endif
                     else
                         ! COMMON LINES (cached weight: w / dkb03)
@@ -472,11 +486,11 @@ contains
                                 fcomp = PF2 * w * cmplx(fplane_get_cmplx(fpls(i), hh,kk), kind=dp)
                                 ctfsq =       w * real(fplane_get_ctfsq(fpls(i),  hh,kk), dp)
                                 if( l_even )then
-                                    self%pfts_even(irot,sh,iproj) = self%pfts_even(irot,sh,iproj) + fcomp
-                                    self%ctf2_even(irot,sh,iproj) = self%ctf2_even(irot,sh,iproj) + ctfsq
+                                    self%pfts_even(irot,sh,iref) = self%pfts_even(irot,sh,iref) + fcomp
+                                    self%ctf2_even(irot,sh,iref) = self%ctf2_even(irot,sh,iref) + ctfsq
                                 else
-                                    self%pfts_odd(irot,sh,iproj)  = self%pfts_odd(irot,sh,iproj)  + fcomp
-                                    self%ctf2_odd(irot,sh,iproj)  = self%ctf2_odd(irot,sh,iproj)  + ctfsq
+                                    self%pfts_odd(irot,sh,iref)  = self%pfts_odd(irot,sh,iref)  + fcomp
+                                    self%ctf2_odd(irot,sh,iref)  = self%ctf2_odd(irot,sh,iref)  + ctfsq
                                 endif
                             enddo   ! shell
                         enddo       ! rotation
@@ -507,6 +521,7 @@ contains
         real(sp) :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
         real :: pw
         integer :: lims(3,2), kspan(2), kspan_len, nrefs, noris, i, iptcl, eo, box
+        integer :: istate, pstate, base
         if( nptcls < 1 ) return
         box = self%p_ptr%box_crop
         if( is_even(box) )then
@@ -524,33 +539,41 @@ contains
         else
             nrefs = noris
         endif
-        nrefs = min(nrefs, self%ncls)
+        nrefs = min(nrefs, self%p_ptr%nspace)
         if( nrefs < 1 ) THROW_HARD('no references available; polar_cavger_insert_ptcls_obsfield')
-        call obs%new(lims, self%interpklim)
-        do i = 1, nptcls
-            iptcl = pinds(i)
-            if( ptcl_field%get_state(iptcl) == 0 ) cycle
-            pw = 1.0
-            if( ptcl_field%isthere(iptcl,'w') ) pw = ptcl_field%get(iptcl,'w')
-            if( pw < TINY ) cycle
-            eo = ptcl_field%get_eo(iptcl)
-            call ptcl_field%get_ori(iptcl, o)
-            call obs%insert_plane(symop, o, fpls(i), eo, pw)
-        enddo
         kspan     = [self%kfromto(1), self%interpklim]
         kspan_len = kspan(2) - kspan(1) + 1
         hcoords   = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
         kcoords   = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
         allocate(pfts_even(self%pftsz,kspan_len,nrefs), pfts_odd(self%pftsz,kspan_len,nrefs))
         allocate(ctf2_even(self%pftsz,kspan_len,nrefs), ctf2_odd(self%pftsz,kspan_len,nrefs))
-        call obs%even%extract_polar(eulspace, nrefs, kspan, hcoords, kcoords, pfts_even, ctf2_even)
-        call obs%odd%extract_polar( eulspace, nrefs, kspan, hcoords, kcoords, pfts_odd,  ctf2_odd )
-        self%pfts_even(:,kspan(1):kspan(2),1:nrefs) = self%pfts_even(:,kspan(1):kspan(2),1:nrefs) + pfts_even
-        self%pfts_odd( :,kspan(1):kspan(2),1:nrefs) = self%pfts_odd( :,kspan(1):kspan(2),1:nrefs) + pfts_odd
-        self%ctf2_even(:,kspan(1):kspan(2),1:nrefs) = self%ctf2_even(:,kspan(1):kspan(2),1:nrefs) + ctf2_even
-        self%ctf2_odd( :,kspan(1):kspan(2),1:nrefs) = self%ctf2_odd( :,kspan(1):kspan(2),1:nrefs) + ctf2_odd
+        do istate = 1, self%p_ptr%nstates
+            call obs%new(lims, self%interpklim)
+            do i = 1, nptcls
+                iptcl  = pinds(i)
+                pstate = ptcl_field%get_state(iptcl)
+                if( pstate /= istate ) cycle
+                pw = 1.0
+                if( ptcl_field%isthere(iptcl,'w') ) pw = ptcl_field%get(iptcl,'w')
+                if( pw < TINY ) cycle
+                eo = ptcl_field%get_eo(iptcl)
+                call ptcl_field%get_ori(iptcl, o)
+                call obs%insert_plane(symop, o, fpls(i), eo, pw)
+            enddo
+            call obs%even%extract_polar(eulspace, nrefs, kspan, hcoords, kcoords, pfts_even, ctf2_even)
+            call obs%odd%extract_polar( eulspace, nrefs, kspan, hcoords, kcoords, pfts_odd,  ctf2_odd )
+            base = (istate - 1) * self%p_ptr%nspace
+            self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs) = &
+                &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs) + pfts_even
+            self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs) = &
+                &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs) + pfts_odd
+            self%ctf2_even(:,kspan(1):kspan(2),base+1:base+nrefs) = &
+                &self%ctf2_even(:,kspan(1):kspan(2),base+1:base+nrefs) + ctf2_even
+            self%ctf2_odd( :,kspan(1):kspan(2),base+1:base+nrefs) = &
+                &self%ctf2_odd( :,kspan(1):kspan(2),base+1:base+nrefs) + ctf2_odd
+            call obs%kill
+        enddo
         deallocate(pfts_even, pfts_odd, ctf2_even, ctf2_odd)
-        call obs%kill
         call o%kill
     end subroutine polar_cavger_insert_ptcls_obsfield
 

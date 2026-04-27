@@ -294,7 +294,6 @@ contains
     end subroutine exec_refine3D_nano
 
     subroutine exec_commander_trajectory_reconstruct3D_distr( self, cline )
-        use simple_commanders_rec_distr, only: commander_volassemble
         real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
         real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
         class(commander_trajectory_reconstruct3D_distr), intent(inout) :: self

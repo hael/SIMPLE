@@ -10,8 +10,7 @@ use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
 use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
 use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
 use simple_matcher_ptcl_io,         only: killimgbatch
-use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
-use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols
+use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar, polar_ref_sections_available
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, sample_ptcls4fillin, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_strategy3D_eval,         only: strategy3D_eval
@@ -34,7 +33,7 @@ type :: refine3D_ctrl
     character(len=:), allocatable :: refine_mode
     character(len=:), allocatable :: polar_mode
     character(len=:), allocatable :: oritype
-    logical :: do_restore
+    logical :: do_write_partial_recs
     logical :: do_polar_prepare
     logical :: do_prob_align
     logical :: do_polar
@@ -45,12 +44,13 @@ end type refine3D_ctrl
 
 contains
 
-    subroutine refine3D_exec( params, build, cline, which_iter, converged )
+    subroutine refine3D_exec( params, build, cline, which_iter, converged, l_write_partial_recs )
         class(parameters), target, intent(inout) :: params
         class(builder),    target, intent(inout) :: build
         class(cmdline),            intent(inout) :: cline
         integer,                   intent(in)    :: which_iter
         logical,                   intent(inout) :: converged
+        logical,                   intent(in), optional :: l_write_partial_recs
         class(parameters), pointer :: p_ptr => null()
         class(builder),    pointer :: b_ptr => null()
         type(eul_prob_tab), target :: eulprob_obj_part
@@ -71,18 +71,22 @@ contains
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz, nrefs
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical             :: doprint, has_been_searched
+        logical             :: l_write_partial_recs_present, l_write_partial_recs_value
 
         ! benchmarking
         type(string) :: benchfname
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
-        integer(timer_int_kind) :: t_prep_pftc_polar_mode, t_prep_sigmas_alloc_ptcl_imgs
-        integer(timer_int_kind) :: t_prep_reproj_refvols, t_memoize_refs
+        integer(timer_int_kind) :: t_prep_sigmas_alloc_ptcl_imgs
+        integer(timer_int_kind) :: t_prep_ref_sections, t_memoize_refs
         real(timer_int_kind)    :: rt_startup, rt_build_batch_ptcls, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
-        real(timer_int_kind)    :: rt_prep_pftc_polar_mode, rt_prep_sigmas_alloc_ptcl_imgs
-        real(timer_int_kind)    :: rt_prep_reproj_refvols, rt_memoize_refs
+        real(timer_int_kind)    :: rt_prep_sigmas_alloc_ptcl_imgs
+        real(timer_int_kind)    :: rt_prep_ref_sections, rt_memoize_refs
 
         p_ptr => params
         b_ptr => build
+        l_write_partial_recs_present = present(l_write_partial_recs)
+        l_write_partial_recs_value   = .false.
+        if( l_write_partial_recs_present ) l_write_partial_recs_value = l_write_partial_recs
         call init_ctrl()
         if( ctrl%do_bench )then
             t_startup = tic()
@@ -95,9 +99,8 @@ contains
         call prepare_batches()
         if( ctrl%do_bench )then
             rt_startup = toc(t_startup)
-            rt_prep_pftc_polar_mode        = 0.0
             rt_prep_sigmas_alloc_ptcl_imgs = 0.0
-            rt_prep_reproj_refvols         = 0.0
+            rt_prep_ref_sections           = 0.0
         endif
         call prepare_refs_sigmas_and_pftc()
         if( ctrl%do_bench ) t_memoize_refs = tic()
@@ -178,26 +181,11 @@ contains
         call killimgbatch(b_ptr)
         call maybe_write_orientations()
 
-        if( ctrl%do_restore )then
+        if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_polar )then
-                if( l_distr_worker_glob )then
-                    call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
-                else
-                    p_ptr%refs = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//MRC_EXT
-                    select case(ctrl%polar_mode)
-                    case('direct','obsfield')
-                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm_direct(b_ptr%eulspace,&
-                            &cline, b_ptr%spproj_field%get_update_frac())
-                    case('yes')
-                        call b_ptr%pftc%polar_cavger_merge_eos_and_norm(b_ptr%eulspace,&
-                            &b_ptr%pgrpsyms, cline, b_ptr%spproj_field%get_update_frac())
-                    case default
-                        THROW_HARD('unsupported POLAR mode: '//ctrl%polar_mode)
-                    end select
-                    call b_ptr%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-                    call b_ptr%pftc%polar_cavger_kill
-                endif
+                call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
+                call b_ptr%pftc%polar_cavger_kill
             else
                 call write_partial_recs(params, build, cline, fpls)
                 call finalize_rec_objs(params, build)
@@ -221,9 +209,8 @@ contains
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'startup_overhead : ',          rt_startup
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D : ',   rt_build_batch_ptcls
-                write(fnr,'(a,1x,f9.2)') 'prep_pftc_polar_mode : ',      rt_prep_pftc_polar_mode
                 write(fnr,'(a,1x,f9.2)') 'prep_sigmas_alloc_ptcls : ',   rt_prep_sigmas_alloc_ptcl_imgs
-                write(fnr,'(a,1x,f9.2)') 'prepare_reproject_refvols : ', rt_prep_reproj_refvols
+                write(fnr,'(a,1x,f9.2)') 'prepare_ref_sections : ',      rt_prep_ref_sections
                 write(fnr,'(a,1x,f9.2)') 'memoize_refs : ',              rt_memoize_refs
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ',     rt_prep_orisrch
                 write(fnr,'(a,1x,f9.2)') '3D alignment : ',              rt_align
@@ -234,17 +221,16 @@ contains
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
                 write(fnr,'(a,1x,f9.2)') 'startup_overhead : ',          (rt_startup/rt_tot)                     * 100.
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D : ',   (rt_build_batch_ptcls/rt_tot)           * 100.
-                write(fnr,'(a,1x,f9.2)') 'prep_pftc_polar_mode : ',      (rt_prep_pftc_polar_mode/rt_tot)        * 100.
                 write(fnr,'(a,1x,f9.2)') 'prep_sigmas_alloc_ptcls : ',   (rt_prep_sigmas_alloc_ptcl_imgs/rt_tot) * 100.
-                write(fnr,'(a,1x,f9.2)') 'prepare_reproject_refvols : ', (rt_prep_reproj_refvols/rt_tot)         * 100.
+                write(fnr,'(a,1x,f9.2)') 'prepare_ref_sections : ',      (rt_prep_ref_sections/rt_tot)           * 100.
                 write(fnr,'(a,1x,f9.2)') 'memoize_refs : ',              (rt_memoize_refs/rt_tot)                * 100.
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ',     (rt_prep_orisrch/rt_tot)                * 100.
                 write(fnr,'(a,1x,f9.2)') '3D alignment : ',              (rt_align/rt_tot)                       * 100.
                 write(fnr,'(a,1x,f9.2)') 'project file I/O : ',          (rt_projio/rt_tot)                      * 100.
                 write(fnr,'(a,1x,f9.2)') 'reconstruction : ',            (rt_rec/rt_tot)                         * 100.
                 write(fnr,'(a,1x,f9.2)') '% accounted for : ', &
-                    ((rt_startup+rt_build_batch_ptcls+rt_prep_pftc_polar_mode+rt_prep_sigmas_alloc_ptcl_imgs+ &
-                    rt_prep_reproj_refvols+rt_memoize_refs+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
+                    ((rt_startup+rt_build_batch_ptcls+rt_prep_sigmas_alloc_ptcl_imgs+ &
+                    rt_prep_ref_sections+rt_memoize_refs+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif
@@ -262,12 +248,12 @@ contains
             ctrl%do_write_oris = .not. ctrl%do_sigma_mode
             select case(ctrl%refine_mode)
                 case('eval','sigma')
-                    ctrl%do_restore = .false.
+                    ctrl%do_write_partial_recs = .false.
                 case default
-                    if( ctrl%do_polar )then
-                        ctrl%do_restore = .true.
+                    if( l_write_partial_recs_present )then
+                        ctrl%do_write_partial_recs = l_write_partial_recs_value
                     else
-                        ctrl%do_restore = (trim(p_ptr%volrec) == 'yes')
+                        ctrl%do_write_partial_recs = .true.
                     endif
             end select
             ctrl%do_polar_prepare = ctrl%do_polar .and. .not. cline%defined('vol1')
@@ -306,23 +292,21 @@ contains
                 nrefs = p_ptr%nspace * p_ptr%nstates
                 call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
             endif
-            if( ctrl%do_polar_prepare )then
-                if( ctrl%do_bench ) t_prep_pftc_polar_mode = tic()
+            if( ctrl%do_polar_prepare .or. (.not. ctrl%do_prob_align) )then
+                if( ctrl%do_bench ) t_prep_ref_sections = tic()
+                if( .not. polar_ref_sections_available() )then
+                    THROW_HARD('polar reference sections are missing; assembly must prepare POLAR_REFS before matching')
+                endif
                 call prep_pftc4align3D_polar(p_ptr, b_ptr, cline, batchsz_max)
-                if( ctrl%do_bench ) rt_prep_pftc_polar_mode = toc(t_prep_pftc_polar_mode)
+                if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
             endif
             if( ctrl%do_bench ) t_prep_sigmas_alloc_ptcl_imgs = tic()
             call prep_sigmas_alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
             if( ctrl%do_bench ) rt_prep_sigmas_alloc_ptcl_imgs = toc(t_prep_sigmas_alloc_ptcl_imgs)
-            if( (.not. ctrl%do_prob_align) .and. (.not. ctrl%do_polar_prepare) )then
-                if( ctrl%do_bench ) t_prep_reproj_refvols = tic()
-                call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
-                if( ctrl%do_bench ) rt_prep_reproj_refvols = toc(t_prep_reproj_refvols)
-            endif
             call build%vol%kill
             call build%vol_odd%kill
             call build%vol2%kill
-            if( ctrl%do_polar .and. ctrl%do_restore )then
+            if( ctrl%do_polar .and. ctrl%do_write_partial_recs )then
                 if( cline%defined('vol1') )then
                     call b_ptr%pftc%polar_cavger_new(.true.)
                     if( p_ptr%l_trail_rec )then
@@ -339,7 +323,7 @@ contains
         end subroutine prepare_refs_sigmas_and_pftc
 
         subroutine maybe_init_reconstruction()
-            if( .not. ctrl%do_restore ) return
+            if( .not. ctrl%do_write_partial_recs ) return
             if( ctrl%do_polar )then
                 if( polar_mode_direct_like() )then
                     call init_rec(params, build, batchsz_max, fpls)
@@ -365,7 +349,7 @@ contains
                         THROW_HARD('unsupported POLAR mode: '//ctrl%polar_mode)
                 end select
             else
-                if( ctrl%do_restore )then
+                if( ctrl%do_write_partial_recs )then
                     call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
                         ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
                 else
@@ -430,7 +414,7 @@ contains
         end subroutine choose_and_run_strategy
 
         subroutine maybe_restore_batch()
-            if( .not. ctrl%do_restore ) return
+            if( .not. ctrl%do_write_partial_recs ) return
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)

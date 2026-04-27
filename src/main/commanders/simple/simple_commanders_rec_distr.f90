@@ -3,21 +3,78 @@ use simple_commanders_api
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_volassemble
+type, extends(commander_base) :: commander_cartesian_volassemble
+  ! Cartesian assembly path.
   contains
-    procedure :: execute      => exec_volassemble
-end type commander_volassemble
+    procedure :: execute => exec_cartesian_assembly
+end type commander_cartesian_volassemble
+
+type, extends(commander_base) :: commander_polar_volassemble
+  ! Polar reference assembly path for polar=yes|direct|obsfield.
+  contains
+    procedure :: execute => exec_polar_assembly
+end type commander_polar_volassemble
 
 contains
 
-    subroutine exec_volassemble( self, cline )
+    subroutine exec_polar_assembly( self, cline )
+        class(commander_polar_volassemble), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        type(string) :: benchfname
+        integer(timer_int_kind) :: t_tot
+        real(timer_int_kind)    :: rt_tot
+        integer :: fnr, nrefs
+        call build%init_params_and_build_general_tbox(cline, params)
+        if( L_BENCH_GLOB ) t_tot = tic()
+        ! Matchers write partition-local Cartesian partial reconstructions
+        ! (polar=no) or polar partial sums (polar=yes|direct|obsfield), while
+        ! the assembly commander owns shared-memory reduction and reference update.
+        nrefs = params%nspace * params%nstates
+        call build%pftc%new(params, nrefs, [1,1], params%kfromto)
+        params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
+        call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
+        call build%pftc%polar_cavger_calc_pops(build%spproj)
+        call build%pftc%polar_cavger_assemble_sums_from_parts
+        select case(trim(params%polar))
+            case('direct','obsfield')
+                call build%pftc%polar_cavger_merge_eos_and_norm_direct(build%eulspace, cline, &
+                    &build%spproj_field%get_update_frac())
+            case('yes')
+                call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, &
+                    &build%spproj_field%get_update_frac())
+            case default
+                THROW_HARD('unsupported POLAR mode: '//trim(params%polar))
+        end select
+        call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+        call build%pftc%polar_cavger_kill
+        call build%pftc%kill
+        call build%kill_general_tbox
+        if( L_BENCH_GLOB )then
+            rt_tot     = toc(t_tot)
+            benchfname = 'VOLASSEMBLE_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
+            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f9.2)') 'polar reference assembly : ', rt_tot
+            call fclose(fnr)
+        endif
+        call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
+        call simple_touch('VOLASSEMBLE_FINISHED')
+    end subroutine exec_polar_assembly
+
+    subroutine exec_cartesian_assembly( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_gridding,         only: prep3D_inv_instrfun4mul
+        use simple_matcher_refvol_utils, only: read_mask_filter_reproject_refvols
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
                                          &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, &
                                          &analyze_filtmap_neighbor_continuity
-        use simple_volume_postprocess_policy, only: volume_postprocess_plan, plan_state_postprocess
-        class(commander_volassemble), intent(inout) :: self
+        use simple_volume_postprocess_policy, only: volume_postprocess_plan, plan_state_postprocess, &
+                                                   &AUTOMASK_ACTION_REGENERATE, &
+                                                   &NU_MASK_SOURCE_FRESH_AUTOMASK, &
+                                                   &NU_MASK_SOURCE_EXISTING_AUTOMASK
+        class(commander_cartesian_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
@@ -37,16 +94,19 @@ contains
         integer, allocatable          :: imat(:,:,:)
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
         real                          :: weight_prev, update_frac_trail_rec, mskrad_px
-        integer                       :: part, state, iptcl, istate, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part, which_iter
+        integer                       :: part, state, iptcl, istate, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part
+        integer                       :: which_iter, nrefs
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
-        integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_automask, t_nonuniform, t_tot
+        integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_automask, t_nonuniform
+        integer(timer_int_kind)       :: t_project_refs, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
-        real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_automask, rt_nonuniform, rt_tot
+        real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_automask, rt_nonuniform
+        real(timer_int_kind)          :: rt_project_refs, rt_tot, rt_accounted
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
         endif
-        call build%init_params_and_build_general_tbox(cline,params)
+        call build%init_params_and_build_general_tbox(cline, params)
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
         call build%eorecvol%kill_exp         ! reduced memory usage
         numlen_part       = max(1, params%numlen)
@@ -67,6 +127,7 @@ contains
             rt_eoavg                   = 0.
             rt_automask                = 0.
             rt_nonuniform              = 0.
+            rt_project_refs            = 0.
         endif
         ! read in previous reconstruction when trail_rec==yes
         update_frac_trail_rec = 1.0
@@ -181,6 +242,9 @@ contains
                 call vol_prev_even%kill
                 call vol_prev_odd%kill
             endif
+            params%vols(state)      = volname
+            params%vols_even(state) = eonames(1)
+            params%vols_odd(state)  = eonames(2)
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
             which_iter = 1
             if( cline%defined('which_iter') ) which_iter = params%which_iter
@@ -191,29 +255,28 @@ contains
             endif
             ! automasking after even/odd volume generation (state-aware for multi-state support)
             if( L_BENCH_GLOB ) t_automask = tic()
-            if( pp_plan%regenerate_automask )then
-                call mskvol%automask3D(params, build%vol, build%vol2, trim(params%automsk).eq.'tight')
+            if( pp_plan%automask_action == AUTOMASK_ACTION_REGENERATE )then
+                call mskvol%automask3D(params, build%vol, build%vol2, pp_plan%automask_tight)
                 call mskvol%write(pp_plan%mskfile_state)
             endif
             if( L_BENCH_GLOB ) rt_automask = rt_automask + toc(t_automask)
             if( l_nonuniform_mode )then
                 if( L_BENCH_GLOB ) t_nonuniform = tic()
                 if( allocated(l_mask) ) deallocate(l_mask)
-                if( pp_plan%use_state_mask_for_nonuniform )then
-                    if( pp_plan%regenerate_automask )then
+                select case( pp_plan%nu_mask_source )
+                    case( NU_MASK_SOURCE_FRESH_AUTOMASK )
                         call mskvol%set_imat
                         call mskvol%get_imat(imat)
-                    else
+                    case( NU_MASK_SOURCE_EXISTING_AUTOMASK )
                         call state_mask_bin%new_bimg(ldim, params%smpd_crop)
                         call state_mask_bin%read_bimg(pp_plan%mskfile_state)
                         call state_mask_bin%get_imat(imat)
                         call state_mask_bin%kill_bimg
-                    endif
-                    if( allocated(imat) )then
-                        allocate(l_mask(ldim(1),ldim(2),ldim(3)))
-                        l_mask = imat > 0
-                        deallocate(imat)
-                    endif
+                end select
+                if( allocated(imat) )then
+                    allocate(l_mask(ldim(1),ldim(2),ldim(3)))
+                    l_mask = imat > 0
+                    deallocate(imat)
                 endif
                 if( .not. allocated(l_mask) )then
                     mskrad_px = 0.5 * params%mskdiam / params%smpd_crop
@@ -271,7 +334,7 @@ contains
             call recname%kill
             call volname%kill
         end do
-        ! Update per-particle FSC(0.143) resolution using the values computed in volassemble.
+        ! Update per-particle FSC(0.143) resolution using the values computed in assembly.
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
         else
@@ -282,6 +345,17 @@ contains
                 endif
             end do
         endif
+        ! Cartesian refinement still matches in polar central-section space.
+        ! Therefore Cartesian assembly always refreshes the projected reference
+        ! sections consumed by the next matcher/probability-table pass.
+        if( L_BENCH_GLOB ) t_project_refs = tic()
+        nrefs = params%nspace * params%nstates
+        call read_mask_filter_reproject_refvols(params, build, cline, 1)
+        call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
+        call build%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+        call build%pftc%polar_cavger_kill
+        call build%pftc%kill
+        if( L_BENCH_GLOB ) rt_project_refs = rt_project_refs + toc(t_project_refs)
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         ! destruct
         call gridcorr_img%kill
@@ -326,6 +400,7 @@ contains
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', rt_eoavg
             write(fnr,'(a,1x,f9.2)') 'automasking              : ', rt_automask
             write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', rt_nonuniform
+            write(fnr,'(a,1x,f9.2)') 'polar ref projection     : ', rt_project_refs
             write(fnr,'(a,1x,f9.2)') 'total time               : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
@@ -338,10 +413,12 @@ contains
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
             write(fnr,'(a,1x,f9.2)') 'automasking              : ', (rt_automask/rt_tot)               * 100.
             write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', (rt_nonuniform/rt_tot)             * 100.
-            write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
-            &((rt_init+rt_read+rt_sum_reduce+rt_sum_eos+rt_sampl_dens_correct_eos+rt_sampl_dens_correct_sum+rt_eoavg+rt_automask+rt_nonuniform)/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'polar ref projection     : ', (rt_project_refs/rt_tot)          * 100.
+            rt_accounted = rt_init + rt_read + rt_sum_reduce + rt_sum_eos + rt_sampl_dens_correct_eos + &
+                &rt_sampl_dens_correct_sum + rt_eoavg + rt_automask + rt_nonuniform + rt_project_refs
+            write(fnr,'(a,1x,f9.2)') '% accounted for          : ', (rt_accounted/rt_tot) * 100.
             call fclose(fnr)
         endif
-    end subroutine exec_volassemble
+    end subroutine exec_cartesian_assembly
 
 end module simple_commanders_rec_distr

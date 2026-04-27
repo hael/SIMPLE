@@ -5,7 +5,7 @@ use simple_parameters,           only: parameters
 use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
 use simple_matcher_3Drec,        only: calc_3Drec, calc_polar_refs
-use simple_commanders_rec_distr, only: commander_volassemble
+use simple_commanders_rec_distr, only: commander_cartesian_volassemble
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
@@ -132,7 +132,7 @@ contains
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        type(commander_volassemble) :: xvolassemble
+        type(commander_cartesian_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in
         type(string)         :: fname
@@ -155,6 +155,8 @@ contains
         if( params%l_polar) then
             call calc_polar_refs( params, build, cline, nptcls2update, pinds )
         else
+            ! Legacy handshake for rec-writing helpers that still inspect this key.
+            ! The strategy owns the actual assembly dispatch decision.
             call cline%set('force_volassemble', 'yes')
             call calc_3Drec( params, build, cline, nptcls2update, pinds )
             cline_volassemble = cline
@@ -256,7 +258,7 @@ contains
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        type(commander_volassemble) :: xvolassemble
+        type(commander_cartesian_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in
         integer                     :: state

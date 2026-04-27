@@ -1,4 +1,7 @@
-!@descr: polar-reference preparation helpers for matcher workflows
+!@descr: reference-section preparation helpers for matcher workflows
+! POLAR_REFS*.bin lifecycle:
+! - producers: write_initial_polar_ref_sections, exec_cartesian_assembly, exec_polar_assembly
+! - consumers: prep_pftc4align3D_polar, prob_tab, prob_tab_neigh
 module simple_matcher_pftc_prep
 use simple_pftc_srch_api
 use simple_builder,              only: builder
@@ -7,11 +10,17 @@ use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun
 use simple_matcher_refvol_utils, only: pick_lp_est_state, estimate_lp_from_refs
 implicit none
 
-public :: prep_pftc4align3D_polar, prep_pftc4align2D
+public :: prep_pftc4align3D_polar, prep_pftc4align2D, polar_ref_sections_available
 private
 #include "simple_local_flags.inc"
 
 contains
+
+    logical function polar_ref_sections_available()
+        polar_ref_sections_available = file_exists(POLAR_REFS_FBODY//BIN_EXT) .or. &
+            &(file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) .and. &
+            & file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT))
+    end function polar_ref_sections_available
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
     subroutine prep_pftc4align2D( params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, l_stream )
@@ -116,8 +125,8 @@ contains
         class(builder),           intent(inout) :: build
         class(cmdline),           intent(in)    :: cline
         integer,                  intent(in)    :: batchsz
-        real, allocatable :: gaufilter(:)
-        integer           :: iproj, nrefs, filtsz, state
+        real, allocatable :: gaufilter(:), default_frc(:)
+        integer           :: iproj, nrefs, filtsz, state, istate
         logical           :: l_filtrefs
         ! Resolution limit estimation
         call pick_lp_est_state(params, build, state)
@@ -125,12 +134,29 @@ contains
             call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
         endif
         ! Calculator init
+        ! Polar reference slots are state-major:
+        ! (state - 1) * nspace + local_projection.
         nrefs = params%nspace * params%nstates
         call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
         ! Read polar references
         call build%pftc%polar_cavger_new(.true.)
         call build%pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
-        call build%clsfrcs%read(string(FRCS_FILE))
+        if( file_exists(FRCS_FILE) )then
+            call build%clsfrcs%read(string(FRCS_FILE))
+        else
+            call build%clsfrcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
+            ! Bootstrap before the first assembly has no empirical FSCs yet.
+            ! Use a neutral FRC so reference preparation does not inherit a
+            ! silent zero-resolution prior.
+            filtsz = build%clsfrcs%get_filtsz()
+            allocate(default_frc(filtsz), source=1.0)
+            do istate = 1,params%nstates
+                do iproj = 1,params%nspace
+                    call build%clsfrcs%set_frc(iproj, default_frc, istate)
+                enddo
+            enddo
+            deallocate(default_frc)
+        endif
         ! prepare filter
         l_filtrefs = .false.
         if(trim(params%gauref).eq.'yes')then
@@ -142,7 +168,7 @@ contains
         ! PREPARATION OF REFERENCES IN pftc
         !$omp parallel do default(shared) private(iproj)&
         !$omp schedule(static) proc_bind(close)
-        do iproj = 1,params%nspace
+        do iproj = 1,nrefs
             if( l_filtrefs ) call build%pftc%polar_filterrefs(iproj, gaufilter)
             ! transfer to pftc
             if( params%l_lpset )then

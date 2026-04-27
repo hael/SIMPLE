@@ -222,6 +222,7 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         logical          :: converged
+        logical          :: l_write_partial_recs
         ! Flags required for worker execution
         if( .not. cline%defined('part')    ) THROW_HARD('PART must be defined for distributed worker execution')
         if( .not. cline%defined('outfile') ) THROW_HARD('OUTFILE must be defined for distributed worker execution')
@@ -230,7 +231,8 @@ contains
         params%which_iter = max(1, params%startit)
         if( .not. cline%defined('extr_iter') ) params%extr_iter = params%which_iter
         call cline%set('which_iter', int2str(params%which_iter))
-        call refine3D_exec(params, build, cline, params%which_iter, converged)
+        l_write_partial_recs = trim(params%volrec) .eq. 'yes' .or. params%l_polar
+        call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
     end subroutine exec_refine3D_distr_worker

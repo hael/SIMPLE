@@ -259,7 +259,7 @@ contains
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable   :: fpls(:)
         type(image),       allocatable   :: cavgs(:)
-        integer :: batchlims(2), ibatch, batchsz, i, maxbatchsz
+        integer :: batchlims(2), ibatch, batchsz, i, maxbatchsz, nrefs
         logical :: DEBUG = .true.
         integer(timer_int_kind) :: t, t0
         real(timer_int_kind)    :: t_init, t_read, t_prep, t_grid, t_tot
@@ -277,7 +277,8 @@ contains
             t_prep = 0.d0
             t_grid = 0.d0
         endif
-        call build%pftc%new(params, params%nspace, [1,1], [2,5])
+        nrefs = params%nspace * params%nstates
+        call build%pftc%new(params, nrefs, [1,1], [2,5])
         call build%pftc%polar_cavger_new(.true.)
         call build%pftc%polar_cavger_zero_pft_refs
         do ibatch = 1,nptcls,maxbatchsz
@@ -309,10 +310,11 @@ contains
         if( DEBUG )t_tot = toc(t0)
         ! Write
         call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
-        ! Crude visualization
-        allocate(cavgs(params%nspace))
+        ! Crude visualization. References are written in state-major order:
+        ! state 1 projections, then state 2, and so on.
+        allocate(cavgs(nrefs))
         call build%pftc%polar_cavger_refs2cartesian( cavgs, 'merged' )
-        do i = 1,params%nspace
+        do i = 1,nrefs
             call cavgs(i)%write(string('prefs_merged.mrc'),i)
             call cavgs(i)%kill
         enddo

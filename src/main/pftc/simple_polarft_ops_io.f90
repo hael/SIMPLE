@@ -180,7 +180,8 @@ contains
         end select
     end subroutine polar_cavger_write
 
-    ! Writes all cavgs PFT arrays
+    ! Writes the polar restoration triplet: merged, even, and odd. This is
+    ! used after polar assembly has produced a merged reference set.
     !! performance critical code
     module subroutine polar_cavger_writeall( self, tmpl_fname )
         class(polarft_calc), intent(inout) :: self
@@ -207,7 +208,9 @@ contains
         call fclose(funit_m)
     end subroutine polar_cavger_writeall
 
-    ! Write references contained in pftc
+    ! Writes only the even/odd reference pair currently held in pftc. Cartesian
+    ! volume projection uses this path; polar_cavger_read_all accepts the
+    ! resulting e/o-only file set.
     !! performance critical code
     module subroutine polar_cavger_write_eo_pftcrefs( self, tmpl_fname )
         class(polarft_calc), intent(inout) :: self
@@ -275,6 +278,7 @@ contains
         integer :: funit_e, funit_o, funit_m
         integer :: dims_e(4), dims_o(4), dims_m(4)
         integer :: i
+        logical :: have_refs, have_even, have_odd
         ext = string('.')//fname2ext(fname)
         if( ext == MRC_EXT )then
             refs = get_fbody(fname, MRC_EXT, separator=.false.)//BIN_EXT
@@ -285,10 +289,15 @@ contains
         endif
         refs_even = get_fbody(refs,BIN_EXT,separator=.false.)//'_even'//BIN_EXT
         refs_odd  = get_fbody(refs,BIN_EXT,separator=.false.)//'_odd'//BIN_EXT
-        if( .not. file_exists(refs) )then
-            THROW_HARD('Polar references do not exist in cwd: '//refs%to_char())
+        have_refs = file_exists(refs)
+        have_even = file_exists(refs_even)
+        have_odd  = file_exists(refs_odd)
+        if( have_even .neqv. have_odd )then
+            write(logfhandle,'(A,1X,A,1X,A)') 'Incomplete even/odd polar reference pair in cwd:', &
+                &refs_even%to_char(), refs_odd%to_char()
+            THROW_HARD('Incomplete even/odd polar reference pair in cwd')
         endif
-        if( file_exists(refs_even) )then ! assume all files are there
+        if( have_refs .and. have_even )then
             call self%open_pft_array_for_read(refs,      self%pfts_merg, funit_m, dims_m, buf_m)
             call self%open_pft_array_for_read(refs_even, self%pfts_even, funit_e, dims_e, buf_e)
             call self%open_pft_array_for_read(refs_odd,  self%pfts_odd,  funit_o, dims_o, buf_o)
@@ -308,12 +317,33 @@ contains
             call fclose(funit_e)
             call fclose(funit_o)
             deallocate(buf_m, buf_e, buf_o)
-        else
+        else if( have_even .and. have_odd )then
+            call self%open_pft_array_for_read(refs_even, self%pfts_even, funit_e, dims_e, buf_e)
+            call self%open_pft_array_for_read(refs_odd,  self%pfts_odd,  funit_o, dims_o, buf_o)
+            !$omp parallel do default(shared) private(i) num_threads(2) schedule(static)
+            do i = 1, 2
+                select case(i)
+                    case(1)
+                        call self%transfer_pft_array_buffer(self%pfts_even, funit_e, dims_e, buf_e)
+                    case(2)
+                        call self%transfer_pft_array_buffer(self%pfts_odd,  funit_o, dims_o, buf_o)
+                end select
+            end do
+            !$omp end parallel do
+            call fclose(funit_e)
+            call fclose(funit_o)
+            deallocate(buf_e, buf_o)
+            !$omp parallel workshare
+            self%pfts_merg = 0.5d0 * (self%pfts_even + self%pfts_odd)
+            !$omp end parallel workshare
+        else if( have_refs )then
             call self%read_pft_array(refs, self%pfts_merg)
             !$omp parallel workshare
             self%pfts_even = self%pfts_merg
             self%pfts_odd  = self%pfts_merg
             !$omp end parallel workshare
+        else
+            THROW_HARD('Polar references do not exist in cwd: '//refs%to_char())
         endif
     end subroutine polar_cavger_read_all
 

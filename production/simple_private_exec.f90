@@ -38,7 +38,7 @@ type(commander_prob_tab2D)              :: xprob_tab2D
 type(commander_prob_align2D)            :: xprob_align2D
 
 ! RECONSTRUCTION PROGRAMS
-type(commander_volassemble)             :: xvolassemble
+type(commander_cartesian_volassemble)   :: xvolassemble
 type(commander_rec3D_worker)            :: xrec3D
 
 ! CHECKER PROGRAMS

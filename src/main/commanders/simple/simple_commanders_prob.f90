@@ -38,9 +38,8 @@ contains
 
     subroutine exec_prob_tab( self, cline )
         use simple_matcher_2Dprep
-        use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
+        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar, polar_ref_sections_available
         use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
         use simple_matcher_ptcl_io,         only: killimgbatch
         use simple_eul_prob_tab,            only: eul_prob_tab
@@ -54,7 +53,6 @@ contains
         type(parameters)         :: params
         type(eul_prob_tab)       :: eulprob_obj_part
         integer :: nptcls
-        logical :: do_polar_prepare
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         call set_bp_range3D( params, build, cline )
@@ -66,19 +64,13 @@ contains
         else
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
-        do_polar_prepare = (params%l_polar .and. (.not.cline%defined('vol1')))
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        if( do_polar_prepare ) then
-            call prep_pftc4align3D_polar( params, build, cline, nptcls )
+        if( .not. polar_ref_sections_available() )then
+            THROW_HARD('polar reference sections are missing; assembly must prepare POLAR_REFS before prob_tab')
         endif
+        call prep_pftc4align3D_polar( params, build, cline, nptcls )
         call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
-        if( .not. do_polar_prepare )then
-            call read_mask_filter_reproject_refvols(params, build, cline, nptcls)
-            call build%vol%kill
-            call build%vol_odd%kill
-            call build%vol2%kill
-        endif
-        call build%pftc%memoize_refs( build%eulspace)
+        call build%pftc%memoize_refs
         ! Build polar particle images
         call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
@@ -103,9 +95,8 @@ contains
 
     subroutine exec_prob_tab_neigh( self, cline )
         use simple_matcher_2Dprep
-        use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
+        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar, polar_ref_sections_available
         use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
         use simple_matcher_ptcl_io,         only: killimgbatch
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
@@ -119,7 +110,6 @@ contains
         type(parameters)         :: params
         type(eul_prob_tab_neigh) :: eulprob_obj_part_neigh
         integer :: nptcls
-        logical :: do_polar_prepare
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         call set_bp_range3D( params, build, cline )
@@ -129,19 +119,13 @@ contains
         else
             THROW_HARD('exec_prob_tab_neigh requires prior particle sampling (in exec_prob_align)')
         endif
-        do_polar_prepare = (params%l_polar .and. (.not.cline%defined('vol1')))
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        if( do_polar_prepare ) then
-            call prep_pftc4align3D_polar( params, build, cline, nptcls )
+        if( .not. polar_ref_sections_available() )then
+            THROW_HARD('polar reference sections are missing; assembly must prepare POLAR_REFS before prob_tab_neigh')
         endif
+        call prep_pftc4align3D_polar( params, build, cline, nptcls )
         call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
-        if( .not. do_polar_prepare )then
-            call read_mask_filter_reproject_refvols(params, build, cline, nptcls)
-            call build%vol%kill
-            call build%vol_odd%kill
-            call build%vol2%kill
-        endif
-        call build%pftc%memoize_refs( build%eulspace)
+        call build%pftc%memoize_refs
         ! Build polar particle images
         call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         call eulprob_obj_part_neigh%new_neigh(params, build, pinds)
