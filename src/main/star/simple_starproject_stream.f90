@@ -461,7 +461,8 @@ contains
             ms_complete = toc(ms0)
             print *,'particle star optics section written in :', ms_complete; call flush(6)
         endif
-        if(NTHR .le. 1) then
+       ! if(NTHR .le. 1) then
+        if(.true.) then
             if(self%verbose) ms0 = tic()
             call self%starfile_set_particles2D_table(spproj)
             call self%starfile_write_table(append = .true.)

@@ -97,6 +97,7 @@ contains
         if( .not.cline%defined('dynreslim') ) call cline%set('dynreslim', 'yes')
         if( .not.cline%defined('center')    ) call cline%set('center',    'yes')
         if( .not.cline%defined('ncls')      ) call cline%set('ncls',       200)
+        if( .not.cline%defined('projfile_optics') ) call cline%set('projfile_optics', OPTICS_JOB_NAME//METADATA_EXT)
         ! restart
         call cleanup4restart
         ! generate own project file if projfile isnt set

@@ -684,7 +684,7 @@ contains
         ! write starfiles
         call starproj%export_cls2D(pool_proj)
         if(l_write_star) then
-            call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
+         !   call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
             if( DEBUG_HERE ) t = tic()
             call starproj_stream%stream_export_micrographs(params, pool_proj, params%outdir, optics_set=.true.)
             if( DEBUG_HERE ) print *,'ms_export  : ', toc(t); call flush(6); t = tic()
