@@ -101,7 +101,7 @@ contains
         endif
         call prepare_refs_sigmas_and_pftc()
         if( ctrl%do_bench ) t_memoize_refs = tic()
-        if( .not. ctrl%do_prob_align ) call build%pftc%memoize_refs
+        if( .not. ctrl%do_prob_align ) call build%pftc%memoize_refs( eulspace=build%eulspace)
         if( ctrl%do_bench )then
             rt_memoize_refs = toc(t_memoize_refs)
             t_prep_orisrch  = tic()

@@ -78,7 +78,7 @@ contains
             call build%vol_odd%kill
             call build%vol2%kill
         endif
-        call build%pftc%memoize_refs
+        call build%pftc%memoize_refs( build%eulspace)
         ! Build polar particle images
         call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
@@ -141,7 +141,7 @@ contains
             call build%vol_odd%kill
             call build%vol2%kill
         endif
-        call build%pftc%memoize_refs
+        call build%pftc%memoize_refs( build%eulspace)
         ! Build polar particle images
         call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         call eulprob_obj_part_neigh%new_neigh(params, build, pinds)

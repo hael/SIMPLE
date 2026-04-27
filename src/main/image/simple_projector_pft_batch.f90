@@ -59,7 +59,6 @@ contains
     end subroutine fproject_polar_batch
 
     !> Extract unique central sections and mirror them
-    ! NOT FUNCTIONAL YET
     subroutine fproject_polar_batch_mirr( vol_pad, eulspace, nspace, kfromto, mask, polar_x, polar_y, refs_state )
         class(projector), intent(in)    :: vol_pad
         class(oris),      intent(inout) :: eulspace
@@ -120,7 +119,6 @@ contains
             psi = eulspace%get(m, 'psi')
             if( (psi > 0.1) .and. (psi < 359.9) )then
                 refs_state(:,:,m) = conjg(pftm)
-                print *, 'mirroring section ', iproj, ' to ', m, ' with psi = ', psi
             else
                 refs_state(:,:,m) = pftm
             endif

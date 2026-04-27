@@ -535,8 +535,9 @@ interface
         class(polarft_calc), intent(inout) :: self
     end subroutine memoize_ptcls
 
-    module subroutine memoize_refs(self)
-        class(polarft_calc), intent(inout) :: self
+    module subroutine memoize_refs( self, eulspace )
+        class(polarft_calc),           intent(inout) :: self
+        class(oris),         optional, intent(in)    :: eulspace
     end subroutine memoize_refs
 
     module subroutine alloc_memo_ptcls(self)
