@@ -57,8 +57,9 @@ contains
             call polarft_dims_from_file_header(fname, pftsz_here, kfromto_here, nrefs_here)
             expected_nrefs      = params%nspace * params%nstates
             expected_interpklim = fdim(params%box_crop) - 1
-            ! Header-only gate for stale POLAR_REFS*. The reader still owns
-            ! payload transfer and k-range zero padding.
+            ! Header-only gate for stale POLAR_REFS*. Lower-k range
+            ! differences are accepted because the reader owns overlap
+            ! transfer and k-range zero padding.
             polar_ref_file_compatible = nrefs_here == expected_nrefs
             polar_ref_file_compatible = polar_ref_file_compatible .and. pftsz_here == params%pftsz
             polar_ref_file_compatible = polar_ref_file_compatible .and. kfromto_here(2) <= expected_interpklim

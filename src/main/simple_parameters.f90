@@ -548,10 +548,16 @@ type :: parameters
     contains
     procedure, private :: init_strings
     procedure          :: new
+    procedure          :: is_final_planned_iter
     procedure, private :: set_img_format
 end type parameters
 
 contains
+
+    logical function is_final_planned_iter( self )
+        class(parameters), intent(in) :: self
+        is_final_planned_iter = (self%which_iter - self%startit + 1) >= self%maxits
+    end function is_final_planned_iter
 
     subroutine init_strings( self )
         class(parameters), intent(inout) :: self

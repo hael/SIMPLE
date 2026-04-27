@@ -535,12 +535,10 @@ contains
         integer      :: current_nspace, prev_nspace
         logical      :: l_pad
         call self%get_pft_array_dims(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_pftsz, prev_klims, prev_nrefs)
-        ! Among the 3 dimensions of the arrays:
-        ! - pftsz/prev_pftsz, and so # of rotations per shell must match exactly
-        ! - Whereas frequency range can be padded with zeros.
-        ! - nrefs: state-major blocks may grow when nspace grows; each state's
-        !          current projections are sourced from the closest previous
-        !          projection in the same state.
+        ! PFT arrays are state-major blocks of per-projection sections.
+        ! The angular shell size must match; frequency ranges can be padded.
+        ! When per-state nspace grows, each current projection is sourced from
+        ! the closest previous projection in the same state.
         if( (prev_nrefs == self%ncls) .and. (prev_pftsz == self%pftsz) )then
             call self%read_pft_array(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_even)
             call self%read_pft_array(string(POLAR_REFS_FBODY)//'_odd'//BIN_EXT,  prev_odd)
@@ -563,9 +561,10 @@ contains
                 call symop%new(self%p_ptr%pgrp)
                 call prev_eulspace%new(prev_nspace, is_ptcl=.false.)
                 call symop%build_refspiral(prev_eulspace)
-                ! when the frequency range does not match, zero-padding will be used
                 ks = max(self%kfromto(1), prev_klims(1))
                 ke = min(self%interpklim, prev_klims(2))
+                ! Compare full requested/stored ranges, not just intersection
+                ! bounds, so missing low/high frequencies trigger zero padding.
                 l_pad = (self%kfromto(1) /= prev_klims(1)) .or. (self%interpklim /= prev_klims(2))
                 fname = string(POLAR_REFS_FBODY)//'_even'//BIN_EXT
                 call map_current_refs_to_closest_previous_refs(fname, prev_even)

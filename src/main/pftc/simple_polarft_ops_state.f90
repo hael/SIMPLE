@@ -507,16 +507,19 @@ contains
     ! split. Polar central sections are then gathered from that field and emitted
     ! as the usual even/odd partial-sum payload.
     module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls, &
-        &reforis_out, nspace_out )
+        &reforis_in, nspace_out )
         class(polarft_calc),        intent(inout) :: self
-        class(oris),                intent(inout) :: eulspace
+        class(oris), target,        intent(inout) :: eulspace
         class(oris), pointer,       intent(inout) :: ptcl_field
         class(sym),                 intent(inout) :: symop
         integer,                    intent(in)    :: nptcls, pinds(nptcls)
         class(fplane_type), target, intent(inout) :: fpls(nptcls)
-        class(oris),      optional, intent(inout) :: reforis_out
+        ! extract_polar currently takes an inout oris even though it only reads
+        ! the reference grid.
+        class(oris), target, optional, intent(inout) :: reforis_in
         integer,          optional, intent(in)    :: nspace_out
         type(fgrid_obs_field_eo) :: obs
+        class(oris), pointer :: refs_ptr
         type(ori) :: o
         complex(dp), allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:)
         real(dp),    allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
@@ -528,6 +531,11 @@ contains
         if( nptcls < 1 ) return
         nspace_refs = self%p_ptr%nspace
         if( present(nspace_out) ) nspace_refs = nspace_out
+        if( present(reforis_in) )then
+            refs_ptr => reforis_in
+        else
+            refs_ptr => eulspace
+        endif
         box = self%p_ptr%box_crop
         if( is_even(box) )then
             lims(1,:) = [0, box/2]
@@ -538,18 +546,8 @@ contains
             lims(2,:) = [-(box-1)/2, (box-1)/2]
             lims(3,:) = [-(box-1)/2, (box-1)/2]
         endif
-        if( present(reforis_out) )then
-            noris = reforis_out%get_noris()
-        else
-            noris = eulspace%get_noris()
-        endif
-        if( present(reforis_out) )then
-            if( reforis_out%isthere('mirr') )then
-                nrefs = noris / 2
-            else
-                nrefs = noris
-            endif
-        else if( eulspace%isthere('mirr') )then
+        noris = refs_ptr%get_noris()
+        if( refs_ptr%isthere('mirr') )then
             nrefs = noris / 2
         else
             nrefs = noris
@@ -575,13 +573,8 @@ contains
                 call ptcl_field%get_ori(iptcl, o)
                 call obs%insert_plane(symop, o, fpls(i), eo, pw)
             enddo
-            if( present(reforis_out) )then
-                call obs%even%extract_polar(reforis_out, nrefs, kspan, hcoords, kcoords, pfts_even, ctf2_even)
-                call obs%odd%extract_polar( reforis_out, nrefs, kspan, hcoords, kcoords, pfts_odd,  ctf2_odd )
-            else
-                call obs%even%extract_polar(eulspace, nrefs, kspan, hcoords, kcoords, pfts_even, ctf2_even)
-                call obs%odd%extract_polar( eulspace, nrefs, kspan, hcoords, kcoords, pfts_odd,  ctf2_odd )
-            endif
+            call obs%even%extract_polar(refs_ptr, nrefs, kspan, hcoords, kcoords, pfts_even, ctf2_even)
+            call obs%odd%extract_polar( refs_ptr, nrefs, kspan, hcoords, kcoords, pfts_odd,  ctf2_odd )
             base = (istate - 1) * nspace_refs
             self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs) = &
                 &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs) + pfts_even

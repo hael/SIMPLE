@@ -3,7 +3,6 @@ use simple_pftc_srch_api
 use simple_strategy3D_alloc,        only: clean_strategy3D, prep_strategy3D, s3D
 use simple_binoris_io,              only: binwrite_oritab
 use simple_builder,                 only: builder
-use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
@@ -64,7 +63,6 @@ contains
         type(class_sample),        allocatable :: clssmp(:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
         real,                      allocatable :: incr_shifts(:,:)
-        type(convergence)   :: conv
         type(ori)           :: orientation
         type(oris)          :: obsfield_ref_eulspace
         type(refine3D_ctrl) :: ctrl
@@ -91,6 +89,7 @@ contains
         l_write_partial_recs_value   = .false.
         if( l_write_partial_recs_present ) l_write_partial_recs_value = l_write_partial_recs
         call init_ctrl()
+        converged = .false.
         if( ctrl%do_bench )then
             t_startup = tic()
             t_tot     = t_startup
@@ -200,9 +199,6 @@ contains
         call b_ptr%esig%kill
         call obsfield_ref_eulspace%kill
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
-        if( .not. p_ptr%l_distr_worker .and. ctrl%refine_mode /= 'sigma' )then
-            converged = conv%check_conv3D(p_ptr, cline, b_ptr%spproj_field, p_ptr%msk)
-        endif
 
         if( ctrl%do_bench )then
             rt_tot = toc(t_tot)
@@ -434,14 +430,7 @@ contains
                     case('obsfield')
                         call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
                             pinds(batch_start:batch_end), fpls(:batchsz))
-                        if( l_obsfield_ref_next )then
-                            call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
-                                b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz), &
-                                reforis_out=obsfield_ref_eulspace, nspace_out=obsfield_ref_nspace)
-                        else
-                            call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
-                                b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
-                        endif
+                        call insert_obsfield_batch()
                     case('yes')
                         call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), &
                             b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
@@ -455,6 +444,17 @@ contains
             endif
             if( ctrl%do_bench ) rt_rec = rt_rec + toc(t_rec)
         end subroutine maybe_restore_batch
+
+        subroutine insert_obsfield_batch()
+            if( l_obsfield_ref_next )then
+                call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
+                    b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz), &
+                    reforis_in=obsfield_ref_eulspace, nspace_out=obsfield_ref_nspace)
+            else
+                call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
+                    b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
+            endif
+        end subroutine insert_obsfield_batch
 
         subroutine maybe_write_orientations()
             if( .not. ctrl%do_write_oris ) return
@@ -496,11 +496,11 @@ contains
         end subroutine prepare_obsfield_ref_space
 
         logical function obsfield_uses_next_nspace()
-            obsfield_uses_next_nspace = ctrl%do_polar .and. ctrl%do_write_partial_recs
-            obsfield_uses_next_nspace = obsfield_uses_next_nspace .and. trim(ctrl%polar_mode) == 'obsfield'
-            obsfield_uses_next_nspace = obsfield_uses_next_nspace .and. p_ptr%nspace_next > p_ptr%nspace
-            obsfield_uses_next_nspace = obsfield_uses_next_nspace .and. &
-                &(p_ptr%which_iter - p_ptr%startit + 1) >= p_ptr%maxits
+            obsfield_uses_next_nspace = ctrl%do_polar                         &
+                &.and. ctrl%do_write_partial_recs                             &
+                &.and. trim(ctrl%polar_mode) == 'obsfield'                    &
+                &.and. p_ptr%nspace_next > p_ptr%nspace                       &
+                &.and. p_ptr%is_final_planned_iter()
         end function obsfield_uses_next_nspace
 
     end subroutine refine3D_exec

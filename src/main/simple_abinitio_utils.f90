@@ -44,6 +44,7 @@ type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
 real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
 integer          :: nstates_glob = 1, nptcls_eff = 0, nsample_minmax(2), maxits_dyn=0
+integer          :: nstages_refine3D = NSTAGES
 
 ! In submodule: simple_abinitio_controller.f90
 interface
@@ -105,6 +106,20 @@ contains
         call cline_reproject%set('nstates',           params%nstates)
         call cline_reproject%delete('projfile')
     end subroutine prep_class_command_lines
+
+    subroutine strip_refine3D_planning_keys( child_cline, delete_which_iter )
+        class(cmdline), intent(inout) :: child_cline
+        logical, optional, intent(in) :: delete_which_iter
+        logical :: l_delete_which_iter
+        l_delete_which_iter = .false.
+        if( present(delete_which_iter) ) l_delete_which_iter = delete_which_iter
+        if( l_delete_which_iter ) call child_cline%delete('which_iter')
+        call child_cline%delete('endit')
+        call child_cline%delete('nspace_next')
+        call child_cline%delete('polar')
+        call child_cline%delete('automsk')
+        call child_cline%delete('filt_mode')
+    end subroutine strip_refine3D_planning_keys
 
     subroutine set_symmetry_class_vars( params )
         class(parameters), intent(in) :: params
@@ -231,10 +246,7 @@ contains
                 call cline_asymrec%set('pgrp',       params%pgrp_start)
                 call cline_asymrec%set('ml_reg',     'no') ! no ml reg for now
                 call cline_asymrec%set('objfun',     'cc')
-                call cline_asymrec%delete('which_iter')
-                call cline_asymrec%delete('endit')
-                call cline_asymrec%delete('nspace_next')
-                call cline_asymrec%delete('polar')
+                call strip_refine3D_planning_keys(cline_asymrec, delete_which_iter=.true.)
                 call xrec3D%execute(cline_asymrec)
                 vol_iter = 'asymmetric_map'//MRC_EXT
                 call simple_copy_file(string(VOL_FBODY)//int2str_pad(1,2)//MRC_EXT, vol_iter)
@@ -266,9 +278,7 @@ contains
                 call cline_symrec%set('projfile',   projfile)
                 call cline_symrec%set('pgrp',       params%pgrp)
                 call cline_symrec%set('which_iter', cline_refine3D%get_iarg('endit'))
-                call cline_symrec%delete('endit')
-                call cline_symrec%delete('nspace_next')
-                call cline_symrec%delete('polar')
+                call strip_refine3D_planning_keys(cline_symrec)
                 call xrec3D%execute(cline_symrec)
                 vol_sym = VOL_FBODY//int2str_pad(1,2)//MRC_EXT
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
@@ -305,11 +315,7 @@ contains
         call cline_rec%delete('vol_even')
         call cline_rec%delete('vol_odd')
         call cline_rec%delete('update_frac')
-        call cline_rec%delete('endit')
-        call cline_rec%delete('automsk')
-        call cline_rec%delete('filt_mode')
-        call cline_rec%delete('nspace_next')
-        call cline_rec%delete('polar')
+        call strip_refine3D_planning_keys(cline_rec)
         call xrec3D%execute(cline_rec)
         if( params%l_polar )then
             ! Polar=yes branch

@@ -13,6 +13,7 @@ integer, parameter :: REFINE3D_ROUTE_STD              = 1
 integer, parameter :: REFINE3D_ROUTE_CAVGS            = 2
 integer, parameter :: REFINE3D_ROUTE_POLAR            = 3
 integer, parameter :: REFINE3D_ROUTE_POLAR_CAVGS      = 4
+integer, parameter :: NSPACE_NEXT_NONE                = 0
 integer, parameter :: NEIGH_NSPACES(2)                = [126,5000]
 
 type :: refine3D_stage_cfg
@@ -52,6 +53,11 @@ contains
         end select
     end function polar_mode_remaps_refs
 
+    integer function active_refine3D_nstages() result(nstages)
+        nstages = min(nstages_refine3D, size(NSPACE), size(MAXITS))
+        if( allocated(lpinfo) ) nstages = min(nstages, size(lpinfo))
+    end function active_refine3D_nstages
+
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
         integer :: route
@@ -87,7 +93,7 @@ contains
             cfg%iter = cline_refine3D%get_iarg('endit')
         endif
         cfg%iter = cfg%iter + 1
-        cfg%inspace_next = 0
+        cfg%inspace_next = NSPACE_NEXT_NONE
         cfg%inspace_sub = 0
     end subroutine init_refine3D_iteration
 
@@ -95,7 +101,7 @@ contains
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        if( istage == NSTAGES )then
+        if( istage == active_refine3D_nstages() )then
             cfg%fillin = 'yes'
             if( params%nstates > 1 ) cfg%fillin = 'no'
             if( l_nsample_stop_given )then
@@ -169,7 +175,7 @@ contains
             case('independent')
                 if( istage >= TRAILREC_STAGE_MULTI  ) cfg%trail_rec = 'yes'
             case('docked')
-                if( istage == NSTAGES )then
+                if( istage == active_refine3D_nstages() )then
                     cfg%trail_rec = 'no'
                 else if( istage >= TRAILREC_STAGE_SINGLE )then
                     cfg%trail_rec = 'yes'
@@ -196,7 +202,7 @@ contains
             cfg%filt_mode = trim(params%filt_mode)
             if( cfg%filt_mode.eq.'uniform' )then
                 cfg%lpstart = lpinfo(istage - 1)%lp
-                if( istage == NSTAGES )then
+                if( istage == active_refine3D_nstages() )then
                     cfg%lpstop = lpinfo(istage)%smpd_crop * 2.
                 else
                     cfg%lpstop = lpinfo(istage + 1)%lp
@@ -269,7 +275,9 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
+        integer :: stage_last
         cfg%ipftsz = 0
+        stage_last = active_refine3D_nstages()
         select case(route)
             case(REFINE3D_ROUTE_STD, REFINE3D_ROUTE_CAVGS)
                 ! nothing to override for standard and cavgs routes
@@ -278,11 +286,11 @@ contains
                 if( cfg%ml_reg.eq.'yes' )         cfg%gaufreq = -1.
                 if( cfg%trail_rec=='yes' )then
                     if( trim(params%multivol_mode)=='docked' )then
-                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(NSTAGES-1)%box_crop)
+                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(max(1,stage_last-1))%box_crop)
                     else
-                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(NSTAGES)%box_crop)
+                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
                     endif
-                    cfg%inspace = NSPACE(NSTAGES)
+                    cfg%inspace = NSPACE(stage_last)
                 endif
         end select
         select case(cfg%refine%to_char())
@@ -296,7 +304,7 @@ contains
         if( params%l_polar .and. (.not. polar_mode_remaps_refs(params%polar)) )then
             select case(cfg%refine%to_char())
                 case('prob_neigh')
-                    cfg%inspace = NSPACE(NSTAGES)
+                    cfg%inspace = NSPACE(stage_last)
             end select
         endif
     end subroutine apply_refine3D_route_overrides
@@ -306,12 +314,12 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
-        if( istage < NSTAGES )then
+        if( istage < active_refine3D_nstages() )then
             cfg%inspace_next = max(cfg%inspace, refine3D_stage_nspace(params, istage + 1, route))
         else
-            cfg%inspace_next = 0
+            cfg%inspace_next = NSPACE_NEXT_NONE
         endif
-        if( cfg%inspace_next <= cfg%inspace ) cfg%inspace_next = 0
+        if( cfg%inspace_next <= cfg%inspace ) cfg%inspace_next = NSPACE_NEXT_NONE
     end subroutine set_refine3D_next_space
 
     integer function refine3D_stage_nspace( params, istage, route ) result(inspace)
@@ -322,6 +330,7 @@ contains
         call set_refine3D_mode_policy( cfg_stage, params, istage, route )
         call set_refine3D_gauref_policy( cfg_stage, params, istage )
         call set_refine3D_trailrec_policy( cfg_stage, params, istage )
+        call set_refine3D_automsk_policy( cfg_stage, params, istage, route )
         call set_refine3D_stage_controls( cfg_stage, params, istage )
         call apply_refine3D_route_overrides( cfg_stage, params, istage, route )
         inspace = cfg_stage%inspace
@@ -334,7 +343,7 @@ contains
         logical,                  intent(in) :: l_cavgs
         integer,                  intent(in) :: route
         call cline_refine3D%set('prg',                     'refine3D')
-        if( l_update_frac_dyn .or. istage == NSTAGES )then
+        if( l_update_frac_dyn .or. istage == active_refine3D_nstages() )then
             call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
             call cline_refine3D%set('fillin',             cfg%fillin)
         else
@@ -367,7 +376,7 @@ contains
             write(logfhandle,'(A,I0,A)') 'emit_refine3D_stage_cfg: stage=', istage, ' automsk active, deleting lp for gold-standard refinement'
         endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
-        if( cfg%inspace_next > cfg%inspace )then
+        if( cfg%inspace_next /= NSPACE_NEXT_NONE )then
             call cline_refine3D%set('nspace_next',         cfg%inspace_next)
         else
             call cline_refine3D%delete('nspace_next')

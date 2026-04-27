@@ -52,6 +52,7 @@ contains
             case default
                 THROW_HARD('unsupported POLAR mode: '//trim(params%polar))
         end select
+        call update_polar_resolution_fields(params, build)
         call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
         call build%pftc%polar_cavger_kill
         call build%pftc%kill
@@ -67,6 +68,46 @@ contains
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         call simple_touch('VOLASSEMBLE_FINISHED')
     end subroutine exec_polar_assembly
+
+    subroutine update_polar_resolution_fields( params, build )
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(string) :: fsc_file
+        real,    allocatable :: fsc(:), res(:), res0143s(:)
+        logical, allocatable :: has_fsc(:)
+        real    :: fsc05, fsc0143
+        integer :: state, iptcl, istate
+        allocate(res0143s(params%nstates), source=0.)
+        allocate(has_fsc(params%nstates), source=.false.)
+        res = get_resarr(params%box_crop, params%smpd_crop)
+        do state = 1, params%nstates
+            fsc_file = string(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
+            if( .not. file_exists(fsc_file) ) cycle
+            fsc = file2rarr(fsc_file)
+            call get_resolution(fsc, res, fsc05, fsc0143)
+            res0143s(state) = fsc0143
+            has_fsc(state)  = .true.
+            deallocate(fsc)
+        end do
+        if( any(has_fsc) )then
+            if( params%nstates == 1 )then
+                if( has_fsc(1) ) call build%spproj_field%set_all2single('res', res0143s(1))
+            else
+                do iptcl = 1, build%spproj_field%get_noris()
+                    istate = build%spproj_field%get_state(iptcl)
+                    if( istate > 0 .and. istate <= params%nstates )then
+                        if( has_fsc(istate) ) call build%spproj_field%set(iptcl, 'res', res0143s(istate))
+                    endif
+                end do
+            endif
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
+        call fsc_file%kill
+        if( allocated(fsc)      ) deallocate(fsc)
+        if( allocated(res)      ) deallocate(res)
+        if( allocated(res0143s) ) deallocate(res0143s)
+        if( allocated(has_fsc)  ) deallocate(has_fsc)
+    end subroutine update_polar_resolution_fields
 
     subroutine exec_cartesian_assembly( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo

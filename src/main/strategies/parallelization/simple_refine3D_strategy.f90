@@ -164,31 +164,58 @@ contains
         call vol_in%kill
     end subroutine prepare_assembly_cline
 
-    subroutine promote_cartesian_ref_nspace_if_needed( params, cline_assembly )
+    subroutine promote_assembly_nspace_if_needed( params, cline_assembly )
         type(parameters), intent(in)    :: params
         type(cmdline),    intent(inout) :: cline_assembly
-        ! Cartesian assembly reprojects assembled volumes. Legacy polar partial
-        ! sums stay at the matching nspace; obsfield has its own promotion path.
-        if( final_planned_iteration(params) .and. params%nspace_next > params%nspace )then
+        logical :: l_eligible
+        ! polar=yes|direct accumulate partial sums sized at matching nspace.
+        ! Cartesian and polar=obsfield can promote assembly-time reprojection.
+        l_eligible = (.not. params%l_polar) .or. trim(params%polar) == 'obsfield'
+        if( .not. l_eligible ) return
+        if( params%is_final_planned_iter() .and. params%nspace_next > params%nspace )then
             call cline_assembly%set('nspace', params%nspace_next)
             call cline_assembly%delete('nspace_next')
         endif
-    end subroutine promote_cartesian_ref_nspace_if_needed
+    end subroutine promote_assembly_nspace_if_needed
 
-    subroutine promote_obsfield_ref_nspace_if_needed( params, cline_assembly )
+    subroutine refresh_resolution_fields_from_fsc( params, build )
         type(parameters), intent(in)    :: params
-        type(cmdline),    intent(inout) :: cline_assembly
-        if( trim(params%polar) /= 'obsfield' ) return
-        if( final_planned_iteration(params) .and. params%nspace_next > params%nspace )then
-            call cline_assembly%set('nspace', params%nspace_next)
-            call cline_assembly%delete('nspace_next')
+        type(builder),    intent(inout) :: build
+        type(string) :: fsc_file
+        real,    allocatable :: fsc(:), res(:), res0143s(:)
+        logical, allocatable :: has_fsc(:)
+        real    :: fsc05, fsc0143
+        integer :: state, iptcl, istate
+        allocate(res0143s(params%nstates), source=0.)
+        allocate(has_fsc(params%nstates), source=.false.)
+        res = get_resarr(params%box_crop, params%smpd_crop)
+        do state = 1, params%nstates
+            fsc_file = string(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
+            if( .not. file_exists(fsc_file) ) cycle
+            fsc = file2rarr(fsc_file)
+            call get_resolution(fsc, res, fsc05, fsc0143)
+            res0143s(state) = fsc0143
+            has_fsc(state)  = .true.
+            deallocate(fsc)
+        end do
+        if( any(has_fsc) )then
+            if( params%nstates == 1 )then
+                if( has_fsc(1) ) call build%spproj_field%set_all2single('res', res0143s(1))
+            else
+                do iptcl = 1, build%spproj_field%get_noris()
+                    istate = build%spproj_field%get_state(iptcl)
+                    if( istate > 0 .and. istate <= params%nstates )then
+                        if( has_fsc(istate) ) call build%spproj_field%set(iptcl, 'res', res0143s(istate))
+                    endif
+                end do
+            endif
         endif
-    end subroutine promote_obsfield_ref_nspace_if_needed
-
-    logical function final_planned_iteration( params )
-        type(parameters), intent(in) :: params
-        final_planned_iteration = (params%which_iter - params%startit + 1) >= params%maxits
-    end function final_planned_iteration
+        call fsc_file%kill
+        if( allocated(fsc)      ) deallocate(fsc)
+        if( allocated(res)      ) deallocate(res)
+        if( allocated(res0143s) ) deallocate(res0143s)
+        if( allocated(has_fsc)  ) deallocate(has_fsc)
+    end subroutine refresh_resolution_fields_from_fsc
 
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
@@ -360,11 +387,10 @@ contains
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
         if( l_write_partial_recs )then
             call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
+            call promote_assembly_nspace_if_needed(params, cline_volassemble)
             if( params%l_polar )then
-                call promote_obsfield_ref_nspace_if_needed(params, cline_volassemble)
                 call xpolar_volassemble%execute(cline_volassemble)
             else
-                call promote_cartesian_ref_nspace_if_needed(params, cline_volassemble)
                 call xvolassemble%execute(cline_volassemble)
             endif
             if( trim(params%volrec) .eq. 'yes' )then
@@ -377,6 +403,14 @@ contains
             if( params%l_polar ) params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
             call cline%delete('force_volassemble')
         endif
+        if( l_write_partial_recs ) call refresh_resolution_fields_from_fsc(params, build)
+        converged = .false.
+        select case(trim(params%refine))
+            case('sigma')
+                ! no convergence report for sigma-only updates
+            case default
+                converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
+        end select
         ! input volume should only be used once in polar mode
         if( params%l_polar ) call cline%delete('vol1')
     end subroutine inmem_execute_iteration
@@ -772,12 +806,11 @@ contains
                     ! nothing
                 case DEFAULT
                     call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
+                    call promote_assembly_nspace_if_needed(params, cline_volassemble)
                     if( params%l_polar )then
-                        call promote_obsfield_ref_nspace_if_needed(params, cline_volassemble)
                         call xpolar_volassemble%execute(cline_volassemble)
                         params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
                     else
-                        call promote_cartesian_ref_nspace_if_needed(params, cline_volassemble)
                         call xvolassemble%execute(cline_volassemble)
                     endif
                     if( trim(params%volrec).eq.'yes' )then
@@ -844,15 +877,13 @@ contains
         endif
         ! convergence
         ! For strict same-iteration metrics, evaluate convergence after assembly
-        ! and re-read the updated project segment (including res field updates).
+        ! and refresh the FSC-derived resolution fields in the active table.
         converged = .false.
         select case(trim(params%refine))
             case('eval')
                 ! nothing
             case DEFAULT
-                if( trim(params%volrec).eq.'yes' )then
-                    call build%spproj%read_segment(params%oritype, params%projfile)
-                endif
+                if( (trim(params%volrec).eq.'yes') .or. params%l_polar ) call refresh_resolution_fields_from_fsc(params, build)
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
                 converged = converged .and. (iter >= params%startit + 2)
         end select

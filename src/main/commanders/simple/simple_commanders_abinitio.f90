@@ -94,6 +94,7 @@ contains
         if( cline%defined('nstages') )then
             nstages_ini3D = min(NSTAGES_INI3D_MAX,params%nstages)   
         endif
+        nstages_refine3D = nstages_ini3D
         ! prepare class command lines
         call prep_class_command_lines(params, cline, work_projfile)
         ! set symmetry class variables
@@ -544,6 +545,7 @@ contains
         ! set class global filt_mode flag for low-pass limit estimation
         l_lpauto     = params%l_lpauto
         l_nonuniform = trim(params%filt_mode).eq.'nonuniform'
+        nstages_refine3D = NSTAGES
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
         l_automsk = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
         ! prepare class command lines
