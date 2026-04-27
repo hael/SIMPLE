@@ -230,7 +230,6 @@ contains
         call set_master_num_threads(self%nthr_master, string('CLUSTER2D'))
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)
-        call build%spproj%split_stk(params%nparts)
     end subroutine distr_initialize
 
     subroutine distr_execute_iteration( self, params, build, cline, converged )

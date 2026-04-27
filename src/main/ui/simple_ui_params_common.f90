@@ -770,8 +770,8 @@ subroutine set_ui_params
                                    'in seconds(23h59mins){86340}', .false., 86340.)
 
     call wcrit%set_param(          'wcrit',           'multi',  'Correlation to weights conversion scheme', &
-                                   'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}', &
-                                   '(softmax|zscore|sum|cen|exp|inv|no){softmax}', .false., 'softmax')
+                                   'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}', &
+                                   '(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}', .false., 'softmax')
 
     call width%set_param(          'width',           'num',    'Falloff of inner mask', &
                                    'Number of cosine edge pixels of inner mask in pixels', &

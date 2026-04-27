@@ -435,8 +435,6 @@ contains
         call cline%set('mkdir', 'no')
         ! distributed environment
         call self%qenv%new(params, params%nparts)
-        ! splitting
-        if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
         ! prepare prototype command lines
         self%cline_rec3D = cline
         self%cline_calc_pspec_distr    = cline

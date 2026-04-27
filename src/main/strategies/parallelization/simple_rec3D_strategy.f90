@@ -228,10 +228,6 @@ contains
         if( fall_over ) THROW_HARD('No images found!')
         ! avoid nested directory structure for jobs
         call cline%set('mkdir', 'no')
-        ! splitting
-        if( trim(params%oritype).eq.'ptcl3D' )then
-            call build%spproj%split_stk(params%nparts, dir=string(PATH_PARENT))
-        endif
         ! Even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
