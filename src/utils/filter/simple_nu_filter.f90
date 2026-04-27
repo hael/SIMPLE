@@ -32,7 +32,8 @@ private
 
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
 real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
-integer,          parameter   :: WINSZ_TENT = 4
+integer,          parameter   :: WINSZ_TENT = 8
+integer,          parameter   :: DISCONT_STEP_THRESH = 1
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD  = 'nu_filter_cache_odd'
 real,             allocatable :: dmats(:,:,:,:)
@@ -651,9 +652,8 @@ contains
         call print_filtmap_lowpass_histogram(mask, aux_resolutions)
     end subroutine print_nu_filtmap_lowpass_stats
 
-    subroutine analyze_filtmap_neighbor_continuity( mask, discontinuity_threshold )
+    subroutine analyze_filtmap_neighbor_continuity( mask )
         logical, intent(in) :: mask(:,:,:)
-        integer, optional, intent(in) :: discontinuity_threshold
         integer :: i, j, k, di, dj, dk, ni, nj, nk
         integer :: lp_i, lp_j, lp_diff, max_diff, n_neighbors, n_discontinuous_neighbors
         integer :: n_total_neighbor_pairs, n_discontinuous_pairs, n_voxels_with_discontinuity, nx, ny, nz, ii, thresh, n_analyzed
@@ -663,8 +663,7 @@ contains
         if( .not.allocated(cutoff_finds)       ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before analyze_filtmap_neighbor_continuity')
         if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in analyze_filtmap_neighbor_continuity')
         ! Use threshold of 1 by default (neighbors differ by more than 1 step)
-        thresh = 1
-        if( present(discontinuity_threshold) ) thresh = discontinuity_threshold
+        thresh = DISCONT_STEP_THRESH
         nx = ldim(1)
         ny = ldim(2)
         nz = ldim(3)
