@@ -25,6 +25,7 @@ contains
         type(string) :: benchfname
         integer(timer_int_kind) :: t_tot
         real(timer_int_kind)    :: rt_tot
+        real                   :: update_frac_eff
         integer :: fnr, nrefs
         call build%init_params_and_build_general_tbox(cline, params)
         if( L_BENCH_GLOB ) t_tot = tic()
@@ -37,13 +38,17 @@ contains
         call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
         call build%pftc%polar_cavger_calc_pops(build%spproj)
         call build%pftc%polar_cavger_assemble_sums_from_parts
+        update_frac_eff = params%update_frac
+        if( params%l_trail_rec .and. (.not. cline%defined('ufrac_trec')) )then
+            if( build%spproj_field%has_been_sampled() )then
+                update_frac_eff = build%spproj_field%get_update_frac()
+            endif
+        endif
         select case(trim(params%polar))
             case('direct','obsfield')
-                call build%pftc%polar_cavger_merge_eos_and_norm_direct(build%eulspace, cline, &
-                    &build%spproj_field%get_update_frac())
+                call build%pftc%polar_cavger_merge_eos_and_norm_direct(build%eulspace, cline, update_frac_eff)
             case('yes')
-                call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, &
-                    &build%spproj_field%get_update_frac())
+                call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, update_frac_eff)
             case default
                 THROW_HARD('unsupported POLAR mode: '//trim(params%polar))
         end select
@@ -352,6 +357,7 @@ contains
         nrefs = params%nspace * params%nstates
         call read_mask_filter_reproject_refvols(params, build, cline, 1)
         call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
+        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
         call build%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
         call build%pftc%polar_cavger_kill
         call build%pftc%kill

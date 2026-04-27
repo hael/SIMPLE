@@ -981,6 +981,7 @@ contains
         nrefs = params%nspace * params%nstates
         call read_mask_filter_reproject_refvols(params, build, cline, 1)
         call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
+        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
         call build%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
         call build%pftc%polar_cavger_kill
         call build%pftc%kill
