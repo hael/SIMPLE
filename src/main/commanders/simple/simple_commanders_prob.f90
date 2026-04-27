@@ -39,7 +39,8 @@ contains
     subroutine exec_prob_tab( self, cline )
         use simple_matcher_2Dprep
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar, polar_ref_sections_available
+        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
+        use simple_matcher_refvol_utils,    only: polar_ref_sections_available
         use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
         use simple_matcher_ptcl_io,         only: killimgbatch
         use simple_eul_prob_tab,            only: eul_prob_tab
@@ -66,7 +67,7 @@ contains
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
         if( .not. polar_ref_sections_available(params) )then
-            THROW_HARD('polar reference sections are missing; assembly must prepare POLAR_REFS before prob_tab')
+            THROW_HARD('polar reference sections are missing; prob_align must materialize POLAR_REFS before prob_tab')
         endif
         call prep_pftc4align3D_polar( params, build, cline, nptcls )
         call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
@@ -96,7 +97,8 @@ contains
     subroutine exec_prob_tab_neigh( self, cline )
         use simple_matcher_2Dprep
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar, polar_ref_sections_available
+        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
+        use simple_matcher_refvol_utils,    only: polar_ref_sections_available
         use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
         use simple_matcher_ptcl_io,         only: killimgbatch
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
@@ -121,7 +123,7 @@ contains
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
         if( .not. polar_ref_sections_available(params) )then
-            THROW_HARD('polar reference sections are missing; assembly must prepare POLAR_REFS before prob_tab_neigh')
+            THROW_HARD('polar reference sections are missing; prob_align must materialize POLAR_REFS before prob_tab_neigh')
         endif
         call prep_pftc4align3D_polar( params, build, cline, nptcls )
         call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
@@ -145,6 +147,7 @@ contains
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,            only: eul_prob_tab
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
+        use simple_matcher_refvol_utils,    only: ensure_polar_refs_on_disk
         use simple_builder,                 only: builder
         class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
@@ -170,6 +173,7 @@ contains
         endif
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
+        call ensure_polar_refs_on_disk(params, build, cline, 1, 'prob_align before prob_tab')
         ! more prep
         call eulprob_obj_glob%new(params, build, pinds)
         ! generating all corrs on all parts
@@ -216,6 +220,7 @@ contains
     subroutine exec_prob_align_neigh( self, cline )
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
+        use simple_matcher_refvol_utils,    only: ensure_polar_refs_on_disk
         use simple_builder,                 only: builder
         class(commander_prob_align_neigh), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
@@ -241,6 +246,7 @@ contains
         call build%spproj%write_segment_inside(params%oritype)
         ! Global object only needs sampled-set maps before reading partition sparse tables.
         ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
+        call ensure_polar_refs_on_disk(params, build, cline, 1, 'prob_align_neigh before prob_tab_neigh')
         call eulprob_obj_glob_neigh%new_neigh(params, build, pinds)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')

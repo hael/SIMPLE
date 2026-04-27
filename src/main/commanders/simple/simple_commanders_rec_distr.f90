@@ -114,7 +114,8 @@ contains
     subroutine exec_cartesian_assembly( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_gridding,         only: prep3D_inv_instrfun4mul
-        use simple_matcher_refvol_utils, only: read_mask_filter_reproject_refvols
+        use simple_matcher_refvol_utils, only: read_mask_filter_reproject_refvols, &
+            &write_polar_refs_from_current_pftc
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
                                          &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, &
                                          &analyze_filtmap_neighbor_continuity
@@ -143,7 +144,7 @@ contains
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
         real                          :: weight_prev, update_frac_trail_rec, mskrad_px
         integer                       :: part, state, iptcl, istate, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part
-        integer                       :: which_iter, nrefs
+        integer                       :: which_iter
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_automask, t_nonuniform
         integer(timer_int_kind)       :: t_project_refs, t_tot
@@ -397,13 +398,8 @@ contains
         ! Therefore Cartesian assembly always refreshes the projected reference
         ! sections consumed by the next matcher/probability-table pass.
         if( L_BENCH_GLOB ) t_project_refs = tic()
-        nrefs = params%nspace * params%nstates
         call read_mask_filter_reproject_refvols(params, build, cline, 1)
-        call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
-        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
-        if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
-        if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
-        call build%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+        call write_polar_refs_from_current_pftc(params, build)
         call build%pftc%polar_cavger_kill
         call build%pftc%kill
         if( L_BENCH_GLOB ) rt_project_refs = rt_project_refs + toc(t_project_refs)

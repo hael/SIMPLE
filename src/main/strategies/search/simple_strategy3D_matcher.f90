@@ -9,9 +9,9 @@ use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
 use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
 use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
 use simple_matcher_ptcl_io,         only: killimgbatch
-use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar, polar_ref_sections_available
+use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
 use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols, complete_volume_source_defined, &
-    &any_volume_source_defined
+    &any_volume_source_defined, write_polar_refs_from_current_pftc, polar_ref_sections_available
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, sample_ptcls4fillin, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_strategy3D_eval,         only: strategy3D_eval
@@ -303,7 +303,7 @@ contains
             if( ctrl%do_polar_prepare )then
                 if( ctrl%do_bench ) t_prep_ref_sections = tic()
                 if( .not. polar_ref_sections_available(p_ptr) )then
-                    THROW_HARD('polar reference sections are missing; assembly must prepare POLAR_REFS before matching')
+                    THROW_HARD('polar reference sections are missing; strategy must materialize POLAR_REFS before matching')
                 endif
                 call prep_pftc4align3D_polar(p_ptr, b_ptr, cline, batchsz_max)
                 if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
@@ -311,7 +311,7 @@ contains
             if( (.not. ctrl%do_prob_align) .and. (.not. ctrl%do_polar_prepare) )then
                 if( ctrl%do_bench ) t_prep_ref_sections = tic()
                 call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
-                call write_current_reprojection_model()
+                call write_polar_refs_from_current_pftc(p_ptr, b_ptr, skip_distr_nonroot=.true.)
                 if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
             endif
             if( ctrl%do_bench ) t_prep_sigmas_alloc_ptcl_imgs = tic()
@@ -337,25 +337,6 @@ contains
                 endif
             endif
         end subroutine prepare_refs_sigmas_and_pftc
-
-        subroutine write_current_reprojection_model()
-            integer :: nrefs_write
-            if( p_ptr%l_distr_worker .and. p_ptr%part /= 1 ) return
-            nrefs_write = p_ptr%nspace * p_ptr%nstates
-            call remove_polar_ref_section_files()
-            call b_ptr%pftc%polar_cavger_new(.true., nrefs=nrefs_write)
-            call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
-        end subroutine write_current_reprojection_model
-
-        subroutine remove_polar_ref_section_files()
-            if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
-            if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) )then
-                call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
-            endif
-            if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) )then
-                call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
-            endif
-        end subroutine remove_polar_ref_section_files
 
         subroutine maybe_init_reconstruction()
             if( .not. ctrl%do_write_partial_recs ) return

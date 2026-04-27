@@ -8,8 +8,8 @@ use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_star_from_iter
-use simple_matcher_pftc_prep,      only: polar_ref_sections_available
-use simple_matcher_refvol_utils,   only: any_volume_source_defined, complete_volume_source_defined
+use simple_matcher_refvol_utils,   only: any_volume_source_defined, complete_volume_source_defined, &
+    &ensure_polar_refs_on_disk, polar_ref_sections_available
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -263,12 +263,6 @@ contains
         endif
     end subroutine remove_partial_assembly_input_files
 
-    subroutine remove_polar_ref_section_files
-        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
-        if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
-        if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
-    end subroutine remove_polar_ref_section_files
-
     subroutine delete_volume_source_keys( cline, nstates )
         type(cmdline), intent(inout) :: cline
         integer,       intent(in)    :: nstates
@@ -286,40 +280,6 @@ contains
             call job_descr%delete('vol'//int2str(state))
         enddo
     end subroutine delete_volume_source_job_keys
-
-    logical function should_write_initial_polar_refs( params, cline ) result( l_write )
-        type(parameters), intent(in) :: params
-        type(cmdline),    intent(in) :: cline
-        integer :: state
-        l_write = .false.
-        if( .not. params%l_polar ) return
-        if( complete_volume_source_defined(cline, params%nstates) )then
-            l_write = params%l_prob_align_mode
-            if( .not. l_write ) return
-        else
-            l_write = .not. polar_ref_sections_available(params)
-        endif
-        if( .not. l_write ) return
-        do state = 1,params%nstates
-            if( .not. file_exists(params%vols(state)) )then
-                l_write = .false.
-                exit
-            endif
-        enddo
-    end function should_write_initial_polar_refs
-
-    subroutine require_polar_ref_source( params, cline )
-        type(parameters), intent(in) :: params
-        type(cmdline),    intent(in) :: cline
-        if( .not. params%l_polar ) return
-        if( any_volume_source_defined(cline, params%nstates) &
-            &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
-            THROW_HARD('incomplete multi-state volume source; provide vol1..volN or use POLAR_REFS')
-        endif
-        if( polar_ref_sections_available(params) ) return
-        if( complete_volume_source_defined(cline, params%nstates) ) return
-        THROW_HARD('polar reference sections are missing and no complete volume source is available for rebuild')
-    end subroutine require_polar_ref_source
 
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
@@ -470,10 +430,11 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        if( should_write_initial_polar_refs(params, cline) )then
-            call write_initial_polar_ref_sections(params, build, cline)
+        if( params%l_polar .and. (.not. params%l_prob_align_mode) )then
+            if( .not. complete_volume_source_defined(cline, params%nstates) )then
+                call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D shared-memory iteration')
+            endif
         endif
-        call require_polar_ref_source(params, cline)
         ! refine=prob* pre-step
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
@@ -876,10 +837,11 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        if( should_write_initial_polar_refs(params, cline) )then
-            call write_initial_polar_ref_sections(params, build, cline)
+        if( params%l_polar .and. (.not. params%l_prob_align_mode) )then
+            if( .not. complete_volume_source_defined(cline, params%nstates) )then
+                call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D distributed iteration')
+            endif
         endif
-        call require_polar_ref_source(params, cline)
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
@@ -1118,23 +1080,5 @@ contains
         call qsys_cleanup(params)
         call self%job_descr%kill
     end subroutine distr_cleanup
-
-    subroutine write_initial_polar_ref_sections( params, build, cline )
-        use simple_matcher_refvol_utils, only: read_mask_filter_reproject_refvols
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        type(cmdline),    intent(in)    :: cline
-        integer :: nrefs
-        ! Bootstrap exception: before the first matcher pass there are no
-        ! partial reconstructions for assembly, but starting volumes can
-        ! still supply the initial polar reference sections.
-        nrefs = params%nspace * params%nstates
-        call remove_polar_ref_section_files
-        call read_mask_filter_reproject_refvols(params, build, cline, 1)
-        call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
-        call build%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
-        call build%pftc%polar_cavger_kill
-        call build%pftc%kill
-    end subroutine write_initial_polar_ref_sections
 
 end module simple_refine3D_strategy

@@ -1,13 +1,13 @@
 !@descr: reference-section preparation helpers for matcher workflows
 ! POLAR_REFS*.bin lifecycle:
-! - producers: write_initial_polar_ref_sections, exec_cartesian_assembly, exec_polar_assembly
+! - producers: centralized materializers in simple_matcher_refvol_utils, exec_polar_assembly
 ! - consumers: prep_pftc4align3D_polar, prob_tab, prob_tab_neigh
 module simple_matcher_pftc_prep
 use simple_pftc_srch_api
 use simple_builder,              only: builder
 use simple_classaverager,        only: cavgs_merged, cavgs_even, cavgs_odd
 use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun
-use simple_matcher_refvol_utils, only: pick_lp_est_state, estimate_lp_from_refs
+use simple_matcher_refvol_utils, only: pick_lp_est_state, estimate_lp_from_refs, polar_ref_sections_available
 implicit none
 
 public :: prep_pftc4align3D_polar, prep_pftc4align2D, polar_ref_sections_available
@@ -15,56 +15,6 @@ private
 #include "simple_local_flags.inc"
 
 contains
-
-    logical function polar_ref_sections_available( params )
-        class(parameters), intent(in) :: params
-        type(string) :: refs, refs_even, refs_odd
-        logical      :: have_refs, have_even, have_odd
-        refs      = POLAR_REFS_FBODY//BIN_EXT
-        refs_even = POLAR_REFS_FBODY//'_even'//BIN_EXT
-        refs_odd  = POLAR_REFS_FBODY//'_odd'//BIN_EXT
-        have_refs = file_exists(refs)
-        have_even = file_exists(refs_even)
-        have_odd  = file_exists(refs_odd)
-        if( have_even .neqv. have_odd )then
-            polar_ref_sections_available = .false.
-        elseif( have_refs .and. have_even )then
-            polar_ref_sections_available = polar_ref_file_compatible(refs) .and. &
-                &polar_ref_file_compatible(refs_even) .and. &
-                &polar_ref_file_compatible(refs_odd)
-        elseif( have_even )then
-            polar_ref_sections_available = polar_ref_file_compatible(refs_even) .and. &
-                &polar_ref_file_compatible(refs_odd)
-        elseif( have_refs )then
-            polar_ref_sections_available = polar_ref_file_compatible(refs)
-        else
-            polar_ref_sections_available = .false.
-        endif
-        call refs%kill
-        call refs_even%kill
-        call refs_odd%kill
-
-    contains
-
-        logical function polar_ref_file_compatible( fname )
-            type(string), intent(in) :: fname
-            integer :: pftsz_here, kfromto_here(2), nrefs_here
-            integer :: expected_nrefs, expected_interpklim
-            if( .not. file_exists(fname) )then
-                polar_ref_file_compatible = .false.
-                return
-            endif
-            call polarft_dims_from_file_header(fname, pftsz_here, kfromto_here, nrefs_here)
-            expected_nrefs      = params%nspace * params%nstates
-            expected_interpklim = fdim(params%box_crop) - 1
-            ! Header-only gate for stale POLAR_REFS*. Lower-k range
-            ! differences are accepted because the reader owns overlap
-            ! transfer and k-range zero padding.
-            polar_ref_file_compatible = nrefs_here == expected_nrefs
-            polar_ref_file_compatible = polar_ref_file_compatible .and. pftsz_here == params%pftsz
-            polar_ref_file_compatible = polar_ref_file_compatible .and. kfromto_here(2) <= expected_interpklim
-        end function polar_ref_file_compatible
-    end function polar_ref_sections_available
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
     subroutine prep_pftc4align2D( params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, l_stream )

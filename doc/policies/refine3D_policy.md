@@ -206,10 +206,18 @@ model, so only the first worker materializes the shared cache to avoid
 concurrent writes to the same handoff files. `prob_tab` and `prob_tab_neigh`
 consume `POLAR_REFS*` because they are separate worker programs and do not own
 a live volume-reprojection path. If a probabilistic pre-step is launched while
-`vol1..volN` is the current source, the strategy
-materializes `POLAR_REFS*` from those volumes for the pre-step; that is a
+`vol1..volN` is the current source, `prob_align` materializes `POLAR_REFS*`
+from those volumes before launching `prob_tab`; that is a
 probability-table handoff, not a declaration that all current matching input is
 file based.
+
+Reference-section production is centralized in `simple_matcher_refvol_utils`.
+Callers that need a file handoff use `ensure_polar_refs_on_disk`, which applies
+one policy: a complete `vol1..volN` source forces fresh materialization,
+compatible existing `POLAR_REFS*` may be reused when no fresh source is present,
+and missing files fall back to the parsed starting-volume set only when all
+state volumes exist. `prob_tab`, `prob_tab_neigh`, and
+`prep_pftc4align3D_polar` remain consumers; they do not reproject volumes.
 
 For file-based polar handoffs, `polar_ref_sections_available` accepts either a
 merged `POLAR_REFS.bin` file or a complete even/odd pair. The reader accepts
@@ -248,24 +256,27 @@ definition of the global `nspace_next` policy.
 
 There is one explicit bootstrap exception. If polar reference files are missing,
 no fresh complete `vol1..volN` set is being used for current matching, and the
-full starting-volume set is available, `simple_refine3D_strategy.f90` may call
-`write_initial_polar_ref_sections` before probabilistic alignment or matching.
-That helper uses the live `params`, `builder`, and `cmdline`, projects the
-starting volumes with `read_mask_filter_reproject_refvols`, and writes the
-initial `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` pair. It does not create a
-second temporary builder. Because this bootstrap path can run before matcher
-setup calls `set_bp_range3D`, reference-volume reprojection must enforce the
-same PFTC range contract before constructing `polarft_calc`: the requested
-search high-frequency index cannot exceed the cropped interpolation limit. If
+full starting-volume set is available, `ensure_polar_refs_on_disk` may
+materialize the initial `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` pair from
+the parsed state volumes. It uses the live `params`, `builder`, and `cmdline`;
+it does not create a second temporary builder. Because this bootstrap path can
+run before matcher setup calls `set_bp_range3D`, reference-volume reprojection
+must enforce the same PFTC range contract before constructing `polarft_calc`:
+the requested search high-frequency index cannot exceed the cropped
+interpolation limit. If
 the reference files are missing, no complete `vol1..volN` set is available, and
 the full starting-volume set is not available, the run must first create those
 references through reconstruction/assembly; shared-memory polar initialization
 errors in that case.
 
-Symmetry search inside `abinitio3D_cavgs` is a content-changing handoff for
-polar reference sections. After the symmetrized map becomes the next volume set,
-existing `POLAR_REFS*` files are stale even when their headers remain
-dimension-compatible, so they must be invalidated and rebuilt from the
+Symmetry search inside `abinitio3D` and `abinitio3D_cavgs` is a
+content-changing handoff for polar reference sections. After the symmetrized map
+becomes the next volume set, the polar route must inject that map as an
+explicit `vol1` source for the next `refine3D` stage. The injected average
+volume also defines the temporary even/odd reference inputs for that handoff;
+stale companion even/odd files must not be allowed to override the injected
+symmetric model. Existing `POLAR_REFS*` files are stale even when their headers
+remain dimension-compatible, so they must be invalidated and rebuilt from the
 symmetrized reference model.
 
 Multi-state polar references are stored state-major: state 1 occupies local

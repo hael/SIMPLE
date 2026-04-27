@@ -5,12 +5,17 @@ use simple_builder,    only: builder
 use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
 use simple_image,      only: image
+use simple_pftc_srch_api, only: polarft_dims_from_file_header
 use simple_matcher_smpl_and_lplims, only: enforce_3D_pftc_k_range
 implicit none
 
 public :: read_mask_filter_reproject_refvols
 public :: pick_lp_est_state, estimate_lp_from_refs
 public :: any_volume_source_defined, complete_volume_source_defined
+public :: complete_volume_source_available
+public :: polar_ref_sections_available
+public :: ensure_polar_refs_on_disk, materialize_polar_refs_from_volume_source
+public :: remove_polar_ref_section_files, write_polar_refs_from_current_pftc
 private
 #include "simple_local_flags.inc"
 
@@ -41,6 +46,133 @@ contains
             endif
         enddo
     end function complete_volume_source_defined
+
+    logical function complete_volume_source_available( params ) result( l_available )
+        class(parameters), intent(in) :: params
+        integer :: state
+        l_available = .true.
+        do state = 1,params%nstates
+            if( .not. file_exists(params%vols(state)) )then
+                l_available = .false.
+                return
+            endif
+        enddo
+    end function complete_volume_source_available
+
+    logical function polar_ref_sections_available( params )
+        class(parameters), intent(in) :: params
+        type(string) :: refs, refs_even, refs_odd
+        logical      :: have_refs, have_even, have_odd
+        refs      = POLAR_REFS_FBODY//BIN_EXT
+        refs_even = POLAR_REFS_FBODY//'_even'//BIN_EXT
+        refs_odd  = POLAR_REFS_FBODY//'_odd'//BIN_EXT
+        have_refs = file_exists(refs)
+        have_even = file_exists(refs_even)
+        have_odd  = file_exists(refs_odd)
+        if( have_even .neqv. have_odd )then
+            polar_ref_sections_available = .false.
+        elseif( have_refs .and. have_even )then
+            polar_ref_sections_available = polar_ref_file_compatible(refs) .and. &
+                &polar_ref_file_compatible(refs_even) .and. &
+                &polar_ref_file_compatible(refs_odd)
+        elseif( have_even )then
+            polar_ref_sections_available = polar_ref_file_compatible(refs_even) .and. &
+                &polar_ref_file_compatible(refs_odd)
+        elseif( have_refs )then
+            polar_ref_sections_available = polar_ref_file_compatible(refs)
+        else
+            polar_ref_sections_available = .false.
+        endif
+        call refs%kill
+        call refs_even%kill
+        call refs_odd%kill
+
+    contains
+
+        logical function polar_ref_file_compatible( fname )
+            type(string), intent(in) :: fname
+            integer :: pftsz_here, kfromto_here(2), nrefs_here
+            integer :: expected_nrefs, expected_interpklim
+            if( .not. file_exists(fname) )then
+                polar_ref_file_compatible = .false.
+                return
+            endif
+            call polarft_dims_from_file_header(fname, pftsz_here, kfromto_here, nrefs_here)
+            expected_nrefs      = params%nspace * params%nstates
+            expected_interpklim = fdim(params%box_crop) - 1
+            ! Header-only gate for stale POLAR_REFS*. Lower-k range
+            ! differences are accepted because the reader owns overlap
+            ! transfer and k-range zero padding.
+            polar_ref_file_compatible = nrefs_here == expected_nrefs
+            polar_ref_file_compatible = polar_ref_file_compatible .and. pftsz_here == params%pftsz
+            polar_ref_file_compatible = polar_ref_file_compatible .and. kfromto_here(2) <= expected_interpklim
+        end function polar_ref_file_compatible
+    end function polar_ref_sections_available
+
+    subroutine remove_polar_ref_section_files
+        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
+        if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
+        if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
+    end subroutine remove_polar_ref_section_files
+
+    subroutine write_polar_refs_from_current_pftc( params, build, nspace_refs, skip_distr_nonroot )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer, optional, intent(in)    :: nspace_refs
+        logical, optional, intent(in)    :: skip_distr_nonroot
+        integer :: nspace_write, nrefs_write
+        if( present(skip_distr_nonroot) )then
+            if( skip_distr_nonroot .and. params%l_distr_worker .and. params%part /= 1 ) return
+        endif
+        nspace_write = params%nspace
+        if( present(nspace_refs) ) nspace_write = nspace_refs
+        nrefs_write = nspace_write * params%nstates
+        call remove_polar_ref_section_files
+        call build%pftc%polar_cavger_new(.true., nrefs=nrefs_write)
+        call build%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+    end subroutine write_polar_refs_from_current_pftc
+
+    subroutine materialize_polar_refs_from_volume_source( params, build, cline, batchsz, cleanup_pftc )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(in)    :: cline
+        integer,           intent(in)    :: batchsz
+        logical, optional, intent(in)    :: cleanup_pftc
+        logical :: l_cleanup
+        if( .not. complete_volume_source_available(params) )then
+            THROW_HARD('cannot materialize POLAR_REFS without complete volume source files')
+        endif
+        call read_mask_filter_reproject_refvols(params, build, cline, batchsz)
+        call write_polar_refs_from_current_pftc(params, build)
+        l_cleanup = .false.
+        if( present(cleanup_pftc) ) l_cleanup = cleanup_pftc
+        if( l_cleanup )then
+            call build%pftc%polar_cavger_kill
+            call build%pftc%kill
+        endif
+    end subroutine materialize_polar_refs_from_volume_source
+
+    subroutine ensure_polar_refs_on_disk( params, build, cline, batchsz, caller )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(in)    :: cline
+        integer,           intent(in)    :: batchsz
+        character(len=*),  intent(in)    :: caller
+        if( any_volume_source_defined(cline, params%nstates) &
+            &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
+            THROW_HARD('incomplete multi-state volume source; provide vol1..volN or use POLAR_REFS; '//caller)
+        endif
+        if( complete_volume_source_defined(cline, params%nstates) )then
+            call materialize_polar_refs_from_volume_source(params, build, cline, batchsz, cleanup_pftc=.true.)
+            return
+        endif
+        if( polar_ref_sections_available(params) ) return
+        if( complete_volume_source_available(params) )then
+            call materialize_polar_refs_from_volume_source(params, build, cline, batchsz, cleanup_pftc=.true.)
+            return
+        endif
+        THROW_HARD('polar reference sections are missing and no complete volume source is available; '//caller)
+    end subroutine ensure_polar_refs_on_disk
 
     !>  \brief  determines the reference volume shift and map shifts back to particles
     !>          reference volume shifting is performed in shift_and_mask_refvol

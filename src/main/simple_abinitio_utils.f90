@@ -127,6 +127,36 @@ contains
         if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
     end subroutine invalidate_polar_ref_sections
 
+    subroutine inject_refine3D_volume( params, state, vol )
+        class(parameters), intent(inout) :: params
+        integer,           intent(in)    :: state
+        class(string),     intent(in)    :: vol
+        type(string) :: vol_key
+        vol_key = 'vol'//int2str(state)
+        call cline_refine3D%set(vol_key%to_char(), vol)
+        params%vols(state) = vol
+        call vol_key%kill
+    end subroutine inject_refine3D_volume
+
+    subroutine inject_polar_refine3D_volume( params, state, vol )
+        class(parameters), intent(inout) :: params
+        integer,           intent(in)    :: state
+        class(string),     intent(in)    :: vol
+        type(string) :: vol_even, vol_odd
+        call inject_refine3D_volume(params, state, vol)
+        vol_even = add2fbody(vol, MRC_EXT, '_even')
+        vol_odd  = add2fbody(vol, MRC_EXT, '_odd' )
+        if( file_exists(vol_even) ) call del_file(vol_even)
+        if( file_exists(vol_odd)  ) call del_file(vol_odd)
+        call simple_copy_file(vol, vol_even)
+        call simple_copy_file(vol, vol_odd)
+        params%vols_even(state) = vol_even
+        params%vols_odd(state)  = vol_odd
+        call invalidate_polar_ref_sections
+        call vol_even%kill
+        call vol_odd%kill
+    end subroutine inject_polar_refine3D_volume
+
     subroutine set_symmetry_class_vars( params )
         class(parameters), intent(in) :: params
         type(string) :: pgrp, pgrp_start
@@ -290,8 +320,11 @@ contains
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
                 call cline_symrec%kill
             endif
-            call cline_refine3D%set('vol1', vol_sym)
-            if( l_polar ) call invalidate_polar_ref_sections
+            if( l_polar )then
+                call inject_polar_refine3D_volume(params, 1, vol_sym)
+            else
+                call inject_refine3D_volume(params, 1, vol_sym)
+            endif
         endif
     end subroutine symmetrize
 
