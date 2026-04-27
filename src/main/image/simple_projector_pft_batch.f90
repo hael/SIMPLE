@@ -18,12 +18,14 @@ contains
         integer,          intent(in)    :: nspace, kfromto(2)
         real(sp),         intent(in)    :: polar_x(:,:), polar_y(:,:)
         complex(sp),      intent(inout) :: refs_state(:,:,:)
-        integer :: iproj, irot, k, kloc, kfrom, kto, pftsz
+        integer :: iproj, irot, k, kloc, kfrom, kto, pftsz, noris
         real    :: e_rotmat(3,3), loc(3), px, py
         kfrom = kfromto(1)
         kto   = kfromto(2)
         pftsz = size(polar_x,1)
+        noris = eulspace%get_noris()
         if( kfrom < 1 .or. kfrom > kto  )           THROW_HARD('invalid kfromto in fproject_polar_batch')
+        if( noris < nspace )                        THROW_HARD('eulspace smaller than requested nspace in fproject_polar_batch')
         if( size(refs_state,1) /= pftsz           ) THROW_HARD('refs_state dim(1) mismatch in fproject_polar_batch')
         if( size(refs_state,2) /= size(polar_x,2) ) THROW_HARD('refs_state dim(2) mismatch in fproject_polar_batch')
         if( size(polar_x,2)    /= (kto-kfrom+1)   ) THROW_HARD('polar_x k-span mismatch in fproject_polar_batch')
@@ -60,12 +62,14 @@ contains
         real(sp),         intent(in)    :: polar_x(:,:), polar_y(:,:)
         complex(sp),      intent(inout) :: refs_state(:,:,:)
         complex(sp) :: pftm(size(polar_x,1), kfromto(1):kfromto(2))
-        integer     :: iproj, irot, k, kloc, kfrom, kto, m, l, pftsz
+        integer     :: iproj, irot, k, kloc, kfrom, kto, m, l, pftsz, noris
         real        :: e_rotmat(3,3), loc(3), px, py, psi
         kfrom = kfromto(1)
         kto   = kfromto(2)
         pftsz = size(polar_x,1)
+        noris = eulspace%get_noris()
         if( kfrom < 1 .or. kfrom > kto  )           THROW_HARD('invalid kfromto in fproject_polar_batch')
+        if( noris < nspace )                        THROW_HARD('eulspace smaller than requested nspace in fproject_polar_batch_mirr')
         if( size(refs_state,1) /= pftsz           ) THROW_HARD('refs_state dim(1) mismatch in fproject_polar_batch')
         if( size(refs_state,2) /= size(polar_x,2) ) THROW_HARD('refs_state dim(2) mismatch in fproject_polar_batch')
         if( size(polar_x,2)    /= (kto-kfrom+1)   ) THROW_HARD('polar_x k-span mismatch in fproject_polar_batch')

@@ -238,6 +238,11 @@ contains
         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
         endif
+        if( build%eulspace%get_noris() /= params%nspace )then
+            call build%eulspace%kill
+            call build%eulspace%new(params%nspace, is_ptcl=.false.)
+            call build%pgrpsyms%build_refspiral(build%eulspace)
+        endif
         call enforce_3D_pftc_k_range(params, build, 'read_mask_filter_reproject_refvols')
         nrefs = params%nspace * params%nstates
         call build%pftc%new(params, nrefs, [1, 1], params%kfromto)
