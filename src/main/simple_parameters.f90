@@ -549,6 +549,9 @@ type :: parameters
     procedure, private :: init_strings
     procedure          :: new
     procedure          :: is_final_planned_iter
+    procedure          :: can_promote_assembly_ref_nspace
+    procedure          :: uses_next_assembly_ref_nspace
+    procedure          :: assembly_ref_nspace
     procedure, private :: set_img_format
 end type parameters
 
@@ -558,6 +561,24 @@ contains
         class(parameters), intent(in) :: self
         is_final_planned_iter = (self%which_iter - self%startit + 1) >= self%maxits
     end function is_final_planned_iter
+
+    logical function can_promote_assembly_ref_nspace( self )
+        class(parameters), intent(in) :: self
+        can_promote_assembly_ref_nspace = (.not. self%l_polar) .or. trim(self%polar) == 'obsfield'
+    end function can_promote_assembly_ref_nspace
+
+    logical function uses_next_assembly_ref_nspace( self )
+        class(parameters), intent(in) :: self
+        uses_next_assembly_ref_nspace = self%can_promote_assembly_ref_nspace() &
+            &.and. self%is_final_planned_iter()                               &
+            &.and. self%nspace_next > self%nspace
+    end function uses_next_assembly_ref_nspace
+
+    integer function assembly_ref_nspace( self )
+        class(parameters), intent(in) :: self
+        assembly_ref_nspace = self%nspace
+        if( self%uses_next_assembly_ref_nspace() ) assembly_ref_nspace = self%nspace_next
+    end function assembly_ref_nspace
 
     subroutine init_strings( self )
         class(parameters), intent(inout) :: self

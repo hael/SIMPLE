@@ -98,6 +98,12 @@ available in `params`. Planning predicates such as final-stage-iteration checks
 depend on the original stage interval, not on a single-iteration child-command
 view.
 
+The same rule applies to distributed workers. A worker may execute only one
+iteration, but `which_iter` is the current iteration and `startit` remains the
+stage start. Worker command lines must not collapse `startit` to `which_iter`,
+because assembly-output planning such as `nspace_next` promotion depends on the
+stage interval.
+
 ### `simple_commanders_prob` and probability-table modules
 
 `simple_commanders_prob.f90` together with:
@@ -196,6 +202,15 @@ projections are remapped to the nearest current projection within the same
 state. Reconstruction-only child command lines must delete `nspace_next`
 because the value belongs to the refine3D-to-assembly handoff, not to plain
 volume reconstruction.
+
+The generic policy question is the assembly output reference space: which
+`nspace` should the reference model emitted for the next iteration use?
+Cartesian reconstruction and `polar=obsfield` answer that question through the
+same assembly-reference-space policy. The matcher may still need a narrower
+obsfield-specific allocation decision because `polar=obsfield` writes partial
+polar reference sums while matching on the current grid; that is an
+implementation detail of the obsfield partial-reference writer, not a separate
+definition of the global `nspace_next` policy.
 
 There is one explicit bootstrap exception. If polar reference files are missing
 but all `vol1..volN` inputs exist, `simple_refine3D_strategy.f90` calls

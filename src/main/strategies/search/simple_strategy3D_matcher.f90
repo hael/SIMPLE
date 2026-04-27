@@ -64,14 +64,14 @@ contains
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
         real,                      allocatable :: incr_shifts(:,:)
         type(ori)           :: orientation
-        type(oris)          :: obsfield_ref_eulspace
+        type(oris)          :: partial_ref_eulspace
         type(refine3D_ctrl) :: ctrl
         real                :: frac_greedy
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz, nrefs
-        integer             :: obsfield_ref_nspace
+        integer             :: partial_ref_nspace
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical             :: doprint, has_been_searched
-        logical             :: l_obsfield_ref_next
+        logical             :: l_partial_refs_use_assembly_space
         logical             :: l_write_partial_recs_present, l_write_partial_recs_value
 
         ! benchmarking
@@ -99,7 +99,7 @@ contains
         call set_bp_range3D(p_ptr, b_ptr, cline)
         call sample_particles_for_update()
         call prepare_batches()
-        call prepare_obsfield_ref_space()
+        call prepare_partial_ref_output_space()
         if( ctrl%do_bench )then
             rt_startup = toc(t_startup)
             rt_prep_sigmas_alloc_ptcl_imgs = 0.0
@@ -197,7 +197,7 @@ contains
         endif
         call b_ptr%pftc%kill
         call b_ptr%esig%kill
-        call obsfield_ref_eulspace%kill
+        call partial_ref_eulspace%kill
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
 
         if( ctrl%do_bench )then
@@ -309,14 +309,14 @@ contains
             call build%vol_odd%kill
             call build%vol2%kill
             if( ctrl%do_polar .and. ctrl%do_write_partial_recs )then
-                nrefs_cavger = obsfield_ref_nspace * p_ptr%nstates
+                nrefs_cavger = partial_ref_nspace * p_ptr%nstates
                 if( cline%defined('vol1') )then
                     call b_ptr%pftc%polar_cavger_new(.true.)
                     if( p_ptr%l_trail_rec )then
                         call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
                     endif
                 endif
-                if( l_obsfield_ref_next ) call b_ptr%pftc%polar_cavger_new(.true., nrefs=nrefs_cavger)
+                if( l_partial_refs_use_assembly_space ) call b_ptr%pftc%polar_cavger_new(.true., nrefs=nrefs_cavger)
                 call b_ptr%pftc%polar_cavger_zero_pft_refs
                 if( file_exists(p_ptr%frcs) )then
                     call b_ptr%clsfrcs%read(p_ptr%frcs)
@@ -446,10 +446,10 @@ contains
         end subroutine maybe_restore_batch
 
         subroutine insert_obsfield_batch()
-            if( l_obsfield_ref_next )then
+            if( l_partial_refs_use_assembly_space )then
                 call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
                     b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz), &
-                    reforis_in=obsfield_ref_eulspace, nspace_out=obsfield_ref_nspace)
+                    reforis_in=partial_ref_eulspace, nspace_out=partial_ref_nspace)
             else
                 call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
                     b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
@@ -485,23 +485,22 @@ contains
             end select
         end function polar_mode_direct_like
 
-        subroutine prepare_obsfield_ref_space()
-            obsfield_ref_nspace = p_ptr%nspace
-            l_obsfield_ref_next = .false.
-            if( .not. obsfield_uses_next_nspace() ) return
-            obsfield_ref_nspace = p_ptr%nspace_next
-            l_obsfield_ref_next = .true.
-            call obsfield_ref_eulspace%new(obsfield_ref_nspace, is_ptcl=.false.)
-            call b_ptr%pgrpsyms%build_refspiral(obsfield_ref_eulspace)
-        end subroutine prepare_obsfield_ref_space
+        subroutine prepare_partial_ref_output_space()
+            partial_ref_nspace = p_ptr%nspace
+            l_partial_refs_use_assembly_space = .false.
+            if( .not. obsfield_partial_refs_use_assembly_space() ) return
+            partial_ref_nspace = p_ptr%assembly_ref_nspace()
+            l_partial_refs_use_assembly_space = .true.
+            call partial_ref_eulspace%new(partial_ref_nspace, is_ptcl=.false.)
+            call b_ptr%pgrpsyms%build_refspiral(partial_ref_eulspace)
+        end subroutine prepare_partial_ref_output_space
 
-        logical function obsfield_uses_next_nspace()
-            obsfield_uses_next_nspace = ctrl%do_polar                         &
-                &.and. ctrl%do_write_partial_recs                             &
-                &.and. trim(ctrl%polar_mode) == 'obsfield'                    &
-                &.and. p_ptr%nspace_next > p_ptr%nspace                       &
-                &.and. p_ptr%is_final_planned_iter()
-        end function obsfield_uses_next_nspace
+        logical function obsfield_partial_refs_use_assembly_space()
+            obsfield_partial_refs_use_assembly_space = ctrl%do_polar            &
+                &.and. ctrl%do_write_partial_recs                               &
+                &.and. trim(ctrl%polar_mode) == 'obsfield'                      &
+                &.and. p_ptr%uses_next_assembly_ref_nspace()
+        end function obsfield_partial_refs_use_assembly_space
 
     end subroutine refine3D_exec
 

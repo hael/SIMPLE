@@ -167,13 +167,9 @@ contains
     subroutine promote_assembly_nspace_if_needed( params, cline_assembly )
         type(parameters), intent(in)    :: params
         type(cmdline),    intent(inout) :: cline_assembly
-        logical :: l_eligible
-        ! polar=yes|direct accumulate partial sums sized at matching nspace.
-        ! Cartesian and polar=obsfield can promote assembly-time reprojection.
-        l_eligible = (.not. params%l_polar) .or. trim(params%polar) == 'obsfield'
-        if( .not. l_eligible ) return
-        if( params%is_final_planned_iter() .and. params%nspace_next > params%nspace )then
-            call cline_assembly%set('nspace', params%nspace_next)
+        ! Cartesian and polar=obsfield can emit the next iteration's reference grid.
+        if( params%uses_next_assembly_ref_nspace() )then
+            call cline_assembly%set('nspace', params%assembly_ref_nspace())
             call cline_assembly%delete('nspace_next')
         endif
     end subroutine promote_assembly_nspace_if_needed
@@ -812,8 +808,8 @@ contains
         call cline%set(          'which_iter', iter)
         call self%job_descr%set( 'extr_iter',  int2str(params%extr_iter))
         call cline%set(          'extr_iter',  params%extr_iter)
-        call self%job_descr%set( 'startit',    int2str(iter))
-        call cline%set(          'startit',    iter)
+        call self%job_descr%set( 'startit',    int2str(params%startit))
+        call cline%set(          'startit',    params%startit)
         ! schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge alignment docs
