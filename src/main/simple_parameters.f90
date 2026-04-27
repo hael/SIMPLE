@@ -356,6 +356,7 @@ type :: parameters
     integer :: nsample_stop=0      !< # particles to sample in refinement with fractional update, upper bound
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
+    integer :: nspace_next=0       !< # projection directions to use for next-stage reference sections
     integer :: nspace_sub=500      !< # projection directions in subspace
     integer :: nspace_max=1500     !< Maximum # of projection directions
     integer :: nstages=8           !< # low-pass limit stages
@@ -962,6 +963,7 @@ contains
         call check_iarg('nsample_start',  self%nsample_start)
         call check_iarg('nsample_stop',   self%nsample_stop)
         call check_iarg('nspace',         self%nspace)
+        call check_iarg('nspace_next',    self%nspace_next)
         call check_iarg('nspace_sub',     self%nspace_sub)
         call check_iarg('nspace_max',     self%nspace_max)
         call check_iarg('nstages',        self%nstages)

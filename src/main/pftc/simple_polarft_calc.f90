@@ -740,13 +740,16 @@ interface
         class(fplane_type), target, intent(inout) :: fpls(nptcls)
     end subroutine polar_cavger_insert_ptcls_direct
 
-    module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
+    module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls, &
+        &reforis_out, nspace_out )
         class(polarft_calc),        intent(inout) :: self
         class(oris),                intent(inout) :: eulspace
         class(oris),  pointer,      intent(inout) :: ptcl_field
         class(sym),                 intent(inout) :: symop
         integer,                    intent(in)    :: nptcls, pinds(nptcls)
         class(fplane_type), target, intent(inout) :: fpls(nptcls)
+        class(oris),      optional, intent(inout) :: reforis_out
+        integer,          optional, intent(in)    :: nspace_out
     end subroutine polar_cavger_insert_ptcls_obsfield
 
     module subroutine polar_cavger_kill( self )

@@ -18,7 +18,7 @@ integer, parameter :: NEIGH_NSPACES(2)                = [126,5000]
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
     type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk
-    integer :: iter, inspace, inspace_sub, imaxits, nsample_dyn, ipftsz
+    integer :: iter, inspace, inspace_next, inspace_sub, imaxits, nsample_dyn, ipftsz
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
 end type refine3D_stage_cfg
@@ -77,6 +77,7 @@ contains
         call set_refine3D_automsk_policy( cfg, params, istage, route )
         call set_refine3D_stage_controls( cfg, params, istage )
         call apply_refine3D_route_overrides( cfg, params, istage, route )
+        call set_refine3D_next_space( cfg, params, istage, route )
     end subroutine build_refine3D_stage_cfg
 
     subroutine init_refine3D_iteration( cfg )
@@ -86,6 +87,7 @@ contains
             cfg%iter = cline_refine3D%get_iarg('endit')
         endif
         cfg%iter = cfg%iter + 1
+        cfg%inspace_next = 0
         cfg%inspace_sub = 0
     end subroutine init_refine3D_iteration
 
@@ -299,6 +301,32 @@ contains
         endif
     end subroutine apply_refine3D_route_overrides
 
+    subroutine set_refine3D_next_space( cfg, params, istage, route )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        integer,                  intent(in)    :: route
+        if( istage < NSTAGES )then
+            cfg%inspace_next = max(cfg%inspace, refine3D_stage_nspace(params, istage + 1, route))
+        else
+            cfg%inspace_next = 0
+        endif
+        if( cfg%inspace_next <= cfg%inspace ) cfg%inspace_next = 0
+    end subroutine set_refine3D_next_space
+
+    integer function refine3D_stage_nspace( params, istage, route ) result(inspace)
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        integer,           intent(in) :: route
+        type(refine3D_stage_cfg) :: cfg_stage
+        call set_refine3D_mode_policy( cfg_stage, params, istage, route )
+        call set_refine3D_gauref_policy( cfg_stage, params, istage )
+        call set_refine3D_trailrec_policy( cfg_stage, params, istage )
+        call set_refine3D_stage_controls( cfg_stage, params, istage )
+        call apply_refine3D_route_overrides( cfg_stage, params, istage, route )
+        inspace = cfg_stage%inspace
+    end function refine3D_stage_nspace
+
     subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, route )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
@@ -339,6 +367,11 @@ contains
             write(logfhandle,'(A,I0,A)') 'emit_refine3D_stage_cfg: stage=', istage, ' automsk active, deleting lp for gold-standard refinement'
         endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
+        if( cfg%inspace_next > cfg%inspace )then
+            call cline_refine3D%set('nspace_next',         cfg%inspace_next)
+        else
+            call cline_refine3D%delete('nspace_next')
+        endif
         if( cfg%inspace_sub > 0 )then
             call cline_refine3D%set('nspace_sub',         cfg%inspace_sub)
         else

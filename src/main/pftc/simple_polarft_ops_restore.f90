@@ -74,8 +74,7 @@ contains
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
             ! read previous polar references to be used first for FSC calculation
-            call self%read_pft_array(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_even)
-            call self%read_pft_array(string(POLAR_REFS_FBODY)//'_odd'//BIN_EXT,  prev_odd)
+            call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
             ! The per-state FSCs below are written to disk and used for ML
             ! regularization. This full-range FSC is retained only for the
             ! legacy even/odd registration cutoff after restoration.
@@ -415,7 +414,7 @@ contains
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
             ! read previous polar references to be used first for FSC calculation
-            call prepare_trail_rec_arrays_direct( self, reforis, prev_even, prev_odd )
+            call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
             ! The per-state FSCs below are written to disk and used for ML
             ! regularization. This full-range FSC is retained only for the
             ! legacy even/odd registration cutoff after restoration.
@@ -524,8 +523,8 @@ contains
     end subroutine mirror_slices_direct
 
     !>  \brief local private routine for trailing reconstruction weighing
-    !!         and dimension checking/editing for direct-like polar modes
-    subroutine prepare_trail_rec_arrays_direct( self, reforis, prev_even, prev_odd )
+    !!         and dimension checking/editing for polar modes
+    subroutine prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
         class(polarft_calc),       intent(in) :: self
         type(oris),                intent(in) :: reforis
         complex(dp), allocatable, intent(out) :: prev_even(:,:,:), prev_odd(:,:,:)
@@ -533,13 +532,15 @@ contains
         type(sym)    :: symop
         type(oris)   :: prev_eulspace
         integer      :: prev_pftsz, prev_klims(2), prev_nrefs, ks, ke
+        integer      :: current_nspace, prev_nspace
         logical      :: l_pad
         call self%get_pft_array_dims(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_pftsz, prev_klims, prev_nrefs)
         ! Among the 3 dimensions of the arrays:
         ! - pftsz/prev_pftsz, and so # of rotations per shell must match exactly
         ! - Whereas frequency range can be padded with zeros.
-        ! - nrefs: when nrefs > prev_nrefs, each slice is sourced from the closest previous slice
-        !          when nrefs < prev_nrefs: does not occur in workflow
+        ! - nrefs: state-major blocks may grow when nspace grows; each state's
+        !          current projections are sourced from the closest previous
+        !          projection in the same state.
         if( (prev_nrefs == self%ncls) .and. (prev_pftsz == self%pftsz) )then
             call self%read_pft_array(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_even)
             call self%read_pft_array(string(POLAR_REFS_FBODY)//'_odd'//BIN_EXT,  prev_odd)
@@ -548,16 +549,24 @@ contains
                 THROW_HARD('Previous refs have different pftsz, cannot be used for trailing reconstruction')
             endif
             if( prev_nrefs > self%ncls )then
-                THROW_HARD('More previous refs than current, cannot be used for trailing reconstruction')
+                THROW_HARD('Previous per-state nspace is larger than current, cannot remap trailing reconstruction refs')
             else
                 ! Previous refs have different dimensions and need to be mapped to current space
+                if( mod(self%ncls, self%p_ptr%nstates) /= 0 )then
+                    THROW_HARD('Current state-major reference count is not divisible by nstates')
+                endif
+                if( mod(prev_nrefs, self%p_ptr%nstates) /= 0 )then
+                    THROW_HARD('Previous state-major reference count is not divisible by nstates')
+                endif
+                current_nspace = self%ncls / self%p_ptr%nstates
+                prev_nspace    = prev_nrefs / self%p_ptr%nstates
                 call symop%new(self%p_ptr%pgrp)
-                call prev_eulspace%new(prev_nrefs, is_ptcl=.false.)
+                call prev_eulspace%new(prev_nspace, is_ptcl=.false.)
                 call symop%build_refspiral(prev_eulspace)
                 ! when the frequency range does not match, zero-padding will be used
                 ks = max(self%kfromto(1), prev_klims(1))
                 ke = min(self%interpklim, prev_klims(2))
-                l_pad = (ks /= prev_klims(1)) .or. (ke /= prev_klims(2))
+                l_pad = (self%kfromto(1) /= prev_klims(1)) .or. (self%interpklim /= prev_klims(2))
                 fname = string(POLAR_REFS_FBODY)//'_even'//BIN_EXT
                 call map_current_refs_to_closest_previous_refs(fname, prev_even)
                 fname = string(POLAR_REFS_FBODY)//'_odd'//BIN_EXT
@@ -574,19 +583,23 @@ contains
                 complex(dp), allocatable, intent(out) :: array(:,:,:)
                 complex(sp), allocatable :: src(:,:,:)
                 type(ori) :: o
-                integer   :: i,j
+                integer   :: state, iproj, i, j, cur_base, prev_base, prev_ref
                 call self%read_any_pft_array(fname, src)
-                !$omp parallel do default(shared) proc_bind(close) private(i,o,j) schedule(static)
+                allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls), source=DCMPLX_ZERO)
+                !$omp parallel do default(shared) proc_bind(close) private(i,o,j,state,iproj,cur_base,prev_base,prev_ref) &
+                !$omp& schedule(static)
                 do i = 1,self%ncls
-                    call reforis%get_ori(i, o)
-                    ! identify nearest slice from the previous set of refs
+                    state = (i - 1) / current_nspace + 1
+                    iproj = i - (state - 1) * current_nspace
+                    cur_base  = (state - 1) * current_nspace
+                    prev_base = (state - 1) * prev_nspace
+                    call reforis%get_ori(iproj, o)
                     j = prev_eulspace%find_closest_proj(o)
-                    ! updates slice of current set with nearest from previous set
+                    prev_ref = prev_base + j
                     if( l_pad )then
-                        array(:,:,i)     = DCMPLX_ZERO
-                        array(:,ks:ke,i) = cmplx(src(:,ks:ke,j), kind=dp)
+                        if( ks <= ke ) array(:,ks:ke,cur_base+iproj) = cmplx(src(:,ks:ke,prev_ref), kind=dp)
                     else
-                        array(:,:,i) = cmplx(src(:,:,j), kind=dp)
+                        array(:,:,cur_base+iproj) = cmplx(src(:,:,prev_ref), kind=dp)
                     endif
                 enddo
                 !$omp end parallel do
@@ -594,7 +607,7 @@ contains
                 call o%kill
             end subroutine map_current_refs_to_closest_previous_refs
 
-    end subroutine prepare_trail_rec_arrays_direct
+    end subroutine prepare_trail_rec_arrays
 
     ! 3D SECTION - Common routines
 

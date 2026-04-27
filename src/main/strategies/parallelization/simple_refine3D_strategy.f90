@@ -164,6 +164,32 @@ contains
         call vol_in%kill
     end subroutine prepare_assembly_cline
 
+    subroutine promote_cartesian_ref_nspace_if_needed( params, cline_assembly )
+        type(parameters), intent(in)    :: params
+        type(cmdline),    intent(inout) :: cline_assembly
+        ! Cartesian assembly reprojects assembled volumes. Legacy polar partial
+        ! sums stay at the matching nspace; obsfield has its own promotion path.
+        if( final_planned_iteration(params) .and. params%nspace_next > params%nspace )then
+            call cline_assembly%set('nspace', params%nspace_next)
+            call cline_assembly%delete('nspace_next')
+        endif
+    end subroutine promote_cartesian_ref_nspace_if_needed
+
+    subroutine promote_obsfield_ref_nspace_if_needed( params, cline_assembly )
+        type(parameters), intent(in)    :: params
+        type(cmdline),    intent(inout) :: cline_assembly
+        if( trim(params%polar) /= 'obsfield' ) return
+        if( final_planned_iteration(params) .and. params%nspace_next > params%nspace )then
+            call cline_assembly%set('nspace', params%nspace_next)
+            call cline_assembly%delete('nspace_next')
+        endif
+    end subroutine promote_obsfield_ref_nspace_if_needed
+
+    logical function final_planned_iteration( params )
+        type(parameters), intent(in) :: params
+        final_planned_iteration = (params%which_iter - params%startit + 1) >= params%maxits
+    end function final_planned_iteration
+
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
     ! ======================================================================
@@ -200,7 +226,7 @@ contains
                     endif
                 end do
             else
-                if( .not. polar_ref_sections_available() ) then
+                if( .not. polar_ref_sections_available(params) ) then
                     THROW_HARD('polar references are required when VOL1 not provided')
                 endif
             endif
@@ -286,7 +312,7 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        l_bootstrap_polar_refs = .not. polar_ref_sections_available()
+        l_bootstrap_polar_refs = .not. polar_ref_sections_available(params)
         if( l_bootstrap_polar_refs )then
             do state = 1, params%nstates
                 if( .not. file_exists(params%vols(state)) )then
@@ -335,8 +361,10 @@ contains
         if( l_write_partial_recs )then
             call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
             if( params%l_polar )then
+                call promote_obsfield_ref_nspace_if_needed(params, cline_volassemble)
                 call xpolar_volassemble%execute(cline_volassemble)
             else
+                call promote_cartesian_ref_nspace_if_needed(params, cline_volassemble)
                 call xvolassemble%execute(cline_volassemble)
             endif
             if( trim(params%volrec) .eq. 'yes' )then
@@ -482,6 +510,7 @@ contains
         self%cline_postprocess         = cline
         self%cline_calc_group_sigmas   = cline
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
+        call self%cline_rec3D%delete( 'nspace_next' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
@@ -585,7 +614,7 @@ contains
             endif
             if( params%l_polar )then
                 if( .not.vol_defined )then
-                    if( polar_ref_sections_available() ) vol_defined = .true.
+                    if( polar_ref_sections_available(params) ) vol_defined = .true.
                 endif
             endif
             if( .not. vol_defined )then
@@ -689,7 +718,7 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        l_bootstrap_polar_refs = .not. polar_ref_sections_available()
+        l_bootstrap_polar_refs = .not. polar_ref_sections_available(params)
         if( l_bootstrap_polar_refs )then
             do state = 1, params%nstates
                 if( .not. file_exists(params%vols(state)) )then
@@ -744,9 +773,11 @@ contains
                 case DEFAULT
                     call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
                     if( params%l_polar )then
+                        call promote_obsfield_ref_nspace_if_needed(params, cline_volassemble)
                         call xpolar_volassemble%execute(cline_volassemble)
                         params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
                     else
+                        call promote_cartesian_ref_nspace_if_needed(params, cline_volassemble)
                         call xvolassemble%execute(cline_volassemble)
                     endif
                     if( trim(params%volrec).eq.'yes' )then

@@ -65,7 +65,7 @@ contains
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        if( .not. polar_ref_sections_available() )then
+        if( .not. polar_ref_sections_available(params) )then
             THROW_HARD('polar reference sections are missing; assembly must prepare POLAR_REFS before prob_tab')
         endif
         call prep_pftc4align3D_polar( params, build, cline, nptcls )
@@ -120,7 +120,7 @@ contains
             THROW_HARD('exec_prob_tab_neigh requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        if( .not. polar_ref_sections_available() )then
+        if( .not. polar_ref_sections_available(params) )then
             THROW_HARD('polar reference sections are missing; assembly must prepare POLAR_REFS before prob_tab_neigh')
         endif
         call prep_pftc4align3D_polar( params, build, cline, nptcls )
