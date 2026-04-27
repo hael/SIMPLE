@@ -8,7 +8,8 @@ use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_star_from_iter
-use simple_matcher_pftc_prep, only: polar_ref_sections_available
+use simple_matcher_pftc_prep,      only: polar_ref_sections_available
+use simple_matcher_refvol_utils,   only: any_volume_source_defined, complete_volume_source_defined
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -213,6 +214,113 @@ contains
         if( allocated(has_fsc)  ) deallocate(has_fsc)
     end subroutine refresh_resolution_fields_from_fsc
 
+    subroutine remove_polar_partial_sum_files( params )
+        type(parameters), intent(in) :: params
+        type(string) :: fname
+        integer :: ipart, numlen_part
+        numlen_part = max(1, params%numlen)
+        do ipart = 1,max(1, params%nparts)
+            fname = 'cavgs_even_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+            if( file_exists(fname) ) call del_file(fname)
+            fname = 'cavgs_odd_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+            if( file_exists(fname) ) call del_file(fname)
+            fname = 'ctfsqsums_even_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+            if( file_exists(fname) ) call del_file(fname)
+            fname = 'ctfsqsums_odd_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+            if( file_exists(fname) ) call del_file(fname)
+        end do
+        call fname%kill
+    end subroutine remove_polar_partial_sum_files
+
+    subroutine remove_cartesian_partial_rec_files( params )
+        type(parameters), intent(in) :: params
+        type(string) :: fbody, fname
+        integer :: state, ipart, numlen_part
+        numlen_part = max(1, params%numlen)
+        do state = 1,max(1, params%nstates)
+            do ipart = 1,max(1, params%nparts)
+                fbody = string(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(ipart,numlen_part)
+                fname = fbody//'_even'//params%ext%to_char()
+                if( file_exists(fname) ) call del_file(fname)
+                fname = fbody//'_odd'//params%ext%to_char()
+                if( file_exists(fname) ) call del_file(fname)
+                fname = string('rho_')//fbody//'_even'//params%ext%to_char()
+                if( file_exists(fname) ) call del_file(fname)
+                fname = string('rho_')//fbody//'_odd'//params%ext%to_char()
+                if( file_exists(fname) ) call del_file(fname)
+            enddo
+        enddo
+        call fbody%kill
+        call fname%kill
+    end subroutine remove_cartesian_partial_rec_files
+
+    subroutine remove_partial_assembly_input_files( params )
+        type(parameters), intent(in) :: params
+        if( params%l_polar )then
+            call remove_polar_partial_sum_files(params)
+        else
+            call remove_cartesian_partial_rec_files(params)
+        endif
+    end subroutine remove_partial_assembly_input_files
+
+    subroutine remove_polar_ref_section_files
+        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
+        if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
+        if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
+    end subroutine remove_polar_ref_section_files
+
+    subroutine delete_volume_source_keys( cline, nstates )
+        type(cmdline), intent(inout) :: cline
+        integer,       intent(in)    :: nstates
+        integer :: state
+        do state = 1,nstates
+            call cline%delete('vol'//int2str(state))
+        enddo
+    end subroutine delete_volume_source_keys
+
+    subroutine delete_volume_source_job_keys( job_descr, nstates )
+        type(chash), intent(inout) :: job_descr
+        integer,     intent(in)    :: nstates
+        integer :: state
+        do state = 1,nstates
+            call job_descr%delete('vol'//int2str(state))
+        enddo
+    end subroutine delete_volume_source_job_keys
+
+    logical function should_write_initial_polar_refs( params, cline ) result( l_write )
+        type(parameters), intent(in) :: params
+        type(cmdline),    intent(in) :: cline
+        integer :: state
+        l_write = .false.
+        if( .not. params%l_polar ) return
+        if( complete_volume_source_defined(cline, params%nstates) )then
+            l_write = params%l_prob_align_mode
+            if( .not. l_write ) return
+        else
+            l_write = .not. polar_ref_sections_available(params)
+        endif
+        if( .not. l_write ) return
+        do state = 1,params%nstates
+            if( .not. file_exists(params%vols(state)) )then
+                l_write = .false.
+                exit
+            endif
+        enddo
+    end function should_write_initial_polar_refs
+
+    subroutine require_polar_ref_source( params, cline )
+        type(parameters), intent(in) :: params
+        type(cmdline),    intent(in) :: cline
+        if( .not. params%l_polar ) return
+        if( any_volume_source_defined(cline, params%nstates) &
+            &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
+            THROW_HARD('incomplete multi-state volume source; provide vol1..volN or use POLAR_REFS')
+        endif
+        if( polar_ref_sections_available(params) ) return
+        if( complete_volume_source_defined(cline, params%nstates) ) return
+        THROW_HARD('polar reference sections are missing and no complete volume source is available for rebuild')
+    end subroutine require_polar_ref_source
+
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
     ! ======================================================================
@@ -247,7 +355,11 @@ contains
         endif
         ! Input reference validation
         if( params%l_polar )then
-            if( cline%defined('vol1') )then
+            if( any_volume_source_defined(cline, params%nstates) &
+                &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
+                THROW_HARD('incomplete multi-state volume source; provide vol1..volN or use POLAR_REFS')
+            endif
+            if( complete_volume_source_defined(cline, params%nstates) )then
                 do state = 1, params%nstates
                     if( .not. file_exists(params%vols(state)) ) then
                         THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
@@ -255,7 +367,7 @@ contains
                 end do
             else
                 if( .not. polar_ref_sections_available(params) ) then
-                    THROW_HARD('polar references are required when VOL1 not provided')
+                    THROW_HARD('polar references are required when complete volume source not provided')
                 endif
             endif
         else
@@ -318,7 +430,7 @@ contains
         type(cmdline)                     :: cline_volassemble
         type(cmdline)                     :: cline_build
         integer                           :: state, iter, extr_iter
-        logical                           :: l_prob_state_mode, l_prob_neigh_mode, l_bootstrap_polar_refs
+        logical                           :: l_prob_state_mode, l_prob_neigh_mode
         logical                           :: l_write_partial_recs
         type(string)                      :: volname
         601 format(A,1X,F12.3)
@@ -339,7 +451,7 @@ contains
         params%extr_iter  = extr_iter
         params%outfile    = 'algndoc'//METADATA_EXT
         ! communicate iteration counters
-        call cline%set('startit',    params%which_iter)
+        call cline%set('startit',    params%startit)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
         ! noise regularization / annealing
@@ -358,18 +470,10 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        l_bootstrap_polar_refs = .not. polar_ref_sections_available(params)
-        if( l_bootstrap_polar_refs )then
-            do state = 1, params%nstates
-                if( .not. file_exists(params%vols(state)) )then
-                    l_bootstrap_polar_refs = .false.
-                    exit
-                endif
-            end do
-        endif
-        if( l_bootstrap_polar_refs )then
+        if( should_write_initial_polar_refs(params, cline) )then
             call write_initial_polar_ref_sections(params, build, cline)
         endif
+        call require_polar_ref_source(params, cline)
         ! refine=prob* pre-step
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
@@ -402,6 +506,7 @@ contains
             ! Legacy handshake for rec-writing helpers that still inspect this key.
             ! The strategy owns the actual assembly dispatch decision.
             call cline%set('force_volassemble', 'yes')
+            call remove_partial_assembly_input_files(params)
         endif
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
         if( l_write_partial_recs )then
@@ -431,7 +536,7 @@ contains
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
         end select
         ! input volume should only be used once in polar mode
-        if( params%l_polar ) call cline%delete('vol1')
+        if( params%l_polar ) call delete_volume_source_keys(cline, params%nstates)
     end subroutine inmem_execute_iteration
 
     subroutine inmem_finalize_iteration(self, params, build)
@@ -737,7 +842,7 @@ contains
         real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:)
         integer :: state, iter
-        logical :: l_prob_state_mode, l_prob_neigh_mode, l_bootstrap_polar_refs
+        logical :: l_prob_state_mode, l_prob_neigh_mode
         if( L_BENCH_GLOB )then
             self%bench%t_init = tic()
             self%bench%t_tot  = tic()
@@ -771,18 +876,10 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        l_bootstrap_polar_refs = .not. polar_ref_sections_available(params)
-        if( l_bootstrap_polar_refs )then
-            do state = 1, params%nstates
-                if( .not. file_exists(params%vols(state)) )then
-                    l_bootstrap_polar_refs = .false.
-                    exit
-                endif
-            end do
-        endif
-        if( l_bootstrap_polar_refs )then
+        if( should_write_initial_polar_refs(params, cline) )then
             call write_initial_polar_ref_sections(params, build, cline)
         endif
+        call require_polar_ref_source(params, cline)
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
@@ -810,6 +907,9 @@ contains
         call cline%set(          'extr_iter',  params%extr_iter)
         call self%job_descr%set( 'startit',    int2str(params%startit))
         call cline%set(          'startit',    params%startit)
+        if( (trim(params%volrec).eq.'yes') .or. params%l_polar )then
+            call remove_partial_assembly_input_files(params)
+        endif
         ! schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge alignment docs
@@ -910,8 +1010,8 @@ contains
         if( (iter - params%startit + 1) >= params%maxits ) converged = .true.
         ! polar reference bookkeeping; the polar assembly commander owns the actual reduction.
         if( params%l_polar )then
-            call self%job_descr%delete('vol1')
-            call cline%delete('vol1')
+            call delete_volume_source_job_keys(self%job_descr, params%nstates)
+            call delete_volume_source_keys(cline, params%nstates)
             if( iter > 1 .and. params%keepvol.eq.'no' )then
                 call del_file(string(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext%to_char())
             endif
@@ -1029,9 +1129,9 @@ contains
         ! partial reconstructions for assembly, but starting volumes can
         ! still supply the initial polar reference sections.
         nrefs = params%nspace * params%nstates
+        call remove_polar_ref_section_files
         call read_mask_filter_reproject_refvols(params, build, cline, 1)
         call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
-        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
         call build%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
         call build%pftc%polar_cavger_kill
         call build%pftc%kill

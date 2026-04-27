@@ -10,6 +10,8 @@ use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, w
 use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
 use simple_matcher_ptcl_io,         only: killimgbatch
 use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar, polar_ref_sections_available
+use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols, complete_volume_source_defined, &
+    &any_volume_source_defined
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, sample_ptcls4fillin, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_strategy3D_eval,         only: strategy3D_eval
@@ -257,7 +259,11 @@ contains
                         ctrl%do_write_partial_recs = .true.
                     endif
             end select
-            ctrl%do_polar_prepare = ctrl%do_polar .and. .not. cline%defined('vol1')
+            if( ctrl%do_polar .and. any_volume_source_defined(cline, p_ptr%nstates) &
+                &.and. (.not. complete_volume_source_defined(cline, p_ptr%nstates)) )then
+                THROW_HARD('incomplete multi-state volume source; provide vol1..volN or use POLAR_REFS')
+            endif
+            ctrl%do_polar_prepare = ctrl%do_polar .and. .not. complete_volume_source_defined(cline, p_ptr%nstates)
         end subroutine init_ctrl
 
         subroutine ensure_even_odd_partition()
@@ -294,12 +300,18 @@ contains
                 nrefs = p_ptr%nspace * p_ptr%nstates
                 call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
             endif
-            if( ctrl%do_polar_prepare .or. (.not. ctrl%do_prob_align) )then
+            if( ctrl%do_polar_prepare )then
                 if( ctrl%do_bench ) t_prep_ref_sections = tic()
                 if( .not. polar_ref_sections_available(p_ptr) )then
                     THROW_HARD('polar reference sections are missing; assembly must prepare POLAR_REFS before matching')
                 endif
                 call prep_pftc4align3D_polar(p_ptr, b_ptr, cline, batchsz_max)
+                if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
+            endif
+            if( (.not. ctrl%do_prob_align) .and. (.not. ctrl%do_polar_prepare) )then
+                if( ctrl%do_bench ) t_prep_ref_sections = tic()
+                call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
+                call write_current_reprojection_model()
                 if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
             endif
             if( ctrl%do_bench ) t_prep_sigmas_alloc_ptcl_imgs = tic()
@@ -310,7 +322,7 @@ contains
             call build%vol2%kill
             if( ctrl%do_polar .and. ctrl%do_write_partial_recs )then
                 nrefs_cavger = partial_ref_nspace * p_ptr%nstates
-                if( cline%defined('vol1') )then
+                if( complete_volume_source_defined(cline, p_ptr%nstates) )then
                     call b_ptr%pftc%polar_cavger_new(.true.)
                     if( p_ptr%l_trail_rec )then
                         call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
@@ -325,6 +337,25 @@ contains
                 endif
             endif
         end subroutine prepare_refs_sigmas_and_pftc
+
+        subroutine write_current_reprojection_model()
+            integer :: nrefs_write
+            if( p_ptr%l_distr_worker .and. p_ptr%part /= 1 ) return
+            nrefs_write = p_ptr%nspace * p_ptr%nstates
+            call remove_polar_ref_section_files()
+            call b_ptr%pftc%polar_cavger_new(.true., nrefs=nrefs_write)
+            call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+        end subroutine write_current_reprojection_model
+
+        subroutine remove_polar_ref_section_files()
+            if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
+            if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) )then
+                call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
+            endif
+            if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) )then
+                call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
+            endif
+        end subroutine remove_polar_ref_section_files
 
         subroutine maybe_init_reconstruction()
             if( .not. ctrl%do_write_partial_recs ) return

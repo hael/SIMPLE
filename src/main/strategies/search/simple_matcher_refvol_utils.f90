@@ -10,10 +10,37 @@ implicit none
 
 public :: read_mask_filter_reproject_refvols
 public :: pick_lp_est_state, estimate_lp_from_refs
+public :: any_volume_source_defined, complete_volume_source_defined
 private
 #include "simple_local_flags.inc"
 
 contains
+
+    logical function any_volume_source_defined( cline, nstates ) result( l_defined )
+        class(cmdline), intent(in) :: cline
+        integer,        intent(in) :: nstates
+        integer :: state
+        l_defined = .false.
+        do state = 1,nstates
+            if( cline%defined('vol'//int2str(state)) )then
+                l_defined = .true.
+                return
+            endif
+        enddo
+    end function any_volume_source_defined
+
+    logical function complete_volume_source_defined( cline, nstates ) result( l_defined )
+        class(cmdline), intent(in) :: cline
+        integer,        intent(in) :: nstates
+        integer :: state
+        l_defined = .true.
+        do state = 1,nstates
+            if( .not. cline%defined('vol'//int2str(state)) )then
+                l_defined = .false.
+                return
+            endif
+        enddo
+    end function complete_volume_source_defined
 
     !>  \brief  determines the reference volume shift and map shifts back to particles
     !>          reference volume shifting is performed in shift_and_mask_refvol
@@ -92,7 +119,7 @@ contains
         else
             vol_avg = params%vols(s)
             if( .not. file_exists(vol_avg) )then
-                THROW_HARD('No usable reference volume inputs for state='//int2str(s)//'; need vol1 or vol_even/vol_odd')
+                THROW_HARD('No usable reference volume inputs for state='//int2str(s)//'; need volN or vol_even/vol_odd')
             endif
             call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
             call build%vol_odd%copy_fast(build%vol)
@@ -201,7 +228,7 @@ contains
         if( lpstart < lpstop )then
             THROW_HARD('Invalid low-pass range ordering: lpstart must be >= lpstop')
         endif
-        if( params%l_polar .and. (.not.cline%defined('vol1')) )then
+        if( params%l_polar .and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
             call polarft_estimate_lplim3D(params%box_crop, params%smpd_crop, lpstart, lpstop, lpopt)
         else
             ! Use circular mask for low-pass estimation (volassemble handles automasking)
