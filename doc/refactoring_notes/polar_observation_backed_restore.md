@@ -144,14 +144,13 @@ has already lost the local observation geometry.
 This deliberately has two stages, like `polar=no`: nearest-cell accumulation during
 particle insertion and KB gather during polar extraction.
 
-The insertion loop is parallelized as a single OpenMP work-sharing loop over native
-`h`. This differs from `reconstructor%insert_plane_oversamp`, which must keep whole KB
-splat windows apart. For the observation field, each sample updates only its nearest
-grid cell, so the splat-style h-coloring would mostly serialize useful work. Cell
-collisions are handled with OpenMP atomic updates of numerator, denominator, and
-nearest-cell KB weight. Observation/rejection counters are reduced across
-threads. There is no finalization or secondary grid build step; extraction reads
-directly from the accumulated dense arrays.
+The insertion loop is parallelized with two native-`h` colors. All Fourier samples for
+one `h` value are handled by one thread, and h values in the same color are separated
+by two native grid units before and after rotation, so nearest-cell destination writes
+cannot collide. This removes OpenMP atomics from the hot insertion loop while avoiding
+the wider h-coloring needed by full KB splats. Observation/rejection counters are
+reduced across threads. There is no finalization or secondary grid build step;
+extraction reads directly from the accumulated dense arrays.
 
 The nearest-cell KB factor is applied once, during insertion, to both the complex
 numerator and CTF2 density. Extraction uses `grid_w` only to decide whether a cell has
@@ -257,9 +256,9 @@ avoid.
   the failed geometric regularizer behavior.
 - Symmetry expansion increases insertion work by `nsym`, because virtual
   symmetry-related observations are deposited into the field up front.
-- Parallel insertion currently relies on atomics for nearest-cell write collisions. If
-  insertion-side splatting returns, the wider `insert_plane_oversamp` race-avoidance
-  logic would need to return with it.
+- Parallel insertion currently relies on two-color h scheduling for nearest-cell write
+  safety. If insertion-side splatting returns, the wider `insert_plane_oversamp`
+  race-avoidance logic would need to return with it.
 
 ## Possible Implementation Shape
 The numerical backend likely belongs near the polar restore/pftc boundary, while the

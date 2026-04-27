@@ -56,6 +56,7 @@ type :: reconstructor_eo
     procedure, private :: read_odd
     ! INTERPOLATION
     procedure          :: grid_plane
+    procedure          :: grid_plane_nn
     procedure          :: compress_exp
     procedure          :: expand_exp
     procedure          :: sum_eos    !< for merging even and odd into sum
@@ -382,6 +383,24 @@ contains
                 THROW_HARD('unsupported eo flag; grid_plane')
         end select
     end subroutine grid_plane
+
+    !> \brief  for nearest-cell gridding of a Fourier plane
+    subroutine grid_plane_nn( self, se, o, fpl, eo, pwght )
+        class(reconstructor_eo), intent(inout) :: self    !< instance
+        class(sym),              intent(inout) :: se      !< symmetry elements
+        class(ori),              intent(inout) :: o       !< orientation
+        class(fplane_type),      intent(in)    :: fpl     !< Fourier & ctf planes
+        integer,                 intent(in)    :: eo      !< eo flag
+        real,                    intent(in)    :: pwght   !< external particle weight
+        select case(eo)
+            case(-1,0)
+                call self%even%insert_plane_oversamp_nn(se, o, fpl, pwght)
+            case(1)
+                call self%odd%insert_plane_oversamp_nn(se, o, fpl, pwght)
+            case DEFAULT
+                THROW_HARD('unsupported eo flag; grid_plane_nn')
+        end select
+    end subroutine grid_plane_nn
 
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )

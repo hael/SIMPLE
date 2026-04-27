@@ -10,6 +10,15 @@ public :: reconstructor
 private
 #include "simple_local_flags.inc"
 
+! Nearest-cell Cartesian insertion is intentionally sparse. Reject cells whose
+! accumulated density is only a tiny fraction of the positive shell mean; such
+! cells are mostly isolated edge hits and otherwise normalize to noisy spikes.
+real, parameter :: RECON_NN_MIN_RHO_SHELL_FRAC = 0.02
+! Two h-colors make nearest-cell writes race-free without atomics: samples in
+! the same color are at least two native grid units apart before and after
+! rotation, farther than the largest distance inside one rounded voxel.
+integer, parameter :: RECON_NN_OMP_STRIDE = 2
+
 type, extends(image) :: reconstructor
     private
     class(parameters),  pointer :: p_ptr => null()              !< pointer to parameters object
@@ -30,6 +39,7 @@ type, extends(image) :: reconstructor
     integer(kind(ENUM_CTFFLAG)) :: ctfflag                      !< ctf flag <yes=1|no=0|flip=2>
     logical                     :: phaseplate     = .false.     !< Volta phaseplate images or not
     logical                     :: rho_allocated  = .false.     !< existence of rho matrix
+    logical                     :: nn_inserted    = .false.     !< expanded mats came from nearest-cell insertion
   contains
     ! CONSTRUCTORS
     procedure          :: alloc_rho
@@ -46,6 +56,7 @@ type, extends(image) :: reconstructor
     procedure          :: read_rho, read_raw_rho
     ! CONVOLUTION INTERPOLATION
     procedure          :: insert_plane_oversamp
+    procedure          :: insert_plane_oversamp_nn
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     procedure          :: expand_exp
@@ -124,6 +135,7 @@ contains
             self%cmat_exp = CMPLX_ZERO
             self%rho_exp  = 0.0
             !$omp end parallel workshare
+            self%nn_inserted = .false.
         endif
     end subroutine reset_exp
 
@@ -298,6 +310,100 @@ contains
         call o_sym%kill
     end subroutine insert_plane_oversamp
 
+    !> insert Fourier plane into the expanded Fourier volume by weighted nearest
+    !> cell assignment. This mirrors insert_plane_oversamp geometry, but replaces
+    !> the full KB splat with the same one-cell KB confidence used by fgrid_obsfield.
+    subroutine insert_plane_oversamp_nn( self, se, o, fpl, pwght )
+        use simple_math,    only: ceil_div, floor_div
+        use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
+        class(reconstructor), intent(inout) :: self
+        class(sym),           intent(inout) :: se
+        class(ori),           intent(inout) :: o
+        class(fplane_type),   intent(in)    :: fpl
+        real,                 intent(in)    :: pwght
+        type(ori) :: o_sym
+        complex   :: comp, cmplx_raw
+        real      :: rotmats(se%get_nsym(),3,3), loc(3), delta(3), ctfval
+        real      :: ctfsq_raw, cell_w, cell_w_norm
+        real      :: pf2
+        integer   :: coord(3), fpllims_pd(3,2), fpllims(3,2)
+        integer   :: nsym, isym, h, k, hp, kp, pf, l
+        integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
+        integer   :: lo1, lo2, lo3, hi1, hi2, hi3
+        if( pwght < TINY ) return
+        self%nn_inserted = .true.
+        nsym = se%get_nsym()
+        rotmats(1,:,:) = o%get_mat()
+        if( nsym > 1 )then
+            do isym = 2, nsym
+                call se%apply(o, isym, o_sym)
+                rotmats(isym,:,:) = o_sym%get_mat()
+            enddo
+        endif
+        ! Native iteration limits so hp=h*pf and kp=k*pf remain valid
+        ! accesses into the padded Fourier plane.
+        fpllims_pd  = fpl%frlims
+        pf          = OSMPL_PAD_FAC
+        pf2          = real(pf*pf)
+        fpllims      = fpllims_pd
+        fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
+        fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
+        fpllims(2,1) = ceil_div (fpllims_pd(2,1), pf)
+        fpllims(2,2) = floor_div(fpllims_pd(2,2), pf)
+        ! Center-normalized one-cell KB confidence. The nearest cell receives
+        ! the full sample at exact cell center and less weight near cell edges.
+        cell_w_norm  = self%kbwin%apod_fast(0.)
+        cell_w_norm  = 1. / (cell_w_norm * cell_w_norm * cell_w_norm)
+        nyq_disk     = self%nyq * (self%nyq + 1)
+        lo1 = self%lims(1,1); hi1 = self%lims(1,2)
+        lo2 = self%lims(2,1); hi2 = self%lims(2,2)
+        lo3 = self%lims(3,1); hi3 = self%lims(3,2)
+        !$omp parallel default(shared) private(isym,l,h,k,h_sq,k_max_h,k_lo,k_hi,&
+        !$omp& cmplx_raw,ctfsq_raw,comp,ctfval,loc,delta,coord,hp,kp,cell_w)&
+        !$omp& proc_bind(close)
+        do isym = 1, nsym
+            do l = 0, RECON_NN_OMP_STRIDE-1
+                !$omp do schedule(static)
+                do h = fpllims(1,1)+l, fpllims(1,2), RECON_NN_OMP_STRIDE
+                    h_sq = h*h
+                    if( h_sq > nyq_disk ) cycle
+                    k_max_h = int(sqrt(real(nyq_disk - h_sq)))
+                    k_lo    = max(fpllims(2,1), -k_max_h)
+                    k_hi    = min(fpllims(2,2),  k_max_h)
+                    hp = h * pf
+                    do k = k_lo, k_hi
+                        kp = k * pf
+                        cmplx_raw = fplane_get_cmplx(fpl, hp, kp)
+                        ctfsq_raw = fplane_get_ctfsq(fpl, hp, kp)
+                        if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
+                            ctfsq_raw <= TINY ) cycle
+                        ! Native destination-grid coordinates; no padded-coordinate
+                        ! scaling and no full stencil allocation/evaluation.
+                        loc(1) = real(h)*rotmats(isym,1,1) + real(k)*rotmats(isym,2,1)
+                        loc(2) = real(h)*rotmats(isym,1,2) + real(k)*rotmats(isym,2,2)
+                        loc(3) = real(h)*rotmats(isym,1,3) + real(k)*rotmats(isym,2,3)
+                        coord = nint(loc)
+                        if( coord(1) < lo1 .or. coord(1) > hi1 ) cycle
+                        if( coord(2) < lo2 .or. coord(2) > hi2 ) cycle
+                        if( coord(3) < lo3 .or. coord(3) > hi3 ) cycle
+                        delta  = loc - real(coord)
+                        cell_w = cell_w_norm * self%kbwin%apod_fast(delta(1)) &
+                            * self%kbwin%apod_fast(delta(2)) * self%kbwin%apod_fast(delta(3))
+                        comp   = cell_w * pwght * pf2 * cmplx_raw
+                        ctfval = cell_w * pwght * ctfsq_raw
+                        self%cmat_exp(coord(1),coord(2),coord(3)) = &
+                            self%cmat_exp(coord(1),coord(2),coord(3)) + comp
+                        self%rho_exp(coord(1),coord(2),coord(3)) = &
+                            self%rho_exp(coord(1),coord(2),coord(3)) + ctfval
+                    enddo
+                enddo
+                !$omp end do
+            enddo
+        enddo
+        !$omp end parallel
+        if( nsym > 1 ) call o_sym%kill
+    end subroutine insert_plane_oversamp_nn
+
     subroutine sampl_dens_correct( self )
         class(reconstructor), intent(inout) :: self
         integer :: h,k,m,phys(3),sh
@@ -322,33 +428,71 @@ contains
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
-        integer :: phys(3), h, k, m
+        real(dp), allocatable :: rho_shell_sum(:), rho_shell_mean(:)
+        integer,  allocatable :: rho_shell_cnt(:)
+        complex :: comp_here
+        real    :: rho_here, rho_floor
+        integer :: phys(3), h, k, m, sh
         if(.not. allocated(self%cmat_exp) .or. .not.allocated(self%rho_exp))then
             THROW_HARD('expanded complex or rho matrices do not exist; compress_exp')
         endif
+        if( self%nn_inserted )then
+            allocate(rho_shell_sum(0:self%nyq), rho_shell_mean(0:self%nyq), rho_shell_cnt(0:self%nyq))
+            rho_shell_sum  = 0.d0
+            rho_shell_mean = 0.d0
+            rho_shell_cnt  = 0
+            !$omp parallel do collapse(3) default(shared) schedule(static)&
+            !$omp private(h,k,m,sh,rho_here) reduction(+:rho_shell_sum,rho_shell_cnt) proc_bind(close)
+            do h = self%lims(1,1),self%lims(1,2)
+                do k = self%lims(2,1),self%lims(2,2)
+                    do m = self%lims(3,1),self%lims(3,2)
+                        rho_here = self%rho_exp(h,k,m)
+                        if( rho_here <= TINY ) cycle
+                        sh = nint(sqrt(real(h*h + k*k + m*m)))
+                        if( sh > self%nyq ) cycle
+                        rho_shell_sum(sh) = rho_shell_sum(sh) + real(rho_here,dp)
+                        rho_shell_cnt(sh) = rho_shell_cnt(sh) + 1
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+            where( rho_shell_cnt > 0 )
+                rho_shell_mean = rho_shell_sum / real(rho_shell_cnt,dp)
+            end where
+        endif
         ! Fourier components & rho matrices compression
         call self%reset        
-        !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
+        !$omp parallel do collapse(3) private(h,k,m,phys,sh,rho_here,rho_floor,comp_here)&
+        !$omp& schedule(static) default(shared) proc_bind(close)
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
-                    if(abs(self%cmat_exp(h,k,m)) < TINY) cycle
+                    comp_here = self%cmat_exp(h,k,m)
+                    rho_here  = self%rho_exp(h,k,m)
+                    if( abs(comp_here) < TINY .and. rho_here <= TINY ) cycle
+                    if( self%nn_inserted )then
+                        sh = nint(sqrt(real(h*h + k*k + m*m)))
+                        if( sh > self%nyq ) cycle
+                        rho_floor = real(RECON_NN_MIN_RHO_SHELL_FRAC * rho_shell_mean(sh))
+                        if( rho_here <= max(TINY, rho_floor) ) cycle
+                    endif
                     if (h > 0) then
                         phys(1) = h + 1
                         phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
                         phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
-                        call self%set_cmat_at(phys(1),phys(2),phys(3), self%cmat_exp(h,k,m))
+                        if( abs(comp_here) >= TINY ) call self%set_cmat_at(phys(1),phys(2),phys(3), comp_here)
                     else
                         phys(1) = -h + 1
                         phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
                         phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
-                        call self%set_cmat_at(phys(1),phys(2),phys(3), conjg(self%cmat_exp(h,k,m)))
+                        if( abs(comp_here) >= TINY ) call self%set_cmat_at(phys(1),phys(2),phys(3), conjg(comp_here))
                     endif
-                    self%rho(phys(1),phys(2),phys(3)) = self%rho_exp(h,k,m)
+                    self%rho(phys(1),phys(2),phys(3)) = rho_here
                 end do
             end do
         end do
         !$omp end parallel do
+        if( allocated(rho_shell_sum) ) deallocate(rho_shell_sum, rho_shell_mean, rho_shell_cnt)
     end subroutine compress_exp
 
     subroutine expand_exp( self )
@@ -516,6 +660,7 @@ contains
         class(reconstructor), intent(inout) :: self !< this instance
         if( allocated(self%rho_exp)  ) deallocate(self%rho_exp)
         if( allocated(self%cmat_exp) ) deallocate(self%cmat_exp)
+        self%nn_inserted = .false.
     end subroutine dealloc_exp
 
     !>  \brief  is a destructor
