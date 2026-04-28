@@ -12,6 +12,8 @@ type, extends(pca) :: ppca
     real, allocatable :: W(:,:)      !< loading matrix
     real, allocatable :: E_zn(:,:)   !< posterior latent means
     real, allocatable :: data(:,:)   !< reconstructed centered data
+    real, allocatable :: eigvals(:)        !< retained covariance eigenvalues eig(W W^T + sigma2 I)
+    real, allocatable :: signal_eigvals(:) !< retained signal eigenvalues eig(W W^T)
     real, allocatable :: Wt(:,:), M(:,:), Minv(:,:), MinvWt(:,:), S_xz(:,:), S_zz(:,:), Iq(:,:)
     real              :: sigma2 = 1.
     real(dp)          :: xnorm2_total = 0._dp
@@ -20,6 +22,9 @@ type, extends(pca) :: ppca
   contains
     procedure :: new      => new_ppca
     procedure :: get_feat => get_feat_ppca
+    procedure :: get_eigvals => get_eigvals_ppca
+    procedure :: get_signal_eigvals => get_signal_eigvals_ppca
+    procedure :: get_sigma2 => get_sigma2_ppca
     procedure :: generate => generate_ppca
     procedure :: master   => master_ppca
     procedure :: set_verbose => set_verbose_ppca
@@ -29,6 +34,7 @@ type, extends(pca) :: ppca
     procedure :: reconstruct_external => reconstruct_external_ppca
     procedure, private :: init
     procedure, private :: em_opt
+    procedure, private :: calc_eigvals
     procedure :: kill     => kill_ppca
 end type
 
@@ -42,6 +48,7 @@ contains
         self%D = D
         self%Q = Q
         allocate(self%W(self%D,self%Q), self%E_zn(self%Q,self%N), self%data(self%D,self%N), &
+                 self%eigvals(self%Q), self%signal_eigvals(self%Q), &
                  self%Wt(self%Q,self%D), self%M(self%Q,self%Q), self%Minv(self%Q,self%Q), &
                  self%MinvWt(self%Q,self%D), self%S_xz(self%D,self%Q), self%S_zz(self%Q,self%Q), &
                  self%Iq(self%Q,self%Q), source=0.)
@@ -54,6 +61,31 @@ contains
         real, allocatable          :: feat(:)
         allocate(feat(self%Q), source=self%E_zn(:,i))
     end function get_feat_ppca
+
+    function get_eigvals_ppca( self ) result( eigvals )
+        class(ppca), intent(in) :: self
+        real, allocatable :: eigvals(:)
+        if( allocated(self%eigvals) )then
+            allocate(eigvals(size(self%eigvals)), source=self%eigvals)
+        else
+            allocate(eigvals(0))
+        endif
+    end function get_eigvals_ppca
+
+    function get_signal_eigvals_ppca( self ) result( eigvals )
+        class(ppca), intent(in) :: self
+        real, allocatable :: eigvals(:)
+        if( allocated(self%signal_eigvals) )then
+            allocate(eigvals(size(self%signal_eigvals)), source=self%signal_eigvals)
+        else
+            allocate(eigvals(0))
+        endif
+    end function get_signal_eigvals_ppca
+
+    real(dp) function get_sigma2_ppca( self ) result( sigma2 )
+        class(ppca), intent(in) :: self
+        sigma2 = real(self%sigma2, dp)
+    end function get_sigma2_ppca
 
     subroutine generate_ppca( self, i, avg, dat )
         class(ppca), intent(inout) :: self
@@ -103,6 +135,7 @@ contains
             endif
             sigma_prev = real(self%sigma2,dp)
         enddo
+        call self%calc_eigvals()
         self%data = matmul(self%W, self%E_zn)
         call system_clock(t1)
         if( self%verbose )then
@@ -257,6 +290,8 @@ contains
         self%sigma2 = real(max(mean_sq * 0.1_dp, real(DTINY,dp)))
         self%E_zn   = 0.
         self%data   = 0.
+        self%eigvals = 0.
+        self%signal_eigvals = 0.
     end subroutine init
 
     subroutine em_opt( self, pcavecs, w_change )
@@ -342,12 +377,37 @@ contains
         deallocate(w_old, wt_w)
     end subroutine em_opt
 
+    subroutine calc_eigvals( self )
+        class(ppca), intent(inout) :: self
+        real(dp), allocatable :: gram(:,:), rot(:,:), vals(:)
+        integer :: i, nrot
+        if( self%Q <= 0 ) return
+        allocate(gram(self%Q,self%Q), rot(self%Q,self%Q), vals(self%Q), source=0._dp)
+        gram = matmul(transpose(real(self%W,dp)), real(self%W,dp))
+        gram = 0.5_dp * (gram + transpose(gram))
+        nrot = 0
+        call jacobi(gram, self%Q, self%Q, vals, rot, nrot)
+        call eigsrt(vals, rot, self%Q, self%Q)
+        vals = max(vals, 0._dp)
+        self%signal_eigvals = real(vals)
+        self%eigvals        = real(vals + real(self%sigma2,dp))
+        self%W    = real(matmul(real(self%W,dp), rot))
+        self%E_zn = real(matmul(transpose(rot), real(self%E_zn,dp)))
+        self%Wt   = transpose(self%W)
+        do i = 1,self%Q
+            if( self%eigvals(i) < self%sigma2 ) self%eigvals(i) = self%sigma2
+        enddo
+        deallocate(gram, rot, vals)
+    end subroutine calc_eigvals
+
     subroutine kill_ppca( self )
         class(ppca), intent(inout) :: self
         if( self%existence )then
             if( allocated(self%W)      ) deallocate(self%W)
             if( allocated(self%E_zn)   ) deallocate(self%E_zn)
             if( allocated(self%data)   ) deallocate(self%data)
+            if( allocated(self%eigvals) ) deallocate(self%eigvals)
+            if( allocated(self%signal_eigvals) ) deallocate(self%signal_eigvals)
             if( allocated(self%Wt)     ) deallocate(self%Wt)
             if( allocated(self%M)      ) deallocate(self%M)
             if( allocated(self%Minv)   ) deallocate(self%Minv)

@@ -23,6 +23,13 @@ public :: create_cls_split_strategy
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: CLS_SPLIT_ICM_MAXITS = 10
+logical, parameter :: L_CLS_SPLIT_USE_ICM_NSELECT = .true.
+real,    parameter :: CLS_SPLIT_ICM_BETA_FRAC = 0.35
+real,    parameter :: CLS_SPLIT_ICM_COMPLEXITY_FRAC = 0.50
+real,    parameter :: CLS_SPLIT_ICM_COUNT_PRIOR_FRAC = 0.05
+real,    parameter :: CLS_SPLIT_ICM_BALANCE_FRAC = 0.10
+
 type, abstract :: cls_split_strategy
 contains
     procedure(init_interface),     deferred :: initialize
@@ -489,7 +496,7 @@ contains
         real, allocatable :: avg(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         integer, allocatable :: i_medoids(:)
-        integer :: nptcls, npix, nsplit_count, nsplit_spec, j, k, class_ldim(3)
+        integer :: nptcls, npix, j, k, class_ldim(3)
         real    :: class_moldiam, class_mskdiam, class_mskrad, dval, sdev_noise
         nsplit = 0
         if( allocated(pinds) ) deallocate(pinds)
@@ -552,19 +559,7 @@ contains
             nsplit = params%ncls
             call cluster_dmat(dmat, 'hclust', nsplit, i_medoids, labels)
         else
-            nsplit_count = particle_count_nsplit(nptcls, params%nptcls_per_subcls, params%nsubcls_min, params%nsubcls_max)
-            if( allocated(eigvals) )then
-                nsplit_spec = spectral_nsplit(eigvals, params%nsubcls_min, params%nsubcls_max)
-                nsplit = nsplit_spec
-                print *, 'SUGGESTED NSPLIT FROM SPECTRUM: ', nsplit_spec
-            else
-                nsplit_spec = params%nsubcls_max
-                nsplit      = max(params%nsubcls_min, min(params%nsubcls_max, nsplit_count))
-            endif
-            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto ncls: class=', cls_id, &
-                ' size=', nptcls, ' count_suggest=', nsplit_count, ' spectral_suggest=', nsplit_spec, ' selected=', nsplit
-            call flush(logfhandle)
-            call cluster_dmat(dmat, 'hclust', nsplit, i_medoids, labels)
+            call select_auto_nsplit(params, cls_id, coords, dmat, eigvals, nsplit, labels)
         endif
         call cavg_den%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
         allocate(raw_subavgs(nsplit), den_subavgs(nsplit))
@@ -693,6 +688,297 @@ contains
         end do
         nsplit = max(nlo, min(nhi, nsplit))
     end function spectral_nsplit
+
+    subroutine select_auto_nsplit(params, cls_id, coords, dmat, eigvals, nsplit, labels)
+        use simple_clustering_utils, only: cluster_dmat
+        type(parameters),         intent(in)    :: params
+        integer,                  intent(in)    :: cls_id
+        real,                     intent(in)    :: coords(:,:), dmat(:,:)
+        real,        allocatable, intent(in)    :: eigvals(:)
+        integer,                  intent(out)   :: nsplit
+        integer,     allocatable, intent(inout) :: labels(:)
+        integer, allocatable :: i_medoids(:), labels_icm(:)
+        integer :: nsplit_count, nsplit_spec, nsplit_legacy, nsplit_icm
+
+        nsplit_count  = particle_count_nsplit(size(dmat,1), params%nptcls_per_subcls, params%nsubcls_min, params%nsubcls_max)
+        nsplit_legacy = nsplit_count
+        nsplit_spec   = params%nsubcls_max
+        if( allocated(eigvals) )then
+            nsplit_spec   = spectral_nsplit(eigvals, params%nsubcls_min, params%nsubcls_max)
+            nsplit_legacy = nsplit_spec
+        endif
+
+        call select_nsplit_icm(params, cls_id, coords, dmat, nsplit_count, nsplit_icm, labels_icm)
+        if( L_CLS_SPLIT_USE_ICM_NSELECT )then
+            nsplit = nsplit_icm
+            if( allocated(labels) ) deallocate(labels)
+            allocate(labels(size(labels_icm)), source=labels_icm)
+        else
+            nsplit = nsplit_legacy
+            call cluster_dmat(dmat, 'hclust', nsplit, i_medoids, labels)
+        endif
+
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto ncls: class=', cls_id, &
+            ' size=', size(dmat,1), ' count_suggest=', nsplit_count, ' spectral_suggest=', nsplit_spec, &
+            ' icm_suggest=', nsplit_icm, ' selected=', nsplit
+        call flush(logfhandle)
+
+        if( allocated(i_medoids)  ) deallocate(i_medoids)
+        if( allocated(labels_icm) ) deallocate(labels_icm)
+    end subroutine select_auto_nsplit
+
+    subroutine select_nsplit_icm(params, cls_id, coords, dmat, nsplit_count, nsplit, labels)
+        use simple_clustering_utils, only: cluster_dmat
+        type(parameters),         intent(in)    :: params
+        integer,                  intent(in)    :: cls_id, nsplit_count
+        real,                     intent(in)    :: coords(:,:), dmat(:,:)
+        integer,                  intent(out)   :: nsplit
+        integer,     allocatable, intent(inout) :: labels(:)
+        integer, allocatable :: labels_trial(:), labels_best(:), medoids(:), neighbors(:,:)
+        real,    allocatable :: unary(:,:)
+        real :: beta, score, best_score, data_e, potts_e, complexity_e, balance_e
+        integer :: k, k_trial, nlo, nhi, maxnn
+        nlo = max(1, params%nsubcls_min)
+        nhi = min(max(nlo, params%nsubcls_max), size(dmat,1))
+        best_score = huge(best_score)
+        nsplit = nlo
+        if( allocated(labels) ) deallocate(labels)
+        maxnn = min(max(1, params%k_nn), max(1, size(dmat,1) - 1))
+        call build_cls_split_knn_graph(dmat, maxnn, neighbors)
+        do k = nlo, nhi
+            k_trial = k
+            if( k_trial == 1 )then
+                allocate(labels_trial(size(dmat,1)), medoids(1), source=1)
+                medoids(1) = cls_split_global_medoid(dmat)
+            else
+                call cluster_dmat(dmat, 'hclust', k_trial, medoids, labels_trial)
+            endif
+            call recompute_cls_split_medoids(dmat, labels_trial, k_trial, medoids)
+            call build_cls_split_unary(dmat, medoids, unary)
+            beta = estimate_cls_split_icm_beta(unary)
+            if( beta > DTINY ) call refine_cls_split_labels_icm(unary, neighbors, beta, labels_trial)
+            call score_cls_split_icm_model(unary, neighbors, beta, labels_trial, nsplit_count, size(coords,1), &
+                score, data_e, potts_e, complexity_e, balance_e)
+            write(logfhandle,'(A,I8,A,I8,A,F10.4,A,F10.4,A,F10.4,A,F10.4,A,F10.4,A,F10.4)') &
+                'Cls split ICM model: class=', cls_id, ' nsubcls=', k_trial, ' score=', score, ' data=', data_e, &
+                ' potts=', potts_e, ' complexity=', complexity_e, ' balance=', balance_e, ' beta=', beta
+            call flush(logfhandle)
+            if( score < best_score )then
+                best_score = score
+                nsplit = k_trial
+                if( allocated(labels_best) ) deallocate(labels_best)
+                allocate(labels_best(size(labels_trial)), source=labels_trial)
+            endif
+            if( allocated(labels_trial) ) deallocate(labels_trial)
+            if( allocated(medoids)      ) deallocate(medoids)
+            if( allocated(unary)        ) deallocate(unary)
+        end do
+        if( allocated(labels_best) )then
+            allocate(labels(size(labels_best)), source=labels_best)
+            deallocate(labels_best)
+        else
+            nsplit = max(nlo, min(nhi, nsplit_count))
+            allocate(labels(size(dmat,1)), source=1)
+        endif
+        if( allocated(neighbors) ) deallocate(neighbors)
+        write(logfhandle,'(A,I8,A,I8,A,F10.4)') 'Cls split ICM selected: class=', cls_id, &
+            ' nsubcls=', nsplit, ' score=', best_score
+        call flush(logfhandle)
+    end subroutine select_nsplit_icm
+
+    subroutine build_cls_split_knn_graph(dmat, maxnn, neighbors)
+        real,                 intent(in)  :: dmat(:,:)
+        integer,              intent(in)  :: maxnn
+        integer, allocatable, intent(out) :: neighbors(:,:)
+        real    :: best_d(maxnn), dval
+        integer :: i, j, pos, shift, n
+        n = size(dmat,1)
+        allocate(neighbors(maxnn,n), source=0)
+        if( n <= 1 ) return
+        do i = 1, n
+            best_d = huge(best_d)
+            do j = 1, n
+                if( j == i ) cycle
+                dval = dmat(i,j)
+                do pos = 1, maxnn
+                    if( dval >= best_d(pos) ) cycle
+                    do shift = maxnn, pos + 1, -1
+                        best_d(shift) = best_d(shift - 1)
+                        neighbors(shift,i) = neighbors(shift - 1,i)
+                    end do
+                    best_d(pos) = dval
+                    neighbors(pos,i) = j
+                    exit
+                end do
+            end do
+        end do
+    end subroutine build_cls_split_knn_graph
+
+    integer function cls_split_global_medoid(dmat) result(medoid)
+        real, intent(in) :: dmat(:,:)
+        real :: best_sum, cur_sum
+        integer :: i
+        medoid = 1
+        best_sum = huge(best_sum)
+        do i = 1, size(dmat,1)
+            cur_sum = sum(dmat(i,:))
+            if( cur_sum < best_sum )then
+                best_sum = cur_sum
+                medoid = i
+            endif
+        end do
+    end function cls_split_global_medoid
+
+    subroutine recompute_cls_split_medoids(dmat, labels, nclust, medoids)
+        real,    intent(in)    :: dmat(:,:)
+        integer, intent(in)    :: labels(:), nclust
+        integer, intent(inout) :: medoids(:)
+        real :: best_sum, cur_sum
+        integer :: c, i, j
+        do c = 1, nclust
+            best_sum = huge(best_sum)
+            if( c <= size(medoids) ) medoids(c) = max(1, min(size(dmat,1), medoids(c)))
+            do i = 1, size(labels)
+                if( labels(i) /= c ) cycle
+                cur_sum = 0.
+                do j = 1, size(labels)
+                    if( labels(j) == c ) cur_sum = cur_sum + dmat(i,j)
+                end do
+                if( cur_sum < best_sum )then
+                    best_sum = cur_sum
+                    medoids(c) = i
+                endif
+            end do
+        end do
+    end subroutine recompute_cls_split_medoids
+
+    subroutine build_cls_split_unary(dmat, medoids, unary)
+        real,                 intent(in)  :: dmat(:,:)
+        integer,              intent(in)  :: medoids(:)
+        real,    allocatable, intent(out) :: unary(:,:)
+        integer :: c
+        allocate(unary(size(dmat,1),size(medoids)), source=0.)
+        do c = 1, size(medoids)
+            unary(:,c) = dmat(:,medoids(c))
+        end do
+    end subroutine build_cls_split_unary
+
+    real function estimate_cls_split_icm_beta(unary) result(beta)
+        real, intent(in) :: unary(:,:)
+        real :: best_e, second_e, cur_e
+        integer :: i, c, n
+        beta = 0.
+        n = 0
+        if( size(unary,2) < 2 ) return
+        do i = 1, size(unary,1)
+            best_e = huge(best_e)
+            second_e = huge(second_e)
+            do c = 1, size(unary,2)
+                cur_e = unary(i,c)
+                if( cur_e < best_e )then
+                    second_e = best_e
+                    best_e = cur_e
+                else if( cur_e < second_e )then
+                    second_e = cur_e
+                endif
+            end do
+            if( second_e < huge(second_e) )then
+                beta = beta + max(0., second_e - best_e)
+                n = n + 1
+            endif
+        end do
+        if( n > 0 ) beta = CLS_SPLIT_ICM_BETA_FRAC * beta / real(n)
+    end function estimate_cls_split_icm_beta
+
+    subroutine refine_cls_split_labels_icm(unary, neighbors, beta, labels)
+        real,    intent(in)    :: unary(:,:), beta
+        integer, intent(in)    :: neighbors(:,:)
+        integer, intent(inout) :: labels(:)
+        integer, allocatable :: prev_labels(:), pops(:)
+        real :: e, best_e
+        integer :: iter, i, c, best_c, nchanged
+        if( size(unary,2) < 2 ) return
+        allocate(prev_labels(size(labels)), pops(size(unary,2)), source=0)
+        do iter = 1, CLS_SPLIT_ICM_MAXITS
+            prev_labels = labels
+            call cls_split_label_pops(prev_labels, size(unary,2), pops)
+            nchanged = 0
+            do i = 1, size(labels)
+                best_c = prev_labels(i)
+                best_e = huge(best_e)
+                do c = 1, size(unary,2)
+                    if( pops(prev_labels(i)) <= 1 .and. c /= prev_labels(i) ) cycle
+                    e = unary(i,c) + beta * cls_split_neighbor_cost(c, prev_labels, neighbors(:,i))
+                    if( e < best_e )then
+                        best_e = e
+                        best_c = c
+                    endif
+                end do
+                if( best_c /= prev_labels(i) ) nchanged = nchanged + 1
+                labels(i) = best_c
+            end do
+            if( nchanged == 0 ) exit
+        end do
+        deallocate(prev_labels, pops)
+    end subroutine refine_cls_split_labels_icm
+
+    real function cls_split_neighbor_cost(label, labels, neighs) result(cost)
+        integer, intent(in) :: label, labels(:), neighs(:)
+        integer :: i, ineigh
+        cost = 0.
+        do i = 1, size(neighs)
+            ineigh = neighs(i)
+            if( ineigh < 1 ) cycle
+            if( labels(ineigh) /= label ) cost = cost + 1.
+        end do
+    end function cls_split_neighbor_cost
+
+    subroutine score_cls_split_icm_model(unary, neighbors, beta, labels, nsplit_count, ndim, &
+        score, data_e, potts_e, complexity_e, balance_e)
+        real,    intent(in)  :: unary(:,:), beta
+        integer, intent(in)  :: neighbors(:,:), labels(:), nsplit_count, ndim
+        real,    intent(out) :: score, data_e, potts_e, complexity_e, balance_e
+        integer, allocatable :: pops(:)
+        real :: avg_data, avg_pop, pop_dev, count_dev
+        integer :: i, k
+        k = size(unary,2)
+        allocate(pops(k), source=0)
+        call cls_split_label_pops(labels, k, pops)
+        data_e = 0.
+        do i = 1, size(labels)
+            data_e = data_e + unary(i,labels(i))
+        end do
+        potts_e = 0.
+        do i = 1, size(labels)
+            potts_e = potts_e + cls_split_neighbor_cost(labels(i), labels, neighbors(:,i))
+        end do
+        potts_e = 0.5 * beta * potts_e
+        avg_data = max(data_e / real(max(1, size(labels))), DTINY)
+        complexity_e = CLS_SPLIT_ICM_COMPLEXITY_FRAC * real(max(1, ndim) * k) * &
+            log(real(max(2, size(labels)))) * avg_data
+        avg_pop = real(size(labels)) / real(max(1, k))
+        pop_dev = 0.
+        do i = 1, k
+            pop_dev = pop_dev + ((real(pops(i)) - avg_pop) / max(avg_pop, 1.))**2
+        end do
+        balance_e = CLS_SPLIT_ICM_BALANCE_FRAC * real(size(labels)) * avg_data * pop_dev
+        count_dev = abs(real(k - max(1, nsplit_count)))
+        balance_e = balance_e + CLS_SPLIT_ICM_COUNT_PRIOR_FRAC * real(size(labels)) * avg_data * count_dev
+        if( any(pops == 0) ) balance_e = balance_e + real(size(labels)) * max(1., avg_data)
+        score = data_e + potts_e + complexity_e + balance_e
+        deallocate(pops)
+    end subroutine score_cls_split_icm_model
+
+    subroutine cls_split_label_pops(labels, nclust, pops)
+        integer, intent(in)  :: labels(:), nclust
+        integer, intent(out) :: pops(:)
+        integer :: i
+        pops = 0
+        do i = 1, size(labels)
+            if( labels(i) < 1 .or. labels(i) > nclust ) cycle
+            pops(labels(i)) = pops(labels(i)) + 1
+        end do
+    end subroutine cls_split_label_pops
 
     subroutine sanitize_embedding_coords(mode, cls_id, coords)
         character(len=*), intent(in)    :: mode
