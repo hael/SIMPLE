@@ -288,31 +288,32 @@ contains
         class(oris),         intent(inout) :: eulspace
         integer,             intent(in)    :: state
         logical,             intent(in)    :: iseven
-        real(sp) :: hcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
-        real(sp) :: kcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
-        integer  :: iref_from, iref_to
+        real(sp) :: hcoords(self%pftsz, self%interpklim-self%kfromto(1)+1)
+        real(sp) :: kcoords(self%pftsz, self%interpklim-self%kfromto(1)+1)
+        integer  :: iref_from, iref_to, kproj(2)
         if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
         iref_from = (state - 1) * self%p_ptr%nspace + 1
         iref_to   = iref_from + self%p_ptr%nspace - 1
-        hcoords   = transpose(self%polar(1, self%kfromto(1):self%kfromto(2), 1:self%pftsz))
-        kcoords   = transpose(self%polar(2, self%kfromto(1):self%kfromto(2), 1:self%pftsz))
+        kproj     = [self%kfromto(1), self%interpklim]
+        hcoords   = transpose(self%polar(1, kproj(1):kproj(2), 1:self%pftsz))
+        kcoords   = transpose(self%polar(2, kproj(1):kproj(2), 1:self%pftsz))
         if( trim(self%p_ptr%mirr_proj).ne.'yes' )then
             ! extract all the slices
             if( iseven )then
-                call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, &
-                &hcoords, kcoords, self%pfts_refs_even(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+                call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
+                &hcoords, kcoords, self%pfts_refs_even(:, kproj(1):kproj(2), iref_from:iref_to))
             else
-                call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, &
-                &hcoords, kcoords, self%pfts_refs_odd(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+                call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
+                &hcoords, kcoords, self%pfts_refs_odd(:, kproj(1):kproj(2), iref_from:iref_to))
             endif
         else
             ! extract half the slices and generate the other half by mirroring
             if( iseven )then
-                call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, &
-                &hcoords, kcoords, self%pfts_refs_even(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+                call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
+                &hcoords, kcoords, self%pfts_refs_even(:, kproj(1):kproj(2), iref_from:iref_to))
             else
-                call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, self%kfromto, &
-                &hcoords, kcoords, self%pfts_refs_odd(:, self%kfromto(1):self%kfromto(2), iref_from:iref_to))
+                call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
+                &hcoords, kcoords, self%pfts_refs_odd(:, kproj(1):kproj(2), iref_from:iref_to))
             endif
         endif
     end subroutine vol_pad2ref_pfts

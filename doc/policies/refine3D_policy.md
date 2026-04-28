@@ -221,7 +221,7 @@ Whenever a current-volume reprojection model is generated, it is also materializ
 
 In distributed matching, all workers generate the same current-volume reference model, so only the first worker materializes the shared cache to avoid concurrent writes to the same handoff files.
 
-Volume reprojection only fills the active search range through `kfromto(2)`, including assembly-side reprojection handoffs. It must not try to anticipate a future iteration's interpolation limit; if the next iteration needs a different high-frequency range, that iteration rebuilds the reference model under its own settled settings.
+Generated polar reference sections are filled through the current run's interpolation limit. They do not try to anticipate a future iteration's interpolation limit; if the next iteration changes geometry or interpolation support, that iteration rebuilds the reference model under its own settled settings.
 
 Probabilistic modes are different. `prob_tab` and `prob_tab_neigh` consume `POLAR_REFS*` because they are separate worker programs and do not own a live volume-reprojection path. If a probabilistic pre-step is launched while `vol1..volN` is the current source, `prob_align` materializes `POLAR_REFS*` from those volumes before launching `prob_tab`. The subsequent matcher consumes the probabilistic assignment artifact. That is a probability-table handoff, not a declaration that all current matching input is file based.
 
