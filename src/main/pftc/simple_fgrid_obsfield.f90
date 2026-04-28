@@ -272,7 +272,7 @@ contains
         complex(dp),            intent(inout) :: pfts(:,:,:)
         real(dp),               intent(inout) :: ctf2(:,:,:)
         complex(dp) :: acc_num, cell_num
-        real(dp)    :: acc_den, wd, jac_w
+        real(dp)    :: acc_den, wd
         real(sp)    :: R(3,3), loc(3), px, py
         real(sp), allocatable :: w(:,:,:)
         integer     :: iproj, irot, k, kloc, pftsz, kfromto1
@@ -302,7 +302,7 @@ contains
         gl_lo1   = self%grid_lims(1,1); gl_hi1 = self%grid_lims(1,2)
         gl_lo2   = self%grid_lims(2,1); gl_hi2 = self%grid_lims(2,2)
         gl_lo3   = self%grid_lims(3,1); gl_hi3 = self%grid_lims(3,2)
-        !$omp parallel default(shared) private(iproj,R,k,kloc,irot,px,py,loc,w,acc_num,acc_den,wd,jac_w,&
+        !$omp parallel default(shared) private(iproj,R,k,kloc,irot,px,py,loc,w,acc_num,acc_den,wd,&
         !$omp& win1_1,win1_2,win1_3,c1,c2,c3,a1,a2,a3,l,m,n,l_conj,cell_num) proc_bind(close)
         allocate(w(wdim_l,wdim_l,wdim_l))
         !$omp do schedule(static)
@@ -326,9 +326,6 @@ contains
                     call self%kb%apod_mat_3d_fast(loc, iwinsz_l, wdim_l, w)
                     acc_num = DCMPLX_ZERO
                     acc_den = 0.d0
-                    ! Match gen_clin_weights: polar samples carry the radial
-                    ! Jacobian because shell arc length grows with k.
-                    jac_w = real(k, dp)
                     do n = 1, wdim_l
                         c3 = win1_3 + n - 1
                         ! c3 bound is m,n-invariant within (l,m,n)-triple; hoisted to n-loop
@@ -356,8 +353,8 @@ contains
                             enddo
                         enddo
                     enddo
-                    pfts(irot,kloc,iproj) = jac_w * acc_num
-                    ctf2(irot,kloc,iproj) = jac_w * acc_den
+                    pfts(irot,kloc,iproj) = acc_num
+                    ctf2(irot,kloc,iproj) = acc_den
                 enddo
             enddo
         enddo
