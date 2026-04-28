@@ -557,7 +557,7 @@ contains
         call sanitize_distance_matrix(trim(params%pca_mode), cls_id, dmat)
         if( l_fixed_nsubcls )then
             nsplit = params%ncls
-            call cluster_dmat(dmat, 'hclust', nsplit, i_medoids, labels)
+            call cluster_dmat(dmat, 'kmed', nsplit, i_medoids, labels)
         else
             call select_auto_nsplit(params, cls_id, coords, dmat, eigvals, nsplit, labels)
         endif
@@ -715,7 +715,7 @@ contains
             allocate(labels(size(labels_icm)), source=labels_icm)
         else
             nsplit = nsplit_legacy
-            call cluster_dmat(dmat, 'hclust', nsplit, i_medoids, labels)
+            call cluster_dmat(dmat, 'kmed', nsplit, i_medoids, labels)
         endif
 
         write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto ncls: class=', cls_id, &
@@ -751,7 +751,7 @@ contains
                 allocate(labels_trial(size(dmat,1)), medoids(1), source=1)
                 medoids(1) = cls_split_global_medoid(dmat)
             else
-                call cluster_dmat(dmat, 'hclust', k_trial, medoids, labels_trial)
+                call cluster_dmat(dmat, 'kmed', k_trial, medoids, labels_trial)
             endif
             call recompute_cls_split_medoids(dmat, labels_trial, k_trial, medoids)
             call build_cls_split_unary(dmat, medoids, unary)
