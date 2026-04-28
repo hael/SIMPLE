@@ -234,7 +234,6 @@ contains
 
     subroutine distr_execute_iteration( self, params, build, cline, converged )
         use simple_stream_utils,         only: terminate_stream
-        use simple_commanders_mkcavgs,   only: commander_cavgassemble
         use simple_commanders_euclid,    only: commander_calc_group_sigmas
         use simple_commanders_prob,      only: commander_prob_align2D
         class(cluster2D_distr_strategy), intent(inout) :: self
@@ -242,11 +241,9 @@ contains
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         logical,                         intent(out)   :: converged
-        type(commander_cavgassemble)      :: xcavgassemble
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_prob_align2D)      :: xprob_align2D
-        type(cmdline)                     :: cline_cavgassemble, cline_calc_sigma, cline_prob_align
-        type(string)                      :: str_iter
+        type(cmdline)                     :: cline_calc_sigma, cline_prob_align
         real                              :: frac_srch_space
         call self%conv%print_iteration(params%which_iter)
         ! Update job description
@@ -260,6 +257,7 @@ contains
         call self%job_descr%set('which_iter', int2str(params%which_iter))
         call self%job_descr%set('extr_iter',  int2str(params%extr_iter))
         call self%job_descr%set('frcs',       FRCS_FILE)
+        call cleanup_distributed_iteration_artifacts(params)
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
@@ -279,18 +277,7 @@ contains
         call build%spproj%merge_algndocs(params%nptcls, params%nparts, 'ptcl2D', ALGN_FBODY)
         ! Assemble class averages
         if( trim(params%restore_cavgs) .eq. 'yes' )then
-            str_iter   = int2str_pad(params%which_iter, 3)
-            params%refs       = CAVGS_ITER_FBODY // str_iter%to_char()            // MRC_EXT
-            params%refs_even  = CAVGS_ITER_FBODY // str_iter%to_char() // '_even' // MRC_EXT
-            params%refs_odd   = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // MRC_EXT
-            call cline%set('refs', params%refs)
-            cline_cavgassemble = cline
-            call cline_cavgassemble%set('prg',  'cavgassemble')
-            call cline_cavgassemble%delete('which_iter')
-            call cline_cavgassemble%set('refs', params%refs)
-            call cline_cavgassemble%set('nthr', self%nthr_master)
-            call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
-            call xcavgassemble%execute(cline_cavgassemble)
+            call run_distributed_cavg_assembly(params, cline, self%nthr_master)
         endif
         ! Sigma2 consolidation
         if( params%cc_objfun==OBJFUN_EUCLID )then
@@ -397,6 +384,45 @@ contains
         call cline_scalerefs%kill
         call refs_sc%kill
     end subroutine init_cluster2D_refs
+
+    subroutine cleanup_distributed_iteration_artifacts( params )
+        type(parameters), intent(in) :: params
+        call del_files(DIST_FBODY,      params%nparts, ext='.dat')
+        call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
+        call del_file(DIST_FBODY//'.dat')
+        call del_file(ASSIGNMENT_FBODY//'.dat')
+        if( trim(params%restore_cavgs) == 'yes' .and. (params%startit <= 1 .or. .not. params%l_update_frac) )then
+            call del_files('cavgs_even_part',     params%nparts, ext=MRC_EXT)
+            call del_files('cavgs_odd_part',      params%nparts, ext=MRC_EXT)
+            call del_files('ctfsqsums_even_part', params%nparts, ext=MRC_EXT)
+            call del_files('ctfsqsums_odd_part',  params%nparts, ext=MRC_EXT)
+        endif
+    end subroutine cleanup_distributed_iteration_artifacts
+
+    subroutine run_distributed_cavg_assembly( params, cline, nthr_master )
+        use simple_commanders_mkcavgs, only: commander_cavgassemble
+        use simple_stream_utils,       only: terminate_stream
+        type(parameters), intent(inout) :: params
+        type(cmdline),    intent(inout) :: cline
+        integer,          intent(in)    :: nthr_master
+        type(commander_cavgassemble) :: xcavgassemble
+        type(cmdline)                :: cline_cavgassemble
+        type(string)                 :: str_iter
+        str_iter   = int2str_pad(params%which_iter, 3)
+        params%refs      = CAVGS_ITER_FBODY // str_iter%to_char()            // MRC_EXT
+        params%refs_even = CAVGS_ITER_FBODY // str_iter%to_char() // '_even' // MRC_EXT
+        params%refs_odd  = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // MRC_EXT
+        call cline%set('refs', params%refs)
+        cline_cavgassemble = cline
+        call cline_cavgassemble%set('prg',  'cavgassemble')
+        call cline_cavgassemble%delete('which_iter')
+        call cline_cavgassemble%set('refs', params%refs)
+        call cline_cavgassemble%set('nthr', nthr_master)
+        call terminate_stream(params, 'SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
+        call xcavgassemble%execute(cline_cavgassemble)
+        call cline_cavgassemble%kill
+        call str_iter%kill
+    end subroutine run_distributed_cavg_assembly
 
     subroutine init_tseries_refs( cline, params, build, cline_make_cavgs, l_scale_inirefs )
         use simple_procimgstk, only: selection_from_tseries_imgfile

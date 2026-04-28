@@ -264,30 +264,8 @@ contains
         end subroutine set_lplims
 
         subroutine set_sampling
-            if( cline%defined('nsample') )then
-                if( params%nsample < 1 ) THROW_HARD('nsample must be >= 1 for abinitio2D sampled update')
-                nsample_target_2D = params%nsample
-            else
-                nsample_target_2D = NPTCLS2SAMPLE_2D
-            endif
-            nptcls_eff                 = spproj%count_state_gt_zero()
-            stage_parms(:)%max_cls_pop = 0
-            stage_parms(:)%nptcls      = min(nptcls_eff, nsample_target_2D)
-            if( nptcls_eff > 0 )then
-                stage_parms(:)%update_frac   = min(1.0, real(stage_parms(1)%nptcls) / real(nptcls_eff))
-                stage_parms(:)%l_update_frac = stage_parms(:)%update_frac < 0.99
-            else
-                stage_parms(:)%update_frac   = 1.0
-                stage_parms(:)%l_update_frac = .false.
-            endif
-            stage_parms(:)%l_sticky_sampling = .false.
-            stage_parms(:)%l_frac_restore    = stage_parms(:)%l_update_frac
-            if( nstages >= STICKY_SAMPL_STAGE )then
-                stage_parms(STICKY_SAMPL_STAGE:min(STOCH_SAMPL_STAGE-1,nstages))%l_sticky_sampling = stage_parms(STICKY_SAMPL_STAGE:min(STOCH_SAMPL_STAGE-1,nstages))%l_update_frac
-            endif
-            if( FRAC_UPDATE_STAGE > 1 )then
-                stage_parms(1:min(FRAC_UPDATE_STAGE-1,nstages))%l_frac_restore = .false.
-            endif
+            nptcls_eff = spproj%count_state_gt_zero()
+            call set_abinitio2D_sampling_policy(params, stage_parms, nstages, nptcls_eff, nsample_target_2D)
         end subroutine set_sampling
 
         subroutine prep_command_lines( cline )

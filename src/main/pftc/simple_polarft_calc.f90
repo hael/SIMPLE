@@ -183,7 +183,7 @@ type :: polarft_calc
     procedure          :: polar_cavger_insert_ptcls_obsfield
     procedure          :: polar_cavger_write_obsfield_parts
     procedure          :: polar_cavger_assemble_obsfields_from_parts
-    procedure          :: polar_cavger_extract_obsfields
+    procedure          :: polar_cavger_reproject_obsfields
     procedure          :: polar_cavger_kill
     procedure          :: center_3Dpolar_refs
     ! ===== RESTORE: simple_polarft_ops_restore.f90
@@ -753,10 +753,10 @@ interface
         class(oris), target, intent(inout) :: reforis
     end subroutine polar_cavger_assemble_obsfields_from_parts
 
-    module subroutine polar_cavger_extract_obsfields( self, reforis )
+    module subroutine polar_cavger_reproject_obsfields( self, reforis )
         class(polarft_calc), intent(inout) :: self
         class(oris), target, intent(inout) :: reforis
-    end subroutine polar_cavger_extract_obsfields
+    end subroutine polar_cavger_reproject_obsfields
 
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self

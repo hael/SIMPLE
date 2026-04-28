@@ -2,7 +2,9 @@
 
 ## Status
 
-This document is a proposal, not a description of current behavior.
+This draft has been superseded by `doc/policies/abinitio2D_policy.md`.
+
+The remaining text is retained as design background, not as the current policy authority.
 
 It defines a 2D scheme that mirrors the current 3D importance-sampling and fractional-update policy while respecting the main differences of `abinitio2D`:
 

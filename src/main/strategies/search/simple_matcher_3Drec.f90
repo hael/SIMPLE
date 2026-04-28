@@ -310,7 +310,7 @@ contains
             if( DEBUG ) t_grid = t_grid + toc(t)
         end do
         ! Normalize polar references
-        call build%pftc%polar_cavger_extract_obsfields(build%eulspace)
+        call build%pftc%polar_cavger_reproject_obsfields(build%eulspace)
         call build%pftc%polar_cavger_normalize_obsfield_refs(build%eulspace, cline, update_frac_eff)
         if( DEBUG )t_tot = toc(t0)
         ! Write

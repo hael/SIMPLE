@@ -326,12 +326,12 @@ contains
                 call obs_part%kill
             enddo
         enddo
-        call self%polar_cavger_extract_obsfields(reforis)
+        call self%polar_cavger_reproject_obsfields(reforis)
         call obs_part%kill
         call fname%kill
     end subroutine polar_cavger_assemble_obsfields_from_parts
 
-    module subroutine polar_cavger_extract_obsfields( self, reforis )
+    module subroutine polar_cavger_reproject_obsfields( self, reforis )
         class(polarft_calc), intent(inout) :: self
         class(oris), target, intent(inout) :: reforis
         complex(dp), allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:)
@@ -340,7 +340,7 @@ contains
         real(sp) :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
         integer :: kspan(2), kspan_len, nrefs, noris, nspace_refs
         integer :: istate, base
-        if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_extract_obsfields')
+        if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_reproject_obsfields')
         nspace_refs = self%p_ptr%nspace
         noris = reforis%get_noris()
         if( reforis%isthere('mirr') )then
@@ -349,7 +349,7 @@ contains
             nrefs = noris
         endif
         nrefs = min(nrefs, nspace_refs)
-        if( nrefs < 1 ) THROW_HARD('no references available; polar_cavger_extract_obsfields')
+        if( nrefs < 1 ) THROW_HARD('no references available; polar_cavger_reproject_obsfields')
         call self%polar_cavger_zero_pft_refs
         kspan     = [self%kfromto(1), self%interpklim]
         kspan_len = kspan(2) - kspan(1) + 1
@@ -367,7 +367,7 @@ contains
             self%ctf2_odd( :,kspan(1):kspan(2),base+1:base+nrefs) = ctf2_odd
         enddo
         deallocate(pfts_even, pfts_odd, ctf2_even, ctf2_odd)
-    end subroutine polar_cavger_extract_obsfields
+    end subroutine polar_cavger_reproject_obsfields
 
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self
