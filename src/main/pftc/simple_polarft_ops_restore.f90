@@ -380,7 +380,7 @@ contains
 
     ! 3D SECTION - Polar references are generated directly from the common lines of cartesian particles
 
-    module subroutine polar_cavger_merge_eos_and_norm_direct( self, reforis, cline, update_frac )
+    module subroutine polar_cavger_merge_eos_and_norm_obsfield( self, reforis, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
         type(cmdline),       intent(in)    :: cline
@@ -472,7 +472,7 @@ contains
         if( self%p_ptr%l_trail_rec )then
             call finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
         endif
-    end subroutine polar_cavger_merge_eos_and_norm_direct
+    end subroutine polar_cavger_merge_eos_and_norm_obsfield
 
     !>  \brief Generate the mirror slices & CTF2
     !!         iref runs through the unique half (un-mirrored references), the

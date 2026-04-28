@@ -300,13 +300,12 @@ contains
                     call build%pftc%polar_cavger_insert_ptcls_obsfield(build%eulspace, build%spproj_field, &
                         & build%pgrpsyms, batchsz, pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
                 case default
-                    call build%pftc%polar_cavger_insert_ptcls_direct(build%eulspace, build%spproj_field, &
-                        & build%pgrpsyms, batchsz, pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+                    THROW_HARD('unsupported POLAR mode for calc_polar_refs: '//trim(params%polar))
             end select
             if( DEBUG ) t_grid = t_grid + toc(t)
         end do
         ! Normalize polar references
-        call build%pftc%polar_cavger_merge_eos_and_norm_direct(build%eulspace, cline, params%update_frac)
+        call build%pftc%polar_cavger_merge_eos_and_norm_obsfield(build%eulspace, cline, params%update_frac)
         if( DEBUG )t_tot = toc(t0)
         ! Write
         call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))

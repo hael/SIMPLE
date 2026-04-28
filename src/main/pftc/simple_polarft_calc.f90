@@ -178,7 +178,6 @@ type :: polarft_calc
     procedure          :: polar_cavger_set_ref_pft
     procedure          :: polar_cavger_calc_pops
     procedure          :: polar_cavger_update_sums
-    procedure          :: polar_cavger_insert_ptcls_direct
     procedure          :: polar_cavger_insert_ptcls_obsfield
     procedure          :: polar_cavger_kill
     procedure          :: center_3Dpolar_refs
@@ -186,7 +185,7 @@ type :: polarft_calc
     procedure          :: polar_filterrefs
     procedure, private :: polar_cavger_calc_frc
     procedure          :: polar_cavger_merge_eos_and_norm
-    procedure          :: polar_cavger_merge_eos_and_norm_direct
+    procedure          :: polar_cavger_merge_eos_and_norm_obsfield
     procedure, private :: finalize_trail_rec
     procedure, private :: mirror_slices
     procedure, private :: calc_fsc
@@ -728,16 +727,6 @@ interface
         logical,           optional, intent(in)    :: is3d
     end subroutine polar_cavger_update_sums
 
-    module subroutine polar_cavger_insert_ptcls_direct( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
-        use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
-        class(polarft_calc),        intent(inout) :: self
-        class(oris),                intent(in)    :: eulspace
-        class(oris),  pointer,      intent(inout) :: ptcl_field
-        class(sym),                 intent(in)    :: symop
-        integer,                    intent(in)    :: nptcls, pinds(nptcls)
-        class(fplane_type), target, intent(inout) :: fpls(nptcls)
-    end subroutine polar_cavger_insert_ptcls_direct
-
     module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls, &
         &reforis_in, nspace_out )
         class(polarft_calc),        intent(inout) :: self
@@ -783,12 +772,12 @@ interface
         real,                intent(in)    :: update_frac
     end subroutine polar_cavger_merge_eos_and_norm
 
-    module subroutine polar_cavger_merge_eos_and_norm_direct( self, reforis, cline, update_frac )
+    module subroutine polar_cavger_merge_eos_and_norm_obsfield( self, reforis, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
-    end subroutine polar_cavger_merge_eos_and_norm_direct
+    end subroutine polar_cavger_merge_eos_and_norm_obsfield
 
     module subroutine finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
         class(polarft_calc),      intent(inout) :: self

@@ -2,19 +2,20 @@ submodule(simple_abinitio_utils) simple_abinitio_controller
 implicit none
 #include "simple_local_flags.inc"
 
-real,    parameter :: UPDATE_FRAC_MIN                 = 0.1                  ! 10% of the particles updated each iteration
-integer, parameter :: NSPACE(8)                       = [500,500,1000,1000,2500,2500,5000,5000]
-integer, parameter :: SHC_REFINE_STAGE                = 1                    ! shc-style refinement stages 1-4
-integer, parameter :: PROB_REFINE_STAGE               = 5                    ! prob refinement stages 5-6
-integer, parameter :: PROB_NEIGH_REFINE_STAGE         = 7                    ! prob_neigh refinement stages 7-8
-integer, parameter :: STOCH_SAMPL_STAGE               = PROB_REFINE_STAGE    ! we switch from greedy to stochastic balanced class sampling when prob is switched on
-integer, parameter :: LPAUTO_STAGE                    = PROB_REFINE_STAGE + 1 ! we switch on automatic low-pass limit estimation after one prob stage
-integer, parameter :: REFINE3D_ROUTE_STD              = 1
-integer, parameter :: REFINE3D_ROUTE_CAVGS            = 2
-integer, parameter :: REFINE3D_ROUTE_POLAR            = 3
-integer, parameter :: REFINE3D_ROUTE_POLAR_CAVGS      = 4
-integer, parameter :: NSPACE_NEXT_NONE                = 0
-integer, parameter :: NEIGH_NSPACES(2)                = [126,5000]
+real,    parameter :: UPDATE_FRAC_MIN            = 0.1                   ! 10% of the particles updated each iteration
+integer, parameter :: NSPACE(8)                  = [500,500,1000,1000,2500,2500,5000,5000]
+integer, parameter :: NSPACE_CAVGS(8)            = [500,500,1000,1000,1000,1000,1000,1000] ! cavgs route: capped at 1000 from stage 3
+integer, parameter :: SHC_REFINE_STAGE           = 1                     ! shc-style refinement stages 1-4
+integer, parameter :: PROB_REFINE_STAGE          = 5                     ! prob refinement stages 5-6
+integer, parameter :: PROB_NEIGH_REFINE_STAGE    = 7                     ! prob_neigh refinement stages 7-8
+integer, parameter :: STOCH_SAMPL_STAGE          = PROB_REFINE_STAGE     ! we switch from greedy to stochastic balanced class sampling when prob is switched on
+integer, parameter :: LPAUTO_STAGE               = PROB_REFINE_STAGE + 1 ! we switch on automatic low-pass limit estimation after one prob stage
+integer, parameter :: REFINE3D_ROUTE_STD         = 1
+integer, parameter :: REFINE3D_ROUTE_CAVGS       = 2
+integer, parameter :: REFINE3D_ROUTE_POLAR       = 3
+integer, parameter :: REFINE3D_ROUTE_POLAR_CAVGS = 4
+integer, parameter :: NSPACE_NEXT_NONE           = 0
+integer, parameter :: NEIGH_NSPACES(2)           = [126,5000]
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
@@ -46,7 +47,7 @@ contains
     logical function polar_mode_remaps_refs( mode )
         character(len=*), intent(in) :: mode
         select case(trim(mode))
-            case('direct','obsfield')
+            case('obsfield')
                 polar_mode_remaps_refs = .true.
             case default
                 polar_mode_remaps_refs = .false.
@@ -81,7 +82,7 @@ contains
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_automsk_policy( cfg, params, istage, route )
-        call set_refine3D_stage_controls( cfg, params, istage )
+        call set_refine3D_stage_controls( cfg, params, istage, route )
         call apply_refine3D_route_overrides( cfg, params, istage, route )
         call set_refine3D_next_space( cfg, params, istage, route )
     end subroutine build_refine3D_stage_cfg
@@ -142,7 +143,12 @@ contains
         else if( istage < PROB_NEIGH_REFINE_STAGE )then
             cfg%refine = 'prob'
         else
-            cfg%refine = 'prob_neigh'
+            ! cavgs routes cap at prob (never prob_neigh)
+            if( route == REFINE3D_ROUTE_CAVGS .or. route == REFINE3D_ROUTE_POLAR_CAVGS )then
+                cfg%refine = 'prob'
+            else
+                cfg%refine = 'prob_neigh'
+            endif
         endif
         if( trim(params%multivol_mode).eq.'input_oris_fixed' )then
             cfg%refine = 'prob_state'
@@ -222,11 +228,16 @@ contains
         endif
     end subroutine set_refine3D_automsk_policy
 
-    subroutine set_refine3D_stage_controls( cfg, params, istage )
+    subroutine set_refine3D_stage_controls( cfg, params, istage, route )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        cfg%inspace = NSPACE(istage)
+        integer,                  intent(in)    :: route
+        if( route == REFINE3D_ROUTE_CAVGS .or. route == REFINE3D_ROUTE_POLAR_CAVGS )then
+            cfg%inspace = NSPACE_CAVGS(istage)
+        else
+            cfg%inspace = NSPACE(istage)
+        endif
         select case(istage)
             case(1,2)
                 cfg%imaxits       = MAXITS(istage)
@@ -290,7 +301,9 @@ contains
                     else
                         cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
                     endif
-                    cfg%inspace = NSPACE(stage_last)
+                    ! remapping modes (obsfield/direct) resize refs onto the current space directly,
+                    ! so inspace should reflect the natural stage spacing (2500 at prob stages 5-6)
+                    if( .not. polar_mode_remaps_refs(params%polar) ) cfg%inspace = NSPACE(stage_last)
                 endif
         end select
         select case(cfg%refine%to_char())
@@ -331,7 +344,7 @@ contains
         call set_refine3D_gauref_policy( cfg_stage, params, istage )
         call set_refine3D_trailrec_policy( cfg_stage, params, istage )
         call set_refine3D_automsk_policy( cfg_stage, params, istage, route )
-        call set_refine3D_stage_controls( cfg_stage, params, istage )
+        call set_refine3D_stage_controls( cfg_stage, params, istage, route )
         call apply_refine3D_route_overrides( cfg_stage, params, istage, route )
         inspace = cfg_stage%inspace
     end function refine3D_stage_nspace

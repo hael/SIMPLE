@@ -243,7 +243,7 @@ type :: parameters
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
-    character(len=STDLEN)     :: polar='no'           !< Polar restoration mode(no|yes|direct|obsfield){no}
+    character(len=STDLEN)     :: polar='no'           !< Polar restoration mode(no|yes|obsfield){no}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
@@ -1630,11 +1630,7 @@ contains
         select case(trim(self%polar))
             case('no')
                 self%l_polar = .false.
-            case('yes','direct','obsfield')
-                self%l_polar = .true.
-            case('new')
-                ! Legacy spelling for the direct particle-to-polar path.
-                self%polar   = 'direct'
+            case('yes','obsfield')
                 self%l_polar = .true.
             case DEFAULT
                 THROW_HARD('Unsupported POLAR argument: '//trim(self%polar))

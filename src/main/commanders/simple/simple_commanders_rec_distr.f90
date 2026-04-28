@@ -10,7 +10,7 @@ type, extends(commander_base) :: commander_cartesian_volassemble
 end type commander_cartesian_volassemble
 
 type, extends(commander_base) :: commander_polar_volassemble
-  ! Polar reference assembly path for polar=yes|direct|obsfield.
+  ! Polar reference assembly path for polar=yes|obsfield.
   contains
     procedure :: execute => exec_polar_assembly
 end type commander_polar_volassemble
@@ -31,7 +31,7 @@ contains
         call build%init_params_and_build_general_tbox(cline, params)
         if( L_BENCH_GLOB ) t_tot = tic()
         ! Matchers write partition-local Cartesian partial reconstructions
-        ! (polar=no) or polar partial sums (polar=yes|direct|obsfield), while
+        ! (polar=no) or polar partial sums (polar=yes|obsfield), while
         ! the assembly commander owns shared-memory reduction and reference update.
         call set_bp_range3D(params, build, cline)
         nrefs = params%nspace * params%nstates
@@ -47,8 +47,8 @@ contains
             endif
         endif
         select case(trim(params%polar))
-            case('direct','obsfield')
-                call build%pftc%polar_cavger_merge_eos_and_norm_direct(build%eulspace, cline, update_frac_eff)
+            case('obsfield')
+                call build%pftc%polar_cavger_merge_eos_and_norm_obsfield(build%eulspace, cline, update_frac_eff)
             case('yes')
                 call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, update_frac_eff)
             case default

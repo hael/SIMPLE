@@ -341,7 +341,7 @@ contains
         subroutine maybe_init_reconstruction()
             if( .not. ctrl%do_write_partial_recs ) return
             if( ctrl%do_polar )then
-                if( polar_mode_direct_like() )then
+                if( trim(ctrl%polar_mode).eq.'obsfield' )then
                     call init_rec(params, build, batchsz_max, fpls)
                     call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
                 endif
@@ -355,7 +355,7 @@ contains
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
-                    case('direct','obsfield')
+                    case('obsfield')
                         call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
                             ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
                     case('yes')
@@ -434,11 +434,6 @@ contains
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
-                    case('direct')
-                        call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
-                            pinds(batch_start:batch_end), fpls(:batchsz))
-                        call b_ptr%pftc%polar_cavger_insert_ptcls_direct(b_ptr%eulspace, b_ptr%spproj_field, &
-                            b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
                     case('obsfield')
                         call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
                             pinds(batch_start:batch_end), fpls(:batchsz))
@@ -489,12 +484,7 @@ contains
         end subroutine maybe_write_orientations
 
         logical function polar_mode_direct_like()
-            select case(ctrl%polar_mode)
-                case('direct','obsfield')
-                    polar_mode_direct_like = .true.
-                case default
-                    polar_mode_direct_like = .false.
-            end select
+            polar_mode_direct_like = trim(ctrl%polar_mode).eq.'obsfield'
         end function polar_mode_direct_like
 
         subroutine prepare_partial_ref_output_space()
