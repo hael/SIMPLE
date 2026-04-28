@@ -577,7 +577,7 @@ contains
         integer      :: length, pos
         length    = fname%strlen_trim()
         fname_tmp = fname%to_char()
-        pos = scan(fname_tmp(1:length),PATH_SEPARATOR,back=.true.)
+        pos = scan(fname_tmp(1:length),'/\',back=.true.)
         if( pos == 0 )then
             new_fname = trim(fname_tmp)
         else
@@ -593,9 +593,9 @@ contains
         integer :: length, pos
         length    = fname%strlen_trim()
         fname_tmp = fname%to_char()
-        pos       = scan(fname_tmp(1:length),PATH_SEPARATOR,back=.true.)
+        pos       = scan(fname_tmp(1:length),'/\',back=.true.)
         if(pos == length)then !< case with trailling slash
-            pos = scan(fname_tmp(1:length-1),PATH_SEPARATOR,back=.true.)
+            pos = scan(fname_tmp(1:length-1),'/\',back=.true.)
         end if
         if( pos == 0 )then
             new_fname = trim(fname_tmp)
@@ -611,7 +611,7 @@ contains
         type(string) :: path
         integer      :: pos
         fname_tmp = fname%to_char()
-        pos       = scan(fname_tmp,PATH_SEPARATOR,back=.true.)
+        pos       = scan(fname_tmp,'/\',back=.true.)
         if( pos == 0 )then
             path = PATH_HERE
         else
@@ -1137,5 +1137,4 @@ contains
     end function get_relative_path
 
 end module simple_fileio
-
 

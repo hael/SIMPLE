@@ -44,7 +44,11 @@
 
 #include "starfile_filename.h"
 #include "starfile_error.h"
+
 #include <unistd.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 // Constructor with root, number and extension .............................
 void FileName::compose(const std::string &str, long int no, const std::string &ext, int numberlength)
@@ -412,9 +416,24 @@ size_t FileName::getFileSize() const
 
 int FileName::globFiles(std::vector<FileName> &files, bool do_clear) const
 {
+
     if (do_clear)
         files.clear();
 
+#ifdef _WIN32
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFile(this->c_str(), &findFileData);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            // Skip "." and ".."
+            std::string fname = findFileData.cFileName;
+            if (fname != "." && fname != "..")
+                files.push_back(fname);
+        } while (FindNextFile(hFind, &findFileData) != 0);
+        FindClose(hFind);
+    }
+    return files.size();
+#else
     glob_t glob_result;
     glob((*this).c_str(), GLOB_TILDE, NULL, &glob_result);
     for(unsigned long int i = 0; i < glob_result.gl_pathc; ++i)
@@ -422,8 +441,8 @@ int FileName::globFiles(std::vector<FileName> &files, bool do_clear) const
         files.push_back(std::string(glob_result.gl_pathv[i]));
     }
     globfree(&glob_result);
-
     return files.size();
+#endif
 }
 
 bool FileName::getTheOtherHalf(FileName &fn_out) const
@@ -488,7 +507,11 @@ int mktree(const FileName &fn_dir, mode_t mode)
         if (dir.size() == 0)
             continue;
 
+        #ifdef _WIN32
+        if ((mdret = mkdir(dir.c_str())) && errno != EEXIST)
+        #else
         if ((mdret = mkdir(dir.c_str(), mode)) && errno != EEXIST)
+        #endif
         {
             return mdret;
         }

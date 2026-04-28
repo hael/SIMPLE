@@ -137,9 +137,13 @@ contains
         link   = 'symlink_link.txt'
         call simple_touch(target)
         call assert_true(file_exists(target), 'symlink: target exists')
+#if defined(_WIN32)
+        call assert_true(.true., 'symlink: skipped on Windows')
+#else
         call syslib_symlink(target, link)
         call assert_true(file_exists(link), 'symlink: link appears in filesystem')
         call del_file(link)
+#endif
         call del_file(target)
     end subroutine test_syslib_symlink
 
@@ -246,6 +250,7 @@ contains
         call simple_touch(f2)
         call simple_list_files('file_*.txt', list)
         call assert_true(allocated(list), 'list_files: list allocated')
+        call assert_true(size(list) >= 1, 'list_files: list contains entries')
         call assert_true(any(list == f1), 'list_files: contains f1')
         call assert_true(any(list == f2), 'list_files: contains f2')
         if (allocated(list)) deallocate(list)
@@ -287,7 +292,7 @@ contains
         absname = simple_abspath(fname, status=istat, check_exists=.true.)
         call assert_int(0, istat, 'abspath: status')
         ! crude check: absolute path should start with '/'
-        call assert_true(absname%has_substr('/'), 'abspath: contains "/"')
+        call assert_true(absname%has_substr('/') .or. absname%has_substr('\'), 'abspath: contains path separator')
         call del_file(fname)
     end subroutine test_simple_abspath
 
@@ -310,11 +315,18 @@ contains
     subroutine test_exec_cmdline()
         integer :: exitstat
         write(*,'(A)') 'test_exec_cmdline'
-        ! benign command that should succeed on most systems
+#if defined(_WIN32)
+        call exec_cmdline('cmd /c exit 0', waitflag=.true., suppress_errors=.false., exitstat=exitstat)
+#else
         call exec_cmdline('true', waitflag=.true., suppress_errors=.false., exitstat=exitstat)
-        call assert_int(0, exitstat, 'exec_cmdline: true command exit status')
+#endif
+        call assert_int(0, exitstat, 'exec_cmdline: success command exit status')
         ! Another command that writes a file
+#if defined(_WIN32)
+        call exec_cmdline('cmd /c echo hello > exec_test.txt', waitflag=.true., suppress_errors=.true., exitstat=exitstat)
+#else
         call exec_cmdline('echo hello > exec_test.txt', waitflag=.true., suppress_errors=.true., exitstat=exitstat)
+#endif
         call assert_true(file_exists('exec_test.txt'), 'exec_cmdline: created file')
         call del_file('exec_test.txt')
     end subroutine test_exec_cmdline

@@ -44,6 +44,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <random>
 #include <iomanip>
 #include <fstream>
 #include <list>
@@ -1276,7 +1277,13 @@ void StarFileTable::printLabels(std::ostream &ost)
 
 void StarFileTable::randomiseOrder()
 {
-    std::random_shuffle(objects.begin(), objects.end());
+	#if __cplusplus >= 201103L
+	static std::random_device rd;
+	static std::mt19937 g(rd());
+	std::shuffle(objects.begin(), objects.end(), g);
+	#else
+	std::random_shuffle(objects.begin(), objects.end());
+	#endif
 }
 
 void StarFileTable::checkObjectID(long id, std::string caller) const

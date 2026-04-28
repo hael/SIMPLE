@@ -20,6 +20,7 @@ interface
         character(c_char),dimension(*),intent(in)  ::  dirname
     end function rmdir
 
+#if !defined(_WIN32)
     !! unlink() deletes a name from the filesystem. On success, zero is
     !! returned. On error, -1 is returned and errno is set.
     function unlink(pathname) bind(C, name="unlink")
@@ -27,6 +28,7 @@ interface
         integer(c_int) :: unlink
         character(c_char),dimension(*),intent(in) :: pathname
     end function unlink
+#endif
 
     !! mkdir() attempts to create a directory named pathname. mkdir returns zero
     !! on success, or -1 if an error occurred (in which case, errno is set
@@ -510,8 +512,6 @@ contains
             endif
             deallocate(path)
         end if
-        call tmpdir_str%kill
-        call path_str%kill
     end subroutine simple_mkdir
 
     !> \brief  Remove directory
@@ -558,6 +558,11 @@ contains
     subroutine simple_rmfile( f, status )
         class(*),          intent(in)  :: f
         integer, optional, intent(out) :: status
+
+#if defined(_WIN32) 
+        call del_file(f)
+        if (present(status)) status = 0
+#else
         character(kind=c_char,len=:), allocatable :: path
         integer :: io_status
         logical :: file_e
@@ -581,6 +586,7 @@ contains
             deallocate(path)
         end if
         if( present(status) ) status = io_status
+#endif
     end subroutine simple_rmfile
 
     !> ensure C-strings get converted to fortran-style strings
@@ -675,8 +681,17 @@ contains
         integer                    :: sz, funit, ios, i, nlines, pid
         pid     = getpid()
         tmpfile = '__simple_filelist_'//int2str(pid)//'__'
-        cmd     = 'ls -1f '//trim(pattern)//' > '//tmpfile%to_char()
+#if defined(_WIN32)
+        cmd = 'cmd /c dir /b "'//trim(pattern)//'" > "'//tmpfile%to_char()//'"'
+#else
+        cmd = 'ls -1f '//trim(pattern)//' > '//tmpfile%to_char()
+#endif
         call exec_cmdline( cmd, suppress_errors=.true.)
+        if( .not. file_exists(tmpfile) )then
+            if( allocated(list) ) deallocate(list)
+            allocate(list(0))
+            return
+        endif
         inquire(file=tmpfile%to_char(), size=sz)
         if( allocated(list) ) deallocate(list)
         if( sz > 0 )then
@@ -698,6 +713,7 @@ contains
             enddo
             close(funit, status='delete')
         else
+            allocate(list(0))
             open(newunit=funit, file=tmpfile%to_char())
             close(funit, status='delete')
         endif
@@ -718,12 +734,25 @@ contains
         if( present(chronological) ) l_chrono = chronological
         tmpfile = '__simple_filelist_'//int2str(part_glob)//'__'
         ! builds command
+#if defined(_WIN32)
+        if( l_chrono )then
+            cmd = 'powershell -NoProfile -Command "Get-ChildItem -Path '''//dir%to_char()//''' -File | Sort-Object LastWriteTime | Where-Object { $_.Name -match '''//adjustl(trim(regexp))//''' } | ForEach-Object { $_.Name }" > "'//tmpfile%to_char()//'"'
+        else
+            cmd = 'powershell -NoProfile -Command "Get-ChildItem -Path '''//dir%to_char()//''' -File | Where-Object { $_.Name -match '''//adjustl(trim(regexp))//''' } | ForEach-Object { $_.Name }" > "'//tmpfile%to_char()//'"'
+        endif
+#else
         if( l_chrono )then
             cmd = 'ls -1f -rt '//dir%to_char()//' | grep -E '''//adjustl(trim(regexp))//''' > '//tmpfile%to_char()
         else
             cmd = 'ls -1f '//dir%to_char()//' | grep -E '''//adjustl(trim(regexp))//''' > '//tmpfile%to_char()
         endif
+#endif
         call exec_cmdline(cmd, suppress_errors=.true.)
+        if( .not. file_exists(tmpfile) )then
+            if( allocated(list) ) deallocate(list)
+            allocate(list(0))
+            return
+        endif
         inquire(file=tmpfile%to_char(), size=sz)
         if( allocated(list) ) deallocate(list)
         if( sz > 0 )then
@@ -745,6 +774,7 @@ contains
             enddo
             close(funit, status='delete')
         else
+            allocate(list(0))
             open(newunit=funit, file=tmpfile%to_char())
             close(funit, status='delete')
         endif

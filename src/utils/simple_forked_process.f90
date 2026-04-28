@@ -92,6 +92,39 @@ module simple_forked_process
 
 contains
 
+  logical function is_posix_runtime()
+    character(len=64) :: envval
+    integer           :: status, length
+
+    call get_environment_variable('OS', value=envval, length=length, status=status)
+    if( status == 0 .and. length > 0 )then
+      if( index(adjustl(envval(:length)), 'Windows_NT') /= 0 )then
+        is_posix_runtime = .false.
+        return
+      endif
+    endif
+
+    call get_environment_variable('ComSpec', value=envval, length=length, status=status)
+    if( status == 0 .and. length > 0 )then
+      is_posix_runtime = .false.
+      return
+    endif
+
+    call get_environment_variable('SYSTEMROOT', value=envval, length=length, status=status)
+    if( status == 0 .and. length > 0 )then
+      is_posix_runtime = .false.
+      return
+    endif
+
+    call get_environment_variable('windir', value=envval, length=length, status=status)
+    if( status == 0 .and. length > 0 )then
+      is_posix_runtime = .false.
+      return
+    endif
+
+    is_posix_runtime = .true.
+  end function is_posix_runtime
+
   ! Fork a child process and begin execution. Optionally accept a new cline,
   ! name, logfile, and restart flag. In the child, redirect logfhandle if a
   ! logfile is given, call self%execute(), then exit. In the parent, record
@@ -106,6 +139,15 @@ contains
     if( present(logfile) ) self%logfile = logfile
     if( present(name)    ) self%name    = name
     if( present(cline)   ) self%cline   = cline
+    if( .not. is_posix_runtime() )then
+      self%pid      = -1
+      self%running  = .false.
+      self%failed   = .false.
+      self%stopped  = .false.
+      self%skipped  = .true.
+      return
+    endif
+    self%skipped = .false.
     self%pid = c_fork()
     if( self%pid < 0 ) then
       ! Fork failed — terminal error.
@@ -146,6 +188,7 @@ contains
   subroutine terminate( self )
     class(forked_process), intent(inout) :: self
     integer(kind=c_int)                  :: rc
+    if( self%pid < 0 ) return
     rc = c_kill(self%pid, SIGTERM)
     if( rc /= 0 ) THROW_HARD('Failed to send SIGTERM to forked child')
   end subroutine terminate
@@ -154,16 +197,17 @@ contains
   subroutine kill( self )
     class(forked_process), intent(inout) :: self
     integer(kind=c_int)                  :: rc
+    if( self%pid < 0 ) return
     rc = c_kill(self%pid, SIGKILL)
     if( rc /= 0 ) THROW_HARD('Failed to send SIGKILL to forked child')
   end subroutine kill
 
-  ! Mark the process as skipped, which will cause status() to return FORK_STATUS_SKIPPED
-  ! and prevent any future restarts. Does not send any signals or modify the running child 
-  ! process, so use in conjunction with terminate() or kill() as needed.
+  ! Mark the process as skipped, which will cause status() to return
+  ! FORK_STATUS_SKIPPED and prevent future restarts.
   subroutine skip( self )
     class(forked_process), intent(inout) :: self
-    self%skipped = .true.
+    self%skipped  = .true.
+    self%restart  = .false.
   end subroutine skip
 
   ! Default execute implementation used for testing. Installs a SIGTERM
@@ -194,7 +238,7 @@ contains
       select case( self%status() )
         case( FORK_STATUS_RUNNING, FORK_STATUS_RESTARTING )
           rc = c_usleep(FORK_POLL_TIME)
-        case( FORK_STATUS_STOPPED, FORK_STATUS_FAILED )
+        case( FORK_STATUS_STOPPED, FORK_STATUS_FAILED, FORK_STATUS_SKIPPED )
           exit
         case default
           THROW_HARD('Unknown fork status')
@@ -216,6 +260,10 @@ contains
     integer                              :: status_code
     options     = WNOHANG
     status_code = FORK_STATUS_RUNNING
+    if( self%skipped )then
+      status_code = FORK_STATUS_SKIPPED
+      return
+    endif
     if( self%running ) then
       rc = c_waitpid(self%pid, stat_loc, options)
       if( rc == self%pid ) then
@@ -233,9 +281,6 @@ contains
       self%n_restarts = 0
       status_code     = FORK_STATUS_STOPPED
       if( self%stoptime == 0 ) self%stoptime = int(c_time(0_c_long))
-    end if
-    if( self%skipped ) then
-      status_code = FORK_STATUS_SKIPPED
     end if
     if( self%failed ) then
       self%failtime = int(c_time(0_c_long))

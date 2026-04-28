@@ -51,6 +51,7 @@ contains
   ! Run all ipc_mq unit tests. Linux-only; compiled to a no-op elsewhere.
   subroutine run_all_ipc_mq_tests()
 #ifdef __linux__
+    if( .not. is_linux_runtime() ) return
     write(*,'(A)') '**** running all ipc mq tests ****'
     call test_create_and_kill()
     call test_create_and_kill_maxmsg()
@@ -65,6 +66,18 @@ contains
     call test_performance()
 #endif
   end subroutine run_all_ipc_mq_tests
+
+  logical function is_linux_runtime()
+    character(len=64) :: envval
+    integer           :: status, length
+
+    call get_environment_variable('OS', value=envval, length=length, status=status)
+    if( status == 0 .and. length > 0 )then
+      is_linux_runtime = index(adjustl(envval(:length)), 'Windows_NT') == 0
+    else
+      is_linux_runtime = .true.
+    endif
+  end function is_linux_runtime
 
   ! Verify that new() activates the queue and kill() deactivates it.
   subroutine test_create_and_kill()

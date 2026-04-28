@@ -45,6 +45,7 @@ contains
 
   ! Run all forked_process unit tests in order.
   subroutine run_all_forked_process_tests()
+    if( .not. is_posix_runtime() ) return
     write(*,'(A)') '**** running all forked process tests ****'
     call test_start()
     call test_kill()
@@ -55,6 +56,39 @@ contains
     call test_destroy()
     call test_logfile_redirection()
   end subroutine run_all_forked_process_tests
+
+  logical function is_posix_runtime()
+    character(len=64) :: envval
+    integer           :: status, length
+
+    call get_environment_variable('OS', value=envval, length=length, status=status)
+    if( status == 0 .and. length > 0 )then
+      if( index(adjustl(envval(:length)), 'Windows_NT') /= 0 )then
+        is_posix_runtime = .false.
+        return
+      endif
+    endif
+
+    call get_environment_variable('ComSpec', value=envval, length=length, status=status)
+    if( status == 0 .and. length > 0 )then
+      is_posix_runtime = .false.
+      return
+    endif
+
+    call get_environment_variable('SYSTEMROOT', value=envval, length=length, status=status)
+    if( status == 0 .and. length > 0 )then
+      is_posix_runtime = .false.
+      return
+    endif
+
+    call get_environment_variable('windir', value=envval, length=length, status=status)
+    if( status == 0 .and. length > 0 )then
+      is_posix_runtime = .false.
+      return
+    endif
+
+    is_posix_runtime = .true.
+  end function is_posix_runtime
 
   ! Fork a process, let it run to completion, and verify it reaches STOPPED.
   subroutine test_start()

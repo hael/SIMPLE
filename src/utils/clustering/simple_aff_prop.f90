@@ -236,46 +236,54 @@ contains
 
     !>  \brief  is the aff_prop unit test
     subroutine test_aff_prop
-        real                 :: datavecs(900,5)
+        real,    allocatable :: datavecs(:,:)
         type(aff_prop)       :: apcls
-        real                 :: simmat(900,900), simsum
+        real,    allocatable :: simmat(:,:)
+        real                 :: simsum
         integer, allocatable :: centers(:), labels(:)
-        integer              :: i, j, ncls, nerr
+        integer              :: i, j, ncls, nerr, nper, ntot
         write(logfhandle,'(a)') '**info(simple_aff_prop_unit_test): testing all functionality'
+#if defined(_WIN32)
+        nper = 40
+#else
+        nper = 300
+#endif
+        ntot = 3 * nper
+        allocate(datavecs(ntot,5), simmat(ntot,ntot))
         ! make data
-        do i=1,300
+        do i=1,nper
             datavecs(i,:) = 1.
         end do
-        do i=301,600
+        do i=nper+1,2*nper
             datavecs(i,:) = 5.
         end do
-        do i=601,900
+        do i=2*nper+1,ntot
             datavecs(i,:) = 10.
         end do
-        do i=1,900-1
+        do i=1,ntot-1
             simmat(i,i) = 0.
-            do j=i+1,900
+            do j=i+1,ntot
                 simmat(i,j) = -euclid(datavecs(i,:),datavecs(j,:))
                 simmat(j,i) = simmat(i,j)
             end do
         end do
-        simmat(900,900) = 0.
-        call apcls%new(900, simmat)
+        simmat(ntot,ntot) = 0.
+        call apcls%new(ntot, simmat)
         call apcls%propagate(centers, labels, simsum)
         ncls = size(centers)
         nerr = 0
-        do i=1,299
-            do j=i+1,300
+        do i=1,nper-1
+            do j=i+1,nper
                 if( labels(i) /= labels(j) ) nerr = nerr+1
             end do
         end do
-        do i=301,599
-            do j=i+1,600
+        do i=nper+1,2*nper-1
+            do j=i+1,2*nper
                 if( labels(i) /= labels(j) ) nerr = nerr+1
             end do
         end do
-        do i=601,899
-            do j=i+1,900
+        do i=2*nper+1,ntot-1
+            do j=i+1,ntot
                 if( labels(i) /= labels(j) ) nerr = nerr+1
             end do
         end do

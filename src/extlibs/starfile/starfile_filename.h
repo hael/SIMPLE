@@ -57,7 +57,9 @@
 #include <vector>
 #include <typeinfo>
 #include <sys/stat.h>
+#ifndef _WIN32
 #include <glob.h>
+#endif
 #include <errno.h>
 #include "starfile_strings.h"
 #include "starfile_generic.h"

@@ -6,6 +6,9 @@
  *
  *   Michael Eager   2018
  */
+#ifdef _WIN32
+struct FTW { int dummy; };
+#endif
 #define  _POSIX_C_SOURCE 200809L
 #define _THREAD_SAFE
 #define _SVID_SOURCE
@@ -16,28 +19,161 @@
 #define _BSD_SOURCE
 #define __DARWIN_C_SOURCE
 #endif
+#ifndef _WIN32
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <fcntl.h> // for open, O_RDWR, O_CREAT
 #include <fts.h>               /* file traversal */
-#include <fcntl.h>           /* Definition of AT_* constants */
 #include <sys/wait.h>
+#else
+#include <windows.h>
+#include <direct.h> // for _mkdir
+#define mkdir _mkdir
+struct stat {
+    DWORD st_mode;
+};
+#define S_IFMT 0
+#define S_IFDIR FILE_ATTRIBUTE_DIRECTORY
+#define S_ISDIR(m) (((m) & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY)
+/* Define POSIX permission macros as no-ops for Windows */
+#ifndef S_IRWXU
+#define S_IRWXU 0777
+#endif
+#ifndef S_IRWXG
+#define S_IRWXG 0070
+#endif
+static int stat(const char *path, struct stat *buf) {
+    DWORD attr = GetFileAttributesA(path);
+    if (attr == INVALID_FILE_ATTRIBUTES) return -1;
+    buf->st_mode = attr;
+    return 0;
+}
+#include <fcntl.h>           /* Definition of AT_* constants */
+#endif
+/* FTW struct for file tree walk: POSIX or stub for Windows */
+#ifdef _WIN32
+// Windows stub for waitpid and macros
+#include <sys/types.h> /* for pid_t */
+#define WNOHANG 1
+#define WUNTRACED 2
+#define WCONTINUED 4
+static int waitpid(pid_t pid, int *status, int options) { return -1; }
+#define WIFEXITED(x) 0
+#define WIFSIGNALED(x) 0
+#define WIFSTOPPED(x) 0
+#define WIFCONTINUED(x) 0
+#define WEXITSTATUS(x) 0
+#define WTERMSIG(x) 0
+#define WSTOPSIG(x) 0
+#endif
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>          /*     extern int errno;   */
+#ifndef _WIN32
 #include <pwd.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
+#ifndef _WIN32
 #include <unistd.h>       /* getpid()  */
+#else
+#include <process.h>
+#endif
+#ifdef _WIN32
+#include <windows.h>
+// Windows stub for DIR and directory functions
+typedef struct {
+    HANDLE hFind;
+    WIN32_FIND_DATA findFileData;
+    int first;
+    char pattern[MAX_PATH];
+} DIR;
+
+static DIR *opendir(const char *name) {
+    DIR *dir = (DIR *)malloc(sizeof(DIR));
+    snprintf(dir->pattern, MAX_PATH, "%s/*", name);
+    dir->hFind = FindFirstFileA(dir->pattern, &dir->findFileData);
+    dir->first = 1;
+    if (dir->hFind == INVALID_HANDLE_VALUE) {
+        free(dir);
+        return NULL;
+    }
+    return dir;
+}
+
+static struct dirent {
+    char d_name[MAX_PATH];
+    unsigned char d_type;
+} _dirent;
+
+#ifndef DT_DIR
+#define DT_DIR 4
+#endif
+
+static struct dirent *readdir(DIR *dir) {
+    if (!dir) return NULL;
+    while (1) {
+        WIN32_FIND_DATA *fd = &dir->findFileData;
+        if (dir->first) {
+            dir->first = 0;
+        } else {
+            if (!FindNextFileA(dir->hFind, fd)) return NULL;
+        }
+        if (strcmp(fd->cFileName, ".") == 0 || strcmp(fd->cFileName, "..") == 0) continue;
+        strncpy(_dirent.d_name, fd->cFileName, MAX_PATH);
+        _dirent.d_type = (fd->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? DT_DIR : 0;
+        return &_dirent;
+    }
+}
+
+static int closedir(DIR *dir) {
+    if (!dir) return -1;
+    FindClose(dir->hFind);
+    free(dir);
+    return 0;
+}
+#else
 #include <dirent.h>      /* DIR and scandir,DT_DIR */
+#endif
 #include <time.h>
+#ifndef _WIN32
 #include <glob.h>
+#else
+// Windows stub for glob_t and glob functions
+typedef struct {
+    int gl_pathc;
+    char **gl_pathv;
+    int gl_offs;
+} glob_t;
+
+#define GLOB_NOMATCH 1
+static int glob(const char *pattern, int flags, void *errfunc, glob_t *pglob) { return GLOB_NOMATCH; }
+static void globfree(glob_t *pglob) { }
+#endif
+#ifndef _WIN32
 #include <regex.h>
+#else
+// Windows stub for regex_t and regex functions
+typedef int regex_t;
+#define REG_EXTENDED 0
+#define REG_ICASE 0
+#define REG_NOSUB 0
+#ifndef REG_NOMATCH
+#define REG_NOMATCH -1
+#endif
+static int regcomp(regex_t *preg, const char *regex, int cflags) { return -1; }
+static int regexec(const regex_t *preg, const char *string, size_t nmatch, void *pmatch, int eflags) { return -1; }
+static void regfree(regex_t *preg) { }
+static int regerror(int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size) { return 0; }
+#endif
 #include <limits.h>      /* PATH_MAX */
 #ifdef __linux__
-#include<linux/limits.h>
+#include <limits.h>
 #endif
+#ifndef _WIN32
 #include <ftw.h>
+#endif
 /* By default, print all messages of severity info and above.  */
 #ifdef _DEBUG
 static int global_debug = 3;
@@ -204,6 +340,38 @@ int makedir(char *path,
       ENOTDIR pathname is relative and dirfd is a file descriptor referring to a
       file other than a directory.
     */
+    #ifdef _WIN32
+    char _path[LONGSTRLEN];
+    char *p;
+    errno = 0;
+    if(*charLen > sizeof(_path) - 1) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    strncpy(_path, path, *charLen);
+    _path[*charLen] = '\0';
+    for(p = _path + 1; *p; p++) {
+        if(*p == '/') {
+            *p = '\0';
+            if(_mkdir(_path) != 0) {
+                if(errno != EEXIST) {
+                    fprintf(stderr, "makedir %s\nerrno:%d msg:%s\n", _path, errno, strerror(errno));
+                    perror("Failed : _mkdir in simple_posix::makedir");
+                    return -1;
+                }
+            }
+            *p = '/';
+        }
+    }
+    if(_mkdir(_path) != 0) {
+        if(errno != EEXIST) {
+            fprintf(stderr, "makedir %s\nerrno:%d msg:%s\n", _path, errno, strerror(errno));
+            perror("Failed : _mkdir in simple_posix::makedir");
+            return -1;
+        }
+    }
+    return 0;
+    #else
     char *cpath = F90to_cstring(path, *charLen);
     // fprintf(stderr, "makedir  %d  %d %s  %s\n",  *charLen, strlen(path), path, cpath);
     if(cpath == NULL) {
@@ -213,16 +381,13 @@ int makedir(char *path,
     }
     char _path[LONGSTRLEN];
     char *p;
-    extern int errno;
     errno = 0;
-
     /* Copy string so its mutable */
     if(*charLen > sizeof(_path) - 1) {
         errno = ENAMETOOLONG;
         free(cpath);
         return -1;
     }
-
     strcpy(_path, cpath);
     // fprintf(stderr, "makedir %d [%s]\n" , strlen(_path), _path);
     free(cpath);
@@ -231,7 +396,6 @@ int makedir(char *path,
         if(*p == '/') {
             /* Temporarily truncate */
             *p = '\0';
-
             if(mkdir(_path, S_IRWXU|S_IRWXG) != 0) {
                 if(errno != EEXIST) {
                     fprintf(stderr, "makedir %s\nerrno:%d msg:%s\n", _path, errno, strerror(errno));
@@ -250,6 +414,7 @@ int makedir(char *path,
         }
     }
     return 0;
+    #endif
 }
 
 // Recursive remove directory
@@ -364,7 +529,7 @@ int list_dirs(char * path, int*len, char * fout, int*len_fout, int* count, size_
         perror("Failed : simple_posix.c::list_dirs ");
         return -1;
     }
-    extern int errno;
+    // errno is provided by <errno.h> and system headers; do not redeclare.
     DIR *d;
     int fcount = 0;
     d = opendir(cpath);
@@ -434,14 +599,22 @@ char * lrealpath(const char *filename)
        to realpath() (it could always overflow).  On those systems, we
        skip this.  */
     /* Find out the max path size.  */
+    #ifdef _WIN32
+    long path_max = 260; // MAX_PATH for Windows
+    #else
     long path_max = pathconf("/", _PC_PATH_MAX);
+    #endif
     if(path_max > 0) {
         /* PATH_MAX is bounded.  */
         char *buf, *rp, *ret;
         buf = (char *) malloc(path_max);
         if(buf == NULL)
             return NULL;
+        #ifdef _WIN32
+        rp = _fullpath(buf, filename, path_max);
+        #else
         rp = realpath(filename, buf);
+        #endif
         ret = strdup(rp ? rp : filename);
         free(buf);
         return ret;
@@ -475,7 +648,9 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
     out[*outlen] = '\0';
 
     c2fstr(resolved, out, *outlen, sizeof(resolved));
+#ifndef _WIN32
     out[0] = '/';
+#endif
 
     free(filein);
     free(resolved);
@@ -495,7 +670,9 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
 #include <mach/vm_task.h>
 #include <mach/task.h>
 #else
+#ifndef _WIN32
 #include <sys/sysinfo.h>
+#endif
 #endif
 int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram, long* totalhigh)
 {
@@ -555,21 +732,29 @@ int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram,
     *totalhigh = free_memory + used_memory; /* Total high water mark memory size */
     *HWMusage =  used_memory;               /* high memory size used */
 
+        #elif defined(_WIN32)
+        // Not available on Windows, stub out
+        *totalram = 0;
+        *sharedram = 0;
+        *bufferram = 0;
+        *totalhigh = 0;
+        *HWMusage = 0;
+        return 0;
 #else
-    struct sysinfo s;
-    if( sysinfo(&s) ) {
-      perror("simple_posix.c::get_sysinfo unable to get mem usage by calling sysinfo");
-      return -1;
-    } else {
-      *totalram = s.totalram;           /* Total usable main memory size */
-      //*freeram=s.freeram;               /* Available memory size */
-      *sharedram = s.sharedram;       /* Amount of shared memory */
-      *bufferram = s.bufferram;              /* Memory used by buffers */
-      *totalhigh = s.totalhigh;              /* Total high memory size */
-      *HWMusage = s.totalhigh - s.freehigh; /* high memory size used */
-    }
+        struct sysinfo s;
+        if( sysinfo(&s) ) {
+            perror("simple_posix.c::get_sysinfo unable to get mem usage by calling sysinfo");
+            return -1;
+        } else {
+            *totalram = s.totalram;           /* Total usable main memory size */
+            //*freeram=s.freeram;               /* Available memory size */
+            *sharedram = s.sharedram;       /* Amount of shared memory */
+            *bufferram = s.bufferram;              /* Memory used by buffers */
+            *totalhigh = s.totalhigh;              /* Total high memory size */
+            *HWMusage = s.totalhigh - s.freehigh; /* high memory size used */
+        }
 #endif
-    return 0;
+        return 0;
 }
 
 int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
