@@ -523,8 +523,8 @@ contains
         type(ori) :: o
         complex(dp), allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:)
         real(dp),    allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
-        real(sp) :: hcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
-        real(sp) :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
+        real(sp) :: hcoords(self%pftsz,self%kfromto(2)-self%kfromto(1)+1)
+        real(sp) :: kcoords(self%pftsz,self%kfromto(2)-self%kfromto(1)+1)
         real :: pw
         integer :: lims(3,2), kspan(2), kspan_len, nrefs, noris, i, iptcl, eo, box
         integer :: istate, pstate, base, nspace_refs
@@ -554,14 +554,14 @@ contains
         endif
         nrefs = min(nrefs, nspace_refs)
         if( nrefs < 1 ) THROW_HARD('no references available; polar_cavger_insert_ptcls_obsfield')
-        kspan     = [self%kfromto(1), self%interpklim]
+        kspan     = [self%kfromto(1), self%kfromto(2)]
         kspan_len = kspan(2) - kspan(1) + 1
-        hcoords   = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
-        kcoords   = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
+        hcoords   = transpose(self%polar(1,self%kfromto(1):self%kfromto(2),1:self%pftsz))
+        kcoords   = transpose(self%polar(2,self%kfromto(1):self%kfromto(2),1:self%pftsz))
         allocate(pfts_even(self%pftsz,kspan_len,nrefs), pfts_odd(self%pftsz,kspan_len,nrefs))
         allocate(ctf2_even(self%pftsz,kspan_len,nrefs), ctf2_odd(self%pftsz,kspan_len,nrefs))
         do istate = 1, self%p_ptr%nstates
-            call obs%new(lims, self%interpklim)
+            call obs%new(lims, self%kfromto(2))
             do i = 1, nptcls
                 iptcl  = pinds(i)
                 pstate = ptcl_field%get_state(iptcl)

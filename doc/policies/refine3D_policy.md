@@ -131,7 +131,9 @@ Cartesian matching still uses projected polar central sections, so this path als
 
 Its benchmark reports this work as `polar reference assembly`.
 
-This policy applies to both shared-memory and distributed `refine3D`. In both execution modes, `simple_refine3D_strategy.f90` calls the polar assembly commander for polar modes and the Cartesian assembly commander for non-polar Cartesian volume assembly. The strategy sets the legacy force-assembly key when `volrec=yes` or when any polar mode is active, then deletes that key after assembly.
+This policy applies to both shared-memory and distributed `refine3D`. In both execution modes, `simple_refine3D_strategy.f90` calls the polar assembly commander for polar modes and the Cartesian assembly commander for non-polar Cartesian volume assembly.
+
+Shared-memory refinement still sets the legacy `force_volassemble` key when `volrec=yes` or when any polar mode is active, then deletes that key after assembly. Distributed refinement does not rely on that key; its workers receive the explicit write-partial-reconstruction decision from the distributed strategy path.
 
 ### 3.6 Postprocessing policy ownership
 
@@ -209,7 +211,7 @@ This is especially important when the assembly output reference space changes fr
 
 The matcher-side reference contract is source based.
 
-If a complete current `vol1..volN` set is provided, `refine3D_exec` derives the matching references directly from those volumes using the current matching settings.
+If a complete current `vol1..volN` set is provided for non-probabilistic matching, `refine3D_exec` derives the matching references directly from those volumes using the current matching settings.
 
 If no complete volume set is provided in polar mode, the matcher consumes the previous assembly handoff in `POLAR_REFS*`.
 
@@ -219,11 +221,13 @@ Whenever a current-volume reprojection model is generated, it is also materializ
 
 In distributed matching, all workers generate the same current-volume reference model, so only the first worker materializes the shared cache to avoid concurrent writes to the same handoff files.
 
-`prob_tab` and `prob_tab_neigh` consume `POLAR_REFS*` because they are separate worker programs and do not own a live volume-reprojection path. If a probabilistic pre-step is launched while `vol1..volN` is the current source, `prob_align` materializes `POLAR_REFS*` from those volumes before launching `prob_tab`. That is a probability-table handoff, not a declaration that all current matching input is file based.
+Volume reprojection only fills the active search range through `kfromto(2)`, including assembly-side reprojection handoffs. It must not try to anticipate a future iteration's interpolation limit; if the next iteration needs a different high-frequency range, that iteration rebuilds the reference model under its own settled settings.
+
+Probabilistic modes are different. `prob_tab` and `prob_tab_neigh` consume `POLAR_REFS*` because they are separate worker programs and do not own a live volume-reprojection path. If a probabilistic pre-step is launched while `vol1..volN` is the current source, `prob_align` materializes `POLAR_REFS*` from those volumes before launching `prob_tab`. The subsequent matcher consumes the probabilistic assignment artifact. That is a probability-table handoff, not a declaration that all current matching input is file based.
 
 ### 5.2 Polar-mode current-source policy
 
-For polar modes, the complete `vol1..volN` set is the current matching-reference source.
+For non-probabilistic polar matching, the complete `vol1..volN` set is the current matching-reference source.
 
 A fresh starting-volume set is reprojected directly by the matcher for the current iteration; it is not first converted into a universal `POLAR_REFS*` input-file contract.
 
@@ -276,7 +280,7 @@ If polar reference files are missing, no fresh complete `vol1..volN` set is bein
 
 This bootstrap path uses the live `params`, `builder`, and `cmdline`. It does not create a second temporary builder.
 
-Because this path can run before matcher setup calls `set_bp_range3D`, reference-volume reprojection must enforce the same PFTC range contract before constructing `polarft_calc`: the requested search high-frequency index cannot exceed the cropped interpolation limit.
+`set_bp_range3D` is the owner of the 3D matching frequency-range policy. Callers must settle the PFTC range with `set_bp_range3D` before invoking `ensure_polar_refs_on_disk` or any path that materializes polar references from volumes. The requested search high-frequency index must not exceed the cropped interpolation limit before `polarft_calc` is constructed.
 
 If the reference files are missing, no complete `vol1..volN` set is available, and the full starting-volume set is not available, the run must first create those references through reconstruction and assembly. Shared-memory polar initialization errors in that case.
 
@@ -334,7 +338,7 @@ Particle-domain work includes:
 - particle sampling for update
 - probabilistic candidate generation
 - state, projection, in-plane, and shift assignment
-- reference matching; 3D matching consumes `POLAR_REFS*` central-section files
+- reference matching; 3D matching either derives central sections from a current volume source or consumes `POLAR_REFS*` handoff files
 - sigma updates during search
 - writing partition-local Cartesian partial reconstructions or polar partial sums
 
