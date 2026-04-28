@@ -71,7 +71,7 @@ contains
         endif
         call prep_pftc4align3D_polar( params, build, cline, nptcls )
         call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
-        call build%pftc%memoize_refs
+        call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Build polar particle images
         call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
@@ -127,7 +127,7 @@ contains
         endif
         call prep_pftc4align3D_polar( params, build, cline, nptcls )
         call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
-        call build%pftc%memoize_refs
+        call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Build polar particle images
         call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         call eulprob_obj_part_neigh%new_neigh(params, build, pinds)

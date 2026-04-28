@@ -95,7 +95,7 @@ contains
         if( l_mirr_proj ) then
             ! sanity checks
             if( .not.present(eulspace) )then
-                THROW_HARD('Reference orientations object is required projection mirroring')
+                THROW_HARD('Reference orientations object is required for projection mirroring')
             endif
             if( .not.eulspace%isthere('mirr') )then
                 THROW_HARD('Mirror reprojections indices absent from Reference orientations object')
