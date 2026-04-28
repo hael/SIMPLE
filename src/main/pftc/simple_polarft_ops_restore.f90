@@ -618,18 +618,23 @@ contains
         complex(dp), allocatable, intent(inout) :: prev_odd(:,:,:)
         type(string) :: fname
         integer      :: tmp_pftsz, tmp_kfromto(2), tmp_nrefs
+        logical      :: have_merged_prev
         ! adding weighted previous refs after restoration of current refs
         !$omp parallel workshare proc_bind(close)
         self%pfts_even = ufrac_trec * self%pfts_even + (1.d0-ufrac_trec) * prev_even
         self%pfts_odd  = ufrac_trec * self%pfts_odd  + (1.d0-ufrac_trec) * prev_odd
         !$omp end parallel workshare
         fname = string(POLAR_REFS_FBODY)//BIN_EXT
-        call self%get_pft_array_dims(fname, tmp_pftsz, tmp_kfromto, tmp_nrefs)
-        if( (tmp_nrefs /= self%ncls) .or. (tmp_pftsz /= self%pftsz) )then
-            ! In case the merged sum was not generated to the correct dimensions
-            ! only occurs on first iteration given a cartesian volume.
+        have_merged_prev = file_exists(fname)
+        if( have_merged_prev )then
+            call self%get_pft_array_dims(fname, tmp_pftsz, tmp_kfromto, tmp_nrefs)
+            have_merged_prev = (tmp_nrefs == self%ncls) .and. (tmp_pftsz == self%pftsz)
+        endif
+        if( .not. have_merged_prev )then
+            ! Previous handoff may be e/o-only. The halves have already been
+            ! trailed independently above; derive only the merged companion.
             !$omp parallel workshare proc_bind(close)
-            self%pfts_merg = ufrac_trec * self%pfts_merg + (1.d0-ufrac_trec) * 0.5d0 * (prev_even + prev_odd)
+            self%pfts_merg = 0.5d0 * (self%pfts_even + self%pfts_odd)
             !$omp end parallel workshare
             deallocate(prev_even, prev_odd)
         else

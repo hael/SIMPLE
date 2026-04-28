@@ -288,6 +288,8 @@ The reader accepts all three forms currently produced by assembly:
 - even/odd-only
 - merged plus even/odd
 
+Trailing reconstruction trails the previous even and odd references independently. If the merged `POLAR_REFS.bin` companion is absent, the merged companion is derived from the already-trailed even/odd references.
+
 Availability is a header contract, not an existence-only check. The stored metadata must remain compatible with the current run:
 
 - the stored number of references must match `nspace * nstates`
