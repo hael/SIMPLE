@@ -599,6 +599,11 @@ contains
         ! Keep worker command lines explicit; assembly commanders own polar reference assembly.
         if( params%l_polar )then
             call cline%set('nspace', params%nspace)
+            ! build%fsc is normally allocated in build_general_tbox (not called for the distr master).
+            ! Allocate it here so that set_bp_range3D can read on-disk FSCs in distr_execute_iteration.
+            if( .not. allocated(build%fsc) .and. params%box_crop > 0 )then
+                allocate( build%fsc(params%nstates, fdim(params%box_crop)-1), source=0.0 )
+            endif
         endif
         ! sanity check
         fall_over = .false.
