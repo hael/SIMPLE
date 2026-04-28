@@ -121,12 +121,12 @@ This is the execution center of particle-domain refinement.
 
 Cartesian matching still uses projected polar central sections, so this path also projects the prepared Cartesian volumes into `POLAR_REFS_even.bin` and `POLAR_REFS_odd.bin` for the next matcher or probability-table pass. That projection is benchmarked as `polar ref projection`.
 
-`exec_polar_assembly` owns polar reference assembly for `polar=yes`, `polar=direct`, and `polar=obsfield`. The matcher writes partition-local polar partial sums. Polar assembly then:
+`exec_polar_assembly` owns polar reference assembly for `polar=yes` and `polar=obsfield`. The matcher writes partition-local polar partial sums. Polar assembly then:
 
 - calculates polar populations
 - reduces the partial sums
 - dispatches to the common-line restore path for `polar=yes`
-- dispatches to the direct restore path for `polar=direct|obsfield`
+- dispatches to the observation-field restore path for `polar=obsfield`
 - writes the updated `POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` triplet
 
 Its benchmark reports this work as `polar reference assembly`.
@@ -172,6 +172,8 @@ Shared-memory `refine3D` must rebuild the strategy toolbox at each iteration aft
 It must not keep one builder instance alive across iterations and then repair it with ad hoc signature checks.
 
 Any particle-state changes made during initialization, such as random initial orientations or cleanup of sampling counters, must be written to the project before the first per-iteration rebuild so the freshly built toolbox sees the intended state.
+
+Likewise, each shared-memory iteration must persist updated orientations to the active project segment before the next iteration rebuilds the toolbox. `algndoc` output is an iteration artifact, but the rebuild path reads the project segment.
 
 ### 4.3 Distributed parity
 
@@ -295,7 +297,7 @@ On the final planned iteration of a stage:
 - Cartesian assembly may reproject the assembled volumes with `nspace_next` so the emitted `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` files match the next stage
 - `polar=obsfield` may do the same because the observations are collected into a 3D structure before reprojection
 
-Legacy `polar=yes` and `polar=direct` keep their emitted references on the current matching grid. When trailing reconstruction averages across a grid increase, previous state-local projections are remapped to the nearest current projection within the same state.
+Legacy `polar=yes` keeps its emitted references on the current matching grid. When trailing reconstruction averages across a grid increase, previous state-local projections are remapped to the nearest current projection within the same state.
 
 Reconstruction-only child command lines must delete `nspace_next` because the value belongs to the `refine3D`-to-assembly handoff, not to plain volume reconstruction.
 
@@ -321,7 +323,7 @@ Multi-state polar references are stored state-major:
 - state 2 occupies `nspace+1:2*nspace`
 - and so on
 
-All polar insertion, mirroring, common-line restoration, direct restoration, FSC/FRC bookkeeping, and ML regularization must preserve that state-local reference block structure.
+All polar insertion, mirroring, common-line restoration, obsfield restoration, FSC/FRC bookkeeping, and ML regularization must preserve that state-local reference block structure.
 
 Common-line restoration is intra-state only. Cross-state common lines are not physical.
 
@@ -380,7 +382,7 @@ Stable examples include:
 
 - assignment maps written by probabilistic alignment
 - partition-local Cartesian partial reconstructions
-- partition-local polar partial sums for `polar=yes|direct|obsfield`
+- partition-local polar partial sums for `polar=yes|obsfield`
 - `POLAR_REFS.bin` / `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` central-section files consumed by 3D matcher and search preparation
 - state volumes and even/odd volumes
 - state-specific automasks such as `automask3D_stateNN.mrc`
@@ -483,7 +485,7 @@ The recommended long-term split is:
 2. `refine3D_strategy` manages iteration state, execution mode, and per-iteration shared-memory builder rebuilds.
 3. probabilistic pre-alignment may sample particles and write an assignment map.
 4. `refine3D_exec` performs particle-domain search and update, then writes Cartesian partial reconstructions or polar partial sums.
-5. assembly commanders assemble state volumes for `polar=no` or state-major polar references for `polar=yes|direct|obsfield`.
+5. assembly commanders assemble state volumes for `polar=no` or state-major polar references for `polar=yes|obsfield`.
 6. output artifacts are persisted for the next iteration and for downstream FSC and reference consumers.
 
 That is the current `refine3D` policy and the architectural model future changes should follow.

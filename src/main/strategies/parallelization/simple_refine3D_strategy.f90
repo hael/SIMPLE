@@ -506,7 +506,9 @@ contains
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(in)    :: params
         type(builder),                  intent(inout) :: build
-        ! no-op (kept for symmetry)
+        ! Shared-memory rebuilds the builder every iteration, so persist the
+        ! updated orientations before the next rebuild reads the project file.
+        if( trim(params%refine) /= 'sigma' ) call build%spproj%write_segment_inside(params%oritype)
     end subroutine inmem_finalize_iteration
 
     subroutine inmem_finalize_run(self, params, build, cline)

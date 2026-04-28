@@ -301,7 +301,7 @@ contains
                     else
                         cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
                     endif
-                    ! remapping modes (obsfield/direct) resize refs onto the current space directly,
+                    ! obsfield remaps refs onto the current space directly,
                     ! so inspace should reflect the natural stage spacing (2500 at prob stages 5-6)
                     if( .not. polar_mode_remaps_refs(params%polar) ) cfg%inspace = NSPACE(stage_last)
                 endif
@@ -312,7 +312,7 @@ contains
                 cfg%inspace     = NEIGH_NSPACES(2)
         end select
         ! Legacy polar trailing reconstruction still expects matching reference
-        ! arrays. direct and obsfield remap previous references onto the current
+        ! arrays. obsfield remaps previous references onto the current
         ! space directly.
         if( params%l_polar .and. (.not. polar_mode_remaps_refs(params%polar)) )then
             select case(cfg%refine%to_char())

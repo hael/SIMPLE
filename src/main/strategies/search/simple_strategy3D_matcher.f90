@@ -483,10 +483,6 @@ contains
             if( ctrl%do_bench ) rt_projio = toc(t_projio)
         end subroutine maybe_write_orientations
 
-        logical function polar_mode_direct_like()
-            polar_mode_direct_like = trim(ctrl%polar_mode).eq.'obsfield'
-        end function polar_mode_direct_like
-
         subroutine prepare_partial_ref_output_space()
             partial_ref_nspace = p_ptr%nspace
             l_partial_refs_use_assembly_space = .false.
