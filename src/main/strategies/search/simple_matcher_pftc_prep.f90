@@ -124,7 +124,8 @@ contains
         logical           :: l_filtrefs
         ! Resolution limit estimation
         call pick_lp_est_state(params, build, state)
-        if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+        if( trim(params%filt_mode).eq.'uniform' .and. &
+            &cline%defined('lpstart') .and. cline%defined('lpstop') )then
             call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
         endif
         ! Calculator init

@@ -18,7 +18,7 @@ end type commander_polar_volassemble
 contains
 
     subroutine exec_polar_assembly( self, cline )
-        use simple_matcher_smpl_and_lplims, only: enforce_3D_pftc_k_range
+        use simple_matcher_smpl_and_lplims, only: set_bp_range3D
         class(commander_polar_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
@@ -33,8 +33,8 @@ contains
         ! Matchers write partition-local Cartesian partial reconstructions
         ! (polar=no) or polar partial sums (polar=yes|direct|obsfield), while
         ! the assembly commander owns shared-memory reduction and reference update.
+        call set_bp_range3D(params, build, cline)
         nrefs = params%nspace * params%nstates
-        call enforce_3D_pftc_k_range(params, build, 'exec_polar_assembly')
         call build%pftc%new(params, nrefs, [1,1], params%kfromto)
         params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
         call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
@@ -114,6 +114,7 @@ contains
     subroutine exec_cartesian_assembly( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_gridding,         only: prep3D_inv_instrfun4mul
+        use simple_matcher_smpl_and_lplims, only: set_bp_range3D
         use simple_matcher_refvol_utils, only: read_mask_filter_reproject_refvols, &
             &write_polar_refs_from_current_pftc
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
@@ -398,6 +399,7 @@ contains
         ! Therefore Cartesian assembly always refreshes the projected reference
         ! sections consumed by the next matcher/probability-table pass.
         if( L_BENCH_GLOB ) t_project_refs = tic()
+        call set_bp_range3D(params, build, cline)
         call read_mask_filter_reproject_refvols(params, build, cline, 1)
         call write_polar_refs_from_current_pftc(params, build)
         call build%pftc%polar_cavger_kill

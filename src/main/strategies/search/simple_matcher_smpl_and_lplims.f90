@@ -4,29 +4,12 @@ use simple_pftc_srch_api
 use simple_builder, only: builder
 implicit none
 
-public :: enforce_3D_pftc_k_range, set_bp_range3D, set_bp_range2D
+public :: set_bp_range3D, set_bp_range2D
 public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4fillin_all, sample_ptcls4update2D
 private
 #include "simple_local_flags.inc"
 
 contains
-
-    subroutine enforce_3D_pftc_k_range( params, build, context )
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        character(len=*), optional, intent(in) :: context
-        integer :: interp_lim, kto
-        interp_lim = fdim(params%box_crop) - 1
-        kto = min(params%kfromto(2), interp_lim)
-        if( kto < params%kfromto(1) )then
-            if( present(context) ) write(logfhandle,*) 'context: ', trim(context)
-            write(logfhandle,*) 'kfromto, interp_lim: ', params%kfromto, interp_lim
-            THROW_HARD('invalid k-range for 3D PFTC')
-        endif
-        params%kfromto(2) = kto
-        params%lp         = calc_lowpass_lim(params%kfromto(2), params%box, params%smpd)
-        call build%spproj_field%set_all2single('lp', params%lp)
-    end subroutine enforce_3D_pftc_k_range
 
     subroutine set_bp_range3D( params, build, cline )
         class(parameters), intent(inout) :: params
@@ -35,7 +18,7 @@ contains
         real, allocatable :: resarr(:), fsc_arr(:)
         real              :: fsc0143, fsc05
         real              :: mapres(params%nstates)
-        integer           :: s, loc(1), lp_ind, arr_sz, fsc_sz
+        integer           :: s, loc(1), lp_ind, arr_sz, fsc_sz, nyqcrop_ind
         type(string)      :: fsc_fname
         logical           :: fsc_bin_exists(params%nstates), all_fsc_bin_exist
         if( params%l_lpset )then
@@ -127,7 +110,12 @@ contains
             ! re-set the low-pass limit
             params%lp = calc_lowpass_lim(params%kfromto(2), params%box, params%smpd)
         endif
-        call enforce_3D_pftc_k_range(params, build, 'set_bp_range3D')
+        ! making sure the resolution limit does not exceed limits of box_crop
+        nyqcrop_ind       = calc_fourier_index(2.*params%smpd_crop, params%box_crop, params%smpd_crop)
+        params%kfromto(2) = min(params%kfromto(2), nyqcrop_ind)
+        params%lp         = calc_lowpass_lim(params%kfromto(2), params%box, params%smpd)
+        ! update low-pass limit in project
+        call build%spproj_field%set_all2single('lp',params%lp)
     end subroutine set_bp_range3D
 
     subroutine set_bp_range2D( params, build, cline, which_iter, frac_srch_space )

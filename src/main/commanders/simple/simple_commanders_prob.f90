@@ -146,7 +146,7 @@ contains
 
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,            only: eul_prob_tab
-        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D, set_bp_range3D
         use simple_matcher_refvol_utils,    only: ensure_polar_refs_on_disk
         use simple_builder,                 only: builder
         class(commander_prob_align), intent(inout) :: self
@@ -173,6 +173,7 @@ contains
         endif
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
+        call set_bp_range3D(params, build, cline)
         call ensure_polar_refs_on_disk(params, build, cline, 1, 'prob_align before prob_tab')
         ! more prep
         call eulprob_obj_glob%new(params, build, pinds)
@@ -219,7 +220,7 @@ contains
 
     subroutine exec_prob_align_neigh( self, cline )
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
-        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D, set_bp_range3D
         use simple_matcher_refvol_utils,    only: ensure_polar_refs_on_disk
         use simple_builder,                 only: builder
         class(commander_prob_align_neigh), intent(inout) :: self
@@ -246,6 +247,7 @@ contains
         call build%spproj%write_segment_inside(params%oritype)
         ! Global object only needs sampled-set maps before reading partition sparse tables.
         ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
+        call set_bp_range3D(params, build, cline)
         call ensure_polar_refs_on_disk(params, build, cline, 1, 'prob_align_neigh before prob_tab_neigh')
         call eulprob_obj_glob_neigh%new_neigh(params, build, pinds)
         cline_prob_tab = cline

@@ -10,6 +10,7 @@ use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_star_from_iter
 use simple_matcher_refvol_utils,   only: any_volume_source_defined, complete_volume_source_defined, &
     &ensure_polar_refs_on_disk, polar_ref_sections_available
+use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -432,6 +433,7 @@ contains
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         if( params%l_polar .and. (.not. params%l_prob_align_mode) )then
             if( .not. complete_volume_source_defined(cline, params%nstates) )then
+                call set_bp_range3D(params, build, cline)
                 call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D shared-memory iteration')
             endif
         endif
@@ -839,6 +841,7 @@ contains
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         if( params%l_polar .and. (.not. params%l_prob_align_mode) )then
             if( .not. complete_volume_source_defined(cline, params%nstates) )then
+                call set_bp_range3D(params, build, cline)
                 call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D distributed iteration')
             endif
         endif
