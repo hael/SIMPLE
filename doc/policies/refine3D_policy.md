@@ -13,7 +13,9 @@ It establishes:
 - stable artifact contracts between workflow phases
 - refactor rules that preserve shared-memory and distributed parity
 
-This document is intentionally broader than an implementation note. It is the top-level policy for how the `refine3D` workflow is divided conceptually and in code.
+This document is intentionally broader than an implementation note, but it is not a line-by-line implementation specification. Its purpose is to define the architectural model, the durable workflow contracts, and the review standards that future changes must satisfy.
+
+Where this document describes a current mechanism, file contract, or exception path, that material should be read as an implementation contract in service of the policy, not as a license to dissolve the higher-level architectural boundaries.
 
 ---
 
@@ -51,6 +53,18 @@ The same scientific workflow applies to both:
 
 Only the process-launch mechanism differs between those routes. The workflow, contracts, and ownership boundaries must remain aligned.
 
+### 2.3 Review standard
+
+Changes to `refine3D` should be reviewed against the following questions:
+
+- Does the change preserve the particle-domain versus assembled-reference boundary?
+- Does it keep orchestration separate from numerical postprocessing and assembled-reference construction?
+- Does it preserve a single clear source of truth for current matching references?
+- Does it maintain parity between shared-memory and distributed execution?
+- Does it preserve explicit artifact and handoff contracts between workflow phases?
+
+If the answer to any of those questions is no, the change is presumptively a policy change rather than a routine implementation update and should be evaluated as such.
+
 ---
 
 ## 3. Execution and Ownership Policy
@@ -75,7 +89,7 @@ This layer should remain thin. It is not the place for low-level search logic or
 - iteration counters and run-finalization bookkeeping
 - orchestration of probabilistic pre-alignment, matcher execution, partial-reconstruction writing, and assembly-command dispatch
 
-This layer may thread command-line state and workflow state across steps, but it must not absorb numerical postprocessing logic.
+This layer may thread command-line state and workflow state across steps, but it must not absorb numerical postprocessing logic or assembled-reference implementation detail beyond what is needed to dispatch the correct assembly pathway.
 
 ### 3.3 Probabilistic pre-alignment ownership
 
@@ -209,31 +223,27 @@ This is especially important when the assembly output reference space changes fr
 
 ## 5. Reference and Assembly Policy
 
-### 5.1 Source-of-truth policy for matching references
+This section contains both policy rules and current implementation contracts. The policy-level rules state what must remain true architecturally; the implementation-contract subsections record the currently valid operational mechanisms that realize those rules.
+
+### 5.1 Policy: source of truth for matching references
 
 The matcher-side reference contract is source based.
 
-If a complete current `vol1..volN` set is provided for non-probabilistic matching, `refine3D_exec` derives the matching references directly from those volumes using the current matching settings.
+For non-probabilistic matching, if a complete current `vol1..volN` set is provided, current matching references are derived directly from those volumes using the current matching settings.
 
-If no complete volume set is provided in polar mode, the matcher consumes the previous assembly handoff in `POLAR_REFS*`.
+If no complete current volume set is provided in polar mode, the matcher may consume the previous assembly handoff in `POLAR_REFS*`.
 
-For Cartesian matching without a probabilistic pre-step, the matcher still reprojects the current Cartesian volumes directly.
+Whenever a current-volume reprojection model is generated, materializing it to `POLAR_REFS*` creates a cache or handoff artifact. It does not change the source of truth for that matcher pass.
 
-Whenever a current-volume reprojection model is generated, it is also materialized to `POLAR_REFS*` as a cache or handoff artifact. That file write does not make files the source of truth for the current matcher pass; it only records the model just generated.
+This distinction must remain explicit. The current matcher source and the current handoff artifact must not be conflated.
 
-In distributed matching, all workers generate the same current-volume reference model, so only the first worker materializes the shared cache to avoid concurrent writes to the same handoff files.
+### 5.2 Policy: current-source rules by mode
 
-Generated polar reference sections are filled through the current run's interpolation limit. They do not try to anticipate a future iteration's interpolation limit; if the next iteration changes geometry or interpolation support, that iteration rebuilds the reference model under its own settled settings.
+For Cartesian matching without a probabilistic pre-step, the matcher reprojects the current Cartesian volumes directly.
 
-Probabilistic modes are different. `prob_tab` and `prob_tab_neigh` consume `POLAR_REFS*` because they are separate worker programs and do not own a live volume-reprojection path. If a probabilistic pre-step is launched while `vol1..volN` is the current source, `prob_align` materializes `POLAR_REFS*` from those volumes before launching `prob_tab`. The subsequent matcher consumes the probabilistic assignment artifact. That is a probability-table handoff, not a declaration that all current matching input is file based.
+For non-probabilistic polar matching, a fresh complete `vol1..volN` set is the current matching-reference source. It is reprojected directly by the matcher for the current iteration and is not first converted into a universal file-based input contract.
 
-### 5.2 Polar-mode current-source policy
-
-For non-probabilistic polar matching, the complete `vol1..volN` set is the current matching-reference source.
-
-A fresh starting-volume set is reprojected directly by the matcher for the current iteration; it is not first converted into a universal `POLAR_REFS*` input-file contract.
-
-`POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` are cache and handoff artifacts used when no fresh complete volume set is supplied. This covers handoffs from:
+`POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` are cache and handoff artifacts used when no fresh complete volume set is supplied. This includes handoffs from:
 
 - class-average initialization
 - explicit reconstruction-before-stage steps
@@ -241,19 +251,31 @@ A fresh starting-volume set is reprojected directly by the matcher for the curre
 
 Existing `POLAR_REFS*` files are reusable only when no new starting-volume set is supplied.
 
-### 5.3 Centralized reference-section production
+### 5.3 Policy: centralized reference production
 
 Reference-section production is centralized in `simple_matcher_refvol_utils`.
+
+Consumers that require a file handoff may request materialization through the centralized utility path, but they do not define independent reprojection policy.
+
+`prob_tab`, `prob_tab_neigh`, and `prep_pftc4align3D_polar` are consumers. They do not own live reprojection of current reference volumes.
+
+### 5.4 Implementation contract: materialization and distributed cache behavior
+
+If a current-volume reprojection model is generated, it is also materialized to `POLAR_REFS*` as a cache or handoff artifact.
+
+In distributed matching, all workers generate the same current-volume reference model, so only the first worker materializes the shared cache to avoid concurrent writes to the same handoff files.
+
+Generated polar reference sections are filled through the current run's interpolation limit. They do not try to anticipate a future iteration's interpolation limit; if the next iteration changes geometry or interpolation support, that iteration rebuilds the reference model under its own settled settings.
+
+Probabilistic modes are different. `prob_tab` and `prob_tab_neigh` consume `POLAR_REFS*` because they are separate worker programs and do not own a live volume-reprojection path. If a probabilistic pre-step is launched while `vol1..volN` is the current source, `prob_align` materializes `POLAR_REFS*` from those volumes before launching `prob_tab`. The subsequent matcher consumes the probabilistic assignment artifact. That is a probability-table handoff, not a declaration that all current matching input is file based.
+
+### 5.5 Implementation contract: file-handoff reuse and validity
 
 Callers that need a file handoff use `ensure_polar_refs_on_disk`, which applies one policy:
 
 - a complete `vol1..volN` source forces fresh materialization
 - compatible existing `POLAR_REFS*` may be reused when no fresh source is present
 - missing files fall back to the parsed starting-volume set only when all state volumes exist
-
-`prob_tab`, `prob_tab_neigh`, and `prep_pftc4align3D_polar` remain consumers. They do not reproject volumes.
-
-### 5.4 File-based handoff validity contract
 
 For file-based polar handoffs, `polar_ref_sections_available` accepts either:
 
@@ -274,7 +296,7 @@ Availability is a header contract, not an existence-only check. The stored metad
 
 When `FRCS_FILE` is absent during the bootstrap pass, matcher preparation creates neutral in-memory FRCs rather than using a silent all-zero FRC model.
 
-### 5.5 Bootstrap exception
+### 5.6 Implementation contract: bootstrap exception
 
 There is one explicit bootstrap exception.
 
@@ -286,11 +308,17 @@ This bootstrap path uses the live `params`, `builder`, and `cmdline`. It does no
 
 If the reference files are missing, no complete `vol1..volN` set is available, and the full starting-volume set is not available, the run must first create those references through reconstruction and assembly. Shared-memory polar initialization errors in that case.
 
-### 5.6 Stage-transition reference-space policy
+### 5.7 Policy: stage-transition reference-space rule
 
 Stage scheduling may emit `nspace_next` when the next stage will use a larger reference grid than the current matcher iteration.
 
 `nspace_next` is a forward-looking assembly hint. It is not the grid used by the current particle-matching pass.
+
+Reconstruction-only child command lines must delete `nspace_next` because the value belongs to the `refine3D`-to-assembly handoff, not to plain volume reconstruction.
+
+The policy question is the assembly output reference space: which `nspace` should the reference model emitted for the next iteration use? That policy is owned by assembly and its handoff contract, not by the current matcher pass.
+
+### 5.8 Implementation contract: current stage-transition behavior
 
 On the final planned iteration of a stage:
 
@@ -299,23 +327,15 @@ On the final planned iteration of a stage:
 
 Legacy `polar=yes` keeps its emitted references on the current matching grid. When trailing reconstruction averages across a grid increase, previous state-local projections are remapped to the nearest current projection within the same state.
 
-Reconstruction-only child command lines must delete `nspace_next` because the value belongs to the `refine3D`-to-assembly handoff, not to plain volume reconstruction.
+The matcher may still need a narrower obsfield-specific allocation decision because `polar=obsfield` writes partial polar reference sums while matching on the current grid; that is an implementation detail of the obsfield partial-reference writer, not a separate definition of the global `nspace_next` policy.
 
-The generic policy question is the assembly output reference space: which `nspace` should the reference model emitted for the next iteration use?
+### 5.9 Policy: content-changing handoffs must invalidate stale references
 
-Cartesian reconstruction and `polar=obsfield` answer that question through the same assembly-reference-space policy. The matcher may still need a narrower obsfield-specific allocation decision because `polar=obsfield` writes partial polar reference sums while matching on the current grid; that is an implementation detail of the obsfield partial-reference writer, not a separate definition of the global `nspace_next` policy.
+Content-changing handoffs must invalidate stale reference artifacts even when those artifacts remain dimension-compatible.
 
-### 5.7 Symmetry-search handoff policy
+Symmetry search inside `abinitio3D` and `abinitio3D_cavgs` is one explicit example. After the symmetrized map becomes the next volume set, the polar route must inject that map as an explicit `vol1` source for the next `refine3D` stage. Stale companion even/odd files must not be allowed to override the injected symmetric model.
 
-Symmetry search inside `abinitio3D` and `abinitio3D_cavgs` is a content-changing handoff for polar reference sections.
-
-After the symmetrized map becomes the next volume set, the polar route must inject that map as an explicit `vol1` source for the next `refine3D` stage.
-
-The injected average volume also defines the temporary even/odd reference inputs for that handoff. Stale companion even/odd files must not be allowed to override the injected symmetric model.
-
-Existing `POLAR_REFS*` files are stale even when their headers remain dimension-compatible, so they must be invalidated and rebuilt from the symmetrized reference model.
-
-### 5.8 Multi-state layout contract
+### 5.10 Implementation contract: multi-state layout
 
 Multi-state polar references are stored state-major:
 
@@ -331,7 +351,7 @@ Common-line restoration is intra-state only. Cross-state common lines are not ph
 
 ## 6. Particle-Domain and Volume-Domain Boundary
 
-The most important architectural boundary in `refine3D` is the distinction between particle-domain work and volume-domain work.
+The boundary introduced in Section 2 governs both code ownership and future refactors.
 
 ### 6.1 Particle-domain work
 
@@ -376,7 +396,7 @@ Mixing these responsibilities makes the workflow harder to reason about and risk
 
 ## 7. Artifact and Handoff Policy
 
-The workflow depends on conventional artifacts that act as handoff points between layers.
+The workflow depends on conventional artifacts that act as explicit handoff points between layers.
 
 Stable examples include:
 
@@ -393,9 +413,9 @@ These artifacts are not incidental implementation leftovers. They are part of th
 
 ## 8. Probabilistic Refinement Policy
 
-`refine3D` supports probabilistic search-related modes, but the workflow is not a monolithic soft-assignment EM implementation.
+`refine3D` supports probabilistic search-related modes, but the current workflow is not a monolithic soft-assignment EM implementation.
 
-The current policy is:
+The current implementation policy is:
 
 - probabilistic pre-alignment may build candidate tables and select assignments before the main matcher pass
 - the main matcher consumes that information and applies hard orientation and state updates to the working orientation model
@@ -406,6 +426,8 @@ This distinction must be preserved in documentation and code review:
 - “probabilistic pre-alignment” is accurate
 - “hard-assignment particle update” is accurate
 - “fully soft volume-integrated EM” is not an accurate description of the current `refine3D` implementation
+
+Future changes may alter the scientific model, but they should not be described as already implemented before the ownership, workflow, and artifact contracts actually change.
 
 ---
 
@@ -419,7 +441,7 @@ Keeping assembled-reference work in explicit assembly pathways is good policy be
 - keeps `refine3D_strategy` focused on orchestration rather than low-level volume handling
 - makes benchmarking more meaningful because the same step owns the same costs
 
-This is the right direction and should not be rolled back.
+This is the right direction and should not be rolled back without an explicit policy decision.
 
 ---
 
@@ -435,6 +457,8 @@ In particular:
 - `simple_volume_postprocess_policy.f90` factors automask and nonuniform-filter decisions out of `exec_cartesian_assembly`
 
 That postprocessing policy helper is important because it centralizes the decision table for automask cadence, compatibility, and nonuniform-mask precedence.
+
+This section is descriptive rather than normative. It records the present implementation status against the policy above.
 
 ---
 
@@ -460,11 +484,15 @@ The recommended long-term split is:
 - numerical modules  
   Implement automasking, FSC masking, and nonuniform filtering details.
 
+This section is guidance for future code movement within the policy boundaries already established above.
+
 ---
 
 ## 12. Near-Term Improvements
 
 - add end-to-end regression coverage that compares shared-memory and distributed `refine3D` artifact sets
+- add a targeted review checklist or test matrix keyed to the policy questions in Section 2.3
+- keep implementation-contract details in this document grouped under explicit labels so future policy changes and mechanism changes are easier to separate
 
 ---
 
@@ -473,6 +501,7 @@ The recommended long-term split is:
 - Do not move assembled-volume postprocessing back into `refine3D_strategy`.
 - Do not treat the assembly commanders as distributed-only helpers.
 - Do not merge probabilistic particle-update logic with volume postprocessing logic.
+- Do not introduce a second ambiguous source of truth for current matching references.
 - Do not describe the current `refine3D` implementation as if it were a single undifferentiated Bayesian engine.
 - Do not reuse shared-memory builder-derived state across iterations when stage policy can change; rebuild the toolbox instead.
 - Do preserve parity between shared-memory and distributed workflows.
