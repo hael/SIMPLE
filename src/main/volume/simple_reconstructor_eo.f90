@@ -551,7 +551,7 @@ contains
 
     !> Load state-specific automask file if it exists, or generate on-the-fly, or use circular fallback
     subroutine load_state_mask_or_fallback( self, state, even, odd )
-        use simple_volume_postprocess_policy, only: state_mask_is_compatible
+        use simple_vol_pproc_policy, only: state_mask_is_compatible
         class(reconstructor_eo), intent(inout) :: self
         integer,                 intent(in)    :: state
         class(image),            intent(inout) :: even, odd

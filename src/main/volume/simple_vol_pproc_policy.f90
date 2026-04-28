@@ -1,12 +1,12 @@
 !@descr: per-state automask and nonuniform-filter policy decisions consumed by Cartesian assembly
-module simple_volume_postprocess_policy
+module simple_vol_pproc_policy
 use simple_core_module_api
 use simple_parameters, only: parameters
 implicit none
 
 private
 
-public :: volume_postprocess_plan
+public :: vol_pproc_plan
 public :: plan_state_postprocess
 public :: state_mask_is_compatible
 public :: AUTOMASK_ACTION_NONE
@@ -26,7 +26,7 @@ integer, parameter :: NU_MASK_SOURCE_FRESH_AUTOMASK    = 1
 integer, parameter :: NU_MASK_SOURCE_EXISTING_AUTOMASK = 2
 integer, parameter :: NU_MASK_SOURCE_SPHERICAL         = 3
 
-type :: volume_postprocess_plan
+type :: vol_pproc_plan
     type(string) :: mskfile_state
     integer      :: automask_action              = AUTOMASK_ACTION_NONE
     integer      :: nu_mask_source               = NU_MASK_SOURCE_NONE
@@ -35,7 +35,7 @@ type :: volume_postprocess_plan
     logical      :: l_state_mask_exists           = .false.
     logical      :: l_state_mask_compatible       = .false.
     logical      :: l_state_mask_incompatible     = .false.
-end type volume_postprocess_plan
+end type vol_pproc_plan
 
 contains
 
@@ -44,7 +44,7 @@ contains
         integer,                      intent(in)    :: state
         integer,                      intent(in)    :: which_iter
         logical,                      intent(in)    :: l_nonuniform_mode
-        type(volume_postprocess_plan), intent(inout) :: plan
+        type(vol_pproc_plan), intent(inout) :: plan
         plan%mskfile_state              = string(AUTOMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
         plan%automask_action            = AUTOMASK_ACTION_NONE
         plan%nu_mask_source             = NU_MASK_SOURCE_NONE
@@ -111,4 +111,4 @@ contains
         end if
     end function should_regenerate_automask
 
-end module simple_volume_postprocess_policy
+end module simple_vol_pproc_policy

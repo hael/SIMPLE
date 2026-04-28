@@ -120,7 +120,7 @@ contains
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
                                          &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, &
                                          &analyze_filtmap_neighbor_continuity
-        use simple_volume_postprocess_policy, only: volume_postprocess_plan, plan_state_postprocess, &
+        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
                                                    &AUTOMASK_ACTION_REGENERATE, &
                                                    &NU_MASK_SOURCE_FRESH_AUTOMASK, &
                                                    &NU_MASK_SOURCE_EXISTING_AUTOMASK
@@ -138,7 +138,7 @@ contains
         type(string)                  :: recname, volname, volname_prev, fsc_txt_file
         type(string)                  :: volname_prev_even, volname_prev_odd, str_state, str_iter
         type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname
-        type(volume_postprocess_plan) :: pp_plan
+        type(vol_pproc_plan) :: pp_plan
         logical, allocatable          :: l_mask(:,:,:)
         logical                       :: l_nonuniform_mode
         integer, allocatable          :: imat(:,:,:)

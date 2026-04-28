@@ -151,7 +151,7 @@ Shared-memory refinement still sets the legacy `force_volassemble` key when `vol
 
 ### 3.6 Postprocessing policy ownership
 
-`simple_volume_postprocess_policy.f90` owns the postprocessing decision table for Cartesian assembly output.
+`simple_vol_pproc_policy.f90` owns the postprocessing decision table for Cartesian assembly output.
 
 That includes:
 
@@ -389,7 +389,7 @@ Volume-domain work includes:
 The key code owners are:
 
 - `simple_commanders_rec_distr.f90`
-- `simple_volume_postprocess_policy.f90`
+- `simple_vol_pproc_policy.f90`
 - `simple_reconstructor_eo.f90`
 
 Mixing these responsibilities makes the workflow harder to reason about and risks divergence between execution modes.
@@ -456,7 +456,7 @@ In particular:
 - `simple_refine3D_strategy.f90` now orchestrates probabilistic pre-alignment, matcher execution, bootstrap polar-reference projection, and assembly-command dispatch
 - `simple_strategy3D_matcher.f90` is the core particle-update path
 - `simple_commanders_rec_distr.f90` has distinct `commander_cartesian_volassemble` and `commander_polar_volassemble` types
-- `simple_volume_postprocess_policy.f90` factors automask and nonuniform-filter decisions out of `exec_cartesian_assembly`
+- `simple_vol_pproc_policy.f90` factors automask and nonuniform-filter decisions out of `exec_cartesian_assembly`
 
 That postprocessing policy helper is important because it centralizes the decision table for automask cadence, compatibility, and nonuniform-mask precedence.
 
@@ -477,7 +477,7 @@ The recommended long-term split is:
 - probability-table and matcher/search modules  
   Particle-domain candidate generation, assignment, and partial reconstruction.
 
-- `simple_volume_postprocess_policy.f90`  
+- `simple_vol_pproc_policy.f90`  
   Decide automask cadence, compatibility, nonuniform-mask precedence, and related artifact policy.
 
 - assembly commanders  
