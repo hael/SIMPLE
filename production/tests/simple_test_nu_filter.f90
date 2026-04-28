@@ -6,22 +6,22 @@ use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)         :: even_file, odd_file, aux_even_file, aux_odd_file, out_even_file, out_odd_file
-character(len=:), allocatable :: smpd_char, mskdiam_char
+character(len=:), allocatable :: smpd_char, mskdiam_char, aux_res_char
 type(image)                   :: vol_even, vol_odd, vol_even_nu, vol_odd_nu, vol_msk
 type(image), allocatable      :: aux_even(:), aux_odd(:)
 logical, allocatable          :: l_mask(:,:,:)
 integer                       :: ldim_even(3), ldim_odd(3), ifoo, slen
-real                          :: smpd, mskdiam, mskrad_px
+real                          :: smpd, mskdiam, mskrad_px, aux_res
 integer(timer_int_kind)       :: t_start
 real(timer_int_kind)          :: rt_elapsed
-if( command_argument_count() /= 4 .and. command_argument_count() /= 6 .and. command_argument_count() /= 8 )then
-    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_nu_filter even.mrc odd.mrc smpd mskdiam [out_even.mrc out_odd.mrc] [aux_even.mrc aux_odd.mrc]'
+if( command_argument_count() /= 4 .and. command_argument_count() /= 6 .and. command_argument_count() /= 9 )then
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_nu_filter even.mrc odd.mrc smpd mskdiam [out_even.mrc out_odd.mrc] [aux_even.mrc aux_odd.mrc aux_res]'
     write(logfhandle,'(a)') 'even.mrc : input even volume (.mrc/.spi)'
     write(logfhandle,'(a)') 'odd.mrc  : input odd volume (.mrc/.spi)'
     write(logfhandle,'(a)') 'smpd    : sampling distance in Angstrom per voxel'
     write(logfhandle,'(a)') 'mskdiam : spherical mask diameter in Angstrom'
     write(logfhandle,'(a)') '[out_even.mrc out_odd.mrc] : optional output volume paths'
-    write(logfhandle,'(a)') '[aux_even.mrc aux_odd.mrc] : optional auxiliary candidate pair'
+    write(logfhandle,'(a)') '[aux_even.mrc aux_odd.mrc aux_res] : optional auxiliary candidate pair and effective resolution in Angstrom'
     stop
 endif
 call get_command_argument(1, even_file)
@@ -34,16 +34,20 @@ call get_command_argument(4, length=slen)
 allocate(character(slen) :: mskdiam_char)
 call get_command_argument(4, mskdiam_char)
 read(mskdiam_char, *) mskdiam
-if( command_argument_count() == 6 .or. command_argument_count() == 8 )then
+if( command_argument_count() == 6 .or. command_argument_count() == 9 )then
     call get_command_argument(5, out_even_file)
     call get_command_argument(6, out_odd_file)
 else
     out_even_file = 'nu_filtered_even.mrc'
     out_odd_file  = 'nu_filtered_odd.mrc'
 endif
-if( command_argument_count() == 8 )then
+if( command_argument_count() == 9 )then
     call get_command_argument(7, aux_even_file)
     call get_command_argument(8, aux_odd_file)
+    call get_command_argument(9, length=slen)
+    allocate(character(slen) :: aux_res_char)
+    call get_command_argument(9, aux_res_char)
+    read(aux_res_char, *) aux_res
 endif
 if( smpd <= 0. )    THROW_HARD('smpd must be > 0 in simple_test_nu_filter')
 if( mskdiam <= 0. ) THROW_HARD('mskdiam must be > 0 in simple_test_nu_filter')
@@ -63,7 +67,7 @@ call vol_even%read(string(trim(even_file)))
 call vol_odd%read(string(trim(odd_file)))
 call vol_even%set_smpd(smpd)
 call vol_odd%set_smpd(smpd)
-if( command_argument_count() == 8 )then
+if( command_argument_count() == 9 )then
     allocate(aux_even(1), aux_odd(1))
     call aux_even(1)%new(ldim_even, smpd)
     call aux_odd(1)%new(ldim_odd,  smpd)
@@ -76,9 +80,9 @@ mskrad_px = 0.5 * mskdiam / smpd
 call vol_msk%disc(ldim_even, smpd, mskrad_px, l_mask)
 t_start = tic()
 if( allocated(aux_even) )then
-    call setup_nu_dmats(vol_even, vol_odd, l_mask, aux_even, aux_odd)
+    call setup_nu_dmats(vol_even, vol_odd, l_mask, [aux_res], aux_even, aux_odd)
 else
-    call setup_nu_dmats(vol_even, vol_odd, l_mask)
+    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 endif
 call optimize_nu_cutoff_finds()
 call nu_filter_vols(vol_even_nu, vol_odd_nu)

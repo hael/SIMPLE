@@ -1,13 +1,13 @@
 !@descr: nonuniform filtering of even/odd volumes
 !
 ! A typical call sequence would be:
-!    call setup_nu_dmats(vol_even, vol_odd, l_mask)
+!    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
 ! Updated call sequence with iterative high-resolution refinement
-!    call setup_nu_dmats(vol_even, vol_odd, l_mask)
+!    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    call extend_nu_filter_highres_iterative(vol_even, vol_odd)  ! optional
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
@@ -21,6 +21,7 @@ use simple_core_module_api
 use simple_image, only: image
 use simple_butterworth
 use simple_tent_smooth, only: tent_smooth_3d
+use simple_neighs,      only: neigh_4_3D
 implicit none
 #include "simple_local_flags.inc"
 
@@ -32,12 +33,20 @@ private
 
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
 real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
-integer,          parameter   :: WINSZ_TENT = 8
-integer,          parameter   :: DISCONT_STEP_THRESH = 1
-character(len=*), parameter   :: NU_FILTER_CACHE_EVEN = 'nu_filter_cache_even'
-character(len=*), parameter   :: NU_FILTER_CACHE_ODD  = 'nu_filter_cache_odd'
+! Physical half-width of the tent regularization kernel. The smoother consumes
+! this as an integer pixel radius, so the full tent base spans 2*radius + 1
+! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
+real,             parameter   :: WINSZ_TENT_ANGSTROM      = 8.
+integer,          parameter   :: DISCONT_STEP_THRESH      = 1
+integer,          parameter   :: NU_POTTS_MAXITS          = 3
+integer,          parameter   :: NU_POTTS_STEP_TOL        = 1
+real,             parameter   :: NU_POTTS_BETA_FRAC       = 1.0
+logical,          parameter   :: L_NU_POTTS_PRIOR_DEFAULT = .false.
+character(len=*), parameter   :: NU_FILTER_CACHE_EVEN     = 'nu_filter_cache_even'
+character(len=*), parameter   :: NU_FILTER_CACHE_ODD      = 'nu_filter_cache_odd'
 real,             allocatable :: dmats(:,:,:,:)
 real,             allocatable :: bwfilters(:,:)
+real,             allocatable :: candidate_coords(:)
 integer,          allocatable :: filtmap(:,:,:)
 integer,          allocatable :: srcmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
@@ -45,6 +54,7 @@ real,             allocatable :: dmat_finest_cached(:,:,:)
 logical,          allocatable :: nu_lmask(:,:,:)
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
+integer :: winsz_tent
 real    :: smpd
 
 contains
@@ -64,6 +74,10 @@ contains
         box  = ldim(1)
         if( any(vol_odd%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; init_nu_filter')
         if( abs(vol_odd%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; init_nu_filter')
+        if( smpd <= TINY ) THROW_HARD('Input volume smpd must be positive; init_nu_filter')
+        ! Convert the physical half-width to pixel radius for tent_smooth_3d.
+        ! The resulting support is 2*winsz_tent + 1 voxels.
+        winsz_tent = max(1, nint(WINSZ_TENT_ANGSTROM / smpd))
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         allocate(cutoff_finds(size(lowpass_limits)))
@@ -112,6 +126,7 @@ contains
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
         if( allocated(dmats)              ) deallocate(dmats)
         if( allocated(bwfilters)          ) deallocate(bwfilters)
+        if( allocated(candidate_coords)    ) deallocate(candidate_coords)
         if( allocated(filtmap)            ) deallocate(filtmap)
         if( allocated(srcmap)             ) deallocate(srcmap)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
@@ -120,6 +135,7 @@ contains
         call cleanup_aux_bank
         ldim = 0
         box  = 0
+        winsz_tent = 0
         smpd = 0.
     end subroutine cleanup_nu_filter
 
@@ -249,9 +265,10 @@ contains
         deallocate(bwfilter)
     end subroutine generate_single_filtered_pair
 
-    subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_even, aux_odd )
+    subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd )
         class(image),          intent(in) :: vol_even, vol_odd
         logical,               intent(in) :: l_mask(:,:,:)
+        real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         type(image) :: vol_even_filt, vol_odd_filt
         type(string) :: even_cache_fname, odd_cache_fname
@@ -265,8 +282,10 @@ contains
         if( .not. any(nu_lmask) ) THROW_HARD('l_mask has no true voxels in setup_nu_dmats')
         if( present(aux_even) ) then
             if( .not. present(aux_odd) ) THROW_HARD('Auxiliary odd bank missing; setup_nu_dmats')
+            if( size(aux_resolutions) /= size(aux_even) ) THROW_HARD('Auxiliary resolutions size mismatch; setup_nu_dmats')
             call stash_aux_volumes(aux_even, aux_odd)
         else
+            if( size(aux_resolutions) /= 0 ) THROW_HARD('Auxiliary resolutions supplied without auxiliary volumes; setup_nu_dmats')
             call cleanup_aux_bank
         end if
         call vol_even_filt%new(ldim, smpd)
@@ -275,6 +294,7 @@ contains
         if( allocated(dmats) ) deallocate(dmats)
         n_candidates = size(cutoff_finds)
         if( allocated(aux_even_bank) ) n_candidates = n_candidates + size(aux_even_bank)
+        call setup_nu_candidate_coords(n_candidates, aux_resolutions)
         allocate(dmats(ldim(1),ldim(2),ldim(3),n_candidates), source=huge(x))
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),           source=0.)
         do i = 1, size(cutoff_finds)
@@ -285,21 +305,66 @@ contains
             call vol_even_filt%read(even_cache_fname)
             call vol_odd_filt%read(odd_cache_fname)
             call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmats(:,:,:,i), nu_lmask)
-            call tent_smooth_3d(dmats(:,:,:,i), dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+            call tent_smooth_3d(dmats(:,:,:,i), dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
             ! dmat_tmp is never just a temporary buffer, the result is in dmats(:,:,:,i)
         end do
         if( allocated(aux_even_bank) ) then
             do i = 1, size(aux_even_bank)
                 call vol_even%nu_objective(aux_even_bank(i), vol_odd, aux_odd_bank(i), &
                     &dmats(:,:,:,size(cutoff_finds)+i), nu_lmask)
-                call tent_smooth_3d(dmats(:,:,:,size(cutoff_finds)+i), dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+                call tent_smooth_3d(dmats(:,:,:,size(cutoff_finds)+i), dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
             end do
         end if
         call vol_even_filt%kill
         call vol_odd_filt%kill
     end subroutine setup_nu_dmats
 
-    subroutine optimize_nu_cutoff_finds
+    subroutine setup_nu_candidate_coords( n_candidates, aux_resolutions )
+        integer, intent(in) :: n_candidates
+        real,    intent(in) :: aux_resolutions(:)
+        integer :: i, n_base, iaux
+        n_base = size(cutoff_finds)
+        if( allocated(candidate_coords) ) deallocate(candidate_coords)
+        allocate(candidate_coords(n_candidates), source=0.)
+        do i = 1, n_base
+            candidate_coords(i) = real(i)
+        end do
+        if( n_candidates == n_base ) return
+        if( size(aux_resolutions) /= n_candidates - n_base )then
+            THROW_HARD('aux_resolutions size mismatch in setup_nu_candidate_coords')
+        endif
+        do iaux = 1, size(aux_resolutions)
+            candidate_coords(n_base + iaux) = lowpass_limit_to_candidate_coord(aux_resolutions(iaux))
+        end do
+    end subroutine setup_nu_candidate_coords
+
+    real function lowpass_limit_to_candidate_coord( lp_angstrom )
+        real, intent(in) :: lp_angstrom
+        integer :: i, n_base
+        real :: denom
+        n_base = size(lowpass_limits)
+        if( lp_angstrom >= lowpass_limits(1) )then
+            lowpass_limit_to_candidate_coord = 1.
+            return
+        endif
+        if( lp_angstrom <= lowpass_limits(n_base) )then
+            lowpass_limit_to_candidate_coord = real(n_base)
+            return
+        endif
+        do i = 1, n_base - 1
+            if( lp_angstrom <= lowpass_limits(i) .and. lp_angstrom >= lowpass_limits(i+1) )then
+                denom = lowpass_limits(i) - lowpass_limits(i+1)
+                lowpass_limit_to_candidate_coord = real(i) + (lowpass_limits(i) - lp_angstrom) / denom
+                return
+            endif
+        end do
+        lowpass_limit_to_candidate_coord = real(n_base)
+    end function lowpass_limit_to_candidate_coord
+
+    subroutine optimize_nu_cutoff_finds( l_potts_prior )
+        logical, optional, intent(in) :: l_potts_prior
+        integer, allocatable :: candmap(:,:,:)
+        logical :: l_use_potts
         integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates
         real    :: best_dmat
         if( .not.allocated(dmats) ) THROW_HARD('dmats not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -314,6 +379,7 @@ contains
         n_candidates = size(dmats, 4)
         if( allocated(filtmap) ) deallocate(filtmap)
         if( allocated(srcmap)  ) deallocate(srcmap)
+        allocate(candmap(nx,ny,nz), source=1)
         allocate(filtmap(nx,ny,nz), source=1)
         allocate(srcmap(nx,ny,nz),  source=1)
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,icand,best_icand,best_dmat) proc_bind(close)
@@ -333,28 +399,154 @@ contains
                             best_icand = icand
                         end if
                     end do
+                    candmap(i,j,k) = best_icand
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        l_use_potts = L_NU_POTTS_PRIOR_DEFAULT
+        if( present(l_potts_prior) ) l_use_potts = l_potts_prior
+        if( l_use_potts ) call refine_nu_candidate_map_potts_icm(candmap, n_candidates)
+        call candidate_map_to_filt_and_src(candmap, n_base)
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
+        allocate(dmat_finest_cached(nx,ny,nz), source=dmats(:,:,:,n_base))
+        ! this is the big memory consumer, so deallocate it here
+        if( allocated(dmats) ) deallocate(dmats)
+        deallocate(candmap)
+    end subroutine optimize_nu_cutoff_finds
+
+    subroutine candidate_map_to_filt_and_src( candmap, n_base )
+        integer, intent(in) :: candmap(:,:,:), n_base
+        integer :: i, j, k, icand, nx, ny, nz
+        nx = size(candmap, 1)
+        ny = size(candmap, 2)
+        nz = size(candmap, 3)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,icand) proc_bind(close)
+        do k = 1, nz
+            do j = 1, ny
+                do i = 1, nx
+                    icand = candmap(i,j,k)
                     ! Base-bank winners preserve their low-pass index in filtmap.
                     ! Auxiliary winners are tracked through srcmap only, because
                     ! they do not correspond to one of cutoff_finds(:).
-                    if( best_icand <= n_base ) then
+                    if( icand <= n_base ) then
                         srcmap(i,j,k)  = 1
-                        filtmap(i,j,k) = best_icand
+                        filtmap(i,j,k) = icand
                     else
                         ! srcmap numbering:
                         !   1   -> base low-pass bank
                         !   2+  -> auxiliary pair 1, 2, ...
-                        srcmap(i,j,k)  = best_icand - n_base + 1
+                        srcmap(i,j,k)  = icand - n_base + 1
                         filtmap(i,j,k) = 1
                     end if
                 end do
             end do
         end do
         !$omp end parallel do
-        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        allocate(dmat_finest_cached(nx,ny,nz), source=dmats(:,:,:,n_base))
-        ! this is the big memory consumer, so deallocate it here
-        if( allocated(dmats) ) deallocate(dmats)
-    end subroutine optimize_nu_cutoff_finds
+    end subroutine candidate_map_to_filt_and_src
+
+    subroutine refine_nu_candidate_map_potts_icm( candmap, n_candidates )
+        integer, intent(inout) :: candmap(:,:,:)
+        integer, intent(in)    :: n_candidates
+        integer, allocatable :: cand_prev(:,:,:)
+        integer :: iter, i, j, k, icand, best_icand, n_4(3,6), nsz, nchanged
+        real    :: beta, e, best_e
+        if( n_candidates < 2 ) return
+        if( .not. allocated(candidate_coords) ) THROW_HARD('candidate_coords not allocated; refine_nu_candidate_map_potts_icm')
+        if( size(candidate_coords) /= n_candidates ) THROW_HARD('candidate_coords size mismatch; refine_nu_candidate_map_potts_icm')
+        beta = estimate_nu_potts_beta(n_candidates)
+        if( beta <= TINY ) return
+        allocate(cand_prev(ldim(1),ldim(2),ldim(3)), source=candmap)
+        write(logfhandle,'(A,F10.4,A,I0,A)') '>>> NU Potts/ICM label regularization: beta=', beta, &
+            &', iterations=', NU_POTTS_MAXITS, ', neighborhood=6'
+        do iter = 1, NU_POTTS_MAXITS
+            cand_prev = candmap
+            nchanged  = 0
+            !$omp parallel do collapse(3) schedule(static) default(shared) &
+            !$omp private(i,j,k,icand,best_icand,n_4,nsz,e,best_e) reduction(+:nchanged) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.nu_lmask(i,j,k) ) cycle
+                        call neigh_4_3D(ldim, [i,j,k], n_4, nsz)
+                        best_icand = cand_prev(i,j,k)
+                        best_e     = huge(best_e)
+                        do icand = 1, n_candidates
+                            e = dmats(i,j,k,icand) + beta * &
+                                &nu_potts_neighborhood_cost(icand, cand_prev, n_4, nsz)
+                            if( e < best_e )then
+                                best_e     = e
+                                best_icand = icand
+                            endif
+                        end do
+                        if( best_icand /= cand_prev(i,j,k) ) nchanged = nchanged + 1
+                        candmap(i,j,k) = best_icand
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+            write(logfhandle,'(A,I0,A,I0)') '>>> NU Potts/ICM iteration ', iter, ' changed voxels: ', nchanged
+            if( nchanged == 0 ) exit
+        end do
+        deallocate(cand_prev)
+    end subroutine refine_nu_candidate_map_potts_icm
+
+    real function estimate_nu_potts_beta( n_candidates )
+        integer, intent(in) :: n_candidates
+        integer :: i, j, k, icand, nvox
+        real    :: best_e, second_e, cur_e
+        estimate_nu_potts_beta = 0.
+        nvox = 0
+        if( n_candidates < 2 ) return
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.nu_lmask(i,j,k) ) cycle
+                    best_e   = huge(best_e)
+                    second_e = huge(second_e)
+                    do icand = 1, n_candidates
+                        cur_e = dmats(i,j,k,icand)
+                        if( cur_e < best_e )then
+                            second_e = best_e
+                            best_e   = cur_e
+                        else if( cur_e < second_e )then
+                            second_e = cur_e
+                        endif
+                    end do
+                    if( second_e < huge(second_e) )then
+                        estimate_nu_potts_beta = estimate_nu_potts_beta + max(0., second_e - best_e)
+                        nvox = nvox + 1
+                    endif
+                end do
+            end do
+        end do
+        if( nvox > 0 ) estimate_nu_potts_beta = NU_POTTS_BETA_FRAC * estimate_nu_potts_beta / real(nvox)
+    end function estimate_nu_potts_beta
+
+    real function nu_potts_neighborhood_cost( icand, cand_prev, n_4, nsz )
+        integer, intent(in) :: icand, cand_prev(:,:,:), n_4(3,6), nsz
+        integer :: ineigh, ni, nj, nk
+        nu_potts_neighborhood_cost = 0.
+        do ineigh = 1, nsz
+            ni = n_4(1,ineigh)
+            nj = n_4(2,ineigh)
+            nk = n_4(3,ineigh)
+            if( .not.nu_lmask(ni,nj,nk) ) cycle
+            nu_potts_neighborhood_cost = nu_potts_neighborhood_cost + &
+                &nu_potts_pair_cost(icand, cand_prev(ni,nj,nk))
+        end do
+    end function nu_potts_neighborhood_cost
+
+    real function nu_potts_pair_cost( icand, jcand )
+        integer, intent(in) :: icand, jcand
+        real :: step_jump
+        if( icand == jcand )then
+            nu_potts_pair_cost = 0.
+        else
+            step_jump = max(0., abs(candidate_coords(icand) - candidate_coords(jcand)) - real(NU_POTTS_STEP_TOL))
+            nu_potts_pair_cost = step_jump
+        endif
+    end function nu_potts_pair_cost
 
     subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit )
         class(image), intent(in) :: vol_even, vol_odd
@@ -405,7 +597,7 @@ contains
         call vol_even_filt_new%read(even_cache_fname)
         call vol_odd_filt_new%read(odd_cache_fname)
         call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new, nu_lmask)
-        call tent_smooth_3d(dmat_new, dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+        call tent_smooth_3d(dmat_new, dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
         ! dmat_tmp is never just a temporary buffer, the result is in dmats(:,:,:,i)
         allocate(dmat_finest(ldim(1),ldim(2),ldim(3)), source=huge(x))
         if( allocated(dmat_finest_cached) ) then
@@ -415,13 +607,13 @@ contains
                 call vol_even_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(sz_old)))
                 call vol_odd_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(sz_old)))
                 call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest, nu_lmask)
-                call tent_smooth_3d(dmat_finest, dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+                call tent_smooth_3d(dmat_finest, dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
             end if
         else
             call vol_even_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(sz_old)))
             call vol_odd_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(sz_old)))
             call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest, nu_lmask)
-            call tent_smooth_3d(dmat_finest, dmat_tmp, ldim(1), ldim(2), ldim(3), WINSZ_TENT)
+            call tent_smooth_3d(dmat_finest, dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
         end if
         ! --- update filtmap in place for the masked voxels ---
         n_extended = 0
@@ -771,7 +963,8 @@ contains
                 write(logfhandle,'(A)') '>>> Moderate discontinuity rate — tent regularization may benefit from widening'
             else
                 write(logfhandle,'(A)') '>>> High discontinuity rate — tent regularization kernel likely too narrow'
-                write(logfhandle,'(A,I0,A)') '    Current WINSZ_TENT = ', WINSZ_TENT, '; consider increasing to reduce spatial noise in LP map'
+                write(logfhandle,'(A,I0,A,F6.2,A)') '    Current tent regularization radius = ', winsz_tent, &
+                    &' px (', WINSZ_TENT_ANGSTROM, ' A); consider increasing to reduce spatial noise in LP map'
             end if
         else
             write(logfhandle,'(A)') '>>> No neighbor pairs found in mask — continuity analysis is inconclusive'

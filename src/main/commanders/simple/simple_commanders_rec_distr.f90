@@ -342,10 +342,11 @@ contains
                     allocate(nu_aux_even(1), nu_aux_odd(1))
                     call nu_aux_even(1)%copy(build%vol)
                     call nu_aux_odd(1)%copy(build%vol2)
-                    call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, nu_aux_even, nu_aux_odd)
+                    call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [res0143s(state)], &
+                        &nu_aux_even, nu_aux_odd)
                 else
                     ! build%vol/build%vol2 hold the current even/odd pair in memory.
-                    call setup_nu_dmats(build%vol, build%vol2, l_mask)
+                    call setup_nu_dmats(build%vol, build%vol2, l_mask, [real ::])
                 end if
                 call optimize_nu_cutoff_finds()
                 call nu_filter_vols(vol_even_nu, vol_odd_nu)
