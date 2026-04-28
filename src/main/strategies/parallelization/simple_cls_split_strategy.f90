@@ -550,20 +550,21 @@ contains
         call sanitize_distance_matrix(trim(params%pca_mode), cls_id, dmat)
         if( l_fixed_nsubcls )then
             nsplit = params%ncls
-            call cluster_dmat(dmat, 'kmed', nsplit, i_medoids, labels)
+            call cluster_dmat(dmat, 'hclust', nsplit, i_medoids, labels)
         else
             nsplit_count = particle_count_nsplit(nptcls, params%nptcls_per_subcls, params%nsubcls_min, params%nsubcls_max)
-            !!!! THIS ALWAYS FALLS BACK ON THE LOWER BOUND
-            ! if( allocated(eigvals) )then
-            !     nsplit_spec = spectral_nsplit(eigvals, params%nsubcls_min, params%nsubcls_max)
-            ! else
-            !     nsplit_spec = params%nsubcls_max
-            ! endif
-            nsplit       = max(params%nsubcls_min, min(params%nsubcls_max, nsplit_count))
+            if( allocated(eigvals) )then
+                nsplit_spec = spectral_nsplit(eigvals, params%nsubcls_min, params%nsubcls_max)
+                nsplit = nsplit_spec
+                print *, 'SUGGESTED NSPLIT FROM SPECTRUM: ', nsplit_spec
+            else
+                nsplit_spec = params%nsubcls_max
+                nsplit      = max(params%nsubcls_min, min(params%nsubcls_max, nsplit_count))
+            endif
             write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto ncls: class=', cls_id, &
                 ' size=', nptcls, ' count_suggest=', nsplit_count, ' spectral_suggest=', nsplit_spec, ' selected=', nsplit
             call flush(logfhandle)
-            call cluster_dmat(dmat, 'kmed', nsplit, i_medoids, labels)
+            call cluster_dmat(dmat, 'hclust', nsplit, i_medoids, labels)
         endif
         call cavg_den%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
         allocate(raw_subavgs(nsplit), den_subavgs(nsplit))
@@ -652,6 +653,7 @@ contains
                     coords(:,i) = feat
                     if( allocated(feat) ) deallocate(feat)
                 end do
+                eigvals = kpca_model%get_eigvals()
                 call kpca_model%kill
             case DEFAULT
                 THROW_HARD('cls_split pca_mode must be ppca, kpca, or diffusion_maps')

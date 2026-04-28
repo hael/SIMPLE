@@ -14,6 +14,7 @@ type, extends(pca) :: kpca_svd
     private
     real, allocatable :: E_zn(:,:)                   !< expectations (feature vecs)
     real, allocatable :: data(:,:)                   !< projected data on feature vecs
+    real, allocatable :: eigvals(:)                  !< fitted eigenvalue spectrum for the active embedding
     integer           :: nthr                        !< number of threads
     character(len=16) :: kpca_backend      = ''      !< backend ('exact' or 'nystrom')
     character(len=16) :: kpca_ker          = ''      !< kernel type ('rbf' or 'cosine')
@@ -24,16 +25,17 @@ type, extends(pca) :: kpca_svd
     logical           :: existence         = .false.
     contains
     ! CONSTRUCTOR
-    procedure :: new        => new_kpca
+    procedure :: new            => new_kpca
     ! SETTERS
-    procedure :: set_params => set_params_kpca
+    procedure :: set_params     => set_params_kpca
     ! GETTERS
-    procedure :: get_feat   => get_feat_kpca
-    procedure :: generate   => generate_kpca
+    procedure :: get_feat       => get_feat_kpca
+    procedure :: get_eigvals    => get_eigvals_kpca
+    procedure :: generate       => generate_kpca
     ! CALCULATORS
-    procedure :: master     => master_kpca
+    procedure :: master         => master_kpca
     ! DESTRUCTOR
-    procedure :: kill       => kill_kpca
+    procedure :: kill           => kill_kpca
     ! PRIVATE
     procedure, private :: kernel_center
     procedure, private :: cosine_kernel
@@ -139,6 +141,16 @@ contains
         allocate(feat(self%Q), source=self%E_zn(:,i))
     end function get_feat_kpca
 
+    function get_eigvals_kpca( self ) result( eigvals )
+        class(kpca_svd), intent(in) :: self
+        real, allocatable :: eigvals(:)
+        if( allocated(self%eigvals) )then
+            allocate(eigvals(size(self%eigvals)), source=self%eigvals)
+        else
+            allocate(eigvals(0))
+        endif
+    end function get_eigvals_kpca
+
     !>  \brief  is for sampling the generative model at a given image index
     subroutine generate_kpca( self, i, avg, dat )
         class(kpca_svd), intent(inout) :: self
@@ -192,6 +204,7 @@ contains
         ! compute the sorted principle components of the kernel above
         if( DEBUG ) call system_clock(start_time, rate)
         call self%compute_eigvecs(ker, eig_vecs, eig_vals)
+        self%eigvals = eig_vals
         self%E_zn = transpose(matmul(ker, eig_vecs))
         if( DEBUG )then
             call system_clock(end_time)
@@ -485,6 +498,7 @@ contains
             if( eig_q(i) > real(DTINY) ) alpha(:,i) = alpha(:,i) / sqrt(eig_q(i))
         enddo
         !$omp end parallel do
+        self%eigvals = eig_q
         self%E_zn = 0.
         if( q_used > 0 ) self%E_zn(1:q_used,1:self%N) = transpose(alpha(:,1:q_used))
         if( PROFILE )then
@@ -1320,7 +1334,9 @@ contains
     subroutine kill_kpca( self )
         class(kpca_svd), intent(inout) :: self
         if( self%existence )then
-            deallocate( self%E_zn, self%data )
+            if( allocated(self%E_zn)    ) deallocate(self%E_zn)
+            if( allocated(self%data)    ) deallocate(self%data)
+            if( allocated(self%eigvals) ) deallocate(self%eigvals)
             self%existence = .false.
         endif
     end subroutine kill_kpca
