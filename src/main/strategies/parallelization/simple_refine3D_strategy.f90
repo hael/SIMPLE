@@ -328,7 +328,8 @@ contains
                 end do
             else
                 if( .not. polar_ref_sections_available(params) ) then
-                    THROW_HARD('polar references are required when complete volume source not provided')
+                    call set_bp_range3D(params, build, cline)
+                    call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D shared-memory initialization')
                 endif
             endif
         else
@@ -860,7 +861,6 @@ contains
                 call cline_prob_align%set('prg', 'prob_align')
             endif
             call cline_prob_align%set('which_iter', iter)
-            call cline_prob_align%set('startit',    iter)
             call build%spproj%write_segment_inside(params%oritype)
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
                 call xprob_align_neigh_distr%execute( cline_prob_align )

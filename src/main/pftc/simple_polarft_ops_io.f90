@@ -614,9 +614,10 @@ contains
         class(polarft_calc),      intent(in)    :: self
         class(string),            intent(in)    :: fname
         complex(sp), allocatable, intent(inout) :: array(:,:,:)
-        integer :: dims(4), funit
+        integer :: dims(4), funit, io_stat
         if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
-        call open_pft_or_ctf2_array_for_write(fname, funit)
+        call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('read_any_pft_array: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) dims
         if( allocated(array) ) deallocate(array)
         allocate(array(dims(1),dims(2):dims(3),dims(4)))
