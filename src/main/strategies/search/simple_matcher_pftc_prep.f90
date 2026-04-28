@@ -1,7 +1,7 @@
 !@descr: reference-section preparation helpers for matcher workflows
 ! POLAR_REFS*.bin lifecycle:
 ! - producers: centralized materializers in simple_matcher_refvol_utils, exec_polar_assembly
-! - consumers: prep_pftc4align3D_polar, prob_tab, prob_tab_neigh
+! - consumers: prep_pftc4align3D, prob_tab, prob_tab_neigh
 module simple_matcher_pftc_prep
 use simple_pftc_srch_api
 use simple_builder,              only: builder
@@ -10,7 +10,7 @@ use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun
 use simple_matcher_refvol_utils, only: pick_lp_est_state, estimate_lp_from_refs, polar_ref_sections_available
 implicit none
 
-public :: prep_pftc4align3D_polar, prep_pftc4align2D, polar_ref_sections_available
+public :: prep_pftc4align3D, prep_pftc4align2D, polar_ref_sections_available
 private
 #include "simple_local_flags.inc"
 
@@ -114,7 +114,7 @@ contains
         nullify(cavgs_m,cavgs_e,cavgs_o)
     end subroutine prep_pftc4align2D
 
-    subroutine prep_pftc4align3D_polar( params, build, cline, batchsz )
+    subroutine prep_pftc4align3D( params, build, cline, batchsz )
         class(parameters),        intent(inout) :: params
         class(builder),           intent(inout) :: build
         class(cmdline),           intent(in)    :: cline
@@ -133,6 +133,8 @@ contains
         ! (state - 1) * nspace + local_projection.
         nrefs = params%nspace * params%nstates
         call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+        ! objective functions & sigma
+        call prep_sigmas_objfun(params, build, .false.)
         ! Read polar references
         call build%pftc%polar_cavger_new(.true.)
         call build%pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
@@ -178,6 +180,6 @@ contains
         end do
         !$omp end parallel do
         if( allocated(gaufilter) ) deallocate(gaufilter)
-    end subroutine prep_pftc4align3D_polar
+    end subroutine prep_pftc4align3D
 
 end module simple_matcher_pftc_prep

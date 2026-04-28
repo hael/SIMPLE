@@ -1,10 +1,10 @@
 !@descr: shared helpers for reading, masking, filtering and reprojecting reference volumes
 module simple_matcher_refvol_utils
 use simple_core_module_api
-use simple_builder,    only: builder
-use simple_parameters, only: parameters
-use simple_cmdline,    only: cmdline
-use simple_image,      only: image
+use simple_builder,       only: builder
+use simple_parameters,    only: parameters
+use simple_cmdline,       only: cmdline
+use simple_image,         only: image
 use simple_pftc_srch_api, only: polarft_dims_from_file_header
 implicit none
 
@@ -106,6 +106,7 @@ contains
             polar_ref_file_compatible = polar_ref_file_compatible .and. pftsz_here == params%pftsz
             polar_ref_file_compatible = polar_ref_file_compatible .and. kfromto_here(2) <= expected_interpklim
         end function polar_ref_file_compatible
+        
     end function polar_ref_sections_available
 
     subroutine remove_polar_ref_section_files

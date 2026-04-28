@@ -39,12 +39,10 @@ contains
     subroutine exec_prob_tab( self, cline )
         use simple_matcher_2Dprep
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
+        use simple_matcher_pftc_prep,       only: prep_pftc4align3D
         use simple_matcher_refvol_utils,    only: polar_ref_sections_available
-        use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
-        use simple_matcher_ptcl_io,         only: killimgbatch
+        use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
         use simple_eul_prob_tab,            only: eul_prob_tab
-        use simple_imgarr_utils,            only: dealloc_imgarr
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -69,8 +67,8 @@ contains
         if( .not. polar_ref_sections_available(params) )then
             THROW_HARD('polar reference sections are missing; prob_align must materialize POLAR_REFS before prob_tab')
         endif
-        call prep_pftc4align3D_polar( params, build, cline, nptcls )
-        call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
+        call prep_pftc4align3D( params, build, cline, nptcls )
+        call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Build polar particle images
         call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
@@ -85,11 +83,9 @@ contains
             call eulprob_obj_part%write_tab(fname)
         endif
         call eulprob_obj_part%kill
-        call killimgbatch(build)
+        call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
         call build%pftc%kill
         call build%kill_general_tbox
-        call dealloc_imgarr(tmp_imgs)
-        call dealloc_imgarr(tmp_imgs_pad)
         call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab
@@ -97,12 +93,10 @@ contains
     subroutine exec_prob_tab_neigh( self, cline )
         use simple_matcher_2Dprep
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
+        use simple_matcher_pftc_prep,       only: prep_pftc4align3D
         use simple_matcher_refvol_utils,    only: polar_ref_sections_available
-        use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
-        use simple_matcher_ptcl_io,         only: killimgbatch
+        use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
-        use simple_imgarr_utils,            only: dealloc_imgarr
         class(commander_prob_tab_neigh), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -125,8 +119,8 @@ contains
         if( .not. polar_ref_sections_available(params) )then
             THROW_HARD('polar reference sections are missing; prob_align must materialize POLAR_REFS before prob_tab_neigh')
         endif
-        call prep_pftc4align3D_polar( params, build, cline, nptcls )
-        call prep_sigmas_alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
+        call prep_pftc4align3D( params, build, cline, nptcls )
+        call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Build polar particle images
         call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
@@ -135,11 +129,9 @@ contains
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part_neigh%write_tab(fname)
         call eulprob_obj_part_neigh%kill
-        call killimgbatch(build)
+        call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
         call build%pftc%kill
         call build%kill_general_tbox
-        call dealloc_imgarr(tmp_imgs)
-        call dealloc_imgarr(tmp_imgs_pad)
         call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab_neigh'))
         call simple_end('**** SIMPLE_PROB_TAB_NEIGH NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab_neigh
@@ -280,7 +272,8 @@ contains
         use simple_strategy2D_matcher,  only: set_b_p_ptrs2D, &
                                               ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
         use simple_matcher_pftc_prep,      only: prep_pftc4align2D
-        use simple_matcher_ptcl_batch,  only: prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
+        use simple_matcher_ptcl_batch,  only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
+        use simple_imgarr_utils,        only: alloc_imgarr
         use simple_classaverager,       only: cavger_new, cavger_read_all, cavger_kill
         use simple_eul_prob_tab2D,      only: eul_prob_tab2D
         class(commander_prob_tab2D), intent(inout) :: self
@@ -308,7 +301,8 @@ contains
             THROW_HARD('exec_prob_tab2D requires prior particle sampling (in exec_prob_align2D)')
         endif
         call set_b_p_ptrs2D(params, build)
-        call prep_batch_particles2D(params, build, nptcls, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+        call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, nptcls)
+        call alloc_imgarr(nptcls, [params%box, params%box, 1], params%smpd, ptcl_imgs)
         ! mirror cluster2D_exec reference setup: polar refs only for polar=yes and iter>1
         l_alloc_read_cavgs = l_distr_worker_glob .or. (params%which_iter==1)
         call cavger_new(params, build, alloccavgs=l_alloc_read_cavgs)

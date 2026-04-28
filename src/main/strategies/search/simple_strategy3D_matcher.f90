@@ -7,9 +7,8 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
 use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
-use simple_matcher_ptcl_batch,      only: prep_sigmas_alloc_ptcl_imgs, build_batch_particles3D
-use simple_matcher_ptcl_io,         only: killimgbatch
-use simple_matcher_pftc_prep,       only: prep_pftc4align3D_polar
+use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
+use simple_matcher_pftc_prep,       only: prep_pftc4align3D
 use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols, complete_volume_source_defined, &
     &any_volume_source_defined, write_polar_refs_from_current_pftc, polar_ref_sections_available
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, sample_ptcls4fillin, sample_ptcls4update3D
@@ -79,10 +78,10 @@ contains
         ! benchmarking
         type(string) :: benchfname
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
-        integer(timer_int_kind) :: t_prep_sigmas_alloc_ptcl_imgs
+        integer(timer_int_kind) :: t_alloc_ptcl_imgs
         integer(timer_int_kind) :: t_prep_ref_sections, t_memoize_refs
         real(timer_int_kind)    :: rt_startup, rt_build_batch_ptcls, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
-        real(timer_int_kind)    :: rt_prep_sigmas_alloc_ptcl_imgs
+        real(timer_int_kind)    :: rt_alloc_ptcl_imgs
         real(timer_int_kind)    :: rt_prep_ref_sections, rt_memoize_refs
 
         p_ptr => params
@@ -104,8 +103,8 @@ contains
         call prepare_partial_ref_output_space()
         if( ctrl%do_bench )then
             rt_startup = toc(t_startup)
-            rt_prep_sigmas_alloc_ptcl_imgs = 0.0
-            rt_prep_ref_sections           = 0.0
+            rt_alloc_ptcl_imgs   = 0.0
+            rt_prep_ref_sections = 0.0
         endif
         call prepare_refs_sigmas_and_pftc()
         if( ctrl%do_bench ) t_memoize_refs = tic()
@@ -180,10 +179,7 @@ contains
         call clean_strategy3D
         call b_ptr%vol%kill
         call orientation%kill
-        call dealloc_imgarr(ptcl_rec_imgs)
-        call dealloc_imgarr(ptcl_match_imgs)
-        call dealloc_imgarr(ptcl_match_imgs_pad)
-        call killimgbatch(b_ptr)
+        call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_rec_imgs)
         call maybe_write_orientations()
 
         if( ctrl%do_write_partial_recs )then
@@ -212,7 +208,7 @@ contains
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'startup_overhead : ',          rt_startup
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D : ',   rt_build_batch_ptcls
-                write(fnr,'(a,1x,f9.2)') 'prep_sigmas_alloc_ptcls : ',   rt_prep_sigmas_alloc_ptcl_imgs
+                write(fnr,'(a,1x,f9.2)') 'alloc_ptcl_imgs : ',           rt_alloc_ptcl_imgs
                 write(fnr,'(a,1x,f9.2)') 'prepare_ref_sections : ',      rt_prep_ref_sections
                 write(fnr,'(a,1x,f9.2)') 'memoize_refs : ',              rt_memoize_refs
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ',     rt_prep_orisrch
@@ -224,7 +220,7 @@ contains
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
                 write(fnr,'(a,1x,f9.2)') 'startup_overhead : ',          (rt_startup/rt_tot)                     * 100.
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D : ',   (rt_build_batch_ptcls/rt_tot)           * 100.
-                write(fnr,'(a,1x,f9.2)') 'prep_sigmas_alloc_ptcls : ',   (rt_prep_sigmas_alloc_ptcl_imgs/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'alloc_ptcl_imgs : ',           (rt_alloc_ptcl_imgs/rt_tot)             * 100.
                 write(fnr,'(a,1x,f9.2)') 'prepare_ref_sections : ',      (rt_prep_ref_sections/rt_tot)           * 100.
                 write(fnr,'(a,1x,f9.2)') 'memoize_refs : ',              (rt_memoize_refs/rt_tot)                * 100.
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ',     (rt_prep_orisrch/rt_tot)                * 100.
@@ -232,7 +228,7 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'project file I/O : ',          (rt_projio/rt_tot)                      * 100.
                 write(fnr,'(a,1x,f9.2)') 'reconstruction : ',            (rt_rec/rt_tot)                         * 100.
                 write(fnr,'(a,1x,f9.2)') '% accounted for : ', &
-                    ((rt_startup+rt_build_batch_ptcls+rt_prep_sigmas_alloc_ptcl_imgs+ &
+                    ((rt_startup+rt_build_batch_ptcls+rt_alloc_ptcl_imgs+ &
                     rt_prep_ref_sections+rt_memoize_refs+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
                 call fclose(fnr)
             endif
@@ -299,30 +295,36 @@ contains
             if( ctrl%do_prob_align .and. (.not. ctrl%do_polar_prepare) )then
                 nrefs = p_ptr%nspace * p_ptr%nstates
                 call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
+                call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
             endif
             if( ctrl%do_polar_prepare )then
                 if( ctrl%do_bench ) t_prep_ref_sections = tic()
                 if( .not. polar_ref_sections_available(p_ptr) )then
                     THROW_HARD('polar reference sections are missing; strategy must materialize POLAR_REFS before matching')
                 endif
-                call prep_pftc4align3D_polar(p_ptr, b_ptr, cline, batchsz_max)
+                call prep_pftc4align3D(p_ptr, b_ptr, cline, batchsz_max)
                 if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
             endif
             if( (.not. ctrl%do_prob_align) .and. (.not. ctrl%do_polar_prepare) )then
                 if( ctrl%do_bench ) t_prep_ref_sections = tic()
                 call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
+                call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
                 call write_polar_refs_from_current_pftc(p_ptr, b_ptr, skip_distr_nonroot=.true.)
                 if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
             endif
-            if( ctrl%do_bench ) t_prep_sigmas_alloc_ptcl_imgs = tic()
-            call prep_sigmas_alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
-            if( ctrl%do_bench ) rt_prep_sigmas_alloc_ptcl_imgs = toc(t_prep_sigmas_alloc_ptcl_imgs)
+            if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
+            call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+            if( ctrl%do_bench ) rt_alloc_ptcl_imgs = toc(t_alloc_ptcl_imgs)
             call build%vol%kill
             call build%vol_odd%kill
             call build%vol2%kill
             if( ctrl%do_polar .and. ctrl%do_write_partial_recs )then
                 nrefs_cavger = partial_ref_nspace * p_ptr%nstates
-                if( complete_volume_source_defined(cline, p_ptr%nstates) )then
+                ! Only the direct non-probability volume path leaves freshly
+                ! projected refs in pftc. In prob modes prob_align materializes
+                ! POLAR_REFS* before prob_tab, while the main pass only stamps
+                ! assignments and accumulates partial reconstruction sums.
+                if( complete_volume_source_defined(cline, p_ptr%nstates) .and. (.not. ctrl%do_prob_align) )then
                     call b_ptr%pftc%polar_cavger_new(.true.)
                     if( p_ptr%l_trail_rec )then
                         call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))

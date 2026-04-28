@@ -3,7 +3,8 @@ module simple_polarft_lines_ppca_stream
 use simple_pftc_srch_api
 use simple_builder,             only: builder
 use simple_complex_ppca,        only: complex_ppca
-use simple_matcher_ptcl_batch,  only: prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
+use simple_matcher_ptcl_batch,  only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
+use simple_imgarr_utils,        only: alloc_imgarr
 implicit none
 
 public :: stream_pft_lines_ppca
@@ -32,7 +33,8 @@ contains
         nk = kfromto(2) - kfromto(1) + 1
         call model%new(0, nk, q)
         call model%stream_reset()
-        call prep_batch_particles2D(params, build, batchsz_max, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+        call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+        call alloc_imgarr(batchsz_max, [params%box, params%box, 1], params%smpd, ptcl_imgs)
         nlines_here = 0_8
         nbatches = size(batches,1)
         do ibatch = 1,nbatches
@@ -61,7 +63,8 @@ contains
         integer :: ibatch
         integer(kind=8) :: nlines_here
         call get_stream_batch_layout(params, build, pinds, batches, batchsz_max)
-        call prep_batch_particles2D(params, build, batchsz_max, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+        call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+        call alloc_imgarr(batchsz_max, [params%box, params%box, 1], params%smpd, ptcl_imgs)
         nlines_here = 0_8
         nbatches = size(batches,1)
         do ibatch = 1,nbatches

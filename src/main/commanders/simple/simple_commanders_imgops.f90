@@ -668,7 +668,8 @@ contains
     subroutine exec_ppca_denoise_polarft_lines( self, cline )
         use simple_complex_ppca,               only: complex_ppca
         use simple_matcher_pftc_prep,          only: prep_pftc4align2D
-        use simple_matcher_ptcl_batch,         only: prep_batch_particles2D, clean_batch_particles2D
+        use simple_matcher_ptcl_batch,         only: alloc_ptcl_imgs, clean_batch_particles2D
+        use simple_imgarr_utils,               only: alloc_imgarr
         use simple_polarft_lines_ppca_stream,  only: stream_pft_lines_ppca, denoise_write_pft_lines_ppca
         class(commander_ppca_denoise_polarft_lines), intent(inout) :: self
         class(cmdline),                              intent(inout) :: cline
@@ -688,7 +689,8 @@ contains
         qfit = max(1, params%neigs)
         which_iter = 1
         if( cline%defined('which_iter') ) which_iter = max(1, params%which_iter)
-        call prep_batch_particles2D(params, build, batchsz_max, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+        call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+        call alloc_imgarr(batchsz_max, [params%box, params%box, 1], params%smpd, ptcl_imgs)
         call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, .false.)
         call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         call stream_pft_lines_ppca(params, build, qfit, model, nlines_fit)

@@ -6,34 +6,12 @@ use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgb
 use simple_matcher_2Dprep,  only: prepimg4align
 implicit none
 
-public :: prep_sigmas_objfun, prep_sigmas_alloc_ptcl_imgs, prep_batch_particles2D, build_batch_particles3D, build_batch_particles2D, clean_batch_particles2D
+public :: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, build_batch_particles2D
+public :: clean_batch_particles2D, clean_batch_particles3D
 private
 #include "simple_local_flags.inc"
 
 contains
-
-    subroutine prep_batch_particles2D( params, build, batchsz_max, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad )
-        class(parameters),        intent(in)    :: params
-        class(builder),           intent(inout) :: build
-        integer,                  intent(in)    :: batchsz_max
-        type(image), allocatable, intent(inout) :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
-        integer :: i, ithr
-        call prepimgbatch(params, build, batchsz_max)
-        allocate(ptcl_imgs(batchsz_max),ptcl_match_imgs(params%nthr), ptcl_match_imgs_pad(params%nthr))
-        !$omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
-        do ithr = 1,params%nthr
-            call ptcl_match_imgs(ithr)%new(    [params%box_crop,   params%box_crop,   1],&
-            &params%smpd_crop, wthreads=.false.)
-            call ptcl_match_imgs_pad(ithr)%new([params%box_croppd, params%box_croppd, 1],&
-            &params%smpd_crop, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        !$omp parallel do private(i) default(shared) proc_bind(close) schedule(static)
-        do i = 1,batchsz_max
-            call ptcl_imgs(i)%new([params%box, params%box, 1], params%smpd, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-    end subroutine prep_batch_particles2D
 
     subroutine prep_sigmas_objfun( params, build, l_stream )
         class(parameters), intent(inout) :: params
@@ -53,14 +31,13 @@ contains
         end if
     end subroutine prep_sigmas_objfun
 
-    subroutine prep_sigmas_alloc_ptcl_imgs( params, build, ptcl_imgs, ptcl_imgs_pad, batchsz )
+    subroutine alloc_ptcl_imgs( params, build, ptcl_imgs, ptcl_imgs_pad, batchsz )
         class(parameters),        intent(inout) :: params
         class(builder),           intent(inout) :: build
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
         type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
         integer,                  intent(in)    :: batchsz
         integer           :: ithr
-        call prep_sigmas_objfun(params, build, .false.)
         call prepimgbatch(params, build, batchsz)
         allocate(ptcl_imgs(nthr_glob), ptcl_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
@@ -69,7 +46,7 @@ contains
             call ptcl_imgs_pad(ithr)%new([params%box_croppd,params%box_croppd,1], params%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
-    end subroutine prep_sigmas_alloc_ptcl_imgs
+    end subroutine alloc_ptcl_imgs
 
     subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, imgs4rec )
         class(parameters),      intent(in)    :: params
@@ -149,5 +126,17 @@ contains
         call dealloc_imgarr(ptcl_match_imgs)
         call dealloc_imgarr(ptcl_match_imgs_pad)
     end subroutine clean_batch_particles2D
+
+    subroutine clean_batch_particles3D( build, ptcl_imgs, ptcl_imgs_pad, imgs4rec )
+        use simple_imgarr_utils, only: dealloc_imgarr
+        class(builder),                     intent(inout) :: build
+        type(image), allocatable,           intent(inout) :: ptcl_imgs(:)
+        type(image), allocatable,           intent(inout) :: ptcl_imgs_pad(:)
+        type(image), allocatable, optional, intent(inout) :: imgs4rec(:)
+        call killimgbatch(build)
+        if( present(imgs4rec) ) call dealloc_imgarr(imgs4rec)
+        call dealloc_imgarr(ptcl_imgs)
+        call dealloc_imgarr(ptcl_imgs_pad)
+    end subroutine clean_batch_particles3D
 
 end module simple_matcher_ptcl_batch

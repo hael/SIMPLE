@@ -10,7 +10,8 @@ use simple_qsys_funs,               only: qsys_job_finished
 use simple_strategy2D,              only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,       only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims, only: set_bp_range2d, sample_ptcls4fillin_all, sample_ptcls4update2D
-use simple_matcher_ptcl_batch,      only: prep_batch_particles2D, build_batch_particles2D, clean_batch_particles2D
+use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
+use simple_imgarr_utils,            only: alloc_imgarr
 use simple_strategy2D_greedy,       only: strategy2D_greedy
 use simple_strategy2D_greedy_smpl,  only: strategy2D_greedy_smpl
 use simple_strategy2D_inpl,         only: strategy2D_inpl
@@ -32,10 +33,10 @@ private
 type(image),   allocatable :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
 class(builder),    pointer :: b_ptr => null()
 class(parameters), pointer :: p_ptr => null()
-real(timer_int_kind)       :: rt_startup, rt_prep_batch_particles2D, rt_prep_pftc_refs2D
+real(timer_int_kind)       :: rt_startup, rt_alloc_ptcl_imgs2D, rt_prep_pftc_refs2D
 real(timer_int_kind)       :: rt_prep_strategy2D_batch
 real(timer_int_kind)       :: rt_build_batch_particles2D, rt_align, rt_cavg, rt_projio, rt_tot
-integer(timer_int_kind)    :: t, t_startup, t_prep_batch_particles2D, t_prep_pftc_refs2D
+integer(timer_int_kind)    :: t, t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
 integer(timer_int_kind)    :: t_prep_strategy2D_batch
 integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_projio, t_tot
 type(string)               :: benchfname
@@ -105,12 +106,13 @@ contains
             rt_startup                 = toc(t_startup)
             rt_build_batch_particles2D = 0.0
             rt_prep_strategy2D_batch   = 0.0
-            t_prep_batch_particles2D   = tic()
+            t_alloc_ptcl_imgs2D        = tic()
         endif
-        call prep_batch_particles2D(p_ptr, b_ptr, batchsz_max, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+        call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+        call alloc_imgarr(batchsz_max, [p_ptr%box, p_ptr%box, 1], p_ptr%smpd, ptcl_imgs)
         if( ctrl%do_bench )then
-            rt_prep_batch_particles2D = toc(t_prep_batch_particles2D)
-            t_prep_pftc_refs2D        = tic()
+            rt_alloc_ptcl_imgs2D = toc(t_alloc_ptcl_imgs2D)
+            t_prep_pftc_refs2D   = tic()
         endif
         call prepare_alignment_references(batchsz_max)
         if( ctrl%do_bench ) rt_prep_pftc_refs2D = toc(t_prep_pftc_refs2D)
@@ -434,7 +436,7 @@ contains
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'startup_overhead     : ', rt_startup
-            write(fnr,'(a,1x,f9.2)') 'prep_batch_particles : ', rt_prep_batch_particles2D
+            write(fnr,'(a,1x,f9.2)') 'prep_batch_particles : ', rt_alloc_ptcl_imgs2D
             write(fnr,'(a,1x,f9.2)') 'prep_pftc_refs       : ', rt_prep_pftc_refs2D
             write(fnr,'(a,1x,f9.2)') 'build_batch_particles: ', rt_build_batch_particles2D
             write(fnr,'(a,1x,f9.2)') 'prep_strategy2D_batch: ', rt_prep_strategy2D_batch
@@ -445,7 +447,7 @@ contains
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
             write(fnr,'(a,1x,f9.2)') 'startup_overhead     : ', (rt_startup/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'prep_batch_particles : ', (rt_prep_batch_particles2D/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'prep_batch_particles : ', (rt_alloc_ptcl_imgs2D/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'prep_pftc_refs       : ', (rt_prep_pftc_refs2D/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'build_batch_particles: ', (rt_build_batch_particles2D/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'prep_strategy2D_batch: ', (rt_prep_strategy2D_batch/rt_tot) * 100.
@@ -453,7 +455,7 @@ contains
             write(fnr,'(a,1x,f9.2)') 'class averaging      : ', (rt_cavg/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', (rt_projio/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') '% accounted for      : ', &
-                ((rt_startup+rt_prep_batch_particles2D+rt_prep_pftc_refs2D+rt_build_batch_particles2D+ &
+                ((rt_startup+rt_alloc_ptcl_imgs2D+rt_prep_pftc_refs2D+rt_build_batch_particles2D+ &
                   rt_prep_strategy2D_batch+rt_align+rt_cavg+rt_projio)/rt_tot) * 100.
 
             call fclose(fnr)

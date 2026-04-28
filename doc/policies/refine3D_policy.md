@@ -257,7 +257,7 @@ Reference-section production is centralized in `simple_matcher_refvol_utils`.
 
 Consumers that require a file handoff may request materialization through the centralized utility path, but they do not define independent reprojection policy.
 
-`prob_tab`, `prob_tab_neigh`, and `prep_pftc4align3D_polar` are consumers. They do not own live reprojection of current reference volumes.
+`prob_tab`, `prob_tab_neigh`, and `prep_pftc4align3D` are consumers. They do not own live reprojection of current reference volumes.
 
 ### 5.4 Implementation contract: materialization and distributed cache behavior
 
