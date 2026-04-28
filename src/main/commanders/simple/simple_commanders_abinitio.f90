@@ -539,7 +539,10 @@ contains
             if( spproj%is_virgin_field('ptcl3D') )then
                 THROW_HARD('Prior 3D alignment required for abinitio workflow when cavg_ini_ext is set to yes')
             endif
-            start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
+            ! symmetry axis search is skipped: input orientations are assumed already symmetrized
+            call cline%set('pgrp_start', params%pgrp)
+            params%pgrp_start = params%pgrp
+            start_stage = SYMSRCH_STAGE + 1 ! start after the symmetry search stage
             l_ini3D     = .true.
         endif
         ! set class global filt_mode flag for low-pass limit estimation
