@@ -51,6 +51,8 @@ contains
         type(stack_io)                :: stkio_r, stkio_r2, stkio_w
         type(string)                  :: final_vol, work_projfile
         integer                       :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
+        integer                       :: cavg_ldim(3), cavg_nimgs
+        real                          :: cavg_smpd
         if( cline%defined('part') )then
             THROW_HARD('abinitio3D_cavgs distributed execution is master-only; remove part from command line')
         endif
@@ -240,6 +242,8 @@ contains
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         if( nstages_ini3D == NSTAGES_INI3D_MAX )then ! produce validation info
+            call find_ldim_nptcls(orig_stk, cavg_ldim, cavg_nimgs, smpd=cavg_smpd)
+            if( cavg_nimgs < ncavgs ) THROW_HARD('fewer images in cavgs stack than expected; abinitio3D_cavgs')
             ! check even odd convergence
             if( params%nstates > 1 ) call conv_eo_states(work_proj%os_ptcl3D)
             call conv_eo(work_proj%os_ptcl3D)
@@ -252,7 +256,7 @@ contains
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
                 final_vol = REC_FBODY//int2str_pad(s,2)//params%ext%to_char()
                 if( file_exists(final_vol) )then
-                    call spproj%add_vol2os_out(final_vol, params%smpd, s, 'vol_cavg')
+                    call spproj%add_vol2os_out(final_vol, cavg_smpd, s, 'vol_cavg')
                 endif
             enddo
             ! reprojections
@@ -264,12 +268,16 @@ contains
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
                 call cline_reproject%set('vol'//int2str(s), REC_FBODY//int2str_pad(s,2)//PPROC_SUFFIX//MRC_EXT)
             enddo
+            call cline_reproject%set('box',  cavg_ldim(1))
+            call cline_reproject%set('smpd', cavg_smpd)
+            call cline_reproject%delete('box_crop')
+            call cline_reproject%delete('smpd_crop')
             call xreproject%execute(cline_reproject)
             ! write alternated stack
-            call img%new([params%box,params%box,1],         params%smpd)
-            call stkio_r%open(orig_stk,                     params%smpd, 'read',                                 bufsz=500)
-            call stkio_r2%open(string('reprojs.mrc'),       params%smpd, 'read',                                 bufsz=500)
-            call stkio_w%open(string('cavgs_reprojs.mrc'),  params%smpd, 'write', box=params%box, is_ft=.false., bufsz=500)
+            call img%new([cavg_ldim(1),cavg_ldim(1),1],     cavg_smpd)
+            call stkio_r%open(orig_stk,                     cavg_smpd, 'read',                                    bufsz=500)
+            call stkio_r2%open(string('reprojs.mrc'),       cavg_smpd, 'read',                                    bufsz=500)
+            call stkio_w%open(string('cavgs_reprojs.mrc'),  cavg_smpd, 'write', box=cavg_ldim(1), is_ft=.false., bufsz=500)
             cnt = -1
             do icls=1,ncavgs
                 cnt = cnt + 2
@@ -284,9 +292,9 @@ contains
             call stkio_r2%close
             call stkio_w%close
             ! produce shifted stack
-            call shift_imgfile(orig_stk, shifted_stk, spproj%os_cls3D, params%smpd)
+            call shift_imgfile(orig_stk, shifted_stk, spproj%os_cls3D, cavg_smpd)
             ! add shifted stack to project
-            call spproj%add_cavgs2os_out(simple_abspath(shifted_stk), params%smpd, 'cavg_shifted')
+            call spproj%add_cavgs2os_out(simple_abspath(shifted_stk), cavg_smpd, 'cavg_shifted')
         endif
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()

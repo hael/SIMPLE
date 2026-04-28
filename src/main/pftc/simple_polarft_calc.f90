@@ -1,6 +1,7 @@
 !@descr: polarft class complete interface
 module simple_polarft_calc
 use simple_pftc_api
+use simple_fgrid_obsfield, only: fgrid_obsfield_eo
 implicit none
 
 public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D
@@ -77,20 +78,21 @@ type :: polarft_calc
     complex(kind=c_float_complex), allocatable :: ft_ref_even(:,:,:),  ft_ref_odd(:,:,:)  !< Fourier Transform of even/odd references
     complex(kind=c_float_complex), allocatable :: ft_ref2_even(:,:,:), ft_ref2_odd(:,:,:) !< Fourier Transform of even/odd references squared modulus
     ! buffer: (nrots,nk) holding cvec2 for all k
-    type(fftw_cmat),  allocatable :: cmat2_many(:)  ! per thread
+    type(fftw_cmat),               allocatable :: cmat2_many(:)  ! per thread
     ! batched backward (c2r) plan: nk transforms of length nrots, in-place
-    type(fftw_crmat), allocatable :: crmat1_many(:) ! per thread
+    type(fftw_crmat),              allocatable :: crmat1_many(:) ! per thread
     ! Convenience vectors, thread memoization
-    type(heap_vars),  allocatable :: heap_vars(:)
-    type(fftw_drvec), allocatable :: drvec(:)
+    type(heap_vars),               allocatable :: heap_vars(:)
+    type(fftw_drvec),              allocatable :: drvec(:)
     ! for the subset of polarft_ops submodules
-    complex(dp),      allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
-    real(dp),         allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
-    integer,          allocatable :: prev_eo_pops(:,:), eo_pops(:,:)
-    logical                       :: l_comlin   = .false.
+    complex(dp),                   allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
+    real(dp),                      allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
+    type(fgrid_obsfield_eo),       allocatable :: obsfields(:)
+    integer,                       allocatable :: prev_eo_pops(:,:), eo_pops(:,:)
     ! Others
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
     real,    pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
+    logical              :: l_comlin  = .false.         !< use common lines?
     logical              :: with_ctf  = .false.         !< CTF flag
     logical              :: existence = .false.         !< to indicate existence
   contains
@@ -179,13 +181,16 @@ type :: polarft_calc
     procedure          :: polar_cavger_calc_pops
     procedure          :: polar_cavger_update_sums
     procedure          :: polar_cavger_insert_ptcls_obsfield
+    procedure          :: polar_cavger_write_obsfield_parts
+    procedure          :: polar_cavger_assemble_obsfields_from_parts
+    procedure          :: polar_cavger_extract_obsfields
     procedure          :: polar_cavger_kill
     procedure          :: center_3Dpolar_refs
     ! ===== RESTORE: simple_polarft_ops_restore.f90
     procedure          :: polar_filterrefs
     procedure, private :: polar_cavger_calc_frc
-    procedure          :: polar_cavger_merge_eos_and_norm
-    procedure          :: polar_cavger_merge_eos_and_norm_obsfield
+    procedure          :: polar_cavger_normalize_commonline_refs
+    procedure          :: polar_cavger_normalize_obsfield_refs
     procedure, private :: finalize_trail_rec
     procedure, private :: mirror_slices
     procedure, private :: calc_fsc
@@ -739,6 +744,20 @@ interface
         integer,          optional, intent(in)    :: nspace_out
     end subroutine polar_cavger_insert_ptcls_obsfield
 
+    module subroutine polar_cavger_write_obsfield_parts( self )
+        class(polarft_calc), intent(inout) :: self
+    end subroutine polar_cavger_write_obsfield_parts
+
+    module subroutine polar_cavger_assemble_obsfields_from_parts( self, reforis )
+        class(polarft_calc), intent(inout) :: self
+        class(oris), target, intent(inout) :: reforis
+    end subroutine polar_cavger_assemble_obsfields_from_parts
+
+    module subroutine polar_cavger_extract_obsfields( self, reforis )
+        class(polarft_calc), intent(inout) :: self
+        class(oris), target, intent(inout) :: reforis
+    end subroutine polar_cavger_extract_obsfields
+
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self
     end subroutine polar_cavger_kill
@@ -764,20 +783,20 @@ interface
         real(sp),            intent(inout) :: frc(1:n)
     end subroutine polar_cavger_calc_frc
 
-    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop, cline, update_frac )
+    module subroutine polar_cavger_normalize_commonline_refs( self, reforis, symop, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
         type(sym),           intent(in)    :: symop
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
-    end subroutine polar_cavger_merge_eos_and_norm
+    end subroutine polar_cavger_normalize_commonline_refs
 
-    module subroutine polar_cavger_merge_eos_and_norm_obsfield( self, reforis, cline, update_frac )
+    module subroutine polar_cavger_normalize_obsfield_refs( self, reforis, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
-    end subroutine polar_cavger_merge_eos_and_norm_obsfield
+    end subroutine polar_cavger_normalize_obsfield_refs
 
     module subroutine finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
         class(polarft_calc),      intent(inout) :: self

@@ -24,38 +24,58 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(string) :: benchfname
-        integer(timer_int_kind) :: t_tot
-        real(timer_int_kind)    :: rt_tot
+        character(len=32) :: reduce_label, normalize_label
+        integer(timer_int_kind) :: t_tot, t_setup, t_reduce, t_normalize, t_resolution, t_write
+        real(timer_int_kind)    :: rt_tot, rt_setup, rt_reduce, rt_normalize, rt_resolution, rt_write
         real                   :: update_frac_eff
         integer :: fnr, nrefs
         call build%init_params_and_build_general_tbox(cline, params)
         if( L_BENCH_GLOB ) t_tot = tic()
-        ! Matchers write partition-local Cartesian partial reconstructions
-        ! (polar=no) or polar partial sums (polar=yes|obsfield), while
+        ! Matchers write partition-local Cartesian partial reconstructions,
+        ! polar partial sums (polar=yes), or obsfield parts (polar=obsfield), while
         ! the assembly commander owns shared-memory reduction and reference update.
+        if( L_BENCH_GLOB ) t_setup = tic()
         call set_bp_range3D(params, build, cline)
         nrefs = params%nspace * params%nstates
         call build%pftc%new(params, nrefs, [1,1], params%kfromto)
         params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
         call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
         call build%pftc%polar_cavger_calc_pops(build%spproj)
-        call build%pftc%polar_cavger_assemble_sums_from_parts
         update_frac_eff = params%update_frac
         if( params%l_trail_rec .and. (.not. cline%defined('ufrac_trec')) )then
             if( build%spproj_field%has_been_sampled() )then
                 update_frac_eff = build%spproj_field%get_update_frac()
             endif
         endif
+        if( L_BENCH_GLOB ) rt_setup = toc(t_setup)
         select case(trim(params%polar))
             case('obsfield')
-                call build%pftc%polar_cavger_merge_eos_and_norm_obsfield(build%eulspace, cline, update_frac_eff)
+                reduce_label    = 'reduce obsfield parts'
+                normalize_label = 'normalize obsfield refs'
+                if( L_BENCH_GLOB ) t_reduce = tic()
+                call build%pftc%polar_cavger_assemble_obsfields_from_parts(build%eulspace)
+                if( L_BENCH_GLOB ) rt_reduce = toc(t_reduce)
+                if( L_BENCH_GLOB ) t_normalize = tic()
+                call build%pftc%polar_cavger_normalize_obsfield_refs(build%eulspace, cline, update_frac_eff)
+                if( L_BENCH_GLOB ) rt_normalize = toc(t_normalize)
             case('yes')
-                call build%pftc%polar_cavger_merge_eos_and_norm(build%eulspace, build%pgrpsyms, cline, update_frac_eff)
+                reduce_label    = 'reduce polar sums'
+                normalize_label = 'normalize common-line refs'
+                if( L_BENCH_GLOB ) t_reduce = tic()
+                call build%pftc%polar_cavger_assemble_sums_from_parts
+                if( L_BENCH_GLOB ) rt_reduce = toc(t_reduce)
+                if( L_BENCH_GLOB ) t_normalize = tic()
+                call build%pftc%polar_cavger_normalize_commonline_refs(build%eulspace, build%pgrpsyms, cline, update_frac_eff)
+                if( L_BENCH_GLOB ) rt_normalize = toc(t_normalize)
             case default
                 THROW_HARD('unsupported POLAR mode: '//trim(params%polar))
         end select
+        if( L_BENCH_GLOB ) t_resolution = tic()
         call update_polar_resolution_fields(params, build)
+        if( L_BENCH_GLOB ) rt_resolution = toc(t_resolution)
+        if( L_BENCH_GLOB ) t_write = tic()
         call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+        if( L_BENCH_GLOB ) rt_write = toc(t_write)
         call build%pftc%polar_cavger_kill
         call build%pftc%kill
         call build%kill_general_tbox
@@ -64,7 +84,21 @@ contains
             benchfname = 'VOLASSEMBLE_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,1x,f9.2)') 'polar reference assembly : ', rt_tot
+            write(fnr,'(a,1x,f9.2)') 'polar assembly setup     : ', rt_setup
+            write(fnr,'(a,1x,f9.2)') trim(reduce_label)//' : ',    rt_reduce
+            write(fnr,'(a,1x,f9.2)') trim(normalize_label)//' : ', rt_normalize
+            write(fnr,'(a,1x,f9.2)') 'resolution metadata      : ', rt_resolution
+            write(fnr,'(a,1x,f9.2)') 'write POLAR_REFS handoff : ', rt_write
+            write(fnr,'(a,1x,f9.2)') 'polar assembly total     : ', rt_tot
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+            write(fnr,'(a,1x,f9.2)') 'polar assembly setup     : ', (rt_setup/rt_tot)     * 100.
+            write(fnr,'(a,1x,f9.2)') trim(reduce_label)//' : ',    (rt_reduce/rt_tot)    * 100.
+            write(fnr,'(a,1x,f9.2)') trim(normalize_label)//' : ', (rt_normalize/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'resolution metadata      : ', (rt_resolution/rt_tot)* 100.
+            write(fnr,'(a,1x,f9.2)') 'write POLAR_REFS handoff : ', (rt_write/rt_tot)     * 100.
+            write(fnr,'(a,1x,f9.2)') '% accounted for          : ', &
+                ((rt_setup+rt_reduce+rt_normalize+rt_resolution+rt_write)/rt_tot) * 100.
             call fclose(fnr)
         endif
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)

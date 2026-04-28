@@ -42,7 +42,7 @@ The public workflow for `refine3D` is:
 1. initialize execution mode and iteration state
 2. optionally run probabilistic pre-alignment
 3. run the particle-update matcher/search pass
-4. write partition-local Cartesian partial reconstructions or polar partial sums
+4. write partition-local Cartesian partial reconstructions, polar partial sums, or observation-field parts
 5. assemble Cartesian volumes or polar references through the explicit assembly pathway
 6. persist updated orientation and volume artifacts for the next iteration or downstream programs
 
@@ -120,7 +120,7 @@ That includes:
 - candidate evaluation
 - orientation, state, in-plane, and shift update
 - Euclidean sigma update during search when applicable
-- writing partial reconstructions or polar partial sums for downstream assembly when instructed by the strategy
+- writing partial reconstructions, polar partial sums, or observation-field parts for downstream assembly when instructed by the strategy
 
 This is the execution center of particle-domain refinement.
 
@@ -135,15 +135,19 @@ This is the execution center of particle-domain refinement.
 
 Cartesian matching still uses projected polar central sections, so this path also projects the prepared Cartesian volumes into `POLAR_REFS_even.bin` and `POLAR_REFS_odd.bin` for the next matcher or probability-table pass. That projection is benchmarked as `polar ref projection`.
 
-`exec_polar_assembly` owns polar reference assembly for `polar=yes` and `polar=obsfield`. The matcher writes partition-local polar partial sums. Polar assembly then:
+`exec_polar_assembly` owns polar reference assembly for `polar=yes` and `polar=obsfield`. The matcher writes partition-local polar partial sums for `polar=yes` and partition-local observation-field parts for `polar=obsfield`. Polar assembly then:
 
 - calculates polar populations
-- reduces the partial sums
-- dispatches to the common-line restore path for `polar=yes`
-- dispatches to the observation-field restore path for `polar=obsfield`
+- reduces the partial sums or observation fields
+- dispatches to common-line polar-reference normalization for `polar=yes`
+- dispatches to observation-field polar-reference normalization for `polar=obsfield`
 - writes the updated `POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` triplet
 
-Its benchmark reports this work as `polar reference assembly`.
+`polar=obsfield` is a Cartesian observation-field assembly path followed by polar sampling of the assembled fields. It must not apply an additional polar Jacobian or shell-density normalization to the extracted central sections.
+
+Its benchmark reports this work by the same boundaries: setup, reduction of
+partition-local inputs, common-line or obsfield normalization, resolution
+metadata update, and `POLAR_REFS*` handoff writing.
 
 This policy applies to both shared-memory and distributed `refine3D`. In both execution modes, `simple_refine3D_strategy.f90` calls the polar assembly commander for polar modes and the Cartesian assembly commander for non-polar Cartesian volume assembly.
 
@@ -215,7 +219,7 @@ Worker command lines must not collapse `startit` to `which_iter`, because assemb
 
 Partition-local assembly inputs are per-iteration artifacts.
 
-Before a matcher iteration writes Cartesian `vol_stateNN_partPP_*` partial reconstructions or polar `cavgs_*_part*.bin` / `ctfsqsums_*_part*.bin` partial sums, the strategy must remove stale files from previous iterations.
+Before a matcher iteration writes Cartesian `vol_stateNN_partPP_*` partial reconstructions, polar `cavgs_*_part*.bin` / `ctfsqsums_*_part*.bin` partial sums, or `obsfield_stateNN_partPP.bin` observation-field parts, the strategy must remove stale files from previous iterations.
 
 This is especially important when the assembly output reference space changes from `nspace` to `nspace_next`. Stale part files with the old reference count, or stale Cartesian partials from a previous workflow phase, must never be accepted as valid assembly input.
 
@@ -329,7 +333,7 @@ On the final planned iteration of a stage:
 
 Legacy `polar=yes` keeps its emitted references on the current matching grid. When trailing reconstruction averages across a grid increase, previous state-local projections are remapped to the nearest current projection within the same state.
 
-The matcher may still need a narrower obsfield-specific allocation decision because `polar=obsfield` writes partial polar reference sums while matching on the current grid; that is an implementation detail of the obsfield partial-reference writer, not a separate definition of the global `nspace_next` policy.
+`polar=obsfield` must not choose a separate matcher-side polar output grid. Workers write state-local observation fields, and assembly extracts the emitted polar reference model on the assembly output grid.
 
 ### 5.9 Policy: content-changing handoffs must invalidate stale references
 
@@ -345,9 +349,9 @@ Multi-state polar references are stored state-major:
 - state 2 occupies `nspace+1:2*nspace`
 - and so on
 
-All polar insertion, mirroring, common-line restoration, obsfield restoration, FSC/FRC bookkeeping, and ML regularization must preserve that state-local reference block structure.
+All polar insertion, mirroring, common-line normalization, obsfield normalization, FSC/FRC bookkeeping, and ML regularization must preserve that state-local reference block structure.
 
-Common-line restoration is intra-state only. Cross-state common lines are not physical.
+Common-line normalization is intra-state only. Cross-state common lines are not physical.
 
 ---
 
@@ -364,7 +368,7 @@ Particle-domain work includes:
 - state, projection, in-plane, and shift assignment
 - reference matching; 3D matching either derives central sections from a current volume source or consumes `POLAR_REFS*` handoff files
 - sigma updates during search
-- writing partition-local Cartesian partial reconstructions or polar partial sums
+- writing partition-local Cartesian partial reconstructions, polar partial sums, or observation-field parts
 
 The key code owners are:
 
@@ -379,7 +383,7 @@ The key code owners are:
 Volume-domain work includes:
 
 - summing partial Cartesian reconstructions into state volumes
-- reducing partition-local polar partial sums into state-major polar references
+- reducing partition-local polar partial sums or observation fields into state-major polar references
 - even/odd averaging and merged-volume generation
 - gridding correction
 - automask generation and reuse
@@ -404,7 +408,8 @@ Stable examples include:
 
 - assignment maps written by probabilistic alignment
 - partition-local Cartesian partial reconstructions
-- partition-local polar partial sums for `polar=yes|obsfield`
+- partition-local polar partial sums for `polar=yes`
+- partition-local observation-field parts for `polar=obsfield`
 - `POLAR_REFS.bin` / `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` central-section files consumed by 3D matcher and search preparation
 - state volumes and even/odd volumes
 - state-specific automasks such as `automask3D_stateNN.mrc`
@@ -515,7 +520,7 @@ This section is guidance for future code movement within the policy boundaries a
 1. `commander_refine3D` selects the execution strategy.
 2. `refine3D_strategy` manages iteration state, execution mode, and per-iteration shared-memory builder rebuilds.
 3. probabilistic pre-alignment may sample particles and write an assignment map.
-4. `refine3D_exec` performs particle-domain search and update, then writes Cartesian partial reconstructions or polar partial sums.
+4. `refine3D_exec` performs particle-domain search and update, then writes Cartesian partial reconstructions, polar partial sums, or observation-field parts.
 5. assembly commanders assemble state volumes for `polar=no` or state-major polar references for `polar=yes|obsfield`.
 6. output artifacts are persisted for the next iteration and for downstream FSC and reference consumers.
 

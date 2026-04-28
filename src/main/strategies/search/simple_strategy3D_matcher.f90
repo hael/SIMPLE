@@ -65,18 +65,16 @@ contains
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
         real,                      allocatable :: incr_shifts(:,:)
         type(ori)           :: orientation
-        type(oris)          :: partial_ref_eulspace
         type(refine3D_ctrl) :: ctrl
         real                :: frac_greedy
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz, nrefs
-        integer             :: partial_ref_nspace
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical             :: doprint, has_been_searched
-        logical             :: l_partial_refs_use_assembly_space
         logical             :: l_write_partial_recs_present, l_write_partial_recs_value
 
         ! benchmarking
         type(string) :: benchfname
+        character(len=32) :: partial_output_label
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
         integer(timer_int_kind) :: t_alloc_ptcl_imgs
         integer(timer_int_kind) :: t_prep_ref_sections, t_memoize_refs
@@ -90,6 +88,15 @@ contains
         l_write_partial_recs_value   = .false.
         if( l_write_partial_recs_present ) l_write_partial_recs_value = l_write_partial_recs
         call init_ctrl()
+        partial_output_label = 'partial reconstruction'
+        if( ctrl%do_polar )then
+            select case(ctrl%polar_mode)
+                case('obsfield')
+                    partial_output_label = 'obsfield insertion'
+                case('yes')
+                    partial_output_label = 'polar-sum accumulation'
+            end select
+        endif
         converged = .false.
         if( ctrl%do_bench )then
             t_startup = tic()
@@ -100,7 +107,6 @@ contains
         call set_bp_range3D(p_ptr, b_ptr, cline)
         call sample_particles_for_update()
         call prepare_batches()
-        call prepare_partial_ref_output_space()
         if( ctrl%do_bench )then
             rt_startup = toc(t_startup)
             rt_alloc_ptcl_imgs   = 0.0
@@ -185,7 +191,11 @@ contains
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_polar )then
-                call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
+                if( trim(ctrl%polar_mode) == 'obsfield' )then
+                    call b_ptr%pftc%polar_cavger_write_obsfield_parts
+                else
+                    call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
+                endif
                 call b_ptr%pftc%polar_cavger_kill
             else
                 call write_partial_recs(params, build, cline, fpls)
@@ -195,7 +205,6 @@ contains
         endif
         call b_ptr%pftc%kill
         call b_ptr%esig%kill
-        call partial_ref_eulspace%kill
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
 
         if( ctrl%do_bench )then
@@ -209,24 +218,24 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'startup_overhead : ',          rt_startup
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D : ',   rt_build_batch_ptcls
                 write(fnr,'(a,1x,f9.2)') 'alloc_ptcl_imgs : ',           rt_alloc_ptcl_imgs
-                write(fnr,'(a,1x,f9.2)') 'prepare_ref_sections : ',      rt_prep_ref_sections
-                write(fnr,'(a,1x,f9.2)') 'memoize_refs : ',              rt_memoize_refs
+                write(fnr,'(a,1x,f9.2)') 'prepare matching refs : ',     rt_prep_ref_sections
+                write(fnr,'(a,1x,f9.2)') 'memoize matching refs : ',     rt_memoize_refs
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ',     rt_prep_orisrch
                 write(fnr,'(a,1x,f9.2)') '3D alignment : ',              rt_align
                 write(fnr,'(a,1x,f9.2)') 'project file I/O : ',          rt_projio
-                write(fnr,'(a,1x,f9.2)') 'reconstruction : ',            rt_rec
+                write(fnr,'(a,1x,f9.2)') trim(partial_output_label)//' : ', rt_rec
                 write(fnr,'(a,1x,f9.2)') 'total time : ',                rt_tot
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
                 write(fnr,'(a,1x,f9.2)') 'startup_overhead : ',          (rt_startup/rt_tot)                     * 100.
                 write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D : ',   (rt_build_batch_ptcls/rt_tot)           * 100.
                 write(fnr,'(a,1x,f9.2)') 'alloc_ptcl_imgs : ',           (rt_alloc_ptcl_imgs/rt_tot)             * 100.
-                write(fnr,'(a,1x,f9.2)') 'prepare_ref_sections : ',      (rt_prep_ref_sections/rt_tot)           * 100.
-                write(fnr,'(a,1x,f9.2)') 'memoize_refs : ',              (rt_memoize_refs/rt_tot)                * 100.
+                write(fnr,'(a,1x,f9.2)') 'prepare matching refs : ',     (rt_prep_ref_sections/rt_tot)           * 100.
+                write(fnr,'(a,1x,f9.2)') 'memoize matching refs : ',     (rt_memoize_refs/rt_tot)                * 100.
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ',     (rt_prep_orisrch/rt_tot)                * 100.
                 write(fnr,'(a,1x,f9.2)') '3D alignment : ',              (rt_align/rt_tot)                       * 100.
                 write(fnr,'(a,1x,f9.2)') 'project file I/O : ',          (rt_projio/rt_tot)                      * 100.
-                write(fnr,'(a,1x,f9.2)') 'reconstruction : ',            (rt_rec/rt_tot)                         * 100.
+                write(fnr,'(a,1x,f9.2)') trim(partial_output_label)//' : ', (rt_rec/rt_tot)                      * 100.
                 write(fnr,'(a,1x,f9.2)') '% accounted for : ', &
                     ((rt_startup+rt_build_batch_ptcls+rt_alloc_ptcl_imgs+ &
                     rt_prep_ref_sections+rt_memoize_refs+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
@@ -319,19 +328,20 @@ contains
             call build%vol_odd%kill
             call build%vol2%kill
             if( ctrl%do_polar .and. ctrl%do_write_partial_recs )then
-                nrefs_cavger = partial_ref_nspace * p_ptr%nstates
-                ! Only the direct non-probability volume path leaves freshly
-                ! projected refs in pftc. In prob modes prob_align materializes
-                ! POLAR_REFS* before prob_tab, while the main pass only stamps
-                ! assignments and accumulates partial reconstruction sums.
-                if( complete_volume_source_defined(cline, p_ptr%nstates) .and. (.not. ctrl%do_prob_align) )then
-                    call b_ptr%pftc%polar_cavger_new(.true.)
-                    if( p_ptr%l_trail_rec )then
-                        call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+                if( trim(ctrl%polar_mode) /= 'obsfield' )then
+                    nrefs_cavger = p_ptr%nspace * p_ptr%nstates
+                    ! Only the direct non-probability volume path leaves freshly
+                    ! projected refs in pftc. In prob modes prob_align materializes
+                    ! POLAR_REFS* before prob_tab, while the main pass only stamps
+                    ! assignments and accumulates partial reconstruction sums.
+                    if( complete_volume_source_defined(cline, p_ptr%nstates) .and. (.not. ctrl%do_prob_align) )then
+                        call b_ptr%pftc%polar_cavger_new(.true.)
+                        if( p_ptr%l_trail_rec )then
+                            call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+                        endif
                     endif
+                    call b_ptr%pftc%polar_cavger_zero_pft_refs
                 endif
-                if( l_partial_refs_use_assembly_space ) call b_ptr%pftc%polar_cavger_new(.true., nrefs=nrefs_cavger)
-                call b_ptr%pftc%polar_cavger_zero_pft_refs
                 if( file_exists(p_ptr%frcs) )then
                     call b_ptr%clsfrcs%read(p_ptr%frcs)
                 else
@@ -455,14 +465,8 @@ contains
         end subroutine maybe_restore_batch
 
         subroutine insert_obsfield_batch()
-            if( l_partial_refs_use_assembly_space )then
-                call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
-                    b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz), &
-                    reforis_in=partial_ref_eulspace, nspace_out=partial_ref_nspace)
-            else
-                call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
-                    b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
-            endif
+            call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
+                b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
         end subroutine insert_obsfield_batch
 
         subroutine maybe_write_orientations()
@@ -484,23 +488,6 @@ contains
             p_ptr%oritab = p_ptr%outfile
             if( ctrl%do_bench ) rt_projio = toc(t_projio)
         end subroutine maybe_write_orientations
-
-        subroutine prepare_partial_ref_output_space()
-            partial_ref_nspace = p_ptr%nspace
-            l_partial_refs_use_assembly_space = .false.
-            if( .not. obsfield_partial_refs_use_assembly_space() ) return
-            partial_ref_nspace = p_ptr%assembly_ref_nspace()
-            l_partial_refs_use_assembly_space = .true.
-            call partial_ref_eulspace%new(partial_ref_nspace, is_ptcl=.false.)
-            call b_ptr%pgrpsyms%build_refspiral(partial_ref_eulspace)
-        end subroutine prepare_partial_ref_output_space
-
-        logical function obsfield_partial_refs_use_assembly_space()
-            obsfield_partial_refs_use_assembly_space = ctrl%do_polar            &
-                &.and. ctrl%do_write_partial_recs                               &
-                &.and. trim(ctrl%polar_mode) == 'obsfield'                      &
-                &.and. p_ptr%uses_next_assembly_ref_nspace()
-        end function obsfield_partial_refs_use_assembly_space
 
     end subroutine refine3D_exec
 

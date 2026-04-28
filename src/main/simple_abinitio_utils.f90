@@ -460,11 +460,21 @@ contains
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
-        type(string) :: str_state, vol_name
-        integer      :: state, pop
+        type(string) :: str_state, vol_name, stkname
+        integer      :: state, pop, ind_in_stk, nptcls, ldim(3)
+        real         :: smpd
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'
+        call spproj%read_segment('stk',    projfile)
+        call spproj%read_segment('ptcl3D', projfile)
+        call spproj%get_stkname_and_ind('ptcl3D', 1, stkname, ind_in_stk)
+        call find_ldim_nptcls(stkname, ldim, nptcls, smpd=smpd)
+        call cline_reconstruct3D%set('box',  ldim(1))
+        call cline_reconstruct3D%set('smpd', smpd)
+        call cline_reconstruct3D%set('oritype', 'ptcl3D')
+        call cline_reconstruct3D%delete('box_crop')
+        call cline_reconstruct3D%delete('smpd_crop')
         call xrec3D%execute(cline_reconstruct3D)
         call spproj%read_segment('out', projfile)
         call spproj%read_segment('ptcl3D', projfile)
@@ -474,10 +484,11 @@ contains
             str_state = int2str_pad(state,2)
             vol_name  = string(VOL_FBODY)//str_state//MRC_EXT
             if( .not. file_exists(vol_name) )cycle
-            call spproj%add_vol2os_out(vol_name, params%smpd, state, 'vol', pop=pop)
-            call spproj%add_fsc2os_out(string(FSC_FBODY)//str_state//BIN_EXT, state, params%box)
+            call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop)
+            call spproj%add_fsc2os_out(string(FSC_FBODY)//str_state//BIN_EXT, state, ldim(1))
         enddo
         call spproj%write_segment_inside('out', projfile)
+        call stkname%kill
     end subroutine calc_final_rec
 
     subroutine postprocess_final_rec( params, spproj )

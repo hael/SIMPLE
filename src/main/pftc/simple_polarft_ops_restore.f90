@@ -51,7 +51,7 @@ contains
 
     ! 3D SECTION - Polar references are generated from common lines of the polar sums of particles
 
-    module subroutine polar_cavger_merge_eos_and_norm( self, reforis, symop, cline, update_frac )
+    module subroutine polar_cavger_normalize_commonline_refs( self, reforis, symop, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
         type(sym),           intent(in)    :: symop
@@ -65,10 +65,10 @@ contains
         real(dp)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp)    :: fsc(self%kfromto(1):self%interpklim), fsc_state(self%kfromto(1):self%interpklim), ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
-        integer     :: find4eoavg, i, state, base, nprojs
+        integer     :: i, state, base, nprojs
         ! Mirror Fourier & CTF2 slices
         call self%mirror_slices( reforis )
-        ! Common-lines conribution
+        ! Common-lines contribution
         call self%calc_comlin_contrib(reforis, symop, pfts_even, pfts_odd, ctf2_even, ctf2_odd)
         ! e/o trailing reconstruction part 1
         if( self%p_ptr%l_trail_rec )then
@@ -114,21 +114,12 @@ contains
         endif
         ! Wiener normalization
         call self%restore_references(reforis, pfts_even, pfts_odd, ctf2_even, ctf2_odd)
-        ! Keeping e/o in register
-        find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D, self%p_ptr%box, self%p_ptr%smpd))
-        find4eoavg = min(find4eoavg, get_find_at_crit(fsc_boxcrop, FSC4EOAVG3D))
-        find4eoavg = min(self%interpklim, find4eoavg)
-        if( find4eoavg >= self%kfromto(1) )then
-            !$omp parallel workshare proc_bind(close)
-            self%pfts_even(:,self%kfromto(1):find4eoavg,:) = self%pfts_merg(:,self%kfromto(1):find4eoavg,:)
-            self%pfts_odd(:, self%kfromto(1):find4eoavg,:) = self%pfts_merg(:,self%kfromto(1):find4eoavg,:)
-            !$omp end parallel workshare
-        endif
+        call average_lowres_eo_for_docking(self, fsc_boxcrop)
         ! e/o trailing reconstruction part 2
         if( self%p_ptr%l_trail_rec )then
             call finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
         endif
-    end subroutine polar_cavger_merge_eos_and_norm
+    end subroutine polar_cavger_normalize_commonline_refs
 
     ! Deals with summing slices and their mirror
     module subroutine mirror_slices( self, ref_space )
@@ -378,9 +369,9 @@ contains
 
     end subroutine calc_comlin_contrib
 
-    ! 3D SECTION - Polar references are generated directly from the common lines of cartesian particles
+    ! 3D SECTION - Polar references are sampled from assembled Cartesian observation fields
 
-    module subroutine polar_cavger_merge_eos_and_norm_obsfield( self, reforis, cline, update_frac )
+    module subroutine polar_cavger_normalize_obsfield_refs( self, reforis, cline, update_frac )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
         type(cmdline),       intent(in)    :: cline
@@ -388,28 +379,11 @@ contains
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
         real(dp)    :: fsc(self%kfromto(1):self%interpklim), fsc_state(self%kfromto(1):self%interpklim)
-        real(dp)    :: ufrac_trec, density_scale
+        real(dp)    :: ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
-        real        :: polar_density, cart_density
-        integer     :: find4eoavg, i, k, state, base, nprojs
+        integer     :: i, state, base, nprojs
         ! Mirror Fourier & CTF2 slices
-        call mirror_slices_direct( self, reforis )
-        ! Scale arrays to reproduce cartesian lattice behaviour after mirroring
-        do k = self%kfromto(1),self%interpklim
-            ! ~average number of points per shell in polar representation
-            polar_density = rad2deg(atan(KBWINSZ / (KBALPHA*real(k)))) / 360.0
-            ! ~average number of points per shell in cartesian representation
-            cart_density  = 1.0 / real(4*k)
-            ! polar to cartesian scaling (both depend linearly on # ptcls, so it cancels out)
-            density_scale = real(cart_density / polar_density,dp)
-            ! Actual scaling
-            !$omp parallel workshare proc_bind(close)
-            self%pfts_even(:,k,:) = density_scale * self%pfts_even(:,k,:)
-            self%pfts_odd(:, k,:) = density_scale * self%pfts_odd(:, k,:)
-            self%ctf2_even(:,k,:) = density_scale * self%ctf2_even(:,k,:)
-            self%ctf2_odd(:, k,:) = density_scale * self%ctf2_odd(:, k,:)
-            !$omp end parallel workshare
-        enddo
+        call mirror_slices_obsfield( self, reforis )
         ! e/o trailing reconstruction part 1
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
@@ -458,27 +432,34 @@ contains
         endif
         ! Wiener normalization
         call self%restore_references(reforis, self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd)
-        ! Keeping e/o in register
-        find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D, self%p_ptr%box, self%p_ptr%smpd))
-        find4eoavg = min(find4eoavg, get_find_at_crit(fsc_boxcrop, FSC4EOAVG3D))
-        find4eoavg = min(self%interpklim, find4eoavg)
-        if( find4eoavg >= self%kfromto(1) )then
-            !$omp parallel workshare proc_bind(close)
-            self%pfts_even(:,self%kfromto(1):find4eoavg,:) = self%pfts_merg(:,self%kfromto(1):find4eoavg,:)
-            self%pfts_odd(:, self%kfromto(1):find4eoavg,:) = self%pfts_merg(:,self%kfromto(1):find4eoavg,:)
-            !$omp end parallel workshare
-        endif
+        call average_lowres_eo_for_docking(self, fsc_boxcrop)
         ! e/o trailing reconstruction part 2
         if( self%p_ptr%l_trail_rec )then
             call finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
         endif
-    end subroutine polar_cavger_merge_eos_and_norm_obsfield
+    end subroutine polar_cavger_normalize_obsfield_refs
+
+    subroutine average_lowres_eo_for_docking( self, fsc_boxcrop )
+        class(polarft_calc), intent(inout) :: self
+        real,                intent(in)    :: fsc_boxcrop(:)
+        integer :: find4eoavg
+        ! Only this low-resolution range is averaged into both half maps.
+        ! Higher-frequency even/odd references remain independently restored.
+        find4eoavg = max(K4EOAVGLB, calc_fourier_index(FREQ4EOAVG3D, self%p_ptr%box, self%p_ptr%smpd))
+        find4eoavg = min(find4eoavg, get_find_at_crit(fsc_boxcrop, FSC4EOAVG3D))
+        find4eoavg = min(self%interpklim, find4eoavg)
+        if( find4eoavg < self%kfromto(1) ) return
+        !$omp parallel workshare proc_bind(close)
+        self%pfts_even(:,self%kfromto(1):find4eoavg,:) = self%pfts_merg(:,self%kfromto(1):find4eoavg,:)
+        self%pfts_odd(:, self%kfromto(1):find4eoavg,:) = self%pfts_merg(:,self%kfromto(1):find4eoavg,:)
+        !$omp end parallel workshare
+    end subroutine average_lowres_eo_for_docking
 
     !>  \brief Generate the mirror slices & CTF2
     !!         iref runs through the unique half (un-mirrored references), the
     !!         iref-th slice is final and after mirroring overwrites corresponding
     !!         mirror reference (m-th).
-    module subroutine mirror_slices_direct( self, ref_space )
+    module subroutine mirror_slices_obsfield( self, ref_space )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: ref_space
         complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
@@ -491,7 +472,7 @@ contains
         nprojs        = self%p_ptr%nspace
         nprojs_nomirr = nprojs / 2
         if( nprojs * self%p_ptr%nstates /= self%ncls )then
-            THROW_HARD('state-major polar reference count mismatch; mirror_slices_direct')
+            THROW_HARD('state-major polar reference count mismatch; mirror_slices_obsfield')
         endif
         nwork = nprojs_nomirr * self%p_ptr%nstates
         !$omp parallel do default(shared) proc_bind(close) private(iref,m,iloc,mloc,iglob,base,istate,pft,psi,l_rotm)
@@ -501,7 +482,7 @@ contains
             base   = (istate - 1) * nprojs
             iref   = base + iloc
             mloc   = ref_space%get_int(iloc,'mirr')
-            if( mloc < 1 .or. mloc > nprojs ) THROW_HARD('mirror index out of state-local range; mirror_slices_direct')
+            if( mloc < 1 .or. mloc > nprojs ) THROW_HARD('mirror index out of state-local range; mirror_slices_obsfield')
             m      = base + mloc
             psi    = abs(ref_space%get(mloc, 'psi'))
             l_rotm = (psi > 0.1) .and. (psi < 359.9)
@@ -520,7 +501,7 @@ contains
             call self%mirror_ctf2(self%ctf2_odd(:,:,iref),  self%ctf2_odd(:,:,m))
         enddo
         !$omp end parallel do
-    end subroutine mirror_slices_direct
+    end subroutine mirror_slices_obsfield
 
     !>  \brief local private routine for trailing reconstruction weighing
     !!         and dimension checking/editing for polar modes

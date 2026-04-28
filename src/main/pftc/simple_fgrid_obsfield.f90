@@ -3,7 +3,7 @@ module simple_fgrid_obsfield
 use simple_core_module_api
 implicit none
 
-public :: fgrid_obs_field, fgrid_obs_field_eo
+public :: fgrid_obs_field, fgrid_obsfield_eo
 private
 #include "simple_local_flags.inc"
 
@@ -11,6 +11,7 @@ private
 ! for one h are handled by one thread, and h values in the same color are at
 ! least two native grid units apart before and after rotation.
 integer, parameter :: OBSFIELD_NN_OMP_STRIDE = 2
+integer, parameter :: OBSFIELD_HEADER_SIZE   = 21
 
 ! Part-local Fourier-grid observation field. This is intentionally volume-like:
 ! particle Fourier components are accumulated into dense expanded-grid
@@ -49,7 +50,7 @@ end type fgrid_obs_field
 
 ! Even/odd wrapper matching the reconstruction convention:
 ! eo=-1 or eo=0 contributes to even, eo=1 contributes to odd.
-type :: fgrid_obs_field_eo
+type :: fgrid_obsfield_eo
     type(fgrid_obs_field) :: even
     type(fgrid_obs_field) :: odd
   contains
@@ -58,7 +59,9 @@ type :: fgrid_obs_field_eo
     procedure, public :: kill          => obsfield_eo_kill
     procedure, public :: insert_plane  => obsfield_eo_insert_plane
     procedure, public :: append_field  => obsfield_eo_append_field
-end type fgrid_obs_field_eo
+    procedure, public :: write         => obsfield_eo_write
+    procedure, public :: read          => obsfield_eo_read
+end type fgrid_obsfield_eo
 
 contains
 
@@ -386,27 +389,75 @@ contains
             all(self%grid_shape == other%grid_shape)
     end function obsfield_compatible_with
 
+    subroutine obsfield_write_local( self, funit, label )
+        class(fgrid_obs_field), intent(in) :: self
+        integer,                intent(in) :: funit
+        character(len=*),       intent(in) :: label
+        integer :: header(OBSFIELD_HEADER_SIZE), io_stat
+        if( .not. self%initialized ) THROW_HARD('obsfield not initialized; '//trim(label))
+        header(1:4)   = [self%pf, self%nyq, self%iwinsz, self%wdim]
+        header(5:10)  = reshape(self%lims,      [6])
+        header(11:16) = reshape(self%grid_lims, [6])
+        header(17:19) = self%grid_shape
+        header(20:21) = [self%nobs, self%ncells]
+        write(funit, iostat=io_stat) header
+        call fileiochk('obsfield_write_local header; '//trim(label), io_stat)
+        write(funit, iostat=io_stat) self%grid_num
+        call fileiochk('obsfield_write_local numerator; '//trim(label), io_stat)
+        write(funit, iostat=io_stat) self%grid_den
+        call fileiochk('obsfield_write_local density; '//trim(label), io_stat)
+        write(funit, iostat=io_stat) self%grid_assigned
+        call fileiochk('obsfield_write_local assignment mask; '//trim(label), io_stat)
+    end subroutine obsfield_write_local
+
+    subroutine obsfield_read_local( self, funit, label )
+        class(fgrid_obs_field), intent(inout) :: self
+        integer,                intent(in)    :: funit
+        character(len=*),       intent(in)    :: label
+        integer :: header(OBSFIELD_HEADER_SIZE), io_stat
+        integer :: lims(3,2), grid_lims(3,2), grid_shape(3), nobs, ncells
+        read(funit, iostat=io_stat) header
+        call fileiochk('obsfield_read_local header; '//trim(label), io_stat)
+        lims       = reshape(header(5:10),  [3,2])
+        grid_lims  = reshape(header(11:16), [3,2])
+        grid_shape = header(17:19)
+        nobs       = header(20)
+        ncells     = header(21)
+        call self%new(lims, header(2))
+        if( self%pf /= header(1) .or. self%iwinsz /= header(3) .or. self%wdim /= header(4) ) &
+            &THROW_HARD('obsfield scalar header mismatch; '//trim(label))
+        if( any(self%grid_lims /= grid_lims) .or. any(self%grid_shape /= grid_shape) .or. &
+            &self%ncells /= ncells ) THROW_HARD('obsfield grid header mismatch; '//trim(label))
+        read(funit, iostat=io_stat) self%grid_num
+        call fileiochk('obsfield_read_local numerator; '//trim(label), io_stat)
+        read(funit, iostat=io_stat) self%grid_den
+        call fileiochk('obsfield_read_local density; '//trim(label), io_stat)
+        read(funit, iostat=io_stat) self%grid_assigned
+        call fileiochk('obsfield_read_local assignment mask; '//trim(label), io_stat)
+        self%nobs = nobs
+    end subroutine obsfield_read_local
+
     subroutine obsfield_eo_new( self, lims, nyq )
-        class(fgrid_obs_field_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo), intent(inout) :: self
         integer,                   intent(in)    :: lims(3,2), nyq
         call self%even%new(lims, nyq)
         call self%odd%new( lims, nyq)
     end subroutine obsfield_eo_new
 
     subroutine obsfield_eo_reset( self )
-        class(fgrid_obs_field_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo), intent(inout) :: self
         call self%even%reset
         call self%odd%reset
     end subroutine obsfield_eo_reset
 
     subroutine obsfield_eo_kill( self )
-        class(fgrid_obs_field_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo), intent(inout) :: self
         call self%even%kill
         call self%odd%kill
     end subroutine obsfield_eo_kill
 
     subroutine obsfield_eo_insert_plane( self, se, o, fpl, eo, pwght )
-        class(fgrid_obs_field_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo), intent(inout) :: self
         class(sym),                intent(inout) :: se
         class(ori),                intent(inout) :: o
         class(fplane_type),        intent(in)    :: fpl
@@ -423,10 +474,33 @@ contains
     end subroutine obsfield_eo_insert_plane
 
     subroutine obsfield_eo_append_field( self, src )
-        class(fgrid_obs_field_eo), intent(inout) :: self
-        class(fgrid_obs_field_eo), intent(in)    :: src
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo), intent(in)    :: src
         call self%even%append_field(src%even)
         call self%odd%append_field(src%odd)
     end subroutine obsfield_eo_append_field
+
+    subroutine obsfield_eo_write( self, fname )
+        class(fgrid_obsfield_eo), intent(in) :: self
+        class(string),             intent(in) :: fname
+        integer :: funit, io_stat
+        call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
+        call fileiochk('obsfield_eo_write open; '//fname%to_char(), io_stat)
+        call obsfield_write_local(self%even, funit, 'even '//fname%to_char())
+        call obsfield_write_local(self%odd,  funit, 'odd '//fname%to_char())
+        call fclose(funit)
+    end subroutine obsfield_eo_write
+
+    subroutine obsfield_eo_read( self, fname )
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        class(string),             intent(in)    :: fname
+        integer :: funit, io_stat
+        if( .not. file_exists(fname) ) THROW_HARD('obsfield file does not exist: '//fname%to_char())
+        call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('obsfield_eo_read open; '//fname%to_char(), io_stat)
+        call obsfield_read_local(self%even, funit, 'even '//fname%to_char())
+        call obsfield_read_local(self%odd,  funit, 'odd '//fname%to_char())
+        call fclose(funit)
+    end subroutine obsfield_eo_read
 
 end module simple_fgrid_obsfield

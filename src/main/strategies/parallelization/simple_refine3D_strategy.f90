@@ -218,7 +218,7 @@ contains
     subroutine remove_polar_partial_sum_files( params )
         type(parameters), intent(in) :: params
         type(string) :: fname
-        integer :: ipart, numlen_part
+        integer :: ipart, numlen_part, state
         numlen_part = max(1, params%numlen)
         do ipart = 1,max(1, params%nparts)
             fname = 'cavgs_even_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
@@ -229,6 +229,10 @@ contains
             if( file_exists(fname) ) call del_file(fname)
             fname = 'ctfsqsums_odd_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
             if( file_exists(fname) ) call del_file(fname)
+            do state = 1,max(1, params%nstates)
+                fname = 'obsfield_state'//int2str_pad(state,2)//'_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+                if( file_exists(fname) ) call del_file(fname)
+            enddo
         end do
         call fname%kill
     end subroutine remove_polar_partial_sum_files

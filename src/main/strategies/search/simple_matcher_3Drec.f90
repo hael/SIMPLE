@@ -259,6 +259,7 @@ contains
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable   :: fpls(:)
         type(image),       allocatable   :: cavgs(:)
+        real    :: update_frac_eff
         integer :: batchlims(2), ibatch, batchsz, i, maxbatchsz, nrefs
         logical :: DEBUG = .true.
         integer(timer_int_kind) :: t, t0
@@ -278,6 +279,10 @@ contains
             t_grid = 0.d0
         endif
         nrefs = params%nspace * params%nstates
+        update_frac_eff = params%update_frac
+        if( params%l_trail_rec .and. (.not. cline%defined('ufrac_trec')) )then
+            if( build%spproj_field%has_been_sampled() ) update_frac_eff = build%spproj_field%get_update_frac()
+        endif
         call build%pftc%new(params, nrefs, [1,1], [2,5])
         call build%pftc%polar_cavger_new(.true.)
         call build%pftc%polar_cavger_zero_pft_refs
@@ -305,7 +310,8 @@ contains
             if( DEBUG ) t_grid = t_grid + toc(t)
         end do
         ! Normalize polar references
-        call build%pftc%polar_cavger_merge_eos_and_norm_obsfield(build%eulspace, cline, params%update_frac)
+        call build%pftc%polar_cavger_extract_obsfields(build%eulspace)
+        call build%pftc%polar_cavger_normalize_obsfield_refs(build%eulspace, cline, update_frac_eff)
         if( DEBUG )t_tot = toc(t0)
         ! Write
         call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))

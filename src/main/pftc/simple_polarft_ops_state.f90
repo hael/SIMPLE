@@ -1,7 +1,7 @@
 !@descr: submodule for controlling various state-related things in the polarops module
 submodule (simple_polarft_calc) simple_polarft_ops_state
 use simple_memoize_ft_maps, only: memoize_ft_maps
-use simple_fgrid_obsfield,  only: fgrid_obs_field_eo
+use simple_fgrid_obsfield,  only: fgrid_obsfield_eo
 implicit none
 #include "simple_local_flags.inc"
 
@@ -38,6 +38,40 @@ contains
         self%ctf2_odd  = 0.d0
         !$omp end parallel workshare
     end subroutine polar_cavger_zero_pft_refs
+
+    subroutine obsfield_lims_from_params( self, lims )
+        class(polarft_calc), intent(in)  :: self
+        integer,             intent(out) :: lims(3,2)
+        integer :: box
+        box = self%p_ptr%box_crop
+        if( is_even(box) )then
+            lims(1,:) = [0, box/2]
+            lims(2,:) = [-box/2, box/2-1]
+            lims(3,:) = [-box/2, box/2-1]
+        else
+            lims(1,:) = [0, (box-1)/2]
+            lims(2,:) = [-(box-1)/2, (box-1)/2]
+            lims(3,:) = [-(box-1)/2, (box-1)/2]
+        endif
+    end subroutine obsfield_lims_from_params
+
+    subroutine ensure_obsfields_allocated( self )
+        class(polarft_calc), intent(inout) :: self
+        integer :: lims(3,2), istate
+        if( allocated(self%obsfields) ) return
+        call obsfield_lims_from_params(self, lims)
+        allocate(self%obsfields(self%p_ptr%nstates))
+        do istate = 1, self%p_ptr%nstates
+            call self%obsfields(istate)%new(lims, self%interpklim)
+        enddo
+    end subroutine ensure_obsfields_allocated
+
+    type(string) function obsfield_part_fname( self, state, part ) result(fname)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: state, part
+        fname = 'obsfield_state'//int2str_pad(state,2)//'_part'// &
+            &int2str_pad(part,max(1,self%p_ptr%numlen))//BIN_EXT
+    end function obsfield_part_fname
 
     module subroutine polar_cavger_set_ref_pft( self, icls, which )
         class(polarft_calc), intent(inout) :: self
@@ -230,11 +264,9 @@ contains
         nullify(spproj_field)
     end subroutine polar_cavger_update_sums
 
-    ! Observation-field restoration experiment. The particle planes are first
-    ! accumulated into a dense expanded 3D Fourier numerator/density field using
-    ! nearest-cell insertion, mirroring the polar=no "insert once, query later"
-    ! split. Polar central sections are then gathered from that field and emitted
-    ! as the usual even/odd partial-sum payload.
+    ! Observation-field restoration experiment. Workers only accumulate dense
+    ! state-local observation fields here; assembly later extracts polar sections
+    ! from the reduced fields, matching the polar=no insert-then-assemble shape.
     module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls, &
         &reforis_in, nspace_out )
         class(polarft_calc),        intent(inout) :: self
@@ -243,46 +275,82 @@ contains
         class(sym),                 intent(inout) :: symop
         integer,                    intent(in)    :: nptcls, pinds(nptcls)
         class(fplane_type), target, intent(inout) :: fpls(nptcls)
-        ! extract_polar currently takes an inout oris even though it only reads
-        ! the reference grid.
+        ! Retained for source compatibility; assembly now owns the output
+        ! reference space for obsfield.
         class(oris), target, optional, intent(inout) :: reforis_in
         integer,          optional, intent(in)    :: nspace_out
-        type(fgrid_obs_field_eo) :: obs
-        class(oris), pointer :: refs_ptr
         type(ori) :: o
+        real :: pw
+        integer :: i, iptcl, eo, pstate
+        if( nptcls < 1 ) return
+        call ensure_obsfields_allocated(self)
+        do i = 1, nptcls
+            iptcl  = pinds(i)
+            pstate = ptcl_field%get_state(iptcl)
+            if( pstate < 1 .or. pstate > self%p_ptr%nstates ) cycle
+            pw = 1.0
+            if( ptcl_field%isthere(iptcl,'w') ) pw = ptcl_field%get(iptcl,'w')
+            if( pw < TINY ) cycle
+            eo = ptcl_field%get_eo(iptcl)
+            call ptcl_field%get_ori(iptcl, o)
+            call self%obsfields(pstate)%insert_plane(symop, o, fpls(i), eo, pw)
+        enddo
+        call o%kill
+    end subroutine polar_cavger_insert_ptcls_obsfield
+
+    module subroutine polar_cavger_write_obsfield_parts( self )
+        class(polarft_calc), intent(inout) :: self
+        type(string) :: fname
+        integer :: istate
+        call ensure_obsfields_allocated(self)
+        do istate = 1, self%p_ptr%nstates
+            fname = obsfield_part_fname(self, istate, self%p_ptr%part)
+            call self%obsfields(istate)%write(fname)
+        enddo
+        call fname%kill
+    end subroutine polar_cavger_write_obsfield_parts
+
+    module subroutine polar_cavger_assemble_obsfields_from_parts( self, reforis )
+        class(polarft_calc), intent(inout) :: self
+        class(oris), target, intent(inout) :: reforis
+        type(fgrid_obsfield_eo) :: obs_part
+        type(string) :: fname
+        integer :: istate, ipart
+        call ensure_obsfields_allocated(self)
+        do istate = 1, self%p_ptr%nstates
+            call self%obsfields(istate)%reset
+            do ipart = 1, self%p_ptr%nparts
+                fname = obsfield_part_fname(self, istate, ipart)
+                call obs_part%read(fname)
+                call self%obsfields(istate)%append_field(obs_part)
+                call obs_part%kill
+            enddo
+        enddo
+        call self%polar_cavger_extract_obsfields(reforis)
+        call obs_part%kill
+        call fname%kill
+    end subroutine polar_cavger_assemble_obsfields_from_parts
+
+    module subroutine polar_cavger_extract_obsfields( self, reforis )
+        class(polarft_calc), intent(inout) :: self
+        class(oris), target, intent(inout) :: reforis
         complex(dp), allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:)
         real(dp),    allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
         real(sp) :: hcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
         real(sp) :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
-        real :: pw
-        integer :: lims(3,2), kspan(2), kspan_len, nrefs, noris, i, iptcl, eo, box
-        integer :: istate, pstate, base, nspace_refs
-        if( nptcls < 1 ) return
+        integer :: kspan(2), kspan_len, nrefs, noris, nspace_refs
+        integer :: istate, base
+        if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_extract_obsfields')
         nspace_refs = self%p_ptr%nspace
-        if( present(nspace_out) ) nspace_refs = nspace_out
-        if( present(reforis_in) )then
-            refs_ptr => reforis_in
-        else
-            refs_ptr => eulspace
-        endif
-        box = self%p_ptr%box_crop
-        if( is_even(box) )then
-            lims(1,:) = [0, box/2]
-            lims(2,:) = [-box/2, box/2-1]
-            lims(3,:) = [-box/2, box/2-1]
-        else
-            lims(1,:) = [0, (box-1)/2]
-            lims(2,:) = [-(box-1)/2, (box-1)/2]
-            lims(3,:) = [-(box-1)/2, (box-1)/2]
-        endif
-        noris = refs_ptr%get_noris()
-        if( refs_ptr%isthere('mirr') )then
+        noris = reforis%get_noris()
+        if( reforis%isthere('mirr') )then
             nrefs = noris / 2
         else
             nrefs = noris
         endif
         nrefs = min(nrefs, nspace_refs)
-        if( nrefs < 1 ) THROW_HARD('no references available; polar_cavger_insert_ptcls_obsfield')
+        if( nrefs < 1 ) THROW_HARD('no references available; polar_cavger_extract_obsfields')
+        call self%polar_cavger_zero_pft_refs
         kspan     = [self%kfromto(1), self%interpklim]
         kspan_len = kspan(2) - kspan(1) + 1
         hcoords   = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
@@ -290,42 +358,31 @@ contains
         allocate(pfts_even(self%pftsz,kspan_len,nrefs), pfts_odd(self%pftsz,kspan_len,nrefs))
         allocate(ctf2_even(self%pftsz,kspan_len,nrefs), ctf2_odd(self%pftsz,kspan_len,nrefs))
         do istate = 1, self%p_ptr%nstates
-            call obs%new(lims, self%interpklim)
-            do i = 1, nptcls
-                iptcl  = pinds(i)
-                pstate = ptcl_field%get_state(iptcl)
-                if( pstate /= istate ) cycle
-                pw = 1.0
-                if( ptcl_field%isthere(iptcl,'w') ) pw = ptcl_field%get(iptcl,'w')
-                if( pw < TINY ) cycle
-                eo = ptcl_field%get_eo(iptcl)
-                call ptcl_field%get_ori(iptcl, o)
-                call obs%insert_plane(symop, o, fpls(i), eo, pw)
-            enddo
-            call obs%even%extract_polar(refs_ptr, nrefs, kspan, hcoords, kcoords, pfts_even, ctf2_even)
-            call obs%odd%extract_polar( refs_ptr, nrefs, kspan, hcoords, kcoords, pfts_odd,  ctf2_odd )
+            call self%obsfields(istate)%even%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, pfts_even, ctf2_even)
+            call self%obsfields(istate)%odd%extract_polar( reforis, nrefs, kspan, hcoords, kcoords, pfts_odd,  ctf2_odd )
             base = (istate - 1) * nspace_refs
-            self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs) = &
-                &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs) + pfts_even
-            self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs) = &
-                &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs) + pfts_odd
-            self%ctf2_even(:,kspan(1):kspan(2),base+1:base+nrefs) = &
-                &self%ctf2_even(:,kspan(1):kspan(2),base+1:base+nrefs) + ctf2_even
-            self%ctf2_odd( :,kspan(1):kspan(2),base+1:base+nrefs) = &
-                &self%ctf2_odd( :,kspan(1):kspan(2),base+1:base+nrefs) + ctf2_odd
-            call obs%kill
+            self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs) = pfts_even
+            self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs) = pfts_odd
+            self%ctf2_even(:,kspan(1):kspan(2),base+1:base+nrefs) = ctf2_even
+            self%ctf2_odd( :,kspan(1):kspan(2),base+1:base+nrefs) = ctf2_odd
         enddo
         deallocate(pfts_even, pfts_odd, ctf2_even, ctf2_odd)
-        call o%kill
-    end subroutine polar_cavger_insert_ptcls_obsfield
+    end subroutine polar_cavger_extract_obsfields
 
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self
+        integer :: istate
         if( allocated(self%pfts_even)    ) deallocate(self%pfts_even)
         if( allocated(self%pfts_odd)     ) deallocate(self%pfts_odd)
         if( allocated(self%pfts_merg)    ) deallocate(self%pfts_merg)
         if( allocated(self%ctf2_even)    ) deallocate(self%ctf2_even)
         if( allocated(self%ctf2_odd)     ) deallocate(self%ctf2_odd)
+        if( allocated(self%obsfields) )then
+            do istate = 1, size(self%obsfields)
+                call self%obsfields(istate)%kill
+            enddo
+            deallocate(self%obsfields)
+        endif
         if( allocated(self%eo_pops)      ) deallocate(self%eo_pops)
         if( allocated(self%prev_eo_pops) ) deallocate(self%prev_eo_pops)
         self%ncls     = 0
