@@ -133,7 +133,7 @@ This is the execution center of particle-domain refinement.
 
 `exec_cartesian_assembly` owns Cartesian volume assembly. It reduces partition-local Cartesian reconstruction updates, handles even/odd volumes, performs gridding correction, writes merged state volumes, updates per-particle FSC-derived resolution metadata, and runs shared-memory postprocessing such as automasking and nonuniform filtering.
 
-Cartesian matching still uses projected polar central sections, so this path also projects the prepared Cartesian volumes into `POLAR_REFS_even.bin` and `POLAR_REFS_odd.bin` for the next matcher or probability-table pass. That projection is benchmarked as `polar ref projection`.
+Cartesian matching still uses projected polar central sections, so refinement-owned Cartesian assembly also projects the prepared Cartesian volumes into `POLAR_REFS_even.bin` and `POLAR_REFS_odd.bin` for the next matcher or probability-table pass. Standalone or terminal `reconstruct3D` calls assemble volumes only; they do not refresh matcher handoff files because no next matching pass owns that range policy. The refinement projection is benchmarked as `polar ref projection`.
 
 `exec_polar_assembly` owns polar reference assembly for `polar=yes` and `polar=obsfield`. The matcher writes partition-local polar partial sums for `polar=yes` and partition-local observation-field parts for `polar=obsfield`. Polar assembly then:
 

@@ -171,10 +171,10 @@ contains
         type(image_bin)               :: state_mask_bin
         type(string)                  :: recname, volname, volname_prev, fsc_txt_file
         type(string)                  :: volname_prev_even, volname_prev_odd, str_state, str_iter
-        type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname
+        type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname, write_polar_refs_arg
         type(vol_pproc_plan) :: pp_plan
         logical, allocatable          :: l_mask(:,:,:)
-        logical                       :: l_nonuniform_mode
+        logical                       :: l_nonuniform_mode, l_write_polar_refs
         integer, allocatable          :: imat(:,:,:)
         real, allocatable             :: fsc(:), res05s(:), res0143s(:)
         real                          :: weight_prev, update_frac_trail_rec, mskrad_px
@@ -193,6 +193,11 @@ contains
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
         call build%eorecvol%kill_exp         ! reduced memory usage
+        l_write_polar_refs = .true.
+        if( cline%defined('write_polar_refs') )then
+            write_polar_refs_arg = cline%get_carg('write_polar_refs')
+            l_write_polar_refs   = write_polar_refs_arg%to_char() /= 'no'
+        endif
         numlen_part       = max(1, params%numlen)
         l_nonuniform_mode = trim(params%filt_mode).eq.'nonuniform'
         allocate(res05s(params%nstates), res0143s(params%nstates))
@@ -431,15 +436,18 @@ contains
             end do
         endif
         ! Cartesian refinement still matches in polar central-section space.
-        ! Therefore Cartesian assembly always refreshes the projected reference
-        ! sections consumed by the next matcher/probability-table pass.
-        if( L_BENCH_GLOB ) t_project_refs = tic()
-        call set_bp_range3D(params, build, cline)
-        call read_mask_filter_reproject_refvols(params, build, cline, 1)
-        call write_polar_refs_from_current_pftc(params, build)
-        call build%pftc%polar_cavger_kill
-        call build%pftc%kill
-        if( L_BENCH_GLOB ) rt_project_refs = rt_project_refs + toc(t_project_refs)
+        ! Refinement assembly refreshes the projected reference sections for the
+        ! next matcher/probability-table pass. Standalone/final reconstruct3D
+        ! calls assemble only volumes and do not own matcher handoff state.
+        if( l_write_polar_refs )then
+            if( L_BENCH_GLOB ) t_project_refs = tic()
+            call set_bp_range3D(params, build, cline)
+            call read_mask_filter_reproject_refvols(params, build, cline, 1)
+            call write_polar_refs_from_current_pftc(params, build)
+            call build%pftc%polar_cavger_kill
+            call build%pftc%kill
+            if( L_BENCH_GLOB ) rt_project_refs = rt_project_refs + toc(t_project_refs)
+        endif
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         ! destruct
         call gridcorr_img%kill

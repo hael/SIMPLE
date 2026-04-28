@@ -473,6 +473,7 @@ contains
         call cline_reconstruct3D%set('box',  ldim(1))
         call cline_reconstruct3D%set('smpd', smpd)
         call cline_reconstruct3D%set('oritype', 'ptcl3D')
+        call cline_reconstruct3D%set('write_polar_refs', 'no')
         call cline_reconstruct3D%delete('box_crop')
         call cline_reconstruct3D%delete('smpd_crop')
         call xrec3D%execute(cline_reconstruct3D)

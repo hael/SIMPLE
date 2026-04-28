@@ -162,6 +162,9 @@ contains
             cline_volassemble = cline
             call cline_volassemble%set('prg',  'volassemble')
             call cline_volassemble%set('nthr', params%nthr)
+            if( .not. cline_volassemble%defined('write_polar_refs') )then
+                call cline_volassemble%set('write_polar_refs', 'no')
+            endif
             do state = 1, params%nstates
                 volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
                 if( cline_volassemble%defined('vol'//int2str(state)) )then
@@ -267,6 +270,9 @@ contains
         cline_volassemble = cline
         call cline_volassemble%set('prg',  'volassemble')
         call cline_volassemble%set('nthr', self%nthr_master)
+        if( .not. cline_volassemble%defined('write_polar_refs') )then
+            call cline_volassemble%set('write_polar_refs', 'no')
+        endif
         do state = 1, params%nstates
             volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
             if( cline_volassemble%defined('vol'//int2str(state)) )then
