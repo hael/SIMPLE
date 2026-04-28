@@ -301,11 +301,6 @@ contains
                             count_required_in_list(self%filt_ctrls) + &
                             count_required_in_list(self%mask_ctrls) + &
                             count_required_in_list(self%comp_ctrls)
-        ! Preserve legacy behavior: if *no required keys* exist anywhere above,
-        ! but there are alternative inputs, then require at least one alt input.
-        if (get_nrequired_keys == 0 .and. .not. self%alt_ios%is_empty()) then
-            get_nrequired_keys = 1
-        end if
     end function get_nrequired_keys
 
     function get_required_keys( self ) result( keys )
