@@ -538,6 +538,7 @@ contains
             vol_name       = string(VOL_FBODY)//str_state//MRC_EXT  ! reconstruction from particles stored in project
             if( .not. file_exists(vol_name) )cycle
             call cline_postprocess%set('state', state)
+            call cline_postprocess%set('vol'//int2str(state), vol_name)
             call xpostprocess%execute(cline_postprocess)
             vol_pproc      = add2fbody(vol_name,MRC_EXT, PPROC_SUFFIX)
             vol_pproc_mirr = add2fbody(vol_name,MRC_EXT, PPROC_SUFFIX//MIRR_SUFFIX)

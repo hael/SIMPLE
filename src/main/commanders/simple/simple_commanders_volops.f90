@@ -296,7 +296,7 @@ contains
         type(image)      :: vol_bfac, vol_no_bfac
         type(sp_project) :: spproj
         real    :: fsc0143, fsc05, smpd, lplim
-        integer :: state, box, fsc_box, ldim(3)
+        integer :: state, box, fsc_box, ldim(3), nptcls
         logical :: has_fsc
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -312,7 +312,11 @@ contains
             state = 1
         endif
         ! check volume, get correct smpd & box
-        if( cline%defined('imgkind') )then
+        if( cline%defined('vol'//int2str(state)) )then
+            fname_vol = params%vols(state)
+            call find_ldim_nptcls(fname_vol, ldim, nptcls, smpd=smpd)
+            box = ldim(1)
+        else if( cline%defined('imgkind') )then
             call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
         else
             call spproj%get_vol('vol', state, fname_vol, smpd, box)
@@ -320,8 +324,6 @@ contains
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
-        ! using the input volume for postprocessing
-        if( cline%defined('vol'//int2str(state)) ) fname_vol = params%vols(state)
         ! generate file names
         fname_even  = add2fbody(fname_vol, params%ext, '_even')
         fname_odd   = add2fbody(fname_vol, params%ext, '_odd' )
