@@ -106,6 +106,7 @@ set_target_properties(${SIMPLELIB} PROPERTIES
 target_link_libraries(${SIMPLELIB}
     PUBLIC
         ${SIMPLE_LIBRARIES}
+        $<$<PLATFORM_ID:Windows>:ws2_32>
 )
 
 target_include_directories(${SIMPLELIB}
