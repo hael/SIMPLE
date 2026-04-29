@@ -392,6 +392,8 @@ type :: parameters
     integer :: vol_dim=0           !< input simulated pdb2mrc volume dimensions
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
+    integer :: workers=0           !< # workers for distributed execution
+    integer :: worker_nthr=0       !< # threads per worker for distributed execution
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
@@ -1036,6 +1038,8 @@ contains
         call check_iarg('vol_dim',        self%vol_dim)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('walltime',       self%walltime)
+        call check_iarg('workers',        self%workers)
+        call check_iarg('worker_nthr',    self%worker_nthr)
         call check_iarg('xdim',           self%xdim)
         call check_iarg('xcoord',         self%xcoord)
         call check_iarg('ycoord',         self%ycoord)

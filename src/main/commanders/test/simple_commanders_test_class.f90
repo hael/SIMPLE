@@ -61,6 +61,7 @@ subroutine exec_test_units( self, cline )
     use simple_cluster2D_rejector_tester, only: run_all_cluster2D_rejector_tests
     ! hand-written unit tests
     use simple_ipc_mq_tester,         only: run_all_ipc_mq_tests
+    use simple_ipc_tcp_socket_tester, only: run_all_ipc_tcp_socket_tests
     use simple_forked_process_tester, only: run_all_forked_process_tests
     use simple_gui_metadata_tester,   only: run_all_gui_metadata_tests
     use simple_gui_assembler_tester,  only: run_all_gui_assembler_tests
@@ -96,6 +97,7 @@ subroutine exec_test_units( self, cline )
     call run_all_oris_tests
     call run_all_rec_list_tests
     call run_all_ipc_mq_tests
+    call run_all_ipc_tcp_socket_tests
     call run_all_forked_process_tests
     call run_all_gui_metadata_tests
     call run_all_gui_assembler_tests

@@ -19,6 +19,8 @@ character(len=*), parameter :: JPG_EXT                       = '.jpg'
 character(len=*), parameter :: STK_EXT                       = '.mrcs'
 character(len=*), parameter :: MRC_EXT                       = '.mrc'
 character(len=*), parameter :: STAR_EXT                      = '.star'
+character(len=*), parameter :: SCRIPT_EXT                    = '.script'
+character(len=*), parameter :: LOG_EXT                       = '.log'
 ! SUFFIXES
 character(len=*), parameter :: SCALE_SUFFIX                  = '_sc'
 character(len=*), parameter :: THUMBNAIL_SUFFIX              = '_thumb'
@@ -119,6 +121,9 @@ character(len=*), parameter :: OPTICS_MAP_PREFIX             = 'optics_map_'
 ! STARFILES
 character(len=*), parameter :: MICS_STAR_BODY                = 'micrographs'
 character(len=*), parameter :: PTCL2D_STAR_BODY              = 'particles2D'
+! WORKERS
+character(len=*), parameter :: WORKER_SCRIPT_PREFIX         = 'worker_'
+character(len=*), parameter :: WORKER_DIR                   = 'workers/'
 ! MISCELLANEOUS
 character(len=3), parameter :: NIL                           = 'nil'
 character(len=*), parameter :: STDERR2STDOUT                 = '2>&1'

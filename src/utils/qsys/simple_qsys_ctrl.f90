@@ -4,9 +4,11 @@ use simple_core_module_api
 use simple_qsys_base,         only: qsys_base
 use simple_qsys_slurm,        only: qsys_slurm
 use simple_qsys_lsf,          only: qsys_lsf
+use simple_qsys_worker,       only: qsys_worker, worker_server
 use simple_cmdline,           only: cmdline
 use simple_parameters,        only: parameters
 use simple_syslib,            only: simple_rmfile
+use simple_qsys_worker_message_task, only: qsys_worker_message_task 
 use simple_mem_estimator
 implicit none
 
@@ -34,6 +36,7 @@ type qsys_ctrl
     integer                       :: nparts_tot             = 0    !< total number of partitions
     integer                       :: ncomputing_units       = 0    !< number of computing units
     integer                       :: ncomputing_units_avail = 0    !< number of available units
+    integer                       :: nthr_worker            = 1    !< thread slots required per worker job (worker backend only)
     integer                       :: numlen                 = 0    !< length of padded number string
     integer                       :: n_stream_updates       = 0    !< counter, for streaming only
     integer                       :: cline_stacksz          = 0    !< size of stack of command lines, for streaming only
@@ -59,6 +62,7 @@ type qsys_ctrl
     ! SUBMISSION TO QSYS
     procedure          :: submit_scripts
     procedure          :: submit_script
+    procedure          :: submit_task_to_worker_server
     ! QUERIES
     procedure, private :: update_queue
     ! THE MASTER SCHEDULERS
@@ -98,7 +102,7 @@ contains
         call self%new(exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
     end function constructor
 
-    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen )
+    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen, nthr_worker )
         class(qsys_ctrl),         intent(inout) :: self             !< the instance
         class(string),            intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
@@ -107,6 +111,7 @@ contains
         integer,                  intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         logical,                  intent(in)    :: stream           !< stream flag
         integer, optional,        intent(in)    :: numlen           !< length of number string
+        integer, optional,        intent(in)    :: nthr_worker      !< thread slots per worker job (default 1)
         integer :: ipart
         call self%kill
         self%stream                 =  stream
@@ -117,6 +122,7 @@ contains
         self%nparts_tot             =  size(parts,1)
         self%ncomputing_units       =  ncomputing_units
         self%ncomputing_units_avail =  ncomputing_units
+        if( present(nthr_worker) ) self%nthr_worker = nthr_worker
         if( self%stream )then
             self%numlen = 5
         else
@@ -656,6 +662,9 @@ contains
 
     ! SUBMISSION TO QSYS
 
+    !> Submit all unsubmitted scripts in the partition range, up to ncomputing_units_avail
+    !> concurrency.  For the worker backend the script is enqueued via
+    !> submit_task_to_worker_server; for local/SLURM/LSF it is launched directly.
     subroutine submit_scripts( self )
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl), intent(inout) :: self
@@ -688,6 +697,9 @@ contains
                 select type( pmyqsys => self%myqsys )
                     class is(qsys_local)
                         qsys_cmd = self%myqsys%submit_cmd()//' '//script_name%to_char()//' '//SUPPRESS_MSG//'&'
+                    class is (qsys_worker)
+                        call self%submit_task_to_worker_server(script_name, self%nthr_worker)
+                        cycle
                     class DEFAULT
                         qsys_cmd = self%myqsys%submit_cmd()//' '//script_name%to_char()
                 end select
@@ -708,6 +720,10 @@ contains
         end do
     end subroutine submit_scripts
 
+    !> Submit a single pre-generated script by name.
+    !> For the worker backend the script is enqueued via submit_task_to_worker_server
+    !> and returns immediately; for local/SLURM/LSF it is executed via exec_cmdline
+    !> with up to QSYS_SUBMISSION_RETRY_LIMIT retries on failure.
     subroutine submit_script( self, script_name )
         use simple_qsys_local, only: qsys_local
         class(qsys_ctrl), intent(inout) :: self
@@ -720,6 +736,9 @@ contains
         select type( pmyqsys => self%myqsys )
             type is (qsys_local)
                 cmd = self%myqsys%submit_cmd()//' '//filepath(string(CWD_GLOB),script_name)//' '//SUPPRESS_MSG//'&'
+            type is (qsys_worker)
+                call self%submit_task_to_worker_server(filepath(string(CWD_GLOB),script_name), self%nthr_worker)
+                return
             class DEFAULT
                 cmd = self%myqsys%submit_cmd()//' '//filepath(string(CWD_GLOB),script_name)
         end select
@@ -734,6 +753,26 @@ contains
         end do
         THROW_HARD('qsys submission failed after multiple retries!')
     end subroutine submit_script
+
+    !> Enqueue script_path as a normal-priority task on the shared worker server.
+    !> nthr specifies the number of thread slots the task requires.
+    !> No-op if worker_server is not associated (logs a warning).
+    subroutine submit_task_to_worker_server( self, script_path, nthr )
+        class(qsys_ctrl),  intent(inout) :: self
+        type(string),         intent(in) :: script_path
+        integer,              intent(in) :: nthr
+        type(qsys_worker_message_task)   :: task_msg
+        if( .not. associated(worker_server) ) then
+            write(logfhandle,'(A)') '>>> QSYS_CTRL submit_task_to_worker_server: worker server not initialised; task ignored'
+            return
+        end if
+        call task_msg%new()
+        task_msg%nthr        = nthr
+        task_msg%script_path = script_path%to_char()
+        if( .not. worker_server%queue_task(task_msg, string('norm')) ) then
+            write(logfhandle,'(A,A)') '>>> QSYS_CTRL submit_task_to_worker_server: normal-priority queue full; dropped job_id ', int2str(task_msg%job_id)
+        end if
+    end subroutine submit_task_to_worker_server
 
     ! QUERIES
 
@@ -990,6 +1029,7 @@ contains
             self%fromto_part(2)         =  0
             self%ncomputing_units       =  0
             self%ncomputing_units_avail =  0
+            self%nthr_worker            =  1
             self%numlen                 =  0
             self%cline_stacksz          =  0
             deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames,&

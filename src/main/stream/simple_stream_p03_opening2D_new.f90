@@ -41,6 +41,7 @@ use simple_commanders_pick,       only: commander_extract
 use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
 use simple_mini_stream_utils,     only: segdiampick_mics
+use simple_qsys_env,              only: qsys_env
 use simple_gui_metadata_api
 
 implicit none
@@ -67,6 +68,7 @@ contains
         integer,                   allocatable     :: cavg_inds(:)           ! shape-ranked class indices into os_cls2D
         type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
         type(string)                               :: cavgsstk, mapfileprefix, projfile
+        type(qsys_env)                             :: qsys
         type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_shape_rank
         type(parameters)                           :: params
         type(sp_project)                           :: spproj, spproj_part
@@ -109,8 +111,10 @@ contains
         call create_stream_project(spproj, cline, string('opening_2D'))
         ! master parameters
         call params%new(cline)
-        projfile          = params%projfile
-        n_increase_cycles = 0
+        projfile           = params%projfile
+        params%workers     = NPARTS2D
+        params%worker_nthr = max(1,floor(real(params%nthr)/4.))
+        n_increase_cycles  = 0
         ! initialise metadata
         call meta_update%new(                        GUI_METADATA_STREAM_UPDATE_TYPE)
         call meta_initial_picking%new(      GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
@@ -156,6 +160,9 @@ contains
                     call send_micrograph_meta(iori, i_max, ithumb + iori)
                 end do
             endif
+            !
+            call qsys%new(params, NPARTS2D)
+            call qsys%kill()
             call run_extract()
             call spproj%read(projfile)
             call send_meta(string('complete'))

@@ -315,6 +315,7 @@ contains
         use simple_qsys_funs, only: qsys_cleanup
         class(cluster2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
+        call self%qenv%kill()
         call qsys_cleanup(params)
         call self%job_descr%kill
     end subroutine distr_cleanup

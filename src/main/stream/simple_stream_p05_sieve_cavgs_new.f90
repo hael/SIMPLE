@@ -82,8 +82,8 @@ contains
         type(string)                    :: refs_jpeg, refs_stk
         type(string)                    :: match_jpeg, match_stk
         type(rec_list)                  :: project_list
-        type(parameters)                :: params
         type(qsys_env)                  :: qenv
+        type(parameters)                :: params
         type(sp_project)                :: spproj_glob, spproj_tmp
         type(project_rec)               :: prec
         type(rec_iterator)              :: it
@@ -112,6 +112,9 @@ contains
         call create_stream_project(spproj_glob, cline, string('sieve_cavgs'))
         call params%new(cline)
         call simple_mkdir(PATH_HERE // DIR_STREAM_COMPLETED)
+        ! initialise the queue environment and worker pool
+        params%workers     = params%nchunks
+        params%worker_nthr = params%nthr 
         call init_stream_qenv(params, qenv, string(SIMPLE_STREAM_CHUNK_PARTITION))
         ! Sanity-check: must start from an empty project
         call spproj_glob%read(params%projfile)

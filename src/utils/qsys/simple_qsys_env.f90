@@ -2,11 +2,13 @@
 module simple_qsys_env
 use simple_core_module_api
 use simple_defs_environment
+use simple_cmdline,           only: cmdline
 use simple_qsys_funs,         only: qsys_watcher,qsys_cleanup
 use simple_qsys_factory,      only: qsys_factory
 use simple_qsys_base,         only: qsys_base
 use simple_qsys_local,        only: qsys_local
 use simple_qsys_slurm,        only: qsys_slurm
+use simple_qsys_worker,       only: qsys_worker, worker_server
 use simple_qsys_lsf,          only: qsys_lsf
 use simple_qsys_pbs,          only: qsys_pbs
 use simple_qsys_sge,          only: qsys_sge
@@ -19,14 +21,15 @@ private
 #include "simple_local_flags.inc"
 
 type :: qsys_env
-    integer, allocatable,      public  :: parts(:,:)
-    type(qsys_ctrl),           public  :: qscripts
-    type(chash),               public  :: qdescr
-    type(string),              private :: simple_exec_bin
-    type(qsys_factory),        private :: qsys_fac
-    class(qsys_base), pointer, private :: myqsys=>null()
-    integer,                   private :: nparts
-    logical,                   private :: existence = .false.
+    integer, allocatable,        public  :: parts(:,:)
+    type(qsys_ctrl),             public  :: qscripts
+    type(chash),                 public  :: qdescr
+    type(string),                private :: simple_exec_bin
+    type(qsys_factory),          private :: qsys_fac, qsys_fac_worker
+    class(qsys_base),   pointer, private :: myqsys=>null(), myqsys_worker=>null()
+    integer,                     private :: nparts
+    logical,                     private :: existence   = .false.
+    logical,                     private :: use_workers = .false.
     contains
     procedure :: new
     procedure :: exists
@@ -37,6 +40,7 @@ type :: qsys_env
     procedure :: exec_simple_prg_in_queue
     procedure :: exec_simple_prg_in_queue_async
     procedure :: exec_simple_prgs_in_queue_async
+    procedure :: start_workers
     procedure :: get_exec_bin
     procedure :: get_qsys
     procedure :: get_navail_computing_units
@@ -96,9 +100,10 @@ contains
         class(string), optional, intent(in)    :: qsys_partition ! to override the qsys read in
         type(ori)             :: compenv_o
         type(sp_project)      :: spproj
-        type(string)          :: qsnam, tpi, hrs_str, mins_str, secs_str
+        type(string)          :: qsnam, tpi, hrs_str, mins_str, secs_str, host_ips
+        integer               :: nthr_workers, n_workers
         character(len=STDLEN) :: default_time_env
-        integer               :: partsz, hrs, mins, secs, nptcls_here, envlen
+        integer               :: partsz, hrs, mins, secs, nptcls_here, envlen, port
         real                  :: rtpi, tot_time_sec
         logical               :: sstream
         integer, parameter    :: MAXENVKEYS = 30
@@ -160,6 +165,13 @@ contains
         endif
         if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
         qsnam = self%qdescr%get('qsys_name')
+        ! The '_worker' suffix on a qsys name (e.g. 'local_worker', 'slurm_worker')
+        ! opts into the TCP worker backend.  Strip the suffix so the underlying
+        ! qsys factory still resolves the base backend (local, slurm, …) correctly.
+        if( qsnam%has_substr(string('_worker')) ) then
+            self%use_workers = .true.
+            qsnam = qsnam%substr_remove(string('_worker'))
+        end if
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
         if(present(exec_bin))then
@@ -176,6 +188,36 @@ contains
         endif
         if(present(qsys_partition)) call self%qdescr%set('qsys_partition', qsys_partition) ! overrides env file and params
         call self%qdescr%set('job_nparts', int2str(params%nparts))                         ! overrides env file
+        ! Worker backend setup: rewire qsys and qscripts to use the worker factory.
+        ! nthr_workers is the thread capacity advertised to the server per worker process.
+        if( self%use_workers ) then
+            nthr_workers = params%nthr
+            if( params%worker_nthr > 0 ) nthr_workers = params%worker_nthr
+            if( present(qsys_nthr)     ) nthr_workers = qsys_nthr
+            call self%qsys_fac_worker%new(string('worker'), self%myqsys_worker)
+            ! Start worker server if not already running (e.g. from a previous call to new() in the same session).
+            ! On the first call: allocate the server, bind the TCP socket, spawn the listener thread,
+            ! then launch one simple_worker process per computing unit via the base qsys backend.
+            if( .not. associated(worker_server) ) then
+                allocate(worker_server)
+                call worker_server%new(nthr_workers)
+                port     = worker_server%get_port()
+                host_ips = worker_server%get_host_ips()
+                n_workers = max(1, params%ncunits)
+                if( params%workers > 0 ) n_workers = params%workers
+                call self%start_workers(n_workers, nthr_workers, port, host_ips)
+            end if
+            ! Replace the base qsys with the worker qsys so that script submission
+            ! goes through submit_task_to_worker_server rather than the shell.
+            call self%myqsys%kill()
+            call self%qsys_fac%kill()
+            call self%qscripts%kill()
+            self%myqsys   => self%myqsys_worker
+            self%qsys_fac =  self%qsys_fac_worker
+            call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
+                &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers)
+        endif
+        ! Tidy up
         call qsnam%kill
         if( params%projfile /= '' ) call compenv_o%kill
         call spproj%kill
@@ -308,6 +350,29 @@ contains
         enddo
         deallocate(jobs_descr)
     end subroutine exec_simple_prgs_in_queue_async
+
+    subroutine start_workers( self, ncunits, nthr, port, host_ips )
+        class(qsys_env), intent(inout) :: self
+        integer,         intent(in)    :: ncunits, nthr, port
+        type(string),    intent(in)    :: host_ips
+        type(cmdline)                  :: cline
+        type(string)                   :: script_name, outfile, executable
+        integer :: iworker
+        write(*,*) "STARTING # WORKERS: ", ncunits
+        call simple_mkdir(WORKER_DIR)
+        call simple_mkdir(WORKER_DIR//STDERROUT_DIR)
+        executable = 'simple_worker'
+        call cline%set('nthr',        int2str(nthr))
+        call cline%set('port',        int2str(port))
+        call cline%set('server', host_ips%to_char())
+        do iworker = 1, ncunits
+            call cline%set('worker_id', int2str(iworker))
+            script_name = WORKER_DIR//WORKER_SCRIPT_PREFIX//int2str_pad(iworker, 4)//SCRIPT_EXT
+            outfile     = WORKER_DIR//STDERROUT_DIR//int2str_pad(iworker, 4)//LOG_EXT
+            call self%exec_simple_prg_in_queue_async(cline, script_name, outfile, executable)
+        end do
+        call cline%kill()
+    end subroutine start_workers
 
     function get_exec_bin( self ) result( exec_bin )
         class(qsys_env), intent(in) :: self

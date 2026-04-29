@@ -92,6 +92,7 @@ contains
         call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params)
         call nice_comm%terminate()
+        call qsys_cleanup(params)
         if( allocated(strategy) ) deallocate(strategy)
         ! Global teardown (strategies may have built different toolboxes)
         call build%kill_general_tbox()
