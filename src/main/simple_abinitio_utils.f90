@@ -184,6 +184,7 @@ contains
         if( .not. file_exists(vol_name) ) return
         call register_stage_volume(params, state, vol_name)
         call cline_postprocess%set('state', state)
+        call cline_postprocess%set('vol'//int2str(state), vol_name)
         call xpostprocess%execute(cline_postprocess)
     end subroutine postprocess_stage_volume
 
