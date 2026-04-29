@@ -143,7 +143,7 @@ Cartesian matching still uses projected polar central sections, so refinement-ow
 - dispatches to observation-field polar-reference normalization for `polar=obsfield`
 - writes the updated `POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` triplet
 
-`polar=obsfield` is a Cartesian observation-field assembly path followed by polar sampling of the assembled fields. It must not apply an additional polar Jacobian or shell-density normalization to the extracted central sections.
+`polar=obsfield` is a Cartesian observation-field assembly path followed by polar sampling of the assembled fields. It must not apply an additional polar Jacobian or shell-density normalization to the extracted central sections. Because the observation field is not a fully restored Cartesian volume, its ML prior is confidence-adjusted by the effective per-shell sampling density of the observed Cartesian cells. That density is derived from cell observation counts, so repeated hits in a few cells do not masquerade as complete shell coverage; sparse shells lower the effective SSNR used for the ML denominator term without rescaling the extracted signal itself.
 
 Its benchmark reports this work by the same boundaries: setup, reduction of
 partition-local inputs, common-line or obsfield normalization, resolution

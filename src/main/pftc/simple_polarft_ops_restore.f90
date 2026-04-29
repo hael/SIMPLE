@@ -379,6 +379,7 @@ contains
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
         real(dp)    :: fsc(self%kfromto(1):self%interpklim), fsc_state(self%kfromto(1):self%interpklim)
+        real(dp)    :: coverage_even(self%kfromto(1):self%interpklim), coverage_odd(self%kfromto(1):self%interpklim)
         real(dp)    :: ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
         integer     :: i, state, base, nprojs
@@ -420,8 +421,16 @@ contains
                 ! FRCs are set to the state-local FSC. to check if we are using those
                 call frcs%set_frc(i, fsc_boxcrop, state)
             enddo
-            if( self%p_ptr%l_ml_reg ) call add_invtausq2rho_range(self, self%ctf2_even, self%ctf2_odd, &
-                &base+1, base+nprojs, fsc_state)
+            if( self%p_ptr%l_ml_reg )then
+                ! Obsfield is Cartesian in where the observations are stored,
+                ! but sparse shells should not carry the same ML confidence as
+                ! a fully restored volume. Coverage damps only the SSNR used
+                ! for the prior term; the extracted signal stays unchanged.
+                call self%obsfields(state)%even%shell_coverage([self%kfromto(1), self%interpklim], coverage_even)
+                call self%obsfields(state)%odd%shell_coverage( [self%kfromto(1), self%interpklim], coverage_odd )
+                call add_invtausq2rho_range(self, self%ctf2_even, self%ctf2_odd, base+1, base+nprojs, fsc_state, &
+                    &coverage_even=coverage_even, coverage_odd=coverage_odd)
+            endif
         enddo
         call frcs%write(string(FRCS_FILE))
         call frcs%kill
@@ -833,17 +842,21 @@ contains
         !$omp end parallel do
     end subroutine add_invtausq2rho
 
-    subroutine add_invtausq2rho_range( self, ctf2_even, ctf2_odd, ref_first, ref_last, fsc )
+    subroutine add_invtausq2rho_range( self, ctf2_even, ctf2_odd, ref_first, ref_last, fsc, coverage_even, coverage_odd )
         class(polarft_calc), intent(inout) :: self
         real(dp),            intent(inout) :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp),            intent(inout) :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,             intent(in)    :: ref_first, ref_last
         real(dp),            intent(in)    :: fsc(self%kfromto(1):self%interpklim)
+        real(dp), optional,  intent(in)    :: coverage_even(self%kfromto(1):self%interpklim)
+        real(dp), optional,  intent(in)    :: coverage_odd(self%kfromto(1):self%interpklim)
         real(dp) :: sig2e(self%kfromto(1):self%interpklim), sig2o(self%kfromto(1):self%interpklim)
-        real(dp) :: ssnr(self%kfromto(1):self%interpklim), tau2(self%kfromto(1):self%interpklim)
+        real(dp) :: ssnr(self%kfromto(1):self%interpklim), ssnr_eff(self%kfromto(1):self%interpklim)
+        real(dp) :: tau2(self%kfromto(1):self%interpklim)
         real(dp) :: invtau2e(self%kfromto(1):self%interpklim), invtau2o(self%kfromto(1):self%interpklim)
         real(dp) :: cc, fudge, invtau2, shell_n
         integer  :: icls, k, kstart, p
+        real(dp), parameter :: COVERAGE_FLOOR = 0.05d0
         if( ref_first < 1 .or. ref_last > self%ncls .or. ref_first > ref_last )then
             THROW_HARD('invalid reference range in add_invtausq2rho_range')
         endif
@@ -861,13 +874,19 @@ contains
             cc = max(0.001d0,min(0.999d0,fsc(k)))
             ssnr(k) = fudge * cc / (1.d0 - cc)
         enddo
+        ! Optional obsfield coverage turns FSC-derived SSNR into an effective
+        ! confidence. It is count-based shell coverage, so clustered repeat hits
+        ! do not look like dense Cartesian sampling, and it does not apply a
+        ! polar/Jacobian scale to numerator or denominator.
         kstart = max(6, calc_fourier_index(self%p_ptr%hp, self%p_ptr%box_crop, self%p_ptr%smpd_crop))
         where( sig2e > DTINY )
             sig2e = shell_n / sig2e
         elsewhere
             sig2e = 0.d0
         end where
-        tau2 = ssnr * sig2e
+        ssnr_eff = ssnr
+        if( present(coverage_even) ) ssnr_eff = ssnr * max(COVERAGE_FLOOR, min(1.d0, coverage_even))
+        tau2 = ssnr_eff * sig2e
         do k = kstart,self%interpklim
             if( tau2(k) > DTINY )then
                 invtau2 = 1.d0 / (fudge * tau2(k))
@@ -879,7 +898,9 @@ contains
         elsewhere
             sig2o = 0.d0
         end where
-        tau2 = ssnr * sig2o
+        ssnr_eff = ssnr
+        if( present(coverage_odd) ) ssnr_eff = ssnr * max(COVERAGE_FLOOR, min(1.d0, coverage_odd))
+        tau2 = ssnr_eff * sig2o
         do k = kstart,self%interpklim
             if( tau2(k) > DTINY )then
                 invtau2 = 1.d0 / (fudge * tau2(k))

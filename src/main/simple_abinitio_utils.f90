@@ -157,6 +157,36 @@ contains
         call vol_odd%kill
     end subroutine inject_polar_refine3D_volume
 
+    subroutine register_stage_volume( params, state, vol_name )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: state
+        class(string),     intent(in) :: vol_name
+        type(sp_project)            :: spproj
+        type(string) :: fsc_name
+        integer :: ldim(3), nptcls
+        real    :: smpd
+        if( .not. file_exists(vol_name) ) return
+        call find_ldim_nptcls(vol_name, ldim, nptcls, smpd=smpd)
+        call spproj%read_segment('out', params%projfile)
+        call spproj%add_vol2os_out(vol_name, smpd, state, 'vol')
+        fsc_name = string(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
+        if( file_exists(fsc_name) ) call spproj%add_fsc2os_out(fsc_name, state, ldim(1))
+        call spproj%write_segment_inside('out', params%projfile)
+        call spproj%kill
+        call fsc_name%kill
+    end subroutine register_stage_volume
+
+    subroutine postprocess_stage_volume( params, state, vol_name )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: state
+        class(string),     intent(in) :: vol_name
+        type(commander_postprocess) :: xpostprocess
+        if( .not. file_exists(vol_name) ) return
+        call register_stage_volume(params, state, vol_name)
+        call cline_postprocess%set('state', state)
+        call xpostprocess%execute(cline_postprocess)
+    end subroutine postprocess_stage_volume
+
     subroutine set_symmetry_class_vars( params )
         class(parameters), intent(in) :: params
         type(string) :: pgrp, pgrp_start
@@ -358,12 +388,16 @@ contains
         call strip_refine3D_planning_keys(cline_rec)
         call xrec3D%execute(cline_rec)
         if( params%l_polar )then
-            ! Polar=yes branch
+            ! Polar reference branch
             sstate = int2str_pad(1,2)
             sstage = int2str_pad(istage-1,2)
             src    = string(VOL_FBODY)//sstate//MRC_EXT
             dest   = string(VOL_FBODY)//sstate//'_stage_'//sstage//MRC_EXT
+            call postprocess_stage_volume(params, 1, src)
+            vol = add2fbody(src, MRC_EXT, PPROC_SUFFIX)
+            if( file_exists(vol) ) call simple_rename(vol, add2fbody(vol, MRC_EXT, '_stage_'//sstage%to_char()))
             call simple_rename(src, dest)
+            call register_stage_volume(params, 1, dest)
             ! Update refine3D command line
             call cline_refine3D%set('vol1', dest)
             ! Update FRCS

@@ -12,6 +12,7 @@ private
 ! least two native grid units apart before and after rotation.
 integer, parameter :: OBSFIELD_NN_OMP_STRIDE = 2
 integer, parameter :: OBSFIELD_HEADER_SIZE   = 21
+integer, parameter :: OBSFIELD_COUNT_FORMAT_SIGN = -1
 
 ! Part-local Fourier-grid observation field. This is intentionally volume-like:
 ! particle Fourier components are accumulated into dense expanded-grid
@@ -35,7 +36,7 @@ type :: fgrid_obs_field
     logical                :: initialized   = .false.
     complex(dp), allocatable :: grid_num(:,:,:)
     real(dp),    allocatable :: grid_den(:,:,:)
-    logical,     allocatable :: grid_assigned(:,:,:)
+    integer,     allocatable :: grid_cnt(:,:,:)
   contains
     procedure, public :: new               => obsfield_new
     procedure, public :: reset             => obsfield_reset
@@ -43,6 +44,7 @@ type :: fgrid_obs_field
     procedure, public :: insert_plane_oversamp
     procedure, public :: append_field      => obsfield_append_field
     procedure, public :: extract_polar     => obsfield_extract_polar
+    procedure, public :: shell_coverage    => obsfield_shell_coverage
     procedure, public :: get_nobs          => obsfield_get_nobs
     procedure, public :: get_ncells        => obsfield_get_ncells
     procedure, private :: compatible_with  => obsfield_compatible_with
@@ -97,9 +99,9 @@ contains
         allocate(self%grid_den(self%grid_lims(1,1):self%grid_lims(1,2), &
             self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
             source=0.d0)
-        allocate(self%grid_assigned(self%grid_lims(1,1):self%grid_lims(1,2), &
+        allocate(self%grid_cnt(self%grid_lims(1,1):self%grid_lims(1,2), &
             self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
-            source=.false.)
+            source=0)
         self%initialized = .true.
     end subroutine obsfield_new
 
@@ -108,14 +110,14 @@ contains
         self%nobs      = 0
         if( allocated(self%grid_num) ) self%grid_num = DCMPLX_ZERO
         if( allocated(self%grid_den) ) self%grid_den = 0.d0
-        if( allocated(self%grid_assigned) ) self%grid_assigned = .false.
+        if( allocated(self%grid_cnt) ) self%grid_cnt = 0
     end subroutine obsfield_reset
 
     subroutine obsfield_kill( self )
         class(fgrid_obs_field), intent(inout) :: self
         if( allocated(self%grid_num) ) deallocate(self%grid_num)
         if( allocated(self%grid_den) ) deallocate(self%grid_den)
-        if( allocated(self%grid_assigned) ) deallocate(self%grid_assigned)
+        if( allocated(self%grid_cnt) ) deallocate(self%grid_cnt)
         self%pf          = OSMPL_PAD_FAC
         self%nyq         = 0
         self%iwinsz      = 0
@@ -236,7 +238,8 @@ contains
                             self%grid_num(coord(1),coord(2),coord(3)) + comp
                         self%grid_den(coord(1),coord(2),coord(3)) = &
                             self%grid_den(coord(1),coord(2),coord(3)) + ctfval
-                        self%grid_assigned(coord(1),coord(2),coord(3)) = .true.
+                        self%grid_cnt(coord(1),coord(2),coord(3)) = &
+                            self%grid_cnt(coord(1),coord(2),coord(3)) + 1
                         nobs_add = nobs_add + 1
                     enddo
                 enddo
@@ -256,9 +259,53 @@ contains
         if( .not. self%compatible_with(src) ) THROW_HARD('incompatible observation fields; obsfield_append_field')
         self%grid_num = self%grid_num + src%grid_num
         self%grid_den = self%grid_den + src%grid_den
-        self%grid_assigned = self%grid_assigned .or. src%grid_assigned
+        self%grid_cnt = self%grid_cnt + src%grid_cnt
         self%nobs      = self%nobs + src%nobs
     end subroutine obsfield_append_field
+
+    ! Effective fraction of native half-grid Cartesian cells observed in each shell.
+    ! This is a confidence measure for obsfield ML regularization only; the signal
+    ! and CTF2 values extracted from the field remain unscaled. Repeated hits in a
+    ! few cells should not look like dense shell coverage, so counts are converted
+    ! to a participation-ratio coverage: (sum cnt)^2 / sum(cnt^2) / n_shell_cells.
+    subroutine obsfield_shell_coverage( self, kfromto, coverage )
+        class(fgrid_obs_field), intent(in)  :: self
+        integer,                intent(in)  :: kfromto(2)
+        real(dp),               intent(out) :: coverage(kfromto(1):kfromto(2))
+        real(dp), allocatable :: count_sum(:), count_sumsq(:)
+        integer,  allocatable :: expected(:)
+        real(dp) :: cnt_dp, neff
+        integer  :: h, k, l, shell, cnt
+        if( kfromto(1) > kfromto(2) ) THROW_HARD('invalid k-range; obsfield_shell_coverage')
+        coverage = 0.d0
+        if( .not. self%initialized ) return
+        allocate(count_sum(kfromto(1):kfromto(2)), count_sumsq(kfromto(1):kfromto(2)), source=0.d0)
+        allocate(expected(kfromto(1):kfromto(2)), source=0)
+        ! Count over the nonredundant Cartesian lattice owned by the field,
+        ! matching the insertion convention that stores c1 >= lims(1,1) and
+        ! recovers Friedel mates during polar extraction.
+        do h = self%lims(1,1), self%lims(1,2)
+            do k = self%lims(2,1), self%lims(2,2)
+                do l = self%lims(3,1), self%lims(3,2)
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                    expected(shell) = expected(shell) + 1
+                    cnt = self%grid_cnt(h,k,l)
+                    if( cnt > 0 )then
+                        cnt_dp = real(cnt, dp)
+                        count_sum(shell)   = count_sum(shell)   + cnt_dp
+                        count_sumsq(shell) = count_sumsq(shell) + cnt_dp * cnt_dp
+                    endif
+                enddo
+            enddo
+        enddo
+        do shell = kfromto(1), kfromto(2)
+            if( expected(shell) < 1 .or. count_sumsq(shell) <= DTINY ) cycle
+            neff = count_sum(shell) * count_sum(shell) / count_sumsq(shell)
+            coverage(shell) = min(1.d0, neff / real(expected(shell), dp))
+        enddo
+        deallocate(count_sum, count_sumsq, expected)
+    end subroutine obsfield_shell_coverage
 
     ! Gather central sections from the dense expanded grid. This keeps the
     ! polar=no volume-sampling shape: direct array addressing in the 3D KB stencil.
@@ -343,13 +390,13 @@ contains
                                 if( l_conj )then
                                     a1 = -c1; a2 = -c2; a3 = -c3
                                     if( a1 < gl_lo1 .or. a1 > gl_hi1 ) cycle
-                                    if( .not. self%grid_assigned(a1,a2,a3) ) cycle
+                                    if( self%grid_cnt(a1,a2,a3) < 1 ) cycle
                                     cell_num = conjg(self%grid_num(a1,a2,a3))
                                     acc_num  = acc_num + wd * cell_num
                                     acc_den  = acc_den + wd * self%grid_den(a1,a2,a3)
                                 else
                                     if( c1 > gl_hi1 ) cycle
-                                    if( .not. self%grid_assigned(c1,c2,c3) ) cycle
+                                    if( self%grid_cnt(c1,c2,c3) < 1 ) cycle
                                     acc_num = acc_num + wd * self%grid_num(c1,c2,c3)
                                     acc_den = acc_den + wd * self%grid_den(c1,c2,c3)
                                 endif
@@ -399,15 +446,15 @@ contains
         header(5:10)  = reshape(self%lims,      [6])
         header(11:16) = reshape(self%grid_lims, [6])
         header(17:19) = self%grid_shape
-        header(20:21) = [self%nobs, self%ncells]
+        header(20:21) = [self%nobs, OBSFIELD_COUNT_FORMAT_SIGN * self%ncells]
         write(funit, iostat=io_stat) header
         call fileiochk('obsfield_write_local header; '//trim(label), io_stat)
         write(funit, iostat=io_stat) self%grid_num
         call fileiochk('obsfield_write_local numerator; '//trim(label), io_stat)
         write(funit, iostat=io_stat) self%grid_den
         call fileiochk('obsfield_write_local density; '//trim(label), io_stat)
-        write(funit, iostat=io_stat) self%grid_assigned
-        call fileiochk('obsfield_write_local assignment mask; '//trim(label), io_stat)
+        write(funit, iostat=io_stat) self%grid_cnt
+        call fileiochk('obsfield_write_local observation counts; '//trim(label), io_stat)
     end subroutine obsfield_write_local
 
     subroutine obsfield_read_local( self, funit, label )
@@ -422,7 +469,10 @@ contains
         grid_lims  = reshape(header(11:16), [3,2])
         grid_shape = header(17:19)
         nobs       = header(20)
-        ncells     = header(21)
+        if( header(21) >= 0 )then
+            THROW_HARD('obsfield file lacks count-format marker; remove stale obsfield parts: '//trim(label))
+        endif
+        ncells     = abs(header(21))
         call self%new(lims, header(2))
         if( self%pf /= header(1) .or. self%iwinsz /= header(3) .or. self%wdim /= header(4) ) &
             &THROW_HARD('obsfield scalar header mismatch; '//trim(label))
@@ -432,8 +482,8 @@ contains
         call fileiochk('obsfield_read_local numerator; '//trim(label), io_stat)
         read(funit, iostat=io_stat) self%grid_den
         call fileiochk('obsfield_read_local density; '//trim(label), io_stat)
-        read(funit, iostat=io_stat) self%grid_assigned
-        call fileiochk('obsfield_read_local assignment mask; '//trim(label), io_stat)
+        read(funit, iostat=io_stat) self%grid_cnt
+        call fileiochk('obsfield_read_local observation counts; '//trim(label), io_stat)
         self%nobs = nobs
     end subroutine obsfield_read_local
 
