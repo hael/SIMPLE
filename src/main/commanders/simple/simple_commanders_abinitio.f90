@@ -249,8 +249,8 @@ contains
             call conv_eo(work_proj%os_ptcl3D)
             ! calculate 3D reconstruction at original sampling
             call calc_final_rec(params, work_proj, work_projfile, xrec3D)
-            ! postprocess final 3D reconstruction
-            call postprocess_final_rec(params, work_proj)
+            ! final raw and low-pass diagnostic 3D reconstruction outputs
+            call write_final_rec_outputs(params, work_proj, lpinfo(nstages_ini3D)%lp)
             ! add rec_final to os_out
             do s = 1,params%nstates
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
@@ -266,7 +266,7 @@ contains
             write(logfhandle,'(A)') '>>>'
             do s = 1,params%nstates
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
-                call cline_reproject%set('vol'//int2str(s), REC_FBODY//int2str_pad(s,2)//PPROC_SUFFIX//MRC_EXT)
+                call cline_reproject%set('vol'//int2str(s), REC_FBODY//int2str_pad(s,2)//LP_SUFFIX//MRC_EXT)
             enddo
             call cline_reproject%set('box',  cavg_ldim(1))
             call cline_reproject%set('smpd', cavg_smpd)
@@ -426,7 +426,6 @@ contains
                 call sync_distributed_child(cline_refine3D)
                 call sync_distributed_child(cline_reconstruct3D)
                 call strip_distributed_child(cline_symmap)
-                call strip_distributed_child(cline_postprocess)
                 call strip_distributed_child(cline_reproject)
             end subroutine configure_cavgs_distributed_clines
 
@@ -764,8 +763,8 @@ contains
         call calc_final_rec(params, spproj, params%projfile, xrec3D)
         ! for visualization
         call gen_ortho_reprojs4viz(params, spproj)
-        ! postprocess final 3D reconstruction
-        call postprocess_final_rec(params, spproj)
+        ! final raw and low-pass diagnostic 3D reconstruction outputs
+        call write_final_rec_outputs(params, spproj, lpinfo(nstages_refine3D)%lp)
         ! termination
         nice_comm%stat_root%stage = "terminating"
         call nice_comm%cycle()

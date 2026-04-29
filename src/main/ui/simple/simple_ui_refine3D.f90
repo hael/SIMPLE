@@ -78,15 +78,20 @@ contains
         &.true.)                                                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call postprocess%add_input(UI_IMG, 'vol1', 'file', 'Volume override', 'Volume override for selected state', &
+            &'input volume e.g. vol_state01.mrc', .false., '')
         ! parameter input/output
         call postprocess%add_input(UI_PARM, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
+        call postprocess%add_input(UI_PARM, 'imgkind', 'str', 'Volume kind', 'Project output volume kind{vol}', &
+            &'project output kind: vol or vol_cavg', .false., 'vol')
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
         call postprocess%add_input(UI_FILT, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
+        call postprocess%add_input(UI_FILT, 'fsc', 'file', 'FSC file', 'Binary FSC file for optimal filtering', &
+            &'e.g. fsc_state01.bin file', .false., '')
         call postprocess%add_input(UI_FILT, bfac)
         call postprocess%add_input(UI_FILT, mirr)
         ! mask controls

@@ -1,7 +1,7 @@
 !@descr: utilities for ab initio 3D reconstruction used by commanders_abinitio
 module simple_abinitio_utils
 use simple_commanders_api
-use simple_commanders_volops, only: commander_postprocess, commander_symmetrize_map
+use simple_commanders_volops, only: commander_symmetrize_map
 use simple_cluster_seed,      only: gen_labelling
 use simple_class_frcs,        only: class_frcs
 use simple_decay_funs,        only: calc_update_frac_dyn
@@ -41,7 +41,7 @@ logical          :: l_lpauto          = .false., l_nsample_given = .false., l_ns
 logical          :: l_automsk         = .false.
 logical          :: l_nonuniform      = .false.
 type(sym)        :: se1, se2
-type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_postprocess, cline_reproject
+type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
 real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
 integer          :: nstates_glob = 1, nptcls_eff = 0, nsample_minmax(2), maxits_dyn=0
 integer          :: nstages_refine3D = NSTAGES
@@ -64,7 +64,6 @@ contains
         cline_refine3D      = cline
         cline_symmap        = cline
         cline_reconstruct3D = cline
-        cline_postprocess   = cline
         cline_reproject     = cline
         ! refine3D
         call cline_refine3D%set('prg',                    'refine3D')
@@ -90,12 +89,6 @@ contains
         call cline_reconstruct3D%set('polar',                   'no')
         ! no fractional update
         call cline_reconstruct3D%delete('update_frac')
-        ! postprocess volume
-        call cline_postprocess%set('prg',              'postprocess')
-        call cline_postprocess%set('projfile',              projfile)
-        call cline_postprocess%set('mkdir',                     'no')
-        call cline_postprocess%set('imgkind',                  'vol')
-        call cline_postprocess%delete('lp')   ! to obtain optimal filtration
         ! re-project volume, only with cavgs
         call cline_reproject%set('prg',                  'reproject')
         call cline_reproject%set('pgrp',                 params%pgrp)
@@ -176,17 +169,23 @@ contains
         call fsc_name%kill
     end subroutine register_stage_volume
 
-    subroutine postprocess_stage_volume( params, state, vol_name )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: state
-        class(string),     intent(in) :: vol_name
-        type(commander_postprocess) :: xpostprocess
-        if( .not. file_exists(vol_name) ) return
-        call register_stage_volume(params, state, vol_name)
-        call cline_postprocess%set('state', state)
-        call cline_postprocess%set('vol'//int2str(state), vol_name)
-        call xpostprocess%execute(cline_postprocess)
-    end subroutine postprocess_stage_volume
+    subroutine write_abinitio_lowpass_snapshot( vol_in, lp, vol_out )
+        class(string), intent(in) :: vol_in, vol_out
+        real,          intent(in) :: lp
+        type(image) :: vol_lp
+        integer :: ldim(3), nptcls
+        real    :: smpd, lp_eff
+        if( .not. file_exists(vol_in) ) return
+        call find_ldim_nptcls(vol_in, ldim, nptcls, smpd=smpd)
+        lp_eff = max(2.0 * smpd, lp)
+        call vol_lp%new(ldim, smpd)
+        call vol_lp%read(vol_in)
+        call vol_lp%fft()
+        call vol_lp%bp(0., lp_eff)
+        call vol_lp%ifft()
+        call vol_lp%write(vol_out, del_if_exists=.true.)
+        call vol_lp%kill
+    end subroutine write_abinitio_lowpass_snapshot
 
     subroutine set_symmetry_class_vars( params )
         class(parameters), intent(in) :: params
@@ -266,7 +265,7 @@ contains
         class(parameters),     intent(inout) :: params
         integer,               intent(in)    :: istage
         class(commander_base), intent(inout) :: xrefine3D
-        type(string) :: stage, str_state, vol_name, vol_pproc
+        type(string) :: stage, str_state, vol_name, vol_stage, vol_pproc, vol_lp, vol_lp_stage
         integer      :: state
         call cline_refine3D%delete('endit')
         call xrefine3D%execute(cline_refine3D)
@@ -280,10 +279,23 @@ contains
                 str_state = int2str_pad(state,2)
                 vol_name  = string(VOL_FBODY)//str_state//MRC_EXT
                 vol_pproc = add2fbody(vol_name, MRC_EXT, PPROC_SUFFIX)
-                if( file_exists(vol_name) ) call simple_copy_file(vol_name,  add2fbody(vol_name, string(MRC_EXT),stage))
+                vol_lp    = add2fbody(vol_name, MRC_EXT, LP_SUFFIX)
+                vol_stage = add2fbody(vol_name, string(MRC_EXT),stage)
+                vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
+                if( file_exists(vol_name) )then
+                    call simple_copy_file(vol_name, vol_stage)
+                    if( file_exists(vol_lp) )then
+                        call simple_copy_file(vol_lp, vol_lp_stage)
+                    else
+                        call write_abinitio_lowpass_snapshot(vol_stage, lpinfo(istage)%lp, vol_lp_stage)
+                    endif
+                endif
                 if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,string(MRC_EXT),stage))
             enddo
         endif
+        call vol_stage%kill
+        call vol_lp%kill
+        call vol_lp_stage%kill
     end subroutine exec_refine3D
 
     subroutine symmetrize( params, istage, spproj, projfile, xrec3D )
@@ -294,7 +306,7 @@ contains
         class(commander_base), optional, intent(inout) :: xrec3D
         type(commander_symmetrize_map) :: xsymmap
         type(cmdline)                  :: cline_asymrec, cline_symrec
-        type(string) :: vol_iter, vol_sym
+        type(string) :: vol_iter, vol_sym, vol_diag
         real :: lpsym
         if( l_symran )then
             call se1%symrandomize(spproj%os_ptcl3D)
@@ -317,6 +329,8 @@ contains
                 call xrec3D%execute(cline_asymrec)
                 vol_iter = 'asymmetric_map'//MRC_EXT
                 call simple_copy_file(string(VOL_FBODY)//int2str_pad(1,2)//MRC_EXT, vol_iter)
+                vol_diag = add2fbody(vol_iter, MRC_EXT, LP_SUFFIX)
+                call write_abinitio_lowpass_snapshot(vol_iter, lpinfo(istage)%lp, vol_diag)
                 call cline_asymrec%kill
             else
                 ! Volume from previous stage
@@ -336,6 +350,8 @@ contains
             write(logfhandle,'(A)') '>>> MAP SYMMETRIZATION'
             write(logfhandle,'(A)') '>>>'
             call xsymmap%execute(cline_symmap)
+            vol_diag = add2fbody(vol_sym, MRC_EXT, LP_SUFFIX)
+            call write_abinitio_lowpass_snapshot(vol_sym, lpsym, vol_diag)
             call del_file('SYMAXIS_SEARCH_FINISHED')
             if( present(xrec3D) )then
                 ! symmetric reconstruction
@@ -349,6 +365,8 @@ contains
                 call xrec3D%execute(cline_symrec)
                 vol_sym = VOL_FBODY//int2str_pad(1,2)//MRC_EXT
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
+                vol_diag = add2fbody(string('symmetric_map')//MRC_EXT, MRC_EXT, LP_SUFFIX)
+                call write_abinitio_lowpass_snapshot(string('symmetric_map')//MRC_EXT, lpinfo(istage)%lp, vol_diag)
                 call cline_symrec%kill
             endif
             if( l_polar )then
@@ -357,6 +375,7 @@ contains
                 call inject_refine3D_volume(params, 1, vol_sym)
             endif
         endif
+        call vol_diag%kill
     end subroutine symmetrize
 
     ! Performs reconstruction at some set stages when polar mode is enabled
@@ -366,7 +385,7 @@ contains
         class(string),           intent(in)    :: projfile
         class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
-        type(string)      :: vol,vol_even,vol_odd, str, tmpl, src, dest, sstate, sstage, pgrp
+        type(string)      :: vol, vol_even, vol_odd, str, tmpl, src, dest, sstate, sstage, pgrp, vol_diag
         type(cmdline)     :: cline_rec
         type(class_frcs)  :: frcs
         real, allocatable :: fsc(:)
@@ -394,10 +413,9 @@ contains
             sstage = int2str_pad(istage-1,2)
             src    = string(VOL_FBODY)//sstate//MRC_EXT
             dest   = string(VOL_FBODY)//sstate//'_stage_'//sstage//MRC_EXT
-            call postprocess_stage_volume(params, 1, src)
-            vol = add2fbody(src, MRC_EXT, PPROC_SUFFIX)
-            if( file_exists(vol) ) call simple_rename(vol, add2fbody(vol, MRC_EXT, '_stage_'//sstage%to_char()))
             call simple_rename(src, dest)
+            vol_diag = add2fbody(dest, MRC_EXT, LP_SUFFIX)
+            call write_abinitio_lowpass_snapshot(dest, lpinfo(istage)%lp, vol_diag)
             call register_stage_volume(params, 1, dest)
             ! Update refine3D command line
             call cline_refine3D%set('vol1', dest)
@@ -424,6 +442,8 @@ contains
                 vol      = string(VOL_FBODY)//sstate//MRC_EXT
                 str      = tmpl//MRC_EXT
                 call     simple_rename(vol, str)
+                vol_diag = add2fbody(str, MRC_EXT, LP_SUFFIX)
+                call     write_abinitio_lowpass_snapshot(str, lpinfo(istage)%lp, vol_diag)
                 params%vols(state) = str
                 vol      = 'vol'//int2str(state)
                 call     cline_refine3D%set(vol, str)
@@ -439,6 +459,7 @@ contains
                 call     simple_rename(vol_odd, str)
             enddo
         endif
+        call vol_diag%kill
         call cline_rec%kill
     end subroutine calc_rec
 
@@ -453,7 +474,6 @@ contains
         call spproj%write_segment_inside(params%oritype, projfile)
         call cline_refine3D%set(     'nstates', params%nstates)
         call cline_reconstruct3D%set('nstates', params%nstates)
-        call cline_postprocess%set(  'nstates', params%nstates)
         call cline_reproject%set(    'nstates', params%nstates)
         call calc_rec(params, projfile, xrec3D, istage)
     end subroutine randomize_states
@@ -527,28 +547,24 @@ contains
         call stkname%kill
     end subroutine calc_final_rec
 
-    subroutine postprocess_final_rec( params, spproj )
+    subroutine write_final_rec_outputs( params, spproj, lp )
         class(parameters), intent(in) :: params
         class(sp_project), intent(in) :: spproj
-        type(commander_postprocess)   :: xpostprocess
-        type(string) :: str_state, vol_name, vol_pproc, vol_pproc_mirr, vol_final
+        real,              intent(in) :: lp
+        type(string) :: str_state, vol_name, vol_final, vol_final_lp
         integer :: state
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle ! empty-state case
             str_state      = int2str_pad(state,2)
             vol_name       = string(VOL_FBODY)//str_state//MRC_EXT  ! reconstruction from particles stored in project
             if( .not. file_exists(vol_name) )cycle
-            call cline_postprocess%set('state', state)
-            call cline_postprocess%set('vol'//int2str(state), vol_name)
-            call xpostprocess%execute(cline_postprocess)
-            vol_pproc      = add2fbody(vol_name,MRC_EXT, PPROC_SUFFIX)
-            vol_pproc_mirr = add2fbody(vol_name,MRC_EXT, PPROC_SUFFIX//MIRR_SUFFIX)
             vol_final      = string(REC_FBODY)//str_state//MRC_EXT
-            if( file_exists(vol_name)       ) call simple_copy_file(vol_name,    vol_final)
-            if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      add2fbody(vol_final,MRC_EXT, PPROC_SUFFIX))
-            if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, add2fbody(vol_final,MRC_EXT, PPROC_SUFFIX//MIRR_SUFFIX))
+            call simple_copy_file(vol_name, vol_final)
+            vol_final_lp = add2fbody(vol_final, MRC_EXT, LP_SUFFIX)
+            call write_abinitio_lowpass_snapshot(vol_final, lp, vol_final_lp)
         enddo
-    end subroutine postprocess_final_rec
+        call vol_final_lp%kill
+    end subroutine write_final_rec_outputs
 
     ! create starting noise volume(s)
     subroutine generate_random_volumes( params, box, smpd, cline )

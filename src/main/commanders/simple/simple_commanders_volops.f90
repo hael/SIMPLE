@@ -296,8 +296,8 @@ contains
         type(image)      :: vol_bfac, vol_no_bfac
         type(sp_project) :: spproj
         real    :: fsc0143, fsc05, smpd, lplim
-        integer :: state, box, fsc_box, ldim(3), nptcls
-        logical :: has_fsc, l_direct_vol
+        integer :: state, box, fsc_box, ldim(3)
+        logical :: has_fsc
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'out')
@@ -312,12 +312,7 @@ contains
             state = 1
         endif
         ! check volume, get correct smpd & box
-        l_direct_vol = cline%defined('vol'//int2str(state))
-        if( l_direct_vol )then
-            fname_vol = params%vols(state)
-            call find_ldim_nptcls(fname_vol, ldim, nptcls, smpd=smpd)
-            box = ldim(1)
-        else if( cline%defined('imgkind') )then
+        if( cline%defined('imgkind') )then
             call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
         else
             call spproj%get_vol('vol', state, fname_vol, smpd, box)
@@ -325,6 +320,8 @@ contains
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
+        ! using the input volume for postprocessing
+        if( cline%defined('vol'//int2str(state)) ) fname_vol = params%vols(state)
         ! generate file names
         fname_even  = add2fbody(fname_vol, params%ext, '_even')
         fname_odd   = add2fbody(fname_vol, params%ext, '_odd' )
@@ -340,16 +337,6 @@ contains
         if( cline%defined('fsc') )then
             if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//params%fsc%to_char()//' not found')
             has_fsc = .true.
-        else if( l_direct_vol )then
-            fname_fsc = string(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
-            params%fsc = fname_fsc
-            if( file_exists(params%fsc) )then
-                has_fsc = .true.
-            else
-                THROW_WARN('FSC file: '//params%fsc%to_char()//' not found')
-                has_fsc = .false.
-                if( .not. cline%defined('lp') ) THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
-            endif
         else
             call spproj%get_fsc(state, fname_fsc, fsc_box)
             params%fsc = fname_fsc
