@@ -40,6 +40,8 @@ type :: refine3D_ctrl
     logical :: do_sigma_mode
     logical :: do_write_oris
     logical :: do_bench
+  contains
+    procedure :: print_flags
 end type refine3D_ctrl
 
 contains
@@ -67,7 +69,7 @@ contains
         type(ori)           :: orientation
         type(refine3D_ctrl) :: ctrl
         real                :: frac_greedy
-        integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz, nrefs
+        integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical             :: doprint, has_been_searched
         logical             :: l_write_partial_recs_present, l_write_partial_recs_value
@@ -105,8 +107,8 @@ contains
         call ensure_even_odd_partition()
         has_been_searched = .not. b_ptr%spproj%is_virgin_field(p_ptr%oritype)
         call set_bp_range3D(p_ptr, b_ptr, cline)
-        call sample_particles_for_update()
-        call prepare_batches()
+        call sample_particles_for_update( pinds, nptcls2update )
+        call prepare_particles_batches( nptcls2update )
         if( ctrl%do_bench )then
             rt_startup = toc(t_startup)
             rt_alloc_ptcl_imgs   = 0.0
@@ -114,7 +116,7 @@ contains
         endif
         call prepare_refs_sigmas_and_pftc()
         if( ctrl%do_bench ) t_memoize_refs = tic()
-        if( .not. ctrl%do_prob_align ) call build%pftc%memoize_refs( eulspace=build%eulspace)
+        if( .not. ctrl%do_prob_align ) call build%pftc%memoize_refs(eulspace=build%eulspace)
         if( ctrl%do_bench )then
             rt_memoize_refs = toc(t_memoize_refs)
             t_prep_orisrch  = tic()
@@ -150,7 +152,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl     = iptcl
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
                 if( ctrl%do_prob_align ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
-                call choose_and_run_strategy(iptcl, iptcl_batch, iptcl_map, ithr, has_been_searched)
+                call choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
                 if ( p_ptr%cc_objfun == OBJFUN_EUCLID ) then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
@@ -166,27 +168,19 @@ contains
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
         call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
+        if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
+        call maybe_write_orientations()
+
         do iptcl_batch = 1, batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
         enddo
         deallocate(strategy3Dsrch, strategy3Dspecs, batches)
         call eulprob_obj_part%kill
         call deallocate_class_samples(clssmp)
-        if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
-        if( trim(p_ptr%ptclw) == 'yes' )then
-            ! not supported
-        else
-            if( trim(p_ptr%cavgw) == 'yes' )then
-                call b_ptr%spproj_field%calc_cavg_soft_weights(p_ptr%frac)
-            else
-                call b_ptr%spproj_field%calc_hard_weights(p_ptr%frac)
-            endif
-        endif
         call clean_strategy3D
         call b_ptr%vol%kill
         call orientation%kill
         call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_rec_imgs)
-        call maybe_write_orientations()
 
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
@@ -279,33 +273,32 @@ contains
             endif
         end subroutine ensure_even_odd_partition
 
-        subroutine sample_particles_for_update()
-            if( allocated(pinds) ) deallocate(pinds)
+        subroutine sample_particles_for_update( pinds_local, nptcls )
+            integer, allocatable, intent(out) :: pinds_local(:)
+            integer,              intent(out) :: nptcls
+            if( allocated(pinds_local) ) deallocate(pinds_local)
             if( ctrl%do_prob_align )then
-                call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds)
+                call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local)
             else
                 if( p_ptr%l_fillin .and. mod(which_iter,5) == 0 )then
-                    call sample_ptcls4fillin(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
+                    call sample_ptcls4fillin(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)
                 else
-                    call sample_ptcls4update3D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
+                    call sample_ptcls4update3D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)
                 endif
             endif
         end subroutine sample_particles_for_update
 
-        subroutine prepare_batches()
-            batchsz_max = min(nptcls2update, p_ptr%nthr * BATCHTHRSZ)
-            nbatches    = ceiling(real(nptcls2update) / real(batchsz_max))
-            batches     = split_nobjs_even(nptcls2update, nbatches)
+        subroutine prepare_particles_batches( nptcls )
+            integer, intent(in) :: nptcls
+            batchsz_max = min(nptcls, p_ptr%nthr * BATCHTHRSZ)
+            nbatches    = ceiling(real(nptcls) / real(batchsz_max))
+            batches     = split_nobjs_even(nptcls, nbatches)
             batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
-        end subroutine prepare_batches
+        end subroutine prepare_particles_batches
 
         subroutine prepare_refs_sigmas_and_pftc()
-            integer :: nrefs_cavger
-            if( ctrl%do_prob_align .and. (.not. ctrl%do_polar_prepare) )then
-                nrefs = p_ptr%nspace * p_ptr%nstates
-                call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
-                call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
-            endif
+            integer :: nrefs
+            nrefs = p_ptr%nspace * p_ptr%nstates
             if( ctrl%do_polar_prepare )then
                 if( ctrl%do_bench ) t_prep_ref_sections = tic()
                 if( .not. polar_ref_sections_available(p_ptr) )then
@@ -313,13 +306,17 @@ contains
                 endif
                 call prep_pftc4align3D(p_ptr, b_ptr, cline, batchsz_max)
                 if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
-            endif
-            if( (.not. ctrl%do_prob_align) .and. (.not. ctrl%do_polar_prepare) )then
-                if( ctrl%do_bench ) t_prep_ref_sections = tic()
-                call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
-                call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
-                call write_polar_refs_from_current_pftc(p_ptr, b_ptr, skip_distr_nonroot=.true.)
-                if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
+            else
+                if( ctrl%do_prob_align )then
+                    call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
+                    call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
+                else
+                    if( ctrl%do_bench ) t_prep_ref_sections = tic()
+                    call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
+                    call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
+                    call write_polar_refs_from_current_pftc(p_ptr, b_ptr, skip_distr_nonroot=.true.)
+                    if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
+                endif
             endif
             if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
             call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
@@ -329,15 +326,17 @@ contains
             call build%vol2%kill
             if( ctrl%do_polar .and. ctrl%do_write_partial_recs )then
                 if( trim(ctrl%polar_mode) /= 'obsfield' )then
-                    nrefs_cavger = p_ptr%nspace * p_ptr%nstates
-                    ! Only the direct non-probability volume path leaves freshly
-                    ! projected refs in pftc. In prob modes prob_align materializes
-                    ! POLAR_REFS* before prob_tab, while the main pass only stamps
-                    ! assignments and accumulates partial reconstruction sums.
-                    if( complete_volume_source_defined(cline, p_ptr%nstates) .and. (.not. ctrl%do_prob_align) )then
+                    if( complete_volume_source_defined(cline, p_ptr%nstates) )then
                         call b_ptr%pftc%polar_cavger_new(.true.)
                         if( p_ptr%l_trail_rec )then
-                            call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+                            ! Only the direct non-probability volume path leaves freshly
+                            ! projected refs in pftc.
+                            ! In prob modes prob_align materializes POLAR_REFS* before
+                            ! prob_tab, while the main pass only stamps assignments and
+                            ! accumulates partial reconstruction sums.
+                            if( .not. ctrl%do_prob_align )then
+                                call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+                            endif
                         endif
                     endif
                     call b_ptr%pftc%polar_cavger_zero_pft_refs
@@ -388,8 +387,8 @@ contains
             if( ctrl%do_bench ) rt_build_batch_ptcls = rt_build_batch_ptcls + toc(t_build_batch_ptcls)
         end subroutine build_batch_particles_local
 
-        subroutine choose_and_run_strategy(iptcl, iptcl_batch, iptcl_map, ithr, has_been_searched)
-            integer, intent(in) :: iptcl, iptcl_batch, iptcl_map, ithr
+        subroutine choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
+            integer, intent(in) :: iptcl, iptcl_batch, ithr
             logical, intent(in) :: has_been_searched
             select case(ctrl%refine_mode)
                 case('shc')
@@ -448,8 +447,9 @@ contains
                 select case(ctrl%polar_mode)
                     case('obsfield')
                         call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
-                            pinds(batch_start:batch_end), fpls(:batchsz))
-                        call insert_obsfield_batch()
+                            &pinds(batch_start:batch_end), fpls(:batchsz))
+                        call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
+                            &b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
                     case('yes')
                         call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), &
                             b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
@@ -463,11 +463,6 @@ contains
             endif
             if( ctrl%do_bench ) rt_rec = rt_rec + toc(t_rec)
         end subroutine maybe_restore_batch
-
-        subroutine insert_obsfield_batch()
-            call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
-                b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
-        end subroutine insert_obsfield_batch
 
         subroutine maybe_write_orientations()
             if( .not. ctrl%do_write_oris ) return
@@ -490,5 +485,20 @@ contains
         end subroutine maybe_write_orientations
 
     end subroutine refine3D_exec
+
+    ! debugging convenience function
+    subroutine print_flags( ctrl )
+        class(refine3D_ctrl), intent(in) :: ctrl
+        write(logfhandle,*) 'refine_mode           : ', ctrl%refine_mode
+        write(logfhandle,*) 'polar_mode            : ', ctrl%polar_mode
+        write(logfhandle,*) 'oritype               : ', ctrl%oritype
+        write(logfhandle,*) 'do_write_partial_recs : ', ctrl%do_write_partial_recs
+        write(logfhandle,*) 'do_polar_prepare      : ', ctrl%do_polar_prepare
+        write(logfhandle,*) 'do_prob_align         : ', ctrl%do_prob_align
+        write(logfhandle,*) 'do_polar              : ', ctrl%do_polar
+        write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
+        write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
+        write(logfhandle,*) 'do_bench              : ', ctrl%do_bench
+    end subroutine print_flags
 
 end module simple_strategy3D_matcher
