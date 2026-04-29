@@ -126,6 +126,8 @@ contains
         ! filter controls
         call reconstruct3D%add_input(UI_FILT, envfsc)
         call reconstruct3D%add_input(UI_FILT, wiener)
+        call reconstruct3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
+        &'Postprocess reconstructed volumes using the generated FSC curves', 'postprocess reconstructed volumes{yes}', .false., 'yes')
         ! mask controls
         call reconstruct3D%add_input(UI_MASK, mskdiam)
         ! computer controls

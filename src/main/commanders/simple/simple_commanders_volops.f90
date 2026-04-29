@@ -286,45 +286,22 @@ contains
         call simple_end('**** SIMPLE_SHARPVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_sharpvol
 
-    subroutine exec_postprocess( self, cline )
-        class(commander_postprocess), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
+    subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline )
+        class(string),   intent(in)    :: fname_vol, fname_fsc
+        integer,         intent(in)    :: box
+        real,            intent(in)    :: smpd
+        type(parameters),intent(inout) :: params
+        class(cmdline),  intent(inout) :: cline
         real, allocatable :: fsc(:), optlp(:), res(:)
-        type(string)     :: fname_vol, fname_fsc, fname_mirr
-        type(string)     :: fname_even, fname_odd, fname_pproc, fname_lp
-        type(parameters) :: params
+        type(string)     :: fname_mirr, fname_pproc, fname_lp
         type(image)      :: vol_bfac, vol_no_bfac
-        type(sp_project) :: spproj
-        real    :: fsc0143, fsc05, smpd, lplim
-        integer :: state, box, fsc_box, ldim(3)
+        real    :: fsc0143, fsc05, lplim
+        integer :: ldim(3)
         logical :: has_fsc
-        ! set defaults
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call cline%set('oritype', 'out')
-        ! parse commad-line
-        call params%new(cline)
-        ! read project segment
-        call spproj%read_segment(params%oritype, params%projfile)
-        ! state
-        if( cline%defined('state') )then
-            state = params%state
-        else
-            state = 1
-        endif
-        ! check volume, get correct smpd & box
-        if( cline%defined('imgkind') )then
-            call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
-        else
-            call spproj%get_vol('vol', state, fname_vol, smpd, box)
-        endif
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
-        ! using the input volume for postprocessing
-        if( cline%defined('vol'//int2str(state)) ) fname_vol = params%vols(state)
         ! generate file names
-        fname_even  = add2fbody(fname_vol, params%ext, '_even')
-        fname_odd   = add2fbody(fname_vol, params%ext, '_odd' )
         fname_pproc = basename(add2fbody(fname_vol,   params%ext, PPROC_SUFFIX))
         fname_mirr  = basename(add2fbody(fname_pproc, params%ext, MIRR_SUFFIX))
         fname_lp    = basename(add2fbody(fname_vol,   params%ext, LP_SUFFIX))
@@ -334,19 +311,15 @@ contains
         call vol_bfac%read(fname_vol)
         ! check fsc filter & determine resolution
         has_fsc = .false.        
-        if( cline%defined('fsc') )then
-            if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//params%fsc%to_char()//' not found')
+        params%fsc = fname_fsc
+        if( trim(params%fsc%to_char()) /= '' .and. file_exists(params%fsc) )then
             has_fsc = .true.
         else
-            call spproj%get_fsc(state, fname_fsc, fsc_box)
-            params%fsc = fname_fsc
-            if( file_exists(params%fsc) )then
-                has_fsc = .true.
-            else
-                THROW_WARN('FSC file: '//params%fsc%to_char()//' not found')
-                has_fsc = .false.
-                if( .not. cline%defined('lp') ) THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
-            endif 
+            THROW_WARN('FSC file: '//params%fsc%to_char()//' not found')
+            has_fsc = .false.
+            if( .not. cline%defined('lp') )then
+                THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; postprocess_volume_from_files')
+            endif
         endif
         if( has_fsc )then
             ! resolution & optimal low-pass filter from FSC
@@ -400,9 +373,51 @@ contains
             call vol_bfac%write(fname_mirr)
         endif
         ! destruct
-        call spproj%kill
         call vol_bfac%kill
         call vol_no_bfac%kill
+    end subroutine postprocess_volume_from_files
+
+    subroutine exec_postprocess( self, cline )
+        class(commander_postprocess), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(string)     :: fname_vol, fname_fsc
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        real    :: smpd
+        integer :: state, box, fsc_box
+        ! set defaults
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call cline%set('oritype', 'out')
+        ! parse commad-line
+        call params%new(cline)
+        ! read project segment
+        call spproj%read_segment(params%oritype, params%projfile)
+        ! state
+        if( cline%defined('state') )then
+            state = params%state
+        else
+            state = 1
+        endif
+        ! check volume, get correct smpd & box
+        if( cline%defined('imgkind') )then
+            call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
+        else
+            call spproj%get_vol('vol', state, fname_vol, smpd, box)
+        endif
+        if( .not.file_exists(fname_vol) )then
+            THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
+        endif
+        ! using the input volume for postprocessing
+        if( cline%defined('vol'//int2str(state)) ) fname_vol = params%vols(state)
+        if( cline%defined('fsc') )then
+            if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//params%fsc%to_char()//' not found')
+            fname_fsc = params%fsc
+        else
+            call spproj%get_fsc(state, fname_fsc, fsc_box)
+        endif
+        call postprocess_volume_from_files(fname_vol, fname_fsc, box, smpd, params, cline)
+        ! destruct
+        call spproj%kill
         call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postprocess
 

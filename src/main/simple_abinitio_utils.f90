@@ -510,11 +510,12 @@ contains
         call final_vol%kill
     end subroutine gen_ortho_reprojs4viz
 
-    subroutine calc_final_rec( params, spproj, projfile, xrec3D )
+    subroutine calc_final_rec( params, spproj, projfile, xrec3D, l_postprocess )
         class(parameters),     intent(in)    :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
+        logical, optional,     intent(in)    :: l_postprocess
         type(string) :: str_state, vol_name, stkname
         integer      :: state, pop, ind_in_stk, nptcls, ldim(3)
         real         :: smpd
@@ -529,6 +530,15 @@ contains
         call cline_reconstruct3D%set('smpd', smpd)
         call cline_reconstruct3D%set('oritype', 'ptcl3D')
         call cline_reconstruct3D%set('write_polar_refs', 'no')
+        if( present(l_postprocess) )then
+            if( l_postprocess )then
+                call cline_reconstruct3D%set('postprocess', 'yes')
+            else
+                call cline_reconstruct3D%set('postprocess', 'no')
+            endif
+        else
+            call cline_reconstruct3D%set('postprocess', 'no')
+        endif
         call cline_reconstruct3D%delete('box_crop')
         call cline_reconstruct3D%delete('smpd_crop')
         call xrec3D%execute(cline_reconstruct3D)
@@ -552,6 +562,7 @@ contains
         class(sp_project), intent(in) :: spproj
         real,              intent(in) :: lp
         type(string) :: str_state, vol_name, vol_final, vol_final_lp
+        type(string) :: vol_pproc, vol_final_pproc, vol_mirr, vol_final_mirr
         integer :: state
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle ! empty-state case
@@ -562,6 +573,16 @@ contains
             call simple_copy_file(vol_name, vol_final)
             vol_final_lp = add2fbody(vol_final, MRC_EXT, LP_SUFFIX)
             call write_abinitio_lowpass_snapshot(vol_final, lp, vol_final_lp)
+            vol_pproc = add2fbody(vol_name, MRC_EXT, PPROC_SUFFIX)
+            if( file_exists(vol_pproc) )then
+                vol_final_pproc = add2fbody(vol_final, MRC_EXT, PPROC_SUFFIX)
+                call simple_copy_file(vol_pproc, vol_final_pproc)
+                vol_mirr = add2fbody(vol_pproc, MRC_EXT, MIRR_SUFFIX)
+                if( file_exists(vol_mirr) )then
+                    vol_final_mirr = add2fbody(vol_final_pproc, MRC_EXT, MIRR_SUFFIX)
+                    call simple_copy_file(vol_mirr, vol_final_mirr)
+                endif
+            endif
         enddo
         call vol_final_lp%kill
     end subroutine write_final_rec_outputs

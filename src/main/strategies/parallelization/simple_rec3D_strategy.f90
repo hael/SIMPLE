@@ -192,7 +192,7 @@ contains
         type(parameters),            intent(in)    :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        ! No-op
+        call maybe_postprocess_reconstruct3D(params, cline)
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, build, cline)
@@ -309,6 +309,7 @@ contains
             enddo
             call build%spproj%write_segment_inside('out', params%projfile)
         endif
+        call maybe_postprocess_reconstruct3D(params, cline)
     end subroutine distr_finalize_run
 
     subroutine distr_cleanup(self, params, build, cline)
@@ -322,5 +323,34 @@ contains
         call self%qenv%kill
         call self%job_descr%kill
     end subroutine distr_cleanup
+
+    subroutine maybe_postprocess_reconstruct3D(params, cline)
+        use simple_commanders_volops, only: postprocess_volume_from_files
+        type(parameters), intent(in)    :: params
+        class(cmdline),   intent(inout) :: cline
+        type(parameters) :: params_pp
+        type(string)     :: str_state, fname_vol, fname_fsc
+        real             :: smpd
+        integer          :: state, nptcls, ldim(3)
+        if( trim(params%postprocess) /= 'yes' )return
+        if( cline%defined('part') )return
+        do state = 1, params%nstates
+            params_pp = params
+            str_state = int2str_pad(state,2)
+            fname_vol = string(VOL_FBODY)//str_state//params%ext
+            fname_fsc = FSC_FBODY//str_state%to_char()//BIN_EXT
+            if( .not. file_exists(fname_vol) )then
+                call str_state%kill
+                call fname_vol%kill
+                call fname_fsc%kill
+                cycle
+            endif
+            call find_ldim_nptcls(fname_vol, ldim, nptcls, smpd=smpd)
+            call postprocess_volume_from_files(fname_vol, fname_fsc, ldim(1), smpd, params_pp, cline)
+            call str_state%kill
+            call fname_vol%kill
+            call fname_fsc%kill
+        enddo
+    end subroutine maybe_postprocess_reconstruct3D
 
 end module simple_rec3D_strategy
