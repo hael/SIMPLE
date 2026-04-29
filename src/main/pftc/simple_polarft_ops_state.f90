@@ -22,9 +22,11 @@ contains
         allocate(self%prev_eo_pops(2,self%ncls), self%eo_pops(2,self%ncls), source=0)
         allocate(self%pfts_even(self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
                 &self%pfts_odd( self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
-                &self%ctf2_even(self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
-                &self%ctf2_odd( self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
                 &self%pfts_merg(self%pftsz, self%kfromto(1):self%interpklim, self%ncls))
+        if( trim(self%p_ptr%polar) /= 'obsfield' )then
+            allocate(self%ctf2_even(self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
+                    &self%ctf2_odd( self%pftsz, self%kfromto(1):self%interpklim, self%ncls))
+        endif
         call self%polar_cavger_zero_pft_refs
         self%pfts_merg = DCMPLX_ZERO
     end subroutine polar_cavger_new
@@ -34,9 +36,13 @@ contains
         !$omp parallel workshare
         self%pfts_even = DCMPLX_ZERO
         self%pfts_odd  = DCMPLX_ZERO
-        self%ctf2_even = 0.d0
-        self%ctf2_odd  = 0.d0
         !$omp end parallel workshare
+        if( allocated(self%ctf2_even) )then
+            !$omp parallel workshare
+            self%ctf2_even = 0.d0
+            self%ctf2_odd  = 0.d0
+            !$omp end parallel workshare
+        endif
     end subroutine polar_cavger_zero_pft_refs
 
     subroutine obsfield_lims_from_params( self, lims )
@@ -326,48 +332,9 @@ contains
                 call obs_part%kill
             enddo
         enddo
-        call self%polar_cavger_reproject_obsfields(reforis)
         call obs_part%kill
         call fname%kill
     end subroutine polar_cavger_assemble_obsfields_from_parts
-
-    module subroutine polar_cavger_reproject_obsfields( self, reforis )
-        class(polarft_calc), intent(inout) :: self
-        class(oris), target, intent(inout) :: reforis
-        complex(dp), allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:)
-        real(dp),    allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
-        real(sp) :: hcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
-        real(sp) :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
-        integer :: kspan(2), kspan_len, nrefs, noris, nspace_refs
-        integer :: istate, base
-        if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_reproject_obsfields')
-        nspace_refs = self%p_ptr%nspace
-        noris = reforis%get_noris()
-        if( reforis%isthere('mirr') )then
-            nrefs = noris / 2
-        else
-            nrefs = noris
-        endif
-        nrefs = min(nrefs, nspace_refs)
-        if( nrefs < 1 ) THROW_HARD('no references available; polar_cavger_reproject_obsfields')
-        call self%polar_cavger_zero_pft_refs
-        kspan     = [self%kfromto(1), self%interpklim]
-        kspan_len = kspan(2) - kspan(1) + 1
-        hcoords   = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
-        kcoords   = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
-        allocate(pfts_even(self%pftsz,kspan_len,nrefs), pfts_odd(self%pftsz,kspan_len,nrefs))
-        allocate(ctf2_even(self%pftsz,kspan_len,nrefs), ctf2_odd(self%pftsz,kspan_len,nrefs))
-        do istate = 1, self%p_ptr%nstates
-            call self%obsfields(istate)%even%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, pfts_even, ctf2_even)
-            call self%obsfields(istate)%odd%extract_polar( reforis, nrefs, kspan, hcoords, kcoords, pfts_odd,  ctf2_odd )
-            base = (istate - 1) * nspace_refs
-            self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs) = pfts_even
-            self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs) = pfts_odd
-            self%ctf2_even(:,kspan(1):kspan(2),base+1:base+nrefs) = ctf2_even
-            self%ctf2_odd( :,kspan(1):kspan(2),base+1:base+nrefs) = ctf2_odd
-        enddo
-        deallocate(pfts_even, pfts_odd, ctf2_even, ctf2_odd)
-    end subroutine polar_cavger_reproject_obsfields
 
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self

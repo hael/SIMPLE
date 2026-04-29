@@ -1,7 +1,7 @@
 !@descr: polarft class complete interface
 module simple_polarft_calc
 use simple_pftc_api
-use simple_fgrid_obsfield, only: fgrid_obsfield_eo
+use simple_fgrid_obsfield, only: fgrid_obsfield_eo, unsampled_floor
 implicit none
 
 public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D
@@ -183,7 +183,6 @@ type :: polarft_calc
     procedure          :: polar_cavger_insert_ptcls_obsfield
     procedure          :: polar_cavger_write_obsfield_parts
     procedure          :: polar_cavger_assemble_obsfields_from_parts
-    procedure          :: polar_cavger_reproject_obsfields
     procedure          :: polar_cavger_kill
     procedure          :: center_3Dpolar_refs
     ! ===== RESTORE: simple_polarft_ops_restore.f90
@@ -753,11 +752,6 @@ interface
         class(oris), target, intent(inout) :: reforis
     end subroutine polar_cavger_assemble_obsfields_from_parts
 
-    module subroutine polar_cavger_reproject_obsfields( self, reforis )
-        class(polarft_calc), intent(inout) :: self
-        class(oris), target, intent(inout) :: reforis
-    end subroutine polar_cavger_reproject_obsfields
-
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self
     end subroutine polar_cavger_kill
@@ -945,7 +939,8 @@ interface
     module subroutine get_pft_array_dims( self, fname, pftsz, kfromto, nrefs )
         class(polarft_calc),      intent(in)  :: self
         class(string),            intent(in)  :: fname
-        integer,                  intent(out) :: pftsz, kfromto(2), nrefs
+        integer,                  intent(out) :: pftsz, nrefs
+        integer, optional,        intent(out) :: kfromto(2)
     end subroutine get_pft_array_dims
 
     module subroutine open_pft_array_for_read( self, fname, array, funit, dims, buffer )

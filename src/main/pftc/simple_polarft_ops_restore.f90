@@ -378,38 +378,70 @@ contains
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
+        real(dp),    allocatable :: denw_even(:,:,:), denw_odd(:,:,:)
         real(dp)    :: fsc(self%kfromto(1):self%interpklim), fsc_state(self%kfromto(1):self%interpklim)
-        real(dp)    :: coverage_even(self%kfromto(1):self%interpklim), coverage_odd(self%kfromto(1):self%interpklim)
-        real(dp)    :: ufrac_trec
+        real(dp)    :: invtau2_even(self%kfromto(1):self%interpklim), invtau2_odd(self%kfromto(1):self%interpklim)
+        real(sp)    :: hcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
+        real(sp)    :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
+        real(dp)    :: ufrac_trec, denom_weight
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
-        integer     :: i, state, base, nprojs
-        ! Mirror Fourier & CTF2 slices
-        call mirror_slices_obsfield( self, reforis )
-        ! e/o trailing reconstruction part 1
+        integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2), iproj, irot, k
+        integer     :: prev_pftsz, prev_nrefs
+        logical     :: have_prev_refs, need_prev_refs
+        if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
+        nprojs = self%p_ptr%nspace
+        if( mod(nprojs,2) /= 0 )then
+            THROW_HARD('obsfield polar reference extraction requires an even nspace for half-grid mirroring')
+        endif
+        if( .not. reforis%isthere('mirr') )then
+            THROW_HARD('Mirror index missing in reference search space; polar_cavger_normalize_obsfield_refs')
+        endif
+        noris = reforis%get_noris()
+        if( noris < nprojs )then
+            THROW_HARD('not enough reference orientations for obsfield polar extraction')
+        endif
+        nrefs = nprojs / 2
+        need_prev_refs = self%p_ptr%l_ml_reg .or. self%p_ptr%l_trail_rec
+        have_prev_refs = need_prev_refs .and. file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) .and. &
+            &file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
+        if( have_prev_refs )then
+            call self%get_pft_array_dims(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_pftsz, nrefs=prev_nrefs)
+            have_prev_refs = (prev_pftsz == self%pftsz) .and. (prev_nrefs <= self%ncls) .and. &
+                &(mod(self%ncls,self%p_ptr%nstates) == 0) .and. (mod(prev_nrefs,self%p_ptr%nstates) == 0)
+        endif
+        if( self%p_ptr%l_trail_rec .and. (.not. have_prev_refs) )then
+            THROW_HARD('compatible previous polar references are required for obsfield trailing reconstruction')
+        endif
+        ! Previous restored references provide the FSC/SSNR estimate, as in the
+        ! Cartesian route. Fractional updates trail the restored current refs
+        ! against that previous pair; the current obsfield density still sets
+        ! the ML denominator scale for this update.
+        if( have_prev_refs )then
+            call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
+            ! Global FSC is retained only for the low-res even/odd docking cutoff;
+            ! ML regularization uses the state-local FSC below.
+            call calc_fsc_from_refs(self, prev_even, prev_odd, 1, self%ncls, fsc)
+        else
+            fsc = 0.d0
+        endif
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
-            ! read previous polar references to be used first for FSC calculation
-            call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
-            ! The per-state FSCs below are written to disk and used for ML
-            ! regularization. This full-range FSC is retained only for the
-            ! legacy even/odd registration cutoff after restoration.
-            call self%calc_fsc(self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd, fsc,&
-                    &ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd )
-        else
-            ! Calculate and write global FSC, FRCs
-            call self%calc_fsc(self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd, fsc)
         endif
         ! write down FRCs
-        nprojs = self%p_ptr%nspace
+        kspan  = [self%kfromto(1), self%interpklim]
+        if( self%p_ptr%l_ml_reg )then
+            prior_start = ml_prior_start(self)
+        else
+            prior_start = self%interpklim + 1
+        endif
+        allocate(denw_even(self%pftsz,kspan(1):kspan(2),nrefs), denw_odd(self%pftsz,kspan(1):kspan(2),nrefs))
         call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
-            if( self%p_ptr%l_trail_rec )then
-                call calc_fsc_range(self, self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd, &
-                    &base+1, base+nprojs, fsc_state, ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd)
+            if( have_prev_refs )then
+                call calc_fsc_from_refs(self, prev_even, prev_odd, base+1, base+nprojs, fsc_state)
             else
-                call calc_fsc_range(self, self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd, &
-                    &base+1, base+nprojs, fsc_state)
+                fsc_state = 0.d0
             endif
             fsc_boxcrop(                 :self%kfromto(1)) = 1.0
             fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc_state(self%kfromto(1):self%interpklim))
@@ -421,17 +453,41 @@ contains
                 ! FRCs are set to the state-local FSC. to check if we are using those
                 call frcs%set_frc(i, fsc_boxcrop, state)
             enddo
+            invtau2_even = 0.d0
+            invtau2_odd  = 0.d0
             if( self%p_ptr%l_ml_reg )then
-                ! Obsfield is Cartesian in where the observations are stored,
-                ! but sparse shells should not carry the same ML confidence as
-                ! a fully restored volume. Coverage damps only the SSNR used
-                ! for the prior term; the extracted signal stays unchanged.
-                call self%obsfields(state)%even%shell_coverage([self%kfromto(1), self%interpklim], coverage_even)
-                call self%obsfields(state)%odd%shell_coverage( [self%kfromto(1), self%interpklim], coverage_odd )
-                call add_invtausq2rho_range(self, self%ctf2_even, self%ctf2_odd, base+1, base+nprojs, fsc_state, &
-                    &coverage_even=coverage_even, coverage_odd=coverage_odd)
+                call self%obsfields(state)%even%calc_invtau2(kspan, fsc_state, real(self%p_ptr%tau,dp), &
+                    &prior_start, invtau2_even)
+                call self%obsfields(state)%odd%calc_invtau2( kspan, fsc_state, real(self%p_ptr%tau,dp), &
+                    &prior_start, invtau2_odd )
             endif
+            hcoords = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
+            kcoords = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
+            call self%obsfields(state)%even%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
+                &invtau2_even, prior_start, self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), denw_even)
+            call self%obsfields(state)%odd%extract_polar( reforis, nrefs, kspan, hcoords, kcoords, &
+                &invtau2_odd,  prior_start, self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), denw_odd)
+            ! Avoid a third KB gather for the merged reference. The restored
+            ! half-map sections already carry the local denominator scale, so
+            ! the merged section is derived as a denominator-weighted blend.
+            !$omp parallel do collapse(3) default(shared) private(iproj,k,irot,denom_weight) proc_bind(close)
+            do iproj = 1,nrefs
+                do k = kspan(1),kspan(2)
+                    do irot = 1,self%pftsz
+                        denom_weight = denw_even(irot,k,iproj) + denw_odd(irot,k,iproj)
+                        if( denom_weight > DTINY )then
+                            self%pfts_merg(irot,k,base+iproj) = &
+                                &(self%pfts_even(irot,k,base+iproj) * denw_even(irot,k,iproj) + &
+                                & self%pfts_odd( irot,k,base+iproj) * denw_odd( irot,k,iproj)) / denom_weight
+                        else
+                            self%pfts_merg(irot,k,base+iproj) = DCMPLX_ZERO
+                        endif
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
         enddo
+        call mirror_slices_obsfield( self, reforis )
         call frcs%write(string(FRCS_FILE))
         call frcs%kill
         fsc_boxcrop(                 :self%kfromto(1)) = 1.0
@@ -439,13 +495,14 @@ contains
         if( self%interpklim < size(fsc_boxcrop) )then
             fsc_boxcrop(self%interpklim+1:)            = 0.0
         endif
-        ! Wiener normalization
-        call self%restore_references(reforis, self%pfts_even, self%pfts_odd, self%ctf2_even, self%ctf2_odd)
         call average_lowres_eo_for_docking(self, fsc_boxcrop)
         ! e/o trailing reconstruction part 2
-        if( self%p_ptr%l_trail_rec )then
+        if( self%p_ptr%l_trail_rec .and. have_prev_refs )then
             call finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
         endif
+        if( allocated(prev_even) ) deallocate(prev_even)
+        if( allocated(prev_odd)  ) deallocate(prev_odd)
+        deallocate(denw_even, denw_odd)
     end subroutine polar_cavger_normalize_obsfield_refs
 
     subroutine average_lowres_eo_for_docking( self, fsc_boxcrop )
@@ -464,7 +521,7 @@ contains
         !$omp end parallel workshare
     end subroutine average_lowres_eo_for_docking
 
-    !>  \brief Generate the mirror slices & CTF2
+    !>  \brief Generate the mirror slices for restored obsfield references
     !!         iref runs through the unique half (un-mirrored references), the
     !!         iref-th slice is final and after mirroring overwrites corresponding
     !!         mirror reference (m-th).
@@ -497,17 +554,17 @@ contains
             l_rotm = (psi > 0.1) .and. (psi < 359.9)
             ! Fourier components
             if( l_rotm )then
+                call self%mirror_pft(self%pfts_merg(:,:,iref), pft)
+                self%pfts_merg(:,:,m) = conjg(pft)
                 call self%mirror_pft(self%pfts_even(:,:,iref), pft)
                 self%pfts_even(:,:,m) = conjg(pft)
                 call self%mirror_pft(self%pfts_odd(:,:,iref), pft)
                 self%pfts_odd(:,:,m)  = conjg(pft)
             else
+                call self%mirror_pft(self%pfts_merg(:,:,iref), self%pfts_merg(:,:,m))
                 call self%mirror_pft(self%pfts_even(:,:,iref), self%pfts_even(:,:,m))
                 call self%mirror_pft(self%pfts_odd(:,:,iref),  self%pfts_odd(:,:,m))
             endif
-            ! CTF
-            call self%mirror_ctf2(self%ctf2_even(:,:,iref), self%ctf2_even(:,:,m))
-            call self%mirror_ctf2(self%ctf2_odd(:,:,iref),  self%ctf2_odd(:,:,m))
         enddo
         !$omp end parallel do
     end subroutine mirror_slices_obsfield
@@ -753,6 +810,43 @@ contains
         end where
     end subroutine calc_fsc_range
 
+    subroutine calc_fsc_from_refs( self, restored_even, restored_odd, ref_first, ref_last, fsc )
+        class(polarft_calc), intent(in)  :: self
+        complex(dp),         intent(in)  :: restored_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp),         intent(in)  :: restored_odd( self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        integer,             intent(in)  :: ref_first, ref_last
+        real(dp),            intent(out) :: fsc(self%kfromto(1):self%interpklim)
+        real(dp) :: vare(self%kfromto(1):self%interpklim), varo(self%kfromto(1):self%interpklim)
+        integer  :: icls, k
+        if( ref_first < 1 .or. ref_last > self%ncls .or. ref_first > ref_last )then
+            THROW_HARD('invalid reference range in calc_fsc_from_refs')
+        endif
+        fsc  = 0.d0
+        vare = 0.d0
+        varo = 0.d0
+        ! Reference-domain FSC for already-restored polar refs read from POLAR_REFS_even/odd.
+        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(icls,k) reduction(+:fsc,vare,varo)
+        do icls = ref_first,ref_last
+            do k = self%kfromto(1),self%interpklim
+                fsc(k)  = fsc(k)  + sum(real(restored_even(:,k,icls) * conjg(restored_odd(:,k,icls)), dp))
+                vare(k) = vare(k) + sum(real(restored_even(:,k,icls) * conjg(restored_even(:,k,icls)), dp))
+                varo(k) = varo(k) + sum(real(restored_odd( :,k,icls) * conjg(restored_odd( :,k,icls)), dp))
+            enddo
+        enddo
+        !$omp end parallel do
+        vare = vare * varo
+        where( vare > DTINY )
+            fsc = fsc / sqrt(vare)
+        elsewhere
+            fsc = 0.d0
+        end where
+    end subroutine calc_fsc_from_refs
+
+    integer function ml_prior_start( self )
+        class(polarft_calc), intent(in) :: self
+        ml_prior_start = max(6, calc_fourier_index(self%p_ptr%hp, self%p_ptr%box_crop, self%p_ptr%smpd_crop))
+    end function ml_prior_start
+
     ! Compute the ML regularization term to be added to the CTF2 in the denominator of the Wiener filter
     module subroutine add_invtausq2rho( self, ctf2_even, ctf2_odd, fsc )
         class(polarft_calc), intent(inout) :: self
@@ -778,11 +872,11 @@ contains
         fudge = real(self%p_ptr%tau,dp)
         do k = self%kfromto(1),self%interpklim
             cc = max(0.001d0,min(0.999d0,fsc(k)))
-            ssnr(k) = fudge * cc / (1.d0 - cc)
+            ssnr(k) = cc / (1.d0 - cc)
         enddo
         ! Add Tau2 inverse to denominators
         ! because signal assumed infinite at very low resolution there is no addition
-        kstart = max(6, calc_fourier_index(self%p_ptr%hp, self%p_ptr%box_crop, self%p_ptr%smpd_crop))
+        kstart = ml_prior_start(self)
         ! Even
         where( sig2e > DTINY )
             sig2e = shell_n / sig2e
@@ -818,7 +912,7 @@ contains
             else
                 do icls = 1,self%ncls
                     do p = 1,self%pftsz
-                        invtau2 = min(1.d3, 1.d3 * ctf2_even(p,k,icls))
+                        invtau2 = unsampled_floor(ctf2_even(p,k,icls))
                         ctf2_even(p,k,icls) = ctf2_even(p,k,icls) + invtau2
                     enddo
                 enddo
@@ -833,7 +927,7 @@ contains
             else
                 do icls = 1,self%ncls
                     do p = 1,self%pftsz
-                        invtau2 = min(1.d3, 1.d3 * ctf2_odd(p,k,icls))
+                        invtau2 = unsampled_floor(ctf2_odd(p,k,icls))
                         ctf2_odd(p,k,icls) = ctf2_odd(p,k,icls) + invtau2
                     enddo
                 enddo
@@ -842,23 +936,22 @@ contains
         !$omp end parallel do
     end subroutine add_invtausq2rho
 
-    subroutine add_invtausq2rho_range( self, ctf2_even, ctf2_odd, ref_first, ref_last, fsc, coverage_even, coverage_odd )
+    subroutine calc_invtausq2rho_range( self, ctf2_even, ctf2_odd, ref_first, ref_last, fsc, kstart, invtau2e, invtau2o )
         class(polarft_calc), intent(inout) :: self
-        real(dp),            intent(inout) :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        real(dp),            intent(inout) :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(in)    :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(in)    :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,             intent(in)    :: ref_first, ref_last
         real(dp),            intent(in)    :: fsc(self%kfromto(1):self%interpklim)
-        real(dp), optional,  intent(in)    :: coverage_even(self%kfromto(1):self%interpklim)
-        real(dp), optional,  intent(in)    :: coverage_odd(self%kfromto(1):self%interpklim)
+        integer,             intent(in)    :: kstart
+        real(dp),            intent(out)   :: invtau2e(self%kfromto(1):self%interpklim)
+        real(dp),            intent(out)   :: invtau2o(self%kfromto(1):self%interpklim)
         real(dp) :: sig2e(self%kfromto(1):self%interpklim), sig2o(self%kfromto(1):self%interpklim)
-        real(dp) :: ssnr(self%kfromto(1):self%interpklim), ssnr_eff(self%kfromto(1):self%interpklim)
+        real(dp) :: ssnr(self%kfromto(1):self%interpklim)
         real(dp) :: tau2(self%kfromto(1):self%interpklim)
-        real(dp) :: invtau2e(self%kfromto(1):self%interpklim), invtau2o(self%kfromto(1):self%interpklim)
         real(dp) :: cc, fudge, invtau2, shell_n
-        integer  :: icls, k, kstart, p
-        real(dp), parameter :: COVERAGE_FLOOR = 0.05d0
+        integer  :: k
         if( ref_first < 1 .or. ref_last > self%ncls .or. ref_first > ref_last )then
-            THROW_HARD('invalid reference range in add_invtausq2rho_range')
+            THROW_HARD('invalid reference range in calc_invtausq2rho_range')
         endif
         shell_n      = real(ref_last - ref_first + 1,dp) * real(self%pftsz,dp)
         invtau2e     = 0.d0
@@ -872,21 +965,14 @@ contains
         fudge = real(self%p_ptr%tau,dp)
         do k = self%kfromto(1),self%interpklim
             cc = max(0.001d0,min(0.999d0,fsc(k)))
-            ssnr(k) = fudge * cc / (1.d0 - cc)
+            ssnr(k) = cc / (1.d0 - cc)
         enddo
-        ! Optional obsfield coverage turns FSC-derived SSNR into an effective
-        ! confidence. It is count-based shell coverage, so clustered repeat hits
-        ! do not look like dense Cartesian sampling, and it does not apply a
-        ! polar/Jacobian scale to numerator or denominator.
-        kstart = max(6, calc_fourier_index(self%p_ptr%hp, self%p_ptr%box_crop, self%p_ptr%smpd_crop))
         where( sig2e > DTINY )
             sig2e = shell_n / sig2e
         elsewhere
             sig2e = 0.d0
         end where
-        ssnr_eff = ssnr
-        if( present(coverage_even) ) ssnr_eff = ssnr * max(COVERAGE_FLOOR, min(1.d0, coverage_even))
-        tau2 = ssnr_eff * sig2e
+        tau2 = ssnr * sig2e
         do k = kstart,self%interpklim
             if( tau2(k) > DTINY )then
                 invtau2 = 1.d0 / (fudge * tau2(k))
@@ -898,15 +984,26 @@ contains
         elsewhere
             sig2o = 0.d0
         end where
-        ssnr_eff = ssnr
-        if( present(coverage_odd) ) ssnr_eff = ssnr * max(COVERAGE_FLOOR, min(1.d0, coverage_odd))
-        tau2 = ssnr_eff * sig2o
+        tau2 = ssnr * sig2o
         do k = kstart,self%interpklim
             if( tau2(k) > DTINY )then
                 invtau2 = 1.d0 / (fudge * tau2(k))
                 invtau2o(k) = invtau2
             endif
         enddo
+    end subroutine calc_invtausq2rho_range
+
+    subroutine add_invtausq2rho_range( self, ctf2_even, ctf2_odd, ref_first, ref_last, fsc )
+        class(polarft_calc), intent(inout) :: self
+        real(dp),            intent(inout) :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(inout) :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        integer,             intent(in)    :: ref_first, ref_last
+        real(dp),            intent(in)    :: fsc(self%kfromto(1):self%interpklim)
+        real(dp) :: invtau2e(self%kfromto(1):self%interpklim), invtau2o(self%kfromto(1):self%interpklim)
+        real(dp) :: invtau2
+        integer  :: icls, k, kstart, p
+        kstart = ml_prior_start(self)
+        call calc_invtausq2rho_range(self, ctf2_even, ctf2_odd, ref_first, ref_last, fsc, kstart, invtau2e, invtau2o)
         !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
         do k = kstart,self%interpklim
             if( invtau2e(k) > 0.d0 )then
@@ -915,7 +1012,7 @@ contains
             else
                 do icls = ref_first,ref_last
                     do p = 1,self%pftsz
-                        invtau2 = min(1.d3, 1.d3 * ctf2_even(p,k,icls))
+                        invtau2 = unsampled_floor(ctf2_even(p,k,icls))
                         ctf2_even(p,k,icls) = ctf2_even(p,k,icls) + invtau2
                     enddo
                 enddo
@@ -930,7 +1027,7 @@ contains
             else
                 do icls = ref_first,ref_last
                     do p = 1,self%pftsz
-                        invtau2 = min(1.d3, 1.d3 * ctf2_odd(p,k,icls))
+                        invtau2 = unsampled_floor(ctf2_odd(p,k,icls))
                         ctf2_odd(p,k,icls) = ctf2_odd(p,k,icls) + invtau2
                     enddo
                 enddo

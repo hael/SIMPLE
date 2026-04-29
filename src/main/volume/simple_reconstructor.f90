@@ -606,7 +606,7 @@ contains
         do k = 1,sz
             cc      = max(0.001,fsc(k))
             cc      = min(0.999,cc)
-            ssnr(k) = fudge * cc / (1.-cc)
+            ssnr(k) = cc / (1.-cc)
         enddo
         ! Noise
         !$omp parallel do collapse(3) default(shared) schedule(static)&

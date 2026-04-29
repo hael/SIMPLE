@@ -528,7 +528,8 @@ contains
     module subroutine get_pft_array_dims( self, fname, pftsz, kfromto, nrefs )
         class(polarft_calc), intent(in)  :: self
         class(string),       intent(in)  :: fname
-        integer,             intent(out) :: pftsz, kfromto(2), nrefs
+        integer,             intent(out) :: pftsz, nrefs
+        integer, optional,   intent(out) :: kfromto(2)
         integer :: io_stat, dims(4), funit
         if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
@@ -537,7 +538,7 @@ contains
         call fclose(funit)
         pftsz   = dims(1)
         ! Returned kfromto is the on-disk available range [kfromto(1), interpklim].
-        kfromto = dims(2:3)
+        if( present(kfromto) ) kfromto = dims(2:3)
         nrefs   = dims(4)
     end subroutine get_pft_array_dims
 

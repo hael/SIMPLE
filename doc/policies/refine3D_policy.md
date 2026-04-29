@@ -143,7 +143,36 @@ Cartesian matching still uses projected polar central sections, so refinement-ow
 - dispatches to observation-field polar-reference normalization for `polar=obsfield`
 - writes the updated `POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` triplet
 
-`polar=obsfield` is a Cartesian observation-field assembly path followed by polar sampling of the assembled fields. It must not apply an additional polar Jacobian or shell-density normalization to the extracted central sections. Because the observation field is not a fully restored Cartesian volume, its ML prior is confidence-adjusted by the effective per-shell sampling density of the observed Cartesian cells. That density is derived from cell observation counts, so repeated hits in a few cells do not masquerade as complete shell coverage; sparse shells lower the effective SSNR used for the ML denominator term without rescaling the extracted signal itself.
+`polar=obsfield` is a Cartesian observation-field assembly path followed by
+polar sampling of the assembled fields. It must not apply an additional polar
+Jacobian or shell-density normalization to the extracted central sections. ML
+regularization derives the FSC/SSNR estimate from the previous compatible
+even/odd reference pair when one is available. On bootstrap, it uses the same
+FSC=0 input with the low-end FSC clamp as the regularization formula rather
+than disabling the FSC-derived prior. The denominator scale comes from the
+current Cartesian observation-field density, and the prior is applied per
+Cartesian grid cell before KB gathering: each half-map cell contributes
+`grid_num / (grid_den + prior(shell))` to the polar extraction. This keeps
+obsfield restoration close to the Cartesian reconstructor policy and avoids a
+separate sampling-density compensation in polar space.
+
+The merged obsfield reference must not be the unweighted average of the
+already-restored halves. For performance, the implementation avoids a third KB
+gather and derives the merged reference from the extracted even/odd sections as
+a denominator-weighted blend, using the effective denominator scale accumulated
+during the two half-map extractions.
+
+On bootstrap iterations with no previous compatible even/odd reference pair,
+the FSC-derived prior is computed from the clamped FSC=0 model. The
+high-frequency unsampled-shell penalty remains a fallback for cells whose
+FSC-derived `tau2` term collapses.
+
+For fractional updates, obsfield follows the Cartesian trailing-reconstruction
+contract. The previous compatible even/odd reference pair is required because
+it supplies both the FSC/SSNR prior estimate and the final trailing target. The
+previous observation field itself is not retained; the current sampled update's
+observation-field density supplies the ML denominator scale, just as the
+current Cartesian reconstructor density does for `polar=no`.
 
 Its benchmark reports this work by the same boundaries: setup, reduction of
 partition-local inputs, common-line or obsfield normalization, resolution

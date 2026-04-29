@@ -3,16 +3,17 @@ module simple_fgrid_obsfield
 use simple_core_module_api
 implicit none
 
-public :: fgrid_obs_field, fgrid_obsfield_eo
+public :: fgrid_obs_field, fgrid_obsfield_eo, unsampled_floor
 private
 #include "simple_local_flags.inc"
 
 ! Two h-colors make nearest-cell writes race-free without atomics: all samples
 ! for one h are handled by one thread, and h values in the same color are at
 ! least two native grid units apart before and after rotation.
-integer, parameter :: OBSFIELD_NN_OMP_STRIDE = 2
-integer, parameter :: OBSFIELD_HEADER_SIZE   = 21
-integer, parameter :: OBSFIELD_COUNT_FORMAT_SIGN = -1
+integer,  parameter :: OBSFIELD_NN_OMP_STRIDE     = 2
+integer,  parameter :: OBSFIELD_HEADER_SIZE       = 21
+integer,  parameter :: OBSFIELD_COUNT_FORMAT_SIGN = -1
+real(dp), parameter :: OBSFIELD_UNSAMPLED_FLOOR  = 1.d3
 
 ! Part-local Fourier-grid observation field. This is intentionally volume-like:
 ! particle Fourier components are accumulated into dense expanded-grid
@@ -38,16 +39,16 @@ type :: fgrid_obs_field
     real(dp),    allocatable :: grid_den(:,:,:)
     integer,     allocatable :: grid_cnt(:,:,:)
   contains
-    procedure, public :: new               => obsfield_new
-    procedure, public :: reset             => obsfield_reset
-    procedure, public :: kill              => obsfield_kill
-    procedure, public :: insert_plane_oversamp
-    procedure, public :: append_field      => obsfield_append_field
-    procedure, public :: extract_polar     => obsfield_extract_polar
-    procedure, public :: shell_coverage    => obsfield_shell_coverage
-    procedure, public :: get_nobs          => obsfield_get_nobs
-    procedure, public :: get_ncells        => obsfield_get_ncells
-    procedure, private :: compatible_with  => obsfield_compatible_with
+    procedure, public  :: new                    => obsfield_new
+    procedure, public  :: reset                  => obsfield_reset
+    procedure, public  :: kill                   => obsfield_kill
+    procedure, public  :: insert_plane_oversamp
+    procedure, public  :: append_field           => obsfield_append_field
+    procedure, public  :: extract_polar          => obsfield_extract_polar
+    procedure, public  :: calc_invtau2           => obsfield_calc_invtau2
+    procedure, public  :: get_nobs               => obsfield_get_nobs
+    procedure, public  :: get_ncells             => obsfield_get_ncells
+    procedure, private :: compatible_with        => obsfield_compatible_with
 end type fgrid_obs_field
 
 ! Even/odd wrapper matching the reconstruction convention:
@@ -66,6 +67,13 @@ type :: fgrid_obsfield_eo
 end type fgrid_obsfield_eo
 
 contains
+
+    pure real(dp) function unsampled_floor( grid_den )
+        real(dp), intent(in) :: grid_den
+        ! Match the Cartesian reconstructor's high-invtau2 fallback for
+        ! sampled cells in shells without an FSC-derived ML prior.
+        unsampled_floor = min(OBSFIELD_UNSAMPLED_FLOOR, OBSFIELD_UNSAMPLED_FLOOR * grid_den)
+    end function unsampled_floor
 
     subroutine obsfield_new( self, lims, nyq )
         class(fgrid_obs_field), intent(inout) :: self
@@ -263,88 +271,77 @@ contains
         self%nobs      = self%nobs + src%nobs
     end subroutine obsfield_append_field
 
-    ! Effective fraction of native half-grid Cartesian cells observed in each shell.
-    ! This is a confidence measure for obsfield ML regularization only; the signal
-    ! and CTF2 values extracted from the field remain unscaled. Repeated hits in a
-    ! few cells should not look like dense shell coverage, so counts are converted
-    ! to a participation-ratio coverage: (sum cnt)^2 / sum(cnt^2) / n_shell_cells.
-    subroutine obsfield_shell_coverage( self, kfromto, coverage )
+    subroutine obsfield_calc_invtau2( self, kfromto, fsc, fudge, prior_start, invtau2 )
         class(fgrid_obs_field), intent(in)  :: self
-        integer,                intent(in)  :: kfromto(2)
-        real(dp),               intent(out) :: coverage(kfromto(1):kfromto(2))
-        real(dp), allocatable :: count_sum(:), count_sumsq(:)
-        integer,  allocatable :: expected(:)
-        real(dp) :: cnt_dp, neff
-        integer  :: h, k, l, shell, cnt
-        if( kfromto(1) > kfromto(2) ) THROW_HARD('invalid k-range; obsfield_shell_coverage')
-        coverage = 0.d0
+        integer,                intent(in)  :: kfromto(2), prior_start
+        real(dp),               intent(in)  :: fsc(kfromto(1):kfromto(2))
+        real(dp),               intent(in)  :: fudge
+        real(dp),               intent(out) :: invtau2(kfromto(1):kfromto(2))
+        real(dp), allocatable :: rsum(:), sig2(:), ssnr(:), tau2(:)
+        integer,  allocatable :: cnt(:)
+        real(dp) :: cc
+        integer  :: h, k, l, shell
+        invtau2 = 0.d0
         if( .not. self%initialized ) return
-        allocate(count_sum(kfromto(1):kfromto(2)), count_sumsq(kfromto(1):kfromto(2)), source=0.d0)
-        allocate(expected(kfromto(1):kfromto(2)), source=0)
-        ! Count over the nonredundant Cartesian lattice owned by the field,
-        ! matching the insertion convention that stores c1 >= lims(1,1) and
-        ! recovers Friedel mates during polar extraction.
+        if( kfromto(1) > kfromto(2) ) THROW_HARD('invalid k-range; obsfield_calc_invtau2')
+        allocate(rsum(kfromto(1):kfromto(2)), sig2(kfromto(1):kfromto(2)), &
+            &ssnr(kfromto(1):kfromto(2)), tau2(kfromto(1):kfromto(2)), source=0.d0)
+        allocate(cnt(kfromto(1):kfromto(2)), source=0)
+        !$omp parallel do collapse(3) default(shared) schedule(static) proc_bind(close) private(h,k,l,shell) reduction(+:cnt,rsum)
         do h = self%lims(1,1), self%lims(1,2)
             do k = self%lims(2,1), self%lims(2,2)
                 do l = self%lims(3,1), self%lims(3,2)
                     shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
                     if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
-                    expected(shell) = expected(shell) + 1
-                    cnt = self%grid_cnt(h,k,l)
-                    if( cnt > 0 )then
-                        cnt_dp = real(cnt, dp)
-                        count_sum(shell)   = count_sum(shell)   + cnt_dp
-                        count_sumsq(shell) = count_sumsq(shell) + cnt_dp * cnt_dp
-                    endif
+                    cnt(shell)  = cnt(shell) + 1
+                    rsum(shell) = rsum(shell) + self%grid_den(h,k,l)
                 enddo
             enddo
         enddo
+        !$omp end parallel do
         do shell = kfromto(1), kfromto(2)
-            if( expected(shell) < 1 .or. count_sumsq(shell) <= DTINY ) cycle
-            neff = count_sum(shell) * count_sum(shell) / count_sumsq(shell)
-            coverage(shell) = min(1.d0, neff / real(expected(shell), dp))
+            cc = max(0.001d0, min(0.999d0, fsc(shell)))
+            ssnr(shell) = cc / (1.d0 - cc)
         enddo
-        deallocate(count_sum, count_sumsq, expected)
-    end subroutine obsfield_shell_coverage
+        where( rsum > DTINY )
+            sig2 = real(cnt,dp) / rsum
+        elsewhere
+            sig2 = 0.d0
+        end where
+        tau2 = ssnr * sig2
+        do shell = max(kfromto(1),prior_start), kfromto(2)
+            if( tau2(shell) > DTINY )then
+                invtau2(shell) = 1.d0 / (fudge * tau2(shell))
+            endif
+        enddo
+        deallocate(rsum, sig2, ssnr, tau2, cnt)
+    end subroutine obsfield_calc_invtau2
 
-    ! Gather central sections from the dense expanded grid. This keeps the
-    ! polar=no volume-sampling shape: direct array addressing in the 3D KB stencil.
-    ! Friedel recovery: stencil cells with c1 < lims(1,1) (which were never
-    ! deposited on insertion) are mapped to (-c1,-c2,-c3); grid_num is
-    ! conjugated, grid_den is read as-is. The decision depends only on c1,
-    ! so it is hoisted to the l-loop. c2/c3 grid-bound checks depend only on
-    ! m,n, so they are hoisted to those loops as cheap defensive guards.
-    subroutine obsfield_extract_polar( self, eulspace, nrefs, kfromto, polar_x, polar_y, pfts, ctf2 )
+    ! Reconstructor-like obsfield extraction: restore each Cartesian cell as
+    ! grid_num / (grid_den + prior(shell)) before KB gathering. This avoids the
+    ! non-equivalent polar-space pattern gather(num)/(gather(den)+prior).
+    subroutine obsfield_extract_polar( self, eulspace, nrefs, kfromto, polar_x, polar_y, invtau2, prior_start, pfts, denw )
         class(fgrid_obs_field), intent(in)    :: self
-        class(oris),            intent(inout) :: eulspace
+        class(oris),            intent(in)    :: eulspace
         integer,                intent(in)    :: nrefs, kfromto(2)
         real(sp),               intent(in)    :: polar_x(:,:), polar_y(:,:)
+        real(dp),               intent(in)    :: invtau2(kfromto(1):kfromto(2))
+        integer,                intent(in)    :: prior_start
         complex(dp),            intent(inout) :: pfts(:,:,:)
-        real(dp),               intent(inout) :: ctf2(:,:,:)
-        complex(dp) :: acc_num, cell_num
-        real(dp)    :: acc_den, wd
+        real(dp), optional,     intent(inout) :: denw(:,:,:)
+        complex(dp) :: acc, cell_num
+        real(dp)    :: denom, denacc, prior, wd
         real(sp)    :: R(3,3), loc(3), px, py
         real(sp), allocatable :: w(:,:,:)
         integer     :: iproj, irot, k, kloc, pftsz, kfromto1
         integer     :: win1_1, win1_2, win1_3, c1, c2, c3, a1, a2, a3
-        integer     :: l, m, n, iwinsz_l, wdim_l, lim1_lo
+        integer     :: l, m, n, iwinsz_l, wdim_l, lim1_lo, shell
         integer     :: gl_lo1, gl_lo2, gl_lo3, gl_hi1, gl_hi2, gl_hi3
         logical     :: l_conj
-        ! if( .not. self%initialized ) THROW_HARD('obsfield not initialized; extract_polar')
-        ! if( nrefs < 1 ) THROW_HARD('invalid nrefs; extract_polar')
-        ! if( kfromto(1) < 1 .or. kfromto(1) > kfromto(2) ) THROW_HARD('invalid kfromto; extract_polar')
         pftsz = size(polar_x,1)
-        ! if( size(polar_y,1) /= pftsz .or. size(polar_y,2) /= size(polar_x,2) )&
-        !     &THROW_HARD('polar coordinate shape mismatch; extract_polar')
-        ! if( size(polar_x,2) /= kfromto(2)-kfromto(1)+1 ) THROW_HARD('polar k-span mismatch; extract_polar')
-        ! if( size(pfts,1) /= pftsz .or. size(pfts,2) /= size(polar_x,2) .or. size(pfts,3) < nrefs )&
-        !     &THROW_HARD('pfts shape mismatch; extract_polar')
-        ! if( size(ctf2,1) /= pftsz .or. size(ctf2,2) /= size(polar_x,2) .or. size(ctf2,3) < nrefs )&
-        !     &THROW_HARD('ctf2 shape mismatch; extract_polar')
         pfts(:,:,1:nrefs) = DCMPLX_ZERO
-        ctf2(:,:,1:nrefs) = 0.d0
+        if( present(denw) ) denw(:,:,1:nrefs) = 0.d0
         if( self%nobs < 1 ) return
-        ! hoisted scalars
         iwinsz_l = self%iwinsz
         wdim_l   = self%wdim
         lim1_lo  = self%lims(1,1)
@@ -352,8 +349,8 @@ contains
         gl_lo1   = self%grid_lims(1,1); gl_hi1 = self%grid_lims(1,2)
         gl_lo2   = self%grid_lims(2,1); gl_hi2 = self%grid_lims(2,2)
         gl_lo3   = self%grid_lims(3,1); gl_hi3 = self%grid_lims(3,2)
-        !$omp parallel default(shared) private(iproj,R,k,kloc,irot,px,py,loc,w,acc_num,acc_den,wd,&
-        !$omp& win1_1,win1_2,win1_3,c1,c2,c3,a1,a2,a3,l,m,n,l_conj,cell_num) proc_bind(close)
+        !$omp parallel default(shared) private(iproj,R,k,kloc,irot,px,py,loc,w,acc,denacc,wd,denom,prior,&
+        !$omp& win1_1,win1_2,win1_3,c1,c2,c3,a1,a2,a3,l,m,n,l_conj,cell_num,shell) proc_bind(close)
         allocate(w(wdim_l,wdim_l,wdim_l))
         !$omp do schedule(static)
         do iproj = 1, nrefs
@@ -363,10 +360,6 @@ contains
                 do irot = 1, pftsz
                     px     = polar_x(irot,kloc)
                     py     = polar_y(irot,kloc)
-                    ! The observation field is indexed by native grid cells.
-                    ! Evaluate the KB gather in the same native coordinate
-                    ! system; using padded coordinates here narrows and shifts
-                    ! the extraction stencil relative to the deposited cells.
                     loc(1) = px*R(1,1) + py*R(2,1)
                     loc(2) = px*R(1,2) + py*R(2,2)
                     loc(3) = px*R(1,3) + py*R(2,3)
@@ -374,11 +367,10 @@ contains
                     win1_2 = nint(loc(2)) - iwinsz_l
                     win1_3 = nint(loc(3)) - iwinsz_l
                     call self%kb%apod_mat_3d_fast(loc, iwinsz_l, wdim_l, w)
-                    acc_num = DCMPLX_ZERO
-                    acc_den = 0.d0
+                    acc = DCMPLX_ZERO
+                    denacc = 0.d0
                     do n = 1, wdim_l
                         c3 = win1_3 + n - 1
-                        ! c3 bound is m,n-invariant within (l,m,n)-triple; hoisted to n-loop
                         if( c3 < gl_lo3 .or. c3 > gl_hi3 ) cycle
                         do m = 1, wdim_l
                             c2 = win1_2 + m - 1
@@ -391,20 +383,37 @@ contains
                                     a1 = -c1; a2 = -c2; a3 = -c3
                                     if( a1 < gl_lo1 .or. a1 > gl_hi1 ) cycle
                                     if( self%grid_cnt(a1,a2,a3) < 1 ) cycle
+                                    shell = nint(sqrt(real(a1*a1 + a2*a2 + a3*a3, dp)))
+                                    prior = 0.d0
+                                    if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
+                                    denom = self%grid_den(a1,a2,a3) + prior
+                                    if( shell >= kfromto(1) .and. shell <= kfromto(2) .and. &
+                                        &shell >= prior_start .and. prior <= DTINY )then
+                                        denom = denom + unsampled_floor(self%grid_den(a1,a2,a3))
+                                    endif
+                                    if( denom <= DTINY ) cycle
                                     cell_num = conjg(self%grid_num(a1,a2,a3))
-                                    acc_num  = acc_num + wd * cell_num
-                                    acc_den  = acc_den + wd * self%grid_den(a1,a2,a3)
                                 else
                                     if( c1 > gl_hi1 ) cycle
                                     if( self%grid_cnt(c1,c2,c3) < 1 ) cycle
-                                    acc_num = acc_num + wd * self%grid_num(c1,c2,c3)
-                                    acc_den = acc_den + wd * self%grid_den(c1,c2,c3)
+                                    shell = nint(sqrt(real(c1*c1 + c2*c2 + c3*c3, dp)))
+                                    prior = 0.d0
+                                    if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
+                                    denom = self%grid_den(c1,c2,c3) + prior
+                                    if( shell >= kfromto(1) .and. shell <= kfromto(2) .and. &
+                                        &shell >= prior_start .and. prior <= DTINY )then
+                                        denom = denom + unsampled_floor(self%grid_den(c1,c2,c3))
+                                    endif
+                                    if( denom <= DTINY ) cycle
+                                    cell_num = self%grid_num(c1,c2,c3)
                                 endif
+                                acc    = acc + wd * cell_num / denom
+                                denacc = denacc + wd * denom
                             enddo
                         enddo
                     enddo
-                    pfts(irot,kloc,iproj) = acc_num
-                    ctf2(irot,kloc,iproj) = acc_den
+                    pfts(irot,kloc,iproj) = acc
+                    if( present(denw) ) denw(irot,kloc,iproj) = denacc
                 enddo
             enddo
         enddo
