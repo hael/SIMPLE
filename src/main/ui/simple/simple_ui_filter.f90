@@ -6,6 +6,7 @@ implicit none
 type(ui_program), target :: filter
 type(ui_program), target :: uniform_filter2D
 type(ui_program), target :: uniform_filter3D
+type(ui_program), target :: nu_filt3D
 
 contains
 
@@ -14,6 +15,7 @@ contains
         call new_filter(prgtab)
         call new_uniform_filter2D(prgtab)
         call new_uniform_filter3D(prgtab)
+        call new_nu_filt3D(prgtab)
     end subroutine construct_filter_programs
 
     subroutine print_filter_programs(logfhandle)
@@ -22,6 +24,7 @@ contains
         write(logfhandle,'(A)') filter%name%to_char()
         write(logfhandle,'(A)') uniform_filter2D%name%to_char()
         write(logfhandle,'(A)') uniform_filter3D%name%to_char()
+        write(logfhandle,'(A)') nu_filt3D%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_filter_programs
 
@@ -130,5 +133,37 @@ contains
         ! add to ui_hash
         call add_ui_program('uniform_filter3D', uniform_filter3D, prgtab)
     end subroutine new_uniform_filter3D
+
+    subroutine new_nu_filt3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call nu_filt3D%new(&
+        &'nu_filt3D',&                                 ! name
+        &'Nonuniform 3D filter',&                              ! descr_short
+        &'is a program for 3D nonuniform local low-pass filtering of even/odd volumes',& ! descr_long
+        &'simple_exec',&                                       ! executable
+        &.false.)                                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call nu_filt3D%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call nu_filt3D%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        call nu_filt3D%add_input(UI_IMG, outvol, required_override=.false.)
+        ! parameter input/output
+        call nu_filt3D%add_input(UI_PARM, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call nu_filt3D%add_input(UI_MASK, mskdiam)
+        call nu_filt3D%add_input(UI_MASK, automsk)
+        ! computer controls
+        call nu_filt3D%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('nu_filt3D', nu_filt3D, prgtab)
+        call add_ui_program('nonu_filt3D', nu_filt3D, prgtab)
+    end subroutine new_nu_filt3D
 
 end module simple_ui_filter

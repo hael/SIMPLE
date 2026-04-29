@@ -125,6 +125,7 @@ type :: parameters
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
     character(len=3)          :: write_imgarr='no'    !< write out cavgs
+    character(len=3)          :: write_polar_refs='yes' !< write out polar references(yes|no){yes}f
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     ! default initialization is done in the init_strings method below
@@ -867,6 +868,7 @@ contains
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wiener',         self%wiener)
         call check_carg('write_imgarr',   self%write_imgarr)
+        call check_carg('write_polar_refs', self%write_polar_refs)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')

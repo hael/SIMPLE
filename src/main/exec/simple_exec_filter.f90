@@ -1,7 +1,7 @@
 !@descr: execution of filtering commanders
 module simple_exec_filter
 use simple_cmdline,             only: cmdline
-use simple_commanders_resolest, only: commander_uniform_filter2D, commander_uniform_filter3D
+use simple_commanders_resolest, only: commander_uniform_filter2D, commander_uniform_filter3D, commander_nu_filt3D
 use simple_commanders_imgops,   only: commander_filter
 implicit none
 
@@ -11,6 +11,7 @@ private
 type(commander_filter)           :: xfilter
 type(commander_uniform_filter2D) :: xuniform_filter2D
 type(commander_uniform_filter3D) :: xuniform_filter3D
+type(commander_nu_filt3D):: xnu_filt3D
 
 contains
 
@@ -29,6 +30,8 @@ contains
                 call xuniform_filter2D%execute(cline)
             case( 'uniform_filter3D' )
                 call xuniform_filter3D%execute(cline)
+            case( 'nu_filt3D', 'nonu_filt3D' )
+                call xnu_filt3D%execute(cline)
             case default
                 l_did_execute = .false.
         end select

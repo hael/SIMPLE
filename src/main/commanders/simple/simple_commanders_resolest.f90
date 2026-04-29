@@ -22,6 +22,11 @@ type, extends(commander_base) :: commander_uniform_filter3D
     procedure :: execute      => exec_uniform_filter3D
 end type commander_uniform_filter3D
 
+type, extends(commander_base) :: commander_nu_filt3D
+    contains
+        procedure :: execute      => exec_nu_filt3D
+end type commander_nu_filt3D
+
 type, extends(commander_base) :: commander_icm3D
   contains
     procedure :: execute      => exec_icm3D
@@ -132,6 +137,66 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_UNIFORM_FILTER3D NORMAL STOP ****')
     end subroutine exec_uniform_filter3D
+
+    subroutine exec_nu_filt3D(self, cline)
+        use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, &
+            &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
+        class(commander_nu_filt3D), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(parameters)     :: params
+        type(image)          :: even, odd, even_nu, odd_nu, vol_msk
+        type(image_msk)      :: envmsk
+        type(string)         :: even_out, odd_out, avg_out
+        logical, allocatable :: l_mask(:,:,:)
+        integer, allocatable :: imat(:,:,:)
+        real                 :: mskrad_px
+        integer              :: ldim(3)
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call odd%new([params%box,params%box,params%box], params%smpd)
+        call even%new([params%box,params%box,params%box], params%smpd)
+        call odd%read(params%vols(1))
+        call even%read(params%vols(2))
+        ldim = even%get_ldim()
+        if( params%automsk .ne. 'no' )then
+            call envmsk%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
+            call envmsk%set_imat
+            call envmsk%get_imat(imat)
+            allocate(l_mask(ldim(1),ldim(2),ldim(3)))
+            l_mask = imat > 0
+            deallocate(imat)
+        else
+            mskrad_px = 0.5 * params%mskdiam / params%smpd
+            call vol_msk%disc(ldim, params%smpd, mskrad_px, l_mask)
+        endif
+        call setup_nu_dmats(even, odd, l_mask, [real ::])
+        call optimize_nu_cutoff_finds()
+        call nu_filter_vols(even_nu, odd_nu)
+        call print_nu_filtmap_lowpass_stats(l_mask)
+        call analyze_filtmap_neighbor_continuity(l_mask)
+        odd_out  = add2fbody(params%vols(1), params%ext, NUFILT_SUFFIX)
+        even_out = add2fbody(params%vols(2), params%ext, NUFILT_SUFFIX)
+        if( params%outvol .ne. '' )then
+            avg_out = params%outvol
+        else
+            avg_out = 'vol_nufilt'//params%ext%to_char()
+        endif
+        call odd_nu%write(odd_out, del_if_exists=.true.)
+        call even_nu%write(even_out, del_if_exists=.true.)
+        call even_nu%add(odd_nu)
+        call even_nu%mul(0.5)
+        call even_nu%write(avg_out, del_if_exists=.true.)
+        call wait_for_closure(avg_out)
+        call cleanup_nu_filter()
+        call odd_nu%kill
+        call even_nu%kill
+        call odd%kill
+        call even%kill
+        call vol_msk%kill
+        call envmsk%kill
+        if( allocated(l_mask) ) deallocate(l_mask)
+        call simple_end('**** SIMPLE_nu_filt3D NORMAL STOP ****')
+    end subroutine exec_nu_filt3D
 
     subroutine exec_icm3D( self, cline )
         class(commander_icm3D), intent(inout) :: self

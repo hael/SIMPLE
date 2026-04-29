@@ -146,18 +146,14 @@ contains
     end subroutine update_polar_resolution_fields
 
     subroutine exec_cartesian_assembly( self, cline )
-        use simple_reconstructor_eo, only: reconstructor_eo
-        use simple_gridding,         only: prep3D_inv_instrfun4mul
+        use simple_reconstructor_eo,        only: reconstructor_eo
+        use simple_gridding,                only: prep3D_inv_instrfun4mul
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_refvol_utils, only: read_mask_filter_reproject_refvols, &
-            &write_polar_refs_from_current_pftc
-        use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
-                                         &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, &
-                                         &analyze_filtmap_neighbor_continuity
-        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
-                                                   &AUTOMASK_ACTION_REGENERATE, &
-                                                   &NU_MASK_SOURCE_FRESH_AUTOMASK, &
-                                                   &NU_MASK_SOURCE_EXISTING_AUTOMASK
+        use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols, write_polar_refs_from_current_pftc
+        use simple_nu_filter,               only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
+        &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
+        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE,&
+                                                   &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
         class(commander_cartesian_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
