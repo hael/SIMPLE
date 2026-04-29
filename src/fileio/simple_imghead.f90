@@ -28,7 +28,7 @@ use simple_tifflib
 implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
-public :: test_imghead, find_ldim_nptcls, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info
+public :: test_imghead, find_ldim_nptcls, find_img_smpd, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info
 private
 #include "simple_local_flags.inc"
 
@@ -1451,14 +1451,13 @@ contains
     end subroutine get_eerfile_info
 
     !>  \brief  is for finding logical dimension and number of particles in stack
-    subroutine find_ldim_nptcls( fname, ldim, nptcls, smpd, doprint, formatchar )
+    subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar )
         class(string),              intent(in)  :: fname      !< filename
         integer,                    intent(out) :: ldim(3)    !< logical dimension
         integer,                    intent(out) :: nptcls     !< number of particles
-        real,             optional, intent(out) :: smpd       !< do print or not
         logical,          optional, intent(in)  :: doprint    !< do print or not
         character(len=1), optional, intent(in)  :: formatchar !< input format
-        real                          :: smpd_here
+        real                          :: smpd_ignore
         integer                       :: iform
         character(len=:), allocatable :: conv
         character(len=1)              :: form
@@ -1473,19 +1472,47 @@ contains
         nptcls = 0
         select case (form)
             case('M','F')
-                call get_mrcfile_info(fname, ldim, form, smpd_here, ddoprint )
+                call get_mrcfile_info(fname, ldim, form, smpd_ignore, ddoprint )
                 nptcls = ldim(3)
             case('S')
-               call get_spifile_info(fname, ldim, iform, nptcls, smpd_here, conv, ddoprint)
+               call get_spifile_info(fname, ldim, iform, nptcls, smpd_ignore, conv, ddoprint)
             case('J','L')
-                call get_tiffile_info(fname, ldim, nptcls, smpd_here, ddoprint)
+                call get_tiffile_info(fname, ldim, nptcls, smpd_ignore, ddoprint)
             case('K')
-                call get_eerfile_info(fname, ldim, nptcls, smpd_here, ddoprint)
+                call get_eerfile_info(fname, ldim, nptcls, smpd_ignore, ddoprint)
             case DEFAULT
                 THROW_HARD('format of file: '//fname%to_char()//' not supported')
         end select
-        if( present(smpd) )smpd = smpd_here
     end subroutine find_ldim_nptcls
+
+    !>  \brief  is for explicitly reading sampling distance from an image header
+    real function find_img_smpd( fname, formatchar ) result( smpd )
+        class(string),              intent(in) :: fname      !< filename
+        character(len=1), optional, intent(in) :: formatchar !< input format
+        integer                       :: ldim(3), nptcls, iform
+        character(len=:), allocatable :: conv
+        character(len=1)              :: form
+        logical                       :: doprint
+        doprint = .false.
+        if( present(formatchar) )then
+            form = formatchar
+        else
+            form = fname2format(fname)
+        endif
+        smpd = 0.
+        select case (form)
+            case('M','F')
+                call get_mrcfile_info(fname, ldim, form, smpd, doprint )
+            case('S')
+                call get_spifile_info(fname, ldim, iform, nptcls, smpd, conv, doprint)
+            case('J','L')
+                call get_tiffile_info(fname, ldim, nptcls, smpd, doprint)
+            case('K')
+                call get_eerfile_info(fname, ldim, nptcls, smpd, doprint)
+            case DEFAULT
+                THROW_HARD('format of file: '//fname%to_char()//' not supported')
+        end select
+    end function find_img_smpd
 
     !>  \brief  is for checking logical dimension and number of particles in stack
     logical function has_ldim_nptcls( fname, ldim, nptcls )

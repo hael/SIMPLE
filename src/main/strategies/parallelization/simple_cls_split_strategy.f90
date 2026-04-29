@@ -1138,7 +1138,8 @@ contains
         call del_file(string('cls_split_subclass_avgs.mrcs'))
         call del_file(string('cls_split_subclass_avgs_conditioned.mrcs'))
         raw_fname = string('cls_split_subclass_avgs_part')//int2str_pad(comb_part(1), params%numlen)//'.mrcs'
-        call find_ldim_nptcls(raw_fname, ldim, nstk, smpd=smpd)
+        call find_ldim_nptcls(raw_fname, ldim, nstk)
+        smpd = params%smpd_crop
         ldim(3) = 1
         call img%new(ldim, smpd)
         map_fname = string('cls_split_class_map.txt')

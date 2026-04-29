@@ -259,7 +259,7 @@ subroutine exec_test_pdb2mrc( self, cline )
     use simple_image,         only : image
     use simple_atoms,         only : atoms
     use simple_molecule_data, only : molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
-    use simple_imghead,       only : find_ldim_nptcls
+    use simple_imghead,       only : find_ldim_nptcls, find_img_smpd
     class(commander_test_pdb2mrc), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
     type(string)        :: pdb_file, vol_file, default_vol
@@ -286,7 +286,8 @@ subroutine exec_test_pdb2mrc( self, cline )
         write(logfhandle,'(a)') '    FAIL: '//default_vol%to_char()//' not created'
         all_ok = .false.
     else
-        call find_ldim_nptcls(default_vol, ldim, nptcls, smpd_out)
+        call find_ldim_nptcls(default_vol, ldim, nptcls)
+        smpd_out = find_img_smpd(default_vol)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
             ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_out
         if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
@@ -317,7 +318,8 @@ subroutine exec_test_pdb2mrc( self, cline )
         write(logfhandle,'(a)') '    FAIL: '//default_vol%to_char()//' not created'
         all_ok = .false.
     else
-        call find_ldim_nptcls(default_vol, ldim, nptcls, smpd_out)
+        call find_ldim_nptcls(default_vol, ldim, nptcls)
+        smpd_out = find_img_smpd(default_vol)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
             ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_out
         if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
@@ -343,7 +345,8 @@ subroutine exec_test_pdb2mrc( self, cline )
         write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not created'
         all_ok = .false.
     else
-        call find_ldim_nptcls(vol_file, ldim, nptcls, smpd_out)
+        call find_ldim_nptcls(vol_file, ldim, nptcls)
+        smpd_out = find_img_smpd(vol_file)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
             ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_out
         if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then
@@ -369,7 +372,8 @@ subroutine exec_test_pdb2mrc( self, cline )
         write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not created'
         all_ok = .false.
     else
-        call find_ldim_nptcls(vol_file, ldim, nptcls, smpd_out)
+        call find_ldim_nptcls(vol_file, ldim, nptcls)
+        smpd_out = find_img_smpd(vol_file)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    volume dims = [', &
             ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_out
         if( ldim(1) < 1 .or. ldim(2) < 1 .or. ldim(3) < 1 )then

@@ -65,7 +65,8 @@ contains
         if( present(moldiam) ) l_moldiam = .true.
         if( present(winsz)   ) l_winsz   = .true.
         ! set micrograph info
-        call find_ldim_nptcls(micname, ldim_raw, nframes, smpd_raw)
+        call find_ldim_nptcls(micname, ldim_raw, nframes)
+        smpd_raw = find_img_smpd(micname)
         if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images; pick')
         ! read micrograph
         call mic_raw%new(ldim_raw, smpd_raw)

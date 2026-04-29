@@ -706,52 +706,12 @@ contains
         real(dp),    optional, intent(in)  :: ufrac_trec
         complex(dp), optional, intent(in)  :: prev_even(:,:,:)
         complex(dp), optional, intent(in)  :: prev_odd(:,:,:)
-        complex(dp) :: even(self%pftsz,self%kfromto(1):self%interpklim)
-        complex(dp) :: odd(self%pftsz,self%kfromto(1):self%interpklim)
-        complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
-        real(dp)    :: vare(self%kfromto(1):self%interpklim)
-        real(dp)    :: varo(self%kfromto(1):self%interpklim)
-        real(dp)    :: ctf2(self%pftsz,self%kfromto(1):self%interpklim)
-        integer     :: icls, k
-        if( self%p_ptr%l_trail_rec )then
-            if( .not.present(ufrac_trec) .or. .not.present(prev_even) .or. .not.present(prev_odd) )then
-                THROW_HARD('Trailing reconstruction requested but missing arguments in calc_fsc')
-            endif
+        if( present(ufrac_trec) .and. present(prev_even) .and. present(prev_odd) )then
+            call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, 1, self%ncls, fsc, &
+                &ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd)
+        else
+            call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, 1, self%ncls, fsc)
         endif
-        ! Calculates per slice contribution to global FSC/variance
-        ! no need to loop over mirrored slices
-        fsc  = 0.d0; vare = 0.d0; varo = 0.d0
-        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-        !$omp private(icls,even,odd,k,pft,ctf2) reduction(+:fsc,vare,varo)
-        do icls = 1,self%ncls
-            ! e/o restoration
-            pft  = pfts_even(:,:,icls)
-            ctf2 = ctf2_even(:,:,icls)
-            call self%shell_floor_norm(pft, ctf2, even)
-            pft  = pfts_odd(:,:,icls)
-            ctf2 = ctf2_odd(:,:,icls)
-            call self%shell_floor_norm(pft, ctf2, odd)
-            if( self%p_ptr%l_trail_rec )then
-                ! adding previous reference
-                even = ufrac_trec * even + (1.d0-ufrac_trec) * prev_even(:,:,icls)
-                odd  = ufrac_trec * odd  + (1.d0-ufrac_trec) * prev_odd(:,:,icls)
-            endif
-            ! FSC contribution
-            do k = self%kfromto(1),self%interpklim
-                fsc(k)   = fsc(k)  + sum(real(even(:,k) * conjg(odd(:,k)), dp))
-                vare(k)  = vare(k) + sum(real(even(:,k) * conjg(even(:,k)),dp))
-                varo(k)  = varo(k) + sum(real(odd(:,k)  * conjg(odd(:,k)), dp))
-            enddo
-        enddo
-        !$omp end parallel do
-        ! Variance
-        vare = vare * varo
-        ! FSC
-        where( vare > DTINY )
-            fsc = fsc / sqrt(vare)
-        elsewhere
-            fsc = 0.d0
-        end where
     end subroutine calc_fsc
 
     subroutine calc_fsc_range( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, ref_first, ref_last, fsc, &
@@ -853,87 +813,7 @@ contains
         real(dp),            intent(inout) :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp),            intent(inout) :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp),            intent(in)    :: fsc(self%kfromto(1):self%interpklim)
-        real(dp) :: sig2e(self%kfromto(1):self%interpklim), sig2o(self%kfromto(1):self%interpklim)
-        real(dp) :: ssnr(self%kfromto(1):self%interpklim), tau2(self%kfromto(1):self%interpklim)
-        real(dp) :: invtau2e(self%kfromto(1):self%interpklim), invtau2o(self%kfromto(1):self%interpklim)
-        real(dp) :: cc, fudge, invtau2, shell_n
-        integer  :: icls, k, kstart, p
-        shell_n      = real(self%ncls,dp) * real(self%pftsz,dp)
-        invtau2e     = 0.d0
-        invtau2o     = 0.d0
-        ! Radial CTF2 sum
-        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k)
-        do k = self%kfromto(1),self%interpklim
-            sig2e(k) = sum(ctf2_even(:,k,:))
-            sig2o(k) = sum(ctf2_odd(:,k,:))
-        enddo
-        !$omp end parallel do
-        ! SSNR
-        fudge = real(self%p_ptr%tau,dp)
-        do k = self%kfromto(1),self%interpklim
-            cc = max(0.001d0,min(0.999d0,fsc(k)))
-            ssnr(k) = cc / (1.d0 - cc)
-        enddo
-        ! Add Tau2 inverse to denominators
-        ! because signal assumed infinite at very low resolution there is no addition
-        kstart = ml_prior_start(self)
-        ! Even
-        where( sig2e > DTINY )
-            sig2e = shell_n / sig2e
-        elsewhere
-            sig2e = 0.d0
-        end where
-        tau2 = ssnr * sig2e
-        do k = kstart,self%interpklim
-            if( tau2(k) > DTINY )then
-                invtau2 = 1.d0 / (fudge * tau2(k))
-                invtau2e(k) = invtau2
-            endif
-        enddo
-        ! Odd
-        where( sig2o > DTINY )
-            sig2o = shell_n / sig2o
-        elsewhere
-            sig2o = 0.d0
-        end where
-        tau2 = ssnr * sig2o
-        do k = kstart,self%interpklim
-            if( tau2(k) > DTINY )then
-                invtau2 = 1.d0 / (fudge * tau2(k))
-                invtau2o(k) = invtau2
-            endif
-        enddo
-        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
-        do k = kstart,self%interpklim
-            if( invtau2e(k) > 0.d0 )then
-                ! CTF2 <- CTF2 + avgCTF2/(tau*SSNR)
-                invtau2 = invtau2e(k)
-                ctf2_even(:,k,:) = ctf2_even(:,k,:) + invtau2
-            else
-                do icls = 1,self%ncls
-                    do p = 1,self%pftsz
-                        invtau2 = unsampled_floor(ctf2_even(p,k,icls))
-                        ctf2_even(p,k,icls) = ctf2_even(p,k,icls) + invtau2
-                    enddo
-                enddo
-            endif
-        enddo
-        !$omp end parallel do
-        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(k,icls,p,invtau2)
-        do k = kstart,self%interpklim
-            if( invtau2o(k) > 0.d0 )then
-                invtau2 = invtau2o(k)
-                ctf2_odd(:,k,:) = ctf2_odd(:,k,:) + invtau2
-            else
-                do icls = 1,self%ncls
-                    do p = 1,self%pftsz
-                        invtau2 = unsampled_floor(ctf2_odd(p,k,icls))
-                        ctf2_odd(p,k,icls) = ctf2_odd(p,k,icls) + invtau2
-                    enddo
-                enddo
-            endif
-        enddo
-        !$omp end parallel do
+        call add_invtausq2rho_range(self, ctf2_even, ctf2_odd, 1, self%ncls, fsc)
     end subroutine add_invtausq2rho
 
     subroutine calc_invtausq2rho_range( self, ctf2_even, ctf2_odd, ref_first, ref_last, fsc, kstart, invtau2e, invtau2o )

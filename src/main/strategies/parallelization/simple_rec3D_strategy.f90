@@ -108,6 +108,7 @@ contains
         type(builder),                      intent(inout) :: build
         class(cmdline),                     intent(inout) :: cline
         call build%init_params_and_build_general_tbox(cline, params)
+        call sync_resolved_rec_params(params, cline)
         call build%build_strategy3D_tbox(params)
         ! Even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
@@ -220,6 +221,7 @@ contains
         call set_master_num_threads(self%nthr_master, string('rec3D'))
         ! parse parameters and project
         call build%init_params_and_build_spproj(cline, params)
+        call sync_resolved_rec_params(params, cline)
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -324,6 +326,20 @@ contains
         call self%job_descr%kill
     end subroutine distr_cleanup
 
+    subroutine sync_resolved_rec_params(params, cline)
+        type(parameters), intent(in)    :: params
+        class(cmdline),   intent(inout) :: cline
+        if( params%box > 0 ) call cline%set('box', params%box)
+        if( params%smpd > TINY ) call cline%set('smpd', params%smpd)
+        if( params%box_crop > 0 ) call cline%set('box_crop', params%box_crop)
+        if( params%smpd_crop > TINY ) call cline%set('smpd_crop', params%smpd_crop)
+        if( params%mskdiam > 0. )then
+            call cline%set('mskdiam', params%mskdiam)
+        else
+            call cline%delete('mskdiam')
+        endif
+    end subroutine sync_resolved_rec_params
+
     subroutine maybe_postprocess_reconstruct3D(params, cline)
         use simple_commanders_volops, only: postprocess_volume_from_files
         type(parameters), intent(in)    :: params
@@ -345,7 +361,8 @@ contains
                 call fname_fsc%kill
                 cycle
             endif
-            call find_ldim_nptcls(fname_vol, ldim, nptcls, smpd=smpd)
+            call find_ldim_nptcls(fname_vol, ldim, nptcls)
+            smpd = params%smpd_crop
             call postprocess_volume_from_files(fname_vol, fname_fsc, ldim(1), smpd, params_pp, cline)
             call str_state%kill
             call fname_vol%kill

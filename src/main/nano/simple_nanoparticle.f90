@@ -254,7 +254,7 @@ contains
         character(len=2) :: el_ucase
         integer :: nptcls
         integer :: Z ! atomic number
-        real    :: smpd, msk_in_pix
+        real    :: msk_in_pix
         call self%kill
         self%npname    = fname
         self%fbody     = get_fbody(basename(fname), fname2ext(fname))
@@ -264,7 +264,7 @@ contains
         el_ucase       = upperCase(params%element)
         call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
-        call find_ldim_nptcls(self%npname, self%ldim, nptcls, smpd)
+        call find_ldim_nptcls(self%npname, self%ldim, nptcls)
         call self%img%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img%read(fname)

@@ -224,7 +224,8 @@ contains
         do imic=nprev_intgs+1,ntot
             cnt = cnt + 1
             rel_micname = simple_abspath(intgs_array(cnt))
-            call find_ldim_nptcls(rel_micname, ldim, nframes, smpd=intg_smpd)
+            call find_ldim_nptcls(rel_micname, ldim, nframes)
+            intg_smpd = find_img_smpd(rel_micname)
             if( nframes <= 0 )then
                 THROW_HARD('# frames in movie: '//intgs_array(cnt)%to_char()//' <= zero; add_intgs')
             else if( nframes > 1 )then

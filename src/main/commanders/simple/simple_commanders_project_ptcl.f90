@@ -308,7 +308,6 @@ contains
         type(oris)       :: os_ptcl2D_tmp, os_ptcl3D_tmp
         type(ctfparams)  :: ctfparms
         integer          :: ldim(3), nimgs, nstks, nptcls_active, iptcl
-        real             :: smpd_new
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'stk')
         call params%new(cline)
@@ -319,7 +318,7 @@ contains
         nstks = spproj%os_stk%get_noris()
         if( nstks < 1 ) THROW_HARD('No stack could be detected in the project; reimport_particles')
         if( spproj%os_ptcl2D%get_noris() < 1 ) THROW_HARD('Project has no ptcl2D field entries; reimport_particles')
-        call find_ldim_nptcls(params%stk, ldim, nimgs, smpd=smpd_new)
+        call find_ldim_nptcls(params%stk, ldim, nimgs)
         ldim(3) = 1
         if( spproj%get_box() /= ldim(1) .or. spproj%get_box() /= ldim(2) )then
             THROW_HARD('Incompatible box dimensions between input stack and project; reimport_particles')
@@ -355,9 +354,6 @@ contains
                 case DEFAULT
                     THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; reimport_particles')
             end select
-        endif
-        if( abs(smpd_new - ctfparms%smpd) > 1.e-6 )then
-            THROW_HARD('Incompatible sampling distance between input stack and project; reimport_particles')
         endif
         os_ptcl2D_tmp = spproj%os_ptcl2D
         os_ptcl3D_tmp = spproj%os_ptcl3D

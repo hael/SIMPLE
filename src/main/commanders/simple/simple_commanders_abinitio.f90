@@ -242,7 +242,8 @@ contains
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         if( nstages_ini3D == NSTAGES_INI3D_MAX )then ! produce validation info
-            call find_ldim_nptcls(orig_stk, cavg_ldim, cavg_nimgs, smpd=cavg_smpd)
+            call find_ldim_nptcls(orig_stk, cavg_ldim, cavg_nimgs)
+            cavg_smpd = params%smpd
             if( cavg_nimgs < ncavgs ) THROW_HARD('fewer images in cavgs stack than expected; abinitio3D_cavgs')
             ! check even odd convergence
             if( params%nstates > 1 ) call conv_eo_states(work_proj%os_ptcl3D)

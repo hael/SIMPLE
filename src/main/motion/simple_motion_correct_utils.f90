@@ -75,7 +75,8 @@ contains
         if( .not.file_exists(gainref_fname) )then
             THROW_HARD('Could not find gain reference: '//gainref_fname%to_char())
         endif
-        call find_ldim_nptcls(gainref_fname, ldim, n, smpd=smpd)
+        call find_ldim_nptcls(gainref_fname, ldim, n)
+        smpd = find_img_smpd(gainref_fname)
         ldim(3) = 1
         call gain%new(ldim, smpd, wthreads=.false.)
         call gain%read(gainref_fname)

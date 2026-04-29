@@ -159,7 +159,8 @@ contains
         integer :: ldim(3), nptcls
         real    :: smpd
         if( .not. file_exists(vol_name) ) return
-        call find_ldim_nptcls(vol_name, ldim, nptcls, smpd=smpd)
+        call find_ldim_nptcls(vol_name, ldim, nptcls)
+        smpd = params%smpd_crop
         call spproj%read_segment('out', params%projfile)
         call spproj%add_vol2os_out(vol_name, smpd, state, 'vol')
         fsc_name = string(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
@@ -169,14 +170,14 @@ contains
         call fsc_name%kill
     end subroutine register_stage_volume
 
-    subroutine write_abinitio_lowpass_snapshot( vol_in, lp, vol_out )
+    subroutine write_abinitio_lowpass_snapshot( vol_in, lp, vol_out, smpd )
         class(string), intent(in) :: vol_in, vol_out
-        real,          intent(in) :: lp
+        real,          intent(in) :: lp, smpd
         type(image) :: vol_lp
         integer :: ldim(3), nptcls
-        real    :: smpd, lp_eff
+        real    :: lp_eff
         if( .not. file_exists(vol_in) ) return
-        call find_ldim_nptcls(vol_in, ldim, nptcls, smpd=smpd)
+        call find_ldim_nptcls(vol_in, ldim, nptcls)
         lp_eff = max(2.0 * smpd, lp)
         call vol_lp%new(ldim, smpd)
         call vol_lp%read(vol_in)
@@ -287,7 +288,7 @@ contains
                     if( file_exists(vol_lp) )then
                         call simple_copy_file(vol_lp, vol_lp_stage)
                     else
-                        call write_abinitio_lowpass_snapshot(vol_stage, lpinfo(istage)%lp, vol_lp_stage)
+                        call write_abinitio_lowpass_snapshot(vol_stage, lpinfo(istage)%lp, vol_lp_stage, lpinfo(istage)%smpd_crop)
                     endif
                 endif
                 if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,string(MRC_EXT),stage))
@@ -330,7 +331,7 @@ contains
                 vol_iter = 'asymmetric_map'//MRC_EXT
                 call simple_copy_file(string(VOL_FBODY)//int2str_pad(1,2)//MRC_EXT, vol_iter)
                 vol_diag = add2fbody(vol_iter, MRC_EXT, LP_SUFFIX)
-                call write_abinitio_lowpass_snapshot(vol_iter, lpinfo(istage)%lp, vol_diag)
+                call write_abinitio_lowpass_snapshot(vol_iter, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
                 call cline_asymrec%kill
             else
                 ! Volume from previous stage
@@ -351,7 +352,7 @@ contains
             write(logfhandle,'(A)') '>>>'
             call xsymmap%execute(cline_symmap)
             vol_diag = add2fbody(vol_sym, MRC_EXT, LP_SUFFIX)
-            call write_abinitio_lowpass_snapshot(vol_sym, lpsym, vol_diag)
+            call write_abinitio_lowpass_snapshot(vol_sym, lpsym, vol_diag, lpinfo(istage)%smpd_crop)
             call del_file('SYMAXIS_SEARCH_FINISHED')
             if( present(xrec3D) )then
                 ! symmetric reconstruction
@@ -366,7 +367,7 @@ contains
                 vol_sym = VOL_FBODY//int2str_pad(1,2)//MRC_EXT
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
                 vol_diag = add2fbody(string('symmetric_map')//MRC_EXT, MRC_EXT, LP_SUFFIX)
-                call write_abinitio_lowpass_snapshot(string('symmetric_map')//MRC_EXT, lpinfo(istage)%lp, vol_diag)
+                call write_abinitio_lowpass_snapshot(string('symmetric_map')//MRC_EXT, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
                 call cline_symrec%kill
             endif
             if( l_polar )then
@@ -415,7 +416,7 @@ contains
             dest   = string(VOL_FBODY)//sstate//'_stage_'//sstage//MRC_EXT
             call simple_rename(src, dest)
             vol_diag = add2fbody(dest, MRC_EXT, LP_SUFFIX)
-            call write_abinitio_lowpass_snapshot(dest, lpinfo(istage)%lp, vol_diag)
+            call write_abinitio_lowpass_snapshot(dest, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
             call register_stage_volume(params, 1, dest)
             ! Update refine3D command line
             call cline_refine3D%set('vol1', dest)
@@ -443,7 +444,7 @@ contains
                 str      = tmpl//MRC_EXT
                 call     simple_rename(vol, str)
                 vol_diag = add2fbody(str, MRC_EXT, LP_SUFFIX)
-                call     write_abinitio_lowpass_snapshot(str, lpinfo(istage)%lp, vol_diag)
+                call     write_abinitio_lowpass_snapshot(str, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
                 params%vols(state) = str
                 vol      = 'vol'//int2str(state)
                 call     cline_refine3D%set(vol, str)
@@ -493,7 +494,8 @@ contains
             if( .not. file_exists(fname) )cycle
             exit
         enddo
-        call find_ldim_nptcls(fname, ldim, ifoo, smpd)
+        call find_ldim_nptcls(fname, ldim, ifoo)
+        smpd = params%smpd
         call final_vol%new(ldim, smpd)
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
@@ -525,9 +527,15 @@ contains
         call spproj%read_segment('stk',    projfile)
         call spproj%read_segment('ptcl3D', projfile)
         call spproj%get_stkname_and_ind('ptcl3D', 1, stkname, ind_in_stk)
-        call find_ldim_nptcls(stkname, ldim, nptcls, smpd=smpd)
+        call find_ldim_nptcls(stkname, ldim, nptcls)
+        smpd = params%smpd
         call cline_reconstruct3D%set('box',  ldim(1))
         call cline_reconstruct3D%set('smpd', smpd)
+        if( params%mskdiam > 0. )then
+            call cline_reconstruct3D%set('mskdiam', params%mskdiam)
+        else
+            call cline_reconstruct3D%delete('mskdiam')
+        endif
         call cline_reconstruct3D%set('oritype', 'ptcl3D')
         call cline_reconstruct3D%set('write_polar_refs', 'no')
         if( present(l_postprocess) )then
@@ -572,7 +580,7 @@ contains
             vol_final      = string(REC_FBODY)//str_state//MRC_EXT
             call simple_copy_file(vol_name, vol_final)
             vol_final_lp = add2fbody(vol_final, MRC_EXT, LP_SUFFIX)
-            call write_abinitio_lowpass_snapshot(vol_final, lp, vol_final_lp)
+            call write_abinitio_lowpass_snapshot(vol_final, lp, vol_final_lp, params%smpd)
             vol_pproc = add2fbody(vol_name, MRC_EXT, PPROC_SUFFIX)
             if( file_exists(vol_pproc) )then
                 vol_final_pproc = add2fbody(vol_final, MRC_EXT, PPROC_SUFFIX)

@@ -116,7 +116,8 @@ contains
         type(image),   intent(inout) :: mic_out
         integer :: nframes, ldim(3)
         real    :: smpd
-        call find_ldim_nptcls(micname, ldim, nframes, smpd=smpd)
+        call find_ldim_nptcls(micname, ldim, nframes)
+        smpd = find_img_smpd(micname)
         if( ldim(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
         call mic_out%new(ldim, smpd)
         call mic_out%read(micname)

@@ -56,7 +56,7 @@ contains
         type(string)           :: cavgs_fname
         logical, allocatable   :: lstates(:)
         integer :: ldim(3), icls, ncls, ncavgs, cnt
-        real    :: smpd, smpd_phys
+        real    :: smpd
         call cline%set('oritype', 'cls2D')
         call params%new(cline)
         ! nice communicator init
@@ -71,9 +71,8 @@ contains
         if( count(lstates) == 0 ) THROW_HARD('All class averages are deselected')
         call spproj%get_cavgs_stk(cavgs_fname, ncls, smpd)
         if( spproj%os_cls2D%get_noris() /= ncls ) THROW_HARD('Inconsistent # of entries cls2D/out!')
-        call find_ldim_nptcls(cavgs_fname, ldim, ncavgs, smpd=smpd_phys)
+        call find_ldim_nptcls(cavgs_fname, ldim, ncavgs)
         if(ncavgs /= ncls)    THROW_HARD('Inconsistent # of cls2D cavgs & physical cavgs!')
-        if( abs(smpd-smpd_phys) > 0.001 ) THROW_HARD('Inconsistent sampling distancs in project & physical cavgs!')
         ! copy selected cavgs
         cnt     = 0
         ldim(3) = 1

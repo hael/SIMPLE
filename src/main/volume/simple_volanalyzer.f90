@@ -26,15 +26,14 @@ contains
         class(string),             intent(in) :: voltab
         type(image) :: vol_mirr
         integer     :: i, ifoo, ldim_read(3)
-        real        :: smpd_here
         p_ptr => params
         call read_filetable(voltab, volnames)
         nvols = size(volnames)
         if( nvols < 3 ) THROW_HARD('Need at least 3 volumes for analysis')
         ! check that dimensions are consistent across volumes
-        call find_ldim_nptcls(volnames(1), ldim, ifoo, smpd=smpd_here)
+        call find_ldim_nptcls(volnames(1), ldim, ifoo)
         do i = 2, nvols
-            call find_ldim_nptcls(volnames(i), ldim_read, ifoo, smpd=smpd_here)
+            call find_ldim_nptcls(volnames(i), ldim_read, ifoo)
             if( any(ldim /= ldim_read) )then
                 print *, 'ldim      ', ldim
                 print *, 'ldim_read ', ldim_read

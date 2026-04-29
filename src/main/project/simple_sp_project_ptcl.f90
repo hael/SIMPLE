@@ -559,7 +559,8 @@ contains
         do iidx=1, size(indices)
             iori = indices(iidx)
             call self%get_stkname_and_ind('ptcl2D', iori, stkname, idx)
-            call find_ldim_nptcls(stkname, ldim_stk, nptcls, smpd)
+            call find_ldim_nptcls(stkname, ldim_stk, nptcls)
+            smpd = self%get_smpd()
             call stkimg%new([ldim_stk(1), ldim_stk(1), 1], smpd)
             if(first) then
                 call stkio_w%open(tmpfile, smpd, 'write', box=ldim_stk(1))

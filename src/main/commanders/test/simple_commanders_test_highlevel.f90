@@ -205,7 +205,7 @@ end subroutine exec_test_mini_stream
 subroutine exec_test_simulate_particles( self, cline )
     use simple_atoms,         only: atoms
     use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
-    use simple_imghead,       only: find_ldim_nptcls
+    use simple_imghead,       only: find_ldim_nptcls, find_img_smpd
     class(commander_test_simulate_particles), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
     type(cmdline)                       :: cline_sim
@@ -247,7 +247,8 @@ subroutine exec_test_simulate_particles( self, cline )
         write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not found'
         THROW_HARD('TEST_SIMULATE_PARTICLES FAILED: volume not generated')
     else
-        call find_ldim_nptcls(vol_file, ldim, nptcls_stk, smpd_stk)
+        call find_ldim_nptcls(vol_file, ldim, nptcls_stk)
+        smpd_stk = find_img_smpd(vol_file)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    PASS: volume dims = [', &
             ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_stk
         if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
@@ -265,7 +266,8 @@ subroutine exec_test_simulate_particles( self, cline )
         write(logfhandle,'(a)') '    FAIL: '//outstk%to_char()//' not found'
         all_ok = .false.
     else
-        call find_ldim_nptcls(outstk, ldim, nptcls_stk, smpd_stk)
+        call find_ldim_nptcls(outstk, ldim, nptcls_stk)
+        smpd_stk = find_img_smpd(outstk)
         write(logfhandle,'(a,i6)')  '    particles in stack: ', nptcls_stk
         write(logfhandle,'(a,i4,a,i4)') '    box size:           ', ldim(1), ' x ', ldim(2)
         write(logfhandle,'(a,f6.2)')    '    smpd:               ', smpd_stk
@@ -314,7 +316,7 @@ end subroutine exec_test_simulate_particles
 subroutine exec_test_reproject( self, cline )
     use simple_atoms,         only: atoms
     use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
-    use simple_imghead,       only: find_ldim_nptcls
+    use simple_imghead,       only: find_ldim_nptcls, find_img_smpd
     class(commander_test_reproject), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
     integer, parameter              :: NSPACE = 100
@@ -344,7 +346,8 @@ subroutine exec_test_reproject( self, cline )
         write(logfhandle,'(a)') '    FAIL: '//vol_file%to_char()//' not found'
         THROW_HARD('TEST_REPROJECT FAILED: volume not generated')
     else
-        call find_ldim_nptcls(vol_file, ldim, nptcls_stk, smpd_stk)
+        call find_ldim_nptcls(vol_file, ldim, nptcls_stk)
+        smpd_stk = find_img_smpd(vol_file)
         write(logfhandle,'(a,i4,a,i4,a,i4,a,f6.2)') '    PASS: volume dims = [', &
             ldim(1),',',ldim(2),',',ldim(3),' ], smpd = ', smpd_stk
         if( ldim(1) /= ldim(2) .or. ldim(1) < 1 )then
@@ -373,7 +376,8 @@ subroutine exec_test_reproject( self, cline )
         write(logfhandle,'(a)') '    FAIL: '//outstk%to_char()//' not found'
         all_ok = .false.
     else
-        call find_ldim_nptcls(outstk, ldim, nptcls_stk, smpd_stk)
+        call find_ldim_nptcls(outstk, ldim, nptcls_stk)
+        smpd_stk = find_img_smpd(outstk)
         write(logfhandle,'(a,i6)')       '    projections in stack: ', nptcls_stk
         write(logfhandle,'(a,i4,a,i4)')  '    box size:             ', ldim(1), ' x ', ldim(2)
         write(logfhandle,'(a,f6.2)')     '    smpd:                 ', smpd_stk

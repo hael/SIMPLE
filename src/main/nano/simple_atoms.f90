@@ -1012,7 +1012,8 @@ contains
         character(len=256) :: atom_volfile
         if( self%n < 1 ) THROW_HARD('No atoms; fit_bfactors')
         ! --- read and upscale volume from file ---
-        call find_ldim_nptcls(string(volfile), ldim, ifoo, smpd=smpd_here)
+        call find_ldim_nptcls(string(volfile), ldim, ifoo)
+        smpd_here = find_img_smpd(string(volfile))
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd_here, ' Angstrom'
         box              = ldim(1)
         upscaling_factor = smpd_here / smpd_target

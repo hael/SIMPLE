@@ -77,14 +77,13 @@ contains
         class(dock_vols), intent(inout) :: self
         class(string),    intent(in)    :: vol_ref_fname
         real,             intent(in)    :: smpd, hp, lp, mskdiam
-        real    :: smpd_target, smpd_here
+        real    :: smpd_target
         integer :: ifoo
         self%smpd    = smpd
         self%hp      = hp
         self%lp      = lp
         self%msk     = mskdiam/self%smpd/2.
-        call find_ldim_nptcls(vol_ref_fname, self%ldim, ifoo, smpd=smpd_here)
-        ! HE, I would not trust the smpd from the header
+        call find_ldim_nptcls(vol_ref_fname, self%ldim, ifoo)
         if( self%ldim(3) /= self%ldim(1) ) THROW_HARD('Only for volumes')
         self%box = self%ldim(1)
         call self%vol_ref%new(self%ldim, self%smpd)
@@ -104,9 +103,8 @@ contains
     subroutine set_target( self, vol_fname )
         class(dock_vols), intent(inout) :: self
         class(string),    intent(in)    :: vol_fname
-        real    :: smpd_here
         integer :: ldim_here(3), ifoo
-        call find_ldim_nptcls(vol_fname, ldim_here, ifoo, smpd=smpd_here)
+        call find_ldim_nptcls(vol_fname, ldim_here, ifoo)
         if( any(ldim_here /= self%ldim ) ) THROW_HARD('Nonconforming volume dimensions')
         call self%vol%new(self%ldim, self%smpd)
         call self%vol%read(vol_fname)
@@ -311,9 +309,8 @@ contains
         class(string),    intent(in)    :: vol_fname, vol_rot_fname
         type(image) :: vol_rot
         type(ori)   :: e
-        real        :: smpd_here
         integer     :: ldim_here(3), ifoo
-        call find_ldim_nptcls(vol_fname, ldim_here, ifoo, smpd=smpd_here)
+        call find_ldim_nptcls(vol_fname, ldim_here, ifoo)
         if( any(ldim_here /= self%ldim ) ) THROW_HARD('Nonconforming volume dimensions')
         call self%vol%new(self%ldim, self%smpd)
         call self%vol%read(vol_fname)
@@ -340,5 +337,4 @@ contains
     end subroutine kill
 
 end module simple_dock_vols
-
 

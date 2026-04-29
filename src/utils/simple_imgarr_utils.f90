@@ -154,7 +154,8 @@ contains
         integer :: icls, ncls, ldim_read(3), cnt, ncls_sel
         real    :: smpd
         if(.not. file_exists(stkname)) THROW_HARD('stk stk does not exist')
-        call find_ldim_nptcls(stkname, ldim_read, ncls, smpd)
+        call find_ldim_nptcls(stkname, ldim_read, ncls)
+        smpd = find_img_smpd(stkname)
         ldim_read(3) = 1
         call stkio_r%open(stkname, smpd, 'read', bufsz=min(1024,ncls))
         if( present(mask) )then

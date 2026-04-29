@@ -75,7 +75,8 @@ contains
         integer :: ldim(3), nrefs, iref
         if( self%l_pickrefs_exist ) return
         if( file_exists(pickrefs_fname) )then
-            call find_ldim_nptcls(pickrefs_fname, ldim, nrefs, smpd=smpd)
+            call find_ldim_nptcls(pickrefs_fname, ldim, nrefs)
+            smpd = find_img_smpd(pickrefs_fname)
             ldim(3) = 1
             allocate(self%pickrefs(nrefs))
             do iref = 1,nrefs

@@ -181,7 +181,8 @@ contains
                 return
             endif
             refs = params%refs
-            call find_ldim_nptcls(refs, ldim, ncls, smpd=smpd)
+            call find_ldim_nptcls(refs, ldim, ncls)
+            smpd = params%smpd
             ldim(3) = 1
             if( .not.file_exists(refs) ) THROW_HARD('File does not exits: '//refs%to_char())
             if( ncls /= params%ncls )    THROW_HARD('Incompatible # of classes in: '//refs%to_char())

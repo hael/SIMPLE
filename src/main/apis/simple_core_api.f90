@@ -23,7 +23,7 @@ use simple_fileio,          only: add2fbody, append2basename, arr2file, arr2txtf
 use simple_hash,            only: hash
 use simple_is_check_assert, only: is_a_number, is_zero, is_gt_zero, is_equal, is_even, check4nans3D, check4nans2D, check4nans, assert_eq,&
                                  &is_odd, is_even
-use simple_imghead,         only: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead, find_ldim_nptcls, update_stack_nimgs
+use simple_imghead,         only: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead, find_ldim_nptcls, find_img_smpd, update_stack_nimgs
 use simple_jiffys,          only: progress, progress_gfortran, simple_end, swap
 use simple_kbinterpol,      only: kbinterpol
 use simple_linalg,          only: eigsrt, jacobi, matinv, norm_2, svdcmp, svdfit, svd_multifit, euclid, hyp, myacos, deg2rad, rad2deg, pythag,&

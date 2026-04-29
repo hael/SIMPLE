@@ -247,16 +247,15 @@ contains
         type(builder)      :: build
         type(image)        :: ave_pre, ave_post, img_tmp, img_tmp2, img_tmp3
         real,  allocatable :: angles1(:), angles2(:)
-        real               :: smpd, ave,var,sdev
+        real               :: ave,var,sdev
         integer            :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
         logical            :: err
         call cline%set('objfun','cc')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! sanity checks & dimensions
-        call find_ldim_nptcls(params%stk,ldim_ptcl,nptcls,smpd=smpd)
+        call find_ldim_nptcls(params%stk,ldim_ptcl,nptcls)
         if( .not.cline%defined('smpd') )then
-            if( smpd < 1.e-4 ) THROW_HARD('Please provide SMPD!')
-            params%smpd = smpd
+            THROW_HARD('Please provide SMPD!')
         endif
         ldim_ptcl(3) = 1
         call find_ldim_nptcls(params%stk2,ldim,n)

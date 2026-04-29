@@ -252,7 +252,8 @@ contains
             l_pad_with_zeros = .false.
             if( self%p_ptr %l_update_frac )then
                 ! check dimensions
-                call find_ldim_nptcls(even_vol, prev_ldim, dummy, smpd=prev_smpd)
+                call find_ldim_nptcls(even_vol, prev_ldim, dummy)
+                prev_smpd = self%smpd
                 if( prev_ldim(1) == self%ldim(1) )then
                     ! all good
                 elseif( prev_ldim(1) > self%ldim(1) )then
