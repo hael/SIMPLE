@@ -444,20 +444,28 @@ contains
         integer,                      intent(in)    :: iptcl, irot
         real(dp),                     intent(out)   :: f, grad(2)
         complex(dp), pointer :: pft_diff(:,:)
+        real(dp),    pointer :: w_weights(:)
         real(dp) :: denom, w, sum_diff
-        integer  :: k, i, ithr
+        integer  :: k, i, ithr, kk, k0
         ithr     = omp_get_thread_num() + 1
         i        = self%pinds(iptcl)
+        k0       = self%kfromto(1)
         f        = 0.d0
         grad     = 0.d0
         denom    = self%wsqsums_ptcls(i)
         pft_diff => self%heap_vars(ithr)%pft_ref_tmp2_8
+        w_weights => self%heap_vars(ithr)%w_weights
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            w_weights(kk) = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+        end do
         ! First rotation: compute difference and f
         call self%rotate_ref_8(pft_ref, irot, pft_ref_tmp)
         pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:self%kfromto(2),i)
         pft_diff    = pft_ref_tmp - self%pfts_ptcls(:,:self%kfromto(2),i)  ! Ref(shift + rotation + CTF) - Ptcl
         do k = self%kfromto(1), self%kfromto(2)
-            w        = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+            kk       = k - k0 + 1
+            w        = w_weights(kk)
             sum_diff = sum(real(pft_diff(:,k) * conjg(pft_diff(:,k)), dp))
             f        = f + w * sum_diff
         end do
@@ -465,14 +473,16 @@ contains
         call self%rotate_ref_8(pft_ref * dcmplx(0.d0, self%argtransf(:self%pftsz,:self%kfromto(2))), irot, pft_ref_tmp)
         pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:self%kfromto(2),i)
         do k = self%kfromto(1), self%kfromto(2)
-            w       = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+            kk      = k - k0 + 1
+            w       = w_weights(kk)
             grad(1) = grad(1) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))), dp)
         end do
         ! Third rotation: y-gradient
         call self%rotate_ref_8(pft_ref * dcmplx(0.d0, self%argtransf(self%pftsz+1:,:self%kfromto(2))), irot, pft_ref_tmp)
         pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:self%kfromto(2),i)
         do k = self%kfromto(1), self%kfromto(2)
-            w       = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+            kk      = k - k0 + 1
+            w       = w_weights(kk)
             grad(2) = grad(2) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))), dp)
         end do
         ! Final computation
@@ -601,10 +611,11 @@ contains
         real(sp),                    intent(out)   :: euclids(self%nrots), meuclids(self%nrots)
         real(dp), pointer :: w_weights(:), sumsq_cache(:)
         real(dp) :: ptcl_sumsq
-        integer  :: i, ithr, k, kk
+        integer  :: i, ithr, k, kk, k0
         logical  :: even
         ithr        =  omp_get_thread_num() + 1
         i           =  self%pinds(iptcl)
+        k0          =  self%kfromto(1)
         even        =  self%iseven(i)
         w_weights   => self%heap_vars(ithr)%w_weights
         sumsq_cache => self%heap_vars(ithr)%sumsq_cache
@@ -615,43 +626,56 @@ contains
             self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = self%ft_ref_odd( :,self%kfromto(1):self%kfromto(2),iref)
         endif
         ! Pre-compute weights and particle sums
-        kk = 0
         do k = self%kfromto(1), self%kfromto(2)
-            kk = kk + 1
+            kk = k - k0 + 1
             ! shell & sigma2 weight
             w_weights(kk)   = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
             ! shell & sigma2 weighted particle variance
             sumsq_cache(kk) = sum(real(self%pfts_ptcls(:,k,i) * conjg(self%pfts_ptcls(:,k,i)), dp)) * w_weights(kk)
-            ! FFTW normalized shell & sigma2 weight
-            w_weights(kk)   = w_weights(kk) / real(2*self%nrots, dp)
         end do
         ptcl_sumsq = sum(sumsq_cache)
-        ! Many IFFT: IFFT( FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)* )
+        ! Single IFFT: IFFT( sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*) )
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
         if( even )then
-            self%crmat1_many(ithr)%c(:,:) = self%ft_ctf2(:,:,i) * self%ft_ref2_even(:,:,iref) -&
-                &2.0 * self%ft_ptcl_ctf(:,:,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, :))
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
+                    self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref) - &
+                    2.0 * self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)) )
+            end do
         else
-            self%crmat1_many(ithr)%c(:,:) = self%ft_ctf2(:,:,i) * self%ft_ref2_odd(:,:,iref) -&
-                &2.0 * self%ft_ptcl_ctf(:,:,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, :))
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
+                    self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref) - &
+                    2.0 * self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)) )
+            end do
         endif
-        call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
-        ! Accumulate using pre-computed weights
-        self%heap_vars(ithr)%kcorrs = matmul(real(self%crmat1_many(ithr)%r(1:self%nrots, 1:self%nk), dp), w_weights(1:self%nk))
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp) / real(2*self%nrots, dp)
         euclids = real(dexp(-(self%heap_vars(ithr)%kcorrs + ptcl_sumsq) / self%wsqsums_ptcls(i)))
         ! Mirrored reference:
         ! 1. Mirror of memoized reference: self%cmat2_many(ithr)%c <- conjg(self%cmat2_many(ithr)%c)
         ! 2. Mirror of memoized reference variance: self%ft_ref2 <- conjg(self%ft_ctf2)
-        ! Many IFFT: IFFT( FT(CTF2) x FT(M(REF2)) - 2*FT(X.CTF) x FT(S.M(REF))* )
+        ! Single IFFT: IFFT( sum_k w_k * (FT(CTF2) x FT(M(REF2)) - 2*FT(X.CTF) x FT(S.M(REF))* ) )
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
         if( even )then
-            self%crmat1_many(ithr)%c(:,:) = self%ft_ctf2(:,:,i) * conjg(self%ft_ref2_even(:,:,iref)) -&
-                &2.0 * self%ft_ptcl_ctf(:,:,i) * self%cmat2_many(ithr)%c(1:self%pftsz+1, :)
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
+                    self%ft_ctf2(:,k,i) * conjg(self%ft_ref2_even(:,k,iref)) - &
+                    2.0 * self%ft_ptcl_ctf(:,k,i) * self%cmat2_many(ithr)%c(1:self%pftsz+1, kk) )
+            end do
         else
-            self%crmat1_many(ithr)%c(:,:) = self%ft_ctf2(:,:,i) * conjg(self%ft_ref2_odd(:,:,iref)) -&
-                &2.0 * self%ft_ptcl_ctf(:,:,i) * self%cmat2_many(ithr)%c(1:self%pftsz+1, :)
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
+                    self%ft_ctf2(:,k,i) * conjg(self%ft_ref2_odd(:,k,iref)) - &
+                    2.0 * self%ft_ptcl_ctf(:,k,i) * self%cmat2_many(ithr)%c(1:self%pftsz+1, kk) )
+            end do
         endif
-        call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
-        ! Accumulate using pre-computed weights
-        self%heap_vars(ithr)%kcorrs = matmul(real(self%crmat1_many(ithr)%r(1:self%nrots, 1:self%nk), dp), w_weights(1:self%nk))
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp) / real(2*self%nrots, dp)
         meuclids = real(dexp(-self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i)))
     end subroutine gen_euclids_mirr_euclids
 
@@ -659,10 +683,11 @@ contains
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(out)   :: ccs(self%nrots), mccs(self%nrots)
-        integer  :: i, ithr
+        integer  :: i, ithr, k, kk, k0
         logical  :: even
         ithr    =  omp_get_thread_num() + 1
         i       =  self%pinds(iptcl)
+        k0      =  self%kfromto(1)
         even    =  self%iseven(i)
         ! Memoized reference
         if( even )then
@@ -670,31 +695,44 @@ contains
         else
             self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = self%ft_ref_odd( :,self%kfromto(1):self%kfromto(2),iref)
         endif
-        ! Many IFFT #1: IFFT( FT(CTF2) x FT(REF2) ) for all k
+        ! Single IFFT #1: IFFT( sum_k FT(CTF2) x FT(REF2) )
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
         if (even) then
-            self%crmat1_many(ithr)%c(:,:) = self%ft_ctf2(:,:,i) * self%ft_ref2_even(:,:,iref)
+            do k = self%kfromto(1), self%kfromto(2)
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref)
+            end do
         else
-            self%crmat1_many(ithr)%c(:,:) = self%ft_ctf2(:,:,i) * self%ft_ref2_odd(:,:,iref)
+            do k = self%kfromto(1), self%kfromto(2)
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref)
+            end do
         endif
-        call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
-        ! Accumulate denominator, which is mirror invariant and re-used below
-        self%drvec(ithr)%r = sum(real(self%crmat1_many(ithr)%r(1:self%nrots,1:self%nk), dp), dim=2)
-        ! Many IFFT #2: IFFT( FT(X.CTF) x FT(S.REF)* ) for all k
-        self%crmat1_many(ithr)%c(:,:) = self%ft_ptcl_ctf(:,:,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,:))
-        call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
-        ! Accumulate numerator
-        self%heap_vars(ithr)%kcorrs = sum(real(self%crmat1_many(ithr)%r(1:self%nrots,1:self%nk), dp), dim=2)
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        ! Denominator is mirror invariant and re-used below
+        self%drvec(ithr)%r = real(self%crvec1(ithr)%r(1:self%nrots), dp)
+        ! Single IFFT #2: IFFT( sum_k FT(X.CTF) x FT(S.REF)* )
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%crvec1(ithr)%c = self%crvec1(ithr)%c + &
+                self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk))
+        end do
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp)
         ! Final correlation computation
         self%drvec(ithr)%r = sqrt(self%drvec(ithr)%r * real(self%sqsums_ptcls(i) * real(2*self%nrots), dp))
         ccs = real(self%heap_vars(ithr)%kcorrs / self%drvec(ithr)%r)
         ! Mirrored reference
         ! 1. Mirror of memoized reference: self%cmat2_many(ithr)%c <- conjg(self%cmat2_many(ithr)%c)
         ! 2. Mirror of memoized reference variance: self%ft_ref2 <- conjg(self%ft_ctf2)
-        ! Many IFFT #2: IFFT( FT(X.CTF) x FT(S.REF)* ) for all k
-        self%crmat1_many(ithr)%c(:,:) = self%ft_ptcl_ctf(:,:,i) * self%cmat2_many(ithr)%c(1:self%pftsz+1,:)
-        call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
-        ! Accumulate numerator
-        self%heap_vars(ithr)%kcorrs = sum(real(self%crmat1_many(ithr)%r(1:self%nrots,1:self%nk), dp), dim=2)
+        ! Single IFFT #2: IFFT( sum_k FT(X.CTF) x FT(S.M(REF))* )
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%crvec1(ithr)%c = self%crvec1(ithr)%c + &
+                self%ft_ptcl_ctf(:,k,i) * self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
+        end do
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp)
         ! Final correlation computation
         mccs = real(self%heap_vars(ithr)%kcorrs / self%drvec(ithr)%r)
     end subroutine gen_corrs_mirr_corrs
