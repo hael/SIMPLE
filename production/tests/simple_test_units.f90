@@ -18,8 +18,10 @@ use simple_cmdline_tester
 use simple_ori_tester
 use simple_oris_tester
 use simple_rec_list_tester
-use simple_microchunked2D_tester,     only: run_all_microchunked2D_tests
-use simple_cluster2D_rejector_tester, only: run_all_cluster2D_rejector_tests
+use simple_microchunked2D_tester,            only: run_all_microchunked2D_tests
+use simple_cluster2D_rejector_tester,        only: run_all_cluster2D_rejector_tests
+use simple_persistent_worker_server_tester,  only: run_all_persistent_worker_server_tests
+use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
 ! hand-written unit tests
 use simple_ipc_mq_tester,         only: run_all_ipc_mq_tests
 use simple_ipc_tcp_socket_tester, only: run_all_ipc_tcp_socket_tests
@@ -66,6 +68,8 @@ call run_all_gui_assembler_tests
 call run_all_http_post_tests
 call run_all_microchunked2D_tests
 call run_all_cluster2D_rejector_tests
+call run_all_persistent_worker_server_tests
+call run_all_persistent_worker_message_tests
 call report_summary()
 ! hand-written unit tests
 write(*,*)'VALIDATING UI JSON FILE:'

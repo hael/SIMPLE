@@ -1,6 +1,6 @@
 !@descr: SIMPLE distributed worker process
 !==============================================================================
-! PROGRAM: simple_worker
+! PROGRAM: simple_persistent_worker
 !
 ! PURPOSE:
 !   Runs as a compute-node agent for the SIMPLE batch-processing system.
@@ -28,7 +28,7 @@
 !   worker_task_thread   pthread body: execute the script, record exit code.
 !   get_nthr_used        Sum the nthr fields of all active slots (thread-safe).
 !==============================================================================
-program simple_worker
+program simple_persistent_worker
     use simple_core_module_api
     use unix,                  only: c_time,                                   &
                                      c_pthread_t, c_pthread_mutex_t,           &
@@ -42,12 +42,12 @@ program simple_worker
     use iso_fortran_env,       only: output_unit
     use simple_jiffys,         only: simple_print_git_version, simple_print_timer
     use simple_ipc_tcp_socket, only: ipc_tcp_socket
-    use simple_qsys_worker_server,            only: TCP_BUFSZ
-    use simple_qsys_worker_message_heartbeat, only: qsys_worker_message_heartbeat
-    use simple_qsys_worker_message_task,      only: qsys_worker_message_task
-    use simple_qsys_worker_message_status,    only: qsys_worker_message_status
-    use simple_qsys_worker_message_terminate, only: qsys_worker_message_terminate
-    use simple_qsys_worker_message_types,     only: WORKER_TERMINATE_MSG, WORKER_STATUS_MSG, WORKER_TASK_MSG
+    use simple_persistent_worker_server,            only: TCP_BUFSZ
+    use simple_persistent_worker_message_heartbeat, only: qsys_persistent_worker_message_heartbeat
+    use simple_persistent_worker_message_task,      only: qsys_persistent_worker_message_task
+    use simple_persistent_worker_message_status,    only: qsys_persistent_worker_message_status
+    use simple_persistent_worker_message_terminate, only: qsys_persistent_worker_message_terminate
+    use simple_persistent_worker_message_types,     only: WORKER_TERMINATE_MSG, WORKER_STATUS_MSG, WORKER_TASK_MSG
     implicit none
 #include "simple_local_flags.inc"
 
@@ -62,7 +62,7 @@ program simple_worker
     ! Per-thread state: task description + pthread bookkeeping
     ! ------------------------------------------------------------------
     type :: worker_thread_args
-        type(qsys_worker_message_task) :: task_msg           !< task being executed
+        type(qsys_persistent_worker_message_task) :: task_msg           !< task being executed
         type(c_pthread_mutex_t)        :: mutex              !< guards all mutable fields below
         type(c_pthread_t)              :: thread             !< pthread handle
         logical                        :: started   = .false.!< true after successful pthread_create
@@ -90,8 +90,8 @@ program simple_worker
 
     ! IPC + message objects
     type(ipc_tcp_socket)                :: ipc_socket
-    type(qsys_worker_message_heartbeat) :: heartbeat_msg
-    type(qsys_worker_message_task)      :: task_msg
+    type(qsys_persistent_worker_message_heartbeat) :: heartbeat_msg
+    type(qsys_persistent_worker_message_task)      :: task_msg
 
     ! Thread slot array (one element per nthr)
     type(worker_thread_args), allocatable, target :: threads(:)
@@ -293,7 +293,7 @@ contains
     !> spawn a new pthread.  If no slot is free the task is dropped and
     !> a warning is printed (the server can re-queue on next heartbeat).
     subroutine start_worker_thread( task )
-        type(qsys_worker_message_task), intent(in) :: task
+        type(qsys_persistent_worker_message_task), intent(in) :: task
         integer     :: slot_rc, create_rc, slot_i
         type(c_ptr) :: local_retval
         do slot_i = 1, size(threads)
@@ -430,4 +430,4 @@ contains
         is_safe_script_path = .true.
     end function is_safe_script_path
 
-end program simple_worker
+end program simple_persistent_worker

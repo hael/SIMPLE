@@ -1,8 +1,8 @@
-# simple_worker Policy
+# simple_persistent_worker Policy
 
 ## Status
 
-This document is a proposal / design record for the `simple_worker` process.
+This document is a proposal / design record for the `simple_persistent_worker` process.
 It should be promoted to `doc/policies/` once the worker backend has been
 exercised in production and the interfaces are considered stable.
 
@@ -11,11 +11,11 @@ server-side and qsys-overlay policy.
 
 ## Scope
 
-This document defines the architectural policy for `production/simple_worker.f90`.
+This document defines the architectural policy for `production/simple_persistent_worker.f90`.
 
 It covers:
 
-- the role and responsibilities of `simple_worker`
+- the role and responsibilities of `simple_persistent_worker`
 - the command-line interface contract
 - the heartbeat loop and server communication
 - thread-slot management and the `worker_thread_args` type
@@ -29,15 +29,15 @@ It covers:
 
 ## Core design rule
 
-`simple_worker` is a stateless compute-node agent.  Its only job is to:
+`simple_persistent_worker` is a stateless compute-node agent.  Its only job is to:
 
 1. Advertise available thread capacity to the server via periodic heartbeats.
 2. Accept tasks in reply and execute them in isolated pthreads.
 3. Exit cleanly when the server sends `WORKER_TERMINATE_MSG`.
 
-`simple_worker` has no knowledge of the job queue, the task graph, or the
+`simple_persistent_worker` has no knowledge of the job queue, the task graph, or the
 scientific algorithms.  It runs scripts exactly as handed to it.  All
-orchestration decisions live in `simple_qsys_worker_server`.
+orchestration decisions live in `simple_persistent_worker_server`.
 
 ---
 
@@ -68,7 +68,7 @@ added without changing the parser for existing keys.
 
 ## Worker UID
 
-Each `simple_worker` process builds a unique identity string at startup:
+Each `simple_persistent_worker` process builds a unique identity string at startup:
 
 ```
 <HOSTNAME>_<PID>
@@ -98,9 +98,9 @@ Construction rules:
 
 ## Heartbeat loop
 
-The heartbeat loop is the main execution loop of `simple_worker`.  It must:
+The heartbeat loop is the main execution loop of `simple_persistent_worker`.  It must:
 
-1. Populate a fresh `qsys_worker_message_heartbeat` on each iteration:
+1. Populate a fresh `qsys_persistent_worker_message_heartbeat` on each iteration:
    - `worker_id`       — from command-line argument
    - `worker_uid`      — computed at startup (constant for process lifetime)
    - `heartbeat_time`  — current epoch time via `c_time(0)`
@@ -137,7 +137,7 @@ Each task slot is represented by one `worker_thread_args` element:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `task_msg` | `qsys_worker_message_task` | task currently in this slot |
+| `task_msg` | `qsys_persistent_worker_message_task` | task currently in this slot |
 | `mutex` | `c_pthread_mutex_t` | guards all mutable fields in this struct |
 | `thread` | `c_pthread_t` | pthread handle |
 | `started` | logical | true after successful `pthread_create` |
@@ -271,7 +271,7 @@ slot.  `pthread_mutex_destroy` must be called exactly once per slot.
 
 The following invariants must be preserved by all future changes:
 
-1. `simple_worker` has no knowledge of the job queue or task graph.  It
+1. `simple_persistent_worker` has no knowledge of the job queue or task graph.  It
    executes scripts; the server decides what to dispatch.
 2. `port` and `server` are mandatory arguments.  The process must call
    `stop 1` if either is absent or invalid.

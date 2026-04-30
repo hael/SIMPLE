@@ -1,10 +1,11 @@
 !==============================================================================
-! MODULE: simple_qsys_worker_message_base
+! MODULE: simple_persistent_worker_message_base
 !
 ! PURPOSE:
-!   Provides the polymorphic base type for all SIMPLE worker wire messages.
+!   Provides the polymorphic base type for all SIMPLE persistent-worker wire
+!   messages.
 !   Every concrete message type (heartbeat, task, status, terminate) extends
-!   qsys_worker_message_base and inherits the serialise method.
+!   qsys_persistent_worker_message_base and inherits the message interface.
 !
 ! DESIGN CONTRACT:
 !   1.  msg_type MUST be set to the correct WORKER_*_MSG enumerator constant
@@ -20,7 +21,7 @@
 !       the base-type size.
 !
 ! USAGE:
-!   type, extends(qsys_worker_message_base) :: my_message
+!   type, extends(qsys_persistent_worker_message_base) :: my_message
 !       integer :: msg_type = MY_MSG_TYPE   ! override default 0
 !       ...
 !   contains
@@ -30,51 +31,50 @@
 ! DEPENDENCIES:
 !   None (no module-level USE required; sizeof is a compiler built-in).
 !==============================================================================
-module simple_qsys_worker_message_base
+module simple_persistent_worker_message_base
     implicit none
 
-    public  :: qsys_worker_message_base
+    public  :: qsys_persistent_worker_message_base
     private
 
-    !> Abstract base for all worker wire messages.
+    !> Abstract base for all persistent-worker wire messages.
     !> Holds only the leading msg_type discriminator that all messages share.
-    type :: qsys_worker_message_base
+    type :: qsys_persistent_worker_message_base
         integer :: msg_type = 0  !< wire message type; 0 = uninitialised/invalid
     contains
-        procedure :: new         => new_qsys_worker_message_base  !< default constructor
-        procedure :: kill        => kill_qsys_worker_message_base !< default destructor
-        procedure :: serialise   !< serialise to raw byte buffer (override in subtypes)
-    end type qsys_worker_message_base
+        procedure :: new         => new_qsys_persistent_worker_message_base  !< default constructor
+        procedure :: kill        => kill_qsys_persistent_worker_message_base !< default destructor
+        procedure :: serialise   !< serialise to raw byte buffer (must override in subtypes)
+    end type qsys_persistent_worker_message_base
 
 contains
 
     !> Default constructor; intentional no-op.
     !> Concrete subtypes must set msg_type in their own new() override.
-    subroutine new_qsys_worker_message_base( self )
-        class(qsys_worker_message_base), intent(inout) :: self
+    subroutine new_qsys_persistent_worker_message_base( self )
+        class(qsys_persistent_worker_message_base), intent(inout) :: self
         ! no-op: msg_type is set by the concrete subtype constructor
-    end subroutine new_qsys_worker_message_base
+    end subroutine new_qsys_persistent_worker_message_base
 
     !> Default destructor; intentional no-op.
     !> Override in concrete subtypes that hold dynamic resources.
-    subroutine kill_qsys_worker_message_base( self )
-        class(qsys_worker_message_base), intent(inout) :: self
+    subroutine kill_qsys_persistent_worker_message_base( self )
+        class(qsys_persistent_worker_message_base), intent(inout) :: self
         ! no-op: base type holds no dynamic resources
-    end subroutine kill_qsys_worker_message_base
+    end subroutine kill_qsys_persistent_worker_message_base
 
     !> Serialise the message into an allocatable byte buffer using TRANSFER.
-    !>
     !> The buffer is (re)allocated to exactly sizeof(self) bytes and filled
     !> with the raw storage representation of self.  Because sizeof() is
     !> evaluated against the declared type of the dummy argument (the base
     !> type), derived-type instances that do NOT override this procedure will
     !> produce a truncated buffer.  Always override in concrete subtypes.
     subroutine serialise( self, buffer )
-        class(qsys_worker_message_base), intent(in)    :: self
+        class(qsys_persistent_worker_message_base), intent(in)    :: self
         character(len=:), allocatable,   intent(inout) :: buffer
         if( allocated(buffer) ) deallocate(buffer)
         allocate(character(len=sizeof(self)) :: buffer)
         buffer = transfer(self, buffer)
     end subroutine serialise
 
-end module simple_qsys_worker_message_base
+end module simple_persistent_worker_message_base

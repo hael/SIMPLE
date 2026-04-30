@@ -1,26 +1,26 @@
-# simple_qsys_worker_server Policy
+# simple_persistent_worker_server Policy
 
 ## Status
 
 This document is a proposal / design record for
-`src/utils/qsys/worker/simple_qsys_worker_server.f90`.
+`src/utils/qsys/worker/simple_persistent_worker_server.f90`.
 It should be promoted to `doc/policies/` once the worker backend has been
 exercised in production and the interfaces are considered stable.
 
 See also:
 - [simple_qsys_worker_policy.md](simple_qsys_worker_policy.md) — qsys overlay and
   environment-level policy
-- [simple_worker_policy.md](simple_worker_policy.md) — worker process policy
+- [simple_persistent_worker_policy.md](simple_persistent_worker_policy.md) — worker process policy
 
 ## Scope
 
 This document defines the architectural policy for the
-`simple_qsys_worker_server` module.
+`simple_persistent_worker_server` module.
 
 It covers:
 
-- the role and responsibilities of `qsys_worker_server`
-- the two-type design (`qsys_worker_server` + `qsys_worker_data`)
+- the role and responsibilities of `persistent_worker_server`
+- the two-type design (`persistent_worker_server` + `persistent_worker_data`)
 - the mutex ownership model
 - `new()` and `kill()` contracts
 - `queue_task()` contract and job-id assignment
@@ -36,10 +36,10 @@ It covers:
 
 ## Core design rule
 
-`qsys_worker_server` is a single-server, multi-worker coordination hub.
+`persistent_worker_server` is a single-server, multi-worker coordination hub.
 Its only job is to:
 
-1. Accept TCP connections from `simple_worker` processes (heartbeats).
+1. Accept TCP connections from `simple_persistent_worker` processes (heartbeats).
 2. Reply with a task, a TERMINATE command, or an idle status.
 3. Expose a `queue_task()` call so the SIMPLE control layer can enqueue work.
 
@@ -54,21 +54,21 @@ The module exposes two types with distinct threading roles:
 
 | Type | Accessed by | Role |
 |---|---|---|
-| `qsys_worker_server` | caller thread only | lifecycle, queueing, configuration |
-| `qsys_worker_data` | **both** caller and listener pthread | shared state under mutex |
+| `persistent_worker_server` | caller thread only | lifecycle, queueing, configuration |
+| `persistent_worker_data` | **both** caller and listener pthread | shared state under mutex |
 
-`qsys_worker_data` is heap-allocated and accessed exclusively through a
-`pointer` field on `qsys_worker_server`.  Its address is passed to the
+`persistent_worker_data` is heap-allocated and accessed exclusively through a
+`pointer` field on `persistent_worker_server`.  Its address is passed to the
 listener thread as a C `void*` via `listener_args%data_ptr`.
 
 The split must be preserved.  No field that is written by the listener thread
-may live directly on `qsys_worker_server`.
+may live directly on `persistent_worker_server`.
 
 ---
 
 ## Mutex ownership
 
-The mutex (`listener_args%mutex`) is owned by `qsys_worker_server`.
+The mutex (`listener_args%mutex`) is owned by `persistent_worker_server`.
 
 Ownership rules:
 
@@ -80,7 +80,7 @@ Ownership rules:
    destroy it.
 4. No other procedure may init or destroy the mutex.
 
-The mutex protects all mutable fields of `qsys_worker_data`:
+The mutex protects all mutable fields of `persistent_worker_data`:
 
 - `n_workers`
 - `l_terminate`
@@ -88,7 +88,7 @@ The mutex protects all mutable fields of `qsys_worker_data`:
 - `workers(:)` (heartbeat registry)
 - `tasks_priority_high(:)`, `tasks_priority_norm(:)`, `tasks_priority_low(:)`
 
-`job_count` on `qsys_worker_server` is also updated under the mutex (inside
+`job_count` on `persistent_worker_server` is also updated under the mutex (inside
 `queue_task`) because it feeds `task%job_id` which is written into the shared
 queue.
 
@@ -268,7 +268,7 @@ restarted).
 `pack_task_queue` must:
 
 1. Shift all active entries to the front of the array, preserving order.
-2. Zero-fill (reset to `qsys_worker_message_task()`) all trailing slots.
+2. Zero-fill (reset to `qsys_persistent_worker_message_task()`) all trailing slots.
 
 `pack_task_queue` must only be called inside the critical section and only
 when `send_terminate == .false.`.
@@ -277,8 +277,8 @@ when `send_terminate == .false.`.
 
 ## Debug logging flag
 
-`l_debug` exists on both `qsys_worker_server` (caller-thread view) and
-`qsys_worker_data` (listener-thread view).  They must be kept in sync.
+`l_debug` exists on both `persistent_worker_server` (caller-thread view) and
+`persistent_worker_data` (listener-thread view).  They must be kept in sync.
 
 Synchronisation rules:
 
@@ -319,7 +319,7 @@ Unbuffered Fortran I/O in the hot path stalls the accept loop.
 | `TCP_BUFSZ` | 1460 | Ethernet MTU (1500) − IP header (20) − TCP header (20) |
 | `KILL_WAIT_TIME_US` | 2 000 000 | 2 s grace period before socket close in `kill()` |
 
-`TCP_BUFSZ` is exported (`public`) so `simple_worker` can declare its receive
+`TCP_BUFSZ` is exported (`public`) so `simple_persistent_worker` can declare its receive
 buffer to the same size.  All message structs must fit within `TCP_BUFSZ`
 bytes.  If a new message type would exceed it, update `TCP_BUFSZ` and this
 policy together.
@@ -330,9 +330,9 @@ policy together.
 
 The following invariants must be preserved by all future changes:
 
-1. `qsys_worker_data` is the only type whose fields are written by the
+1. `persistent_worker_data` is the only type whose fields are written by the
    listener pthread.  No field written by the listener thread may live
-   directly on `qsys_worker_server`.
+   directly on `persistent_worker_server`.
 2. The mutex is init in `new()`, destroyed in `kill()` after thread join.
    No other procedure may init or destroy it.
 3. `job_count` increment and `task%job_id` assignment must be inside the

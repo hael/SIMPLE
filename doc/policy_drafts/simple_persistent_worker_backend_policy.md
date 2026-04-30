@@ -38,7 +38,7 @@ The `_worker` suffix is a thin overlay, not a replacement backend.
 - Appending `_worker` to any supported backend name opts into the TCP worker
   backend.  The suffix is stripped before the factory resolves the base
   backend, so the underlying submission mechanism (local shell, SLURM sbatch,
-  …) is still used — but only to launch the persistent `simple_worker`
+  …) is still used — but only to launch the persistent `simple_persistent_worker`
   processes.  Once those workers are running, all task dispatch goes through
   the TCP server.
 
@@ -57,9 +57,9 @@ responsibilities that belong to the other.
 ```
 simple_qsys_env
   │
-  ├─ base qsys (local / slurm / …)   ← used only to launch simple_worker processes
+  ├─ base qsys (local / slurm / …)   ← used only to launch simple_persistent_worker processes
   │
-  ├─ simple_qsys_worker_server        ← TCP accept-loop, heartbeat, task queue
+  ├─ simple_persistent_worker_server        ← TCP accept-loop, heartbeat, task queue
   │     └─ listener thread (pthread)
   │
   └─ simple_qsys_worker (qsys_base)  ← submit_script → submit_task_to_worker_server
@@ -118,7 +118,7 @@ The startup sequence, in order, must be:
    the listener thread, stores the ephemeral port
 3. Query `worker_server%get_port()` and `worker_server%get_host_ips()`
 4. Call `self%start_workers(n_workers, nthr_workers, port, host_ips)` —
-   submits one `simple_worker` process per computing unit via the base
+   submits one `simple_persistent_worker` process per computing unit via the base
    qsys backend
 
 No task dispatch may occur before step 4 completes.
@@ -133,7 +133,7 @@ instances within the same session.
 To shut down cleanly:
 
 1. Send a `WORKER_TERMINATE_MSG` to each connected worker (handled inside
-   `qsys_worker_server%kill()`)
+   `persistent_worker_server%kill()`)
 2. Join the listener thread
 3. Destroy the mutex
 4. Close and zero `self%port`
@@ -147,7 +147,7 @@ when the thread-join happens, and `self%port = 0` must only be written after
 ## Message protocol
 
 Four fixed-size C-interoperable message types are defined in
-`simple_qsys_worker_message_types.f90`:
+`simple_persistent_worker_message_types.f90`:
 
 | Constant | Value | Direction | Purpose |
 |---|---|---|---|
@@ -159,7 +159,7 @@ Four fixed-size C-interoperable message types are defined in
 ### Serialisation contract
 
 Every concrete message type must override the `serialise` procedure from
-`qsys_worker_message_base`.  The override must:
+`qsys_persistent_worker_message_base`.  The override must:
 
 - `deallocate` any existing buffer
 - `allocate` the buffer using `sizeof(self)` where `self` is declared as
@@ -181,7 +181,7 @@ If a new message type would exceed it, either reduce the payload or change
 
 ## Thread-safety obligations
 
-`qsys_worker_server` owns a single mutex (`self%mutex`) that protects:
+`persistent_worker_server` owns a single mutex (`self%mutex`) that protects:
 
 - the worker registry (`worker_data` array)
 - the task queue (`task_queue` array and `job_count`)
@@ -227,7 +227,7 @@ The `nthr_worker` field in `qsys_ctrl` must be reset to `1` in `kill()`.
 
 ## Debug logging flag
 
-`qsys_worker_server` and `qsys_worker_data` each carry an `l_debug` logical
+`persistent_worker_server` and `persistent_worker_data` each carry an `l_debug` logical
 field (default `.false.`).
 
 When `.false.`, only significant events are logged:

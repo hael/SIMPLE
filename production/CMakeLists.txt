@@ -10,7 +10,7 @@ set(SIMPLE_TEST_EXE     simple_test_exec)
 set(SINGLE_EXE          single_exec)
 set(STREAM_EXE          simple_stream)
 set(SIMPLE_PRIVATE_EXE  simple_private_exec)
-set(SIMPLE_WORKER_EXE   simple_worker)
+set(SIMPLE_WORKER_EXE   simple_persistent_worker)
 
 add_executable(${SIMPLE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec.f90")
@@ -23,7 +23,7 @@ add_executable(${STREAM_EXE}
 add_executable(${SIMPLE_PRIVATE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec.f90")
 add_executable(${SIMPLE_WORKER_EXE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/simple_worker.f90")
+    "${CMAKE_CURRENT_SOURCE_DIR}/simple_persistent_worker.f90")
 
 set(SIMPLE_EXECUTABLES
     ${SIMPLE_EXE}

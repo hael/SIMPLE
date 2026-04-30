@@ -1,13 +1,13 @@
 !@descr: batch-processing manager - Factory class
 module simple_qsys_factory
 use simple_core_module_api
-use simple_qsys_base,         only: qsys_base
-use simple_qsys_local,        only: qsys_local
-use simple_qsys_slurm,        only: qsys_slurm
-use simple_qsys_lsf,          only: qsys_lsf
-use simple_qsys_sge,          only: qsys_sge
-use simple_qsys_pbs,          only: qsys_pbs
-use simple_qsys_worker,       only: qsys_worker
+use simple_qsys_base,              only: qsys_base
+use simple_qsys_local,             only: qsys_local
+use simple_qsys_slurm,             only: qsys_slurm
+use simple_qsys_lsf,               only: qsys_lsf
+use simple_qsys_sge,               only: qsys_sge
+use simple_qsys_pbs,               only: qsys_pbs
+use simple_qsys_persistent_worker, only: qsys_persistent_worker
 implicit none
 
 public :: qsys_factory
@@ -42,8 +42,8 @@ contains
                 allocate(qsys_sge   :: self%qsys_base_type)
             case('pbs')
                 allocate(qsys_pbs   :: self%qsys_base_type)
-            case('worker')
-                allocate(qsys_worker :: self%qsys_base_type)
+            case('persistent_worker')
+                allocate(qsys_persistent_worker :: self%qsys_base_type)
             case DEFAULT
                 THROW_HARD('class: '//which%to_char()//' unsupported in qsys_factory constructor')
         end select

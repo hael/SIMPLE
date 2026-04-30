@@ -1,19 +1,20 @@
-!@descr: batch-processing manager - environment module
+!@descr: Queue-system execution environment with optional persistent worker dispatch
 module simple_qsys_env
 use simple_core_module_api
 use simple_defs_environment
 use simple_cmdline,           only: cmdline
-use simple_qsys_funs,         only: qsys_watcher,qsys_cleanup
+use simple_qsys_funs,         only: qsys_watcher, qsys_cleanup
 use simple_qsys_factory,      only: qsys_factory
 use simple_qsys_base,         only: qsys_base
 use simple_qsys_local,        only: qsys_local
 use simple_qsys_slurm,        only: qsys_slurm
-use simple_qsys_worker,       only: qsys_worker, worker_server
+use simple_qsys_persistent_worker, only: qsys_persistent_worker
 use simple_qsys_lsf,          only: qsys_lsf
 use simple_qsys_pbs,          only: qsys_pbs
 use simple_qsys_sge,          only: qsys_sge
 use simple_qsys_ctrl,         only: qsys_ctrl
 use simple_parameters,        only: parameters
+use simple_persistent_worker_server, only: persistent_worker
 implicit none
 
 public :: qsys_env
@@ -21,15 +22,19 @@ private
 #include "simple_local_flags.inc"
 
 type :: qsys_env
-    integer, allocatable,        public  :: parts(:,:)
-    type(qsys_ctrl),             public  :: qscripts
-    type(chash),                 public  :: qdescr
-    type(string),                private :: simple_exec_bin
-    type(qsys_factory),          private :: qsys_fac, qsys_fac_worker
-    class(qsys_base),   pointer, private :: myqsys=>null(), myqsys_worker=>null()
-    integer,                     private :: nparts
-    logical,                     private :: existence   = .false.
-    logical,                     private :: use_workers = .false.
+    ! --- public state (read directly by callers) ---
+    integer, allocatable,        public  :: parts(:,:)             !< particle ranges [ipart, start/end]
+    type(qsys_ctrl),             public  :: qscripts               !< script controller for the dispatch path
+    type(chash),                 public  :: qdescr                 !< key/value queue-job description
+    ! --- private implementation details ---
+    type(qsys_ctrl),             private :: base_qscripts          !< script controller for the base/worker-launch path
+    type(string),                private :: simple_exec_bin        !< fully resolved path to submission executable
+    type(qsys_factory),          private :: qsys_fac_base          !< factory that owns base_qsys
+    type(qsys_factory),          private :: qsys_fac_dispatch      !< factory that owns dispatch_qsys
+    class(qsys_base),   pointer, private :: base_qsys     => null() !< base backend (local/slurm/lsf/…)
+    class(qsys_base),   pointer, private :: dispatch_qsys => null() !< dispatch backend (persistent_worker)
+    integer,                     private :: nparts                 !< number of job partitions
+    logical,                     private :: existence   = .false.  !< .true. after new(); .false. after kill()
     contains
     procedure :: new
     procedure :: exists
@@ -40,7 +45,7 @@ type :: qsys_env
     procedure :: exec_simple_prg_in_queue
     procedure :: exec_simple_prg_in_queue_async
     procedure :: exec_simple_prgs_in_queue_async
-    procedure :: start_workers
+    procedure :: start_persistent_workers
     procedure :: get_exec_bin
     procedure :: get_qsys
     procedure :: get_navail_computing_units
@@ -49,15 +54,20 @@ end type qsys_env
 
 contains
 
+    !> Build queue description from runtime parameters and environment variables.
+    !! Falls back to shell environment variables (SIMPLE_PATH, SIMPLE_QSYS, …)
+    !! when the corresponding parameter fields are empty.
     subroutine init_qdescr_from_runtime( qdescr, params, qsys_name, qsys_partition )
-        type(chash),               intent(inout) :: qdescr
-        class(parameters),         intent(in)    :: params
-        class(string), optional,   intent(in)    :: qsys_name
-        class(string), optional,   intent(in)    :: qsys_partition
+        type(chash),               intent(inout) :: qdescr           !< populated with scheduler metadata on return
+        class(parameters),         intent(in)    :: params           !< run-time parameter set
+        class(string), optional,   intent(in)    :: qsys_name        !< explicit scheduler name; overrides params and environment
+        class(string), optional,   intent(in)    :: qsys_partition   !< explicit partition; overrides environment
         type(string)          :: env_var, qsys_name_here, job_name
         integer               :: iostat
+        ! Resolve SIMPLE installation path – mandatory.
         call qdescr%set('simple_path', simple_getenv('SIMPLE_PATH', iostat))
         if( iostat /= 0 ) THROW_HARD('SIMPLE_PATH is not defined in your environment; qsys_env::init_qdescr_from_runtime')
+        ! Resolve scheduler name: argument > params%qsys_name > SIMPLE_QSYS env var.
         if( present(qsys_name) ) then
             qsys_name_here = qsys_name
         else
@@ -69,11 +79,13 @@ contains
             end if
         end if
         call qdescr%set('qsys_name', qsys_name_here)
+        ! User e-mail falls back to a placeholder when not configured.
         env_var = simple_getenv('SIMPLE_EMAIL', iostat)
         if( iostat /= 0 ) env_var = 'my.name@uni.edu'
         call qdescr%set('user_email', env_var)
         call qdescr%set('time_per_image', string(TIME_PER_IMAGE_DEFAULT))
         call qdescr%set('walltime', string(params%walltime))
+        ! Partition: argument > SIMPLE_QSYS_PARTITION env var; omitted when neither is set.
         if( present(qsys_partition) ) then
             call qdescr%set('qsys_partition', qsys_partition)
         else
@@ -88,22 +100,27 @@ contains
         call env_var%kill
     end subroutine init_qdescr_from_runtime
 
+    !> Initialize qsys environment state, script controllers, and optional worker backend.
+    !! A qsys_name ending in '_worker' (e.g. 'local_worker', 'slurm_worker') activates the
+    !! TCP persistent-worker dispatch path; all other names use the standard backend directly.
     subroutine new( self, params, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition )
         use simple_sp_project, only: sp_project
         class(qsys_env),         intent(inout) :: self
-        class(parameters),       intent(in)    :: params
-        integer,                 intent(in)    :: nparts
-        logical,       optional, intent(in)    :: stream
-        integer,       optional, intent(in)    :: numlen, nptcls, qsys_nthr
-        class(string), optional, intent(in)    :: exec_bin
-        class(string), optional, intent(in)    :: qsys_name ! to override the qsys read in
-        class(string), optional, intent(in)    :: qsys_partition ! to override the qsys read in
+        class(parameters),       intent(in)    :: params             !< run-time parameter set
+        integer,                 intent(in)    :: nparts             !< number of parallel job partitions
+        logical,       optional, intent(in)    :: stream             !< .true. for streaming / continuous mode
+        integer,       optional, intent(in)    :: numlen             !< zero-padding width for script numbering
+        integer,       optional, intent(in)    :: nptcls             !< override params%nptcls particle count
+        integer,       optional, intent(in)    :: qsys_nthr          !< override per-job thread count
+        class(string), optional, intent(in)    :: exec_bin           !< override default submission executable
+        class(string), optional, intent(in)    :: qsys_name          !< override scheduler name from params/env
+        class(string), optional, intent(in)    :: qsys_partition     !< override scheduler partition from params/env
         type(ori)             :: compenv_o
         type(sp_project)      :: spproj
-        type(string)          :: qsnam, tpi, hrs_str, mins_str, secs_str, host_ips
+        type(string)          :: qsnam, tpi, hrs_str, mins_str, secs_str
         integer               :: nthr_workers, n_workers
         character(len=STDLEN) :: default_time_env
-        integer               :: partsz, hrs, mins, secs, nptcls_here, envlen, port
+        integer               :: partsz, hrs, mins, secs, nptcls_here, envlen
         real                  :: rtpi, tot_time_sec
         logical               :: sstream
         integer, parameter    :: MAXENVKEYS = 30
@@ -139,9 +156,9 @@ contains
         else
             call init_qdescr_from_runtime(self%qdescr, params, qsys_name, qsys_partition)
         end if
-        ! deal with time
+        ! Derive per-job runtime budget.
         call get_environment_variable(SIMPLE_DEFAULT_PARTITION_TIME, default_time_env, envlen)
-        if( envlen > 0 .and. trim(default_time_env) .eq. "true" ) then
+        if( envlen > 0 .and. trim(default_time_env) .eq. 'true' ) then
             if( self%qdescr%isthere('job_time') ) then
                 call self%qdescr%delete('job_time')
             end if
@@ -149,11 +166,11 @@ contains
             tpi          = self%qdescr%get('time_per_image')
             rtpi         = str2real(tpi)
             tot_time_sec = rtpi*real(partsz)
-            if( self%qdescr%isthere('walltime') )then
+            if( self%qdescr%isthere('walltime') ) then
                 tot_time_sec = min(tot_time_sec, str2real(self%qdescr%get('walltime')))
             else
                 tot_time_sec = min(tot_time_sec, real(WALLTIME_DEFAULT))
-            endif
+            end if
             tot_time_sec = min(tot_time_sec, real(params%walltime)) ! command line override
             hrs          = int(tot_time_sec/3600.)
             hrs_str      = int2str(hrs)
@@ -161,75 +178,80 @@ contains
             mins_str     = int2str(mins)
             secs         = int(tot_time_sec - 3600.*real(hrs) - 60.*real(mins))
             secs_str     = int2str(secs)
-            call self%qdescr%set('job_time','0-'//hrs_str%to_char()//':'//mins_str%to_char()//':'//secs_str%to_char())
-        endif
-        if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
-        qsnam = self%qdescr%get('qsys_name')
-        ! The '_worker' suffix on a qsys name (e.g. 'local_worker', 'slurm_worker')
-        ! opts into the TCP worker backend.  Strip the suffix so the underlying
-        ! qsys factory still resolves the base backend (local, slurm, …) correctly.
-        if( qsnam%has_substr(string('_worker')) ) then
-            self%use_workers = .true.
-            qsnam = qsnam%substr_remove(string('_worker'))
+            call self%qdescr%set('job_time', '0-'//hrs_str%to_char()//':'//mins_str%to_char()//':'//secs_str%to_char())
         end if
-        call self%qsys_fac%new(qsnam, self%myqsys)
-        ! create the user specific qsys and qsys controller (script generator)
-        if(present(exec_bin))then
+
+        if( present(exec_bin) ) then
             self%simple_exec_bin = filepath(self%qdescr%get('simple_path'),string('bin'),exec_bin)
         else
             self%simple_exec_bin = filepath(self%qdescr%get('simple_path'),string('bin'),string('simple_private_exec'))
-        endif
-        call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
-            &[1, self%nparts], params%ncunits, sstream, numlen)
-        if(present(qsys_nthr)) then
+        end if
+        if( present(qsys_nthr) ) then
             call self%qdescr%set('job_cpus_per_task', int2str(qsys_nthr))                  ! overrides env file and params
         else
             call self%qdescr%set('job_cpus_per_task', int2str(params%nthr))                ! overrides env file
-        endif
-        if(present(qsys_partition)) call self%qdescr%set('qsys_partition', qsys_partition) ! overrides env file and params
+        end if
+        if( present(qsys_partition) ) call self%qdescr%set('qsys_partition', qsys_partition) ! overrides env file and params
         call self%qdescr%set('job_nparts', int2str(params%nparts))                         ! overrides env file
-        ! Worker backend setup: rewire qsys and qscripts to use the worker factory.
-        ! nthr_workers is the thread capacity advertised to the server per worker process.
-        if( self%use_workers ) then
+        if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
+        qsnam = self%qdescr%get('qsys_name')
+        ! The '_worker' suffix on a qsys name (e.g. 'local_worker', 'slurm_worker')
+        ! opts into the TCP persistent-worker backend.  Strip the suffix so the
+        ! underlying qsys factory still resolves the base scheduler (local, slurm, …).
+        if( qsnam%has_substr(string('_worker')) ) then
+            qsnam = qsnam%substr_remove(string('_worker'))
+            ! Resolve worker concurrency: explicit params override ncunits; qsys_nthr overrides params%nthr.
             nthr_workers = params%nthr
+            n_workers    = max(1, params%ncunits)
+            if( params%workers > 0     ) n_workers    = params%workers
             if( params%worker_nthr > 0 ) nthr_workers = params%worker_nthr
             if( present(qsys_nthr)     ) nthr_workers = qsys_nthr
-            call self%qsys_fac_worker%new(string('worker'), self%myqsys_worker)
-            ! Start worker server if not already running (e.g. from a previous call to new() in the same session).
-            ! On the first call: allocate the server, bind the TCP socket, spawn the listener thread,
-            ! then launch one simple_worker process per computing unit via the base qsys backend.
-            if( .not. associated(worker_server) ) then
-                allocate(worker_server)
-                call worker_server%new(nthr_workers)
-                port     = worker_server%get_port()
-                host_ips = worker_server%get_host_ips()
-                n_workers = max(1, params%ncunits)
-                if( params%workers > 0 ) n_workers = params%workers
-                call self%start_workers(n_workers, nthr_workers, port, host_ips)
-            end if
-            ! Replace the base qsys with the worker qsys so that script submission
-            ! goes through submit_task_to_worker_server rather than the shell.
-            call self%myqsys%kill()
-            call self%qsys_fac%kill()
-            call self%qscripts%kill()
-            self%myqsys   => self%myqsys_worker
-            self%qsys_fac =  self%qsys_fac_worker
-            call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
+            ! Build two separate backends: base backend launches workers via the underlying scheduler;
+            ! dispatch backend routes tasks to the running TCP worker pool.
+            call self%qsys_fac_base%new(qsnam, self%base_qsys)
+            call self%qsys_fac_dispatch%new(string('persistent_worker'), self%dispatch_qsys)
+            ! qscripts dispatches through the TCP worker path.
+            call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
                 &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers)
-        endif
-        ! Tidy up
+            ! base_qscripts submits directly via the base scheduler (used to launch worker processes).
+            call self%base_qscripts%new(self%simple_exec_bin, self%base_qsys, self%parts,&
+                &[1, self%nparts], params%ncunits, sstream, numlen)
+            ! Reuse a live server when configuration is compatible; otherwise start a fresh one.
+            if( associated(persistent_worker%server) ) then
+                if( .not. persistent_worker%server%is_running()      ) THROW_HARD('cannot reuse existing worker server that is not running;')
+                if( persistent_worker%launch_backend /= qsnam        ) THROW_HARD('cannot reuse existing worker server with different backend; kill the server or use a persistent qsys name')
+                if( nthr_workers > persistent_worker%nthr_per_worker ) THROW_HARD('cannot reuse existing worker server with lower nthr_per_worker than requested;')
+                if( n_workers > persistent_worker%n_workers          ) THROW_HARD('cannot reuse existing worker server with lower n_workers than requested;')
+            else
+                persistent_worker%launch_backend  = qsnam
+                persistent_worker%nthr_per_worker = nthr_workers
+                persistent_worker%n_workers       = n_workers
+                allocate(persistent_worker%server)
+                call persistent_worker%server%new(persistent_worker%nthr_per_worker)
+                call self%start_persistent_workers()
+            end if
+        else
+            ! Standard path: a single backend handles both script generation and dispatch.
+            call self%qsys_fac_base%new(qsnam, self%base_qsys)
+            call self%qsys_fac_dispatch%new(qsnam, self%dispatch_qsys)
+            call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
+            &[1, self%nparts], params%ncunits, sstream, numlen)
+        end if
+        ! Release temporary strings and project objects.
         call qsnam%kill
         if( params%projfile /= '' ) call compenv_o%kill
         call spproj%kill
         self%existence = .true.
     end subroutine new
 
+    !> Return .true. when the environment has been initialized.
     function exists( self ) result( is )
         class(qsys_env) :: self
         logical         :: is
         is = self%existence
     end function exists
 
+    !> Generate a single submission script.
     subroutine gen_script( self, cline, script_name, prg_output )
         use simple_cmdline, only: cmdline
         class(qsys_env)              :: self
@@ -238,6 +260,7 @@ contains
         call self%qscripts%generate_script(cline, self%qdescr, script_name, prg_output)
     end subroutine gen_script
 
+    !> Generate scripts and schedule standard or array jobs.
     subroutine gen_scripts_and_schedule_jobs( self, job_descr, part_params, algnfbody, array, extra_params )
         class(qsys_env)                        :: self
         class(chash)                           :: job_descr
@@ -249,7 +272,7 @@ contains
         aarray = .false.
         if( present(array) ) aarray = array
         ! we only support array execution by SLURM and distributed local shared-memory
-        select type(pmyqsys => self%myqsys)
+        select type(pbase_qsys => self%base_qsys)
             class is(qsys_local)
                 aarray = .false.
             class is(qsys_slurm)
@@ -260,17 +283,19 @@ contains
                 aarray = .false.
             class is(qsys_pbs)
                 aarray = .false.
+            class is(qsys_persistent_worker)
+                aarray = .false.
         end select
         if( present(extra_params) ) then
             call qsys_cleanup(extra_params)
-        endif
-        if( aarray )then
-            call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr,outfile_body=algnfbody, part_params=part_params)
+        end if
+        if( aarray ) then
+            call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr, outfile_body=algnfbody, part_params=part_params)
             call self%qscripts%schedule_array_jobs
         else
-            call self%qscripts%generate_scripts(job_descr, string(MRC_EXT), self%qdescr,outfile_body=algnfbody, part_params=part_params, extra_params=extra_params)
+            call self%qscripts%generate_scripts(job_descr, string(MRC_EXT), self%qdescr, outfile_body=algnfbody, part_params=part_params, extra_params=extra_params)
             call self%qscripts%schedule_jobs
-        endif
+        end if
     end subroutine gen_scripts_and_schedule_jobs
 
     !>  \brief  Generate scripts for subprojects and schedule them for parallel execution.
@@ -287,16 +312,18 @@ contains
         call self%qscripts%schedule_subproject_jobs
     end subroutine gen_subproject_scripts_and_schedule
 
+    !> Schedule already-generated subproject jobs.
     subroutine schedule_subproject_jobs( self )
         class(qsys_env), intent(inout) :: self
         call self%qscripts%schedule_subproject_jobs
     end subroutine schedule_subproject_jobs
 
+    !> Generate and submit a single script, then block until its finish indicator file appears.
     subroutine exec_simple_prg_in_queue( self, cline, finish_indicator )
         use simple_cmdline, only: cmdline
         class(qsys_env), intent(inout) :: self
         class(cmdline),  intent(inout) :: cline
-        class(string),   intent(in)    :: finish_indicator
+        class(string),   intent(in)    :: finish_indicator !< path of the completion sentinel file
         character(len=*), parameter    :: SCRIPT_NAME = 'simple_script_single'
         type(chash)                    :: job_descr
         call del_file(finish_indicator)
@@ -309,81 +336,126 @@ contains
         call job_descr%kill
     end subroutine exec_simple_prg_in_queue
 
-    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile, exec_bin )
+    !> Generate and submit one script without blocking; caller is responsible for monitoring.
+    !! When base=.true. the script is routed through base_qscripts (the underlying
+    !! scheduler) rather than through the dispatch (TCP worker) path.
+    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile, exec_bin, base )
         use simple_cmdline, only: cmdline
         class(qsys_env),         intent(inout) :: self
-        class(cmdline),          intent(in)    :: cline
-        class(string),           intent(in)    :: script_name, outfile
-        class(string), optional, intent(in)    :: exec_bin
+        class(cmdline),          intent(in)    :: cline        !< command-line parameters for the job
+        class(string),           intent(in)    :: script_name  !< path of the script to generate and submit
+        class(string),           intent(in)    :: outfile      !< stdout/stderr log path for the job
+        class(string), optional, intent(in)    :: exec_bin     !< override submission executable
+        logical,       optional, intent(in)    :: base         !< .true. to route via base (not dispatch) controller
         type(chash) :: job_descr
+        logical     :: l_base
+        l_base = .false.
+        if( present(base) ) l_base = base
         call cline%gen_job_descr(job_descr)
-        if( present(exec_bin) )then
-            call self%qscripts%generate_script(job_descr, self%qdescr, exec_bin, script_name, outfile=outfile)
+        if( present(exec_bin) ) then
+            if( l_base ) then
+                call self%base_qscripts%generate_script(job_descr, self%qdescr, exec_bin, script_name, outfile=outfile)
+            else
+                call self%qscripts%generate_script(job_descr, self%qdescr, exec_bin, script_name, outfile=outfile)
+            end if
         else
-            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
-                & outfile=outfile)
-        endif
+            if( l_base ) then
+                call self%base_qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile=outfile)
+            else
+                call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile=outfile)
+            end if
+        end if
         call wait_for_closure(script_name)
-        call self%qscripts%submit_script(script_name)
+        if( l_base ) then
+            call self%base_qscripts%submit_script(script_name)
+        else
+            call self%qscripts%submit_script(script_name)
+        end if
         call job_descr%kill
     end subroutine exec_simple_prg_in_queue_async
 
-    !>  To submit a list of jobs asynchronously
-    subroutine exec_simple_prgs_in_queue_async( self, clines, script_name, outfile, exec_bins )
+    !> Generate and submit multiple scripts as a single batch without blocking.
+    !! When base=.true. all scripts are routed through base_qscripts.
+    subroutine exec_simple_prgs_in_queue_async( self, clines, script_name, outfile, exec_bins, base )
         use simple_cmdline, only: cmdline
         class(qsys_env),            intent(inout) :: self
-        type(cmdline), allocatable, intent(in)    :: clines(:)
-        class(string),              intent(in)    :: script_name, outfile
-        class(string),    optional, intent(in)    :: exec_bins(:)
+        type(cmdline), allocatable, intent(in)    :: clines(:)      !< one command line per job
+        class(string),              intent(in)    :: script_name    !< shared script path prefix
+        class(string),              intent(in)    :: outfile        !< shared stdout/stderr log path
+        class(string),    optional, intent(in)    :: exec_bins(:)   !< per-job executable overrides
+        logical,          optional, intent(in)    :: base           !< .true. to route via base controller
         type(chash), allocatable :: jobs_descr(:)
         integer :: i, njobs
+        logical :: l_base
         njobs = size(clines)
+        l_base = .false.
+        if( present(base) ) l_base = base
         allocate(jobs_descr(njobs))
-        do i = 1,njobs
+        do i = 1, njobs
             call clines(i)%gen_job_descr(jobs_descr(i))
-        enddo
-        call self%qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile, exec_bins=exec_bins)
+        end do
+        if( l_base ) then
+            call self%base_qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile, exec_bins=exec_bins)
+        else
+            call self%qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile, exec_bins=exec_bins)
+        end if
         call wait_for_closure(script_name)
-        call self%qscripts%submit_script(script_name)
-        do i = 1,njobs
+        if( l_base ) then
+            call self%base_qscripts%submit_script(script_name)
+        else
+            call self%qscripts%submit_script(script_name)
+        end if
+        do i = 1, njobs
             call jobs_descr(i)%kill
-        enddo
+        end do
         deallocate(jobs_descr)
     end subroutine exec_simple_prgs_in_queue_async
 
-    subroutine start_workers( self, ncunits, nthr, port, host_ips )
+    !> Submit one simple_persistent_worker process per slot through the base scheduler.
+    !! Each worker is given the server host/port at launch so it can connect back.
+    !! Scripts and logs are placed under WORKER_DIR for easy monitoring.
+    subroutine start_persistent_workers( self )
         class(qsys_env), intent(inout) :: self
-        integer,         intent(in)    :: ncunits, nthr, port
-        type(string),    intent(in)    :: host_ips
         type(cmdline)                  :: cline
-        type(string)                   :: script_name, outfile, executable
-        integer :: iworker
-        write(*,*) "STARTING # WORKERS: ", ncunits
+        type(string)                   :: script_name, outfile, executable, host_ips
+        integer                        :: iworker, ncunits, nthr, port
+        if( .not. associated(persistent_worker%server) ) THROW_HARD('cannot start persistent workers without an allocated server;')
+        ! Cache server properties so each worker script can connect back.
+        ncunits  = persistent_worker%n_workers
+        nthr     = persistent_worker%nthr_per_worker
+        port     = persistent_worker%server%get_port()
+        host_ips = persistent_worker%server%get_host_ips()
+        write(*,*) 'STARTING # WORKERS: ', ncunits
+        ! Ensure per-worker output directories exist before submitting scripts.
         call simple_mkdir(WORKER_DIR)
         call simple_mkdir(WORKER_DIR//STDERROUT_DIR)
-        executable = 'simple_worker'
-        call cline%set('nthr',        int2str(nthr))
-        call cline%set('port',        int2str(port))
+        executable = 'simple_persistent_worker'
+        ! Common connection parameters shared by every worker script.
+        call cline%set('nthr',   int2str(nthr))
+        call cline%set('port',   int2str(port))
         call cline%set('server', host_ips%to_char())
+        ! Submit one script per worker slot via the base (non-dispatch) controller.
         do iworker = 1, ncunits
             call cline%set('worker_id', int2str(iworker))
             script_name = WORKER_DIR//WORKER_SCRIPT_PREFIX//int2str_pad(iworker, 4)//SCRIPT_EXT
             outfile     = WORKER_DIR//STDERROUT_DIR//int2str_pad(iworker, 4)//LOG_EXT
-            call self%exec_simple_prg_in_queue_async(cline, script_name, outfile, executable)
+            call self%exec_simple_prg_in_queue_async(cline, script_name, outfile, executable, base=.true.)
         end do
-        call cline%kill()
-    end subroutine start_workers
+        call cline%kill
+    end subroutine start_persistent_workers
 
+    !> Get fully resolved executable path used for generated scripts.
     function get_exec_bin( self ) result( exec_bin )
         class(qsys_env), intent(in) :: self
-        type(string):: exec_bin
+        type(string)                :: exec_bin
         exec_bin = self%simple_exec_bin
     end function get_exec_bin
 
-    function get_qsys( self )result( qsys )
+    !> Return canonical base qsys backend name.
+    function get_qsys( self ) result( qsys )
         class(qsys_env), intent(in)   :: self
         character(len=:), allocatable :: qsys
-        select type(pmyqsys => self%myqsys)
+        select type(pbase_qsys => self%base_qsys)
             class is(qsys_local)
                 qsys = 'local'
             class is(qsys_slurm)
@@ -394,24 +466,31 @@ contains
                 qsys = 'sge'
             class is(qsys_pbs)
                 qsys = 'pbs'
+            class is(qsys_persistent_worker)
+                qsys = 'persistent_worker'
         end select
     end function get_qsys
 
+    !> Report currently available computing units from scheduler controller.
     integer function get_navail_computing_units( self )
         class(qsys_env), intent(in) :: self
         get_navail_computing_units = self%qscripts%get_ncomputing_units_avail()
     end function get_navail_computing_units
 
+    !> Release scripts/controllers and reset internal state.
     subroutine kill( self )
         class(qsys_env) :: self
-        if( self%existence )then
-            deallocate(self%parts)
+        if( self%existence ) then
+            if( allocated(self%parts) ) deallocate(self%parts)
             call self%qscripts%kill
+            call self%base_qscripts%kill
             call self%qdescr%kill
-            call self%qsys_fac%kill
-            self%myqsys => null()
+            call self%qsys_fac_base%kill
+            call self%qsys_fac_dispatch%kill
+            self%base_qsys => null()
+            self%dispatch_qsys => null()
             self%existence = .false.
-        endif
+        end if
     end subroutine kill
 
 end module simple_qsys_env

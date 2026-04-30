@@ -7,6 +7,7 @@ use simple_cmdline,        only: cmdline, cmdline_err
 use simple_exec_helpers,   only: script_exec, update_job_descriptions_in_project
 use simple_jiffys,         only: simple_print_git_version, simple_print_timer
 use simple_ui,             only: make_ui, list_stream_prgs_in_ui
+use simple_persistent_worker_server,   only: persistent_worker
 use simple_stream_p00_master,          only: stream_p00_master
 use simple_stream_p01_preprocess,      only: stream_p01_preprocess
 use simple_stream_p02_assign_optics,   only: stream_p02_assign_optics
@@ -77,11 +78,15 @@ select case(trim(prg))
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
 call update_job_descriptions_in_project(string('simple_stream'), string(trim(prg)), cline)
+! kill any persistent worker server if it was launched by this execution
+if( associated(persistent_worker%server) )then
+    call persistent_worker%server%kill
+endif
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('84c81809')
+call simple_print_git_version('332d9446')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

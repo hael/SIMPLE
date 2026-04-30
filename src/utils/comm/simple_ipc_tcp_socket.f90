@@ -203,7 +203,7 @@ module simple_ipc_tcp_socket
       rc = c_close(self%server_fd)
       self%server_fd = -1
     end if
-    ! The mutex is owned by the caller (e.g. qsys_worker_server) and must be
+    ! The mutex is owned by the caller (e.g. persistent_worker_server) and must be
     ! destroyed by the owner after join_listener returns, not here.
     self%listening = .false.
   end subroutine join_listener

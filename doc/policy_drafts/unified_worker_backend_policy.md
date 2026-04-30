@@ -13,7 +13,7 @@ The current implementation is a `_worker` overlay on the existing qsys system:
 - `pbs_worker`
 - `sge_worker`
 
-The overlay starts persistent `simple_worker` processes and routes generated
+The overlay starts persistent `simple_persistent_worker` processes and routes generated
 SIMPLE job scripts to them through a TCP worker server. The existing qsys
 scheduler and filesystem completion files still own job-level completion.
 
@@ -52,7 +52,7 @@ case('worker')
 Current behavior:
 
 - The base backend is still created first.
-- The base backend is used to launch persistent `simple_worker` processes.
+- The base backend is used to launch persistent `simple_persistent_worker` processes.
 - After workers are launched, `qsys_env` replaces its active qsys object with
   `qsys_worker`, so later script submissions are queued to the worker server.
 
@@ -69,13 +69,13 @@ Current caveat:
 Implemented in:
 
 - `src/utils/qsys/simple_qsys_worker.f90`
-- `src/utils/qsys/worker/simple_qsys_worker_server.f90`
+- `src/utils/qsys/worker/simple_persistent_worker_server.f90`
 - `src/utils/comm/simple_ipc_tcp_socket.f90`
 
 `simple_qsys_worker.f90` provides a module-level server pointer:
 
 ```fortran
-type(qsys_worker_server), pointer, public :: worker_server => null()
+type(persistent_worker_server), pointer, public :: worker_server => null()
 ```
 
 `simple_qsys_env%new()` allocates and starts this server lazily:
@@ -134,13 +134,13 @@ Current caveat:
 Implemented in:
 
 - `src/utils/qsys/simple_qsys_env.f90`
-- `production/simple_worker.f90`
+- `production/simple_persistent_worker.f90`
 
 `simple_qsys_env%start_workers()` launches persistent worker processes through
 the base backend:
 
 ```fortran
-executable = 'simple_worker'
+executable = 'simple_persistent_worker'
 call cline%set('nthr',      int2str(nthr))
 call cline%set('port',      int2str(port))
 call cline%set('server',    host_ips%to_char())
@@ -150,9 +150,9 @@ call self%exec_simple_prg_in_queue_async(cline, script_name, outfile, executable
 
 The worker executable is built from:
 
-- `production/simple_worker.f90`
+- `production/simple_persistent_worker.f90`
 
-`simple_worker` accepts key-value command-line arguments:
+`simple_persistent_worker` accepts key-value command-line arguments:
 
 - `nthr`
 - `port`
@@ -189,7 +189,7 @@ Current behavior:
 Implemented in:
 
 - `src/utils/qsys/simple_qsys_ctrl.f90`
-- `src/utils/qsys/worker/simple_qsys_worker_message_task.f90`
+- `src/utils/qsys/worker/simple_persistent_worker_message_task.f90`
 
 Existing SIMPLE distributed workflows still generate job scripts in
 `qsys_ctrl`. When the active qsys object is `qsys_worker`, the script is not
@@ -243,11 +243,11 @@ Current caveat:
 
 Implemented in:
 
-- `src/utils/qsys/worker/simple_qsys_worker_message_types.f90`
-- `src/utils/qsys/worker/simple_qsys_worker_message_heartbeat.f90`
-- `src/utils/qsys/worker/simple_qsys_worker_message_task.f90`
-- `src/utils/qsys/worker/simple_qsys_worker_message_status.f90`
-- `src/utils/qsys/worker/simple_qsys_worker_message_terminate.f90`
+- `src/utils/qsys/worker/simple_persistent_worker_message_types.f90`
+- `src/utils/qsys/worker/simple_persistent_worker_message_heartbeat.f90`
+- `src/utils/qsys/worker/simple_persistent_worker_message_task.f90`
+- `src/utils/qsys/worker/simple_persistent_worker_message_status.f90`
+- `src/utils/qsys/worker/simple_persistent_worker_message_terminate.f90`
 
 The protocol currently defines four message types:
 
@@ -274,7 +274,7 @@ The current worker backend is asynchronous as a dispatch transport.
 
 That means:
 
-- `simple_worker` processes persist
+- `simple_persistent_worker` processes persist
 - tasks are queued to the worker server
 - workers poll by heartbeat
 - workers execute task scripts in local pthreads
@@ -299,7 +299,7 @@ So the current model is:
 existing SIMPLE scheduler
     -> generated bash scripts
         -> worker-server task queue
-            -> persistent simple_worker process
+            -> persistent simple_persistent_worker process
                 -> bash script execution
                     -> legacy filesystem completion files
 ```
@@ -361,12 +361,12 @@ Current execution shape:
 1. `qsys_env%new()` sees `local_worker`.
 2. It strips `_worker` and constructs the base `local` backend.
 3. It starts the TCP worker server.
-4. It launches `workers` persistent `simple_worker` processes through the
+4. It launches `workers` persistent `simple_persistent_worker` processes through the
    base `local` backend.
 5. It replaces the active qsys object with `qsys_worker`.
 6. Later generated partition scripts are queued to the worker server instead
    of being launched directly.
-7. Each `simple_worker` heartbeats and receives scripts when it has enough
+7. Each `simple_persistent_worker` heartbeats and receives scripts when it has enough
    free thread slots.
 8. The scheduler still waits for legacy completion files.
 
@@ -414,7 +414,7 @@ Consequence:
 
 ### Production script-path validation is disabled
 
-`production/simple_worker.f90` contains `is_safe_script_path`, but the dispatch
+`production/simple_persistent_worker.f90` contains `is_safe_script_path`, but the dispatch
 path currently bypasses it:
 
 ```fortran
@@ -442,8 +442,8 @@ To describe the current code precisely:
 | Term | Current meaning |
 |---|---|
 | distributed part | one generated qsys script / partition-level work unit |
-| worker process | one persistent `simple_worker` executable |
-| worker server | the TCP dispatcher in `simple_qsys_worker_server` |
+| worker process | one persistent `simple_persistent_worker` executable |
+| worker server | the TCP dispatcher in `simple_persistent_worker_server` |
 | worker overlay | the `qsys_worker` qsys object used after startup |
 | thread slot | local task capacity reported by a worker heartbeat |
 
@@ -564,7 +564,7 @@ object would make this clearer:
 
 ```fortran
 type persistent_worker_runtime
-    type(qsys_worker_server), pointer :: server => null()
+    type(persistent_worker_server), pointer :: server => null()
     integer :: nworkers = 0
     integer :: nthr_per_worker = 0
     type(string) :: launch_backend

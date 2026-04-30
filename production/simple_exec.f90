@@ -2,6 +2,7 @@
 program simple_exec
 use simple_exec_api
 use simple_parameters, only: parameters
+use simple_persistent_worker_server, only: persistent_worker
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)      :: xarg, prg
@@ -60,12 +61,16 @@ if( .not. l_did_execute )then
     THROW_HARD('Program "'//trim(prg)//'" not recognized. Use prg=list to see available programs.')
 endif
 call update_job_descriptions_in_project(string('simple_exec'), string(trim(prg)), cline)
+! kill any persistent worker server if it was launched by this execution
+if( associated(persistent_worker%server) )then
+    call persistent_worker%server%kill()
+endif
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
 if( .not. l_silent )then
-    call simple_print_git_version('84c81809')
+    call simple_print_git_version('332d9446')
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
