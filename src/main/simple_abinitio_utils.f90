@@ -1,6 +1,7 @@
 !@descr: utilities for ab initio 3D reconstruction used by commanders_abinitio
 module simple_abinitio_utils
 use simple_commanders_api
+use simple_commanders_rec_distr, only: commander_polar_volassemble
 use simple_commanders_volops, only: commander_symmetrize_map
 use simple_cluster_seed,      only: gen_labelling
 use simple_class_frcs,        only: class_frcs
@@ -275,16 +276,24 @@ contains
         class(parameters),     intent(inout) :: params
         integer,               intent(in)    :: istage
         class(commander_base), intent(inout) :: xrefine3D
+        type(commander_polar_volassemble) :: xpolar_volassemble
+        type(cmdline) :: cline_obsfield_volassemble
         type(string) :: stage, str_state, vol_name, vol_stage, vol_pproc, vol_lp, vol_lp_stage
         integer      :: state
         call cline_refine3D%delete('endit')
         call xrefine3D%execute(cline_refine3D)
+        if( l_polar .and. (trim(params%polar) == 'obsfield') )then
+            cline_obsfield_volassemble = cline_refine3D
+            call cline_obsfield_volassemble%set('write_obsfield_vols', 'yes')
+            call xpolar_volassemble%execute(cline_obsfield_volassemble)
+            call cline_obsfield_volassemble%kill
+        endif
         call del_files(DIST_FBODY,      params%nparts,ext='.dat')
         call del_files(ASSIGNMENT_FBODY,params%nparts,ext='.dat')
         call del_file(DIST_FBODY//'.dat')
         call del_file(ASSIGNMENT_FBODY//'.dat')
         stage = '_stage_'//int2str(istage)
-        if( .not. l_polar )then
+        if( (.not. l_polar) .or. (trim(params%polar) == 'obsfield') )then
             do state = 1, params%nstates
                 str_state = int2str_pad(state,2)
                 vol_name  = string(VOL_FBODY)//str_state//MRC_EXT

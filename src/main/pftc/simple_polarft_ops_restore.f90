@@ -378,6 +378,7 @@ contains
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
+        type(string) :: volname
         real(dp)    :: fsc(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_prior_state(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
@@ -388,7 +389,7 @@ contains
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
         integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2)
         integer     :: prev_pftsz, prev_nrefs
-        logical     :: have_prev_refs, need_prev_refs
+        logical     :: have_prev_refs, need_prev_refs, write_cartesian_vols
         if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
         nprojs = self%p_ptr%nspace
         if( mod(nprojs,2) /= 0 )then
@@ -422,6 +423,10 @@ contains
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
         endif
+        write_cartesian_vols = .false.
+        if( cline%defined('write_obsfield_vols') )then
+            write_cartesian_vols = trim(cline%get_carg('write_obsfield_vols')) == 'yes'
+        endif
         ! write down FRCs
         kspan  = [self%kfromto(1), self%interpklim]
         if( self%p_ptr%l_ml_reg )then
@@ -451,7 +456,15 @@ contains
                 &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
+            if( write_cartesian_vols )then
+                ! Keep the Cartesian stage representative tied to the same restored
+                ! obsfield that generated the polar references at the stage handoff.
+                volname = string(VOL_FBODY)//int2str_pad(state,2)//MRC_EXT
+                call self%obsfields(state)%write_merged_volume(volname, self%p_ptr%box_crop, self%p_ptr%smpd_crop, &
+                    &kspan, invtau2_even, invtau2_odd, prior_start, real(self%p_ptr%box))
+            endif
         enddo
+        if( write_cartesian_vols ) call volname%kill
         call mirror_slices_obsfield( self, reforis )
         call calc_fsc_from_refs(self, self%pfts_even, self%pfts_odd, 1, self%ncls, fsc)
         fsc_boxcrop(                 :self%kfromto(1)) = 1.0

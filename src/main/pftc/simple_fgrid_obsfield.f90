@@ -1,6 +1,7 @@
 !@descr: dense Fourier-grid observation field for restoration experiments
 module simple_fgrid_obsfield
 use simple_core_module_api
+use simple_image, only: image
 implicit none
 
 public :: fgrid_obs_field, fgrid_obsfield_eo, unsampled_floor
@@ -63,6 +64,7 @@ type :: fgrid_obsfield_eo
     procedure, public :: insert_plane  => obsfield_eo_insert_plane
     procedure, public :: append_field  => obsfield_eo_append_field
     procedure, public :: extract_polar => obsfield_eo_extract_polar
+    procedure, public :: write_merged_volume => obsfield_eo_write_merged_volume
     procedure, public :: write         => obsfield_eo_write
     procedure, public :: read          => obsfield_eo_read
 end type fgrid_obsfield_eo
@@ -546,6 +548,99 @@ contains
         deallocate(w)
         !$omp end parallel
     end subroutine obsfield_eo_extract_polar
+
+    subroutine obsfield_eo_write_merged_volume( self, fname, box, smpd, kfromto, invtau2_even, invtau2_odd, &
+            &prior_start, mag_correction )
+        class(fgrid_obsfield_eo), intent(in) :: self
+        class(string),             intent(in) :: fname
+        integer,                   intent(in) :: box, kfromto(2), prior_start
+        real,                      intent(in) :: smpd
+        real(dp),                  intent(in) :: invtau2_even(kfromto(1):kfromto(2))
+        real(dp),                  intent(in) :: invtau2_odd( kfromto(1):kfromto(2))
+        real, optional,            intent(in) :: mag_correction
+        type(image) :: vol
+        complex(dp) :: val_even, val_odd, merged
+        real(dp)    :: den_even, den_odd, denom_weight
+        real        :: mag_corr
+        integer     :: h, k, l, shell, phys(3), nyq
+        logical     :: have_even, have_odd
+        if( box < 1 ) THROW_HARD('invalid box; obsfield_eo_write_merged_volume')
+        if( kfromto(1) > kfromto(2) ) THROW_HARD('invalid k-range; obsfield_eo_write_merged_volume')
+        if( .not. self%even%initialized .or. .not. self%odd%initialized )then
+            THROW_HARD('obsfield not initialized; obsfield_eo_write_merged_volume')
+        endif
+        if( .not. self%even%compatible_with(self%odd) )then
+            THROW_HARD('incompatible even/odd obsfields; obsfield_eo_write_merged_volume')
+        endif
+        mag_corr = 1.0
+        if( present(mag_correction) ) mag_corr = mag_correction
+        nyq = fdim(box) - 1
+        call vol%new([box,box,box], smpd, wthreads=.false.)
+        call vol%set_cmat(cmplx(0.,0.))
+        !$omp parallel do collapse(3) default(shared) schedule(static) proc_bind(close)&
+        !$omp private(h,k,l,shell,phys,val_even,val_odd,merged,den_even,den_odd,denom_weight,have_even,have_odd)
+        do h = self%even%lims(1,1), self%even%lims(1,2)
+            do k = self%even%lims(2,1), self%even%lims(2,2)
+                do l = self%even%lims(3,1), self%even%lims(3,2)
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                    if( shell > nyq ) cycle
+                    call obsfield_restored_cell(self%even, h, k, l, kfromto, invtau2_even, prior_start, &
+                        &val_even, den_even, have_even)
+                    call obsfield_restored_cell(self%odd, h, k, l, kfromto, invtau2_odd, prior_start, &
+                        &val_odd, den_odd, have_odd)
+                    if( .not. have_even .and. .not. have_odd ) cycle
+                    denom_weight = 0.d0
+                    merged       = DCMPLX_ZERO
+                    if( have_even )then
+                        denom_weight = denom_weight + den_even
+                        merged       = merged + val_even * den_even
+                    endif
+                    if( have_odd )then
+                        denom_weight = denom_weight + den_odd
+                        merged       = merged + val_odd * den_odd
+                    endif
+                    if( denom_weight <= DTINY ) cycle
+                    phys = vol%comp_addr_phys(h,k,l)
+                    call vol%set_cmat_at(phys(1), phys(2), phys(3), cmplx(merged / denom_weight))
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        call vol%ifft
+        if( mag_corr > TINY ) call vol%div(mag_corr)
+        call vol%write(fname, del_if_exists=.true.)
+        call vol%kill
+    end subroutine obsfield_eo_write_merged_volume
+
+    subroutine obsfield_restored_cell( self, h, k, l, kfromto, invtau2, prior_start, value, denom, have_cell )
+        class(fgrid_obs_field), intent(in)  :: self
+        integer,                intent(in)  :: h, k, l, kfromto(2), prior_start
+        real(dp),               intent(in)  :: invtau2(kfromto(1):kfromto(2))
+        complex(dp),            intent(out) :: value
+        real(dp),               intent(out) :: denom
+        logical,                intent(out) :: have_cell
+        real(dp) :: prior
+        integer  :: shell
+        value     = DCMPLX_ZERO
+        denom     = 0.d0
+        have_cell = .false.
+        if( .not. self%initialized ) return
+        if( h < lbound(self%grid_num,1) .or. h > ubound(self%grid_num,1) ) return
+        if( k < lbound(self%grid_num,2) .or. k > ubound(self%grid_num,2) ) return
+        if( l < lbound(self%grid_num,3) .or. l > ubound(self%grid_num,3) ) return
+        if( self%grid_cnt(h,k,l) < 1 ) return
+        shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+        prior = 0.d0
+        if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
+        denom = self%grid_den(h,k,l) + prior
+        if( shell >= kfromto(1) .and. shell <= kfromto(2) .and. shell >= prior_start .and. prior <= DTINY )then
+            denom = denom + unsampled_floor(self%grid_den(h,k,l))
+        endif
+        if( denom <= DTINY ) return
+        value     = self%grid_num(h,k,l) / denom
+        have_cell = .true.
+    end subroutine obsfield_restored_cell
 
     integer function obsfield_get_nobs( self )
         class(fgrid_obs_field), intent(in) :: self
