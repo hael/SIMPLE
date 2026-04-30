@@ -26,7 +26,8 @@ private
 integer, parameter :: CLS_SPLIT_AUTO_NEIGS_SCAN_MAX = 24
 integer, parameter :: CLS_SPLIT_ICM_RANK_MAXITS = 16
 real,    parameter :: CLS_SPLIT_ICM_RANK_BETA_FRAC = 0.35
-real,    parameter :: CLS_SPLIT_ICM_RANK_COMPLEXITY_FRAC = 0.05
+real,    parameter :: CLS_SPLIT_ICM_RANK_COMPLEXITY_FRAC = 0.10
+real,    parameter :: CLS_SPLIT_ICM_RANK_LOWER_SEED_FRAC = 0.50
 
 type, abstract :: cls_split_strategy
 contains
@@ -681,9 +682,10 @@ contains
         character(len=*), intent(in) :: mode
         integer,          intent(in) :: max_neigs, cls_id
         real,    allocatable :: spec(:)
-        integer, allocatable :: labels(:), prev_labels(:)
-        real :: smin, smax, delta, beta, complexity, mu_drop, mu_keep, var_drop, var_keep
-        integer :: i, iter, n, nchanged, nmin_rank, init_rank
+        real :: smin, smax, delta, beta, complexity, score, best_score
+        integer :: i, n, nmin_rank, upper_rank, lower_rank, best_seed, k_trial
+        integer :: seeds(2)
+        character(len=12) :: seed_names(2)
         n = min(size(eigvals), max(1, max_neigs))
         nmin_rank = cls_split_min_neigs(trim(mode), n)
         if( n <= 0 )then
@@ -691,7 +693,6 @@ contains
             return
         endif
         allocate(spec(n), source=0.)
-        allocate(labels(n), prev_labels(n), source=0)
         do i = 1, n
             if( ieee_is_finite(eigvals(i)) .and. eigvals(i) > DTINY )then
                 spec(i) = log(eigvals(i))
@@ -704,48 +705,90 @@ contains
         delta = smax - smin
         if( .not. ieee_is_finite(delta) .or. delta <= 1.e-6 )then
             nkeep = nmin_rank
-            deallocate(spec, labels, prev_labels)
+            deallocate(spec)
             return
         endif
         spec = (spec - smin) / delta
-        init_rank = cls_split_initial_neigs_from_gap(spec, nmin_rank)
-        labels = 0
-        labels(1:init_rank) = 1
-        write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split ICM neigs init: mode=', trim(mode), &
-            ' class=', cls_id, ' scan=', n, ' min=', nmin_rank, ' init=', init_rank
-        call flush(logfhandle)
+        upper_rank = cls_split_initial_neigs_from_gap(spec, nmin_rank)
+        upper_rank = max(nmin_rank, min(n, upper_rank))
+        lower_rank = nint(CLS_SPLIT_ICM_RANK_LOWER_SEED_FRAC * real(upper_rank))
+        lower_rank = max(nmin_rank, min(upper_rank, lower_rank))
+        seeds(1) = upper_rank
+        seeds(2) = lower_rank
+        seed_names = [character(len=12) :: 'upper_gap', 'fraction']
         beta       = CLS_SPLIT_ICM_RANK_BETA_FRAC
         complexity = CLS_SPLIT_ICM_RANK_COMPLEXITY_FRAC
-        do iter = 1, CLS_SPLIT_ICM_RANK_MAXITS
+        write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split ICM neigs seeds: mode=', trim(mode), &
+            ' class=', cls_id, ' scan=', n, ' min=', nmin_rank, ' upper=', upper_rank, &
+            ' lower_fraction=', lower_rank
+        call flush(logfhandle)
+        best_score = huge(best_score)
+        nkeep = upper_rank
+        best_seed = 1
+        do i = 1, size(seeds)
+            call run_icm_rank_seed(spec, trim(mode), cls_id, trim(seed_names(i)), seeds(i), nmin_rank, upper_rank, beta, complexity, &
+                k_trial, score)
+            if( score < best_score )then
+                best_score = score
+                nkeep = k_trial
+                best_seed = i
+            endif
+        end do
+        write(logfhandle,'(A,A,A,I8,A,A,A,I8,A,F12.5)') 'Cls split ICM neigs selected: mode=', trim(mode), &
+            ' class=', cls_id, ' seed=', trim(seed_names(best_seed)), ' keep=', nkeep, ' score=', best_score
+        call flush(logfhandle)
+        deallocate(spec)
+    end function select_neigs_icm
+
+    subroutine run_icm_rank_seed(spec, mode, cls_id, seed_name, seed_rank, nmin_rank, nmax_rank, beta, alpha, nkeep, score)
+        real,             intent(in)  :: spec(:), beta, alpha
+        character(len=*), intent(in)  :: mode, seed_name
+        integer,          intent(in)  :: cls_id, seed_rank, nmin_rank, nmax_rank
+        integer,          intent(out) :: nkeep
+        real,             intent(out) :: score
+        integer, allocatable :: labels(:), prev_labels(:)
+        real :: mu_drop, mu_keep, var_drop, var_keep
+        integer :: iter, i, n, nchanged, maxits
+        n = size(spec)
+        allocate(labels(n), prev_labels(n), source=0)
+        labels = 0
+        labels(1:max(nmin_rank, min(nmax_rank, seed_rank))) = 1
+        if( nmax_rank < n ) labels(nmax_rank+1:n) = 0
+        write(logfhandle,'(A,A,A,I8,A,A,A,I8,A,I8,A,I8)') 'Cls split ICM neigs init: mode=', trim(mode), &
+            ' class=', cls_id, ' seed=', trim(seed_name), ' init=', cls_split_rank_prefix(labels, nmin_rank, nmax_rank), &
+            ' min=', nmin_rank, ' max=', nmax_rank
+        call flush(logfhandle)
+        maxits = max(CLS_SPLIT_ICM_RANK_MAXITS, n)
+        do iter = 1, maxits
             prev_labels = labels
             call estimate_icm_rank_stats(spec, prev_labels, mu_drop, mu_keep, var_drop, var_keep)
-            nchanged = 0
-            do i = 1, n
-                call update_icm_rank_site(spec, prev_labels, i, beta, complexity, mu_drop, mu_keep, var_drop, var_keep, labels(i))
-                if( labels(i) /= prev_labels(i) ) nchanged = nchanged + 1
+            do i = 1, nmax_rank
+                call update_icm_rank_site(spec, prev_labels, i, beta, alpha, nmin_rank, nmax_rank, &
+                    mu_drop, mu_keep, var_drop, var_keep, labels(i))
             end do
-            if( count(labels == 1) < nmin_rank ) labels(1:nmin_rank) = 1
-            write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split ICM neigs iter: mode=', trim(mode), &
-                ' class=', cls_id, ' iter=', iter, ' changed=', nchanged, ' keep=', cls_split_rank_prefix(labels, nmin_rank)
+            labels(1:nmin_rank) = 1
+            if( nmax_rank < n ) labels(nmax_rank+1:n) = 0
+            nchanged = count(labels /= prev_labels)
+            score = score_icm_rank_solution(spec, labels, beta, alpha, nmin_rank, nmax_rank)
+            write(logfhandle,'(A,A,A,I8,A,A,A,I8,A,I8,A,I8,A,F12.5)') 'Cls split ICM neigs iter: mode=', trim(mode), &
+                ' class=', cls_id, ' seed=', trim(seed_name), ' iter=', iter, ' changed=', nchanged, &
+                ' keep=', cls_split_rank_prefix(labels, nmin_rank, nmax_rank), ' score=', score
             call flush(logfhandle)
             if( nchanged == 0 ) exit
         end do
-        nkeep = 0
-        do i = 1, n
-            if( labels(i) == 1 ) nkeep = i
-        end do
-        nkeep = max(nmin_rank, min(n, nkeep))
-        deallocate(spec, labels, prev_labels)
-    end function select_neigs_icm
+        nkeep = cls_split_rank_prefix(labels, nmin_rank, nmax_rank)
+        score = score_icm_rank_solution(spec, labels, beta, alpha, nmin_rank, nmax_rank)
+        deallocate(labels, prev_labels)
+    end subroutine run_icm_rank_seed
 
-    integer function cls_split_rank_prefix(labels, nmin_rank) result(nkeep)
-        integer, intent(in) :: labels(:), nmin_rank
+    integer function cls_split_rank_prefix(labels, nmin_rank, nmax_rank) result(nkeep)
+        integer, intent(in) :: labels(:), nmin_rank, nmax_rank
         integer :: i
         nkeep = 0
-        do i = 1, size(labels)
+        do i = 1, min(size(labels), nmax_rank)
             if( labels(i) == 1 ) nkeep = i
         end do
-        nkeep = max(nmin_rank, min(size(labels), nkeep))
+        nkeep = max(nmin_rank, min(nmax_rank, nkeep))
     end function cls_split_rank_prefix
 
     integer function cls_split_min_neigs(mode, max_neigs) result(nmin_rank)
@@ -806,13 +849,14 @@ contains
         var_keep = max(var_keep / real(max(1, nkeep)), 1.e-3)
     end subroutine estimate_icm_rank_stats
 
-    subroutine update_icm_rank_site(spec, labels, ind, beta, complexity, mu_drop, mu_keep, var_drop, var_keep, label_new)
-        real,    intent(in)  :: spec(:), beta, complexity, mu_drop, mu_keep, var_drop, var_keep
-        integer, intent(in)  :: labels(:), ind
+    subroutine update_icm_rank_site(spec, labels, ind, beta, alpha, nmin_rank, nmax_rank, &
+        mu_drop, mu_keep, var_drop, var_keep, label_new)
+        real,    intent(in)  :: spec(:), beta, alpha, mu_drop, mu_keep, var_drop, var_keep
+        integer, intent(in)  :: labels(:), ind, nmin_rank, nmax_rank
         integer, intent(out) :: label_new
         real :: cost_drop, cost_keep
         cost_drop = (spec(ind) - mu_drop)**2 / var_drop
-        cost_keep = (spec(ind) - mu_keep)**2 / var_keep + complexity
+        cost_keep = (spec(ind) - mu_keep)**2 / var_keep + cls_split_rank_complexity(ind, nmin_rank, nmax_rank, alpha)
         cost_drop = cost_drop + beta * icm_rank_neighbor_cost(0, labels, ind)
         cost_keep = cost_keep + beta * icm_rank_neighbor_cost(1, labels, ind)
         if( ind > 1 )then
@@ -827,6 +871,35 @@ contains
             label_new = 0
         endif
     end subroutine update_icm_rank_site
+
+    real function score_icm_rank_solution(spec, labels, beta, alpha, nmin_rank, nmax_rank) result(score)
+        real,    intent(in) :: spec(:), beta, alpha
+        integer, intent(in) :: labels(:), nmin_rank, nmax_rank
+        real :: mu_drop, mu_keep, var_drop, var_keep
+        integer :: i
+        call estimate_icm_rank_stats(spec, labels, mu_drop, mu_keep, var_drop, var_keep)
+        score = 0.
+        do i = 1, size(spec)
+            if( labels(i) == 1 )then
+                score = score + (spec(i) - mu_keep)**2 / var_keep
+                score = score + cls_split_rank_complexity(i, nmin_rank, nmax_rank, alpha)
+            else
+                score = score + (spec(i) - mu_drop)**2 / var_drop
+            endif
+        end do
+        do i = 1, size(spec) - 1
+            if( labels(i) /= labels(i+1) ) score = score + beta
+            if( labels(i) == 0 .and. labels(i+1) == 1 ) score = score + 2. * beta
+        end do
+    end function score_icm_rank_solution
+
+    real function cls_split_rank_complexity(ind, nmin_rank, nmax_rank, alpha) result(complexity)
+        integer, intent(in) :: ind, nmin_rank, nmax_rank
+        real,    intent(in) :: alpha
+        integer :: kfree
+        kfree = min(max(nmin_rank, 4), nmax_rank)
+        complexity = alpha * real(max(0, ind - kfree)) / real(max(1, nmax_rank - kfree))
+    end function cls_split_rank_complexity
 
     real function icm_rank_neighbor_cost(label, labels, ind) result(cost)
         integer, intent(in) :: label, labels(:), ind
