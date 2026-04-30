@@ -173,7 +173,7 @@ contains
             ithr   = omp_get_thread_num() + 1
             iptcl  = pinds(i)
             if( params%l_polar )then
-                call ptcl_imgs(i)%norm_noise_taper_edge_mask_pad_fft(build%lmsk, params%msk, build%img_pad_heap(ithr))
+                call ptcl_imgs(i)%norm_noise_mask_pad_fft(build%lmsk, params%msk, build%img_pad_heap(ithr))
             else
                 call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
             endif
