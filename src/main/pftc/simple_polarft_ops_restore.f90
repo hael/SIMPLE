@@ -378,14 +378,13 @@ contains
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
-        real(dp),    allocatable :: denw_even(:,:,:), denw_odd(:,:,:)
         real(dp)    :: fsc(self%kfromto(1):self%interpklim), fsc_state(self%kfromto(1):self%interpklim)
         real(dp)    :: invtau2_even(self%kfromto(1):self%interpklim), invtau2_odd(self%kfromto(1):self%interpklim)
         real(sp)    :: hcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
         real(sp)    :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
-        real(dp)    :: ufrac_trec, denom_weight
+        real(dp)    :: ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
-        integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2), iproj, irot, k
+        integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2)
         integer     :: prev_pftsz, prev_nrefs
         logical     :: have_prev_refs, need_prev_refs
         if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
@@ -434,7 +433,8 @@ contains
         else
             prior_start = self%interpklim + 1
         endif
-        allocate(denw_even(self%pftsz,kspan(1):kspan(2),nrefs), denw_odd(self%pftsz,kspan(1):kspan(2),nrefs))
+        hcoords = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
+        kcoords = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
         call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
@@ -461,31 +461,11 @@ contains
                 call self%obsfields(state)%odd%calc_invtau2( kspan, fsc_state, real(self%p_ptr%tau,dp), &
                     &prior_start, invtau2_odd )
             endif
-            hcoords = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
-            kcoords = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
-            call self%obsfields(state)%even%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
-                &invtau2_even, prior_start, self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), denw_even)
-            call self%obsfields(state)%odd%extract_polar( reforis, nrefs, kspan, hcoords, kcoords, &
-                &invtau2_odd,  prior_start, self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), denw_odd)
-            ! Avoid a third KB gather for the merged reference. The restored
-            ! half-map sections already carry the local denominator scale, so
-            ! the merged section is derived as a denominator-weighted blend.
-            !$omp parallel do collapse(3) default(shared) private(iproj,k,irot,denom_weight) proc_bind(close)
-            do iproj = 1,nrefs
-                do k = kspan(1),kspan(2)
-                    do irot = 1,self%pftsz
-                        denom_weight = denw_even(irot,k,iproj) + denw_odd(irot,k,iproj)
-                        if( denom_weight > DTINY )then
-                            self%pfts_merg(irot,k,base+iproj) = &
-                                &(self%pfts_even(irot,k,base+iproj) * denw_even(irot,k,iproj) + &
-                                & self%pfts_odd( irot,k,base+iproj) * denw_odd( irot,k,iproj)) / denom_weight
-                        else
-                            self%pfts_merg(irot,k,base+iproj) = DCMPLX_ZERO
-                        endif
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
+            call self%obsfields(state)%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
+                &invtau2_even, invtau2_odd, prior_start, &
+                &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
+                &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
+                &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
         enddo
         call mirror_slices_obsfield( self, reforis )
         call frcs%write(string(FRCS_FILE))
@@ -502,7 +482,6 @@ contains
         endif
         if( allocated(prev_even) ) deallocate(prev_even)
         if( allocated(prev_odd)  ) deallocate(prev_odd)
-        deallocate(denw_even, denw_odd)
     end subroutine polar_cavger_normalize_obsfield_refs
 
     subroutine average_lowres_eo_for_docking( self, fsc_boxcrop )

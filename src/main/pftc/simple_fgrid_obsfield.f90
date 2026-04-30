@@ -62,6 +62,7 @@ type :: fgrid_obsfield_eo
     procedure, public :: kill          => obsfield_eo_kill
     procedure, public :: insert_plane  => obsfield_eo_insert_plane
     procedure, public :: append_field  => obsfield_eo_append_field
+    procedure, public :: extract_polar => obsfield_eo_extract_polar
     procedure, public :: write         => obsfield_eo_write
     procedure, public :: read          => obsfield_eo_read
 end type fgrid_obsfield_eo
@@ -421,6 +422,130 @@ contains
         deallocate(w)
         !$omp end parallel
     end subroutine obsfield_extract_polar
+
+    ! Gather even/odd half-map references through one shared geometry/KB walk,
+    ! then derive the merged reference with the same denominator weighting used
+    ! by the separate extraction path.
+    subroutine obsfield_eo_extract_polar( self, eulspace, nrefs, kfromto, polar_x, polar_y, &
+            &invtau2_even, invtau2_odd, prior_start, pfts_even, pfts_odd, pfts_merg )
+        class(fgrid_obsfield_eo), intent(in)    :: self
+        class(oris),              intent(in)    :: eulspace
+        integer,                  intent(in)    :: nrefs, kfromto(2)
+        real(sp),                 intent(in)    :: polar_x(:,:), polar_y(:,:)
+        real(dp),                 intent(in)    :: invtau2_even(kfromto(1):kfromto(2))
+        real(dp),                 intent(in)    :: invtau2_odd( kfromto(1):kfromto(2))
+        integer,                  intent(in)    :: prior_start
+        complex(dp),              intent(inout) :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
+        complex(dp) :: acc_even, acc_odd, cell_num
+        real(dp)    :: den_even, den_odd, denom, denom_weight, prior, wd
+        real(sp)    :: R(3,3), loc(3), px, py
+        real(sp), allocatable :: w(:,:,:)
+        integer     :: iproj, irot, k, kloc, pftsz, kfromto1
+        integer     :: win1_1, win1_2, win1_3, c1, c2, c3, a1, a2, a3
+        integer     :: l, m, n, iwinsz_l, wdim_l, lim1_lo, shell
+        integer     :: gl_lo1, gl_lo2, gl_lo3, gl_hi1, gl_hi2, gl_hi3
+        logical     :: have_even, have_odd, l_conj
+        pftsz = size(polar_x,1)
+        pfts_even(:,:,1:nrefs) = DCMPLX_ZERO
+        pfts_odd( :,:,1:nrefs) = DCMPLX_ZERO
+        pfts_merg(:,:,1:nrefs) = DCMPLX_ZERO
+        have_even = self%even%nobs > 0
+        have_odd  = self%odd%nobs  > 0
+        if( .not. have_even .and. .not. have_odd ) return
+        iwinsz_l = self%even%iwinsz
+        wdim_l   = self%even%wdim
+        lim1_lo  = self%even%lims(1,1)
+        kfromto1 = kfromto(1)
+        gl_lo1   = self%even%grid_lims(1,1); gl_hi1 = self%even%grid_lims(1,2)
+        gl_lo2   = self%even%grid_lims(2,1); gl_hi2 = self%even%grid_lims(2,2)
+        gl_lo3   = self%even%grid_lims(3,1); gl_hi3 = self%even%grid_lims(3,2)
+        !$omp parallel default(shared) private(iproj,R,k,kloc,irot,px,py,loc,w,acc_even,acc_odd,den_even,den_odd,&
+        !$omp& denom,denom_weight,prior,wd,win1_1,win1_2,win1_3,c1,c2,c3,a1,a2,a3,l,m,n,l_conj,cell_num,shell) &
+        !$omp& proc_bind(close)
+        allocate(w(wdim_l,wdim_l,wdim_l))
+        !$omp do schedule(static)
+        do iproj = 1, nrefs
+            R = eulspace%get_mat(iproj)
+            do k = kfromto1, kfromto(2)
+                kloc = k - kfromto1 + 1
+                do irot = 1, pftsz
+                    px     = polar_x(irot,kloc)
+                    py     = polar_y(irot,kloc)
+                    loc(1) = px*R(1,1) + py*R(2,1)
+                    loc(2) = px*R(1,2) + py*R(2,2)
+                    loc(3) = px*R(1,3) + py*R(2,3)
+                    win1_1 = nint(loc(1)) - iwinsz_l
+                    win1_2 = nint(loc(2)) - iwinsz_l
+                    win1_3 = nint(loc(3)) - iwinsz_l
+                    call self%even%kb%apod_mat_3d_fast(loc, iwinsz_l, wdim_l, w)
+                    acc_even = DCMPLX_ZERO
+                    acc_odd  = DCMPLX_ZERO
+                    den_even = 0.d0
+                    den_odd  = 0.d0
+                    do n = 1, wdim_l
+                        c3 = win1_3 + n - 1
+                        if( c3 < gl_lo3 .or. c3 > gl_hi3 ) cycle
+                        do m = 1, wdim_l
+                            c2 = win1_2 + m - 1
+                            if( c2 < gl_lo2 .or. c2 > gl_hi2 ) cycle
+                            do l = 1, wdim_l
+                                c1 = win1_1 + l - 1
+                                wd = real(w(l,m,n), dp)
+                                l_conj = c1 < lim1_lo
+                                if( l_conj )then
+                                    a1 = -c1; a2 = -c2; a3 = -c3
+                                    if( a1 < gl_lo1 .or. a1 > gl_hi1 ) cycle
+                                else
+                                    if( c1 > gl_hi1 ) cycle
+                                    a1 = c1; a2 = c2; a3 = c3
+                                endif
+                                shell = nint(sqrt(real(a1*a1 + a2*a2 + a3*a3, dp)))
+                                if( have_even .and. self%even%grid_cnt(a1,a2,a3) > 0 )then
+                                    prior = 0.d0
+                                    if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2_even(shell)
+                                    denom = self%even%grid_den(a1,a2,a3) + prior
+                                    if( shell >= kfromto(1) .and. shell <= kfromto(2) .and. &
+                                        &shell >= prior_start .and. prior <= DTINY )then
+                                        denom = denom + unsampled_floor(self%even%grid_den(a1,a2,a3))
+                                    endif
+                                    if( denom > DTINY )then
+                                        cell_num = self%even%grid_num(a1,a2,a3)
+                                        if( l_conj ) cell_num = conjg(cell_num)
+                                        acc_even = acc_even + wd * cell_num / denom
+                                        den_even = den_even + wd * denom
+                                    endif
+                                endif
+                                if( have_odd .and. self%odd%grid_cnt(a1,a2,a3) > 0 )then
+                                    prior = 0.d0
+                                    if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2_odd(shell)
+                                    denom = self%odd%grid_den(a1,a2,a3) + prior
+                                    if( shell >= kfromto(1) .and. shell <= kfromto(2) .and. &
+                                        &shell >= prior_start .and. prior <= DTINY )then
+                                        denom = denom + unsampled_floor(self%odd%grid_den(a1,a2,a3))
+                                    endif
+                                    if( denom > DTINY )then
+                                        cell_num = self%odd%grid_num(a1,a2,a3)
+                                        if( l_conj ) cell_num = conjg(cell_num)
+                                        acc_odd = acc_odd + wd * cell_num / denom
+                                        den_odd = den_odd + wd * denom
+                                    endif
+                                endif
+                            enddo
+                        enddo
+                    enddo
+                    pfts_even(irot,kloc,iproj) = acc_even
+                    pfts_odd( irot,kloc,iproj) = acc_odd
+                    denom_weight = den_even + den_odd
+                    if( denom_weight > DTINY )then
+                        pfts_merg(irot,kloc,iproj) = (acc_even * den_even + acc_odd * den_odd) / denom_weight
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end do
+        deallocate(w)
+        !$omp end parallel
+    end subroutine obsfield_eo_extract_polar
 
     integer function obsfield_get_nobs( self )
         class(fgrid_obs_field), intent(in) :: self
