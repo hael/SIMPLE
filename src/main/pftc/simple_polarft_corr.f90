@@ -155,69 +155,32 @@ contains
                 self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = self%ft_ref_odd( :,self%kfromto(1):self%kfromto(2),iref)
             endif
         endif
-        if( self%l_kcollapse_objfun )then
-            ! ========================================================================
-            ! Single IFFT #1: IFFT( sum_k FT(CTF2) x FT(REF2) )
-            ! ========================================================================
-            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-            if (even) then
-                do k = self%kfromto(1), self%kfromto(2)
-                    self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref)
-                end do
-            else
-                do k = self%kfromto(1), self%kfromto(2)
-                    self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref)
-                end do
-            endif
-            call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-            self%drvec(ithr)%r = real(self%crvec1(ithr)%r(1:self%nrots), dp)
-            ! ========================================================================
-            ! Single IFFT #2: IFFT( sum_k FT(X.CTF) x FT(S.REF)* )
-            ! ========================================================================
-            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        ! ========================================================================
+        ! Single IFFT #1: IFFT( sum_k FT(CTF2) x FT(REF2) )
+        ! ========================================================================
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        if (even) then
             do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%crvec1(ithr)%c = self%crvec1(ithr)%c + &
-                    self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,kk))
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref)
             end do
-            call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-            self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp)
         else
-            ! ========================================================================
-            ! Batched IFFT #1: IFFT( FT(CTF2) x FT(REF2) ) for all k
-            ! Single-pass preparation
-            ! ========================================================================
-            if (even) then
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%crmat1_many(ithr)%c(:,kk) = self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref)
-                end do
-            else
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%crmat1_many(ithr)%c(:,kk) = self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref)
-                end do
-            endif
-            call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
-            ! Accumulate denominator
-            self%drvec(ithr)%r = 0.d0
-            do kk = 1, self%nk
-                self%drvec(ithr)%r = self%drvec(ithr)%r + real(self%crmat1_many(ithr)%r(1:self%nrots,kk), dp)
-            end do
-            ! ========================================================================
-            ! Batched IFFT #2: IFFT( FT(X.CTF) x FT(S.REF)* ) for all k
-            ! ========================================================================
             do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%crmat1_many(ithr)%c(:,kk) = self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk))
-            end do
-            call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
-            ! Accumulate numerator
-            self%heap_vars(ithr)%kcorrs = 0.d0
-            do kk = 1, self%nk
-                self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(self%crmat1_many(ithr)%r(1:self%nrots,kk), dp)
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref)
             end do
         endif
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        self%drvec(ithr)%r = real(self%crvec1(ithr)%r(1:self%nrots), dp)
+        ! ========================================================================
+        ! Single IFFT #2: IFFT( sum_k FT(X.CTF) x FT(S.REF)* )
+        ! ========================================================================
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%crvec1(ithr)%c = self%crvec1(ithr)%c + &
+                self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,kk))
+        end do
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp)
         ! Final correlation computation
         self%drvec(ithr)%r = self%drvec(ithr)%r * real(self%sqsums_ptcls(i) * real(2*self%nrots), dp)
         cc = real(self%heap_vars(ithr)%kcorrs / dsqrt(self%drvec(ithr)%r))
@@ -280,69 +243,33 @@ contains
             w_weights(kk)   = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
             sumsq_cache(kk) = sum(real(self%pfts_ptcls(:,k,i) * conjg(self%pfts_ptcls(:,k,i)), dp))
         end do
-        if( self%l_kcollapse_objfun )then
-            ! ========================================================================
-            ! Single IFFT: IFFT( sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*) )
-            ! ========================================================================
-            base_sum = 0.d0
-            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-            if (even) then
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    base_sum = base_sum + w_weights(kk) * sumsq_cache(kk)
-                    self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
-                        self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref) - &
-                        2.0 * self%ft_ptcl_ctf(:,k,i) * &
-                        conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)) )
-                end do
-            else
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    base_sum = base_sum + w_weights(kk) * sumsq_cache(kk)
-                    self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
-                        self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref) - &
-                        2.0 * self%ft_ptcl_ctf(:,k,i) * &
-                        conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)) )
-                end do
-            endif
-            call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-            self%heap_vars(ithr)%kcorrs = base_sum + &
-                real(self%crvec1(ithr)%r(1:self%nrots), dp) / real(2*self%nrots, dp)
+        ! ========================================================================
+        ! Single IFFT: IFFT( sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*) )
+        ! ========================================================================
+        base_sum = 0.d0
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        if (even) then
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                base_sum = base_sum + w_weights(kk) * sumsq_cache(kk)
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
+                    self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref) - &
+                    2.0 * self%ft_ptcl_ctf(:,k,i) * &
+                    conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)) )
+            end do
         else
-            ! ========================================================================
-            ! Batched IFFT: IFFT( FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)* )
-            ! Single-pass preparation with branch hoisting
-            ! ========================================================================
-            if (even) then
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%crmat1_many(ithr)%c(:,kk) = &
-                        self%ft_ctf2(:,k,i) * self%ft_ref2_even(:,k,iref) - &
-                        2.0 * self%ft_ptcl_ctf(:,k,i) * &
-                        conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk))
-                end do
-            else
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%crmat1_many(ithr)%c(:,kk) = &
-                        self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref) - &
-                        2.0 * self%ft_ptcl_ctf(:,k,i) * &
-                        conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk))
-                end do
-            endif
-            call fftwf_execute_dft_c2r(self%plan_bwd1_many, self%crmat1_many(ithr)%c, self%crmat1_many(ithr)%r)
-            ! ========================================================================
-            ! Accumulate using pre-computed weights (NO redundant computation)
-            ! ========================================================================
-            self%heap_vars(ithr)%kcorrs = 0.d0
-            do kk = 1, self%nk
-                ! Use pre-computed values from w_weights and sumsq_cache
-                self%drvec(ithr)%r = (w_weights(kk) / real(2*self%nrots, dp)) * &
-                                    real(self%crmat1_many(ithr)%r(1:self%nrots, kk), dp)
-                self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + &
-                                            w_weights(kk) * sumsq_cache(kk) + self%drvec(ithr)%r
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                base_sum = base_sum + w_weights(kk) * sumsq_cache(kk)
+                self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
+                    self%ft_ctf2(:,k,i) * self%ft_ref2_odd(:,k,iref) - &
+                    2.0 * self%ft_ptcl_ctf(:,k,i) * &
+                    conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)) )
             end do
         endif
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        self%heap_vars(ithr)%kcorrs = base_sum + &
+            real(self%crvec1(ithr)%r(1:self%nrots), dp) / real(2*self%nrots, dp)
         euclids = real(dexp(-self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i)))
     end subroutine gen_euclids
 
