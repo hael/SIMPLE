@@ -1044,22 +1044,22 @@ contains
             benchfname = 'DISTR_REFINE3D_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation              : ', self%bench%rt_init
-            write(fnr,'(a,1x,f9.2)') 'prob tab, distributed       : ', self%bench%rt_prob
-            write(fnr,'(a,1x,f9.2)') '3D align & rec, distributed : ', self%bench%rt_sched
-            write(fnr,'(a,1x,f9.2)') 'assemble parts              : ', self%bench%rt_assemble
-            write(fnr,'(a,1x,f9.2)') 'total time                  : ', self%bench%rt_tot
+            write(fnr,'(a,t52,f9.2)') 'refine3D init, distributed              : ', self%bench%rt_init
+            write(fnr,'(a,t52,f9.2)') 'refine3D prob tab, distributed       : ', self%bench%rt_prob
+            write(fnr,'(a,t52,f9.2)') 'refine3D 3D align & rec, distributed : ', self%bench%rt_sched
+            write(fnr,'(a,t52,f9.2)') 'refine3D assemble parts              : ', self%bench%rt_assemble
+            write(fnr,'(a,t52,f9.2)') 'refine3D total time                  : ', self%bench%rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation              : ', &
+            write(fnr,'(a,t52,f9.2)') 'refine3D init, distributed              : ', &
                 &(self%bench%rt_init/self%bench%rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'prob tab, distributed       : ', &
+            write(fnr,'(a,t52,f9.2)') 'refine3D prob tab, distributed       : ', &
                 &(self%bench%rt_prob/self%bench%rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') '3D align & rec, distributed : ', &
+            write(fnr,'(a,t52,f9.2)') 'refine3D 3D align & rec, distributed : ', &
                 &(self%bench%rt_sched/self%bench%rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'assemble parts              : ', &
+            write(fnr,'(a,t52,f9.2)') 'refine3D assemble parts              : ', &
                 &(self%bench%rt_assemble/self%bench%rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') '% accounted for             : ',&
+            write(fnr,'(a,t52,f9.2)') 'refine3D % accounted for             : ',&
                 &((self%bench%rt_init + self%bench%rt_prob + self%bench%rt_sched + &
                 &self%bench%rt_assemble)/self%bench%rt_tot) * 100.
             call fclose(fnr)

@@ -24,7 +24,6 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(string) :: benchfname
-        character(len=32) :: reduce_label, normalize_label
         integer(timer_int_kind) :: t_tot, t_setup, t_reduce, t_normalize, t_resolution, t_write
         real(timer_int_kind)    :: rt_tot, rt_setup, rt_reduce, rt_normalize, rt_resolution, rt_write
         real                   :: update_frac_eff
@@ -50,8 +49,6 @@ contains
         if( L_BENCH_GLOB ) rt_setup = toc(t_setup)
         select case(trim(params%polar))
             case('obsfield')
-                reduce_label    = 'reduce obsfield parts'
-                normalize_label = 'normalize obsfield refs'
                 if( L_BENCH_GLOB ) t_reduce = tic()
                 call build%pftc%polar_cavger_assemble_obsfields_from_parts(build%eulspace)
                 if( L_BENCH_GLOB ) rt_reduce = toc(t_reduce)
@@ -59,8 +56,6 @@ contains
                 call build%pftc%polar_cavger_normalize_obsfield_refs(build%eulspace, cline, update_frac_eff)
                 if( L_BENCH_GLOB ) rt_normalize = toc(t_normalize)
             case('yes')
-                reduce_label    = 'reduce polar sums'
-                normalize_label = 'normalize common-line refs'
                 if( L_BENCH_GLOB ) t_reduce = tic()
                 call build%pftc%polar_cavger_assemble_sums_from_parts
                 if( L_BENCH_GLOB ) rt_reduce = toc(t_reduce)
@@ -84,20 +79,32 @@ contains
             benchfname = 'VOLASSEMBLE_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,1x,f9.2)') 'polar assembly setup     : ', rt_setup
-            write(fnr,'(a,1x,f9.2)') trim(reduce_label)//' : ',    rt_reduce
-            write(fnr,'(a,1x,f9.2)') trim(normalize_label)//' : ', rt_normalize
-            write(fnr,'(a,1x,f9.2)') 'resolution metadata      : ', rt_resolution
-            write(fnr,'(a,1x,f9.2)') 'write POLAR_REFS handoff : ', rt_write
-            write(fnr,'(a,1x,f9.2)') 'polar assembly total     : ', rt_tot
+            write(fnr,'(a,t52,f9.2)') 'volassemble polar assembly setup     : ', rt_setup
+            select case(trim(params%polar))
+                case('obsfield')
+                    write(fnr,'(a,t52,f9.2)') 'volassemble reduce obsfield parts       : ', rt_reduce
+                    write(fnr,'(a,t52,f9.2)') 'volassemble normalize obsfield refs     : ', rt_normalize
+                case('yes')
+                    write(fnr,'(a,t52,f9.2)') 'volassemble reduce polar sums           : ', rt_reduce
+                    write(fnr,'(a,t52,f9.2)') 'volassemble normalize common-line refs  : ', rt_normalize
+            end select
+            write(fnr,'(a,t52,f9.2)') 'volassemble resolution metadata      : ', rt_resolution
+            write(fnr,'(a,t52,f9.2)') 'volassemble write POLAR_REFS handoff : ', rt_write
+            write(fnr,'(a,t52,f9.2)') 'volassemble polar assembly total     : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'polar assembly setup     : ', (rt_setup/rt_tot)     * 100.
-            write(fnr,'(a,1x,f9.2)') trim(reduce_label)//' : ',    (rt_reduce/rt_tot)    * 100.
-            write(fnr,'(a,1x,f9.2)') trim(normalize_label)//' : ', (rt_normalize/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'resolution metadata      : ', (rt_resolution/rt_tot)* 100.
-            write(fnr,'(a,1x,f9.2)') 'write POLAR_REFS handoff : ', (rt_write/rt_tot)     * 100.
-            write(fnr,'(a,1x,f9.2)') '% accounted for          : ', &
+            write(fnr,'(a,t52,f9.2)') 'volassemble polar assembly setup     : ', (rt_setup/rt_tot)     * 100.
+            select case(trim(params%polar))
+                case('obsfield')
+                    write(fnr,'(a,t52,f9.2)') 'volassemble reduce obsfield parts       : ', (rt_reduce/rt_tot)    * 100.
+                    write(fnr,'(a,t52,f9.2)') 'volassemble normalize obsfield refs     : ', (rt_normalize/rt_tot) * 100.
+                case('yes')
+                    write(fnr,'(a,t52,f9.2)') 'volassemble reduce polar sums           : ', (rt_reduce/rt_tot)    * 100.
+                    write(fnr,'(a,t52,f9.2)') 'volassemble normalize common-line refs  : ', (rt_normalize/rt_tot) * 100.
+            end select
+            write(fnr,'(a,t52,f9.2)') 'volassemble resolution metadata      : ', (rt_resolution/rt_tot)* 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble write POLAR_REFS handoff : ', (rt_write/rt_tot)     * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble % accounted for          : ', &
                 ((rt_setup+rt_reduce+rt_normalize+rt_resolution+rt_write)/rt_tot) * 100.
             call fclose(fnr)
         endif
@@ -479,32 +486,32 @@ contains
             benchfname = 'VOLASSEMBLE_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
-            write(fnr,'(a,1x,f9.2)') 'reading of volumes (I/O) : ', rt_read
-            write(fnr,'(a,1x,f9.2)') 'summing partial volumes  : ', rt_sum_reduce
-            write(fnr,'(a,1x,f9.2)') 'sum of eo-paris          : ', rt_sum_eos
-            write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', rt_sampl_dens_correct_eos
-            write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', rt_sampl_dens_correct_sum
-            write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', rt_eoavg
-            write(fnr,'(a,1x,f9.2)') 'automasking              : ', rt_automask
-            write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', rt_nonuniform
-            write(fnr,'(a,1x,f9.2)') 'polar ref projection     : ', rt_project_refs
-            write(fnr,'(a,1x,f9.2)') 'total time               : ', rt_tot
+            write(fnr,'(a,t52,f9.2)') 'volassemble initialisation           : ', rt_init
+            write(fnr,'(a,t52,f9.2)') 'volassemble reading of volumes (I/O) : ', rt_read
+            write(fnr,'(a,t52,f9.2)') 'volassemble summing partial volumes  : ', rt_sum_reduce
+            write(fnr,'(a,t52,f9.2)') 'volassemble sum of eo-paris          : ', rt_sum_eos
+            write(fnr,'(a,t52,f9.2)') 'volassemble gridding correction (eos): ', rt_sampl_dens_correct_eos
+            write(fnr,'(a,t52,f9.2)') 'volassemble gridding correction (sum): ', rt_sampl_dens_correct_sum
+            write(fnr,'(a,t52,f9.2)') 'volassemble averaging eo-pairs       : ', rt_eoavg
+            write(fnr,'(a,t52,f9.2)') 'volassemble automasking              : ', rt_automask
+            write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform filtering     : ', rt_nonuniform
+            write(fnr,'(a,t52,f9.2)') 'volassemble polar ref projection     : ', rt_project_refs
+            write(fnr,'(a,t52,f9.2)') 'volassemble total time               : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation           : ', (rt_init/rt_tot)                   * 100.
-            write(fnr,'(a,1x,f9.2)') 'reading of volumes (I/O) : ', (rt_read/rt_tot)                   * 100.
-            write(fnr,'(a,1x,f9.2)') 'summing partial volumes  : ', (rt_sum_reduce/rt_tot)             * 100.
-            write(fnr,'(a,1x,f9.2)') 'sum of eo-paris          : ', (rt_sum_eos/rt_tot)                * 100.
-            write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', (rt_sampl_dens_correct_eos/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', (rt_sampl_dens_correct_sum/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
-            write(fnr,'(a,1x,f9.2)') 'automasking              : ', (rt_automask/rt_tot)               * 100.
-            write(fnr,'(a,1x,f9.2)') 'nonuniform filtering     : ', (rt_nonuniform/rt_tot)             * 100.
-            write(fnr,'(a,1x,f9.2)') 'polar ref projection     : ', (rt_project_refs/rt_tot)          * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble initialisation           : ', (rt_init/rt_tot)                   * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble reading of volumes (I/O) : ', (rt_read/rt_tot)                   * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble summing partial volumes  : ', (rt_sum_reduce/rt_tot)             * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble sum of eo-paris          : ', (rt_sum_eos/rt_tot)                * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble gridding correction (eos): ', (rt_sampl_dens_correct_eos/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble gridding correction (sum): ', (rt_sampl_dens_correct_sum/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble automasking              : ', (rt_automask/rt_tot)               * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform filtering     : ', (rt_nonuniform/rt_tot)             * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble polar ref projection     : ', (rt_project_refs/rt_tot)          * 100.
             rt_accounted = rt_init + rt_read + rt_sum_reduce + rt_sum_eos + rt_sampl_dens_correct_eos + &
                 &rt_sampl_dens_correct_sum + rt_eoavg + rt_automask + rt_nonuniform + rt_project_refs
-            write(fnr,'(a,1x,f9.2)') '% accounted for          : ', (rt_accounted/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble % accounted for          : ', (rt_accounted/rt_tot) * 100.
             call fclose(fnr)
         endif
     end subroutine exec_cartesian_assembly

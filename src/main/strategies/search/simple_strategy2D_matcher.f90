@@ -435,26 +435,26 @@ contains
             benchfname = 'CLUSTER2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,1x,f9.2)') 'startup_overhead     : ', rt_startup
-            write(fnr,'(a,1x,f9.2)') 'prep_batch_particles : ', rt_alloc_ptcl_imgs2D
-            write(fnr,'(a,1x,f9.2)') 'prep_pftc_refs       : ', rt_prep_pftc_refs2D
-            write(fnr,'(a,1x,f9.2)') 'build_batch_particles: ', rt_build_batch_particles2D
-            write(fnr,'(a,1x,f9.2)') 'prep_strategy2D_batch: ', rt_prep_strategy2D_batch
-            write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', rt_align
-            write(fnr,'(a,1x,f9.2)') 'class averaging      : ', rt_cavg
-            write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', rt_projio
-            write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
+            write(fnr,'(a,t52,f9.2)') 'match2D startup_overhead     : ', rt_startup
+            write(fnr,'(a,t52,f9.2)') 'match2D prep_batch_particles : ', rt_alloc_ptcl_imgs2D
+            write(fnr,'(a,t52,f9.2)') 'match2D prep_pftc_refs       : ', rt_prep_pftc_refs2D
+            write(fnr,'(a,t52,f9.2)') 'match2D build_batch_particles: ', rt_build_batch_particles2D
+            write(fnr,'(a,t52,f9.2)') 'match2D prep_strategy2D_batch: ', rt_prep_strategy2D_batch
+            write(fnr,'(a,t52,f9.2)') 'match2D stochastic alignment : ', rt_align
+            write(fnr,'(a,t52,f9.2)') 'match2D class averaging      : ', rt_cavg
+            write(fnr,'(a,t52,f9.2)') 'match2D project file I/O     : ', rt_projio
+            write(fnr,'(a,t52,f9.2)') 'match2D total time           : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'startup_overhead     : ', (rt_startup/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'prep_batch_particles : ', (rt_alloc_ptcl_imgs2D/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'prep_pftc_refs       : ', (rt_prep_pftc_refs2D/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'build_batch_particles: ', (rt_build_batch_particles2D/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'prep_strategy2D_batch: ', (rt_prep_strategy2D_batch/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'class averaging      : ', (rt_cavg/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', (rt_projio/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') '% accounted for      : ', &
+            write(fnr,'(a,t52,f9.2)') 'match2D startup_overhead     : ', (rt_startup/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'match2D prep_batch_particles : ', (rt_alloc_ptcl_imgs2D/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'match2D prep_pftc_refs       : ', (rt_prep_pftc_refs2D/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'match2D build_batch_particles: ', (rt_build_batch_particles2D/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'match2D prep_strategy2D_batch: ', (rt_prep_strategy2D_batch/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'match2D stochastic alignment : ', (rt_align/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'match2D class averaging      : ', (rt_cavg/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'match2D project file I/O     : ', (rt_projio/rt_tot) * 100.
+            write(fnr,'(a,t52,f9.2)') 'match2D % accounted for      : ', &
                 ((rt_startup+rt_alloc_ptcl_imgs2D+rt_prep_pftc_refs2D+rt_build_batch_particles2D+ &
                   rt_prep_strategy2D_batch+rt_align+rt_cavg+rt_projio)/rt_tot) * 100.
 

@@ -69,15 +69,14 @@ contains
         call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution
         call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
-        call cline%set('refine',       'neigh') ! greedy multi-neighborhood 3D refinement 
-        call cline%set('icm',            'yes') ! ICM regularization to maximize map connectivity
+        call cline%set('refine',  'prob_neigh') ! greedy multi-neighborhood 3D refinement 
+        call cline%set('ml_reg',         'yes') ! ML regularization is on
         call cline%set('automsk',        'yes') ! envelope masking for background flattening
         call cline%set('overlap',         0.99) ! convergence if overlap > 99%
         call cline%set('nstates',            1) ! only single-state refinement is supported
         call cline%set('objfun',      'euclid') ! the objective function is noise-normalized Euclidean distance
         call cline%set('envfsc',         'yes') ! we use the envelope mask when calculating an FSC plot
         call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
-        call cline%set('lam_anneal',     'yes') ! we conduct deterministic annealing of the lambda regularization parameter
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')

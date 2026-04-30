@@ -76,7 +76,6 @@ contains
 
         ! benchmarking
         type(string) :: benchfname
-        character(len=32) :: partial_output_label
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
         integer(timer_int_kind) :: t_alloc_ptcl_imgs
         integer(timer_int_kind) :: t_prep_ref_sections, t_memoize_refs
@@ -90,15 +89,6 @@ contains
         l_write_partial_recs_value   = .false.
         if( l_write_partial_recs_present ) l_write_partial_recs_value = l_write_partial_recs
         call init_ctrl()
-        partial_output_label = 'partial reconstruction'
-        if( ctrl%do_polar )then
-            select case(ctrl%polar_mode)
-                case('obsfield')
-                    partial_output_label = 'obsfield insertion'
-                case('yes')
-                    partial_output_label = 'polar-sum accumulation'
-            end select
-        endif
         converged = .false.
         if( ctrl%do_bench )then
             t_startup = tic()
@@ -209,28 +199,40 @@ contains
                 benchfname = 'REFINE3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,1x,f9.2)') 'startup_overhead : ',          rt_startup
-                write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D : ',   rt_build_batch_ptcls
-                write(fnr,'(a,1x,f9.2)') 'alloc_ptcl_imgs : ',           rt_alloc_ptcl_imgs
-                write(fnr,'(a,1x,f9.2)') 'prepare matching refs : ',     rt_prep_ref_sections
-                write(fnr,'(a,1x,f9.2)') 'memoize matching refs : ',     rt_memoize_refs
-                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ',     rt_prep_orisrch
-                write(fnr,'(a,1x,f9.2)') '3D alignment : ',              rt_align
-                write(fnr,'(a,1x,f9.2)') 'project file I/O : ',          rt_projio
-                write(fnr,'(a,1x,f9.2)') trim(partial_output_label)//' : ', rt_rec
-                write(fnr,'(a,1x,f9.2)') 'total time : ',                rt_tot
+                write(fnr,'(a,t52,f9.2)') 'match3D startup_overhead : ',          rt_startup
+                write(fnr,'(a,t52,f9.2)') 'match3D build_batch_particles3D : ',   rt_build_batch_ptcls
+                write(fnr,'(a,t52,f9.2)') 'match3D alloc_ptcl_imgs : ',           rt_alloc_ptcl_imgs
+                write(fnr,'(a,t52,f9.2)') 'match3D prepare matching refs : ',     rt_prep_ref_sections
+                write(fnr,'(a,t52,f9.2)') 'match3D memoize matching refs : ',     rt_memoize_refs
+                write(fnr,'(a,t52,f9.2)') 'match3D orisrch3D preparation : ',     rt_prep_orisrch
+                write(fnr,'(a,t52,f9.2)') 'match3D 3D alignment : ',              rt_align
+                write(fnr,'(a,t52,f9.2)') 'match3D project file I/O : ',          rt_projio
+                if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
+                    write(fnr,'(a,t52,f9.2)') 'match3D obsfield insertion : ',     rt_rec
+                else if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'yes' )then
+                    write(fnr,'(a,t52,f9.2)') 'match3D polar-sum accumulation : ', rt_rec
+                else
+                    write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction : ', rt_rec
+                endif
+                write(fnr,'(a,t52,f9.2)') 'match3D total time : ',                rt_tot
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'startup_overhead : ',          (rt_startup/rt_tot)                     * 100.
-                write(fnr,'(a,1x,f9.2)') 'build_batch_particles3D : ',   (rt_build_batch_ptcls/rt_tot)           * 100.
-                write(fnr,'(a,1x,f9.2)') 'alloc_ptcl_imgs : ',           (rt_alloc_ptcl_imgs/rt_tot)             * 100.
-                write(fnr,'(a,1x,f9.2)') 'prepare matching refs : ',     (rt_prep_ref_sections/rt_tot)           * 100.
-                write(fnr,'(a,1x,f9.2)') 'memoize matching refs : ',     (rt_memoize_refs/rt_tot)                * 100.
-                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ',     (rt_prep_orisrch/rt_tot)                * 100.
-                write(fnr,'(a,1x,f9.2)') '3D alignment : ',              (rt_align/rt_tot)                       * 100.
-                write(fnr,'(a,1x,f9.2)') 'project file I/O : ',          (rt_projio/rt_tot)                      * 100.
-                write(fnr,'(a,1x,f9.2)') trim(partial_output_label)//' : ', (rt_rec/rt_tot)                      * 100.
-                write(fnr,'(a,1x,f9.2)') '% accounted for : ', &
+                write(fnr,'(a,t52,f9.2)') 'match3D startup_overhead : ',          (rt_startup/rt_tot)                     * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D build_batch_particles3D : ',   (rt_build_batch_ptcls/rt_tot)           * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D alloc_ptcl_imgs : ',           (rt_alloc_ptcl_imgs/rt_tot)             * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D prepare matching refs : ',     (rt_prep_ref_sections/rt_tot)           * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D memoize matching refs : ',     (rt_memoize_refs/rt_tot)                * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D orisrch3D preparation : ',     (rt_prep_orisrch/rt_tot)                * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D 3D alignment : ',              (rt_align/rt_tot)                       * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D project file I/O : ',          (rt_projio/rt_tot)                      * 100.
+                if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
+                    write(fnr,'(a,t52,f9.2)') 'match3D obsfield insertion : ',     (rt_rec/rt_tot)                         * 100.
+                else if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'yes' )then
+                    write(fnr,'(a,t52,f9.2)') 'match3D polar-sum accumulation : ', (rt_rec/rt_tot)                         * 100.
+                else
+                    write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction : ', (rt_rec/rt_tot)                         * 100.
+                endif
+                write(fnr,'(a,t52,f9.2)') 'match3D % accounted for : ', &
                     ((rt_startup+rt_build_batch_ptcls+rt_alloc_ptcl_imgs+ &
                     rt_prep_ref_sections+rt_memoize_refs+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
                 call fclose(fnr)
