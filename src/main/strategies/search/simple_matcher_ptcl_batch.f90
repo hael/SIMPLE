@@ -60,6 +60,11 @@ contains
         type(ctfparams) :: ctfparms(nthr_glob)
         integer :: i, iptcl, ithr
         if( nptcls < 1 ) return
+        if( params%l_ml_reg )then
+            if( .not. allocated(build%esig%sigma2_noise) )then
+                THROW_HARD('build%esig%sigma2_noise is not allocated while ml_reg is enabled; prep_imgs4obsfield')
+            endif
+        endif
         call memoize_ft_maps(ptcl_imgs_pad(1)%get_ldim(), ptcl_imgs_pad(1)%get_smpd())
         !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
         do i = 1,nptcls
@@ -85,7 +90,12 @@ contains
         shift   = 0.0
         ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
         if( ctfparms%ctfflag == CTFFLAG_YES ) ctfparms%ctfflag = CTFFLAG_FLIP
-        call ptcl_img_pad%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms, shift, fplane)
+        if( params%l_ml_reg )then
+            call ptcl_img_pad%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms, shift, &
+                &fplane, build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
+        else
+            call ptcl_img_pad%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms, shift, fplane)
+        endif
     end subroutine prep_img4obsfield
 
     subroutine shift_obsfield_fplanes( params, nptcls, incr_shifts, fplanes )
