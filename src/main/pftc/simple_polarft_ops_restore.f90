@@ -425,7 +425,7 @@ contains
         endif
         write_cartesian_vols = .false.
         if( cline%defined('write_obsfield_vols') )then
-            write_cartesian_vols = trim(cline%get_carg('write_obsfield_vols')) == 'yes'
+            write_cartesian_vols = cline%get_carg('write_obsfield_vols') == 'yes'
         endif
         ! write down FRCs
         kspan  = [self%kfromto(1), self%interpklim]
