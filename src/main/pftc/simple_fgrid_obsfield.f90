@@ -147,7 +147,7 @@ contains
     !
     ! Nearest-cell insertion touches one destination cell per Fourier sample.
     ! Use two h-colors to avoid write collisions without OpenMP atomics.
-    subroutine insert_plane_oversamp( self, se, o, fpl, pwght )
+    subroutine insert_plane_oversamp( self, se, o, fpl, pwght, shift_crop )
         use simple_math,    only: ceil_div, floor_div
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
         class(fgrid_obs_field), intent(inout) :: self
@@ -155,10 +155,12 @@ contains
         class(ori),             intent(inout) :: o
         class(fplane_type),     intent(in)    :: fpl
         real,                   intent(in)    :: pwght
+        real, optional,         intent(in)    :: shift_crop(2)
         type(ori)   :: o_sym
         complex(sp) :: cmplx_raw
+        complex(sp) :: phase_h, phase_k, phase_shift, w_k
         complex(dp) :: comp
-        real(dp)    :: ctfval, pwght_dp, pwght_pf2_dp, cell_w, cell_w_norm
+        real(dp)    :: ctfval, pwght_dp, pwght_pf2_dp, cell_w, cell_w_norm, pshift_pf(2)
         real(sp)    :: ctfsq_raw
         real(sp)    :: loc(3), delta(3), R(3,3)
         real        :: rotmats(se%get_nsym(),3,3)
@@ -167,6 +169,7 @@ contains
         integer     :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
         integer     :: lim1_lo, gl_lo1, gl_lo2, gl_lo3, gl_hi1, gl_hi2, gl_hi3
         integer     :: nobs_add
+        logical     :: l_shift
         if( .not. self%initialized ) THROW_HARD('obsfield not initialized; insert_plane_oversamp')
         if( pwght < TINY ) return
         nobs_add      = 0
@@ -192,6 +195,12 @@ contains
         pwght_pf2_dp = pwght_dp * real(pf_local*pf_local, dp)
         cell_w_norm  = real(self%kb%apod_fast(0._sp), dp)
         cell_w_norm  = 1.d0 / (cell_w_norm * cell_w_norm * cell_w_norm)
+        l_shift      = .false.
+        if( present(shift_crop) ) l_shift = any(abs(shift_crop) > 1.e-6)
+        if( l_shift )then
+            pshift_pf = real(-shift_crop * fpl%shconst(1:2), dp) * real(pf_local, dp)
+            w_k       = cmplx(real(cos(pshift_pf(2)),sp), real(sin(pshift_pf(2)),sp), kind=sp)
+        endif
         ! integer disk gate: bit-exact equivalent of original nint(sqrt(h^2+k^2)) > nyq
         ! since for non-negative integer n,  n > nyq*(nyq+1)  <=>  nint(sqrt(n)) > nyq
         nyq_disk     = self%nyq * (self%nyq + 1)
@@ -201,6 +210,7 @@ contains
         gl_lo3 = self%grid_lims(3,1); gl_hi3 = self%grid_lims(3,2)
         !$omp parallel default(shared) private(isym,R,l,h,k,h_sq,k_max_h,k_lo,k_hi,&
         !$omp& cmplx_raw,ctfsq_raw,comp,ctfval,loc,delta,coord,hp,kp,cell_w)&
+        !$omp& private(phase_h,phase_k,phase_shift)&
         !$omp& reduction(+:nobs_add) proc_bind(close)
         do isym = 1, nsym
             R = rotmats(isym,:,:)
@@ -214,13 +224,24 @@ contains
                     k_lo    = max(fpllims(2,1), -k_max_h)
                     k_hi    = min(fpllims(2,2),  k_max_h)
                     hp = h * pf_local
+                    if( l_shift )then
+                        phase_h = cmplx(real(cos(real(h,dp)*pshift_pf(1)),sp), &
+                            real(sin(real(h,dp)*pshift_pf(1)),sp), kind=sp)
+                        phase_k = cmplx(real(cos(real(k_lo,dp)*pshift_pf(2)),sp), &
+                            real(sin(real(k_lo,dp)*pshift_pf(2)),sp), kind=sp)
+                    endif
                     do k = k_lo, k_hi
                         kp = k * pf_local
+                        if( l_shift )then
+                            phase_shift = phase_h * phase_k
+                            phase_k     = phase_k * w_k
+                        endif
                         ! raw padded-plane samples (single precision); cheap zero-skip
                         cmplx_raw = fplane_get_cmplx(fpl, hp, kp)
                         ctfsq_raw = fplane_get_ctfsq(fpl, hp, kp)
                         if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
                             ctfsq_raw <= TINY ) cycle
+                        if( l_shift ) cmplx_raw = cmplx_raw * phase_shift
                         ! rotated location on the native lattice; third h-component
                         ! is zero, so 6 muls instead of matmul's 9
                         loc(1) = real(h,sp)*R(1,1) + real(k,sp)*R(2,1)
@@ -735,18 +756,27 @@ contains
         call self%odd%kill
     end subroutine obsfield_eo_kill
 
-    subroutine obsfield_eo_insert_plane( self, se, o, fpl, eo, pwght )
+    subroutine obsfield_eo_insert_plane( self, se, o, fpl, eo, pwght, shift_crop )
         class(fgrid_obsfield_eo), intent(inout) :: self
         class(sym),                intent(inout) :: se
         class(ori),                intent(inout) :: o
         class(fplane_type),        intent(in)    :: fpl
         integer,                   intent(in)    :: eo
         real,                      intent(in)    :: pwght
+        real, optional,            intent(in)    :: shift_crop(2)
         select case(eo)
             case(-1,0)
-                call self%even%insert_plane_oversamp(se, o, fpl, pwght)
+                if( present(shift_crop) )then
+                    call self%even%insert_plane_oversamp(se, o, fpl, pwght, shift_crop=shift_crop)
+                else
+                    call self%even%insert_plane_oversamp(se, o, fpl, pwght)
+                endif
             case(1)
-                call self%odd%insert_plane_oversamp(se, o, fpl, pwght)
+                if( present(shift_crop) )then
+                    call self%odd%insert_plane_oversamp(se, o, fpl, pwght, shift_crop=shift_crop)
+                else
+                    call self%odd%insert_plane_oversamp(se, o, fpl, pwght)
+                endif
             case DEFAULT
                 THROW_HARD('unsupported eo flag; obsfield_eo_insert_plane')
         end select

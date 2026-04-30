@@ -1303,14 +1303,15 @@ contains
         if( cline%defined('msklist') )then
             if( nlines(self%msklist)< MAXS ) call read_masks
         endif
-        ! no stack given, get ldim from volume if present
+        ! no stack given, get ldim from volume if present.  An explicit box
+        ! still owns particle-stack I/O; stage/reference volumes may be cropped.
         if( self%stk .eq. '' .and. cline%defined('vol_even') )then
             call find_ldim_nptcls(self%vol_even, self%ldim, ifoo)
-            self%box      = self%ldim(1)
+            if( .not.cline%defined('box')      ) self%box      = self%ldim(1)
             if( .not.cline%defined('box_crop') ) self%box_crop = self%box
         else if( self%stk .eq. '' .and. vol_defined(1) )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
-            self%box      = self%ldim(1)
+            if( .not.cline%defined('box')      ) self%box      = self%ldim(1)
             if( .not.cline%defined('box_crop') ) self%box_crop = self%box
         endif
         ! directories

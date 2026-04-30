@@ -460,9 +460,9 @@ contains
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
                     case('obsfield')
-                        call shift_obsfield_fplanes(p_ptr, batchsz, incr_shifts(:,1:batchsz), fpls(:batchsz))
                         call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
-                            &b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
+                            &b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz), &
+                            &incr_shifts=incr_shifts(:,1:batchsz))
                     case('yes')
                         call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), &
                             b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)

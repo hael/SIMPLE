@@ -268,22 +268,26 @@ contains
     ! state-local observation fields here; assembly later extracts polar sections
     ! from the reduced fields, matching the polar=no insert-then-assemble shape.
     module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls, &
-        &reforis_in, nspace_out )
-        class(polarft_calc),        intent(inout) :: self
-        class(oris), target,        intent(inout) :: eulspace
-        class(oris), pointer,       intent(inout) :: ptcl_field
-        class(sym),                 intent(inout) :: symop
-        integer,                    intent(in)    :: nptcls, pinds(nptcls)
-        class(fplane_type), target, intent(inout) :: fpls(nptcls)
+        &reforis_in, nspace_out, incr_shifts )
+        class(polarft_calc),           intent(inout) :: self
+        class(oris), target,           intent(inout) :: eulspace
+        class(oris), pointer,          intent(inout) :: ptcl_field
+        class(sym),                    intent(inout) :: symop
+        integer,                       intent(in)    :: nptcls, pinds(nptcls)
+        class(fplane_type), target,    intent(inout) :: fpls(nptcls)
         ! Retained for source compatibility; assembly now owns the output
         ! reference space for obsfield.
         class(oris), target, optional, intent(inout) :: reforis_in
-        integer,          optional, intent(in)    :: nspace_out
+        integer,             optional, intent(in)    :: nspace_out
+        real,                optional, intent(in)    :: incr_shifts(2,nptcls)
         type(ori) :: o
-        real :: pw
+        real :: crop_factor, pw, shift_crop(2)
         integer :: i, iptcl, eo, pstate
+        logical :: l_shift
         if( nptcls < 1 ) return
         call ensure_obsfields_allocated(self)
+        l_shift = present(incr_shifts)
+        if( l_shift ) crop_factor = real(self%p_ptr%box_crop) / real(self%p_ptr%box)
         do i = 1, nptcls
             iptcl  = pinds(i)
             pstate = ptcl_field%get_state(iptcl)
@@ -293,7 +297,12 @@ contains
             if( pw < TINY ) cycle
             eo = ptcl_field%get_eo(iptcl)
             call ptcl_field%get_ori(iptcl, o)
-            call self%obsfields(pstate)%insert_plane(symop, o, fpls(i), eo, pw)
+            if( l_shift )then
+                shift_crop = incr_shifts(:,i) * crop_factor
+                call self%obsfields(pstate)%insert_plane(symop, o, fpls(i), eo, pw, shift_crop=shift_crop)
+            else
+                call self%obsfields(pstate)%insert_plane(symop, o, fpls(i), eo, pw)
+            endif
         enddo
         call o%kill
     end subroutine polar_cavger_insert_ptcls_obsfield
