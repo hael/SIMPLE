@@ -274,6 +274,12 @@ contains
         self%with_ctf = l_wctf
     end subroutine set_with_ctf
 
+    module subroutine set_kcollapse_objfun(self, enabled)
+        class(polarft_calc), intent(inout) :: self
+        logical,             intent(in)    :: enabled
+        self%l_kcollapse_objfun = enabled
+    end subroutine set_kcollapse_objfun
+
     module subroutine assign_sigma2_noise(self, sigma2_noise)
         class(polarft_calc),       intent(inout) :: self
         real, allocatable, target, intent(inout) :: sigma2_noise(:,:)

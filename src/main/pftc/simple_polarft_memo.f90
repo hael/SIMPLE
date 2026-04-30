@@ -261,7 +261,7 @@ contains
         integer(kind=c_int) :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
         integer             :: ithr
         call self%kill_memo_workspace
-        allocate(self%drvec(nthr_glob), self%cmat2_many(nthr_glob), self%crmat1_many(nthr_glob))
+        allocate(self%drvec(nthr_glob), self%cmat2_many(nthr_glob), self%crmat1_many(nthr_glob), self%crvec1(nthr_glob))
         ! convenience objects
         do ithr = 1,nthr_glob
             self%drvec(ithr)%p = fftw_alloc_real(int(self%nrots, c_size_t))
@@ -274,6 +274,9 @@ contains
             call c_f_pointer(self%crmat1_many(ithr)%p, self%crmat1_many(ithr)%c, [self%pftsz+1, self%nk])
             ! Real in-place view on same memory: (nrots+2, nk)
             call c_f_pointer(self%crmat1_many(ithr)%p, self%crmat1_many(ithr)%r, [self%nrots+2, self%nk])
+            self%crvec1(ithr)%p = fftwf_alloc_complex(int(self%pftsz+1, c_size_t))
+            call c_f_pointer(self%crvec1(ithr)%p, self%crvec1(ithr)%c, [self%pftsz+1])
+            call c_f_pointer(self%crvec1(ithr)%p, self%crvec1(ithr)%r, [self%nrots+2])
         enddo
         ! plans & FFTW3 wisdoms
         if( self%p_ptr%l_distr_worker )then
@@ -308,6 +311,9 @@ contains
         self%plan_bwd1_many = fftwf_plan_many_dft_c2r( rank, n, howmany, &
         &self%crmat1_many(1)%c, inembed, istride, idist, &
         &self%crmat1_many(1)%r, onembed, ostride, odist, &
+        &ior(FFTW_MEASURE, FFTW_USE_WISDOM) )
+        self%plan_bwd1_single = fftwf_plan_dft_c2r_1d( int(self%nrots, c_int), &
+        &self%crvec1(1)%c, self%crvec1(1)%r, &
         &ior(FFTW_MEASURE, FFTW_USE_WISDOM) )
         ! Plan the many R2C transforms for CTF2 memoization
         rank       = 1_c_int
@@ -354,11 +360,13 @@ contains
                 call fftw_free( self%drvec(ithr)%p)
                 call fftwf_free(self%cmat2_many(ithr)%p)
                 call fftwf_free(self%crmat1_many(ithr)%p)
+                call fftwf_free(self%crvec1(ithr)%p)
             enddo
-            deallocate(self%drvec, self%cmat2_many, self%crmat1_many)
+            deallocate(self%drvec, self%cmat2_many, self%crmat1_many, self%crvec1)
             call fftwf_destroy_plan(self%plan_mem_r2c_many)
             call fftwf_destroy_plan(self%plan_fwd1_many)
             call fftwf_destroy_plan(self%plan_bwd1_many)
+            call fftwf_destroy_plan(self%plan_bwd1_single)
         endif
     end subroutine kill_memo_workspace
 

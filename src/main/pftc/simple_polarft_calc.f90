@@ -25,6 +25,12 @@ type fftw_crmat
     real(kind=c_float),            pointer :: r(:,:) => null()  ! (nrots+2, nk) view on same memory
 end type fftw_crmat
 
+type fftw_crvec
+    type(c_ptr)                            :: p
+    complex(kind=c_float_complex), pointer :: c(:) => null()  ! (pftsz+1)
+    real(kind=c_float),            pointer :: r(:) => null()  ! (nrots+2) view on same memory
+end type fftw_crvec
+
 type heap_vars
     complex(sp), pointer :: pft_ref(:,:)        => null()
     real(dp),    pointer :: argvec(:)           => null()
@@ -70,7 +76,7 @@ type :: polarft_calc
     complex(sp), allocatable :: pfts_ptcls(:,:,:)        !< 3D complex matrix of particle sections
     ! FFTW plans
     ! batched FFT plans for vectors of length nrots (nk transforms)
-    type(c_ptr) :: plan_fwd1_many, plan_bwd1_many, plan_mem_r2c_many
+    type(c_ptr) :: plan_fwd1_many, plan_bwd1_many, plan_bwd1_single, plan_mem_r2c_many
     ! Memoized terms
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)                      !< Fourier Transform of particle times CTF
     complex(kind=c_float_complex), allocatable :: ft_absptcl_ctf(:,:,:)                   !< Fourier Transform of (particle times CTF)**2
@@ -81,6 +87,8 @@ type :: polarft_calc
     type(fftw_cmat),               allocatable :: cmat2_many(:)  ! per thread
     ! batched backward (c2r) plan: nk transforms of length nrots, in-place
     type(fftw_crmat),              allocatable :: crmat1_many(:) ! per thread
+    ! single backward (c2r) plan: one k-collapsed transform of length nrots
+    type(fftw_crvec),              allocatable :: crvec1(:)      ! per thread
     ! Convenience vectors, thread memoization
     type(heap_vars),               allocatable :: heap_vars(:)
     type(fftw_drvec),              allocatable :: drvec(:)
@@ -93,6 +101,7 @@ type :: polarft_calc
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
     real,    pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
     logical              :: l_comlin  = .false.         !< use common lines?
+    logical              :: l_kcollapse_objfun = .true. !< collapse k spectra before objective IFFTs
     logical              :: with_ctf  = .false.         !< CTF flag
     logical              :: existence = .false.         !< to indicate existence
   contains
@@ -111,6 +120,7 @@ type :: polarft_calc
     procedure          :: swap_ptclsevenodd
     procedure          :: set_eo
     procedure          :: set_with_ctf
+    procedure          :: set_kcollapse_objfun
     procedure          :: assign_sigma2_noise
     ! ===== GETTERS + POINTER ACCESSORS: simple_polarft_access.f90
     procedure          :: get_nrots
@@ -305,6 +315,11 @@ interface
         class(polarft_calc), intent(inout) :: self
         logical,             intent(in)    :: l_wctf
     end subroutine set_with_ctf
+
+    module subroutine set_kcollapse_objfun(self, enabled)
+        class(polarft_calc), intent(inout) :: self
+        logical,             intent(in)    :: enabled
+    end subroutine set_kcollapse_objfun
 
     module subroutine assign_sigma2_noise(self, sigma2_noise)
         class(polarft_calc),       intent(inout) :: self
