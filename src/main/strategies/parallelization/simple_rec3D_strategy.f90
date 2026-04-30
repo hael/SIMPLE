@@ -8,6 +8,7 @@ use simple_matcher_3Dpolar,      only: calc_polar_partials
 use simple_matcher_3Drec,        only: calc_3Drec
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_commanders_rec_distr, only: commander_cartesian_volassemble, commander_polar_volassemble
+use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_iter_refs_fname, refine3D_state_vol_fname
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
@@ -164,7 +165,7 @@ contains
             call cline_volassemble%set('prg',  'volassemble')
             call cline_volassemble%set('nthr', params%nthr)
             call xpolar_volassemble%execute(cline_volassemble)
-            params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
+            params%refs = refine3D_iter_refs_fname(params%which_iter)
             call cline%delete('force_volassemble')
             call cline_volassemble%kill
         else
@@ -179,7 +180,7 @@ contains
                 call cline_volassemble%set('write_polar_refs', 'no')
             endif
             do state = 1, params%nstates
-                volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+                volname = refine3D_state_vol_fname(state)
                 if( cline_volassemble%defined('vol'//int2str(state)) )then
                     vol_in = cline_volassemble%get_carg('vol'//int2str(state))
                     if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
@@ -189,7 +190,7 @@ contains
             end do
             call xvolassemble%execute(cline_volassemble)
             do state = 1, params%nstates
-                volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+                volname = refine3D_state_vol_fname(state)
                 params%vols(state) = volname
                 call cline%set('vol'//int2str(state), volname)
             end do
@@ -290,7 +291,7 @@ contains
             call cline_volassemble%set('write_polar_refs', 'no')
         endif
         do state = 1, params%nstates
-            volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+            volname = refine3D_state_vol_fname(state)
             if( cline_volassemble%defined('vol'//int2str(state)) )then
                 vol_in = cline_volassemble%get_carg('vol'//int2str(state))
                 if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
@@ -311,20 +312,20 @@ contains
         type(parameters),            intent(in)    :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        type(string) :: str_state, fsc_file
+        type(string) :: fsc_file
         integer      :: state
         ! updates project file only if mkdir is set to yes
         if( params%mkdir.eq.'yes' )then
             do state = 1, params%nstates
-                str_state = int2str_pad(state,2)
-                fsc_file  = FSC_FBODY//str_state%to_char()//BIN_EXT
+                fsc_file = refine3D_fsc_fname(state)
                 call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
                 if( trim(params%oritype).eq.'cls3D' )then
-                    call build%spproj%add_vol2os_out(string(VOL_FBODY)//str_state//params%ext, params%smpd_crop, state, 'vol_cavg')
+                    call build%spproj%add_vol2os_out(refine3D_state_vol_fname(state), &
+                        &params%smpd_crop, state, 'vol_cavg')
                 else
-                    call build%spproj%add_vol2os_out(string(VOL_FBODY)//str_state//params%ext, params%smpd_crop, state, 'vol')
+                    call build%spproj%add_vol2os_out(refine3D_state_vol_fname(state), &
+                        &params%smpd_crop, state, 'vol')
                 endif
-                call str_state%kill
                 call fsc_file%kill
             enddo
             call build%spproj%write_segment_inside('out', params%projfile)
@@ -363,18 +364,16 @@ contains
         type(parameters), intent(in)    :: params
         class(cmdline),   intent(inout) :: cline
         type(parameters) :: params_pp
-        type(string)     :: str_state, fname_vol, fname_fsc
+        type(string)     :: fname_vol, fname_fsc
         real             :: smpd
         integer          :: state, nptcls, ldim(3)
         if( trim(params%postprocess) /= 'yes' )return
         if( cline%defined('part') )return
         do state = 1, params%nstates
             params_pp = params
-            str_state = int2str_pad(state,2)
-            fname_vol = string(VOL_FBODY)//str_state//params%ext
-            fname_fsc = FSC_FBODY//str_state%to_char()//BIN_EXT
+            fname_vol = refine3D_state_vol_fname(state)
+            fname_fsc = refine3D_fsc_fname(state)
             if( .not. file_exists(fname_vol) )then
-                call str_state%kill
                 call fname_vol%kill
                 call fname_fsc%kill
                 cycle
@@ -382,7 +381,6 @@ contains
             call find_ldim_nptcls(fname_vol, ldim, nptcls)
             smpd = params%smpd_crop
             call postprocess_volume_from_files(fname_vol, fname_fsc, ldim(1), smpd, params_pp, cline)
-            call str_state%kill
             call fname_vol%kill
             call fname_fsc%kill
         enddo

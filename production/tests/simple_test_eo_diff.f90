@@ -2,23 +2,25 @@
 program simple_test_eo_diff
 use simple_core_module_api
 use simple_image, only: image
+use simple_refine3D_fnames, only: refine3D_state_halfvol_fname, refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
-character(len=*), parameter :: name_vol      = 'recvol_state01.mrc'
-character(len=*), parameter :: name_vol_even = 'recvol_state01_even.mrc'
-character(len=*), parameter :: name_vol_odd  = 'recvol_state01_odd.mrc'
 integer,          parameter :: box           = 300
 integer,          parameter :: ldim(3)       = [box,box,box]
 real,             parameter :: smpd          = 1.2156
+type(string)       :: name_vol, name_vol_even, name_vol_odd
 type(image)       :: vol, vol_even, vol_odd, vol_noise
 integer           :: filtsz
 real, allocatable :: res(:), corrs(:)
+name_vol      = refine3D_state_vol_fname(1)
+name_vol_even = refine3D_state_halfvol_fname(1, 'even')
+name_vol_odd  = refine3D_state_halfvol_fname(1, 'odd')
 call vol%new(ldim, smpd)
 call vol_even%new(ldim, smpd)
 call vol_odd%new(ldim, smpd)
-call vol%read(string(name_vol))
-call vol_even%read(string(name_vol_even))
-call vol_odd%read(string(name_vol_odd))
+call vol%read(name_vol)
+call vol_even%read(name_vol_even)
+call vol_odd%read(name_vol_odd)
 call vol_noise%copy(vol_even)
 call vol_noise%subtr(vol_odd)
 call vol_noise%write(string('noisevol_state01.mrc'))

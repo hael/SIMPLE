@@ -6,6 +6,7 @@ use simple_parameters,    only: parameters
 use simple_cmdline,       only: cmdline
 use simple_image,         only: image
 use simple_pftc_srch_api, only: polarft_dims_from_file_header
+use simple_refine3D_fnames, only: refine3D_polar_refs_fbody, refine3D_polar_refs_fname
 implicit none
 
 public :: read_mask_filter_reproject_refvols
@@ -62,9 +63,9 @@ contains
         class(parameters), intent(in) :: params
         type(string) :: refs, refs_even, refs_odd
         logical      :: have_refs, have_even, have_odd
-        refs      = POLAR_REFS_FBODY//BIN_EXT
-        refs_even = POLAR_REFS_FBODY//'_even'//BIN_EXT
-        refs_odd  = POLAR_REFS_FBODY//'_odd'//BIN_EXT
+        refs      = refine3D_polar_refs_fname()
+        refs_even = refine3D_polar_refs_fname('even')
+        refs_odd  = refine3D_polar_refs_fname('odd')
         have_refs = file_exists(refs)
         have_even = file_exists(refs_even)
         have_odd  = file_exists(refs_odd)
@@ -110,9 +111,16 @@ contains
     end function polar_ref_sections_available
 
     subroutine remove_polar_ref_section_files
-        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
-        if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
-        if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
+        type(string) :: refs, refs_even, refs_odd
+        refs      = refine3D_polar_refs_fname()
+        refs_even = refine3D_polar_refs_fname('even')
+        refs_odd  = refine3D_polar_refs_fname('odd')
+        if( file_exists(refs) )      call del_file(refs)
+        if( file_exists(refs_even) ) call del_file(refs_even)
+        if( file_exists(refs_odd) )  call del_file(refs_odd)
+        call refs%kill
+        call refs_even%kill
+        call refs_odd%kill
     end subroutine remove_polar_ref_section_files
 
     subroutine write_polar_refs_from_current_pftc( params, build, nspace_refs, skip_distr_nonroot )
@@ -129,7 +137,7 @@ contains
         nrefs_write = nspace_write * params%nstates
         call remove_polar_ref_section_files
         call build%pftc%polar_cavger_new(.true., nrefs=nrefs_write)
-        call build%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+        call build%pftc%polar_cavger_write_eo_pftcrefs(refine3D_polar_refs_fbody())
     end subroutine write_polar_refs_from_current_pftc
 
     subroutine materialize_polar_refs_from_volume_source( params, build, cline, batchsz, cleanup_pftc )
@@ -227,8 +235,8 @@ contains
         vol_avg = params%vols(s)
         ! READ: try nonuniform refs first if requested, then regular refs, then average
         if( l_nonuniform_mode )then
-            vol_even = add2fbody(params%vols_even(s), params%ext, NUFILT_SUFFIX)
-            vol_odd  = add2fbody(params%vols_odd(s),  params%ext, NUFILT_SUFFIX)
+            vol_even = add2fbody(params%vols_even(s), MRC_EXT, NUFILT_SUFFIX)
+            vol_odd  = add2fbody(params%vols_odd(s),  MRC_EXT, NUFILT_SUFFIX)
         else
             vol_even = params%vols_even(s)
             vol_odd  = params%vols_odd(s)

@@ -4,6 +4,7 @@ use simple_commanders_api
 use simple_pftc_srch_api
 use simple_fsc
 use simple_commanders_euclid, only: commander_calc_pspec
+use simple_refine3D_fnames,  only: refine3D_fsc_fbody, refine3D_fsc_fname
 implicit none
 #include "simple_local_flags.inc"
 
@@ -87,8 +88,8 @@ contains
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
         call even%kill
         call odd%kill
-        fsc_templ = FSC_FBODY//int2str_pad(1,2)
-        call arr2file(fsc, fsc_templ//BIN_EXT)
+        fsc_templ = refine3D_fsc_fbody(1)
+        call arr2file(fsc, refine3D_fsc_fname(1))
         if( params%automsk .ne. 'no' )then
             call plot_phrand_fsc(size(fsc), fsc, fsc_t, fsc_n, res, params%smpd, fsc_templ%to_char())
         else

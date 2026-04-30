@@ -2,6 +2,7 @@
 module simple_polarft_calc
 use simple_pftc_api
 use simple_fgrid_obsfield, only: fgrid_obsfield_eo, unsampled_floor
+use simple_refine3D_fnames, only: refine3D_polar_refs_fname
 implicit none
 
 public :: polarft_calc, polarft_dims_from_file_header, polarft_estimate_lplim3D
@@ -1053,8 +1054,8 @@ contains
             THROW_HARD('Invalid low-pass range ordering in polarft_estimate_lplim3D: lpstart must be >= lpstop')
         endif
         ! read current references
-        str_even = POLAR_REFS_FBODY//'_even'//BIN_EXT
-        str_odd  = POLAR_REFS_FBODY//'_odd'//BIN_EXT
+        str_even = refine3D_polar_refs_fname('even')
+        str_odd  = refine3D_polar_refs_fname('odd')
         if( .not.file_exists(str_even) .or. .not.file_exists(str_odd) )then
             if( DEBUG )then
                 write(logfhandle,'(A)') '>>> DEBUG: polarft_estimate_lplim3D'

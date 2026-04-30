@@ -1,5 +1,7 @@
 module simple_strategy3D_matcher
 use simple_pftc_srch_api
+use simple_matcher_refvol_utils
+use simple_matcher_ptcl_batch
 use simple_strategy3D_alloc,        only: clean_strategy3D, prep_strategy3D, s3D
 use simple_binoris_io,              only: binwrite_oritab
 use simple_builder,                 only: builder
@@ -7,13 +9,10 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
 use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
-use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D, &
-    &shift_obsfield_fplanes
 use simple_matcher_pftc_prep,       only: prep_pftc4align3D
-use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols, complete_volume_source_defined, &
-    &any_volume_source_defined, write_polar_refs_from_current_pftc, polar_ref_sections_available
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, sample_ptcls4fillin, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
+use simple_refine3D_fnames,         only: refine3D_bench_fname, refine3D_polar_refs_fbody
 use simple_strategy3D_eval,         only: strategy3D_eval
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
@@ -206,7 +205,7 @@ contains
             doprint = .true.
             if( p_ptr%part /= 1 ) doprint = .false.
             if( doprint )then
-                benchfname = 'REFINE3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
+                benchfname = refine3D_bench_fname(which_iter)
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,t52,f9.2)') 'match3D startup_overhead : ',          rt_startup
@@ -347,7 +346,7 @@ contains
                             ! prob_tab, while the main pass only stamps assignments and
                             ! accumulates partial reconstruction sums.
                             if( .not. ctrl%do_prob_align )then
-                                call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(string(POLAR_REFS_FBODY))
+                                call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(refine3D_polar_refs_fbody())
                             endif
                         endif
                     endif

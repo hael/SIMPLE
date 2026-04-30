@@ -7,6 +7,7 @@ use simple_cmdline,         only: cmdline
 use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
+use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_state_vol_fname
 implicit none
 
 public :: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs, calc_3Drec
@@ -227,9 +228,9 @@ contains
                 cycle
             endif
             call build%eorecvols(s)%compress_exp
-            call build%eorecvols(s)%write_eos(string(VOL_FBODY)//int2str_pad(s,2)//'_part'//int2str_pad(params%part,numlen_part))
+            call build%eorecvols(s)%write_eos(refine3D_partial_rec_fbody(s, params%part, numlen_part))
             if( .not. cline%defined('force_volassemble') )then
-                params%vols(s) = string(VOL_FBODY)//int2str_pad(s,2)//MRC_EXT
+                params%vols(s) = refine3D_state_vol_fname(s)
                 call cline%set('vol'//int2str(s), params%vols(s))
             endif
         end do

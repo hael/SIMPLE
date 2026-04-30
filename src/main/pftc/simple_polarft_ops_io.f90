@@ -1,5 +1,7 @@
 !@descr: submodule for parallel I/O and polar->Cartesian conversion
 submodule (simple_polarft_calc) simple_polarft_ops_io
+use simple_refine3D_fnames, only: refine3D_polar_cavgs_part_fname, &
+    &refine3D_polar_ctfsqsums_part_fname, refine3D_polar_ref_part_fname
 implicit none
 #include "simple_local_flags.inc"
 contains
@@ -353,10 +355,10 @@ contains
         integer :: dims_cae(4), dims_cao(4), dims_cte(4), dims_cto(4)
         integer :: funit_cae, funit_cao, funit_cte, funit_cto
         integer :: i
-        cae = 'cavgs_even_part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//BIN_EXT
-        cao = 'cavgs_odd_part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//BIN_EXT
-        cte = 'ctfsqsums_even_part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//BIN_EXT
-        cto = 'ctfsqsums_odd_part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//BIN_EXT
+        cae = refine3D_polar_cavgs_part_fname('even', self%p_ptr%part, self%p_ptr%numlen)
+        cao = refine3D_polar_cavgs_part_fname('odd',  self%p_ptr%part, self%p_ptr%numlen)
+        cte = refine3D_polar_ctfsqsums_part_fname('even', self%p_ptr%part, self%p_ptr%numlen)
+        cto = refine3D_polar_ctfsqsums_part_fname('odd',  self%p_ptr%part, self%p_ptr%numlen)
         select case(trim(which))
             case('read')
                 call self%open_pft_array_for_read(cae,  self%pfts_even, funit_cae, dims_cae, pfte_buf)
@@ -430,10 +432,10 @@ contains
                &ctf2e(self%pftsz,self%kfromto(1):self%interpklim,self%ncls), ctf2o(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
         call self%polar_cavger_zero_pft_refs
         do ipart = 1,self%p_ptr%nparts
-            cae = 'cavgs_even_part'    //int2str_pad(ipart,self%p_ptr%numlen)//BIN_EXT
-            cao = 'cavgs_odd_part'     //int2str_pad(ipart,self%p_ptr%numlen)//BIN_EXT
-            cte = 'ctfsqsums_even_part'//int2str_pad(ipart,self%p_ptr%numlen)//BIN_EXT
-            cto = 'ctfsqsums_odd_part' //int2str_pad(ipart,self%p_ptr%numlen)//BIN_EXT
+            cae = refine3D_polar_cavgs_part_fname('even', ipart, self%p_ptr%numlen)
+            cao = refine3D_polar_cavgs_part_fname('odd',  ipart, self%p_ptr%numlen)
+            cte = refine3D_polar_ctfsqsums_part_fname('even', ipart, self%p_ptr%numlen)
+            cto = refine3D_polar_ctfsqsums_part_fname('odd',  ipart, self%p_ptr%numlen)
             call self%open_pft_array_for_read(cae, pfte,  funit_cae, dims_cae, pfte_buf)
             call self%open_pft_array_for_read(cao, pfto,  funit_cao, dims_cao, pfto_buf)
             call self%open_ctf2_array_for_read(cte, ctf2e, funit_cte, dims_cte, ctf2e_buf)
@@ -736,11 +738,9 @@ contains
             do ipart = 1, nparts
                 iref_from = (s - 1) * self%p_ptr%nspace + parts(ipart, 1)
                 iref_to   = (s - 1) * self%p_ptr%nspace + parts(ipart, 2)
-                fname = string(POLAR_REFS_FBODY)//'_s'//int2str_pad(s,2)  &
-                      & //'_part'//int2str_pad(ipart, numlen)//'_even'//BIN_EXT
+                fname = refine3D_polar_ref_part_fname(s, ipart, numlen, 'even')
                 call self%read_ref_pfts_range(fname, .true.,  iref_from, iref_to)
-                fname = string(POLAR_REFS_FBODY)//'_s'//int2str_pad(s,2)  &
-                      & //'_part'//int2str_pad(ipart, numlen)//'_odd'//BIN_EXT
+                fname = refine3D_polar_ref_part_fname(s, ipart, numlen, 'odd')
                 call self%read_ref_pfts_range(fname, .false., iref_from, iref_to)
             end do
         end do

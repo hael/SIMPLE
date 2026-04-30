@@ -1,5 +1,6 @@
 !@descr: submodule for class average restoration in the polar Fourier domain
 submodule (simple_polarft_calc) simple_polarft_ops_restore
+use simple_refine3D_fnames, only: refine3D_fsc_fname, refine3D_polar_refs_fname, refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
 contains               
@@ -98,7 +99,7 @@ contains
             if( self%interpklim < size(fsc_boxcrop) )then
                 fsc_boxcrop(self%interpklim+1:)            = 0.0
             endif
-            call arr2file(fsc_boxcrop, string(FSC_FBODY//int2str_pad(state,2)//BIN_EXT))
+            call arr2file(fsc_boxcrop, refine3D_fsc_fname(state))
             do i = 1,nprojs
                 ! FRCs are set to the state-local FSC. to check if we are using those
                 call frcs%set_frc(i, fsc_boxcrop, state)
@@ -404,10 +405,10 @@ contains
         endif
         nrefs = nprojs / 2
         need_prev_refs = self%p_ptr%l_ml_reg .or. self%p_ptr%l_trail_rec
-        have_prev_refs = need_prev_refs .and. file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) .and. &
-            &file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
+        have_prev_refs = need_prev_refs .and. file_exists(refine3D_polar_refs_fname('even')) .and. &
+            &file_exists(refine3D_polar_refs_fname('odd'))
         if( have_prev_refs )then
-            call self%get_pft_array_dims(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_pftsz, nrefs=prev_nrefs)
+            call self%get_pft_array_dims(refine3D_polar_refs_fname('even'), prev_pftsz, nrefs=prev_nrefs)
             have_prev_refs = (prev_pftsz == self%pftsz) .and. (prev_nrefs <= self%ncls) .and. &
                 &(mod(self%ncls,self%p_ptr%nstates) == 0) .and. (mod(prev_nrefs,self%p_ptr%nstates) == 0)
         endif
@@ -460,7 +461,7 @@ contains
             if( write_cartesian_vols )then
                 ! Keep the Cartesian stage representative tied to the same restored
                 ! obsfield that generated the polar references at the stage handoff.
-                volname = string(VOL_FBODY)//int2str_pad(state,2)//MRC_EXT
+                volname = refine3D_state_vol_fname(state)
                 call self%obsfields(state)%write_merged_volume(volname, self%p_ptr%box_crop, self%p_ptr%smpd_crop, &
                     &kspan, invtau2_even, invtau2_odd, prior_start, real(self%p_ptr%box))
             endif
@@ -488,7 +489,7 @@ contains
             if( self%interpklim < size(fsc_boxcrop) )then
                 fsc_boxcrop(self%interpklim+1:)            = 0.0
             endif
-            call arr2file(fsc_boxcrop, string(FSC_FBODY//int2str_pad(state,2)//BIN_EXT))
+            call arr2file(fsc_boxcrop, refine3D_fsc_fname(state))
             do i = 1,nprojs
                 ! FRCs are set to the state-local FSC. to check if we are using those
                 call frcs%set_frc(i, fsc_boxcrop, state)
@@ -576,14 +577,14 @@ contains
         integer      :: prev_pftsz, prev_klims(2), prev_nrefs, ks, ke
         integer      :: current_nspace, prev_nspace
         logical      :: l_pad
-        call self%get_pft_array_dims(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_pftsz, prev_klims, prev_nrefs)
+        call self%get_pft_array_dims(refine3D_polar_refs_fname('even'), prev_pftsz, prev_klims, prev_nrefs)
         ! PFT arrays are state-major blocks of per-projection sections.
         ! The angular shell size must match; frequency ranges can be padded.
         ! When per-state nspace grows, each current projection is sourced from
         ! the closest previous projection in the same state.
         if( (prev_nrefs == self%ncls) .and. (prev_pftsz == self%pftsz) )then
-            call self%read_pft_array(string(POLAR_REFS_FBODY)//'_even'//BIN_EXT, prev_even)
-            call self%read_pft_array(string(POLAR_REFS_FBODY)//'_odd'//BIN_EXT,  prev_odd)
+            call self%read_pft_array(refine3D_polar_refs_fname('even'), prev_even)
+            call self%read_pft_array(refine3D_polar_refs_fname('odd'),  prev_odd)
         else
             if( prev_pftsz /= self%pftsz )then
                 THROW_HARD('Previous refs have different pftsz, cannot be used for trailing reconstruction')
@@ -608,9 +609,9 @@ contains
                 ! Compare full requested/stored ranges, not just intersection
                 ! bounds, so missing low/high frequencies trigger zero padding.
                 l_pad = (self%kfromto(1) /= prev_klims(1)) .or. (self%interpklim /= prev_klims(2))
-                fname = string(POLAR_REFS_FBODY)//'_even'//BIN_EXT
+                fname = refine3D_polar_refs_fname('even')
                 call map_current_refs_to_closest_previous_refs(fname, prev_even)
-                fname = string(POLAR_REFS_FBODY)//'_odd'//BIN_EXT
+                fname = refine3D_polar_refs_fname('odd')
                 call map_current_refs_to_closest_previous_refs(fname, prev_odd)
                 call symop%kill
                 call prev_eulspace%kill
@@ -666,7 +667,7 @@ contains
         self%pfts_even = ufrac_trec * self%pfts_even + (1.d0-ufrac_trec) * prev_even
         self%pfts_odd  = ufrac_trec * self%pfts_odd  + (1.d0-ufrac_trec) * prev_odd
         !$omp end parallel workshare
-        fname = string(POLAR_REFS_FBODY)//BIN_EXT
+        fname = refine3D_polar_refs_fname()
         have_merged_prev = file_exists(fname)
         if( have_merged_prev )then
             call self%get_pft_array_dims(fname, tmp_pftsz, tmp_kfromto, tmp_nrefs)

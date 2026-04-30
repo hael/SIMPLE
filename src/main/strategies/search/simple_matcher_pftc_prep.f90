@@ -8,6 +8,7 @@ use simple_builder,              only: builder
 use simple_classaverager,        only: cavgs_merged, cavgs_even, cavgs_odd
 use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun
 use simple_matcher_refvol_utils, only: pick_lp_est_state, estimate_lp_from_refs, polar_ref_sections_available
+use simple_refine3D_fnames,      only: refine3D_polar_refs_fname
 implicit none
 
 public :: prep_pftc4align3D, prep_pftc4align2D, polar_ref_sections_available
@@ -137,7 +138,7 @@ contains
         call prep_sigmas_objfun(params, build, .false.)
         ! Read polar references
         call build%pftc%polar_cavger_new(.true.)
-        call build%pftc%polar_cavger_read_all(string(POLAR_REFS_FBODY//BIN_EXT))
+        call build%pftc%polar_cavger_read_all(refine3D_polar_refs_fname())
         if( file_exists(FRCS_FILE) )then
             call build%clsfrcs%read(string(FRCS_FILE))
         else

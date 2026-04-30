@@ -8,6 +8,8 @@ use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D
 use simple_commanders_rec,      only: commander_rec3D, commander_rec3D
 use simple_cluster_seed,        only: gen_labelling
 use simple_decay_funs,          only: calc_update_frac_dyn, calc_update_frac
+use simple_refine3D_fnames,     only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
+    &refine3D_state_vol_fname, refine3D_state_halfvol_fname
 implicit none
 
 public :: commander_abinitio3D_cavgs, commander_abinitio3D, commander_multivol_assign
@@ -248,7 +250,7 @@ contains
             ! add rec_final to os_out
             do s = 1,params%nstates
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
-                final_vol = REC_FBODY//int2str_pad(s,2)//params%ext%to_char()
+                final_vol = REC_FBODY//int2str_pad(s,2)//MRC_EXT
                 if( file_exists(final_vol) )then
                     call spproj%add_vol2os_out(final_vol, cavg_smpd, s, 'vol_cavg')
                 endif
@@ -312,7 +314,6 @@ contains
                 class(cmdline), intent(inout) :: cline
                 type(string)  :: src, dest
                 type(cmdline) :: local_cline_rec
-                character(len=:), allocatable :: state
                 integer :: s
                 call work_proj%os_ptcl3D%rnd_oris
                 call work_proj%os_ptcl3D%zero_shifts
@@ -329,21 +330,20 @@ contains
                 call local_cline_rec%set('write_polar_refs', 'no')
                 call xrec3D%execute(local_cline_rec)
                 do s = 1,params%nstates
-                    state = int2str_pad(s,2)
-                    src   = VOL_FBODY//state//'.mrc'
-                    dest  = STARTVOL_FBODY//state//'.mrc'
+                    src   = refine3D_state_vol_fname(s)
+                    dest  = refine3D_startvol_fname(s)
                     call simple_rename(src, dest)
                     ! updates refine3D command line with new volume
                     call cline%set('vol'//int2str(s), dest)
-                    src   = VOL_FBODY//state//'_even.mrc'
-                    dest  = STARTVOL_FBODY//state//'_even_unfil.mrc'
+                    src   = refine3D_state_halfvol_fname(s, 'even')
+                    dest  = refine3D_startvol_half_fname(s, 'even', unfil=.true.)
                     call simple_copy_file(src, dest)
-                    dest  = STARTVOL_FBODY//state//'_even.mrc'
+                    dest  = refine3D_startvol_half_fname(s, 'even')
                     call simple_rename(src, dest)
-                    src   = VOL_FBODY//state//'_odd.mrc'
-                    dest  = STARTVOL_FBODY//state//'_odd_unfil.mrc'
+                    src   = refine3D_state_halfvol_fname(s, 'odd')
+                    dest  = refine3D_startvol_half_fname(s, 'odd', unfil=.true.)
                     call simple_copy_file(src, dest)
-                    dest  = STARTVOL_FBODY//state//'_odd.mrc'
+                    dest  = refine3D_startvol_half_fname(s, 'odd')
                     call simple_rename(src, dest)
                 enddo
                 call local_cline_rec%kill

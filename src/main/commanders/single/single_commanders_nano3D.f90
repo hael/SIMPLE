@@ -6,6 +6,8 @@ use simple_commanders_rec,       only: commander_rec3D
 use simple_commanders_reproject, only: commander_reproject
 use simple_commanders_cluster2D
 use simple_nanoparticle
+use simple_refine3D_fnames,  only: refine3D_resolution_txt_fbody, refine3D_state_halfvol_fname, &
+    &refine3D_state_vol_fbody, refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
 
@@ -60,25 +62,27 @@ contains
         type(cmdline)                 :: cline_vizoris, cline_refine3D_cavgs
         type(image), allocatable      :: imgs(:)
         type(sp_project)              :: spproj
-        character(len=*), parameter   :: RECVOL     = 'recvol_state01.mrc'
-        character(len=*), parameter   :: EVEN       = 'recvol_state01_even.mrc'
-        character(len=*), parameter   :: ODD        = 'recvol_state01_odd.mrc'
-        character(len=*), parameter   :: SIMVOL     = 'recvol_state01_SIM.mrc'
-        character(len=*), parameter   :: ATOMS      = 'recvol_state01_ATMS.pdb'
-        character(len=*), parameter   :: BINARY     = 'recvol_state01_BIN.mrc'
-        character(len=*), parameter   :: CCS        = 'recvol_state01_CC.mrc'
         character(len=*), parameter   :: SPLITTED   = 'split_ccs.mrc'
         character(len=*), parameter   :: FINAL_MAPS = './final_results/'
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
         type(string)                  :: iter_dir, cavgs_stk, fname
         real,             allocatable :: rstates(:), corrs(:)
         logical,          allocatable :: state_mask(:)
-        type(string) :: fbody, fbody_split, fname_reprojs, fname_reprojs_sim, fname_cvags_vs_reprojs
+        type(string) :: fbody, fbody_split, fname_recvol, fname_even, fname_odd, fname_simvol
+        type(string) :: fname_atoms, fname_binary, fname_ccs, fname_reprojs, fname_reprojs_sim
+        type(string) :: fname_cvags_vs_reprojs
         integer      :: i, iter, cnt, cnt2, funit, io_stat, endit, ncavgs
         real         :: smpd
         logical      :: fall_over
-        fbody       = get_fbody(RECVOL,   'mrc')
+        fbody       = refine3D_state_vol_fbody(1)
         fbody_split = get_fbody(SPLITTED, 'mrc')
+        fname_recvol = refine3D_state_vol_fname(1)
+        fname_even   = refine3D_state_halfvol_fname(1, 'even')
+        fname_odd    = refine3D_state_halfvol_fname(1, 'odd')
+        fname_simvol = fbody//'_SIM.mrc'
+        fname_atoms  = fbody//'_ATMS.pdb'
+        fname_binary = fbody//'_BIN.mrc'
+        fname_ccs    = fbody//'_CC.mrc'
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5)
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10)
@@ -114,13 +118,13 @@ contains
         call cline_refine3D_nano%delete('maxits_between')
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
-        call cline_detect_atms%set('vol1', RECVOL)               ! this is ALWYAS going to be the input volume to detect_atoms
+        call cline_detect_atms%set('vol1', fname_recvol)         ! this is ALWYAS going to be the input volume to detect_atoms
         if( params%mskdiam_detect > 0. ) call cline_detect_atms%set('mskdiam', params%mskdiam_detect)
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
             call xrefine3D_nano%execute(cline_refine3D_nano)
-            call cline_refine3D_nano%set('vol1', SIMVOL)         ! the reference volume is ALWAYS SIMVOL
+            call cline_refine3D_nano%set('vol1', fname_simvol)   ! the reference volume is ALWAYS SIMVOL
             call cline_refine3D_nano%delete('lp')                ! uses the default 1.0 A low-pass limit
             endit = cline_refine3D_nano%get_iarg('endit')        ! last iteration executed by refine3D_nano
             call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
@@ -130,42 +134,42 @@ contains
             ! copy critical output
             iter_dir = 'iteration_'//int2str_pad(i,2)//'/'
             call simple_mkdir(iter_dir)
-            call simple_copy_file(string(RECVOL),   iter_dir//fbody//'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(string(EVEN),     iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_even.mrc')
-            call simple_copy_file(string(ODD),      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_odd.mrc')
-            call simple_copy_file(string(SIMVOL),   iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_SIM.mrc')
-            call simple_copy_file(string(ATOMS),    iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
-            call simple_copy_file(string(BINARY),   iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_BIN.mrc')
-            call simple_copy_file(string(CCS),      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_CC.mrc')
+            call simple_copy_file(fname_recvol,      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(fname_even,        iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_even.mrc')
+            call simple_copy_file(fname_odd,         iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_odd.mrc')
+            call simple_copy_file(fname_simvol,      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_SIM.mrc')
+            call simple_copy_file(fname_atoms,       iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
+            call simple_copy_file(fname_binary,      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_BIN.mrc')
+            call simple_copy_file(fname_ccs,         iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_CC.mrc')
             call simple_copy_file(string(SPLITTED), iter_dir//fbody_split//'_iter'//int2str_pad(i,3)//'.mrc')
             if( params%cc_objfun==OBJFUN_EUCLID )then
                 call simple_copy_file(string(SIGMA2_GROUP_FBODY)//int2str(endit)//STAR_EXT,&
                     &iter_dir//SIGMA2_GROUP_FBODY//int2str_pad(i,3)//STAR_EXT)
             endif
             ! clean
-            call exec_cmdline('rm -f recvol_state01_iter*')
+            call exec_cmdline(string('rm -f ')//fbody//'_iter*')
             if( params%cc_objfun==OBJFUN_EUCLID ) call exec_cmdline('rm -f '//SIGMA2_GROUP_FBODY//'*'//STAR_EXT)
-            call del_file(ATOMS)
-            call del_file(BINARY)
-            call del_file(CCS)
+            call del_file(fname_atoms)
+            call del_file(fname_binary)
+            call del_file(fname_ccs)
             call del_file(SPLITTED)
             iter = iter + 1
         end do
         call xdetect_atms%execute(cline_detect_atms)
         call simple_mkdir(FINAL_MAPS)
-        call simple_copy_file(string(RECVOL),   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'.mrc')
-        call simple_copy_file(string(EVEN),     string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_even.mrc')
-        call simple_copy_file(string(ODD),      string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_odd.mrc')
-        call simple_copy_file(string(SIMVOL),   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
-        call simple_copy_file(string(ATOMS),    string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_ATMS.pdb')
-        call simple_copy_file(string(BINARY),   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_BIN.mrc')
-        call simple_copy_file(string(CCS),      string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_CC.mrc')
+        call simple_copy_file(fname_recvol,      string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'.mrc')
+        call simple_copy_file(fname_even,        string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_even.mrc')
+        call simple_copy_file(fname_odd,         string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_odd.mrc')
+        call simple_copy_file(fname_simvol,      string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
+        call simple_copy_file(fname_atoms,       string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_ATMS.pdb')
+        call simple_copy_file(fname_binary,      string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_BIN.mrc')
+        call simple_copy_file(fname_ccs,         string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_CC.mrc')
         call simple_copy_file(string(SPLITTED), string(FINAL_MAPS)//fbody_split//'_iter'//int2str_pad(iter,3)//'.mrc')
         ! clean
-        call del_file(SIMVOL)
-        call del_file(ATOMS)
-        call del_file(BINARY)
-        call del_file(CCS)
+        call del_file(fname_simvol)
+        call del_file(fname_atoms)
+        call del_file(fname_binary)
+        call del_file(fname_ccs)
         call del_file(SPLITTED)
         ! Align existing 2D class averages from the project against the final 3D volume.
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
@@ -337,18 +341,18 @@ contains
         endif
         parts = split_nobjs_even(nptcls, nparts)
         allocate(vol_fnames(nparts), rad_cc(params%box/2), rad_dists(params%box/2))
-        recname      = VOL_FBODY//int2str_pad(1,2)//params%ext%to_char()
-        recname_even = VOL_FBODY//int2str_pad(1,2)//'_even'//params%ext%to_char()
-        recname_odd  = VOL_FBODY//int2str_pad(1,2)//'_odd'//params%ext%to_char()
+        recname      = refine3D_state_vol_fname(1)
+        recname_even = refine3D_state_halfvol_fname(1, 'even')
+        recname_odd  = refine3D_state_halfvol_fname(1, 'odd')
         fname        = 'lifetimes.csv'
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
         write(funit,*) 'PARTITION, ', 'FRAME_START, ', 'FRAME_END, ', 'LIFETIME'
         do ipart = 1,nparts
             str_state         = int2str_pad(ipart,2)
-            vol_fnames(ipart) = 'partvol'//str_state%to_char()//params%ext%to_char()
-            vol_fname_even    = 'partvol'//str_state%to_char()//'_even'//params%ext%to_char()
-            vol_fname_odd     = 'partvol'//str_state%to_char()//'_odd'//params%ext%to_char()
-            res_fname         = 'RESOLUTION_STATE'//str_state%to_char()
+            vol_fnames(ipart) = 'partvol'//str_state%to_char()//MRC_EXT
+            vol_fname_even    = 'partvol'//str_state%to_char()//'_even'//MRC_EXT
+            vol_fname_odd     = 'partvol'//str_state%to_char()//'_odd'//MRC_EXT
+            res_fname         = refine3D_resolution_txt_fbody(ipart)
             ! prep 3D rec command line
             cline_rec = cline
             call cline_rec%delete('nparts') ! shared-memory implementation
@@ -366,13 +370,13 @@ contains
             call simple_rename(recname_even, vol_fname_even)
             call simple_rename(recname_odd,  vol_fname_odd)
             if( ipart == 1 )then
-                call simple_rename('RESOLUTION_STATE01', 'RESOLUTION_FILE_FIRST')
+                call simple_rename(refine3D_resolution_txt_fbody(1), 'RESOLUTION_FILE_FIRST')
             else
-                call simple_rename('RESOLUTION_STATE01',  res_fname)
+                call simple_rename(refine3D_resolution_txt_fbody(1), res_fname)
             endif
         end do
         call fclose(funit)
-        call simple_rename('RESOLUTION_FILE_FIRST', 'RESOLUTION_STATE01')
+        call simple_rename('RESOLUTION_FILE_FIRST', refine3D_resolution_txt_fbody(1))
         ! Calculate correlation matrices
         nlps   = size(LP_LIST)
         hp_ind = calc_fourier_index(HP_LIM, params%box, params%smpd)

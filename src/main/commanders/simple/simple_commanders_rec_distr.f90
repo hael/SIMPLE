@@ -1,5 +1,8 @@
 module simple_commanders_rec_distr
 use simple_commanders_api
+use simple_refine3D_fnames, only: refine3D_fsc_fname, refine3D_iter_refs_fname, refine3D_polar_refs_fbody, &
+    &refine3D_partial_rec_fbody, refine3D_resolution_txt_fbody, refine3D_state_halfvol_fname, &
+    &refine3D_state_vol_fbody, refine3D_state_vol_fname, refine3D_volassemble_bench_fname
 implicit none
 #include "simple_local_flags.inc"
 
@@ -76,7 +79,7 @@ contains
         call set_bp_range3D(params, build, cline)
         nrefs = params%nspace * params%nstates
         call build%pftc%new(params, nrefs, [1,1], params%kfromto)
-        params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
+        params%refs = refine3D_iter_refs_fname(params%which_iter)
         call build%pftc%polar_cavger_new(.true., nrefs=nrefs)
         call build%pftc%polar_cavger_calc_pops(build%spproj)
         update_frac_eff = params%update_frac
@@ -108,14 +111,14 @@ contains
         call update_polar_resolution_fields(params, build)
         if( L_BENCH_GLOB ) rt_resolution = toc(t_resolution)
         if( L_BENCH_GLOB ) t_write = tic()
-        call build%pftc%polar_cavger_writeall(string(POLAR_REFS_FBODY))
+        call build%pftc%polar_cavger_writeall(refine3D_polar_refs_fbody())
         if( L_BENCH_GLOB ) rt_write = toc(t_write)
         call build%pftc%polar_cavger_kill
         call build%pftc%kill
         call build%kill_general_tbox
         if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)
-            benchfname = 'VOLASSEMBLE_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
+            benchfname = refine3D_volassemble_bench_fname(params%which_iter)
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,t52,f9.2)') 'volassemble polar assembly setup     : ', rt_setup
@@ -163,7 +166,7 @@ contains
         allocate(has_fsc(params%nstates), source=.false.)
         res = get_resarr(params%box_crop, params%smpd_crop)
         do state = 1, params%nstates
-            fsc_file = string(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
+            fsc_file = refine3D_fsc_fname(state)
             if( .not. file_exists(fsc_file) ) cycle
             fsc = file2rarr(fsc_file)
             call get_resolution(fsc, res, fsc05, fsc0143)
@@ -212,7 +215,7 @@ contains
         type(image_msk)               :: mskvol
         type(image_bin)               :: state_mask_bin
         type(string)                  :: recname, volname, volname_prev, fsc_txt_file
-        type(string)                  :: volname_prev_even, volname_prev_odd, str_state, str_iter
+        type(string)                  :: volname_prev_even, volname_prev_odd
         type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname, write_polar_refs_arg
         type(vol_pproc_plan) :: pp_plan
         logical, allocatable          :: l_mask(:,:,:)
@@ -280,7 +283,7 @@ contains
             ! assemble volumes
             do part=1,params%nparts
                 if( L_BENCH_GLOB ) t_read = tic()
-                call eorecvol_read%read_eos(string(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,numlen_part))
+                call eorecvol_read%read_eos(refine3D_partial_rec_fbody(state, part, numlen_part))
                 ! sum the Fourier coefficients
                 if( L_BENCH_GLOB )then
                     rt_read       = rt_read + toc(t_read)
@@ -290,10 +293,10 @@ contains
                 if( L_BENCH_GLOB ) rt_sum_reduce = rt_sum_reduce + toc(t_sum_reduce)
             end do
             ! correct for sampling density and estimate resolution
-            recname    = VOL_FBODY//int2str_pad(state,2)
-            volname    = recname//params%ext
-            eonames(1) = recname//'_even'//params%ext%to_char()
-            eonames(2) = recname//'_odd'//params%ext%to_char()
+            recname    = refine3D_state_vol_fbody(state)
+            volname    = refine3D_state_vol_fname(state)
+            eonames(1) = refine3D_state_halfvol_fname(state, 'even')
+            eonames(2) = refine3D_state_halfvol_fname(state, 'odd')
             if( params%l_ml_reg )then
                 ! the sum is done after regularization
             else
@@ -305,8 +308,8 @@ contains
             if( params%l_trail_rec )then
                 if( .not. cline%defined('vol'//int2str(state)) ) THROW_HARD('vol'//int2str(state)//' required in volassemble cline when trail_rec==yes')
                 volname_prev      = cline%get_carg('vol'//int2str(state))
-                volname_prev_even = add2fbody(volname_prev, params%ext, '_even')
-                volname_prev_odd  = add2fbody(volname_prev, params%ext, '_odd')
+                volname_prev_even = add2fbody(volname_prev, MRC_EXT, '_even')
+                volname_prev_odd  = add2fbody(volname_prev, MRC_EXT, '_odd')
                 if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//volname_prev_even%to_char()//' does not exist!')
                 if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//volname_prev_odd%to_char()//' does not exist!')
                 call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
@@ -317,12 +320,10 @@ contains
             else 
                 call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
             endif
-            str_state = int2str_pad(state,2)
             if( cline%defined('which_iter') )then
-                str_iter     = int2str_pad(params%which_iter,3)
-                fsc_txt_file = 'RESOLUTION_STATE'//str_state%to_char()//'_ITER'//str_iter%to_char()
+                fsc_txt_file = refine3D_resolution_txt_fbody(state, params%which_iter)
             else
-                fsc_txt_file = 'RESOLUTION_STATE'//str_state%to_char()
+                fsc_txt_file = refine3D_resolution_txt_fbody(state)
             endif
             call build%eorecvol%write_fsc2txt(fsc_txt_file)
             if( L_BENCH_GLOB ) rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
@@ -418,8 +419,8 @@ contains
                 if( params%l_ml_reg ) then
                     call vol_nu_base_even%new(ldim, params%smpd_crop)
                     call vol_nu_base_odd%new( ldim, params%smpd_crop)
-                    call vol_nu_base_even%read(add2fbody(eonames(1), params%ext, '_unfil'))
-                    call vol_nu_base_odd%read( add2fbody(eonames(2), params%ext, '_unfil'))
+                    call vol_nu_base_even%read(add2fbody(eonames(1), MRC_EXT, '_unfil'))
+                    call vol_nu_base_odd%read( add2fbody(eonames(2), MRC_EXT, '_unfil'))
                     allocate(nu_aux_even(1), nu_aux_odd(1))
                     call nu_aux_even(1)%copy(build%vol)
                     call nu_aux_odd(1)%copy(build%vol2)
@@ -437,9 +438,9 @@ contains
                     call print_nu_filtmap_lowpass_stats(l_mask)
                 endif
                 call analyze_filtmap_neighbor_continuity(l_mask)
-                eonames_nu(1) = add2fbody(eonames(1), params%ext, NUFILT_SUFFIX)
-                eonames_nu(2) = add2fbody(eonames(2), params%ext, NUFILT_SUFFIX)
-                volname_nu    = add2fbody(volname,    params%ext, NUFILT_SUFFIX)
+                eonames_nu(1) = add2fbody(eonames(1), MRC_EXT, NUFILT_SUFFIX)
+                eonames_nu(2) = add2fbody(eonames(2), MRC_EXT, NUFILT_SUFFIX)
+                volname_nu    = add2fbody(volname,    MRC_EXT, NUFILT_SUFFIX)
                 call vol_even_nu%write(eonames_nu(1), del_if_exists=.true.)
                 call vol_odd_nu%write(eonames_nu(2), del_if_exists=.true.)
                 call vol_even_nu%add(vol_odd_nu)
@@ -522,7 +523,7 @@ contains
         call simple_touch('VOLASSEMBLE_FINISHED')
         if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)
-            benchfname = 'VOLASSEMBLE_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
+            benchfname = refine3D_volassemble_bench_fname(params%which_iter)
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,t52,f9.2)') 'volassemble initialisation           : ', rt_init

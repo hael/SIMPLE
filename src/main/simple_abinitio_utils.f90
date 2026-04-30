@@ -7,6 +7,9 @@ use simple_cluster_seed,      only: gen_labelling
 use simple_class_frcs,        only: class_frcs
 use simple_decay_funs,        only: calc_update_frac_dyn
 use simple_parameters,        only: parameters
+use simple_refine3D_fnames,   only: refine3D_fsc_fname, refine3D_polar_refs_fname, &
+    &refine3D_startvol_fbody, refine3D_startvol_fname, refine3D_startvol_half_fname, &
+    &refine3D_state_halfvol_fname, refine3D_state_vol_fbody, refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
 
@@ -124,9 +127,16 @@ contains
     end subroutine strip_refine3D_planning_keys
 
     subroutine invalidate_polar_ref_sections
-        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
-        if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
-        if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
+        type(string) :: refs, refs_even, refs_odd
+        refs      = refine3D_polar_refs_fname()
+        refs_even = refine3D_polar_refs_fname('even')
+        refs_odd  = refine3D_polar_refs_fname('odd')
+        if( file_exists(refs) )      call del_file(refs)
+        if( file_exists(refs_even) ) call del_file(refs_even)
+        if( file_exists(refs_odd) )  call del_file(refs_odd)
+        call refs%kill
+        call refs_even%kill
+        call refs_odd%kill
     end subroutine invalidate_polar_ref_sections
 
     subroutine inject_refine3D_volume( params, state, vol )
@@ -177,7 +187,7 @@ contains
             call spproj%read_segment('out', params%projfile)
         endif
         call spproj%add_vol2os_out(vol_name, smpd, state, 'vol')
-        fsc_name = string(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
+        fsc_name = refine3D_fsc_fname(state)
         if( file_exists(fsc_name) ) call spproj%add_fsc2os_out(fsc_name, state, ldim(1))
         if( present(projfile) )then
             call spproj%write_segment_inside('out', projfile)
@@ -304,7 +314,7 @@ contains
         if( (.not. l_polar) .or. (trim(params%polar) == 'obsfield') )then
             do state = 1, params%nstates
                 str_state = int2str_pad(state,2)
-                vol_name  = string(VOL_FBODY)//str_state//MRC_EXT
+                vol_name  = refine3D_state_vol_fname(state)
                 vol_pproc = add2fbody(vol_name, MRC_EXT, PPROC_SUFFIX)
                 vol_lp    = add2fbody(vol_name, MRC_EXT, LP_SUFFIX)
                 vol_stage = add2fbody(vol_name, string(MRC_EXT),stage)
@@ -359,13 +369,13 @@ contains
                 call cline_asymrec%set('write_polar_refs', 'no')
                 call xrec3D%execute(cline_asymrec)
                 vol_iter = 'asymmetric_map'//MRC_EXT
-                call simple_copy_file(string(VOL_FBODY)//int2str_pad(1,2)//MRC_EXT, vol_iter)
+                call simple_copy_file(refine3D_state_vol_fname(1), vol_iter)
                 vol_diag = add2fbody(vol_iter, MRC_EXT, LP_SUFFIX)
                 call write_abinitio_lowpass_snapshot(vol_iter, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
                 call cline_asymrec%kill
             else
                 ! Volume from previous stage
-                vol_iter = string(VOL_FBODY)//STR_STATE_GLOB//MRC_EXT
+                vol_iter = refine3D_state_vol_fname(1)
             endif
             ! symmetry determination & map symmetrization
             if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to map symmetrization does not exist')
@@ -398,7 +408,7 @@ contains
                 call cline_symrec%set('polar',      'no')
                 call cline_symrec%set('write_polar_refs', 'no')
                 call xrec3D%execute(cline_symrec)
-                vol_sym = VOL_FBODY//int2str_pad(1,2)//MRC_EXT
+                vol_sym = refine3D_state_vol_fname(1)
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
                 vol_diag = add2fbody(string('symmetric_map')//MRC_EXT, MRC_EXT, LP_SUFFIX)
                 call write_abinitio_lowpass_snapshot(string('symmetric_map')//MRC_EXT, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
@@ -455,18 +465,18 @@ contains
             sstate = int2str_pad(state,2)
             ! Rename volumes
             if( istage == 1 )then
-                tmpl = string(STARTVOL_FBODY)//sstate
+                tmpl = refine3D_startvol_fbody(state)
             else
-                tmpl = string(VOL_FBODY)//sstate//'_stage_'//sstage
+                tmpl = refine3D_state_vol_fbody(state)//'_stage_'//sstage
             endif
             have_even_stage = .false.
             have_odd_stage  = .false.
-            src  = string(VOL_FBODY)//sstate//MRC_EXT
+            src  = refine3D_state_vol_fname(state)
             dest_main = tmpl//MRC_EXT
             call simple_rename(src, dest_main)
             vol_diag = add2fbody(dest_main, MRC_EXT, LP_SUFFIX)
             call write_abinitio_lowpass_snapshot(dest_main, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
-            vol_even = string(VOL_FBODY)//sstate//'_even'//MRC_EXT
+            vol_even = refine3D_state_halfvol_fname(state, 'even')
             if( file_exists(vol_even) )then
                 dest = tmpl//'_even_unfil'//MRC_EXT
                 call simple_copy_file(vol_even, dest)
@@ -475,7 +485,7 @@ contains
                 dest_even = dest
                 have_even_stage = .true.
             endif
-            vol_odd  = string(VOL_FBODY)//sstate//'_odd' //MRC_EXT
+            vol_odd  = refine3D_state_halfvol_fname(state, 'odd')
             if( file_exists(vol_odd) )then
                 dest = tmpl//'_odd_unfil'//MRC_EXT
                 call simple_copy_file(vol_odd, dest)
@@ -507,7 +517,7 @@ contains
             call frcs%new(nrefs, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, params%nstates)
             do state = 1,params%nstates
                 sstate = int2str_pad(state,2)
-                fsc    = file2rarr(string(FSC_FBODY)//sstate//BIN_EXT)
+                fsc    = file2rarr(refine3D_fsc_fname(state))
                 ref_first = (state - 1) * inspace + 1
                 ref_last  = state * inspace
                 do i = ref_first, ref_last
@@ -548,7 +558,7 @@ contains
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle   ! empty-state case
             str_state = int2str_pad(state,2)
-            fname = string(VOL_FBODY)//str_state//MRC_EXT
+            fname = refine3D_state_vol_fname(state)
             if( .not. file_exists(fname) )cycle
             exit
         enddo
@@ -558,8 +568,7 @@ contains
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
             if( spproj%isthere_in_osout('vol', state) )then
-                str_state = int2str_pad(state,2)
-                fname     = VOL_FBODY//str_state%to_char()//MRC_EXT
+                fname = refine3D_state_vol_fname(state)
                 if( .not. file_exists(fname) )cycle
                 call final_vol%read(fname)
                 call final_vol%generate_orthogonal_reprojs(reprojs)
@@ -614,10 +623,10 @@ contains
             pop = spproj%os_ptcl3D%get_pop(state, 'state')
             if( pop == 0 )cycle     ! empty-state case
             str_state = int2str_pad(state,2)
-            vol_name  = string(VOL_FBODY)//str_state//MRC_EXT
+            vol_name  = refine3D_state_vol_fname(state)
             if( .not. file_exists(vol_name) )cycle
             call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop)
-            call spproj%add_fsc2os_out(string(FSC_FBODY)//str_state//BIN_EXT, state, ldim(1))
+            call spproj%add_fsc2os_out(refine3D_fsc_fname(state), state, ldim(1))
         enddo
         call spproj%write_segment_inside('out', projfile)
         call stkname%kill
@@ -633,7 +642,7 @@ contains
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle ! empty-state case
             str_state      = int2str_pad(state,2)
-            vol_name       = string(VOL_FBODY)//str_state//MRC_EXT  ! reconstruction from particles stored in project
+            vol_name       = refine3D_state_vol_fname(state) ! reconstruction from particles stored in project
             if( .not. file_exists(vol_name) )cycle
             vol_final      = string(REC_FBODY)//str_state//MRC_EXT
             call simple_copy_file(vol_name, vol_final)
@@ -674,21 +683,21 @@ contains
         do s = 1, params%nstates
             call noisevol%gauran(0., b)
             call noisevol%add(signal)
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
+            vol_name = refine3D_startvol_fname(s)
             call cline%set('vol'//int2str(s), vol_name)
             params%vols(s) = vol_name
             call noisevol%write(vol_name)
             call noisevol%gauran(0., b)
             call noisevol%add(signal)
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
+            vol_name = refine3D_startvol_half_fname(s, 'even')
             call noisevol%write(vol_name)
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
+            vol_name = refine3D_startvol_half_fname(s, 'even', unfil=.true.)
             call noisevol%write(vol_name)
             call noisevol%gauran(0., b)
             call noisevol%add(signal)
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
+            vol_name = refine3D_startvol_half_fname(s, 'odd')
             call noisevol%write(vol_name)
-            vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
+            vol_name = refine3D_startvol_half_fname(s, 'odd', unfil=.true.)
             call noisevol%write(vol_name)
         end do
         call signal%kill

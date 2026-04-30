@@ -1,15 +1,15 @@
 module simple_refine3D_strategy
 use simple_core_module_api
-use simple_builder,       only: builder
-use simple_parameters,    only: parameters
-use simple_cmdline,       only: cmdline
-use simple_qsys_env,      only: qsys_env
-use simple_convergence,   only: convergence
-use simple_decay_funs,    only: inv_cos_decay, cos_decay
-use simple_cluster_seed,  only: gen_labelling
-use simple_euclid_sigma2, only: sigma2_star_from_iter
-use simple_matcher_refvol_utils,   only: any_volume_source_defined, complete_volume_source_defined, &
-    &ensure_polar_refs_on_disk, polar_ref_sections_available
+use simple_refine3D_fnames
+use simple_matcher_refvol_utils
+use simple_builder,                 only: builder
+use simple_parameters,              only: parameters
+use simple_cmdline,                 only: cmdline
+use simple_qsys_env,                only: qsys_env
+use simple_convergence,             only: convergence
+use simple_decay_funs,              only: inv_cos_decay, cos_decay
+use simple_cluster_seed,            only: gen_labelling
+use simple_euclid_sigma2,           only: sigma2_star_from_iter
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 implicit none
 
@@ -154,7 +154,7 @@ contains
         call cline_assembly%set('combine_eo', params%combine_eo)
         if( params%l_update_frac ) call cline_assembly%set('update_frac', params%update_frac)
         do state = 1, params%nstates
-            volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+            volname = refine3D_state_vol_fname(state)
             if( cline_assembly%defined('vol'//int2str(state)) )then
                 vol_in = cline_assembly%get_carg('vol'//int2str(state))
                 if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
@@ -188,7 +188,7 @@ contains
         allocate(has_fsc(params%nstates), source=.false.)
         res = get_resarr(params%box_crop, params%smpd_crop)
         do state = 1, params%nstates
-            fsc_file = string(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
+            fsc_file = refine3D_fsc_fname(state)
             if( .not. file_exists(fsc_file) ) cycle
             fsc = file2rarr(fsc_file)
             call get_resolution(fsc, res, fsc05, fsc0143)
@@ -221,16 +221,16 @@ contains
         integer :: ipart, numlen_part, state
         numlen_part = max(1, params%numlen)
         do ipart = 1,max(1, params%nparts)
-            fname = 'cavgs_even_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+            fname = refine3D_polar_cavgs_part_fname('even', ipart, numlen_part)
             if( file_exists(fname) ) call del_file(fname)
-            fname = 'cavgs_odd_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+            fname = refine3D_polar_cavgs_part_fname('odd', ipart, numlen_part)
             if( file_exists(fname) ) call del_file(fname)
-            fname = 'ctfsqsums_even_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+            fname = refine3D_polar_ctfsqsums_part_fname('even', ipart, numlen_part)
             if( file_exists(fname) ) call del_file(fname)
-            fname = 'ctfsqsums_odd_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+            fname = refine3D_polar_ctfsqsums_part_fname('odd', ipart, numlen_part)
             if( file_exists(fname) ) call del_file(fname)
             do state = 1,max(1, params%nstates)
-                fname = 'obsfield_state'//int2str_pad(state,2)//'_part'//int2str_pad(ipart,numlen_part)//BIN_EXT
+                fname = refine3D_obsfield_part_fname(state, ipart, numlen_part)
                 if( file_exists(fname) ) call del_file(fname)
             enddo
         end do
@@ -239,23 +239,21 @@ contains
 
     subroutine remove_cartesian_partial_rec_files( params )
         type(parameters), intent(in) :: params
-        type(string) :: fbody, fname
+        type(string) :: fname
         integer :: state, ipart, numlen_part
         numlen_part = max(1, params%numlen)
         do state = 1,max(1, params%nstates)
             do ipart = 1,max(1, params%nparts)
-                fbody = string(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(ipart,numlen_part)
-                fname = fbody//'_even'//params%ext%to_char()
+                fname = refine3D_partial_rec_fname(state, ipart, numlen_part, 'even')
                 if( file_exists(fname) ) call del_file(fname)
-                fname = fbody//'_odd'//params%ext%to_char()
+                fname = refine3D_partial_rec_fname(state, ipart, numlen_part, 'odd')
                 if( file_exists(fname) ) call del_file(fname)
-                fname = string('rho_')//fbody//'_even'//params%ext%to_char()
+                fname = refine3D_partial_rho_fname(state, ipart, numlen_part, 'even')
                 if( file_exists(fname) ) call del_file(fname)
-                fname = string('rho_')//fbody//'_odd'//params%ext%to_char()
+                fname = refine3D_partial_rho_fname(state, ipart, numlen_part, 'odd')
                 if( file_exists(fname) ) call del_file(fname)
             enddo
         enddo
-        call fbody%kill
         call fname%kill
     end subroutine remove_cartesian_partial_rec_files
 
@@ -487,12 +485,12 @@ contains
             endif
             if( trim(params%volrec) .eq. 'yes' )then
                 do state = 1, params%nstates
-                    volname = string(VOL_FBODY)//int2str_pad(state,2)//params%ext
+                    volname = refine3D_state_vol_fname(state)
                     params%vols(state) = volname
                     call cline%set('vol'//int2str(state), volname)
                 end do
             endif
-            if( params%l_polar ) params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
+            if( params%l_polar ) params%refs = refine3D_iter_refs_fname(params%which_iter)
             call cline%delete('force_volassemble')
         endif
         if( l_write_partial_recs ) call refresh_resolution_fields_from_fsc(params, build)
@@ -523,7 +521,7 @@ contains
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(string) :: str_state, fsc_file, vol, vol_iter
+        type(string) :: fsc_file, vol, vol_iter
         integer      :: state
         ! report last iteration
         call cline%delete( 'startit' )
@@ -543,10 +541,9 @@ contains
                     call build%spproj%remove_entry_from_osout('fsc', state)
                 else
                     ! add state volume, fsc to os_out
-                    str_state = int2str_pad(state,2)
-                    fsc_file  = string(FSC_FBODY)//str_state//BIN_EXT
+                    fsc_file  = refine3D_fsc_fname(state)
                     call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
-                    vol       = string(VOL_FBODY)//str_state//params%ext
+                    vol       = refine3D_state_vol_fname(state)
                     vol_iter  = vol
                     if( trim(params%oritype).eq.'cls3D' )then
                         call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
@@ -563,7 +560,6 @@ contains
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
         endif
         call simple_touch(JOB_FINISHED_FBODY)
-        call str_state%kill
         call fsc_file%kill
         call vol%kill
         call vol_iter%kill
@@ -590,7 +586,7 @@ contains
         type(commander_rec3D)      :: xrec3D
         type(commander_calc_pspec) :: xcalc_pspec_distr
         type(cmdline) :: cline_tmp
-        type(string)  :: prev_refine_path, target_name, fname_vol, vol, str_state, fsc_file
+        type(string)  :: prev_refine_path, target_name, fname_vol, vol, fsc_file
         type(string), allocatable :: list(:)
         real    :: smpd
         integer :: state, box, nfiles, i
@@ -692,12 +688,11 @@ contains
             prev_refine_path = get_fpath(fname_vol)
             if( simple_abspath(prev_refine_path,check_exists=.false.) .eq. CWD_GLOB )then
                 do state=1,params%nstates
-                    str_state = int2str_pad(state,2)
-                    fsc_file  = FSC_FBODY//str_state%to_char()//BIN_EXT
+                    fsc_file  = refine3D_fsc_fname(state)
                     if( .not.file_exists(fsc_file)) THROW_HARD('Missing file: '//fsc_file%to_char())
                 end do
                 if( params%l_update_frac )then
-                    call simple_list_files(prev_refine_path%to_char()//'*recvol_state*part*', list)
+                    call simple_list_files(refine3D_partial_rec_glob(prev_refine_path%to_char()), list)
                     nfiles = size(list)
                     err = params%nparts * 4 /= nfiles
                     if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -712,8 +707,7 @@ contains
             else
                 ! carry over FSCs
                 do state=1,params%nstates
-                    str_state = int2str_pad(state,2)
-                    fsc_file  = FSC_FBODY//str_state%to_char()//BIN_EXT
+                    fsc_file  = refine3D_fsc_fname(state)
                     call simple_copy_file(prev_refine_path//fsc_file, fsc_file)
                 end do
                 if( params%cc_objfun==OBJFUN_EUCLID )then
@@ -759,17 +753,20 @@ contains
                 call cline_tmp%set('objfun', 'cc')
                 call xrec3D%execute( cline_tmp )
                 do state = 1,params%nstates
-                    str_state = int2str_pad(state,2)
                     ! rename volumes and update cline/params
-                    call simple_rename(string(VOL_FBODY)//str_state//params%ext, string(STARTVOL_FBODY)//str_state//params%ext)
-                    params%vols(state) = string(STARTVOL_FBODY)//str_state//params%ext
+                    call simple_rename(refine3D_state_vol_fname(state), refine3D_startvol_fname(state))
+                    params%vols(state) = refine3D_startvol_fname(state)
                     vol = 'vol'//int2str(state)
                     call cline%set(vol%to_char(), params%vols(state))
                     ! keep unfiltered copies
-                    call simple_copy_file(string(VOL_FBODY)//str_state//'_even'//params%ext, string(STARTVOL_FBODY)//str_state//'_even_unfil'//params%ext)
-                    call simple_rename(  string(VOL_FBODY)//str_state//'_even'//params%ext, string(STARTVOL_FBODY)//str_state//'_even'//params%ext)
-                    call simple_copy_file(string(VOL_FBODY)//str_state//'_odd' //params%ext, string(STARTVOL_FBODY)//str_state//'_odd_unfil' //params%ext)
-                    call simple_rename(  string(VOL_FBODY)//str_state//'_odd' //params%ext, string(STARTVOL_FBODY)//str_state//'_odd' //params%ext)
+                    call simple_copy_file(refine3D_state_halfvol_fname(state, 'even'), &
+                        &refine3D_startvol_half_fname(state, 'even', unfil=.true.))
+                    call simple_rename(refine3D_state_halfvol_fname(state, 'even'), &
+                        &refine3D_startvol_half_fname(state, 'even'))
+                    call simple_copy_file(refine3D_state_halfvol_fname(state, 'odd'), &
+                        &refine3D_startvol_half_fname(state, 'odd', unfil=.true.))
+                    call simple_rename(refine3D_state_halfvol_fname(state, 'odd'), &
+                        &refine3D_startvol_half_fname(state, 'odd'))
                 enddo
                 vol_defined = .true.
             endif
@@ -787,7 +784,6 @@ contains
         call target_name%kill
         call fname_vol%kill
         call vol%kill
-        call str_state%kill
         call fsc_file%kill
     end subroutine distr_initialize
 
@@ -811,7 +807,7 @@ contains
         type(commander_cartesian_volassemble) :: xvolassemble
         type(commander_polar_volassemble) :: xpolar_volassemble
         type(cmdline) :: cline_prob_align, cline_volassemble
-        type(string)  :: str, str_iter, str_state
+        type(string)  :: str
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
         type(string)  :: fname_vol, volpproc, vollp
         real, allocatable :: res(:), fsc(:)
@@ -825,7 +821,6 @@ contains
         601 format(A,1X,F12.3)
         iter     = params%which_iter
         call self%conv%print_iteration(iter)
-        str_iter = int2str_pad(iter,3)
         ! annealing
         if( params%l_noise_reg )then
             params%eps = inv_cos_decay(iter, params%maxits_glob, params%eps_bounds)
@@ -904,7 +899,7 @@ contains
                     call promote_assembly_nspace_if_needed(params, cline_volassemble)
                     if( params%l_polar )then
                         call xpolar_volassemble%execute(cline_volassemble)
-                        params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext%to_char()
+                        params%refs = refine3D_iter_refs_fname(iter)
                     else
                         call xvolassemble%execute(cline_volassemble)
                     endif
@@ -912,7 +907,6 @@ contains
                         ! rename & add volumes to project & update job_descr
                         call build%spproj_field%get_pops(state_pops, 'state')
                         do state = 1,params%nstates
-                            str_state = int2str_pad(state,2)
                             if( state_pops(state) == 0 )then
                                 vol = 'vol'//int2str(state)
                                 call cline%delete(vol%to_char())
@@ -924,13 +918,13 @@ contains
                                 endif
                                 call build%spproj%remove_entry_from_osout('fsc', state)
                             else
-                                vol_iter  = string(VOL_FBODY)//str_state//params%ext
-                                fsc_file  = string(FSC_FBODY)//str_state//BIN_EXT
+                                vol_iter  = refine3D_state_vol_fname(state)
+                                fsc_file  = refine3D_fsc_fname(state)
                                 call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
                                 ! FSC plot
                                 res       = get_resarr(params%box_crop, params%smpd_crop)
                                 fsc       = file2rarr(fsc_file)
-                                fsc_templ = 'fsc_state'//str_state%to_char()//'_iter'//str_iter%to_char()
+                                fsc_templ = refine3D_fsc_plot_fbody(state, iter)
                                 call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ%to_char())
                                 if( trim(params%oritype).eq.'cls3D' )then
                                     call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
@@ -945,25 +939,21 @@ contains
                         call build%spproj%write_segment_inside('out')
                         ! per-state postprocess (and optional automask)
                         do state = 1,params%nstates
-                            str_state = int2str_pad(state,2)
                             if( state_pops(state) == 0 ) cycle
                             call self%cline_postprocess%set('state', state)
                             call self%cline_postprocess%set('nthr',  self%nthr_master)
                             if( cline%defined('lp') ) call self%cline_postprocess%set('lp', params%lp)
                             call xpostprocess%execute(self%cline_postprocess)
-                            volpproc = string(VOL_FBODY)//str_state//PPROC_SUFFIX//params%ext%to_char()
-                            vollp    = string(VOL_FBODY)//str_state//LP_SUFFIX//params%ext%to_char()
+                            volpproc = refine3D_state_vol_suffix_fname(state, PPROC_SUFFIX)
+                            vollp    = refine3D_state_vol_suffix_fname(state, LP_SUFFIX)
                             ! keep per-iteration postprocessed copies
-                            vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter,3)//&
-                                &PPROC_SUFFIX//params%ext%to_char()
+                            vol_iter = refine3D_iter_vol_fname(state, iter, PPROC_SUFFIX)
                             call simple_copy_file(volpproc, vol_iter)
-                            vol_iter = string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext%to_char()
+                            vol_iter = refine3D_iter_vol_fname(state, iter, LP_SUFFIX)
                             call simple_copy_file(vollp, vol_iter)
                             if( iter > 1 .and. params%keepvol.eq.'no' )then
-                                call del_file(string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter-1,3)//&
-                                    &PPROC_SUFFIX//params%ext%to_char())
-                                call del_file(string(VOL_FBODY)//str_state//'_iter'//int2str_pad(iter-1,3)//&
-                                    &LP_SUFFIX//params%ext%to_char())
+                                call del_file(refine3D_iter_vol_fname(state, iter-1, PPROC_SUFFIX))
+                                call del_file(refine3D_iter_vol_fname(state, iter-1, LP_SUFFIX))
                             endif
                         enddo
                     endif
@@ -989,7 +979,7 @@ contains
             call delete_volume_source_job_keys(self%job_descr, params%nstates)
             call delete_volume_source_keys(cline, params%nstates)
             if( iter > 1 .and. params%keepvol.eq.'no' )then
-                call del_file(string(CAVGS_ITER_FBODY)//int2str_pad(iter-1,3)//params%ext%to_char())
+                call del_file(refine3D_iter_refs_fname(iter-1))
             endif
         endif
         ! combine even/odd final iteration
@@ -1019,8 +1009,6 @@ contains
             call cline%set( 'trs', params%trs )
         endif
         call str%kill
-        call str_iter%kill
-        call str_state%kill
         call vol%kill
         call vol_iter%kill
         call fsc_templ%kill
@@ -1041,7 +1029,7 @@ contains
         type(string) :: benchfname
         integer :: fnr
         if( L_BENCH_GLOB )then
-            benchfname = 'DISTR_REFINE3D_BENCH_ITER'//int2str_pad(params%which_iter,3)//'.txt'
+            benchfname = refine3D_distr_bench_fname(params%which_iter)
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,t52,f9.2)') 'refine3D init, distributed              : ', self%bench%rt_init

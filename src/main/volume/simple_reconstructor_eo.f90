@@ -6,6 +6,7 @@ use simple_image_msk,     only: image_msk
 use simple_parameters,    only: parameters
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
+use simple_refine3D_fnames, only: refine3D_fsc_fname
 use simple_fsc
 implicit none
 
@@ -538,7 +539,7 @@ contains
             endif
         endif
         ! save, get & print resolution
-        call arr2file(self%fsc, string(FSC_FBODY//int2str_pad(state,2)//BIN_EXT))
+        call arr2file(self%fsc, refine3D_fsc_fname(state))
         call get_resolution(self%fsc, res, self%res_fsc05, self%res_fsc0143)
         self%res_fsc05   = max(self%res_fsc05,self%fny)
         self%res_fsc0143 = max(self%res_fsc0143,self%fny)

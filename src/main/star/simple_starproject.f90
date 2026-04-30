@@ -4,6 +4,7 @@ use simple_core_module_api
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use simple_starproject_utils
+use simple_refine3D_fnames, only: refine3D_iter_vol_fname, refine3D_resolution_txt_fbody
 use CPlot2D_wrapper_module
 use simple_rnd
 use FoX_dom
@@ -707,7 +708,7 @@ contains
         real,               allocatable   :: fscs(:,:,:), maxres05(:), maxres0128(:)
         type(sp_project)      :: classproj, fscproj
         type(string)          :: stkname, relpath, line
-        character(len=STDLEN) :: str_state, str_iter
+        character(len=STDLEN) :: str_iter
         type(string)          :: volassemble_output, pprocvol, lpvol, cwd
         integer :: i, j, state, fhandle, ios, ok
         logical :: ex
@@ -724,8 +725,7 @@ contains
         call classproj%os_cls3D%new(states, is_ptcl=.false.)
         i = 0
         do state = 1, states
-            str_state = int2str_pad(state,2)
-            volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+            volassemble_output = refine3D_resolution_txt_fbody(state, iter)
             if(file_exists(volassemble_output)) then
                 i = 0
                 call fopen(fhandle, file=volassemble_output, status='old')
@@ -755,8 +755,8 @@ contains
                 end do
                 call fclose(fhandle)
             end if
-            pprocvol = VOL_FBODY//trim(str_state)//"_iter"//trim(str_iter)//PPROC_SUFFIX//".mrc"
-            lpvol    = VOL_FBODY//trim(str_state)//"_iter"//trim(str_iter)//LP_SUFFIX//".mrc"
+            pprocvol = refine3D_iter_vol_fname(state, iter, PPROC_SUFFIX)
+            lpvol    = refine3D_iter_vol_fname(state, iter, LP_SUFFIX)
             if(file_exists(pprocvol)) then
               call classproj%os_cls3D%set(state, 'ppvol', basename(cwd)//"/"//pprocvol)
             end if

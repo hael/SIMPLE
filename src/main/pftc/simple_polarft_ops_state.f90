@@ -1,6 +1,7 @@
 !@descr: submodule for controlling various state-related things in the polarops module
 submodule (simple_polarft_calc) simple_polarft_ops_state
 use simple_memoize_ft_maps, only: memoize_ft_maps
+use simple_refine3D_fnames, only: refine3D_obsfield_part_fname
 use simple_fgrid_obsfield,  only: fgrid_obsfield_eo
 implicit none
 #include "simple_local_flags.inc"
@@ -71,13 +72,6 @@ contains
             call self%obsfields(istate)%new(lims, self%interpklim)
         enddo
     end subroutine ensure_obsfields_allocated
-
-    type(string) function obsfield_part_fname( self, state, part ) result(fname)
-        class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: state, part
-        fname = 'obsfield_state'//int2str_pad(state,2)//'_part'// &
-            &int2str_pad(part,max(1,self%p_ptr%numlen))//BIN_EXT
-    end function obsfield_part_fname
 
     module subroutine polar_cavger_set_ref_pft( self, icls, which )
         class(polarft_calc), intent(inout) :: self
@@ -310,7 +304,7 @@ contains
         integer :: istate
         call ensure_obsfields_allocated(self)
         do istate = 1, self%p_ptr%nstates
-            fname = obsfield_part_fname(self, istate, self%p_ptr%part)
+            fname = refine3D_obsfield_part_fname(istate, self%p_ptr%part, self%p_ptr%numlen)
             call self%obsfields(istate)%write(fname)
         enddo
         call fname%kill
@@ -326,7 +320,7 @@ contains
         do istate = 1, self%p_ptr%nstates
             call self%obsfields(istate)%reset
             do ipart = 1, self%p_ptr%nparts
-                fname = obsfield_part_fname(self, istate, ipart)
+                fname = refine3D_obsfield_part_fname(istate, ipart, self%p_ptr%numlen)
                 call obs_part%read(fname)
                 call self%obsfields(istate)%append_field(obs_part)
                 call obs_part%kill

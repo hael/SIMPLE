@@ -2,6 +2,7 @@
 module simple_matcher_smpl_and_lplims
 use simple_pftc_srch_api
 use simple_builder, only: builder
+use simple_refine3D_fnames, only: refine3D_fsc_fname
 implicit none
 
 public :: set_bp_range3D, set_bp_range2D
@@ -30,7 +31,7 @@ contains
             endif
             ! FSC values are read anyway
             do s=1,params%nstates
-                fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
+                fsc_fname = refine3D_fsc_fname(s)
                 if( file_exists(fsc_fname) )then
                     fsc_arr = file2rarr(fsc_fname)
                     fsc_sz  = size(build%fsc(s,:))
@@ -53,7 +54,7 @@ contains
             all_fsc_bin_exist = .true.
             fsc_bin_exists    = .false.
             do s=1,params%nstates
-                fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
+                fsc_fname = refine3D_fsc_fname(s)
                 fsc_bin_exists( s ) = file_exists(fsc_fname)
                 if( build%spproj_field%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
                     & all_fsc_bin_exist = .false.
@@ -65,7 +66,7 @@ contains
                 resarr = build%img%get_res()
                 do s=1,params%nstates
                     if( fsc_bin_exists(s) )then
-                        fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
+                        fsc_fname = refine3D_fsc_fname(s)
                         fsc_arr = file2rarr(fsc_fname)
                         fsc_sz  = size(build%fsc(s,:))
                         arr_sz  = size(fsc_arr)

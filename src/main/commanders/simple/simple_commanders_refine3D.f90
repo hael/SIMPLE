@@ -4,6 +4,7 @@ use simple_commanders_api
 use simple_pftc_srch_api
 use simple_commanders_euclid
 use simple_commanders_volops, only: commander_postprocess
+use simple_refine3D_fnames,   only: refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
 
@@ -58,7 +59,6 @@ contains
         logical, parameter :: DEBUG            = .true.
         integer, parameter :: MINBOX           = 256
         integer, parameter :: NPDIRS4BAL       = 300
-        type(string) :: str_state
         real         :: smpd_target, smpd_crop, scale, trslim
         integer      :: box_crop, maxits_phase1, maxits_phase2, iter
         logical      :: l_autoscale
@@ -134,8 +134,7 @@ contains
         call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
         call xrec3D%execute(cline_rec3D)
         ! 3D refinement, phase1
-        str_state = int2str_pad(1,2)
-        call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
+        call cline%set('vol1', refine3D_state_vol_fname(1))
         call cline%set('prg',                'refine3D')
         call cline%set('ufrac_trec', params%update_frac)
         call cline%set('maxits',          maxits_phase1)
@@ -151,7 +150,7 @@ contains
         ! re-reconstruct from all particle images
         call xrec3D%execute(cline_rec3D)
         ! 3D refinement, phase2
-        call cline%set('vol1', string(VOL_FBODY)//str_state//MRC_EXT)
+        call cline%set('vol1', refine3D_state_vol_fname(1))
         call cline%set('maxits',   maxits_phase1)
         call cline%set('filt_mode', params%filt_mode)
         call cline%set('startit',           iter)
