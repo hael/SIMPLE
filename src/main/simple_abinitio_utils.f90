@@ -408,11 +408,11 @@ contains
         class(string),           intent(in)    :: projfile
         class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
-        type(string)      :: vol, vol_even, vol_odd, str, tmpl, src, dest, sstate, sstage, pgrp, vol_diag
+        type(string)      :: vol, vol_even, vol_odd, tmpl, src, dest, sstate, sstage, pgrp, vol_diag
         type(cmdline)     :: cline_rec
         type(class_frcs)  :: frcs
         real, allocatable :: fsc(:)
-        integer           :: i, inspace, state
+        integer           :: i, inspace, state, nrefs
         ! Reconstruction
         pgrp = trim(params%pgrp)
         if( istage <= SYMSRCH_STAGE ) pgrp = trim(params%pgrp_start)
@@ -424,7 +424,9 @@ contains
         call cline_rec%set('box_crop',  lpinfo(istage)%box_crop)
         call cline_rec%set('trail_rec', 'no')
         if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
-        call cline_rec%delete('vol1')
+        do state = 1,params%nstates
+            call cline_rec%delete('vol'//int2str(state))
+        enddo
         call cline_rec%delete('vol_even')
         call cline_rec%delete('vol_odd')
         call cline_rec%delete('update_frac')
@@ -432,58 +434,52 @@ contains
         call cline_rec%set('polar', 'no')
         call cline_rec%set('write_polar_refs', 'no')
         call xrec3D%execute(cline_rec)
-        if( params%l_polar )then
-            ! Polar reference branch
-            sstate = int2str_pad(1,2)
-            sstage = int2str_pad(istage-1,2)
-            src    = string(VOL_FBODY)//sstate//MRC_EXT
-            dest   = string(VOL_FBODY)//sstate//'_stage_'//sstage//MRC_EXT
+        ! Rename volumes, update cline & project
+        sstage  = int2str_pad(istage-1,2)
+        do state = 1,params%nstates
+            sstate = int2str_pad(state,2)
+            ! Rename volumes
+            if( istage == 1 )then
+                tmpl = string(STARTVOL_FBODY)//sstate
+            else
+                tmpl = string(VOL_FBODY)//sstate//'_stage_'//sstage
+            endif
+            src  = string(VOL_FBODY)//sstate//MRC_EXT
+            dest = tmpl//MRC_EXT
             call simple_rename(src, dest)
             vol_diag = add2fbody(dest, MRC_EXT, LP_SUFFIX)
             call write_abinitio_lowpass_snapshot(dest, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
-            call register_stage_volume(params, 1, dest, projfile)
+            vol_even = string(VOL_FBODY)//sstate//'_even'//MRC_EXT
+            dest     = tmpl//'_even_unfil'//MRC_EXT
+            call     simple_copy_file(vol_even, dest)
+            dest     = tmpl//'_even'//MRC_EXT
+            call     simple_rename(vol_even, dest)
+            vol_odd  = string(VOL_FBODY)//sstate//'_odd' //MRC_EXT
+            dest     = tmpl//'_odd_unfil'//MRC_EXT
+            call     simple_copy_file(vol_odd, dest)
+            dest     = tmpl//'_odd'//MRC_EXT
+            call     simple_rename(vol_odd, dest)
             ! Update refine3D command line
-            call cline_refine3D%set('vol1', dest)
-            params%vols(1) = dest
-            ! Update FRCS
-            fsc     = file2rarr(string(FSC_FBODY)//int2str_pad(1,2)//BIN_EXT)
+            vol = 'vol'//int2str(state)
+            call cline_refine3D%set(vol, dest)
+            ! Update project
+            call register_stage_volume(params, state, dest)
+        enddo
+        if( params%l_polar )then
+            ! Update FRCs object, is this required??
             inspace = cline_refine3D%get_iarg('nspace')
-            call frcs%new(inspace, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, 1)
-            do i = 1,inspace
-                call frcs%set_frc(i,fsc)
+            nrefs   = params%nstates * inspace
+            call frcs%new(nrefs, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, params%nstates)
+            do state = 1,params%nstates
+                sstate = int2str_pad(state,2)
+                fsc    = file2rarr(string(FSC_FBODY)//sstate//BIN_EXT)
+                do i = (state-1)*inspace+1, nrefs
+                    call frcs%set_frc(i,fsc)
+                enddo
             enddo
             call frcs%write(string(FRCS_FILE))
             deallocate(fsc)
             call frcs%kill
-        else
-            ! Cartesian branch
-            do state = 1,params%nstates
-                ! rename volumes and update cline
-                sstate = int2str_pad(state,2)
-                if( istage == 1 )then
-                    tmpl = string(STARTVOL_FBODY)//sstate
-                else
-                    tmpl = string(VOL_FBODY)//sstate//'_stage_'//int2str_pad(istage-1,2)
-                endif
-                vol      = string(VOL_FBODY)//sstate//MRC_EXT
-                str      = tmpl//MRC_EXT
-                call     simple_rename(vol, str)
-                vol_diag = add2fbody(str, MRC_EXT, LP_SUFFIX)
-                call     write_abinitio_lowpass_snapshot(str, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
-                params%vols(state) = str
-                vol      = 'vol'//int2str(state)
-                call     cline_refine3D%set(vol, str)
-                vol_even = string(VOL_FBODY)//sstate//'_even'//MRC_EXT
-                str      = tmpl//'_even_unfil'//MRC_EXT
-                call     simple_copy_file(vol_even, str)
-                str      = tmpl//'_even'//MRC_EXT
-                call     simple_rename(vol_even, str)
-                vol_odd  = string(VOL_FBODY)//sstate//'_odd' //MRC_EXT
-                str      = tmpl//'_odd_unfil'//MRC_EXT
-                call     simple_copy_file(vol_odd, str)
-                str      = tmpl//'_odd'//MRC_EXT
-                call     simple_rename(vol_odd, str)
-            enddo
         endif
         call vol_diag%kill
         call cline_rec%kill
@@ -630,77 +626,35 @@ contains
         type(image)  :: noisevol, signal
         real         :: b
         integer      :: s
+        ! The starting volume is noisy sphere whose values are scaled
+        ! to suit the euclid/sigma2 alignment scheme
+        ! random normal sphere N(0,5/box) + normal background N(0,5/box)
         call noisevol%new([box,box,box], smpd)
-        select case(trim(params%inivol))
-            case('rand')
-                ! random uniform distribution [0,1]
-                ! resulting std dev in projections is ~box/10
-                do s = 1, params%nstates
-                    call noisevol%ran
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
-                    call cline%set('vol'//int2str(s), vol_name)
-                    params%vols(s) = vol_name
-                    call noisevol%write(vol_name)
-                    call noisevol%ran
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
-                    call noisevol%write(vol_name)
-                    call noisevol%ran
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
-                    call noisevol%write(vol_name)
-                end do
-            case('rand_scaled')
-                ! random uniform distribution [0,5/box]
-                ! resulting std dev in projections is ~0.2
-                b = 5.0/real(box)
-                do s = 1, params%nstates
-                    call noisevol%ran(b=b)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
-                    call cline%set('vol'//int2str(s), vol_name)
-                    params%vols(s) = vol_name
-                    call noisevol%write(vol_name)
-                    call noisevol%ran(b=b)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
-                    call noisevol%write(vol_name)
-                    call noisevol%ran(b=b)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
-                    call noisevol%write(vol_name)
-                end do
-            case('sphere')
-                ! random normal sphere N(0,5/box) + normal background N(0,5/box)
-                b = 5.0/real(box)
-                call signal%new([box,box,box], smpd)
-                call signal%gauran(0.0, b)
-                call signal%mask3D_soft(0.25*real(box), backgr=0.)
-                do s = 1, params%nstates
-                    call noisevol%gauran(0., b)
-                    call noisevol%add(signal)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
-                    call cline%set('vol'//int2str(s), vol_name)
-                    params%vols(s) = vol_name
-                    call noisevol%write(vol_name)
-                    call noisevol%gauran(0., b)
-                    call noisevol%add(signal)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
-                    call noisevol%write(vol_name)
-                    call noisevol%gauran(0., b)
-                    call noisevol%add(signal)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
-                    call noisevol%write(vol_name)
-                    vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
-                    call noisevol%write(vol_name)
-                end do
-                call signal%kill
-        end select
+        b = 5.0/real(box)
+        call signal%new([box,box,box], smpd)
+        call signal%gauran(0.0, b)
+        call signal%mask3D_soft(0.25*real(box), backgr=0.)
+        do s = 1, params%nstates
+            call noisevol%gauran(0., b)
+            call noisevol%add(signal)
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'.mrc'
+            call cline%set('vol'//int2str(s), vol_name)
+            params%vols(s) = vol_name
+            call noisevol%write(vol_name)
+            call noisevol%gauran(0., b)
+            call noisevol%add(signal)
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'_even.mrc'
+            call noisevol%write(vol_name)
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'_even_unfil.mrc'
+            call noisevol%write(vol_name)
+            call noisevol%gauran(0., b)
+            call noisevol%add(signal)
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd.mrc'
+            call noisevol%write(vol_name)
+            vol_name = 'startvol_state'//int2str_pad(s,2)//'_odd_unfil.mrc'
+            call noisevol%write(vol_name)
+        end do
+        call signal%kill
         call noisevol%kill
     end subroutine generate_random_volumes
 

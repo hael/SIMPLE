@@ -500,11 +500,6 @@ contains
         endif
         ! Polar representation
         l_polar = params%l_polar ! global parameter
-        if( params%l_polar )then
-            if( trim(params%multivol_mode).ne.'single' )then
-                THROW_HARD('POLAR modes are not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
-            endif
-        endif
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)
         call nice_comm%cycle()
