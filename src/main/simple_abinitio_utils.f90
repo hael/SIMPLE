@@ -90,6 +90,10 @@ contains
         call cline_reconstruct3D%set('polar',                   'no')
         ! no fractional update
         call cline_reconstruct3D%delete('update_frac')
+        call cline_reconstruct3D%delete('refs')
+        call cline_reconstruct3D%delete('refs_even')
+        call cline_reconstruct3D%delete('refs_odd')
+        call cline_reconstruct3D%delete('write_obsfield_vols')
         ! re-project volume, only with cavgs
         call cline_reproject%set('prg',                  'reproject')
         call cline_reproject%set('pgrp',                 params%pgrp)
@@ -113,6 +117,10 @@ contains
         call child_cline%delete('polar')
         call child_cline%delete('automsk')
         call child_cline%delete('filt_mode')
+        call child_cline%delete('refs')
+        call child_cline%delete('refs_even')
+        call child_cline%delete('refs_odd')
+        call child_cline%delete('write_obsfield_vols')
     end subroutine strip_refine3D_planning_keys
 
     subroutine invalidate_polar_ref_sections
@@ -341,6 +349,8 @@ contains
                 call cline_asymrec%set('prg',        'reconstruct3D')
                 call cline_asymrec%set('mkdir',      'no')
                 call cline_asymrec%set('projfile',   projfile)
+                call cline_asymrec%set('box',        params%box)
+                call cline_asymrec%set('smpd',       params%smpd)
                 call cline_asymrec%set('pgrp',       params%pgrp_start)
                 call cline_asymrec%set('ml_reg',     'no') ! no ml reg for now
                 call cline_asymrec%set('objfun',     'cc')
@@ -380,6 +390,8 @@ contains
                 call cline_symrec%set('prg',        'reconstruct3D')
                 call cline_symrec%set('mkdir',      'no')
                 call cline_symrec%set('projfile',   projfile)
+                call cline_symrec%set('box',        params%box)
+                call cline_symrec%set('smpd',       params%smpd)
                 call cline_symrec%set('pgrp',       params%pgrp)
                 call cline_symrec%set('which_iter', cline_refine3D%get_iarg('endit'))
                 call strip_refine3D_planning_keys(cline_symrec)
@@ -408,11 +420,12 @@ contains
         class(string),           intent(in)    :: projfile
         class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
-        type(string)      :: vol, vol_even, vol_odd, tmpl, src, dest, sstate, sstage, pgrp, vol_diag
+        type(string)      :: vol_even, vol_odd, tmpl, src, dest, dest_main, dest_even, dest_odd, sstate, sstage, pgrp, vol_diag
         type(cmdline)     :: cline_rec
         type(class_frcs)  :: frcs
         real, allocatable :: fsc(:)
-        integer           :: i, inspace, state, nrefs
+        integer           :: i, inspace, state, nrefs, ref_first, ref_last
+        logical           :: have_even_stage, have_odd_stage
         ! Reconstruction
         pgrp = trim(params%pgrp)
         if( istage <= SYMSRCH_STAGE ) pgrp = trim(params%pgrp_start)
@@ -421,6 +434,8 @@ contains
         call cline_rec%set('mkdir',     'no')
         call cline_rec%set('projfile',  projfile)
         call cline_rec%set('pgrp',      pgrp)
+        call cline_rec%set('box',       params%box)
+        call cline_rec%set('smpd',      params%smpd)
         call cline_rec%set('box_crop',  lpinfo(istage)%box_crop)
         call cline_rec%set('trail_rec', 'no')
         if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
@@ -444,26 +459,46 @@ contains
             else
                 tmpl = string(VOL_FBODY)//sstate//'_stage_'//sstage
             endif
+            have_even_stage = .false.
+            have_odd_stage  = .false.
             src  = string(VOL_FBODY)//sstate//MRC_EXT
-            dest = tmpl//MRC_EXT
-            call simple_rename(src, dest)
-            vol_diag = add2fbody(dest, MRC_EXT, LP_SUFFIX)
-            call write_abinitio_lowpass_snapshot(dest, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
+            dest_main = tmpl//MRC_EXT
+            call simple_rename(src, dest_main)
+            vol_diag = add2fbody(dest_main, MRC_EXT, LP_SUFFIX)
+            call write_abinitio_lowpass_snapshot(dest_main, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
             vol_even = string(VOL_FBODY)//sstate//'_even'//MRC_EXT
-            dest     = tmpl//'_even_unfil'//MRC_EXT
-            call     simple_copy_file(vol_even, dest)
-            dest     = tmpl//'_even'//MRC_EXT
-            call     simple_rename(vol_even, dest)
+            if( file_exists(vol_even) )then
+                dest = tmpl//'_even_unfil'//MRC_EXT
+                call simple_copy_file(vol_even, dest)
+                dest = tmpl//'_even'//MRC_EXT
+                call simple_rename(vol_even, dest)
+                dest_even = dest
+                have_even_stage = .true.
+            endif
             vol_odd  = string(VOL_FBODY)//sstate//'_odd' //MRC_EXT
-            dest     = tmpl//'_odd_unfil'//MRC_EXT
-            call     simple_copy_file(vol_odd, dest)
-            dest     = tmpl//'_odd'//MRC_EXT
-            call     simple_rename(vol_odd, dest)
+            if( file_exists(vol_odd) )then
+                dest = tmpl//'_odd_unfil'//MRC_EXT
+                call simple_copy_file(vol_odd, dest)
+                dest = tmpl//'_odd'//MRC_EXT
+                call simple_rename(vol_odd, dest)
+                dest_odd = dest
+                have_odd_stage = .true.
+            endif
             ! Update refine3D command line
-            vol = 'vol'//int2str(state)
-            call cline_refine3D%set(vol, dest)
+            if( params%l_polar )then
+                if( have_even_stage .and. have_odd_stage )then
+                    call inject_refine3D_volume(params, state, dest_main)
+                    params%vols_even(state) = dest_even
+                    params%vols_odd(state)  = dest_odd
+                    call invalidate_polar_ref_sections
+                else
+                    call inject_polar_refine3D_volume(params, state, dest_main)
+                endif
+            else
+                call inject_refine3D_volume(params, state, dest_main)
+            endif
             ! Update project
-            call register_stage_volume(params, state, dest)
+            call register_stage_volume(params, state, dest_main, projfile)
         enddo
         if( params%l_polar )then
             ! Update FRCs object, is this required??
@@ -473,7 +508,9 @@ contains
             do state = 1,params%nstates
                 sstate = int2str_pad(state,2)
                 fsc    = file2rarr(string(FSC_FBODY)//sstate//BIN_EXT)
-                do i = (state-1)*inspace+1, nrefs
+                ref_first = (state - 1) * inspace + 1
+                ref_last  = state * inspace
+                do i = ref_first, ref_last
                     call frcs%set_frc(i,fsc)
                 enddo
             enddo

@@ -378,7 +378,7 @@ contains
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
-        type(string) :: volname
+        type(string) :: volname, write_obsfield_vols_arg
         real(dp)    :: fsc(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_prior_state(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
@@ -425,7 +425,8 @@ contains
         endif
         write_cartesian_vols = .false.
         if( cline%defined('write_obsfield_vols') )then
-            write_cartesian_vols = cline%get_carg('write_obsfield_vols') == 'yes'
+            write_obsfield_vols_arg = cline%get_carg('write_obsfield_vols')
+            write_cartesian_vols = write_obsfield_vols_arg%to_char() == 'yes'
         endif
         ! write down FRCs
         kspan  = [self%kfromto(1), self%interpklim]
@@ -465,6 +466,7 @@ contains
             endif
         enddo
         if( write_cartesian_vols ) call volname%kill
+        call write_obsfield_vols_arg%kill
         call mirror_slices_obsfield( self, reforis )
         call calc_fsc_from_refs(self, self%pfts_even, self%pfts_odd, 1, self%ncls, fsc)
         fsc_boxcrop(                 :self%kfromto(1)) = 1.0
