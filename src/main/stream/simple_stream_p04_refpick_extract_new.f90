@@ -631,6 +631,10 @@ contains
                 if( .not.allocated(completed_fnames) )then
                     return ! nothing was previously completed
                 endif
+                if( size(completed_fnames)==0 ) then
+                    deallocate(completed_fnames)
+                    return ! nothing was previously completed
+                endif
                 n_spprojs = size(completed_fnames)
                 allocate(spprojs(n_spprojs))
                 ! read projects micrographs

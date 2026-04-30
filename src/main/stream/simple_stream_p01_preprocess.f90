@@ -603,6 +603,10 @@ contains
                 if( .not.allocated(completed_fnames) )then
                     return ! nothing was previously completed
                 endif
+                if( size(completed_fnames)==0 ) then
+                    deallocate(completed_fnames)
+                    return ! nothing was previously completed
+                endif
                 n_spprojs = size(completed_fnames)
                 ! import into global project
                 allocate(spprojs(n_spprojs), mics_mask(n_spprojs*STREAM_NMOVS_SET))

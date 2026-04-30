@@ -730,7 +730,11 @@ contains
                 integer :: n_spprojs, iproj, nmics, imic, jmic, cnt, iostat,id
                 ! previously completed projects
                 call simple_list_files_regexp(string(DIR_STREAM_COMPLETED), '\.simple$', completed_fnames)
-                if( .not.allocated(completed_fnames) )then
+                if( .not.allocated(completed_fnames) ) then
+                    return ! nothing was previously completed
+                endif
+                if( size(completed_fnames)==0 ) then
+                    deallocate(completed_fnames)    
                     return ! nothing was previously completed
                 endif
                 n_spprojs = size(completed_fnames)

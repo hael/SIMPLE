@@ -361,6 +361,10 @@ contains
             if(allocated(tmp_farr)) deallocate(tmp_farr)
             call simple_list_files_regexp(dir, self%regexp%to_char(), tmp_farr, chronological=chrono)
             if( .not.allocated(tmp_farr) ) cycle
+            if( size(tmp_farr) == 0 )then
+                deallocate(tmp_farr)
+                cycle
+            endif
             if( allocated(farray) )then
                 n_newfiles = size(tmp_farr)
                 nfiles     = size(farray)
@@ -462,8 +466,9 @@ contains
         ! Test root folder first
         regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$|\.eer$'
         call simple_list_files_regexp(absdirectory, regexp%to_char(), tmp)
-        if( allocated(tmp) )then
+        if( allocated(tmp) .and. size(tmp) > 0 ) then
             ! Movies are present in the folder: this single folder will be watched
+            deallocate(tmp)
             found = .true.
             return
         endif
