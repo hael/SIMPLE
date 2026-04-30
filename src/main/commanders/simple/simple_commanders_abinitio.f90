@@ -37,29 +37,29 @@ contains
         class(commander_abinitio3D_cavgs), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! shared-mem commanders
-        type(commander_refine3D)      :: xrefine3D
-        type(commander_rec3D)         :: xrec3D
-        type(commander_reproject)     :: xreproject
+        type(commander_refine3D)  :: xrefine3D
+        type(commander_rec3D)     :: xrec3D
+        type(commander_reproject) :: xreproject
         ! other
-        type(string)                  :: stk, orig_stk, shifted_stk, stk_even, stk_odd, ext
-        integer,          allocatable :: states(:)
-        type(ori)                     :: o, o_even, o_odd
-        type(parameters)              :: params
-        type(ctfparams)               :: ctfvars
-        type(sp_project)              :: spproj, work_proj
-        type(image)                   :: img
-        type(stack_io)                :: stkio_r, stkio_r2, stkio_w
-        type(string)                  :: final_vol, work_projfile
-        integer                       :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
-        integer                       :: cavg_ldim(3), cavg_nimgs
-        real                          :: cavg_smpd
+        type(string)              :: stk, orig_stk, shifted_stk, stk_even, stk_odd, ext
+        integer, allocatable      :: states(:)
+        type(ori)                 :: o, o_even, o_odd
+        type(parameters)          :: params
+        type(ctfparams)           :: ctfvars
+        type(sp_project)          :: spproj, work_proj
+        type(image)               :: img
+        type(stack_io)            :: stkio_r, stkio_r2, stkio_w
+        type(string)              :: final_vol, work_projfile
+        integer                   :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
+        integer                   :: cavg_ldim(3), cavg_nimgs
+        real                      :: cavg_smpd
         if( cline%defined('part') )then
             THROW_HARD('abinitio3D_cavgs distributed execution is master-only; remove part from command line')
         endif
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        call cline%set('polar',   'obsfield') ! best mode for class averages
+        call cline%set('polar',         'no') ! needed for white noise regularization to have an effect
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'yes')
@@ -83,14 +83,7 @@ contains
         ! set class global filt_mode flag for low-pass limit estimation
         params%l_lpauto = .false.; l_lpauto=.false. ! global parameter for low-pass limit estimation
         l_nonuniform = .false.
-        ! Polar representation
-        l_polar = params%l_polar ! global parameter
-        if( params%l_polar )then
-            if( trim(params%multivol_mode).ne.'single' )then
-                THROW_HARD('POLAR modes are not compatible with MULTIVOL_MODE='//trim(params%multivol_mode))
-            endif
-            ! end comment to activate lpauto
-        endif
+        l_polar = .false.
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES_INI3D_MAX
         if( cline%defined('nstages') )then
@@ -196,14 +189,6 @@ contains
             call set_cline_refine3D(params, istage, l_cavgs=.true.)
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
-            endif
-            ! Reconstruction for polar representation
-            if( l_polar .and. (istage>1) )then
-                if( l_srch4symaxis .and. (istage == SYMSRCH_STAGE+1) )then
-                    ! exception: after symmetry search
-                else
-                    call calc_rec(params, work_projfile, xrec3D, istage)
-                endif
             endif
             ! Probabilistic search
             call exec_refine3D(params, istage, xrefine3D)
@@ -332,7 +317,6 @@ contains
                 call local_cline_rec%set('prg',   'reconstruct3D')
                 call local_cline_rec%set('mkdir', 'no') ! to avoid nested dirs
                 call local_cline_rec%set('objfun', 'cc')
-                call local_cline_rec%set('polar',  'no')
                 call xrec3D%execute(local_cline_rec)
                 do s = 1,params%nstates
                     state = int2str_pad(s,2)

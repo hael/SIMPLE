@@ -13,7 +13,6 @@ integer, parameter :: LPAUTO_STAGE               = PROB_REFINE_STAGE + 1 ! we sw
 integer, parameter :: REFINE3D_ROUTE_STD         = 1
 integer, parameter :: REFINE3D_ROUTE_CAVGS       = 2
 integer, parameter :: REFINE3D_ROUTE_POLAR       = 3
-integer, parameter :: REFINE3D_ROUTE_POLAR_CAVGS = 4
 integer, parameter :: NSPACE_NEXT_NONE           = 0
 integer, parameter :: NEIGH_NSPACES(2)           = [126,5000]
 
@@ -29,18 +28,12 @@ contains
 
     integer function classify_refine3D_route( l_cavgs ) result(route)
         logical, intent(in) :: l_cavgs
-        if( l_polar )then
-            if( l_cavgs )then
-                route = REFINE3D_ROUTE_POLAR_CAVGS
-            else
-                route = REFINE3D_ROUTE_POLAR
-            endif
+        if( l_cavgs )then
+            route = REFINE3D_ROUTE_CAVGS
+        else if( l_polar )then
+            route = REFINE3D_ROUTE_POLAR
         else
-            if( l_cavgs )then
-                route = REFINE3D_ROUTE_CAVGS
-            else
-                route = REFINE3D_ROUTE_STD
-            endif
+            route = REFINE3D_ROUTE_STD
         endif
     end function classify_refine3D_route
 
@@ -83,7 +76,7 @@ contains
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_automsk_policy( cfg, params, istage, route )
         call set_refine3D_stage_controls( cfg, params, istage, route )
-        call apply_refine3D_route_overrides( cfg, params, istage, route )
+        call apply_refine3D_route_overrides( cfg, params, route )
         call set_refine3D_next_space( cfg, params, istage, route )
     end subroutine build_refine3D_stage_cfg
 
@@ -144,7 +137,7 @@ contains
             cfg%refine = 'prob'
         else
             ! cavgs routes cap at prob (never prob_neigh)
-            if( route == REFINE3D_ROUTE_CAVGS .or. route == REFINE3D_ROUTE_POLAR_CAVGS )then
+            if( route == REFINE3D_ROUTE_CAVGS )then
                 cfg%refine = 'prob'
             else
                 cfg%refine = 'prob_neigh'
@@ -233,7 +226,7 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
-        if( route == REFINE3D_ROUTE_CAVGS .or. route == REFINE3D_ROUTE_POLAR_CAVGS )then
+        if( route == REFINE3D_ROUTE_CAVGS )then
             cfg%inspace = NSPACE_CAVGS(istage)
         else
             cfg%inspace = NSPACE(istage)
@@ -281,18 +274,19 @@ contains
         end select
     end subroutine set_refine3D_stage_controls
 
-    subroutine apply_refine3D_route_overrides( cfg, params, istage, route )
+    subroutine apply_refine3D_route_overrides( cfg, params, route )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
-        integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
         integer :: stage_last
         cfg%ipftsz = 0
         stage_last = active_refine3D_nstages()
         select case(route)
-            case(REFINE3D_ROUTE_STD, REFINE3D_ROUTE_CAVGS)
-                ! nothing to override for standard and cavgs routes
-            case(REFINE3D_ROUTE_POLAR, REFINE3D_ROUTE_POLAR_CAVGS)
+            case(REFINE3D_ROUTE_STD)
+                ! nothing to override for the standard route
+            case(REFINE3D_ROUTE_CAVGS)
+                cfg%ml_reg = 'no'
+            case(REFINE3D_ROUTE_POLAR)
                 if( trim(params%gauref).eq.'no' ) cfg%gaufreq = -1.
                 if( cfg%ml_reg.eq.'yes' )         cfg%gaufreq = -1.
                 if( cfg%trail_rec=='yes' )then
@@ -345,7 +339,7 @@ contains
         call set_refine3D_trailrec_policy( cfg_stage, params, istage )
         call set_refine3D_automsk_policy( cfg_stage, params, istage, route )
         call set_refine3D_stage_controls( cfg_stage, params, istage, route )
-        call apply_refine3D_route_overrides( cfg_stage, params, istage, route )
+        call apply_refine3D_route_overrides( cfg_stage, params, route )
         inspace = cfg_stage%inspace
     end function refine3D_stage_nspace
 
@@ -420,7 +414,7 @@ contains
         endif
         call cline_refine3D%delete('ipftsz')
         select case(route)
-            case(REFINE3D_ROUTE_POLAR, REFINE3D_ROUTE_POLAR_CAVGS)
+            case(REFINE3D_ROUTE_POLAR)
                 call cline_refine3D%set('center_type',    'params')
                 if( cfg%ipftsz > 0 )then
                     call cline_refine3D%set('pftsz',      cfg%ipftsz)
