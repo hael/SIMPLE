@@ -10,7 +10,7 @@
 !                                         successfully bound with a raw c_socket call
 !     4. test_occupied_port_skipped     — holding a port open causes find_available_port
 !                                         to return a different (higher) port
-!     5. test_init_and_kill             — init() starts the listener; kill() stops it
+!     5. test_init_server_and_kill      — init_server() starts the listener; kill() stops it
 !     6. test_find_host_ips             — find_host_ips() returns a non-empty string
 !     7. test_start_and_join_listener   — start_listener/join_listener lifecycle
 !
@@ -25,7 +25,8 @@ module simple_ipc_tcp_socket_tester
   use simple_test_utils,     only: assert_true, assert_int
   use simple_string,         only: string
   use iso_c_binding
-  use unix,          only: c_socket, c_bind, c_close, c_htons, c_socklen_t, &
+  use unix,          only: c_socket, c_bind, c_close, c_htons, c_socklen_t,    &
+                            c_pthread_mutex_init, c_pthread_mutex_destroy,    &
                             c_pthread_mutex_lock, c_pthread_mutex_unlock,     &
                             AF_INET, SOCK_STREAM, INADDR_ANY, c_int16_t
   implicit none
@@ -42,7 +43,7 @@ contains
     call test_port_in_range()
     call test_port_is_bindable()
     call test_occupied_port_skipped()
-   ! call test_init_server_and_kill()
+    call test_init_server_and_kill()
     call test_find_host_ips()
     call test_start_and_join_listener()
     write(*,'(A)') '**** ipc_tcp_socket tests done ****'
@@ -116,10 +117,8 @@ contains
     addr%sin_port   = c_htons(transfer(int(TCP_PORT_MIN, c_int32_t), 0_c_int16_t))
     addr%sin_addr   = int(INADDR_ANY, c_int32_t)
     rc = c_bind(fd, c_loc(addr), addrlen)
-    if( rc /= 0 ) then
-      ! TCP_PORT_MIN already occupied by something else — test is still valid
-      rc = c_close(fd)
-    end if
+    ! If bind failed, TCP_PORT_MIN was already occupied externally — test is still valid.
+    ! Do not close fd early; the final c_close below handles both cases.
     call sock%find_available_port(found)
     port = sock%get_port()
     call assert_true(found,               'port found with TCP_PORT_MIN occupied')
@@ -127,11 +126,21 @@ contains
     rc = c_close(fd)
   end subroutine test_occupied_port_skipped
 
-  ! init_server() must start the listener; kill() must stop it and reset port to -1.
+  ! init_server() must find a port, start the listener, and set is_listening=.true.
+  ! kill() must join the listener thread, reset port to -1, and set is_listening=.false.
+  ! A second kill() on an already-dead socket must be a no-op.
+  ! The caller owns the mutex in listener_args and must init/destroy it around the call.
   subroutine test_init_server_and_kill()
     type(ipc_tcp_socket)        :: sock
     type(listener_args), target :: args
+    integer(kind=c_int)         :: rc
     write(*,'(A)') 'test_init_server_and_kill'
+    call assert_true(.not. sock%is_listening(), 'is_listening false before init')
+    call assert_true(sock%get_port() == -1,     'port -1 before init')
+    ! Initialise the mutex before init_server: start_listener borrows it by pointer.
+    rc = c_pthread_mutex_init(args%mutex, c_null_ptr)
+    call assert_true(rc == 0, 'mutex init succeeded')
+    if( rc /= 0 ) return
     call sock%init_server(c_funloc(null_listener_thread), c_loc(args))
     call assert_true(sock%get_port() >= TCP_PORT_MIN, 'port valid after init')
     call assert_true(sock%get_port() <= TCP_PORT_MAX, 'port in range after init')
@@ -139,8 +148,11 @@ contains
     call sock%kill()
     call assert_true(sock%get_port() == -1,           'port reset to -1 after kill')
     call assert_true(.not. sock%is_listening(),       'listener stopped after kill')
+    ! Destroy the mutex after the listener thread has been joined by kill().
+    rc = c_pthread_mutex_destroy(args%mutex)
+    call assert_true(rc == 0, 'mutex destroy succeeded')
     call sock%kill()   ! second kill must be a no-op
-    call assert_true(sock%get_port() == -1,           'port still -1 after second kill')
+    call assert_true(sock%get_port() == -1, 'port still -1 after second kill')
   end subroutine test_init_server_and_kill
 
   ! find_host_ips() must populate host_ips with at least one IP address.
@@ -154,19 +166,31 @@ contains
     call assert_true(ips%strlen_trim() > 0,     'host_ips is non-empty after find_host_ips')
   end subroutine test_find_host_ips
 
-  ! start_listener() must set is_listening=.true.; join_listener() must reset it.
+  ! start_listener() must set is_listening=.true.; kill() must reset it.
+  ! The mutex in listener_args must be initialised by the caller before
+  ! start_listener() is called (as documented in simple_ipc_tcp_socket) and
+  ! destroyed by the caller after kill() joins the listener thread.
   subroutine test_start_and_join_listener()
     type(ipc_tcp_socket)        :: sock
     type(listener_args), target :: args
+    integer(kind=c_int)         :: rc
     logical                     :: found
     write(*,'(A)') 'test_start_and_join_listener'
     call sock%find_available_port(found)
-    call assert_true(found,                   'port found before start_listener')
+    call assert_true(found, 'port found before start_listener')
     if( .not. found ) return
+    call assert_true(.not. sock%is_listening(), 'is_listening false before start_listener')
+    ! Initialise the mutex: the caller owns it, not ipc_tcp_socket.
+    rc = c_pthread_mutex_init(args%mutex, c_null_ptr)
+    call assert_true(rc == 0, 'mutex init succeeded')
+    if( rc /= 0 ) return
     call sock%start_listener(c_funloc(null_listener_thread), c_loc(args))
-    call assert_true(sock%is_listening(),     'is_listening true after start_listener')
+    call assert_true(sock%is_listening(), 'is_listening true after start_listener')
     call sock%kill()
     call assert_true(.not. sock%is_listening(), 'is_listening false after kill')
+    ! Destroy the mutex after the listener thread has been joined by kill().
+    rc = c_pthread_mutex_destroy(args%mutex)
+    call assert_true(rc == 0, 'mutex destroy succeeded')
   end subroutine test_start_and_join_listener
 
   ! Minimal bind(c) thread: signals ready then accepts one message (the TERMINATE
