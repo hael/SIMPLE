@@ -7,7 +7,8 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
 use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
-use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
+use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D, &
+    &shift_obsfield_fplanes
 use simple_matcher_pftc_prep,       only: prep_pftc4align3D
 use simple_matcher_refvol_utils,    only: read_mask_filter_reproject_refvols, complete_volume_source_defined, &
     &any_volume_source_defined, write_polar_refs_from_current_pftc, polar_ref_sections_available
@@ -131,6 +132,7 @@ contains
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
+            incr_shifts(:,1:batchsz) = 0.0
             call build_batch_particles_local()
             if( ctrl%do_bench ) t_align = tic()
             !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,orientation) &
@@ -459,6 +461,7 @@ contains
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
                     case('obsfield')
+                        call shift_obsfield_fplanes(p_ptr, batchsz, incr_shifts(:,1:batchsz), fpls(:batchsz))
                         call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
                             &b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
                     case('yes')

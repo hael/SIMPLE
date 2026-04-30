@@ -6,7 +6,7 @@ use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgb
 use simple_matcher_2Dprep,  only: prepimg4align
 implicit none
 
-public :: prep_sigmas_objfun, alloc_ptcl_imgs, prep_imgs4obsfield
+public :: prep_sigmas_objfun, alloc_ptcl_imgs, prep_imgs4obsfield, shift_obsfield_fplanes
 public :: build_batch_particles3D, build_batch_particles2D
 public :: clean_batch_particles2D, clean_batch_particles3D
 private
@@ -87,6 +87,49 @@ contains
         if( ctfparms%ctfflag == CTFFLAG_YES ) ctfparms%ctfflag = CTFFLAG_FLIP
         call ptcl_img_pad%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms, shift, fplane)
     end subroutine prep_img4obsfield
+
+    subroutine shift_obsfield_fplanes( params, nptcls, incr_shifts, fplanes )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: nptcls
+        real,              intent(in)    :: incr_shifts(2,nptcls)
+        type(fplane_type), intent(inout) :: fplanes(nptcls)
+        real :: crop_factor, shift_crop(2)
+        integer :: i
+        if( nptcls < 1 ) return
+        crop_factor = real(params%box_crop) / real(params%box)
+        !$omp parallel do default(shared) private(i,shift_crop) schedule(static) proc_bind(close)
+        do i = 1,nptcls
+            shift_crop = incr_shifts(:,i) * crop_factor
+            if( any(abs(shift_crop) > 1.e-6) ) call shift_obsfield_fplane(fplanes(i), shift_crop)
+        enddo
+        !$omp end parallel do
+    end subroutine shift_obsfield_fplanes
+
+    subroutine shift_obsfield_fplane( fplane, shift_crop )
+        type(fplane_type), intent(inout) :: fplane
+        real,              intent(in)    :: shift_crop(2)
+        complex :: w1, w2, ph0, ph_h, ph_k
+        real(8) :: pshift(2)
+        integer :: h, k, hmin, hmax, kmin, kmax
+        if( .not. allocated(fplane%cmplx_plane) ) return
+        hmin = lbound(fplane%cmplx_plane, 1)
+        hmax = ubound(fplane%cmplx_plane, 1)
+        kmin = lbound(fplane%cmplx_plane, 2)
+        kmax = ubound(fplane%cmplx_plane, 2)
+        pshift = real(-shift_crop * fplane%shconst(1:2), kind=8)
+        w1   = cmplx(real(cos(pshift(1))), real(sin(pshift(1))))
+        w2   = cmplx(real(cos(pshift(2))), real(sin(pshift(2))))
+        ph0  = cmplx(real(cos(real(hmin,kind=8)*pshift(1))), real(sin(real(hmin,kind=8)*pshift(1))))
+        ph_k = cmplx(real(cos(real(kmin,kind=8)*pshift(2))), real(sin(real(kmin,kind=8)*pshift(2))))
+        do k = kmin,kmax
+            ph_h = ph0
+            do h = hmin,hmax
+                fplane%cmplx_plane(h,k) = fplane%cmplx_plane(h,k) * (ph_k * ph_h)
+                ph_h = ph_h * w1
+            enddo
+            ph_k = ph_k * w2
+        enddo
+    end subroutine shift_obsfield_fplane
 
     subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, &
             &imgs4rec, fplanes_obsfield, imgs_obsfield_pad )
