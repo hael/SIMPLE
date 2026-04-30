@@ -378,7 +378,9 @@ contains
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
-        real(dp)    :: fsc(self%kfromto(1):self%interpklim), fsc_state(self%kfromto(1):self%interpklim)
+        real(dp)    :: fsc(self%kfromto(1):self%interpklim)
+        real(dp)    :: fsc_prior_state(self%kfromto(1):self%interpklim)
+        real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
         real(dp)    :: invtau2_even(self%kfromto(1):self%interpklim), invtau2_odd(self%kfromto(1):self%interpklim)
         real(sp)    :: hcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
         real(sp)    :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
@@ -411,17 +413,11 @@ contains
         if( self%p_ptr%l_trail_rec .and. (.not. have_prev_refs) )then
             THROW_HARD('compatible previous polar references are required for obsfield trailing reconstruction')
         endif
-        ! Previous restored references provide the FSC/SSNR estimate, as in the
-        ! Cartesian route. Fractional updates trail the restored current refs
-        ! against that previous pair; the current obsfield density still sets
-        ! the ML denominator scale for this update.
+        ! Previous restored references provide only the prior FSC/SSNR estimate
+        ! needed before obsfield extraction. The FSC written below is computed
+        ! from the current restored obsfield references after mirroring.
         if( have_prev_refs )then
             call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
-            ! Global FSC is retained only for the low-res even/odd docking cutoff;
-            ! ML regularization uses the state-local FSC below.
-            call calc_fsc_from_refs(self, prev_even, prev_odd, 1, self%ncls, fsc)
-        else
-            fsc = 0.d0
         endif
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
@@ -435,30 +431,19 @@ contains
         endif
         hcoords = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
         kcoords = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
-        call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
             if( have_prev_refs )then
-                call calc_fsc_from_refs(self, prev_even, prev_odd, base+1, base+nprojs, fsc_state)
+                call calc_fsc_from_refs(self, prev_even, prev_odd, base+1, base+nprojs, fsc_prior_state)
             else
-                fsc_state = 0.d0
+                fsc_prior_state = 0.d0
             endif
-            fsc_boxcrop(                 :self%kfromto(1)) = 1.0
-            fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc_state(self%kfromto(1):self%interpklim))
-            if( self%interpklim < size(fsc_boxcrop) )then
-                fsc_boxcrop(self%interpklim+1:)            = 0.0
-            endif
-            call arr2file(fsc_boxcrop, string(FSC_FBODY//int2str_pad(state,2)//BIN_EXT))
-            do i = 1,nprojs
-                ! FRCs are set to the state-local FSC. to check if we are using those
-                call frcs%set_frc(i, fsc_boxcrop, state)
-            enddo
             invtau2_even = 0.d0
             invtau2_odd  = 0.d0
             if( self%p_ptr%l_ml_reg )then
-                call self%obsfields(state)%even%calc_invtau2(kspan, fsc_state, real(self%p_ptr%tau,dp), &
+                call self%obsfields(state)%even%calc_invtau2(kspan, fsc_prior_state, real(self%p_ptr%tau,dp), &
                     &prior_start, invtau2_even)
-                call self%obsfields(state)%odd%calc_invtau2( kspan, fsc_state, real(self%p_ptr%tau,dp), &
+                call self%obsfields(state)%odd%calc_invtau2( kspan, fsc_prior_state, real(self%p_ptr%tau,dp), &
                     &prior_start, invtau2_odd )
             endif
             call self%obsfields(state)%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
@@ -468,8 +453,7 @@ contains
                 &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
         enddo
         call mirror_slices_obsfield( self, reforis )
-        call frcs%write(string(FRCS_FILE))
-        call frcs%kill
+        call calc_fsc_from_refs(self, self%pfts_even, self%pfts_odd, 1, self%ncls, fsc)
         fsc_boxcrop(                 :self%kfromto(1)) = 1.0
         fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc(self%kfromto(1):self%interpklim))
         if( self%interpklim < size(fsc_boxcrop) )then
@@ -480,6 +464,23 @@ contains
         if( self%p_ptr%l_trail_rec .and. have_prev_refs )then
             call finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
         endif
+        call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
+        do state = 1,self%p_ptr%nstates
+            base = (state - 1) * nprojs
+            call calc_fsc_from_refs(self, self%pfts_even, self%pfts_odd, base+1, base+nprojs, fsc_state)
+            fsc_boxcrop(                 :self%kfromto(1)) = 1.0
+            fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc_state(self%kfromto(1):self%interpklim))
+            if( self%interpklim < size(fsc_boxcrop) )then
+                fsc_boxcrop(self%interpklim+1:)            = 0.0
+            endif
+            call arr2file(fsc_boxcrop, string(FSC_FBODY//int2str_pad(state,2)//BIN_EXT))
+            do i = 1,nprojs
+                ! FRCs are set to the state-local FSC. to check if we are using those
+                call frcs%set_frc(i, fsc_boxcrop, state)
+            enddo
+        enddo
+        call frcs%write(string(FRCS_FILE))
+        call frcs%kill
         if( allocated(prev_even) ) deallocate(prev_even)
         if( allocated(prev_odd)  ) deallocate(prev_odd)
     end subroutine polar_cavger_normalize_obsfield_refs
