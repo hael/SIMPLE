@@ -6,7 +6,8 @@ use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgb
 use simple_matcher_2Dprep,  only: prepimg4align
 implicit none
 
-public :: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, build_batch_particles2D
+public :: prep_sigmas_objfun, alloc_ptcl_imgs, prep_imgs4obsfield
+public :: build_batch_particles3D, build_batch_particles2D
 public :: clean_batch_particles2D, clean_batch_particles3D
 private
 #include "simple_local_flags.inc"
@@ -48,20 +49,67 @@ contains
         !$omp end parallel do
     end subroutine alloc_ptcl_imgs
 
-    subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, imgs4rec )
+    subroutine prep_imgs4obsfield( params, build, nptcls, pinds, ptcl_imgs_pad, fplanes )
+        use simple_image, only: image
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nptcls
+        integer,           intent(in)    :: pinds(nptcls)
+        class(image),      intent(inout) :: ptcl_imgs_pad(nptcls)
+        type(fplane_type), intent(inout) :: fplanes(nptcls)
+        type(ctfparams) :: ctfparms(nthr_glob)
+        integer :: i, iptcl, ithr
+        if( nptcls < 1 ) return
+        call memoize_ft_maps(ptcl_imgs_pad(1)%get_ldim(), ptcl_imgs_pad(1)%get_smpd())
+        !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
+        do i = 1,nptcls
+            ithr  = omp_get_thread_num() + 1
+            iptcl = pinds(i)
+            call prep_img4obsfield(params, build, iptcl, ptcl_imgs_pad(i), fplanes(i), ctfparms(ithr))
+        enddo
+        !$omp end parallel do
+        call forget_ft_maps
+    end subroutine prep_imgs4obsfield
+
+    subroutine prep_img4obsfield( params, build, iptcl, ptcl_img_pad, fplane, ctfparms )
+        use simple_image, only: image
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: iptcl
+        class(image),      intent(inout) :: ptcl_img_pad
+        type(fplane_type), intent(inout) :: fplane
+        type(ctfparams),   intent(inout) :: ctfparms
+        real    :: shift(2)
+        integer :: kfromto(2)
+        kfromto = build%esig%get_kfromto()
+        shift   = 0.0
+        ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
+        if( ctfparms%ctfflag == CTFFLAG_YES ) ctfparms%ctfflag = CTFFLAG_FLIP
+        call ptcl_img_pad%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms, shift, fplane)
+    end subroutine prep_img4obsfield
+
+    subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, &
+            &imgs4rec, fplanes_obsfield, imgs_obsfield_pad )
         class(parameters),      intent(in)    :: params
         class(builder),         intent(inout) :: build
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
         class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
+        type(fplane_type), optional, intent(inout) :: fplanes_obsfield(nptcls_here)
+        class(image), optional, intent(inout) :: imgs_obsfield_pad(nptcls_here)
         complex, allocatable :: pft(:,:)
         integer :: iptcl_batch, iptcl, ithr
-        logical :: l_backup_imgs
+        logical :: l_backup_imgs, l_prep_obsfield
         l_backup_imgs = present(imgs4rec)
+        l_prep_obsfield = present(fplanes_obsfield)
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
         call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
+        if( l_prep_obsfield .and. .not. present(imgs_obsfield_pad) )then
+            THROW_HARD('imgs_obsfield_pad required with fplanes_obsfield; build_batch_particles3D')
+        endif
         call tmp_imgs(1)%memoize_mask_coords
+        ! prepimg4align needs cropped FT maps; obsfield fplanes are generated below with padded maps.
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
         call tmp_imgs_pad(1)%memoize4polarize_oversamp(build%pftc%get_pdim_interp())
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,pft) schedule(static) proc_bind(close)
@@ -70,6 +118,7 @@ contains
             iptcl = pinds_here(iptcl_batch)
             if( l_backup_imgs ) call imgs4rec(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
             call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
+            if( l_prep_obsfield ) call imgs_obsfield_pad(iptcl_batch)%copy_fast(tmp_imgs_pad(ithr))
             pft = build%pftc%allocate_ptcl_pft()
             call tmp_imgs_pad(ithr)%polarize_oversamp(pft)
             call build%pftc%set_ptcl_pft(iptcl, pft)
@@ -77,9 +126,12 @@ contains
             call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
+        call forget_ft_maps
+        if( l_prep_obsfield )then
+            call prep_imgs4obsfield(params, build, nptcls_here, pinds_here, imgs_obsfield_pad, fplanes_obsfield)
+        endif
         call build%pftc%create_polar_absctfmats(build%spproj, 'ptcl3D')
         call build%pftc%memoize_ptcls
-        call forget_ft_maps
     end subroutine build_batch_particles3D
 
     subroutine build_batch_particles2D( params, build, nptcls_here, pinds, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad )
@@ -127,14 +179,16 @@ contains
         call dealloc_imgarr(ptcl_match_imgs_pad)
     end subroutine clean_batch_particles2D
 
-    subroutine clean_batch_particles3D( build, ptcl_imgs, ptcl_imgs_pad, imgs4rec )
+    subroutine clean_batch_particles3D( build, ptcl_imgs, ptcl_imgs_pad, imgs4rec, imgs_obsfield_pad )
         use simple_imgarr_utils, only: dealloc_imgarr
         class(builder),                     intent(inout) :: build
         type(image), allocatable,           intent(inout) :: ptcl_imgs(:)
         type(image), allocatable,           intent(inout) :: ptcl_imgs_pad(:)
         type(image), allocatable, optional, intent(inout) :: imgs4rec(:)
+        type(image), allocatable, optional, intent(inout) :: imgs_obsfield_pad(:)
         call killimgbatch(build)
         if( present(imgs4rec) ) call dealloc_imgarr(imgs4rec)
+        if( present(imgs_obsfield_pad) ) call dealloc_imgarr(imgs_obsfield_pad)
         call dealloc_imgarr(ptcl_imgs)
         call dealloc_imgarr(ptcl_imgs_pad)
     end subroutine clean_batch_particles3D

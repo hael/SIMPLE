@@ -59,7 +59,7 @@ contains
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        call cline%set('polar',         'no') ! needed for white noise regularization to have an effect
+        if( .not. cline%defined('polar') ) call cline%set('polar', 'obsfield')
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'yes')
@@ -83,7 +83,7 @@ contains
         ! set class global filt_mode flag for low-pass limit estimation
         params%l_lpauto = .false.; l_lpauto=.false. ! global parameter for low-pass limit estimation
         l_nonuniform = .false.
-        l_polar = .false.
+        l_polar = params%l_polar
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES_INI3D_MAX
         if( cline%defined('nstages') )then
@@ -189,6 +189,14 @@ contains
             call set_cline_refine3D(params, istage, l_cavgs=.true.)
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
+            endif
+            ! Reconstruction for polar representation
+            if( params%l_polar )then
+                if( (istage == 1) .or. (l_srch4symaxis .and. (istage == SYMSRCH_STAGE+1)) )then
+                    ! exceptions: first stage, after symmetry search
+                else
+                    call calc_rec( params, work_projfile, xrec3D, istage )
+                endif
             endif
             ! Probabilistic search
             call exec_refine3D(params, istage, xrefine3D)
@@ -317,6 +325,8 @@ contains
                 call local_cline_rec%set('prg',   'reconstruct3D')
                 call local_cline_rec%set('mkdir', 'no') ! to avoid nested dirs
                 call local_cline_rec%set('objfun', 'cc')
+                call local_cline_rec%set('polar', 'no')
+                call local_cline_rec%set('write_polar_refs', 'no')
                 call xrec3D%execute(local_cline_rec)
                 do s = 1,params%nstates
                     state = int2str_pad(s,2)

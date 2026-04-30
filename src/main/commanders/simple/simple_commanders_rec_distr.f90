@@ -15,7 +15,46 @@ type, extends(commander_base) :: commander_polar_volassemble
     procedure :: execute => exec_polar_assembly
 end type commander_polar_volassemble
 
+type, extends(commander_base) :: commander_polar_rec3D_worker
+  ! Polar partial-reference worker for distributed reconstruct3D.
+  contains
+    procedure :: execute => exec_polar_rec3D_worker
+end type commander_polar_rec3D_worker
+
 contains
+
+    subroutine exec_polar_rec3D_worker( self, cline )
+        use simple_matcher_3Dpolar,          only: calc_polar_partials
+        use simple_matcher_smpl_and_lplims,  only: set_bp_range3D
+        use simple_qsys_funs,                only: qsys_job_finished
+        class(commander_polar_rec3D_worker), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(parameters)     :: params
+        type(builder)        :: build
+        type(string)         :: fname
+        integer, allocatable :: pinds(:)
+        integer              :: nptcls2update
+        call build%init_params_and_build_general_tbox(cline, params)
+        call build%build_strategy3D_tbox(params)
+        if( .not. params%l_polar ) THROW_HARD('polar_rec3D worker requires POLAR=yes|obsfield')
+        if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds)
+        else
+            call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds)
+        endif
+        if( params%l_ml_reg )then
+            fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+            call build%esig%new(params, build%pftc, fname, params%box)
+            call build%esig%read_groups(build%spproj_field)
+        end if
+        call set_bp_range3D(params, build, cline)
+        call calc_polar_partials(params, build, nptcls2update, pinds)
+        if( allocated(pinds) ) deallocate(pinds)
+        call build%esig%kill
+        call build%kill_strategy3D_tbox
+        call build%kill_general_tbox
+        call qsys_job_finished(params, string('simple_commanders_rec_distr :: exec_polar_rec3D_worker'))
+    end subroutine exec_polar_rec3D_worker
 
     subroutine exec_polar_assembly( self, cline )
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D

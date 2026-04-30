@@ -150,10 +150,11 @@ contains
         call vol_odd%kill
     end subroutine inject_polar_refine3D_volume
 
-    subroutine register_stage_volume( params, state, vol_name )
+    subroutine register_stage_volume( params, state, vol_name, projfile )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: state
         class(string),     intent(in) :: vol_name
+        class(string),     intent(in), optional :: projfile
         type(sp_project)            :: spproj
         type(string) :: fsc_name
         integer :: ldim(3), nptcls
@@ -161,11 +162,19 @@ contains
         if( .not. file_exists(vol_name) ) return
         call find_ldim_nptcls(vol_name, ldim, nptcls)
         smpd = params%smpd_crop
-        call spproj%read_segment('out', params%projfile)
+        if( present(projfile) )then
+            call spproj%read_segment('out', projfile)
+        else
+            call spproj%read_segment('out', params%projfile)
+        endif
         call spproj%add_vol2os_out(vol_name, smpd, state, 'vol')
         fsc_name = string(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
         if( file_exists(fsc_name) ) call spproj%add_fsc2os_out(fsc_name, state, ldim(1))
-        call spproj%write_segment_inside('out', params%projfile)
+        if( present(projfile) )then
+            call spproj%write_segment_inside('out', projfile)
+        else
+            call spproj%write_segment_inside('out', params%projfile)
+        endif
         call spproj%kill
         call fsc_name%kill
     end subroutine register_stage_volume
@@ -327,6 +336,8 @@ contains
                 call cline_asymrec%set('ml_reg',     'no') ! no ml reg for now
                 call cline_asymrec%set('objfun',     'cc')
                 call strip_refine3D_planning_keys(cline_asymrec, delete_which_iter=.true.)
+                call cline_asymrec%set('polar',      'no')
+                call cline_asymrec%set('write_polar_refs', 'no')
                 call xrec3D%execute(cline_asymrec)
                 vol_iter = 'asymmetric_map'//MRC_EXT
                 call simple_copy_file(string(VOL_FBODY)//int2str_pad(1,2)//MRC_EXT, vol_iter)
@@ -363,6 +374,8 @@ contains
                 call cline_symrec%set('pgrp',       params%pgrp)
                 call cline_symrec%set('which_iter', cline_refine3D%get_iarg('endit'))
                 call strip_refine3D_planning_keys(cline_symrec)
+                call cline_symrec%set('polar',      'no')
+                call cline_symrec%set('write_polar_refs', 'no')
                 call xrec3D%execute(cline_symrec)
                 vol_sym = VOL_FBODY//int2str_pad(1,2)//MRC_EXT
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
@@ -407,6 +420,8 @@ contains
         call cline_rec%delete('vol_odd')
         call cline_rec%delete('update_frac')
         call strip_refine3D_planning_keys(cline_rec)
+        call cline_rec%set('polar', 'no')
+        call cline_rec%set('write_polar_refs', 'no')
         call xrec3D%execute(cline_rec)
         if( params%l_polar )then
             ! Polar reference branch
@@ -417,9 +432,10 @@ contains
             call simple_rename(src, dest)
             vol_diag = add2fbody(dest, MRC_EXT, LP_SUFFIX)
             call write_abinitio_lowpass_snapshot(dest, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
-            call register_stage_volume(params, 1, dest)
+            call register_stage_volume(params, 1, dest, projfile)
             ! Update refine3D command line
             call cline_refine3D%set('vol1', dest)
+            params%vols(1) = dest
             ! Update FRCS
             fsc     = file2rarr(string(FSC_FBODY)//int2str_pad(1,2)//BIN_EXT)
             inspace = cline_refine3D%get_iarg('nspace')

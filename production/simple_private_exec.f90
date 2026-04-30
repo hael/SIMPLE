@@ -40,6 +40,7 @@ type(commander_prob_align2D)            :: xprob_align2D
 ! RECONSTRUCTION PROGRAMS
 type(commander_cartesian_volassemble)   :: xvolassemble
 type(commander_rec3D_worker)            :: xrec3D
+type(commander_polar_rec3D_worker)      :: xpolar_rec3D
 
 ! CHECKER PROGRAMS
 type(commander_check_box)               :: xcheck_box
@@ -177,6 +178,8 @@ select case(prg)
     ! RECONSTRUCTION PROGRAMS
     case( 'reconstruct3D' )
         call xrec3D%execute(cline)
+    case( 'polar_reconstruct3D' )
+        call xpolar_rec3D%execute(cline)
     case( 'volassemble' )
         call xvolassemble%execute(cline)
 

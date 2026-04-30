@@ -62,6 +62,7 @@ contains
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
         type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_rec_imgs(:)
+        type(image),               allocatable :: ptcl_obsfield_imgs_pad(:)
         type(fplane_type),         allocatable :: fpls(:)
         type(class_sample),        allocatable :: clssmp(:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
@@ -170,7 +171,7 @@ contains
         call clean_strategy3D
         call b_ptr%vol%kill
         call orientation%kill
-        call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_rec_imgs)
+        call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_rec_imgs, ptcl_obsfield_imgs_pad)
 
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
@@ -186,6 +187,13 @@ contains
                 call finalize_rec_objs(params, build)
             endif
             if( ctrl%do_bench ) rt_rec = rt_rec + toc(t_rec)
+        endif
+        if( allocated(fpls) .and. ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
+            do iptcl_batch = 1,size(fpls)
+                if( allocated(fpls(iptcl_batch)%cmplx_plane) ) deallocate(fpls(iptcl_batch)%cmplx_plane)
+                if( allocated(fpls(iptcl_batch)%ctfsq_plane) ) deallocate(fpls(iptcl_batch)%ctfsq_plane)
+            enddo
+            deallocate(fpls)
         endif
         call b_ptr%pftc%kill
         call b_ptr%esig%kill
@@ -355,8 +363,10 @@ contains
             if( .not. ctrl%do_write_partial_recs ) return
             if( ctrl%do_polar )then
                 if( trim(ctrl%polar_mode).eq.'obsfield' )then
-                    call init_rec(params, build, batchsz_max, fpls)
-                    call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+                    if( allocated(fpls) ) deallocate(fpls)
+                    allocate(fpls(batchsz_max))
+                    call alloc_imgarr(batchsz_max, [p_ptr%box_croppd,p_ptr%box_croppd,1], &
+                        &p_ptr%smpd_crop, ptcl_obsfield_imgs_pad)
                 endif
             else
                 call init_rec(params, build, batchsz_max, fpls)
@@ -370,7 +380,8 @@ contains
                 select case(ctrl%polar_mode)
                     case('obsfield')
                         call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                            ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
+                            ptcl_match_imgs, ptcl_match_imgs_pad, fplanes_obsfield=fpls(:batchsz), &
+                            imgs_obsfield_pad=ptcl_obsfield_imgs_pad(:batchsz))
                     case('yes')
                         call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
                             ptcl_match_imgs, ptcl_match_imgs_pad)
@@ -448,8 +459,6 @@ contains
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
                     case('obsfield')
-                        call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
-                            &pinds(batch_start:batch_end), fpls(:batchsz))
                         call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
                             &b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
                     case('yes')

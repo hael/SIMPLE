@@ -4,8 +4,10 @@ use simple_builder,              only: builder
 use simple_parameters,           only: parameters
 use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
-use simple_matcher_3Drec,        only: calc_3Drec, calc_polar_refs
-use simple_commanders_rec_distr, only: commander_cartesian_volassemble
+use simple_matcher_3Dpolar,      only: calc_polar_partials
+use simple_matcher_3Drec,        only: calc_3Drec
+use simple_matcher_smpl_and_lplims, only: set_bp_range3D
+use simple_commanders_rec_distr, only: commander_cartesian_volassemble, commander_polar_volassemble
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
@@ -134,6 +136,7 @@ contains
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
         type(commander_cartesian_volassemble) :: xvolassemble
+        type(commander_polar_volassemble)     :: xpolar_volassemble
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in
         type(string)         :: fname
@@ -154,7 +157,16 @@ contains
         endif
         ! Reconstruction kernel
         if( params%l_polar) then
-            call calc_polar_refs( params, build, cline, nptcls2update, pinds )
+            call cline%set('force_volassemble', 'yes')
+            call set_bp_range3D(params, build, cline)
+            call calc_polar_partials( params, build, nptcls2update, pinds )
+            cline_volassemble = cline
+            call cline_volassemble%set('prg',  'volassemble')
+            call cline_volassemble%set('nthr', params%nthr)
+            call xpolar_volassemble%execute(cline_volassemble)
+            params%refs = string(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext%to_char()
+            call cline%delete('force_volassemble')
+            call cline_volassemble%kill
         else
             ! Legacy handshake for rec-writing helpers that still inspect this key.
             ! The strategy owns the actual assembly dispatch decision.
@@ -235,6 +247,7 @@ contains
         if( fall_over ) THROW_HARD('No images found!')
         ! avoid nested directory structure for jobs
         call cline%set('mkdir', 'no')
+        if( params%l_polar ) call cline%set('prg', 'polar_reconstruct3D')
         ! Even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
@@ -264,6 +277,7 @@ contains
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
         type(commander_cartesian_volassemble) :: xvolassemble
+        type(commander_polar_volassemble)     :: xpolar_volassemble
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in
         integer                     :: state
@@ -284,7 +298,11 @@ contains
                 endif
             endif
         end do
-        call xvolassemble%execute(cline_volassemble)
+        if( params%l_polar )then
+            call xpolar_volassemble%execute(cline_volassemble)
+        else
+            call xvolassemble%execute(cline_volassemble)
+        endif
         call cline_volassemble%kill
     end subroutine distr_execute
 
