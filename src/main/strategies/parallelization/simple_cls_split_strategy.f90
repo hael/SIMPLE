@@ -25,9 +25,9 @@ private
 
 integer, parameter :: CLS_SPLIT_AUTO_NEIGS_SCAN_MAX = 24
 integer, parameter :: CLS_SPLIT_ICM_RANK_MAXITS = 16
-real,    parameter :: CLS_SPLIT_ICM_RANK_BETA_FRAC = 0.35
-real,    parameter :: CLS_SPLIT_ICM_RANK_COMPLEXITY_FRAC = 0.10
-real,    parameter :: CLS_SPLIT_ICM_RANK_LOWER_SEED_FRAC = 0.50
+real,    parameter :: CLS_SPLIT_ICM_RANK_BETA_FRAC = 0.35 ! neighbor penalty: larger values discourage fragmented spectra such as keep/drop/keep.
+real,    parameter :: CLS_SPLIT_ICM_RANK_COMPLEXITY_FRAC = 0.10 ! Late-rank complexity penalty: larger values make high-index eigenfeatures harder to retain.
+real,    parameter :: CLS_SPLIT_ICM_RANK_LOWER_SEED_FRAC = 0.50 ! Lower-seed fraction of the eigengap upper bound; smaller values probe more compact latent spaces.
 
 type, abstract :: cls_split_strategy
 contains
