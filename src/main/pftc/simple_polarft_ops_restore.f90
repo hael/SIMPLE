@@ -1,6 +1,7 @@
 !@descr: submodule for class average restoration in the polar Fourier domain
 submodule (simple_polarft_calc) simple_polarft_ops_restore
 use simple_refine3D_fnames, only: refine3D_fsc_fname, refine3D_polar_refs_fname, refine3D_state_vol_fname
+use simple_refnode_shell_graph, only: refnode_shell_graph
 implicit none
 #include "simple_local_flags.inc"
 contains               
@@ -379,7 +380,10 @@ contains
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
+        type(refnode_shell_graph) :: refnodes
+        type(sym)    :: refnode_sym
         type(string) :: volname, write_obsfield_vols_arg
+        character(len=STDLEN) :: refnode_mode
         real(dp)    :: fsc(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_prior_state(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
@@ -441,6 +445,20 @@ contains
         endif
         hcoords = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
         kcoords = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
+        refnode_mode = lowercase(trim(self%p_ptr%obsfield_refnodes))
+        if( trim(refnode_mode) /= 'no' )then
+            call refnode_sym%new(self%p_ptr%pgrp)
+            call refnodes%new(reforis, refnode_sym, hcoords, kcoords, kspan, nprojs, &
+                &self%p_ptr%obsfield_refnode_support_mult)
+            if( trim(self%p_ptr%obsfield_refnode_stats) == 'yes' .or. trim(refnode_mode) == 'geom' )then
+                call refnodes%log_stats('asym_refspace')
+            endif
+            call refnodes%kill
+            call refnode_sym%kill
+            if( trim(refnode_mode) == 'geom' )then
+                write(logfhandle,'(A)') 'obsfield refnodes geom mode: diagnostics only; using Cartesian obsfield references'
+            endif
+        endif
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
             if( have_prev_refs )then

@@ -166,11 +166,18 @@ contains
         call vol_in%kill
     end subroutine prepare_assembly_cline
 
-    subroutine promote_assembly_nspace_if_needed( params, cline_assembly )
+    subroutine promote_assembly_nspace_if_needed( params, cline_assembly, force )
         type(parameters), intent(in)    :: params
         type(cmdline),    intent(inout) :: cline_assembly
+        logical, optional, intent(in)   :: force
+        logical :: l_force
+        l_force = .false.
+        if( present(force) ) l_force = force
         ! Cartesian and polar=obsfield can emit the next iteration's reference grid.
-        if( params%uses_next_assembly_ref_nspace() )then
+        if( l_force .and. params%can_promote_assembly_ref_nspace() .and. params%nspace_next > params%nspace )then
+            call cline_assembly%set('nspace', params%nspace_next)
+            call cline_assembly%delete('nspace_next')
+        else if( params%uses_next_assembly_ref_nspace() )then
             call cline_assembly%set('nspace', params%assembly_ref_nspace())
             call cline_assembly%delete('nspace_next')
         endif
@@ -501,6 +508,13 @@ contains
             case default
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
         end select
+        if( converged .and. params%l_polar .and. trim(params%polar) == 'obsfield' .and. &
+            &(.not. params%uses_next_assembly_ref_nspace()) .and. &
+            &params%can_promote_assembly_ref_nspace() .and. params%nspace_next > params%nspace )then
+            call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
+            call promote_assembly_nspace_if_needed(params, cline_volassemble, force=.true.)
+            call xpolar_volassemble%execute(cline_volassemble)
+        endif
         ! input volume should only be used once in polar mode
         if( params%l_polar ) call delete_volume_source_keys(cline, params%nstates)
     end subroutine inmem_execute_iteration
@@ -977,6 +991,14 @@ contains
         end select
         ! Force termination at requested number of iterations (maxits is run-length)
         if( (iter - params%startit + 1) >= params%maxits ) converged = .true.
+        if( converged .and. params%l_polar .and. trim(params%polar) == 'obsfield' .and. &
+            &(.not. params%uses_next_assembly_ref_nspace()) .and. &
+            &params%can_promote_assembly_ref_nspace() .and. params%nspace_next > params%nspace )then
+            call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
+            call promote_assembly_nspace_if_needed(params, cline_volassemble, force=.true.)
+            call xpolar_volassemble%execute(cline_volassemble)
+            params%refs = refine3D_iter_refs_fname(iter)
+        endif
         ! polar reference bookkeeping; the polar assembly commander owns the actual reduction.
         if( params%l_polar )then
             call delete_volume_source_job_keys(self%job_descr, params%nstates)
