@@ -216,6 +216,25 @@ contains
         call vol_lp%kill
     end subroutine write_abinitio_lowpass_snapshot
 
+    real function abinitio_state_fsc_lowpass( state, box, smpd, fallback_lp ) result( lp )
+        integer, intent(in) :: state, box
+        real,    intent(in) :: smpd, fallback_lp
+        type(string) :: fsc_name
+        real, allocatable :: fsc(:), res(:)
+        real :: fsc05, fsc0143
+        lp = fallback_lp
+        fsc_name = refine3D_fsc_fname(state)
+        if( file_exists(fsc_name) )then
+            fsc = file2rarr(fsc_name)
+            res = get_resarr(box, smpd)
+            call get_resolution(fsc, res, fsc05, fsc0143)
+            if( fsc0143 > 0. .and. fsc0143 == fsc0143 ) lp = fsc0143
+        endif
+        if( allocated(fsc) ) deallocate(fsc)
+        if( allocated(res) ) deallocate(res)
+        call fsc_name%kill
+    end function abinitio_state_fsc_lowpass
+
     subroutine set_symmetry_class_vars( params )
         class(parameters), intent(in) :: params
         type(string) :: pgrp, pgrp_start
@@ -298,6 +317,7 @@ contains
         type(cmdline) :: cline_obsfield_volassemble
         type(string) :: stage, str_state, vol_name, vol_stage, vol_pproc, vol_lp, vol_lp_stage
         integer      :: state
+        real         :: lp_snapshot
         call cline_refine3D%delete('endit')
         call xrefine3D%execute(cline_refine3D)
         if( l_polar .and. (trim(params%polar) == 'obsfield') )then
@@ -321,11 +341,9 @@ contains
                 vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
                 if( file_exists(vol_name) )then
                     call simple_copy_file(vol_name, vol_stage)
-                    if( file_exists(vol_lp) )then
-                        call simple_copy_file(vol_lp, vol_lp_stage)
-                    else
-                        call write_abinitio_lowpass_snapshot(vol_stage, lpinfo(istage)%lp, vol_lp_stage, lpinfo(istage)%smpd_crop)
-                    endif
+                    lp_snapshot = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
+                        &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+                    call write_abinitio_lowpass_snapshot(vol_stage, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
                 endif
                 if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,string(MRC_EXT),stage))
             enddo
@@ -435,6 +453,7 @@ contains
         type(class_frcs)  :: frcs
         real, allocatable :: fsc(:)
         integer           :: i, inspace, state, nrefs, ref_first, ref_last
+        real              :: lp_snapshot
         logical           :: have_even_stage, have_odd_stage
         ! Reconstruction
         pgrp = trim(params%pgrp)
@@ -475,7 +494,9 @@ contains
             dest_main = tmpl//MRC_EXT
             call simple_rename(src, dest_main)
             vol_diag = add2fbody(dest_main, MRC_EXT, LP_SUFFIX)
-            call write_abinitio_lowpass_snapshot(dest_main, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
+            lp_snapshot = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
+                &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+            call write_abinitio_lowpass_snapshot(dest_main, lp_snapshot, vol_diag, lpinfo(istage)%smpd_crop)
             vol_even = refine3D_state_halfvol_fname(state, 'even')
             if( file_exists(vol_even) )then
                 dest = tmpl//'_even_unfil'//MRC_EXT
@@ -639,6 +660,7 @@ contains
         type(string) :: str_state, vol_name, vol_final, vol_final_lp
         type(string) :: vol_pproc, vol_final_pproc, vol_mirr, vol_final_mirr
         integer :: state
+        real    :: lp_snapshot
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle ! empty-state case
             str_state      = int2str_pad(state,2)
@@ -647,7 +669,8 @@ contains
             vol_final      = string(REC_FBODY)//str_state//MRC_EXT
             call simple_copy_file(vol_name, vol_final)
             vol_final_lp = add2fbody(vol_final, MRC_EXT, LP_SUFFIX)
-            call write_abinitio_lowpass_snapshot(vol_final, lp, vol_final_lp, params%smpd)
+            lp_snapshot = abinitio_state_fsc_lowpass(state, params%box, params%smpd, lp)
+            call write_abinitio_lowpass_snapshot(vol_final, lp_snapshot, vol_final_lp, params%smpd)
             vol_pproc = add2fbody(vol_name, MRC_EXT, PPROC_SUFFIX)
             if( file_exists(vol_pproc) )then
                 vol_final_pproc = add2fbody(vol_final, MRC_EXT, PPROC_SUFFIX)
