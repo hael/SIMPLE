@@ -10,7 +10,7 @@ integer(dp) :: t
 real(dp)    :: rt_cpu, rt_gpu, rt_cpus
 real, allocatable :: a(:,:), b(:,:), c(:,:), d(:,:)
 integer :: i,j,k, num_devices,nteams,nthreads, device_id,ndevices
-integer :: default_device, host_device, initial_device
+integer :: default_device, host_device
 logical :: is_host
 if( command_argument_count() < 2 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_openmp_offload device=x nthr=y'
@@ -33,19 +33,12 @@ if( (p%device > ndevices) .or. (p%device < 0) ) then
 endif
 
 ! Host device sanity checks
-! omp_get_device_num() on the host equals omp_get_initial_device();
-! use omp_get_initial_device() to avoid missing Fortran binding in libgomp.so
-initial_device = omp_get_initial_device()
-host_device    = initial_device
-print *, 'Host device ID from omp_get_initial_device:   ', initial_device
-if( initial_device /= host_device ) then
-    stop 'Fatal error: incompatible device IDs'
-endif
+host_device = omp_get_initial_device()
+print *, 'Host device ID from omp_get_initial_device:   ', host_device
 if( host_device == p%device ) then
     stop 'Fatal error: params%device must be the ID of the GPU, not the CPU host'
 endif
 
-! #ifdef should not be required, temporary
 #ifdef USE_OPENMP_OFFLOAD
 ! Hooking up device
 default_device = omp_get_default_device()
@@ -123,28 +116,28 @@ rt_cpus = toc(t)
 ! openmp offload
 t = tic()
 !$omp target teams map(to:a,b) map(tofrom:c)
-!$omp loop
+!$omp loop collapse(2)
 do j = 1,N
   do i = 1,N
         c(i,j) = log(1. + 2.*sqrt(a(i,j)) + exp(-b(i,j)))**2.0
     enddo
 enddo
 !$omp end loop
-!$omp loop
+!$omp loop collapse(2)
 do j = 1,N
   do i = 1,N
         c(i,j) = c(i,j) + log(1. + 2.*sqrt(a(i,j)) + exp(-b(i,j)))**2.0
     enddo
 enddo
 !$omp end loop
-!$omp loop
+!$omp loop collapse(2)
 do j = 1,N
   do i = 1,N
         c(i,j) = c(i,j) - log(1. + 2.*sqrt(a(i,j)) + exp(-b(i,j)))**2.0
     enddo
 enddo
 !$omp end loop
-!$omp loop
+!$omp loop collapse(2)
 do j = 1,N
     do i = 1,N
         c(i,j) = 3. * exp(-cos(c(i,j) * pi))

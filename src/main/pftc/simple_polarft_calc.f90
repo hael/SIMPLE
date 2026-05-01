@@ -183,6 +183,8 @@ type :: polarft_calc
     procedure          :: gen_sigma_contrib
     procedure          :: gen_objfun_vals_mirr_vals
     procedure, private :: gen_corrs_mirr_corrs, gen_euclids_mirr_euclids
+    procedure          :: gen_all_euclids_gpu
+    procedure          :: gen_all_euclids
     ! ===== STATE: simple_polarft_ops_state.f90
     procedure          :: polar_cavger_new
     procedure          :: polar_cavger_zero_pft_refs
@@ -698,6 +700,19 @@ interface
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(out)   :: euclids(self%nrots), meuclids(self%nrots)
     end subroutine gen_euclids_mirr_euclids
+
+    ! currently in development routines
+
+    module subroutine gen_all_euclids_gpu( self, iptcl )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+    end subroutine gen_all_euclids_gpu
+
+    module subroutine gen_all_euclids( self, nr, ref_range, iptcl, euclids )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: nr, ref_range(2), iptcl
+        real(sp),                    intent(out)   :: euclids(self%nrots,nr)
+    end subroutine gen_all_euclids
 
     ! The below routines were previoulsy implemented as an independent set of submodules.
     ! This design decision was incorrect and forced the use of pointers to access encapsulated data.
