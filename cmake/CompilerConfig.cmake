@@ -67,6 +67,8 @@ endif()
 # ------------------------------------------------------------------------------
 if(APPLE)
     add_compile_definitions(__FreeBSD__ MACOSX)
+elseif(WIN32)
+    add_compile_definitions(_WIN32 WINDOWS)
 else()
     add_compile_definitions(__linux__ LINUX)
 endif()

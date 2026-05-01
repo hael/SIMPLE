@@ -38,6 +38,9 @@ module simple_ipc_tcp_socket_tester
 contains
 
   subroutine run_all_ipc_tcp_socket_tests()
+#if defined(_WIN32)
+    write(*,'(A)') '**** skipping ipc_tcp_socket tests on _WIN32 (POSIX socket stubs) ****'
+#else
     write(*,'(A)') '**** running all ipc_tcp_socket tests ****'
     call test_find_available_port()
     call test_port_in_range()
@@ -47,6 +50,7 @@ contains
     call test_find_host_ips()
     call test_start_and_join_listener()
     write(*,'(A)') '**** ipc_tcp_socket tests done ****'
+#endif
   end subroutine run_all_ipc_tcp_socket_tests
 
   ! find_available_port must succeed (found=.true.) on a machine that has

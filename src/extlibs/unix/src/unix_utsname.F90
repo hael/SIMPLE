@@ -7,7 +7,7 @@ module unix_utsname
     implicit none
     private
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter, public :: SYS_NMLN = 65
 

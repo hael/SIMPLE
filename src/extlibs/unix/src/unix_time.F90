@@ -8,7 +8,7 @@ module unix_time
     implicit none
     private
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter, public :: CLOCK_REALTIME           = 0
     integer(kind=c_int), parameter, public :: CLOCK_MONOTONIC          = 1

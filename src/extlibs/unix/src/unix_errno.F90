@@ -6,7 +6,7 @@ module unix_errno
     use, intrinsic :: iso_c_binding
     implicit none
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter, public :: EPERM           = 1
     integer(kind=c_int), parameter, public :: ENOENT          = 2

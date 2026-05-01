@@ -8,7 +8,7 @@ module unix_regex
     implicit none
     private
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter, public :: REG_EXTENDED = 1
     integer(kind=c_int), parameter, public :: REG_ICASE    = shiftl(1, 1)

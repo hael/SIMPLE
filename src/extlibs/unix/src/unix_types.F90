@@ -16,7 +16,7 @@ module unix_types
     integer, parameter, public :: c_uint32_t = c_int32_t
     integer, parameter, public :: c_uint64_t = c_int64_t
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer, parameter, public :: c_blkcnt_t    = c_int64_t
     integer, parameter, public :: c_blksize_t   = c_long

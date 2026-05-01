@@ -31,7 +31,7 @@ module unix_netdb
         integer(kind=c_int32_t) :: s_addr = 0_c_int32_t
     end type c_in_addr
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter, public :: AF_INET6 = 10
 

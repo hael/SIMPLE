@@ -96,7 +96,17 @@ module simple_ipc_tcp_socket
     logical :: found
     call self%find_host_ips()
     call self%find_available_port(found)
-    if( .not.found ) THROW_HARD('failed to find available TCP port')
+    if( .not.found ) then
+#if defined(_WIN32)
+        write(logfhandle,'(A)') '>>> IPC_TCP_SOCKET init_server: no available TCP port on _WIN32 (POSIX socket stubs); listener disabled'
+        self%port      = -1
+        self%server_fd = -1
+        self%listening = .false.
+        return
+#else
+        THROW_HARD('failed to find available TCP port')
+#endif
+    end if
     write(logfhandle,'(A,I0)')'>>> IPC_TCP_SOCKET available port found: ', self%port
     call self%start_listener(thread_funloc, thread_args_ptr)
   end subroutine init_server
@@ -228,7 +238,8 @@ module simple_ipc_tcp_socket
   !> loopback (127.*), and store them comma-separated in self%host_ips.
   subroutine find_host_ips( self )
     class(ipc_tcp_socket), intent(inout) :: self
-    character(kind=c_char, len=16) :: cmd, mode
+    character(kind=c_char, len=16)  :: cmd
+    character(kind=c_char, len=16)  :: mode
     character(kind=c_char)         :: buf(1024)
     type(c_ptr)                    :: pipe, ret
     integer(kind=c_int)            :: rc
@@ -236,9 +247,16 @@ module simple_ipc_tcp_socket
     character(len=1024)            :: fbuf
     character(len=64)              :: token
     logical                        :: first
-    cmd  = 'hostname -I' // c_null_char
-    mode = 'r'           // c_null_char
     self%host_ips = string('')
+#if defined(_WIN32)
+    ! On Windows builds, the current socket layer is POSIX-stubbed; use loopback.
+    self%host_ips = string('127.0.0.1')
+    write(logfhandle,'(A,A)')'>>> IPC_TCP_SOCKET host IPs: ', self%host_ips%to_char()
+    return
+#else
+    cmd  = 'hostname -I' // c_null_char
+#endif
+    mode = 'r'           // c_null_char
     pipe = c_popen(cmd, mode)
     if( .not. c_associated(pipe) ) return
     ret = c_fgets(buf(1), int(size(buf), c_int), pipe)

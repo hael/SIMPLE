@@ -9,7 +9,7 @@ module unix_semaphore
     implicit none
     private
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer, parameter :: SEM_SIZE = 32
 

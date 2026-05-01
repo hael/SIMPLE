@@ -91,40 +91,7 @@ module simple_ipc_mq
 
 contains
 
-#ifdef __linux__
-
-  logical function is_linux_runtime()
-    character(len=64) :: envval
-    integer           :: status, length
-
-    call get_environment_variable('OS', value=envval, length=length, status=status)
-    if( status == 0 .and. length > 0 )then
-      if( index(adjustl(envval(:length)), 'Windows_NT') /= 0 )then
-        is_linux_runtime = .false.
-        return
-      endif
-    endif
-
-    call get_environment_variable('ComSpec', value=envval, length=length, status=status)
-    if( status == 0 .and. length > 0 )then
-      is_linux_runtime = .false.
-      return
-    endif
-
-    call get_environment_variable('SYSTEMROOT', value=envval, length=length, status=status)
-    if( status == 0 .and. length > 0 )then
-      is_linux_runtime = .false.
-      return
-    endif
-
-    call get_environment_variable('windir', value=envval, length=length, status=status)
-    if( status == 0 .and. length > 0 )then
-      is_linux_runtime = .false.
-      return
-    endif
-
-    is_linux_runtime = .true.
-  end function is_linux_runtime
+#if !defined(_WIN32)
 
   ! Create and open a new POSIX message queue. The queue path is
   ! /<name>.<pid>. If max_msgsize is given the queue is configured with
@@ -136,10 +103,6 @@ contains
     type(string), optional, intent(in)    :: name
     integer,      optional, intent(in)    :: max_msgsize
     type(c_mq_attr), target               :: attr
-    if( .not. is_linux_runtime() )then
-      self%active = .false.
-      return
-    endif
     if( present(name)        ) self%name        = name
     if( present(max_msgsize) ) self%max_msgsize = max_msgsize
     self%mq_ppid = c_getpid()

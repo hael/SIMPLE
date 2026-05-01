@@ -8,7 +8,7 @@ module unix_fcntl
     implicit none
     private
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter, public :: O_ACCMODE  = int(o'0003')
     integer(kind=c_int), parameter, public :: O_RDONLY   = int(o'00')

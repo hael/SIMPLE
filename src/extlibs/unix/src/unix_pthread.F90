@@ -7,7 +7,7 @@ module unix_pthread
     implicit none
     private
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter :: PTHREAD_CREATE_DETACHED = 1
 

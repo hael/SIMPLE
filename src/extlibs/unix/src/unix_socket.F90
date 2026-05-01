@@ -8,7 +8,7 @@ module unix_socket
     implicit none
     private
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter, public :: SOL_SOCKET     = 1
 

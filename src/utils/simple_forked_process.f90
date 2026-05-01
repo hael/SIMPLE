@@ -92,39 +92,6 @@ module simple_forked_process
 
 contains
 
-  logical function is_posix_runtime()
-    character(len=64) :: envval
-    integer           :: status, length
-
-    call get_environment_variable('OS', value=envval, length=length, status=status)
-    if( status == 0 .and. length > 0 )then
-      if( index(adjustl(envval(:length)), 'Windows_NT') /= 0 )then
-        is_posix_runtime = .false.
-        return
-      endif
-    endif
-
-    call get_environment_variable('ComSpec', value=envval, length=length, status=status)
-    if( status == 0 .and. length > 0 )then
-      is_posix_runtime = .false.
-      return
-    endif
-
-    call get_environment_variable('SYSTEMROOT', value=envval, length=length, status=status)
-    if( status == 0 .and. length > 0 )then
-      is_posix_runtime = .false.
-      return
-    endif
-
-    call get_environment_variable('windir', value=envval, length=length, status=status)
-    if( status == 0 .and. length > 0 )then
-      is_posix_runtime = .false.
-      return
-    endif
-
-    is_posix_runtime = .true.
-  end function is_posix_runtime
-
   ! Fork a child process and begin execution. Optionally accept a new cline,
   ! name, logfile, and restart flag. In the child, redirect logfhandle if a
   ! logfile is given, call self%execute(), then exit. In the parent, record
@@ -139,14 +106,14 @@ contains
     if( present(logfile) ) self%logfile = logfile
     if( present(name)    ) self%name    = name
     if( present(cline)   ) self%cline   = cline
-    if( .not. is_posix_runtime() )then
+#if defined(_WIN32)
       self%pid      = -1
       self%running  = .false.
       self%failed   = .false.
       self%stopped  = .false.
       self%skipped  = .true.
       return
-    endif
+#endif
     self%skipped = .false.
     self%pid = c_fork()
     if( self%pid < 0 ) then

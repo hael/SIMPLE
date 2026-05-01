@@ -8,7 +8,7 @@ module unix_signal
     implicit none
     private
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter, public :: SIGHUP    = 1
     integer(kind=c_int), parameter, public :: SIGINT    = 2

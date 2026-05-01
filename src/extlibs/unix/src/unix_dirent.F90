@@ -17,7 +17,7 @@ module unix_dirent
     integer(kind=c_int), parameter, public :: DT_SOCK    = 12
     integer(kind=c_int), parameter, public :: DT_WHT     = 14
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     ! struct dirent
     type, bind(c), public :: c_dirent

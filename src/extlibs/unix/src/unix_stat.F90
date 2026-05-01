@@ -9,7 +9,7 @@ module unix_stat
     implicit none
     private
 
-#if defined (__linux__)
+#if defined (__linux__) || defined (_WIN32)
 
     integer(kind=c_int), parameter, public :: S_IRUSR = int(o'0400')
     integer(kind=c_int), parameter, public :: S_IWUSR = int(o'0200')
