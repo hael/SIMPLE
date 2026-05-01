@@ -587,7 +587,7 @@ contains
         character(len=:), allocatable :: volkey
         real :: weight_cur, weight_prev
         if( ufrac_trec >= 0.99d0 )then
-            call vol_cur%read(volname_cur)
+            call vol_cur%read_and_crop(volname_cur, self%p_ptr%smpd_crop, self%p_ptr%box_crop, self%p_ptr%smpd_crop)
             call vol_cur%write(volname_out, del_if_exists=.true.)
             call vol_cur%kill
             if( trim(volname_cur%to_char()) /= trim(volname_out%to_char()) ) call del_file(volname_cur)
@@ -595,7 +595,7 @@ contains
         endif
         volkey = 'vol'//int2str(state)
         if( .not. cline%defined(volkey) )then
-            call vol_cur%read(volname_cur)
+            call vol_cur%read_and_crop(volname_cur, self%p_ptr%smpd_crop, self%p_ptr%box_crop, self%p_ptr%smpd_crop)
             call vol_cur%write(volname_out, del_if_exists=.true.)
             call vol_cur%kill
             if( trim(volname_cur%to_char()) /= trim(volname_out%to_char()) ) call del_file(volname_cur)
@@ -603,7 +603,7 @@ contains
         endif
         volname_prev = cline%get_carg(volkey)
         if( .not. file_exists(volname_prev) )then
-            call vol_cur%read(volname_cur)
+            call vol_cur%read_and_crop(volname_cur, self%p_ptr%smpd_crop, self%p_ptr%box_crop, self%p_ptr%smpd_crop)
             call vol_cur%write(volname_out, del_if_exists=.true.)
             call vol_cur%kill
             if( trim(volname_cur%to_char()) /= trim(volname_out%to_char()) ) call del_file(volname_cur)
@@ -612,7 +612,7 @@ contains
         endif
         weight_cur  = real(ufrac_trec)
         weight_prev = 1.0 - weight_cur
-        call vol_cur%read(volname_cur)
+        call vol_cur%read_and_crop(volname_cur, self%p_ptr%smpd_crop, self%p_ptr%box_crop, self%p_ptr%smpd_crop)
         call vol_prev%read_and_crop(volname_prev, self%p_ptr%smpd, self%p_ptr%box_crop, self%p_ptr%smpd_crop)
         call vol_cur%mul(weight_cur)
         call vol_prev%mul(weight_prev)
