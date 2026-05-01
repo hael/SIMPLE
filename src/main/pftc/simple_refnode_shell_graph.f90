@@ -30,6 +30,8 @@ type :: refnode_shell_graph
     procedure :: kill      => refnode_graph_kill
     procedure :: log_summary => refnode_graph_log_summary
     procedure :: log_stats => refnode_graph_log_stats
+    procedure :: query_nodes => refnode_graph_query_nodes
+    procedure :: node_to_polar => refnode_graph_node_to_polar
 end type refnode_shell_graph
 
 contains
@@ -252,32 +254,128 @@ contains
         enddo
     end subroutine query_index
 
+    subroutine refnode_graph_query_nodes( self, q, shell, node_ids, weights, nfound, candidates, overflow )
+        class(refnode_shell_graph), intent(in)  :: self
+        real(sp),                    intent(in)  :: q(3)
+        integer,                     intent(in)  :: shell
+        integer,                     intent(out) :: node_ids(:)
+        real(dp),                    intent(out) :: weights(:)
+        integer,                     intent(out) :: nfound
+        integer,           optional, intent(out) :: candidates
+        logical,           optional, intent(out) :: overflow
+        real(dp) :: theta, phi, theta_lo, theta_hi, sin_min, dphi_max, cos_support, dotv, support_den
+        real(sp) :: qdir(3)
+        real     :: qnorm
+        integer  :: itheta, iphi, iphi0, iphi1, it0, it1, inode, icell, iphi_wrap, ncand
+        logical  :: full_phi, l_overflow
+        nfound     = 0
+        ncand      = 0
+        l_overflow = .false.
+        if( present(candidates) ) candidates = 0
+        if( present(overflow) ) overflow = .false.
+        if( .not. allocated(self%cell_head) ) return
+        if( shell < self%kfromto(1) .or. shell > self%kfromto(2) ) return
+        qnorm = sqrt(sum(q*q))
+        if( qnorm <= TINY ) return
+        qdir = q / qnorm
+        call vec_angles(qdir, theta, phi)
+        cos_support = cos(self%theta_support)
+        support_den = max(DTINY, 1.d0 - cos_support)
+        it0 = max(1, int(max(0.d0, theta - self%theta_support) / self%dtheta) + 1)
+        it1 = min(self%ntheta, int(min(DPI, theta + self%theta_support) / self%dtheta) + 1)
+        do itheta = it0,it1
+            theta_lo = real(itheta - 1,dp) * self%dtheta
+            theta_hi = real(itheta,dp) * self%dtheta
+            sin_min  = min(sin(theta), min(sin(theta_lo), sin(theta_hi)))
+            full_phi = sin_min <= sin(0.5d0 * self%theta_support)
+            if( full_phi )then
+                iphi0 = 1
+                iphi1 = self%nphi
+            else
+                dphi_max = 2.d0 * asin(min(1.d0, sin(0.5d0 * self%theta_support) / sqrt(max(DTINY, sin(theta) * sin_min))))
+                dphi_max = min(DPI, dphi_max + self%dphi)
+                if( dphi_max >= DPI )then
+                    full_phi = .true.
+                    iphi0 = 1
+                    iphi1 = self%nphi
+                else
+                    iphi0 = int((phi - dphi_max) / self%dphi)
+                    iphi1 = int((phi + dphi_max) / self%dphi) + 2
+                endif
+            endif
+            do iphi = iphi0,iphi1
+                if( full_phi )then
+                    iphi_wrap = iphi
+                else
+                    iphi_wrap = modulo(iphi - 1, self%nphi) + 1
+                endif
+                icell = (itheta - 1) * self%nphi + iphi_wrap
+                inode = self%cell_head(icell)
+                do while( inode > 0 )
+                    ncand = ncand + 1
+                    dotv = sum(real(qdir,dp) * real(self%node_dir(:,inode,shell-self%kfromto(1)+1),dp))
+                    if( dotv >= cos_support )then
+                        if( nfound < size(node_ids) .and. nfound < size(weights) )then
+                            nfound = nfound + 1
+                            node_ids(nfound) = inode
+                            weights(nfound)  = max(0.d0, (dotv - cos_support) / support_den)
+                        else
+                            l_overflow = .true.
+                        endif
+                    endif
+                    inode = self%cell_next(inode)
+                enddo
+            enddo
+        enddo
+        if( present(candidates) ) candidates = ncand
+        if( present(overflow) ) overflow = l_overflow
+    end subroutine refnode_graph_query_nodes
+
+    pure subroutine refnode_graph_node_to_polar( self, inode, iproj, irot )
+        class(refnode_shell_graph), intent(in)  :: self
+        integer,                    intent(in)  :: inode
+        integer,                    intent(out) :: iproj, irot
+        if( inode < 1 .or. inode > self%nodes_shell .or. self%pftsz < 1 )then
+            iproj = 0
+            irot  = 0
+        else
+            iproj = (inode - 1) / self%pftsz + 1
+            irot  = mod(inode - 1, self%pftsz) + 1
+        endif
+    end subroutine refnode_graph_node_to_polar
+
     subroutine log_lookup_stats( self )
         class(refnode_shell_graph), intent(in) :: self
-        real(dp) :: cand_mean, acc_mean, brute_mean, cand_sumsq, acc_sumsq
-        real(dp) :: cand_sdev, acc_sdev, dotv, cos_support
+        real(dp) :: cand_mean, acc_mean, brute_mean, weight_mean, weight_sumsq, cand_sumsq, acc_sumsq
+        real(dp) :: cand_sdev, acc_sdev, weight_sdev, dotv, cos_support, wsum
         real(sp) :: q(3)
-        integer  :: stride, isample, inode, nsamples, candidates, accepted, brute
-        integer  :: cand_max, acc_max, empty_queries, mismatches
+        integer, allocatable :: node_ids(:)
+        real(dp), allocatable :: weights(:)
+        integer  :: stride, isample, inode, nsamples, candidates, accepted, brute, nfound
+        integer  :: cand_max, acc_max, empty_queries, mismatches, overflows
+        logical  :: overflow
         if( .not. allocated(self%cell_head) ) return
+        allocate(node_ids(256), source=0)
+        allocate(weights(256), source=0.d0)
         stride        = max(1, self%nodes_shell / 256)
         nsamples      = 0
         cand_mean     = 0.d0
         acc_mean      = 0.d0
         brute_mean    = 0.d0
+        weight_mean   = 0.d0
         cand_sumsq    = 0.d0
         acc_sumsq     = 0.d0
+        weight_sumsq  = 0.d0
         cand_max      = 0
         acc_max       = 0
         empty_queries = 0
         mismatches    = 0
+        overflows     = 0
         cos_support   = cos(self%theta_support)
-        !$omp parallel do default(shared) private(isample,inode,q,candidates,accepted,brute,dotv) &
-        !$omp reduction(+:nsamples,cand_mean,acc_mean,brute_mean,cand_sumsq,acc_sumsq,empty_queries,mismatches) &
-        !$omp reduction(max:cand_max,acc_max) schedule(static) proc_bind(close)
         do isample = 1,self%nodes_shell,stride
             q = self%node_dir(:,isample,1)
             call query_index(self, q, 1, candidates, accepted)
+            call self%query_nodes(q, self%kfromto(1), node_ids, weights, nfound, overflow=overflow)
             brute = 0
             do inode = 1,self%nodes_shell
                 dotv = sum(real(q,dp) * real(self%node_dir(:,inode,1),dp))
@@ -287,31 +385,41 @@ contains
             cand_mean  = cand_mean  + real(candidates,dp)
             acc_mean   = acc_mean   + real(accepted,dp)
             brute_mean = brute_mean + real(brute,dp)
+            wsum       = 0.d0
+            if( nfound > 0 ) wsum = sum(weights(:nfound))
+            weight_mean  = weight_mean  + wsum
             cand_sumsq = cand_sumsq + real(candidates,dp) * real(candidates,dp)
             acc_sumsq  = acc_sumsq  + real(accepted,dp)   * real(accepted,dp)
+            weight_sumsq = weight_sumsq + wsum * wsum
             cand_max   = max(cand_max, candidates)
             acc_max    = max(acc_max, accepted)
             if( accepted == 0 ) empty_queries = empty_queries + 1
             if( accepted /= brute ) mismatches = mismatches + 1
+            if( overflow ) overflows = overflows + 1
         enddo
-        !$omp end parallel do
         if( nsamples > 0 )then
             cand_mean  = cand_mean  / real(nsamples,dp)
             acc_mean   = acc_mean   / real(nsamples,dp)
             brute_mean = brute_mean / real(nsamples,dp)
+            weight_mean = weight_mean / real(nsamples,dp)
             cand_sumsq = cand_sumsq / real(nsamples,dp)
             acc_sumsq  = acc_sumsq  / real(nsamples,dp)
+            weight_sumsq = weight_sumsq / real(nsamples,dp)
             cand_sdev  = sqrt(max(0.d0, cand_sumsq - cand_mean*cand_mean))
             acc_sdev   = sqrt(max(0.d0, acc_sumsq  - acc_mean*acc_mean))
+            weight_sdev = sqrt(max(0.d0, weight_sumsq - weight_mean*weight_mean))
         else
             cand_sdev = 0.d0
             acc_sdev  = 0.d0
+            weight_sdev = 0.d0
         endif
-        write(logfhandle,'(A,2X,A,I0,2X,A,F10.3,2X,A,F10.3,2X,A,I0,2X,A,F10.3,2X,A,F10.3,2X,A,I0,2X,A,F10.3,2X,A,I0,2X,A,I0)') &
+        write(logfhandle,'(A,2X,A,I0,2X,A,F10.3,2X,A,F10.3,2X,A,I0,2X,A,F10.3,2X,A,F10.3,2X,A,I0,2X,A,F10.3,2X,A,F10.3,2X,A,F10.3,2X,A,I0,2X,A,I0,2X,A,I0)') &
             &'obsfield refnodes lookup', 'sampled=', nsamples, 'candidates_mean=', cand_mean, &
             &'candidates_sdev=', cand_sdev, 'candidates_max=', cand_max, 'accepted_mean=', acc_mean, &
             &'accepted_sdev=', acc_sdev, 'accepted_max=', acc_max, 'brute_mean=', brute_mean, &
-            &'empty_queries=', empty_queries, 'lookup_mismatch=', mismatches
+            &'weight_sum_mean=', weight_mean, 'weight_sum_sdev=', weight_sdev, &
+            &'empty_queries=', empty_queries, 'lookup_mismatch=', mismatches, 'query_overflows=', overflows
+        deallocate(node_ids, weights)
     end subroutine log_lookup_stats
 
     subroutine log_shell_stats( self, ik, shell )

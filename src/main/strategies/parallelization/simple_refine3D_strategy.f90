@@ -153,6 +153,9 @@ contains
         call cline_assembly%set('nthr',       nthr)
         call cline_assembly%set('combine_eo', params%combine_eo)
         if( params%l_update_frac ) call cline_assembly%set('update_frac', params%update_frac)
+        if( params%l_polar .and. trim(params%polar) == 'obsfield' )then
+            call cline_assembly%set('write_obsfield_vols', 'yes')
+        endif
         do state = 1, params%nstates
             volname = refine3D_state_vol_fname(state)
             if( cline_assembly%defined('vol'//int2str(state)) )then
@@ -174,7 +177,8 @@ contains
         l_force = .false.
         if( present(force) ) l_force = force
         ! Cartesian and polar=obsfield can emit the next iteration's reference grid.
-        if( l_force .and. params%can_promote_assembly_ref_nspace() .and. params%nspace_next > params%nspace )then
+        if( l_force .and. params%can_promote_assembly_ref_nspace() .and. &
+            &params%nspace_next > params%nspace )then
             call cline_assembly%set('nspace', params%nspace_next)
             call cline_assembly%delete('nspace_next')
             if( params%pftsz_next > 0 ) call cline_assembly%set('pftsz', params%pftsz_next)

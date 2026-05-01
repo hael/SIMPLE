@@ -61,8 +61,8 @@ contains
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        call cline%set('polar', 'obsfield') ! only activate this for testing
-        ! call cline%set('polar',         'no') ! should be the default since only this mode supports white noise reg
+        ! call cline%set('polar', 'obsfield') ! only activate this for testing
+        call cline%set('polar',         'no') ! should be the default since only this mode supports white noise reg
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'yes')

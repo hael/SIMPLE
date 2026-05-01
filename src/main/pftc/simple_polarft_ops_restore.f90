@@ -1,7 +1,7 @@
 !@descr: submodule for class average restoration in the polar Fourier domain
 submodule (simple_polarft_calc) simple_polarft_ops_restore
-use simple_refine3D_fnames,     only: refine3D_fsc_fname, refine3D_polar_refs_fname, refine3D_state_vol_fname
-use simple_refnode_shell_graph, only: refnode_shell_graph
+use simple_refine3D_fnames,     only: refine3D_fsc_fname, refine3D_obsfield_fname, refine3D_polar_ctf2_fname, &
+    &refine3D_polar_refs_fname, refine3D_polar_sums_fname, refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
 contains               
@@ -60,7 +60,8 @@ contains
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
-        complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
+        complex(dp), allocatable :: prev_sums_even(:,:,:), prev_sums_odd(:,:,:)
+        real(dp),    allocatable :: prev_ctf2_even(:,:,:), prev_ctf2_odd(:,:,:)
         complex(dp) :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         complex(dp) :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp)    :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
@@ -75,26 +76,19 @@ contains
         ! e/o trailing reconstruction part 1
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
-            ! read previous polar references to be used first for FSC calculation
-            call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
-            ! The per-state FSCs below are written to disk and used for ML
-            ! regularization. This full-range FSC is retained only for the
-            ! legacy even/odd registration cutoff after restoration.
-            call self%calc_fsc(pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc,&
-                                &ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd)
-        else
-            call self%calc_fsc(pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc)
+            call prepare_trail_rec_stats(self, reforis, pfts_even, pfts_odd, ctf2_even, ctf2_odd, ufrac_trec, &
+                &prev_sums_even, prev_sums_odd, prev_ctf2_even, prev_ctf2_odd)
         endif
+        ! The per-state FSCs below are written to disk and used for ML
+        ! regularization. This full-range FSC is retained only for the
+        ! legacy even/odd registration cutoff after restoration.
+        call self%calc_fsc(pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc)
+        call write_trail_rec_stats(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd)
         nprojs = self%p_ptr%nspace
         call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
-            if( self%p_ptr%l_trail_rec )then
-                call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, base+1, base+nprojs, fsc_state, &
-                    &ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd)
-            else
-                call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, base+1, base+nprojs, fsc_state)
-            endif
+            call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, base+1, base+nprojs, fsc_state)
             fsc_boxcrop(                 :self%kfromto(1)) = 1.0
             fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc_state(self%kfromto(1):self%interpklim))
             if( self%interpklim < size(fsc_boxcrop) )then
@@ -117,10 +111,10 @@ contains
         ! Wiener normalization
         call self%restore_references(reforis, pfts_even, pfts_odd, ctf2_even, ctf2_odd)
         call average_lowres_eo_for_docking(self, fsc_boxcrop)
-        ! e/o trailing reconstruction part 2
-        if( self%p_ptr%l_trail_rec )then
-            call finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
-        endif
+        if( allocated(prev_sums_even) ) deallocate(prev_sums_even)
+        if( allocated(prev_sums_odd)  ) deallocate(prev_sums_odd)
+        if( allocated(prev_ctf2_even) ) deallocate(prev_ctf2_even)
+        if( allocated(prev_ctf2_odd)  ) deallocate(prev_ctf2_odd)
     end subroutine polar_cavger_normalize_commonline_refs
 
     ! Deals with summing slices and their mirror
@@ -380,10 +374,8 @@ contains
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
-        type(refnode_shell_graph) :: refnodes
-        type(sym)    :: refnode_sym
-        type(string) :: volname, write_obsfield_vols_arg
-        character(len=STDLEN) :: refnode_mode
+        type(fgrid_obsfield_eo) :: prev_obsfield
+        type(string) :: obsfield_name, obsfield_tmp_name, volname, write_obsfield_vols_arg
         real(dp)    :: fsc(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_prior_state(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
@@ -394,8 +386,7 @@ contains
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
         integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2)
         integer     :: prev_pftsz, prev_nrefs
-        logical     :: have_prev_refs, need_prev_refs, write_cartesian_vols, use_trail_rec
-        logical     :: refnode_diag_iter, refnode_need_graph
+        logical     :: have_prev_refs, have_prev_obsfields, need_prev_refs, write_cartesian_vols, use_trail_rec
         if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
         nprojs = self%p_ptr%nspace
         if( mod(nprojs,2) /= 0 )then
@@ -411,18 +402,13 @@ contains
         nrefs = nprojs / 2
         prev_pftsz = 0
         prev_nrefs = 0
-        need_prev_refs = self%p_ptr%l_ml_reg .or. self%p_ptr%l_trail_rec
+        need_prev_refs = self%p_ptr%l_ml_reg
         have_prev_refs = need_prev_refs .and. file_exists(refine3D_polar_refs_fname('even')) .and. &
             &file_exists(refine3D_polar_refs_fname('odd'))
         if( have_prev_refs )then
             call self%get_pft_array_dims(refine3D_polar_refs_fname('even'), prev_pftsz, nrefs=prev_nrefs)
             have_prev_refs = (prev_pftsz == self%pftsz) .and. (prev_nrefs <= self%ncls) .and. &
                 &(mod(self%ncls,self%p_ptr%nstates) == 0) .and. (mod(prev_nrefs,self%p_ptr%nstates) == 0)
-        endif
-        if( self%p_ptr%l_trail_rec .and. (.not. have_prev_refs) )then
-            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') 'obsfield trailing POLAR_REFS mismatch: prev_pftsz=', &
-                &prev_pftsz, ' current_pftsz=', self%pftsz, ' prev_nrefs=', prev_nrefs, ' current_nrefs=', self%ncls
-            THROW_HARD('compatible previous polar references are required for obsfield trailing reconstruction')
         endif
         use_trail_rec = self%p_ptr%l_trail_rec
         ! Previous restored references provide only the prior FSC/SSNR estimate
@@ -450,26 +436,30 @@ contains
         endif
         hcoords = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
         kcoords = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
-        refnode_mode = lowercase(trim(self%p_ptr%obsfield_refnodes))
-        refnode_diag_iter = self%p_ptr%which_iter == 0 .or. self%p_ptr%which_iter <= self%p_ptr%startit
-        refnode_need_graph = trim(refnode_mode) /= 'no' .and. (trim(refnode_mode) /= 'geom' .or. refnode_diag_iter)
-        if( refnode_need_graph )then
-            call refnode_sym%new(self%p_ptr%pgrp)
-            call refnodes%new(reforis, refnode_sym, hcoords, kcoords, kspan, nprojs, &
-                &self%p_ptr%obsfield_refnode_support_mult)
-            if( trim(self%p_ptr%obsfield_refnode_stats) == 'yes' )then
-                call refnodes%log_stats('asym_refspace')
-            elseif( trim(refnode_mode) == 'geom' )then
-                call refnodes%log_summary('asym_refspace')
-            endif
-            call refnodes%kill
-            call refnode_sym%kill
-            if( trim(refnode_mode) == 'geom' )then
-                write(logfhandle,'(A)') 'obsfield refnodes geom mode: diagnostics only; using Cartesian obsfield references'
+        have_prev_obsfields = .false.
+        if( use_trail_rec )then
+            have_prev_obsfields = .true.
+            do state = 1,self%p_ptr%nstates
+                obsfield_name = refine3D_obsfield_fname(state)
+                if( .not. file_exists(obsfield_name) )then
+                    have_prev_obsfields = .false.
+                    exit
+                endif
+            enddo
+            if( .not. have_prev_obsfields )then
+                write(logfhandle,'(A)') 'WARNING: previous obsfields are unavailable; obsfield trailing reconstruction uses current fields as seed'
             endif
         endif
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
+            obsfield_name = refine3D_obsfield_fname(state)
+            if( have_prev_obsfields )then
+                call prev_obsfield%read(obsfield_name)
+                call self%obsfields(state)%blend_field(prev_obsfield, ufrac_trec)
+                call prev_obsfield%kill
+            endif
+            obsfield_tmp_name = obsfield_name//'_tmp'
+            call self%obsfields(state)%write(obsfield_tmp_name)
             if( have_prev_refs )then
                 call calc_fsc_from_refs(self, prev_even, prev_odd, base+1, base+nprojs, fsc_prior_state)
             else
@@ -496,7 +486,15 @@ contains
                     &kspan, invtau2_even, invtau2_odd, prior_start, real(self%p_ptr%box))
             endif
         enddo
+        do state = 1,self%p_ptr%nstates
+            obsfield_name = refine3D_obsfield_fname(state)
+            obsfield_tmp_name = obsfield_name//'_tmp'
+            call simple_rename(obsfield_tmp_name, obsfield_name, overwrite=.false.)
+        enddo
         if( write_cartesian_vols ) call volname%kill
+        call obsfield_name%kill
+        call obsfield_tmp_name%kill
+        call prev_obsfield%kill
         call write_obsfield_vols_arg%kill
         call mirror_slices_obsfield( self, reforis )
         call calc_fsc_from_refs(self, self%pfts_even, self%pfts_odd, 1, self%ncls, fsc)
@@ -506,10 +504,6 @@ contains
             fsc_boxcrop(self%interpklim+1:)            = 0.0
         endif
         call average_lowres_eo_for_docking(self, fsc_boxcrop)
-        ! e/o trailing reconstruction part 2
-        if( use_trail_rec )then
-            call finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
-        endif
         call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
@@ -681,67 +675,191 @@ contains
 
     end subroutine prepare_trail_rec_arrays
 
+    subroutine prepare_trail_rec_stats( self, reforis, pfts_even, pfts_odd, ctf2_even, ctf2_odd, ufrac_trec, &
+            &prev_sums_even, prev_sums_odd, prev_ctf2_even, prev_ctf2_odd )
+        class(polarft_calc),      intent(in)    :: self
+        type(oris),               intent(in)    :: reforis
+        complex(dp),              intent(inout) :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp),              intent(inout) :: pfts_odd( self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),                 intent(inout) :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),                 intent(inout) :: ctf2_odd( self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),                 intent(in)    :: ufrac_trec
+        complex(dp), allocatable, intent(inout) :: prev_sums_even(:,:,:), prev_sums_odd(:,:,:)
+        real(dp),    allocatable, intent(inout) :: prev_ctf2_even(:,:,:), prev_ctf2_odd(:,:,:)
+        type(string) :: fname
+        type(sym)    :: symop
+        type(oris)   :: prev_eulspace
+        integer      :: prev_pftsz, prev_klims(2), prev_nrefs, ks, ke
+        integer      :: current_nspace, prev_nspace
+        logical      :: l_pad
+        fname = refine3D_polar_sums_fname('even')
+        call self%get_pft_array_dims(fname, prev_pftsz, prev_klims, prev_nrefs)
+        if( (prev_nrefs == self%ncls) .and. (prev_pftsz == self%pftsz) )then
+            call self%read_pft_array(fname, prev_sums_even)
+            fname = refine3D_polar_sums_fname('odd')
+            call self%read_pft_array(fname, prev_sums_odd)
+            fname = refine3D_polar_ctf2_fname('even')
+            call read_ctf2_array(self, fname, prev_ctf2_even)
+            fname = refine3D_polar_ctf2_fname('odd')
+            call read_ctf2_array(self, fname, prev_ctf2_odd)
+        else
+            if( prev_pftsz /= self%pftsz )then
+                THROW_HARD('Previous polar sums have different pftsz, cannot be used for trailing reconstruction')
+            endif
+            if( prev_nrefs > self%ncls )then
+                THROW_HARD('Previous per-state nspace is larger than current, cannot remap trailing reconstruction sums')
+            endif
+            if( mod(self%ncls, self%p_ptr%nstates) /= 0 )then
+                THROW_HARD('Current state-major reference count is not divisible by nstates')
+            endif
+            if( mod(prev_nrefs, self%p_ptr%nstates) /= 0 )then
+                THROW_HARD('Previous state-major reference count is not divisible by nstates')
+            endif
+            current_nspace = self%ncls / self%p_ptr%nstates
+            prev_nspace    = prev_nrefs / self%p_ptr%nstates
+            call symop%new(self%p_ptr%pgrp)
+            call prev_eulspace%new(prev_nspace, is_ptcl=.false.)
+            call symop%build_refspiral(prev_eulspace)
+            ks = max(self%kfromto(1), prev_klims(1))
+            ke = min(self%interpklim, prev_klims(2))
+            l_pad = (self%kfromto(1) /= prev_klims(1)) .or. (self%interpklim /= prev_klims(2))
+            fname = refine3D_polar_sums_fname('even')
+            call map_current_refs_to_closest_previous_pft(fname, prev_sums_even)
+            fname = refine3D_polar_sums_fname('odd')
+            call map_current_refs_to_closest_previous_pft(fname, prev_sums_odd)
+            fname = refine3D_polar_ctf2_fname('even')
+            call map_current_refs_to_closest_previous_ctf2(fname, prev_ctf2_even)
+            fname = refine3D_polar_ctf2_fname('odd')
+            call map_current_refs_to_closest_previous_ctf2(fname, prev_ctf2_odd)
+            call symop%kill
+            call prev_eulspace%kill
+        endif
+        !$omp parallel workshare proc_bind(close)
+        pfts_even = ufrac_trec * pfts_even + (1.d0 - ufrac_trec) * prev_sums_even
+        pfts_odd  = ufrac_trec * pfts_odd  + (1.d0 - ufrac_trec) * prev_sums_odd
+        ctf2_even = ufrac_trec * ctf2_even + (1.d0 - ufrac_trec) * prev_ctf2_even
+        ctf2_odd  = ufrac_trec * ctf2_odd  + (1.d0 - ufrac_trec) * prev_ctf2_odd
+        !$omp end parallel workshare
+        call fname%kill
+        contains
+
+            subroutine map_current_refs_to_closest_previous_pft( fname, array )
+                type(string),             intent(in)  :: fname
+                complex(dp), allocatable, intent(out) :: array(:,:,:)
+                complex(sp), allocatable :: src(:,:,:)
+                type(ori) :: o
+                integer   :: state, iproj, i, j, cur_base, prev_base, prev_ref
+                call self%read_any_pft_array(fname, src)
+                allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls), source=DCMPLX_ZERO)
+                !$omp parallel do default(shared) proc_bind(close) private(i,o,j,state,iproj,cur_base,prev_base,prev_ref) &
+                !$omp& schedule(static)
+                do i = 1,self%ncls
+                    state = (i - 1) / current_nspace + 1
+                    iproj = i - (state - 1) * current_nspace
+                    cur_base  = (state - 1) * current_nspace
+                    prev_base = (state - 1) * prev_nspace
+                    call reforis%get_ori(iproj, o)
+                    j = prev_eulspace%find_closest_proj(o)
+                    prev_ref = prev_base + j
+                    if( l_pad )then
+                        if( ks <= ke ) array(:,ks:ke,cur_base+iproj) = cmplx(src(:,ks:ke,prev_ref), kind=dp)
+                    else
+                        array(:,:,cur_base+iproj) = cmplx(src(:,:,prev_ref), kind=dp)
+                    endif
+                enddo
+                !$omp end parallel do
+                deallocate(src)
+                call o%kill
+            end subroutine map_current_refs_to_closest_previous_pft
+
+            subroutine map_current_refs_to_closest_previous_ctf2( fname, array )
+                type(string),          intent(in)  :: fname
+                real(dp), allocatable, intent(out) :: array(:,:,:)
+                real(sp), allocatable :: src(:,:,:)
+                type(ori) :: o
+                integer   :: state, iproj, i, j, cur_base, prev_base, prev_ref
+                call read_any_ctf2_array(fname, src)
+                allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls), source=0.d0)
+                !$omp parallel do default(shared) proc_bind(close) private(i,o,j,state,iproj,cur_base,prev_base,prev_ref) &
+                !$omp& schedule(static)
+                do i = 1,self%ncls
+                    state = (i - 1) / current_nspace + 1
+                    iproj = i - (state - 1) * current_nspace
+                    cur_base  = (state - 1) * current_nspace
+                    prev_base = (state - 1) * prev_nspace
+                    call reforis%get_ori(iproj, o)
+                    j = prev_eulspace%find_closest_proj(o)
+                    prev_ref = prev_base + j
+                    if( l_pad )then
+                        if( ks <= ke ) array(:,ks:ke,cur_base+iproj) = real(src(:,ks:ke,prev_ref), dp)
+                    else
+                        array(:,:,cur_base+iproj) = real(src(:,:,prev_ref), dp)
+                    endif
+                enddo
+                !$omp end parallel do
+                deallocate(src)
+                call o%kill
+            end subroutine map_current_refs_to_closest_previous_ctf2
+    end subroutine prepare_trail_rec_stats
+
+    subroutine write_trail_rec_stats( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd )
+        class(polarft_calc), intent(in) :: self
+        complex(dp),         intent(in) :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp),         intent(in) :: pfts_odd( self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(in) :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        real(dp),            intent(in) :: ctf2_odd( self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        type(string) :: fname
+        fname = refine3D_polar_sums_fname('even')
+        call self%write_pft_array(pfts_even, fname)
+        fname = refine3D_polar_sums_fname('odd')
+        call self%write_pft_array(pfts_odd, fname)
+        fname = refine3D_polar_ctf2_fname('even')
+        call self%write_ctf2_array(ctf2_even, fname)
+        fname = refine3D_polar_ctf2_fname('odd')
+        call self%write_ctf2_array(ctf2_odd, fname)
+        call fname%kill
+    end subroutine write_trail_rec_stats
+
+    subroutine read_ctf2_array( self, fname, array )
+        class(polarft_calc),   intent(in)    :: self
+        class(string),         intent(in)    :: fname
+        real(dp), allocatable, intent(inout) :: array(:,:,:)
+        real(sp), allocatable :: buffer(:,:,:)
+        integer :: dims(4), funit
+        call self%open_ctf2_array_for_read(fname, array, funit, dims, buffer)
+        call self%transfer_ctf2_array_buffer(array, funit, dims, buffer)
+        deallocate(buffer)
+        call fclose(funit)
+    end subroutine read_ctf2_array
+
+    subroutine read_any_ctf2_array( fname, array )
+        class(string),        intent(in)    :: fname
+        real(sp), allocatable, intent(inout) :: array(:,:,:)
+        integer :: dims(4), funit, io_stat
+        if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
+        call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('read_any_ctf2_array: '//fname%to_char(), io_stat)
+        read(unit=funit,pos=1) dims
+        if( allocated(array) ) deallocate(array)
+        allocate(array(dims(1),dims(2):dims(3),dims(4)))
+        read(unit=funit, pos=(sizeof(dims)+1)) array
+        call fclose(funit)
+    end subroutine read_any_ctf2_array
+
     ! 3D SECTION - Common routines
 
-    !>  \brief local private routine for trailing reconstruction  weighing and merging
-    subroutine finalize_trail_rec( self, ufrac_trec, prev_even, prev_odd )
-        class(polarft_calc),      intent(inout) :: self
-        real(dp),                 intent(in)    :: ufrac_trec
-        complex(dp), allocatable, intent(inout) :: prev_even(:,:,:)
-        complex(dp), allocatable, intent(inout) :: prev_odd(:,:,:)
-        type(string) :: fname
-        integer      :: tmp_pftsz, tmp_kfromto(2), tmp_nrefs
-        logical      :: have_merged_prev
-        ! adding weighted previous refs after restoration of current refs
-        !$omp parallel workshare proc_bind(close)
-        self%pfts_even = ufrac_trec * self%pfts_even + (1.d0-ufrac_trec) * prev_even
-        self%pfts_odd  = ufrac_trec * self%pfts_odd  + (1.d0-ufrac_trec) * prev_odd
-        !$omp end parallel workshare
-        fname = refine3D_polar_refs_fname()
-        have_merged_prev = file_exists(fname)
-        if( have_merged_prev )then
-            call self%get_pft_array_dims(fname, tmp_pftsz, tmp_kfromto, tmp_nrefs)
-            have_merged_prev = (tmp_nrefs == self%ncls) .and. (tmp_pftsz == self%pftsz)
-        endif
-        if( .not. have_merged_prev )then
-            ! Previous handoff may be e/o-only. The halves have already been
-            ! trailed independently above; derive only the merged companion.
-            !$omp parallel workshare proc_bind(close)
-            self%pfts_merg = 0.5d0 * (self%pfts_even + self%pfts_odd)
-            !$omp end parallel workshare
-            deallocate(prev_even, prev_odd)
-        else
-            deallocate(prev_even,prev_odd)
-            call self%read_pft_array(fname, prev_even)
-            !$omp parallel workshare proc_bind(close)
-            self%pfts_merg = ufrac_trec * self%pfts_merg + (1.d0-ufrac_trec) * prev_even
-            !$omp end parallel workshare
-            deallocate(prev_even)
-        endif
-        call fname%kill
-    end subroutine finalize_trail_rec
-
     ! Calculate global FSC within [self%kfromto(1);self%interpklim]
-    module subroutine calc_fsc( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc, ufrac_trec, prev_even, prev_odd )
+    module subroutine calc_fsc( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, fsc )
         class(polarft_calc),   intent(in)  :: self
         complex(dp),           intent(in)  :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         complex(dp),           intent(in)  :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp),              intent(in)  :: ctf2_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp),              intent(in)  :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         real(dp),              intent(out) :: fsc(self%kfromto(1):self%interpklim)
-        real(dp),    optional, intent(in)  :: ufrac_trec
-        complex(dp), optional, intent(in)  :: prev_even(:,:,:)
-        complex(dp), optional, intent(in)  :: prev_odd(:,:,:)
-        if( present(ufrac_trec) .and. present(prev_even) .and. present(prev_odd) )then
-            call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, 1, self%ncls, fsc, &
-                &ufrac_trec=ufrac_trec, prev_even=prev_even, prev_odd=prev_odd)
-        else
-            call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, 1, self%ncls, fsc)
-        endif
+        call calc_fsc_range(self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, 1, self%ncls, fsc)
     end subroutine calc_fsc
 
-    subroutine calc_fsc_range( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, ref_first, ref_last, fsc, &
-            &ufrac_trec, prev_even, prev_odd )
+    subroutine calc_fsc_range( self, pfts_even, pfts_odd, ctf2_even, ctf2_odd, ref_first, ref_last, fsc )
         class(polarft_calc),   intent(in)  :: self
         complex(dp),           intent(in)  :: pfts_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         complex(dp),           intent(in)  :: pfts_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
@@ -749,9 +867,6 @@ contains
         real(dp),              intent(in)  :: ctf2_odd(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
         integer,               intent(in)  :: ref_first, ref_last
         real(dp),              intent(out) :: fsc(self%kfromto(1):self%interpklim)
-        real(dp),    optional, intent(in)  :: ufrac_trec
-        complex(dp), optional, intent(in)  :: prev_even(:,:,:)
-        complex(dp), optional, intent(in)  :: prev_odd(:,:,:)
         complex(dp) :: even(self%pftsz,self%kfromto(1):self%interpklim)
         complex(dp) :: odd(self%pftsz,self%kfromto(1):self%interpklim)
         complex(dp) :: pft(self%pftsz,self%kfromto(1):self%interpklim)
@@ -761,11 +876,6 @@ contains
         integer     :: icls, k
         if( ref_first < 1 .or. ref_last > self%ncls .or. ref_first > ref_last )then
             THROW_HARD('invalid reference range in calc_fsc_range')
-        endif
-        if( self%p_ptr%l_trail_rec )then
-            if( .not.present(ufrac_trec) .or. .not.present(prev_even) .or. .not.present(prev_odd) )then
-                THROW_HARD('Trailing reconstruction requested but missing arguments in calc_fsc_range')
-            endif
         endif
         fsc  = 0.d0; vare = 0.d0; varo = 0.d0
         !$omp parallel do default(shared) schedule(static) proc_bind(close)&
@@ -777,10 +887,6 @@ contains
             pft  = pfts_odd(:,:,icls)
             ctf2 = ctf2_odd(:,:,icls)
             call self%shell_floor_norm(pft, ctf2, odd)
-            if( self%p_ptr%l_trail_rec )then
-                even = ufrac_trec * even + (1.d0-ufrac_trec) * prev_even(:,:,icls)
-                odd  = ufrac_trec * odd  + (1.d0-ufrac_trec) * prev_odd(:,:,icls)
-            endif
             do k = self%kfromto(1),self%interpklim
                 fsc(k)   = fsc(k)  + sum(real(even(:,k) * conjg(odd(:,k)), dp))
                 vare(k)  = vare(k) + sum(real(even(:,k) * conjg(even(:,k)),dp))

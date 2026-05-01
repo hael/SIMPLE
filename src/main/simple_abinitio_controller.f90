@@ -325,7 +325,7 @@ contains
         integer :: stage_last
         stage_last = active_refine3D_nstages()
         if( istage < active_refine3D_nstages() )then
-            cfg%inspace_next = max(cfg%inspace, refine3D_stage_nspace(params, istage + 1, route))
+            cfg%inspace_next = refine3D_stage_nspace(params, istage + 1, route)
             if( params%l_polar .and. polar_mode_remaps_refs(params%polar) )then
                 call set_refine3D_mode_policy( cfg_next, params, istage + 1, route )
                 call set_refine3D_trailrec_policy( cfg_next, params, istage + 1 )
@@ -347,7 +347,7 @@ contains
         else
             cfg%inspace_next = NSPACE_NEXT_NONE
         endif
-        if( cfg%inspace_next <= cfg%inspace ) cfg%inspace_next = NSPACE_NEXT_NONE
+        if( cfg%inspace_next == cfg%inspace ) cfg%inspace_next = NSPACE_NEXT_NONE
     end subroutine set_refine3D_next_space
 
     integer function refine3D_stage_nspace( params, istage, route ) result(inspace)

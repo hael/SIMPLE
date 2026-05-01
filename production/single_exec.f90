@@ -67,4 +67,3 @@ if( .not. l_silent )then
     call simple_print_timer(rt_exec)
 endif
 end program single_exec
-

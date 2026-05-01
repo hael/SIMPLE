@@ -246,8 +246,6 @@ type :: parameters
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: polar='no'           !< Polar restoration mode(no|yes|obsfield){no}
-    character(len=STDLEN)     :: obsfield_refnodes='no' !< Development reference-node obsfield path(no|geom|cart_compare|direct_compare|yes){no}
-    character(len=STDLEN)     :: obsfield_refnode_stats='no' !< Print reference-node graph diagnostics(yes|no){no}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
@@ -488,7 +486,6 @@ type :: parameters
     real    :: nsig=2.5            !< # sigmas
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
-    real    :: obsfield_refnode_support_mult=1.5 !< Reference-node angular support multiplier{1.5}
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
@@ -579,6 +576,7 @@ contains
         class(parameters), intent(in) :: self
         uses_next_assembly_ref_nspace = self%can_promote_assembly_ref_nspace() &
             &.and. self%is_final_planned_iter()                               &
+            &.and. self%nspace_next > 0                                        &
             &.and. self%nspace_next > self%nspace
     end function uses_next_assembly_ref_nspace
 
@@ -816,8 +814,6 @@ contains
         call check_carg('platonic',       self%platonic)
         call check_carg('plot_key',       self%plot_key)
         call check_carg('polar',          self%polar)
-        call check_carg('obsfield_refnodes', self%obsfield_refnodes)
-        call check_carg('obsfield_refnode_stats', self%obsfield_refnode_stats)
         call check_carg('postprocess',    self%postprocess)
         call check_carg('pre_norm',       self%pre_norm)
         call check_carg('prg',            self%prg)
@@ -1125,7 +1121,6 @@ contains
         call check_rarg('nsig',           self%nsig)
         call check_rarg('osmpd',          self%osmpd)
         call check_rarg('overlap',        self%overlap)
-        call check_rarg('obsfield_refnode_support_mult', self%obsfield_refnode_support_mult)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('prob_athres',    self%prob_athres)
         call check_rarg('rec_athres',     self%rec_athres)
@@ -1652,17 +1647,6 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported POLAR argument: '//trim(self%polar))
         end select
-        select case(trim(self%obsfield_refnodes))
-            case('no','geom','cart_compare','direct_compare','yes')
-            case DEFAULT
-                THROW_HARD('Unsupported obsfield_refnodes argument: '//trim(self%obsfield_refnodes))
-        end select
-        select case(trim(self%obsfield_refnode_stats))
-            case('no','yes')
-            case DEFAULT
-                THROW_HARD('Unsupported obsfield_refnode_stats argument: '//trim(self%obsfield_refnode_stats))
-        end select
-        if( self%obsfield_refnode_support_mult <= 0. ) THROW_HARD('obsfield_refnode_support_mult must be > 0')
         if( self%l_polar )then
             ! deactivate post-alignment cartesian reconstruction
             self%volrec = 'no'

@@ -12,8 +12,8 @@ private
 ! for one h are handled by one thread, and h values in the same color are at
 ! least two native grid units apart before and after rotation.
 integer,  parameter :: OBSFIELD_NN_OMP_STRIDE     = 2
-integer,  parameter :: OBSFIELD_HEADER_SIZE       = 21
-integer,  parameter :: OBSFIELD_COUNT_FORMAT_SIGN = -1
+integer,  parameter :: OBSFIELD_HEADER_SIZE      = 21
+integer,  parameter :: OBSFIELD_GATE_FORMAT_SIGN = -2
 real(dp), parameter :: OBSFIELD_UNSAMPLED_FLOOR  = 1.d3
 
 ! Part-local Fourier-grid observation field. This is intentionally volume-like:
@@ -38,13 +38,14 @@ type :: fgrid_obs_field
     logical                :: initialized   = .false.
     complex(dp), allocatable :: grid_num(:,:,:)
     real(dp),    allocatable :: grid_den(:,:,:)
-    integer,     allocatable :: grid_cnt(:,:,:)
+    logical,     allocatable :: grid_obs(:,:,:)
   contains
     procedure, public  :: new                    => obsfield_new
     procedure, public  :: reset                  => obsfield_reset
     procedure, public  :: kill                   => obsfield_kill
     procedure, public  :: insert_plane_oversamp
     procedure, public  :: append_field           => obsfield_append_field
+    procedure, public  :: blend_field            => obsfield_blend_field
     procedure, public  :: extract_polar          => obsfield_extract_polar
     procedure, public  :: calc_invtau2           => obsfield_calc_invtau2
     procedure, public  :: get_nobs               => obsfield_get_nobs
@@ -63,6 +64,7 @@ type :: fgrid_obsfield_eo
     procedure, public :: kill          => obsfield_eo_kill
     procedure, public :: insert_plane  => obsfield_eo_insert_plane
     procedure, public :: append_field  => obsfield_eo_append_field
+    procedure, public :: blend_field   => obsfield_eo_blend_field
     procedure, public :: extract_polar => obsfield_eo_extract_polar
     procedure, public :: write_merged_volume => obsfield_eo_write_merged_volume
     procedure, public :: write         => obsfield_eo_write
@@ -110,9 +112,9 @@ contains
         allocate(self%grid_den(self%grid_lims(1,1):self%grid_lims(1,2), &
             self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
             source=0.d0)
-        allocate(self%grid_cnt(self%grid_lims(1,1):self%grid_lims(1,2), &
+        allocate(self%grid_obs(self%grid_lims(1,1):self%grid_lims(1,2), &
             self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
-            source=0)
+            source=.false.)
         self%initialized = .true.
     end subroutine obsfield_new
 
@@ -121,14 +123,14 @@ contains
         self%nobs      = 0
         if( allocated(self%grid_num) ) self%grid_num = DCMPLX_ZERO
         if( allocated(self%grid_den) ) self%grid_den = 0.d0
-        if( allocated(self%grid_cnt) ) self%grid_cnt = 0
+        if( allocated(self%grid_obs) ) self%grid_obs = .false.
     end subroutine obsfield_reset
 
     subroutine obsfield_kill( self )
         class(fgrid_obs_field), intent(inout) :: self
         if( allocated(self%grid_num) ) deallocate(self%grid_num)
         if( allocated(self%grid_den) ) deallocate(self%grid_den)
-        if( allocated(self%grid_cnt) ) deallocate(self%grid_cnt)
+        if( allocated(self%grid_obs) ) deallocate(self%grid_obs)
         self%pf          = OSMPL_PAD_FAC
         self%nyq         = 0
         self%iwinsz      = 0
@@ -270,8 +272,7 @@ contains
                             self%grid_num(coord(1),coord(2),coord(3)) + comp
                         self%grid_den(coord(1),coord(2),coord(3)) = &
                             self%grid_den(coord(1),coord(2),coord(3)) + ctfval
-                        self%grid_cnt(coord(1),coord(2),coord(3)) = &
-                            self%grid_cnt(coord(1),coord(2),coord(3)) + 1
+                        self%grid_obs(coord(1),coord(2),coord(3)) = .true.
                         nobs_add = nobs_add + 1
                     enddo
                 enddo
@@ -291,9 +292,47 @@ contains
         if( .not. self%compatible_with(src) ) THROW_HARD('incompatible observation fields; obsfield_append_field')
         self%grid_num = self%grid_num + src%grid_num
         self%grid_den = self%grid_den + src%grid_den
-        self%grid_cnt = self%grid_cnt + src%grid_cnt
-        self%nobs      = self%nobs + src%nobs
+        self%grid_obs = self%grid_obs .or. src%grid_obs
+        self%nobs      = count(self%grid_obs)
     end subroutine obsfield_append_field
+
+    subroutine obsfield_blend_field( self, prev, update_frac )
+        class(fgrid_obs_field), intent(inout) :: self
+        class(fgrid_obs_field), intent(in)    :: prev
+        real(dp),                intent(in)    :: update_frac
+        real(dp) :: weight_prev
+        integer  :: lo(3), hi(3)
+        logical  :: l_intersection_subset
+        if( .not. self%initialized ) THROW_HARD('destination not initialized; obsfield_blend_field')
+        if( .not. prev%initialized ) return
+        if( self%pf /= prev%pf ) THROW_HARD('incompatible observation field oversampling; obsfield_blend_field')
+        if( self%nyq < 1 .or. prev%nyq < 1 ) THROW_HARD('invalid observation field nyquist; obsfield_blend_field')
+        weight_prev = 1.d0 - update_frac
+        lo = max(self%grid_lims(:,1), prev%grid_lims(:,1))
+        hi = min(self%grid_lims(:,2), prev%grid_lims(:,2))
+        if( any(hi < lo) )then
+            self%nobs = count(self%grid_obs)
+            return
+        endif
+        l_intersection_subset = any(lo /= self%grid_lims(:,1)) .or. any(hi /= self%grid_lims(:,2)) .or. &
+            &any(lo /= prev%grid_lims(:,1)) .or. any(hi /= prev%grid_lims(:,2))
+        if( l_intersection_subset .or. self%nyq /= prev%nyq .or. any(self%lims /= prev%lims) )then
+            write(logfhandle,'(A,2(A,I0),A,6(I0,1X),A,6(I0,1X),A,6(I0,1X))') &
+                &'WARNING: obsfield trailing blend uses grid intersection;', &
+                &' current_nyq=', self%nyq, ' prev_nyq=', prev%nyq, &
+                &' current_grid_lims=', self%grid_lims, ' prev_grid_lims=', prev%grid_lims, ' overlap=', lo, hi
+        endif
+        self%grid_num(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = &
+            &update_frac * self%grid_num(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) + &
+            &weight_prev * prev%grid_num(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
+        self%grid_den(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = &
+            &update_frac * self%grid_den(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) + &
+            &weight_prev * prev%grid_den(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
+        self%grid_obs(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = &
+            &((update_frac > DTINY) .and. self%grid_obs(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))) .or. &
+            &((weight_prev > DTINY) .and. prev%grid_obs(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+        self%nobs = count(self%grid_obs)
+    end subroutine obsfield_blend_field
 
     subroutine obsfield_calc_invtau2( self, kfromto, fsc, fudge, prior_start, invtau2 )
         class(fgrid_obs_field), intent(in)  :: self
@@ -365,7 +404,7 @@ contains
         pftsz = size(polar_x,1)
         pfts(:,:,1:nrefs) = DCMPLX_ZERO
         if( present(denw) ) denw(:,:,1:nrefs) = 0.d0
-        if( self%nobs < 1 ) return
+        if( .not. any(self%grid_obs) ) return
         iwinsz_l = self%iwinsz
         wdim_l   = self%wdim
         lim1_lo  = self%lims(1,1)
@@ -406,7 +445,7 @@ contains
                                 if( l_conj )then
                                     a1 = -c1; a2 = -c2; a3 = -c3
                                     if( a1 < gl_lo1 .or. a1 > gl_hi1 ) cycle
-                                    if( self%grid_cnt(a1,a2,a3) < 1 ) cycle
+                                    if( .not. self%grid_obs(a1,a2,a3) ) cycle
                                     shell = nint(sqrt(real(a1*a1 + a2*a2 + a3*a3, dp)))
                                     prior = 0.d0
                                     if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
@@ -419,7 +458,7 @@ contains
                                     cell_num = conjg(self%grid_num(a1,a2,a3))
                                 else
                                     if( c1 > gl_hi1 ) cycle
-                                    if( self%grid_cnt(c1,c2,c3) < 1 ) cycle
+                                    if( .not. self%grid_obs(c1,c2,c3) ) cycle
                                     shell = nint(sqrt(real(c1*c1 + c2*c2 + c3*c3, dp)))
                                     prior = 0.d0
                                     if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
@@ -472,8 +511,8 @@ contains
         pfts_even(:,:,1:nrefs) = DCMPLX_ZERO
         pfts_odd( :,:,1:nrefs) = DCMPLX_ZERO
         pfts_merg(:,:,1:nrefs) = DCMPLX_ZERO
-        have_even = self%even%nobs > 0
-        have_odd  = self%odd%nobs  > 0
+        have_even = any(self%even%grid_obs)
+        have_odd  = any(self%odd%grid_obs)
         if( .not. have_even .and. .not. have_odd ) return
         iwinsz_l = self%even%iwinsz
         wdim_l   = self%even%wdim
@@ -523,7 +562,7 @@ contains
                                     a1 = c1; a2 = c2; a3 = c3
                                 endif
                                 shell = nint(sqrt(real(a1*a1 + a2*a2 + a3*a3, dp)))
-                                if( have_even .and. self%even%grid_cnt(a1,a2,a3) > 0 )then
+                                if( have_even .and. self%even%grid_obs(a1,a2,a3) )then
                                     prior = 0.d0
                                     if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2_even(shell)
                                     denom = self%even%grid_den(a1,a2,a3) + prior
@@ -538,7 +577,7 @@ contains
                                         den_even = den_even + wd * denom
                                     endif
                                 endif
-                                if( have_odd .and. self%odd%grid_cnt(a1,a2,a3) > 0 )then
+                                if( have_odd .and. self%odd%grid_obs(a1,a2,a3) )then
                                     prior = 0.d0
                                     if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2_odd(shell)
                                     denom = self%odd%grid_den(a1,a2,a3) + prior
@@ -650,7 +689,7 @@ contains
         if( h < lbound(self%grid_num,1) .or. h > ubound(self%grid_num,1) ) return
         if( k < lbound(self%grid_num,2) .or. k > ubound(self%grid_num,2) ) return
         if( l < lbound(self%grid_num,3) .or. l > ubound(self%grid_num,3) ) return
-        if( self%grid_cnt(h,k,l) < 1 ) return
+        if( .not. self%grid_obs(h,k,l) ) return
         shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
         prior = 0.d0
         if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
@@ -696,15 +735,15 @@ contains
         header(5:10)  = reshape(self%lims,      [6])
         header(11:16) = reshape(self%grid_lims, [6])
         header(17:19) = self%grid_shape
-        header(20:21) = [self%nobs, OBSFIELD_COUNT_FORMAT_SIGN * self%ncells]
+        header(20:21) = [self%nobs, OBSFIELD_GATE_FORMAT_SIGN * self%ncells]
         write(funit, iostat=io_stat) header
         call fileiochk('obsfield_write_local header; '//trim(label), io_stat)
         write(funit, iostat=io_stat) self%grid_num
         call fileiochk('obsfield_write_local numerator; '//trim(label), io_stat)
         write(funit, iostat=io_stat) self%grid_den
         call fileiochk('obsfield_write_local density; '//trim(label), io_stat)
-        write(funit, iostat=io_stat) self%grid_cnt
-        call fileiochk('obsfield_write_local observation counts; '//trim(label), io_stat)
+        write(funit, iostat=io_stat) self%grid_obs
+        call fileiochk('obsfield_write_local observation gate; '//trim(label), io_stat)
     end subroutine obsfield_write_local
 
     subroutine obsfield_read_local( self, funit, label )
@@ -712,17 +751,16 @@ contains
         integer,                intent(in)    :: funit
         character(len=*),       intent(in)    :: label
         integer :: header(OBSFIELD_HEADER_SIZE), io_stat
-        integer :: lims(3,2), grid_lims(3,2), grid_shape(3), nobs, ncells
+        integer :: lims(3,2), grid_lims(3,2), grid_shape(3), ncells
         read(funit, iostat=io_stat) header
         call fileiochk('obsfield_read_local header; '//trim(label), io_stat)
         lims       = reshape(header(5:10),  [3,2])
         grid_lims  = reshape(header(11:16), [3,2])
         grid_shape = header(17:19)
-        nobs       = header(20)
-        if( header(21) >= 0 )then
-            THROW_HARD('obsfield file lacks count-format marker; remove stale obsfield parts: '//trim(label))
+        if( header(21) >= 0 .or. mod(header(21), OBSFIELD_GATE_FORMAT_SIGN) /= 0 )then
+            THROW_HARD('obsfield file lacks gate-format marker; remove stale obsfield parts: '//trim(label))
         endif
-        ncells     = abs(header(21))
+        ncells     = header(21) / OBSFIELD_GATE_FORMAT_SIGN
         call self%new(lims, header(2))
         if( self%pf /= header(1) .or. self%iwinsz /= header(3) .or. self%wdim /= header(4) ) &
             &THROW_HARD('obsfield scalar header mismatch; '//trim(label))
@@ -732,9 +770,9 @@ contains
         call fileiochk('obsfield_read_local numerator; '//trim(label), io_stat)
         read(funit, iostat=io_stat) self%grid_den
         call fileiochk('obsfield_read_local density; '//trim(label), io_stat)
-        read(funit, iostat=io_stat) self%grid_cnt
-        call fileiochk('obsfield_read_local observation counts; '//trim(label), io_stat)
-        self%nobs = nobs
+        read(funit, iostat=io_stat) self%grid_obs
+        call fileiochk('obsfield_read_local observation gate; '//trim(label), io_stat)
+        self%nobs = count(self%grid_obs)
     end subroutine obsfield_read_local
 
     subroutine obsfield_eo_new( self, lims, nyq )
@@ -788,6 +826,14 @@ contains
         call self%even%append_field(src%even)
         call self%odd%append_field(src%odd)
     end subroutine obsfield_eo_append_field
+
+    subroutine obsfield_eo_blend_field( self, prev, update_frac )
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo), intent(in)    :: prev
+        real(dp),                  intent(in)    :: update_frac
+        call self%even%blend_field(prev%even, update_frac)
+        call self%odd%blend_field( prev%odd,  update_frac)
+    end subroutine obsfield_eo_blend_field
 
     subroutine obsfield_eo_write( self, fname )
         class(fgrid_obsfield_eo), intent(in) :: self
