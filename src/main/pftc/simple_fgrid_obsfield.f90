@@ -17,7 +17,7 @@ integer,  parameter :: OBSFIELD_COUNT_FORMAT_SIGN = -1
 real(dp), parameter :: OBSFIELD_UNSAMPLED_FLOOR  = 1.d3
 integer,  parameter :: SHELL_CACHE_MIN_NTHETA     = 4
 integer,  parameter :: DIRECT_SHELL_MAGIC         = -937241
-integer,  parameter :: DIRECT_SHELL_VERSION       = 1
+integer,  parameter :: DIRECT_SHELL_VERSION       = 2
 
 ! Part-local Fourier-grid observation field. This is intentionally volume-like:
 ! particle Fourier components are accumulated into dense expanded-grid
@@ -72,6 +72,7 @@ end type spherical_shell_map
 type :: spherical_shell_accum_eo
     private
     integer :: kfromto(2) = 0
+    integer :: shell_os   = 1
     logical :: initialized = .false.
     type(spherical_shell_map), allocatable :: shells(:)
   contains
@@ -753,9 +754,15 @@ contains
     subroutine shell_grid_dims( shell, ntheta, nphi )
         integer, intent(in)  :: shell
         integer, intent(out) :: ntheta, nphi
-        ntheta = max(SHELL_CACHE_MIN_NTHETA, 2*shell + 1)
-        nphi   = 2 * ntheta
+        call shell_grid_dims_os(shell, 1, ntheta, nphi)
     end subroutine shell_grid_dims
+
+    subroutine shell_grid_dims_os( shell, shell_os, ntheta, nphi )
+        integer, intent(in)  :: shell, shell_os
+        integer, intent(out) :: ntheta, nphi
+        ntheta = max(SHELL_CACHE_MIN_NTHETA, max(1,shell_os) * (2*shell + 1))
+        nphi   = 2 * ntheta
+    end subroutine shell_grid_dims_os
 
     subroutine shell_cache_new( self, kfromto )
         class(spherical_shell_cache_eo), intent(inout) :: self
@@ -1060,16 +1067,18 @@ contains
         endif
     end subroutine shell_cache_blend_populated
 
-    subroutine shell_accum_new( self, kfromto )
+    subroutine shell_accum_new( self, kfromto, shell_os )
         class(spherical_shell_accum_eo), intent(inout) :: self
         integer,                         intent(in)    :: kfromto(2)
+        integer, optional,                intent(in)    :: shell_os
         integer :: shell, ishell, ntheta, nphi
         call self%kill
         if( kfromto(1) > kfromto(2) ) THROW_HARD('invalid k-range; shell_accum_new')
+        if( present(shell_os) ) self%shell_os = max(1, shell_os)
         allocate(self%shells(kfromto(2)-kfromto(1)+1))
         do shell = kfromto(1), kfromto(2)
             ishell = shell - kfromto(1) + 1
-            call shell_grid_dims(shell, ntheta, nphi)
+            call shell_grid_dims_os(shell, self%shell_os, ntheta, nphi)
             self%shells(ishell)%ntheta = ntheta
             self%shells(ishell)%nphi   = nphi
             allocate(self%shells(ishell)%even(ntheta,nphi), source=DCMPLX_ZERO)
@@ -1107,6 +1116,7 @@ contains
             deallocate(self%shells)
         endif
         self%kfromto     = 0
+        self%shell_os    = 1
         self%initialized = .false.
     end subroutine shell_accum_kill
 
@@ -1281,7 +1291,8 @@ contains
         integer :: ishell
         if( .not. src%initialized ) return
         if( .not. self%initialized ) THROW_HARD('destination not initialized; shell_accum_append_field')
-        if( any(self%kfromto /= src%kfromto) .or. size(self%shells) /= size(src%shells) )then
+        if( any(self%kfromto /= src%kfromto) .or. size(self%shells) /= size(src%shells) .or. &
+            &self%shell_os /= src%shell_os )then
             THROW_HARD('incompatible shell accumulators; shell_accum_append_field')
         endif
         do ishell = 1,size(self%shells)
@@ -1362,9 +1373,9 @@ contains
     subroutine shell_accum_write( self, funit )
         class(spherical_shell_accum_eo), intent(in) :: self
         integer,                         intent(in) :: funit
-        integer :: header(4), meta(4), ishell, io_stat
+        integer :: header(5), meta(4), ishell, io_stat
         if( .not. self%initialized ) return
-        header = [DIRECT_SHELL_MAGIC, DIRECT_SHELL_VERSION, self%kfromto(1), self%kfromto(2)]
+        header = [DIRECT_SHELL_MAGIC, DIRECT_SHELL_VERSION, self%kfromto(1), self%kfromto(2), self%shell_os]
         write(funit, iostat=io_stat) header
         call fileiochk('shell_accum_write header', io_stat)
         do ishell = 1,size(self%shells)
@@ -1390,12 +1401,12 @@ contains
     subroutine shell_accum_read( self, funit )
         class(spherical_shell_accum_eo), intent(inout) :: self
         integer,                         intent(in)    :: funit
-        integer :: header(4), meta(4), ishell, io_stat
+        integer :: header(5), meta(4), ishell, io_stat
         read(funit, iostat=io_stat) header
         if( io_stat /= 0 ) return
         if( header(1) /= DIRECT_SHELL_MAGIC ) THROW_HARD('invalid direct shell accumulator marker')
         if( header(2) /= DIRECT_SHELL_VERSION ) THROW_HARD('unsupported direct shell accumulator version')
-        call self%new(header(3:4))
+        call self%new(header(3:4), header(5))
         do ishell = 1,size(self%shells)
             read(funit, iostat=io_stat) meta
             call fileiochk('shell_accum_read metadata', io_stat)
@@ -1491,21 +1502,25 @@ contains
         self%nobs = nobs
     end subroutine obsfield_read_local
 
-    subroutine obsfield_eo_new( self, lims, nyq, kfromto, direct_shells )
+    subroutine obsfield_eo_new( self, lims, nyq, kfromto, direct_shells, shell_os )
         class(fgrid_obsfield_eo), intent(inout) :: self
         integer,                   intent(in)    :: lims(3,2), nyq
         integer, optional,          intent(in)    :: kfromto(2)
         logical, optional,          intent(in)    :: direct_shells
+        integer, optional,          intent(in)    :: shell_os
+        integer :: shell_os_local
         logical :: l_direct_shells
         call self%even%new(lims, nyq)
         call self%odd%new( lims, nyq)
         l_direct_shells = .false.
         if( present(direct_shells) ) l_direct_shells = direct_shells
+        shell_os_local = 1
+        if( present(shell_os) ) shell_os_local = max(1, shell_os)
         if( l_direct_shells )then
             if( present(kfromto) )then
-                call self%direct_shells%new(kfromto)
+                call self%direct_shells%new(kfromto, shell_os_local)
             else
-                call self%direct_shells%new([1,nyq])
+                call self%direct_shells%new([1,nyq], shell_os_local)
             endif
         else
             call self%direct_shells%kill

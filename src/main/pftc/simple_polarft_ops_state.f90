@@ -71,7 +71,8 @@ contains
         l_direct_shells = trim(self%p_ptr%obsfield_shell_direct) /= 'no'
         allocate(self%obsfields(self%p_ptr%nstates))
         do istate = 1, self%p_ptr%nstates
-            call self%obsfields(istate)%new(lims, self%interpklim, [self%kfromto(1), self%interpklim], l_direct_shells)
+            call self%obsfields(istate)%new(lims, self%interpklim, [self%kfromto(1), self%interpklim], &
+                &l_direct_shells, self%p_ptr%obsfield_shell_os)
         enddo
     end subroutine ensure_obsfields_allocated
 

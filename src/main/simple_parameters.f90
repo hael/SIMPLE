@@ -372,6 +372,7 @@ type :: parameters
     integer :: numlen=0            !< length of number string
     integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correction{5}
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
+    integer :: obsfield_shell_os=1 !< direct obsfield shell angular oversampling factor{1}
     integer :: offset=20           !< pixels offset{20}
     integer :: optics_offset=0
     integer :: part=1
@@ -1024,6 +1025,7 @@ contains
         call check_iarg('numlen',         self%numlen)
         call check_iarg('nxpatch',        self%nxpatch)
         call check_iarg('nypatch',        self%nypatch)
+        call check_iarg('obsfield_shell_os', self%obsfield_shell_os)
         call check_iarg('offset',         self%offset)
         call check_iarg('optics_offset',  self%optics_offset)
         call check_iarg('part',           self%part)
@@ -1658,6 +1660,7 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported obsfield_shell_direct argument: '//trim(self%obsfield_shell_direct))
         end select
+        if( self%obsfield_shell_os < 1 ) THROW_HARD('obsfield_shell_os must be >= 1')
         if( self%l_polar )then
             ! deactivate post-alignment cartesian reconstruction
             self%volrec = 'no'

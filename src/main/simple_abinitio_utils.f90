@@ -315,7 +315,7 @@ contains
         class(commander_base), intent(inout) :: xrefine3D
         type(commander_polar_volassemble) :: xpolar_volassemble
         type(cmdline) :: cline_obsfield_volassemble
-        type(string) :: stage, str_state, vol_name, vol_stage, vol_pproc, vol_lp, vol_lp_stage
+        type(string) :: stage, vol_name, vol_stage, vol_lp_stage
         integer      :: state
         real         :: lp_snapshot
         call cline_refine3D%delete('endit')
@@ -330,26 +330,20 @@ contains
         call del_files(ASSIGNMENT_FBODY,params%nparts,ext='.dat')
         call del_file(DIST_FBODY//'.dat')
         call del_file(ASSIGNMENT_FBODY//'.dat')
-        stage = '_stage_'//int2str(istage)
+        stage = '_stage'//int2str_pad(istage,2)
         if( (.not. l_polar) .or. (trim(params%polar) == 'obsfield') )then
             do state = 1, params%nstates
-                str_state = int2str_pad(state,2)
                 vol_name  = refine3D_state_vol_fname(state)
-                vol_pproc = add2fbody(vol_name, MRC_EXT, PPROC_SUFFIX)
-                vol_lp    = add2fbody(vol_name, MRC_EXT, LP_SUFFIX)
                 vol_stage = add2fbody(vol_name, string(MRC_EXT),stage)
                 vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
                 if( file_exists(vol_name) )then
-                    call simple_copy_file(vol_name, vol_stage)
                     lp_snapshot = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
                         &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
-                    call write_abinitio_lowpass_snapshot(vol_stage, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
+                    call write_abinitio_lowpass_snapshot(vol_name, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
                 endif
-                if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,string(MRC_EXT),stage))
             enddo
         endif
         call vol_stage%kill
-        call vol_lp%kill
         call vol_lp_stage%kill
     end subroutine exec_refine3D
 
@@ -486,7 +480,7 @@ contains
             if( istage == 1 )then
                 tmpl = refine3D_startvol_fbody(state)
             else
-                tmpl = refine3D_state_vol_fbody(state)//'_stage_'//sstage
+                tmpl = refine3D_state_vol_fbody(state)//'_stage'//sstage
             endif
             have_even_stage = .false.
             have_odd_stage  = .false.
