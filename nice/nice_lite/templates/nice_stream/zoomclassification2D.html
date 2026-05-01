@@ -10,9 +10,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
     <script src={% static 'nice_stream/panelclassification2D.js' %}></script>
 </head>
-<body class="w-full h-screen flex flex-col bg-nice4bg text-nice4dark">
+<body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
-        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:view_stream' jobid %} title="back">
+        <a class="text-streamlabel hover:text-streamtext cursor-pointer" href={% url 'nice_lite:view_stream' jobid %} title="back">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                 <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
             </svg>
@@ -20,13 +20,27 @@
         <div class="px-[10px] text-[18px]">{{ displayid }} stream - 2D classification</div>
     </div>
     <div class="w-full flex flex-row p-[10px]">
-        <div class="flex flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="flex flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border-[2px] border-streamline">
             <div class="flex flex-row">
                 {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
-                    <div class="flex flex-col">
-                        <div class="font-bold text-[12px] pl-[10px]">particles</div>
-                        <div class="h-[50px] w-[240px]">
-                            <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-accepted={{ jobstats.particles_accepted }} data-rejected={{ jobstats.particles_rejected }}></canvas>
+                    <div class="flex flex-col w-full">
+                        <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px]">particles</div>
+                        <div class="flex gap-2 p-[10px] pb-[6px]">
+                            <div class="flex-1 bg-streamring/10 border border-streamring/20 rounded-lg px-2.5 py-2">
+                                <div class="w-1.5 h-1.5 rounded-full bg-streamring mb-1.5"></div>
+                                <div class="text-[10px] font-medium text-streamring mb-0.5">accepted</div>
+                                <div class="text-base font-medium text-streamring leading-none">{{ jobstats.particles_accepted|intcomma }}</div>
+                            </div>
+                            <div class="flex-1 bg-streambg border border-streamline rounded-lg px-2.5 py-2">
+                                <div class="w-1.5 h-1.5 rounded-full bg-streamicon mb-1.5"></div>
+                                <div class="text-[10px] font-medium text-streamsubtle mb-0.5">imported</div>
+                                <div class="text-base font-medium text-streamtext leading-none">{{ jobstats.particles_imported|intcomma }}</div>
+                            </div>
+                            <div class="flex-1 bg-streamrejected/10 border border-streamrejected/20 rounded-lg px-2.5 py-2">
+                                <div class="w-1.5 h-1.5 rounded-full bg-streamrejected mb-1.5"></div>
+                                <div class="text-[10px] font-medium text-streamrejected mb-0.5">rejected</div>
+                                <div class="text-base font-medium text-streamrejected leading-none">{{ jobstats.particles_rejected|intcomma }}</div>
+                            </div>
                         </div>
                     </div>
                 {% endif %}
@@ -82,9 +96,9 @@
                 </div>
             {% endif %}
         </div>
-        <div class="flex ml-[10px] flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+        <div class="flex ml-[10px] flex-1 flex-col bg-streambar rounded-xl p-[5px] text-streamtext border-[2px] border-streamline overflow-hidden">
             <div class="font-bold text-[12px]">log</div>
-            <div class="logtext h-[200px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+            <div class="logtext h-[200px] overflow-auto mx-[10px] p-[5px] bg-streambg rounded">
                 {% for logpart in log %}
                     {% if "text" in logpart %}
                         <pre class="text-[10px]">{{ logpart.text }}</pre>
@@ -94,11 +108,11 @@
                 {% endfor %}
             </div>
             <div class="font-bold text-[12px]">errors</div>
-            <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+            <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-streambg rounded">
                 <pre class="text-[10px]">{{error}}</pre>
             </div>
         </div>
-        <div class="flex ml-[10px] flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+        <div class="flex ml-[10px] flex-col bg-streambar rounded-xl p-[5px] text-streamtext border-[2px] border-streamline overflow-hidden">
             <div class="font-bold text-[12px] pl-[10px]">help</div>
             <div class="flex-1 w-[200px] overflow-auto mx-[10px] p-[5px]">
                 <div class="text-[10px]">some help text</div>
@@ -106,20 +120,20 @@
         </div>
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
-        <div class="relative flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
-            <div id="loadinggauze" class="absolute text-[12px] flex h-[99%] w-[99%] bg-nice4bubble items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
+        <div class="relative flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border-[2px] border-streamline">
+            <div id="loadinggauze" class="absolute text-[12px] flex h-[99%] w-[99%] bg-streambar items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
             {% if status == "running" %}
                 {% if "stage" in jobstats and jobstats.stage == "updating mask diameter" %}
                 <div class="flex flex-row w-full flex-1 text-[10px] justify-center items-center">
                         updating mask diameter ...
                 </div>
                 {% elif jobstats.user_input is True and "latest_cls2D" in jobstats and "iteration" in jobstats and jobstats.iteration > 0 %}  
-                    <div class="font-bold text-[12px] pl-[10px]">latest classes</div>
+                    <span class="text-[10px] text-streamlabel pl-[10px] mb-2">latest classes</span>
                     <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
                         <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
                             <div id="accepted_cls2D_slider" class="flex flex-wrap">
                                 {% for cls2D in jobstats.latest_cls2D %}
-                                    <div class="flex flex-col snap-center cls2dcontainer rounded bg-nice4bg m-[5px] p-[5px] border-[1px] border-nice4header" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
+                                    <div class="flex flex-col snap-center cls2dcontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
                                         <div class="flex text-[10px]">
                                             <div class="font-bold">
                                                 population :
@@ -139,7 +153,7 @@
                                         <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.mrcidx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
                                             <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
                                                 <canvas class="mskcanvas z-1" height=100 width=100 data-mskscale="{{ cls2D.mskscale }}" data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
-                                                <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                                <div class="xmark hidden h-[100px] w-[100px] text-streamerror flex items-center justify-center">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
                                                         <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                     </svg>
@@ -150,7 +164,7 @@
                                 {% endfor %}
                             </div>
                             <div name="selectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-streambar m-[5px] border-streamline border-[2px] rounded">
                                     <div class="flex flex-col">
                                         <div class="font-bold">contrast</div>
                                         <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
@@ -174,12 +188,12 @@
                 {% endif %}
             {% else %}
                 {% if "latest_cls2D" in jobstats %}                
-                    <div class="font-bold text-[12px] pl-[10px]">final classes</div>
+                    <span class="text-[10px] text-streamlabel pl-[10px] mb-2">final classes</span>
                     <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
                         <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
                             <div id="accepted_cls2D_slider" class="flex flex-wrap">
                                 {% for cls2D in jobstats.latest_cls2D %}
-                                    <div class="flex flex-col snap-center cls2dcontainer rounded bg-nice4bg m-[5px] p-[5px] border-[1px] border-nice4header" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                    <div class="flex flex-col snap-center cls2dcontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
                                         <div class="flex text-[10px]">
                                             <div class="font-bold">
                                                 population :
@@ -198,7 +212,7 @@
                                         </div>
                                         <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.mrcidx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
                                             <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
-                                                <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                                <div class="xmark hidden h-[100px] w-[100px] text-streamerror flex items-center justify-center">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
                                                         <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                     </svg>
@@ -209,7 +223,7 @@
                                 {% endfor %}
                             </div>
                             <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-streambar m-[5px] border-streamline border-[2px] rounded">
                                     <div class="flex flex-col">
                                         <div class="font-bold">contrast</div>
                                         <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 

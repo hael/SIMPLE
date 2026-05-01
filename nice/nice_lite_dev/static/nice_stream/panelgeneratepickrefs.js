@@ -24,17 +24,6 @@ const buildDonut = (canvas, dataValues, labels) => {
         }
     });
 };
-<<<<<<< HEAD
-
-<<<<<<< Updated upstream
-restartProcess = (element) => {
-  const confirmed = confirm("Please confirm that you wish to restart this process");
-  if(confirmed){
-    element.form.submit()
-  }
-}
-=======
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
 
 const restartProcess = (element) => {
     const confirmed = confirm("Please confirm that you wish to restart this process");
@@ -71,43 +60,6 @@ const toggleTemplate = (templ) => {
     lastinteraction = Date.now() + 90000; // don't auto-reload for 2 minutes while user is interacting
 };
 
-=======
-const restartProcess = (element) => {
-    const confirmed = confirm("Please confirm that you wish to restart this process");
-    if (confirmed) element.form.submit();
-};
-
-const stopProcess = (element) => {
-    const confirmed = confirm("Please confirm that you wish to stop this process");
-    if (confirmed) element.form.submit();
-};
-
-// Scroll buttons use sibling traversal: [left btn][viewport][right btn]
-const scrlRight = (element, event) => {
-    event.preventDefault();
-    const slider = element.previousElementSibling;
-    const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
-    slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + 215;
-    lastinteraction = Date.now();
-};
-
-const scrlLeft = (element, event) => {
-    event.preventDefault();
-    const slider = element.nextElementSibling;
-    const atStart = slider.scrollLeft <= 0;
-    slider.scrollLeft = atStart ? slider.scrollWidth - slider.clientWidth : slider.scrollLeft - 215;
-    lastinteraction = Date.now();
-};
-
-const toggleTemplate = (templ) => {
-    templ.classList.toggle("disabledbutton");
-    const xmark = templ.querySelector('.xmark');
-    xmark.classList.toggle("hidden", !templ.classList.contains("disabledbutton"));
-    updateCounts();
-    lastinteraction = Date.now() + 90000; // don't auto-reload for 2 minutes while user is interacting
-};
-
->>>>>>> Stashed changes
 const selectRefs = (element) => {
     const selected = [];
     let path = "";
@@ -235,75 +187,11 @@ const updateContrast = (element) => {
     document.querySelector(':root').style.setProperty('--genpickrefs-contrast', element.value / 100);
 };
 
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-updateScale = (element) => {
-  const scale = element.value
-  for(const cls2D of document.querySelectorAll(".cls2D")){
-    cls2D.style.width  = scale + "px"
-    cls2D.style.height = scale + "px"
-  }
-  for(const cls2Dimg of document.querySelectorAll(".cls2Dimg")){
-    cls2Dimg.style.width  = scale + "px"
-    cls2Dimg.style.height = scale + "px"
-  }
-  for(const picktemplate of document.querySelectorAll(".picktemplate")){
-    picktemplate.style.width  = scale + "px"
-    picktemplate.style.height = scale + "px"
-  }
-  for(const picktemplateimg of document.querySelectorAll(".picktemplateimg")){
-    picktemplateimg.style.width  = scale + "px"
-    picktemplateimg.style.height = scale + "px"
-  }
-}
-
-drawMask = () => {
-  for(const mskcanvas of document.getElementsByClassName("mskcanvas")){
-    const mskscale = Number(mskcanvas.dataset.mskscale)
-    const mskdiam  = Number(mskcanvas.dataset.mskdiam)
-    const ctx      = mskcanvas.getContext("2d")
-    ctx.strokeStyle = "yellow";
-    ctx.clearRect(0, 0, mskcanvas.width, mskcanvas.height)
-    ctx.beginPath();
-    ctx.arc(mskcanvas.width / 2, mskcanvas.height / 2, mskdiam * mskcanvas.width / (mskscale * 2), 0, 2 * Math.PI);
-    ctx.stroke();
-  }
-}
-
-window.addEventListener("load", () => {
-  drawMask()
-  updateCounts()
-})
-
-window.addEventListener("load", () => {
-  const logtext = document.querySelector(".logtext")
-  logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
-})
-
-window.addEventListener("load", () => {
-  var cssroot = document.querySelector(':root');
-  cssroot.style.setProperty('--genpickrefs-contrast',   1.0);
-  cssroot.style.setProperty('--genpickrefs-brightness', 1.0);
-})
-
-window.addEventListener("load", () =>{
-    for(const canvas of document.getElementsByClassName("particles_pie_chart")){
-        const n_imported  = Number(canvas.dataset.imported)
-        const n_processed = Number(canvas.dataset.processed)
-        const n_rejected  = Number(canvas.dataset.rejected)
-        buildDonut(canvas, [n_imported - n_processed - n_rejected, n_processed, n_rejected], ['unclassified', 'accepted', 'rejected'])
-=======
-=======
->>>>>>> Stashed changes
 const updateScale = (element) => {
     const scale = element.value;
     for (const el of document.querySelectorAll(".cls2D, .cls2Dimg, .picktemplate, .picktemplateimg")) {
         el.style.width  = scale + "px";
         el.style.height = scale + "px";
-<<<<<<< Updated upstream
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
->>>>>>> Stashed changes
     }
 };
 

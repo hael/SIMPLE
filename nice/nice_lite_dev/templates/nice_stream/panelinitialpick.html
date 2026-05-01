@@ -28,20 +28,7 @@
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
     <!-- Loading gauze -->
-<<<<<<< Updated upstream
-    {% include 'nice_stream/_panel_gauze_loading.html' %}
-
-    <!-- Waiting gauze: shown until preprocessed micrographs arrive -->
-    {% if "micrographs_imported" not in jobstats or jobstats.micrographs_imported == 0 %}
-        <div id="waitinggauze"
-             class="absolute inset-0 flex items-center justify-center text-[10px] text-streamlabel bg-streambar transition-opacity duration-300 delay-300 ease-in-out z-10">
-            waiting for preprocessing&hellip;
-<<<<<<< HEAD
-        </div>
-    {% endif %}
-=======
     {% include 'nice_stream/includes/_panel_gauze_loading.html' %}
->>>>>>> Stashed changes
 
     <!-- Transient status overlays -->
     {% include 'nice_stream/includes/_panel_status_overlay.html' %}
@@ -73,73 +60,17 @@
                 <span class="text-[10px] text-streamlabel mb-2">pick locations</span>
                 <div class="flex items-center gap-1">
 
-<<<<<<< Updated upstream
-                    <button type="button" class="text-streamaccent hover:text-streamtext transition-colors flex-shrink-0"
-                            onclick="scrlLeft(this, event)">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
-                            <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-=======
-        </div>
-    {% endif %}
-
-    <!-- Transient status overlays -->
-    {% include 'nice_stream/_panel_status_overlay.html' %}
-
-    <div class="flex flex-col h-full">
-
-        <!-- Header: status · title · zoom · stop/restart -->
-        {% include 'nice_stream/_panel_header.html' with panel_title="initial picking" zoom_url="nice_lite:view_stream_initial_pick_zoom" terminate_field="terminate_initial_pick" restart_field="restart_initial_pick" last_import=jobstats.last_micrograph_imported has_skipped=True use_js=True %}
-
-        <!-- Count tiles -->
-        <div class="grid grid-cols-2 gap-2 px-4 pt-2">
-            {% include 'nice_stream/_count_tile.html' with count=jobstats.micrographs_accepted label="mics picked" sublabel=jobstats.micrographs_accepted sublabel_sep="/" variant="action"%}
-            {% include 'nice_stream/_count_tile.html' with count=jobstats.particles_extracted label="particles extracted" sublabel=jobstats.particles_per_mic sublabel_unit="/mic" %}
-        </div>
-
-        <!-- Micrograph slider (pick locations) -->
-        {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
-            <div class="flex flex-col px-4 pt-2">
-                <span class="text-[10px] text-streamlabel mb-2">pick locations</span>
-                <div class="flex items-center gap-1">
-
-                    {% include 'nice_stream/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
->>>>>>> Stashed changes
 
                     <div id="micrographs_slider"
                          {% if status == "running" and jobstats.user_input is True and "picking_diameters" in jobstats %}
                              data-best_diam="{{ jobstats.best_diam }}"
                              data-picking_diameters="{{ jobstats.picking_diameters }}"
                          {% endif %}
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-                         class="flex flex-row w-[235px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-=======
-                         class="flex flex-row flex-1 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
->>>>>>> Stashed changes
-                        {# Boxes overlay canvas — drawn by JS, z-stacked above the micrograph. #}
-                        <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-10" height="210" width="210"></canvas>
-                        {% for micrograph in jobstats.latest_micrographs %}
-<<<<<<< Updated upstream
-                            <div class="snap-center slider_micrograph" oncontextmenu="showMenu(this, event)"
-                                 data-xdim="{{ micrograph.xdim }}"
-                                 data-ydim="{{ micrograph.ydim }}"
-                                 data-boxes="{{ micrograph.boxes }}">
-                                <div class="w-[235px] h-[235px] m-auto">
-                                    <div style="filter:contrast(var(--inipick-contrast)) brightness(var(--inipick-brightness)); background:url({% url 'nice_lite:image' micrograph.path %}); background-size:200% 100%; background-position:100% 0%"
-                                         class="h-[235px] w-[235px] rounded m-auto"></div>
-                                </div>
-=======
                          class="flex flex-row flex-1 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
                         {# Boxes overlay canvas — drawn by JS, z-stacked above the micrograph. #}
                         <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-10" height="210" width="210"></canvas>
                         {% for micrograph in jobstats.latest_micrographs %}
-=======
->>>>>>> Stashed changes
                             <div class="flex-shrink-0 w-full aspect-square relative overflow-hidden snap-center slider_micrograph"
                                     oncontextmenu="showMenu(this, event)"
                                     data-ctfres="{{ micrograph.ctfres|floatformat:1 }}"
@@ -153,28 +84,11 @@
                                         loading="lazy" alt=""
                                         class="rounded absolute inset-0 w-full h-full object-cover object-[100%]"
                                         style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness));">
-<<<<<<< Updated upstream
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
->>>>>>> Stashed changes
                             </div>
                         {% endfor %}
                     </div>
 
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-                    <button type="button" class="text-streamaccent hover:text-streamtext transition-colors flex-shrink-0"
-                            onclick="scrlRight(this, event)">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
-                            <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-=======
-                    {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
->>>>>>> Stashed changes
 
                 </div>
             </div>
@@ -191,15 +105,7 @@
                     <div class="flex flex-col gap-1">
                         <span class="font-medium">brightness</span>
                         <input class="mx-2" oninput="updateBrightness(this)"
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-                               type="range" max="300" min="0" step="1" value="50">
-=======
                                type="range" max="300" min="0" step="1" value="100">
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
-                               type="range" max="300" min="0" step="1" value="100">
->>>>>>> Stashed changes
                     </div>
                 </div>
             </div>

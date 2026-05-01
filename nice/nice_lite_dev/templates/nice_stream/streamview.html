@@ -25,15 +25,7 @@
 <body class="bg-streambg h-screen flex flex-col font-sans">
 
     <!-- Sub-bar: back link + stream title -->
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-    <div class="flex items-center gap-3 px-5 pt-4 pb-3 flex-shrink-0">
-=======
     <div class="flex items-center gap-3 px-5 pt-3 pb-2 flex-shrink-0">
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
-    <div class="flex items-center gap-3 px-5 pt-3 pb-2 flex-shrink-0">
->>>>>>> Stashed changes
         <a href="{% url 'nice_lite:dataset' %}" title="back to dataset"
            class="inline-flex items-center gap-1.5 text-xs text-streamsubtle hover:text-streamtext transition-colors">
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor"
@@ -47,31 +39,13 @@
 
     <!-- Scrollable stage-card grid -->
     <div class="flex-1 min-h-0 overflow-y-auto">
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-        <div class="flex flex-row flex-wrap gap-3 px-5 pb-5 content-start">
-=======
         <div class="flex flex-row flex-wrap gap-3 px-5 pb-1 content-start">
->>>>>>> Stashed changes
 
             <!-- Collection panel: acquisition parameters + movies -->
             {% include 'nice_stream/includes/_panel_iframe_card.html' with frame_id="collection_iframe" frame_url="nice_lite:view_stream_movies" frame_height="h-full" %}
 
             <!-- Preprocessing -->
-<<<<<<< Updated upstream
-            {% include 'nice_stream/_panel_iframe_card.html' with frame_id="preprocess_iframe" frame_url="nice_lite:view_stream_preprocess" %}
-=======
-        <div class="flex flex-row flex-wrap gap-3 px-5 pb-1 content-start">
-
-            <!-- Collection panel: acquisition parameters + movies -->
-            {% include 'nice_stream/_panel_iframe_card.html' with frame_id="collection_iframe" frame_url="nice_lite:view_stream_movies" frame_height="h-full" %}
-
-            <!-- Preprocessing -->
-            {% include 'nice_stream/_panel_iframe_card.html' with frame_id="preprocess_iframe" frame_url="nice_lite:view_stream_preprocess" frame_height="h-full" %}
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
             {% include 'nice_stream/includes/_panel_iframe_card.html' with frame_id="preprocess_iframe" frame_url="nice_lite:view_stream_preprocess" frame_height="h-full" %}
->>>>>>> Stashed changes
 
             <!-- Optics assignment -->
             {% include 'nice_stream/includes/_panel_iframe_card.html' with frame_id="optics_iframe" frame_url="nice_lite:view_stream_optics" %}

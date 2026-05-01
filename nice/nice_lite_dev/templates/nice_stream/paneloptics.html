@@ -37,26 +37,6 @@
         <!-- Header: status · title · zoom · stop/restart -->
         {% include 'nice_stream/includes/_panel_header.html' with panel_title="optics assignment" zoom_url="nice_lite:view_stream_optics_zoom" zoom_method="POST" terminate_field="terminate_optics_assignment" restart_field="restart_optics_assignment" last_import=jobstats.last_micrograph_imported %}
 
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-        <!-- Stats -->
-        <div class="divide-y divide-streamdivider px-4 flex-shrink-0">
-            {% if "optics_groups_assigned" in jobstats %}
-                <div class="flex items-baseline justify-between py-2">
-                    <span class="text-[11px] text-streamlabel">groups assigned</span>
-                    <span class="text-[11px] font-medium text-streaminput font-mono">{{ jobstats.optics_groups_assigned }}</span>
-                </div>
-=======
-         <!-- Count tiles -->
-        <div class="grid grid-cols-2 gap-2 px-4 pt-2">
-            {% if jobstats.micrographs_assigned|add:jobstats.micrographs_assigned == jobstats.micrographs_assigned %}
-                {% include 'nice_stream/_count_tile.html' with count=jobstats.micrographs_assigned label="mics assigned" sublabel=jobstats.micrographs_assigned sublabel_sep="/" %}
-            {% else %}
-                {% include 'nice_stream/_count_tile.html' with count=jobstats.micrographs_assigned label="mics assigned" sublabel=jobstats.micrographs_assigned sublabel_sep="/" variant="action" %}
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-            {% endif %}
-            {% include 'nice_stream/_count_tile.html' with count=jobstats.optics_groups_assigned label="shift groups" %}
-=======
         <!-- Waiting gauze: shown until micrographs are available (below header) -->
         {% if "micrographs_assigned" not in jobstats or jobstats.micrographs_assigned == 0 %}
             {% include 'nice_stream/includes/_panel_waiting_gauze.html' %}
@@ -70,7 +50,6 @@
                 {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_assigned label="micrographs assigned" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="action" %}
             {% endif %}
             {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.optics_groups_assigned label="shift groups" %}
->>>>>>> Stashed changes
         </div>
 
         <!-- Beam shift scatter chart -->

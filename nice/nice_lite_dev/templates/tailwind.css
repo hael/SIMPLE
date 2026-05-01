@@ -61,16 +61,8 @@
 @theme { --color-streamerror   : #ef4444; } /* error / danger           */
 @theme { --color-streamerrorline    : #fee2e2; } /* error card border   */
 @theme { --color-streamerrorsurface : #fef2f2; } /* error icon bg       */
-<<<<<<< Updated upstream
-@theme { --color-streamrejected     : #fca5a5; } /* rejected segment    */
-<<<<<<< HEAD
-=======
-@theme { --color-streamaction      : #60a5fa; } /* action / info blue  */
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
 @theme { --color-streamrejected     : #f59e0b; } /* rejected segment    */
 @theme { --color-streamaction      : #60a5fa; } /* action / info blue  */
->>>>>>> Stashed changes
 
 @layer components {
   .nicebutton {

@@ -30,20 +30,7 @@
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
     <!-- Loading gauze -->
-<<<<<<< Updated upstream
-    {% include 'nice_stream/_panel_gauze_loading.html' %}
-
-    <!-- Waiting gauze: shown until movies arrive -->
-    {% if "movies_imported" not in jobstats or jobstats.movies_imported == 0 %}
-        <div id="waitinggauze"
-             class="absolute inset-0 flex items-center justify-center text-[10px] text-streamlabel bg-streambar transition-opacity duration-300 delay-300 ease-in-out z-10">
-            waiting for movies&hellip;
-<<<<<<< HEAD
-        </div>
-    {% endif %}
-=======
     {% include 'nice_stream/includes/_panel_gauze_loading.html' %}
->>>>>>> Stashed changes
 
     <!-- Transient status overlays -->
     {% include 'nice_stream/includes/_panel_status_overlay.html' %}
@@ -92,155 +79,6 @@
                             {% include 'nice_stream/includes/_histogram_slide.html' with label="ice score" canvas_class="icescore_histogram" labels=jobstats.histograms.icefrac.labels values=jobstats.histograms.icefrac.data savedval=jobstats.cutoff_ice_score form_id="update_preprocess_icescore" form_field="icescore" no_label=True %}
                         {% endif %}
 
-<<<<<<< Updated upstream
-        <!-- Charts row: movies pie + histograms -->
-        <div class="flex flex-row flex-wrap gap-x-4 gap-y-3 px-4 pt-3 flex-shrink-0">
-            <div class="flex items-center gap-3 mb-2">
-                {% if "movies_imported" in jobstats and "movies_processed" in jobstats and "movies_rejected" in jobstats and jobstats.movies_imported > 0 %}
-                    <div class="flex flex-col items-center gap-1 flex-shrink-0">
-                        <span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamaccent">
-                            <span class="w-1.5 h-1.5 rounded-full bg-streamaccent"></span>
-                            {{ jobstats.movies_imported|intcomma }} movies
-                        </span>
-                        <canvas class="movies_pie_chart" width="40" height="40"
-                                data-imported="{{ jobstats.movies_imported }}"
-                                data-processed="{{ jobstats.movies_processed }}"
-                                data-rejected="{{ jobstats.movies_rejected }}"></canvas>
-                    </div>
-                {% endif %}
-                <!-- Legend (always shown; colours match JS chart colours) -->
-                <div class="flex flex-col self-end">
-                    <div class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-sm bg-streamring"></span>
-                        <span class="text-[10px] text-streamsubtle">imported</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-sm bg-streamaccent"></span>
-                        <span class="text-[10px] text-streamsubtle">processed</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-sm bg-streamrejected"></span>
-                        <span class="text-[10px] text-streamsubtle">rejected</span>
-=======
-        </div>
-    {% endif %}
-
-    <!-- Transient status overlays -->
-    {% include 'nice_stream/_panel_status_overlay.html' %}
-
-    <div class="flex flex-col h-full">
-
-        <!-- Header: status · title · zoom · stop/restart -->
-        {% include 'nice_stream/_panel_header.html' with panel_title="preprocessing" zoom_url="nice_lite:view_stream_preprocess_zoom" terminate_field="terminate_preprocess" restart_field="restart_preprocess" last_import=jobstats.last_movie_imported %}
-
-        <!-- Count tiles -->
-        <div class="grid grid-cols-2 gap-2 px-4 pt-2">
-            {% if jobstats.movies_processed|add:jobstats.movies_rejected == jobstats.movies_imported %}
-                {% include 'nice_stream/_count_tile.html' with count=jobstats.movies_processed label="mics processed" sublabel=jobstats.movies_imported sublabel_sep="/" %}
-            {% else %}
-                {% include 'nice_stream/_count_tile.html' with count=jobstats.movies_processed label="mics processed" sublabel=jobstats.movies_imported sublabel_sep="/" variant="action" %}
-            {% endif %}
-            {% include 'nice_stream/_count_tile.html' with count=jobstats.movies_rejected  label="mics rejected"  sublabel=jobstats.movies_imported sublabel_sep="/" variant="rejected" %}
-        </div>
-
-        <!-- Histogram slider -->
-        {% if "histograms" in jobstats %}
-            <div class="flex flex-col px-4 pt-2 flex-shrink-0">
-
-                <span id="histogram_label" class="text-[10px] text-streamlabel mb-1 transition-opacity duration-150"></span>
-
-                <div class="flex items-center gap-1">
-
-                    {% include 'nice_stream/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
-
-                    <div id="histogram_slider" class="flex flex-1 flex-row overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-
-                        {% if "ctfres" in jobstats.histograms %}
-                            {% include 'nice_stream/_histogram_slide.html' with label="CTF resolution" canvas_class="ctfres_histogram" labels=jobstats.histograms.ctfres.labels values=jobstats.histograms.ctfres.data savedval=jobstats.cutoff_ctf_res form_id="update_preprocess_ctfres" form_field="ctfres" no_label=True %}
-                        {% endif %}
-
-                        {% if "astig" in jobstats.histograms %}
-                            {% include 'nice_stream/_histogram_slide.html' with label="astigmatism" canvas_class="astig_histogram" labels=jobstats.histograms.astig.labels values=jobstats.histograms.astig.data savedval=jobstats.cutoff_astigmatism form_id="update_preprocess_astig" form_field="astigmatism" no_label=True %}
-                        {% endif %}
-
-                        {% if "icefrac" in jobstats.histograms %}
-                            {% include 'nice_stream/_histogram_slide.html' with label="ice score" canvas_class="icescore_histogram" labels=jobstats.histograms.icefrac.labels values=jobstats.histograms.icefrac.data savedval=jobstats.cutoff_ice_score form_id="update_preprocess_icescore" form_field="icescore" no_label=True %}
-                        {% endif %}
-
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-                    </div>
-
-                    {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
-
-                </div>
-            </div>
-<<<<<<< HEAD
-
-            {% if "histograms" in jobstats and "ctfres" in jobstats.histograms %}
-                <div class="flex flex-col gap-1 flex-shrink-0">
-                    <span class="text-[10px] text-streamlabel">CTF resolution</span>
-                    <div class="h-[50px] w-[120px]">
-                        {# Hidden form: JS submits it when the user clicks a cutoff on the histogram. #}
-                        <form id="update_preprocess_ctfres" class="hidden" method="POST" action="{% url 'nice_lite:update_stream_parameters' %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="selected_job_id" value="{{ jobid }}">
-                            <input type="hidden" name="ctfres" value="0">
-                        </form>
-                        <canvas class="ctfres_histogram" width="120" height="50"
-                                data-savedval="{{ jobstats.cutoff_ctf_res }}"
-                                data-labels="{{ jobstats.histograms.ctfres.labels }}"
-                                data-values="{{ jobstats.histograms.ctfres.data }}"></canvas>
-                    </div>
-                </div>
-            {% endif %}
-
-            {% if "histograms" in jobstats and "astig" in jobstats.histograms %}
-                <div class="flex flex-col gap-1 flex-shrink-0">
-                    <span class="text-[10px] text-streamlabel">astigmatism</span>
-                    <div class="h-[50px] w-[120px]">
-                        <form id="update_preprocess_astig" class="hidden" method="POST" action="{% url 'nice_lite:update_stream_parameters' %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="selected_job_id" value="{{ jobid }}">
-                            <input type="hidden" name="astigmatism" value="0">
-                        </form>
-                        <canvas class="astig_histogram" width="120" height="50"
-                                data-savedval="{{ jobstats.cutoff_astigmatism }}"
-                                data-labels="{{ jobstats.histograms.astig.labels }}"
-                                data-values="{{ jobstats.histograms.astig.data }}"></canvas>
-                    </div>
-                </div>
-            {% endif %}
-
-            {% if "histograms" in jobstats and "icefrac" in jobstats.histograms %}
-                <div class="flex flex-col gap-1 flex-shrink-0">
-                    <span class="text-[10px] text-streamlabel">ice score</span>
-                    <div class="h-[50px] w-[120px]">
-                        <form id="update_preprocess_icescore" class="hidden" method="POST" action="{% url 'nice_lite:update_stream_parameters' %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="selected_job_id" value="{{ jobid }}">
-                            <input type="hidden" name="icescore" value="0">
-                        </form>
-                        <canvas class="icescore_histogram" width="120" height="50"
-                                data-savedval="{{ jobstats.cutoff_ice_score }}"
-                                data-labels="{{ jobstats.histograms.icefrac.labels }}"
-                                data-values="{{ jobstats.histograms.icefrac.data }}"></canvas>
-                    </div>
-                </div>
-            {% endif %}
-
-        </div>
-
-        <!-- Micrograph slider -->
-        {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
-            <div class="flex flex-col px-4 pt-3">
-=======
-        {% endif %}
-
-        <!-- Micrograph slider -->
-        {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
-            <div class="flex flex-col px-4 pt-1.5 pb-4">
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
                     </div>
 
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
@@ -252,22 +90,11 @@
         <!-- Micrograph slider -->
         {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
             <div class="flex flex-col px-4 pt-1.5 pb-4">
->>>>>>> Stashed changes
                 <span class="text-[10px] text-streamlabel mb-2">latest micrographs</span>
                 <div class="flex items-center gap-1">
 
                     <!-- Scroll left -->
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-                    <button type="button" class="text-streamaccent hover:text-streamtext transition-colors flex-shrink-0"
-                            onclick="scrlLeft(this, event)">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
-                            <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-=======
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
->>>>>>> Stashed changes
 
                     <!-- Slider viewport: flex-1 fills space between the two arrow buttons -->
                     <div id="micrograph_slider"
@@ -279,56 +106,19 @@
                                      oncontextmenu="showMenu(this, event)"
                                      data-ctfres="{{ micrograph.ctfres|floatformat:1 }}"
                                      data-dfx="{{ micrograph.dfx|floatformat:2 }}"
-<<<<<<< Updated upstream
-                                     data-dfy="{{ micrograph.dfy|floatformat:2 }}"
-                                     title="defocus: {{ micrograph.dfx|floatformat:2 }}/{{ micrograph.dfy|floatformat:2 }} μm&#013;CTF resolution: {{ micrograph.ctfres|floatformat:1 }}Å">
-                                    <div style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness)); background:url({% url 'nice_lite:image' micrograph.path %}); background-size:200% 100%; background-position:100% 0%"
-                                         class="h-[235px] w-[235px] rounded"></div>
-=======
-                    {% include 'nice_stream/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
-
-                    <!-- Slider viewport: flex-1 fills space between the two arrow buttons -->
-                    <div id="micrograph_slider"
-                         class="flex flex-1 flex-row overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
-                        {% for micrograph in jobstats.latest_micrographs %}
-                            {% if micrograph.path != '' %}
-                                <!-- flex-shrink-0 + w-full keeps each slide exactly one viewport wide -->
-                                <div class="flex-shrink-0 w-full aspect-square relative overflow-hidden snap-center"
-                                     oncontextmenu="showMenu(this, event)"
-                                     data-ctfres="{{ micrograph.ctfres|floatformat:1 }}"
-                                     data-dfx="{{ micrograph.dfx|floatformat:2 }}"
-=======
->>>>>>> Stashed changes
                                      data-dfy="{{ micrograph.dfy|floatformat:2 }}">
                                     <!-- Image is 200% wide, anchored right → shows the right half (micrograph) of the composite -->
                                     <img src="{% url 'nice_lite:image' micrograph.path %}"
                                          loading="lazy" alt=""
                                          class="rounded absolute inset-0 w-full h-full object-cover object-[100%]"
                                          style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness));">
-<<<<<<< Updated upstream
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
->>>>>>> Stashed changes
                                 </div>
                             {% endif %}
                         {% endfor %}
                     </div>
 
                     <!-- Scroll right -->
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-                    <button type="button" class="text-streamaccent hover:text-streamtext transition-colors flex-shrink-0"
-                            onclick="scrlRight(this, event)">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
-                            <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-=======
-                    {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
->>>>>>> Stashed changes
 
                 </div>
             </div>

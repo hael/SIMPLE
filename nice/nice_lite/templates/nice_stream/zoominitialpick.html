@@ -10,9 +10,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
     <script src={% static 'nice_stream/panelinitialpick.js' %}></script>
 </head>
-<body class="w-full h-screen flex flex-col bg-nice4bg text-nice4dark">
+<body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
-        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:view_stream' jobid %} title="back">
+        <a class="text-streamlabel hover:text-streamtext cursor-pointer" href={% url 'nice_lite:view_stream' jobid %} title="back">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                 <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
             </svg>
@@ -20,7 +20,7 @@
         <div class="px-[10px] text-[18px]">{{ displayid }} stream - initial picking</div>
     </div>
     <div class="w-full flex flex-row p-[10px]">
-        <div class="flex flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="flex flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border-[2px] border-streamline">
             <div class="flex flex-row">
                 {% if "micrographs_imported" in jobstats and "micrographs_accepted" in jobstats and "micrographs_rejected" in jobstats and jobstats.micrographs_imported > 0 %}
                     <div class="flex flex-col">
@@ -48,7 +48,7 @@
                     <div class="flex flex-col w-full overflow-hidden">
                         <div class="font-bold text-[12px] pl-[10px]">picking diameter</div>
                         <div class="flex flex-row justify-center items-center">
-                            <form class="flex flex-col text-nice4success hover:text-nice4header cursor-pointer" method="POST" action={% url 'nice_lite:decrease_moldiam_stream_initial_pick' jobid %}>
+                            <form class="flex flex-col text-streamring hover:text-streamlabel cursor-pointer" method="POST" action={% url 'nice_lite:decrease_moldiam_stream_initial_pick' jobid %}>
                                 {% csrf_token %}
                                 <button onclick="this.form.submit()" title="decrease range">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
@@ -56,15 +56,15 @@
                                     </svg>
                                 </button>
                             </form>
-                            <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_moldiam_stream_initial_pick' jobid %}>
+                            <form class="flex flex-col text-streamlabel items-center" method="POST" action={% url 'nice_lite:select_moldiam_stream_initial_pick' jobid %}>
                                 {% csrf_token %}
                                 <input type="hidden" name="diameter"></input>
                                 <div class="sticky flex">
-                                    <div title="refined" style="width:{{ refine_width }}%; margin-left:{{ refine_start }}%" class="bg-nice4success absolute h-[20px] rounded z-[-1]"></div>
+                                    <div title="refined" style="width:{{ refine_width }}%; margin-left:{{ refine_start }}%" class="bg-streamring absolute h-[20px] rounded z-[-1]"></div>
                                     <input type="range" id="picking_diameters" data-diameters='{{ jobstats.picking_diameters }}' min="1" max={{ jobstats.picking_diameters|length }} oninput="draw_overlay_coordinates()"></input>
                                 </div> 
                             </form>
-                            <form class="flex flex-col text-nice4success hover:text-nice4header cursor-pointer" method="POST" action={% url 'nice_lite:increase_moldiam_stream_initial_pick' jobid %}>
+                            <form class="flex flex-col text-streamring hover:text-streamlabel cursor-pointer" method="POST" action={% url 'nice_lite:increase_moldiam_stream_initial_pick' jobid %}>
                                 {% csrf_token %}
                                 <button onclick="this.form.submit()" title="increase range">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
@@ -74,7 +74,7 @@
                             </form> 
                         </div>
                         <div class="flex flex-row justify-center items-baseline">
-                            <form id="refinediameter" class="text-nice4header items-center" method="POST" action={% url 'nice_lite:refine_moldiam_stream_initial_pick' jobid %}>
+                            <form id="refinediameter" class="text-streamlabel items-center" method="POST" action={% url 'nice_lite:refine_moldiam_stream_initial_pick' jobid %}>
                                 {% csrf_token %}
                                 <input type="hidden" name="refine_diameter"></input>
                                 <button class="userbutton" type="button" onclick="refineDiameter()">refine diameter</button>
@@ -87,17 +87,17 @@
                 </div>
             {% endif %}
         </div>
-        <div class="flex ml-[10px] flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+        <div class="flex ml-[10px] flex-1 flex-col bg-streambar rounded-xl p-[5px] text-streamtext border-[2px] border-streamline overflow-hidden">
             <div class="font-bold text-[12px]">log</div>
-            <div class="logtext h-[200px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+            <div class="logtext h-[200px] overflow-auto mx-[10px] p-[5px] bg-streambg rounded">
                 <pre class="text-[10px]">{{log}}</pre>
             </div>
             <div class="font-bold text-[12px]">errors</div>
-            <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
+            <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-streambg rounded">
                 <pre class="text-[10px]">{{error}}</pre>
             </div>
         </div>
-        <div class="flex ml-[10px] flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
+        <div class="flex ml-[10px] flex-col bg-streambar rounded-xl p-[5px] text-streamtext border-[2px] border-streamline overflow-hidden">
             <div class="font-bold text-[12px] pl-[10px]">help</div>
             <div class="flex-1 w-[200px] overflow-auto mx-[10px] p-[5px]">
                 <div class="text-[10px]">some help text</div>
@@ -105,12 +105,12 @@
         </div>
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
-        <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border-[2px] border-streamline">
             <div class="font-bold text-[12px] pl-[10px]">latest micrographs</div> 
             {% if "latest_picked_micrographs" in jobstats and jobstats.latest_picked_micrographs|length > 0 %}
                 <div class="flex flex-col flex-1 overflow-y-auto">
                     <div class="flex flex-row items-center m-auto">
-                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlLeft(this, event)">
+                        <div class="h-[24px] w-[24px] text-streamlabel hover:text-streamtext cursor-pointer" onclick="scrlLeft(this, event)">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                 <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
                             </svg>
@@ -126,7 +126,7 @@
                             {% endfor %}
                         </div>
                         <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent z-2" onclick="hideMenu()">
-                            <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] p-[2px] rounded">
+                            <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-streambar m-[5px] border-streamline border-[2px] p-[2px] rounded">
                                 <div class="flex flex-col">
                                     <div class="font-bold">contrast</div>
                                     <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
@@ -141,7 +141,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="h-[24px] w-[24px] text-nice4header hover:text-nice4dark cursor-pointer" onclick="scrlRight(this, event)">
+                        <div class="h-[24px] w-[24px] text-streamlabel hover:text-streamtext cursor-pointer" onclick="scrlRight(this, event)">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                 <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
                             </svg>

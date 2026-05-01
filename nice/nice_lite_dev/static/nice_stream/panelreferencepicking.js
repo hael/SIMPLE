@@ -38,20 +38,6 @@ const stopProcess = (element)  => {
   }
 }
 
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-const scrlMicRight = ()  => {
-  const micrograph_slider = document.getElementById("micrographs_slider")
-  const rect = micrograph_slider.getBoundingClientRect();
-  micrograph_slider.scrollLeft += rect.width;
-  lastinteraction = Date.now();
-}
-
-const scrlMicLeft = ()  => {
-  const micrograph_slider = document.getElementById("micrographs_slider")
-  const rect = micrograph_slider.getBoundingClientRect();
-  micrograph_slider.scrollLeft -= rect.width;
-=======
 const scrlMicRight = (element, event) => {
   event.preventDefault();
   const slider = element.previousElementSibling;
@@ -60,25 +46,11 @@ const scrlMicRight = (element, event) => {
   lastinteraction = Date.now();
 }
 
-=======
-const scrlMicRight = (element, event) => {
-  event.preventDefault();
-  const slider = element.previousElementSibling;
-  const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
-  slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + 235;
-  lastinteraction = Date.now();
-}
-
->>>>>>> Stashed changes
 const scrlMicLeft = (element, event) => {
   event.preventDefault();
   const slider = element.nextElementSibling;
   const atStart = slider.scrollLeft <= 0;
   slider.scrollLeft = atStart ? slider.scrollWidth - slider.clientWidth : slider.scrollLeft - 235;
-<<<<<<< Updated upstream
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
->>>>>>> Stashed changes
   lastinteraction = Date.now();
 }
 

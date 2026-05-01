@@ -1,22 +1,4 @@
 {% comment %}
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-  panelmovies.html — movies stage panel, loaded inside an iframe by streamview.html.
-=======
-  panelmovies.html — collection panel, loaded inside an iframe by streamview.html.
->>>>>>> Stashed changes
-
-  Structure:
-    - Loading gauze: fades out once the page is ready.
-    - Card header: "collection" title with border-b.
-    - Collection parameters: kv rows for acquisition settings from args.
-    - Movies section: count tile + chart strip.
-
-  Context variables:
-    jobstats — dict with movies_imported, movies_rate, timeplots sub-dict.
-<<<<<<< Updated upstream
-    args     — dict with dir_movies, dir_meta, gainref.
-=======
   panelmovies.html — collection panel, loaded inside an iframe by streamview.html.
 
   Structure:
@@ -28,10 +10,6 @@
   Context variables:
     jobstats — dict with movies_imported, movies_rate, timeplots sub-dict.
     args     — dict with smpd, kv, cs, fraca, total_dose, dir_movies, etc.
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
-=======
-    args     — dict with smpd, kv, cs, fraca, total_dose, dir_movies, etc.
->>>>>>> Stashed changes
 {% endcomment %}
 {% load static %}
 {% load humanize %}
@@ -56,12 +34,7 @@
 
         <!-- Header -->
         <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-            <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">movies</p>
-=======
             <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">collection</p>
->>>>>>> Stashed changes
         </div>
 
         <!-- Count tiles -->
@@ -120,67 +93,6 @@
             </div>
         {% endif %}
 
-=======
-            <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">collection</p>
-        </div>
-
-        <!-- Count tiles -->
-        <div class="grid grid-cols-2 gap-2 px-4 pt-2">
-            {% if "movies_rate" in jobstats and "movies_imported" in jobstats %}{% include 'nice_stream/_count_tile.html' with count=jobstats.movies_imported label="movies" sublabel=jobstats.movies_rate sublabel_unit="/hour" %}{% endif %}
-        </div> 
-
-        <!-- Collection parameters -->
-        {% if args %}
-            <div class="grid grid-cols-[max-content_1fr] gap-x-3 px-4 py-2 flex-shrink-0">
-                {% if "smpd" in args %}{% with val=args.smpd|floatformat:3 %}{% include 'nice_stream/_kv_row.html' with label="pixel size" value=val unit="Å/px" %}{% endwith %}{% endif %}
-                {% if "smpd_downscale" in args %}{% with val=args.smpd_downscale|floatformat:3 %}{% include 'nice_stream/_kv_row.html' with label="downsampled pixel size" value=val unit="Å/px" %}{% endwith %}{% endif %}
-                {% if "kv" in args %}{% include 'nice_stream/_kv_row.html' with label="acceleration voltage" value=args.kv unit="kV" %}{% endif %}
-                {% if "cs" in args %}{% include 'nice_stream/_kv_row.html' with label="spherical aberation" value=args.cs unit="mm" %}{% endif %}
-                {% if "fraca" in args %}{% include 'nice_stream/_kv_row.html' with label="amplitude fraction" value=args.fraca %}{% endif %}
-                {% if "total_dose" in args %}{% include 'nice_stream/_kv_row.html' with label="total dose" value=args.total_dose unit="e⁻/Å²" %}{% endif %}
-                {% if "dir_movies" in args %}{% include 'nice_stream/_kv_row.html' with label="movies directory" value=args.dir_movies %}{% endif %}
-                {% if "dir_meta" in args %}{% include 'nice_stream/_kv_row.html' with label="metadata directory" value=args.dir_meta %}{% endif %}
-                {% if "gainref" in args %}{% include 'nice_stream/_kv_row.html' with label="gain reference" value=args.gainref %}{% endif %}
-            </div>
-        {% endif %}
-
-        <!-- Chart strip: snap-scroll slider, one plot visible at a time -->
-        {% if "timeplots" in jobstats %}
-            <div class="flex flex-col px-4 pt-2 flex-shrink-0">
-
-                <span id="histogram_label" class="text-[10px] text-streamlabel mb-1 transition-opacity duration-150"></span>
-
-                <div class="flex items-center gap-1">
-
-                    {% include 'nice_stream/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
-
-                    <div id="timeplots_slider" class="flex flex-1 flex-row overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
-
-                        {% if "astig" in jobstats.timeplots %}
-                            {% include 'nice_stream/_histogram_slide.html' with label="astigmatism" canvas_class="astig_histogram" labels=jobstats.timeplots.astig.labels values=jobstats.timeplots.astig.data values2=jobstats.timeplots.astig.data2 no_label=True %}
-                        {% endif %}
-
-                        {% if "ctfres" in jobstats.timeplots %}
-                            {% include 'nice_stream/_histogram_slide.html' with label="CTF resolution" canvas_class="ctfres_histogram" labels=jobstats.timeplots.ctfres.labels values=jobstats.timeplots.ctfres.data values2=jobstats.timeplots.ctfres.data2 no_label=True %}
-                        {% endif %}
-
-                        {% if "df" in jobstats.timeplots %}
-                            {% include 'nice_stream/_histogram_slide.html' with label="average defocus" canvas_class="df_histogram" labels=jobstats.timeplots.df.labels values=jobstats.timeplots.df.data values2=jobstats.timeplots.df.data2 no_label=True %}
-                        {% endif %}
-
-                        {% if "rate" in jobstats.timeplots %}
-                            {% include 'nice_stream/_histogram_slide.html' with label="exposure rate" canvas_class="rate_histogram" labels=jobstats.timeplots.rate.labels values=jobstats.timeplots.rate.data no_label=True %}
-                        {% endif %}
-
-                    </div>
-
-                    {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
-
-                </div>
-            </div>
-        {% endif %}
-
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
     </div>
 
 </body>
