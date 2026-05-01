@@ -179,6 +179,48 @@ The proposed path keeps the attractive accumulate-once/query-many structure of
 `polar=no` and `polar=obsfield`, but stores the intermediate object in the
 geometry where polar reference sections naturally live.
 
+## Bridge Design: Cartesian Accumulation With Spherical Cache
+
+An intermediate design worth testing before direct particle-to-shell
+accumulation is:
+
+```text
+particle Fourier planes
+  -> dense Cartesian observation field
+  -> spherical shell cache
+  -> polar refs
+```
+
+This keeps the current `polar=obsfield` insertion hot loop unchanged. After all
+particle insertions and distributed reductions are complete, assembly resamples
+the restored Cartesian observation field shell by shell onto an angular grid.
+Reference extraction then becomes an angular lookup on the shell cache instead
+of a repeated Cartesian KB gather for every requested central-section sample.
+
+The scientific status of this bridge is different from the direct shell
+estimator above. It should first be treated as a cache of the Cartesian
+obsfield estimator, not as a new estimator. That means the first validation
+question is whether the cached shell extraction reproduces current obsfield
+extraction closely enough to be useful. If it does, the cache can isolate the
+performance question: does paying one shell projection per assembly beat
+paying the Cartesian gather for every reference section?
+
+The cost model is:
+
+```text
+current obsfield extraction:
+    nrefs * polar_samples_per_ref * Cartesian_KB_stencil
+
+shell-cache extraction:
+    shell_cache_samples * Cartesian_KB_stencil
+    + nrefs * polar_samples_per_ref * angular_lookup
+```
+
+This bridge is attractive when the number of requested references is large
+enough that the one-time shell projection amortizes well. Its main drawbacks
+are the transient memory footprint of holding both representations and the
+extra interpolation step introduced by Cartesian-to-shell resampling.
+
 ## Distributed Execution Model
 
 Workers should not need global particle state.

@@ -246,6 +246,7 @@ type :: parameters
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: polar='no'           !< Polar restoration mode(no|yes|obsfield){no}
+    character(len=STDLEN)     :: obsfield_shell_cache='no' !< Experimental obsfield shell-cache extraction(no|yes|compare){no}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
@@ -812,6 +813,7 @@ contains
         call check_carg('platonic',       self%platonic)
         call check_carg('plot_key',       self%plot_key)
         call check_carg('polar',          self%polar)
+        call check_carg('obsfield_shell_cache', self%obsfield_shell_cache)
         call check_carg('postprocess',    self%postprocess)
         call check_carg('pre_norm',       self%pre_norm)
         call check_carg('prg',            self%prg)

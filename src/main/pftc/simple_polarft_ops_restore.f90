@@ -379,7 +379,9 @@ contains
         real,                intent(in)    :: update_frac
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
+        complex(dp), allocatable :: shell_even(:,:,:), shell_odd(:,:,:), shell_merg(:,:,:)
         type(string) :: volname, write_obsfield_vols_arg
+        character(len=STDLEN) :: obsfield_shell_cache_mode
         real(dp)    :: fsc(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_prior_state(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
@@ -391,6 +393,7 @@ contains
         integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2)
         integer     :: prev_pftsz, prev_nrefs
         logical     :: have_prev_refs, need_prev_refs, write_cartesian_vols
+        logical     :: compare_shell_cache
         if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
         nprojs = self%p_ptr%nspace
         if( mod(nprojs,2) /= 0 )then
@@ -429,6 +432,13 @@ contains
             write_obsfield_vols_arg = cline%get_carg('write_obsfield_vols')
             write_cartesian_vols = write_obsfield_vols_arg%to_char() == 'yes'
         endif
+        obsfield_shell_cache_mode = lowercase(trim(self%p_ptr%obsfield_shell_cache))
+        select case(trim(obsfield_shell_cache_mode))
+            case('no','yes','compare')
+            case DEFAULT
+                THROW_HARD('Unsupported obsfield_shell_cache argument: '//trim(self%p_ptr%obsfield_shell_cache))
+        end select
+        compare_shell_cache = trim(obsfield_shell_cache_mode) == 'compare'
         ! write down FRCs
         kspan  = [self%kfromto(1), self%interpklim]
         if( self%p_ptr%l_ml_reg )then
@@ -453,11 +463,34 @@ contains
                 call self%obsfields(state)%odd%calc_invtau2( kspan, fsc_prior_state, real(self%p_ptr%tau,dp), &
                     &prior_start, invtau2_odd )
             endif
-            call self%obsfields(state)%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
-                &invtau2_even, invtau2_odd, prior_start, &
-                &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
-                &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
-                &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
+            select case(trim(obsfield_shell_cache_mode))
+                case('yes')
+                    call self%obsfields(state)%extract_polar_shell_cache(reforis, nrefs, kspan, hcoords, kcoords, &
+                        &invtau2_even, invtau2_odd, prior_start, &
+                        &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
+                        &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
+                        &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
+                case DEFAULT
+                    call self%obsfields(state)%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
+                        &invtau2_even, invtau2_odd, prior_start, &
+                        &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
+                        &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
+                        &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
+                    if( compare_shell_cache )then
+                        allocate(shell_even(self%pftsz,kspan(2)-kspan(1)+1,nrefs), source=DCMPLX_ZERO)
+                        allocate(shell_odd( self%pftsz,kspan(2)-kspan(1)+1,nrefs), source=DCMPLX_ZERO)
+                        allocate(shell_merg(self%pftsz,kspan(2)-kspan(1)+1,nrefs), source=DCMPLX_ZERO)
+                        call self%obsfields(state)%extract_polar_shell_cache(reforis, nrefs, kspan, hcoords, kcoords, &
+                            &invtau2_even, invtau2_odd, prior_start, shell_even, shell_odd, shell_merg)
+                        call log_obsfield_shell_cache_delta(state, 'even', &
+                            &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), shell_even)
+                        call log_obsfield_shell_cache_delta(state, 'odd', &
+                            &self%pfts_odd(:,kspan(1):kspan(2),base+1:base+nrefs), shell_odd)
+                        call log_obsfield_shell_cache_delta(state, 'merged', &
+                            &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs), shell_merg)
+                        deallocate(shell_even, shell_odd, shell_merg)
+                    endif
+            end select
             if( write_cartesian_vols )then
                 ! Keep the Cartesian stage representative tied to the same restored
                 ! obsfield that generated the polar references at the stage handoff.
@@ -1031,5 +1064,42 @@ contains
             Mout = DCMPLX_ZERO
         end where
     end subroutine shell_floor_norm
+
+    subroutine log_obsfield_shell_cache_delta( state, label, ref, shell )
+        integer,     intent(in) :: state
+        character(len=*), intent(in) :: label
+        complex(dp), intent(in) :: ref(:,:,:), shell(:,:,:)
+        real(dp) :: diff_abs, max_abs, sumsq_diff, sumsq_ref, rms_diff, rms_ref, rel_rms
+        integer  :: i, j, k, nvals
+        max_abs    = 0.d0
+        sumsq_diff = 0.d0
+        sumsq_ref  = 0.d0
+        nvals      = size(ref)
+        do k = 1, size(ref,3)
+            do j = 1, size(ref,2)
+                do i = 1, size(ref,1)
+                    diff_abs   = abs(shell(i,j,k) - ref(i,j,k))
+                    max_abs    = max(max_abs, diff_abs)
+                    sumsq_diff = sumsq_diff + diff_abs * diff_abs
+                    sumsq_ref  = sumsq_ref + abs(ref(i,j,k)) * abs(ref(i,j,k))
+                enddo
+            enddo
+        enddo
+        if( nvals > 0 )then
+            rms_diff = sqrt(sumsq_diff / real(nvals,dp))
+            rms_ref  = sqrt(sumsq_ref  / real(nvals,dp))
+        else
+            rms_diff = 0.d0
+            rms_ref  = 0.d0
+        endif
+        if( rms_ref > DTINY )then
+            rel_rms = rms_diff / rms_ref
+        else
+            rel_rms = 0.d0
+        endif
+        write(logfhandle,'(A,I4,2X,A,2X,A,1PE12.4,2X,A,1PE12.4,2X,A,1PE12.4)') &
+            &'obsfield shell-cache compare state=', state, trim(label), &
+            &'max_abs=', max_abs, 'rms_abs=', rms_diff, 'rel_rms=', rel_rms
+    end subroutine log_obsfield_shell_cache_delta
 
 end submodule simple_polarft_ops_restore

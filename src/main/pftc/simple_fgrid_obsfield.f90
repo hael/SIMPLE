@@ -15,6 +15,7 @@ integer,  parameter :: OBSFIELD_NN_OMP_STRIDE     = 2
 integer,  parameter :: OBSFIELD_HEADER_SIZE       = 21
 integer,  parameter :: OBSFIELD_COUNT_FORMAT_SIGN = -1
 real(dp), parameter :: OBSFIELD_UNSAMPLED_FLOOR  = 1.d3
+integer,  parameter :: SHELL_CACHE_MIN_NTHETA     = 4
 
 ! Part-local Fourier-grid observation field. This is intentionally volume-like:
 ! particle Fourier components are accumulated into dense expanded-grid
@@ -64,10 +65,35 @@ type :: fgrid_obsfield_eo
     procedure, public :: insert_plane  => obsfield_eo_insert_plane
     procedure, public :: append_field  => obsfield_eo_append_field
     procedure, public :: extract_polar => obsfield_eo_extract_polar
+    procedure, public :: extract_polar_shell_cache => obsfield_eo_extract_polar_shell_cache
     procedure, public :: write_merged_volume => obsfield_eo_write_merged_volume
     procedure, public :: write         => obsfield_eo_write
     procedure, public :: read          => obsfield_eo_read
 end type fgrid_obsfield_eo
+
+! First-pass angular cache for Cartesian obsfield extraction. The sampling is a
+! simple shell ring grid so the cache path can be validated before committing to
+! a HEALPix-like angular backend.
+type :: spherical_shell_map
+    integer :: ntheta = 0
+    integer :: nphi   = 0
+    complex(dp), allocatable :: even(:,:)
+    complex(dp), allocatable :: odd(:,:)
+    real(dp),    allocatable :: den_even(:,:)
+    real(dp),    allocatable :: den_odd(:,:)
+end type spherical_shell_map
+
+type :: spherical_shell_cache_eo
+    private
+    integer :: kfromto(2) = 0
+    logical :: initialized = .false.
+    type(spherical_shell_map), allocatable :: shells(:)
+  contains
+    procedure :: new           => shell_cache_new
+    procedure :: kill          => shell_cache_kill
+    procedure :: build         => shell_cache_build_from_obsfield
+    procedure :: extract_polar => shell_cache_extract_polar
+end type spherical_shell_cache_eo
 
 contains
 
@@ -570,6 +596,25 @@ contains
         !$omp end parallel
     end subroutine obsfield_eo_extract_polar
 
+    subroutine obsfield_eo_extract_polar_shell_cache( self, eulspace, nrefs, kfromto, polar_x, polar_y, &
+            &invtau2_even, invtau2_odd, prior_start, pfts_even, pfts_odd, pfts_merg )
+        class(fgrid_obsfield_eo), intent(in)    :: self
+        class(oris),              intent(in)    :: eulspace
+        integer,                  intent(in)    :: nrefs, kfromto(2)
+        real(sp),                 intent(in)    :: polar_x(:,:), polar_y(:,:)
+        real(dp),                 intent(in)    :: invtau2_even(kfromto(1):kfromto(2))
+        real(dp),                 intent(in)    :: invtau2_odd( kfromto(1):kfromto(2))
+        integer,                  intent(in)    :: prior_start
+        complex(dp),              intent(inout) :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
+        type(spherical_shell_cache_eo) :: cache
+        pfts_even(:,:,1:nrefs) = DCMPLX_ZERO
+        pfts_odd( :,:,1:nrefs) = DCMPLX_ZERO
+        pfts_merg(:,:,1:nrefs) = DCMPLX_ZERO
+        call cache%build(self, kfromto, invtau2_even, invtau2_odd, prior_start)
+        call cache%extract_polar(eulspace, nrefs, polar_x, polar_y, pfts_even, pfts_odd, pfts_merg)
+        call cache%kill
+    end subroutine obsfield_eo_extract_polar_shell_cache
+
     subroutine obsfield_eo_write_merged_volume( self, fname, box, smpd, kfromto, invtau2_even, invtau2_odd, &
             &prior_start, mag_correction )
         class(fgrid_obsfield_eo), intent(in) :: self
@@ -662,6 +707,292 @@ contains
         value     = self%grid_num(h,k,l) / denom
         have_cell = .true.
     end subroutine obsfield_restored_cell
+
+    subroutine shell_grid_dims( shell, ntheta, nphi )
+        integer, intent(in)  :: shell
+        integer, intent(out) :: ntheta, nphi
+        ntheta = max(SHELL_CACHE_MIN_NTHETA, 2*shell + 1)
+        nphi   = 2 * ntheta
+    end subroutine shell_grid_dims
+
+    subroutine shell_cache_new( self, kfromto )
+        class(spherical_shell_cache_eo), intent(inout) :: self
+        integer,                         intent(in)    :: kfromto(2)
+        integer :: shell, ishell, ntheta, nphi
+        call self%kill
+        if( kfromto(1) > kfromto(2) ) THROW_HARD('invalid k-range; shell_cache_new')
+        allocate(self%shells(kfromto(2)-kfromto(1)+1))
+        do shell = kfromto(1), kfromto(2)
+            ishell = shell - kfromto(1) + 1
+            call shell_grid_dims(shell, ntheta, nphi)
+            self%shells(ishell)%ntheta = ntheta
+            self%shells(ishell)%nphi   = nphi
+            allocate(self%shells(ishell)%even(ntheta,nphi), source=DCMPLX_ZERO)
+            allocate(self%shells(ishell)%odd( ntheta,nphi), source=DCMPLX_ZERO)
+            allocate(self%shells(ishell)%den_even(ntheta,nphi), source=0.d0)
+            allocate(self%shells(ishell)%den_odd( ntheta,nphi), source=0.d0)
+        enddo
+        self%kfromto     = kfromto
+        self%initialized = .true.
+    end subroutine shell_cache_new
+
+    subroutine shell_cache_kill( self )
+        class(spherical_shell_cache_eo), intent(inout) :: self
+        integer :: ishell
+        if( allocated(self%shells) )then
+            do ishell = 1, size(self%shells)
+                if( allocated(self%shells(ishell)%even)     ) deallocate(self%shells(ishell)%even)
+                if( allocated(self%shells(ishell)%odd)      ) deallocate(self%shells(ishell)%odd)
+                if( allocated(self%shells(ishell)%den_even) ) deallocate(self%shells(ishell)%den_even)
+                if( allocated(self%shells(ishell)%den_odd)  ) deallocate(self%shells(ishell)%den_odd)
+            enddo
+            deallocate(self%shells)
+        endif
+        self%kfromto     = 0
+        self%initialized = .false.
+    end subroutine shell_cache_kill
+
+    subroutine shell_cache_build_from_obsfield( self, obs, kfromto, invtau2_even, invtau2_odd, prior_start )
+        class(spherical_shell_cache_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo),        intent(in)    :: obs
+        integer,                         intent(in)    :: kfromto(2), prior_start
+        real(dp),                        intent(in)    :: invtau2_even(kfromto(1):kfromto(2))
+        real(dp),                        intent(in)    :: invtau2_odd( kfromto(1):kfromto(2))
+        complex(dp) :: val
+        real(dp)    :: den, theta, phi, sint, cost
+        real(sp)    :: loc(3)
+        real(sp), allocatable :: w(:,:,:)
+        integer     :: shell, ishell, itheta, iphi, ntheta, nphi, wdim_l
+        logical     :: have_even, have_odd, have_cell
+        if( .not. obs%even%initialized .or. .not. obs%odd%initialized )then
+            THROW_HARD('obsfield not initialized; shell_cache_build_from_obsfield')
+        endif
+        if( .not. obs%even%compatible_with(obs%odd) )then
+            THROW_HARD('incompatible even/odd obsfields; shell_cache_build_from_obsfield')
+        endif
+        call self%new(kfromto)
+        have_even = obs%even%nobs > 0
+        have_odd  = obs%odd%nobs  > 0
+        if( .not. have_even .and. .not. have_odd ) return
+        wdim_l = obs%even%wdim
+        !$omp parallel default(shared) private(shell,ishell,itheta,iphi,ntheta,nphi,theta,phi,sint,cost,loc,w,&
+        !$omp& val,den,have_cell) proc_bind(close)
+        allocate(w(wdim_l,wdim_l,wdim_l))
+        !$omp do schedule(dynamic)
+        do shell = kfromto(1), kfromto(2)
+            ishell = shell - kfromto(1) + 1
+            ntheta = self%shells(ishell)%ntheta
+            nphi   = self%shells(ishell)%nphi
+            do itheta = 1, ntheta
+                theta = DPI * (real(itheta,dp) - 0.5d0) / real(ntheta,dp)
+                sint  = sin(theta)
+                cost  = cos(theta)
+                do iphi = 1, nphi
+                    phi    = DTWOPI * real(iphi-1,dp) / real(nphi,dp)
+                    loc(1) = real(real(shell,dp) * sint * cos(phi), sp)
+                    loc(2) = real(real(shell,dp) * sint * sin(phi), sp)
+                    loc(3) = real(real(shell,dp) * cost, sp)
+                    if( have_even )then
+                        call obsfield_gather_restored_at(obs%even, loc, kfromto, invtau2_even, prior_start, &
+                            &w, val, den, have_cell)
+                        if( have_cell )then
+                            self%shells(ishell)%even(itheta,iphi)     = val
+                            self%shells(ishell)%den_even(itheta,iphi) = den
+                        endif
+                    endif
+                    if( have_odd )then
+                        call obsfield_gather_restored_at(obs%odd, loc, kfromto, invtau2_odd, prior_start, &
+                            &w, val, den, have_cell)
+                        if( have_cell )then
+                            self%shells(ishell)%odd(itheta,iphi)     = val
+                            self%shells(ishell)%den_odd(itheta,iphi) = den
+                        endif
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end do
+        deallocate(w)
+        !$omp end parallel
+    end subroutine shell_cache_build_from_obsfield
+
+    subroutine obsfield_gather_restored_at( self, loc, kfromto, invtau2, prior_start, w, value, denw, have_value )
+        class(fgrid_obs_field), intent(in)    :: self
+        real(sp),               intent(in)    :: loc(3)
+        integer,                intent(in)    :: kfromto(2), prior_start
+        real(dp),               intent(in)    :: invtau2(kfromto(1):kfromto(2))
+        real(sp),               intent(inout) :: w(:,:,:)
+        complex(dp),            intent(out)   :: value
+        real(dp),               intent(out)   :: denw
+        logical,                intent(out)   :: have_value
+        complex(dp) :: acc, cell_num
+        real(dp)    :: denom, prior, wd
+        integer     :: win1_1, win1_2, win1_3, c1, c2, c3, a1, a2, a3
+        integer     :: l, m, n, iwinsz_l, wdim_l, lim1_lo, shell
+        integer     :: gl_lo1, gl_lo2, gl_lo3, gl_hi1, gl_hi2, gl_hi3
+        logical     :: l_conj
+        value      = DCMPLX_ZERO
+        denw       = 0.d0
+        have_value = .false.
+        if( self%nobs < 1 ) return
+        iwinsz_l = self%iwinsz
+        wdim_l   = self%wdim
+        lim1_lo  = self%lims(1,1)
+        gl_lo1   = self%grid_lims(1,1); gl_hi1 = self%grid_lims(1,2)
+        gl_lo2   = self%grid_lims(2,1); gl_hi2 = self%grid_lims(2,2)
+        gl_lo3   = self%grid_lims(3,1); gl_hi3 = self%grid_lims(3,2)
+        win1_1   = nint(loc(1)) - iwinsz_l
+        win1_2   = nint(loc(2)) - iwinsz_l
+        win1_3   = nint(loc(3)) - iwinsz_l
+        call self%kb%apod_mat_3d_fast(loc, iwinsz_l, wdim_l, w)
+        acc = DCMPLX_ZERO
+        do n = 1, wdim_l
+            c3 = win1_3 + n - 1
+            if( c3 < gl_lo3 .or. c3 > gl_hi3 ) cycle
+            do m = 1, wdim_l
+                c2 = win1_2 + m - 1
+                if( c2 < gl_lo2 .or. c2 > gl_hi2 ) cycle
+                do l = 1, wdim_l
+                    c1     = win1_1 + l - 1
+                    wd     = real(w(l,m,n), dp)
+                    l_conj = c1 < lim1_lo
+                    if( l_conj )then
+                        a1 = -c1; a2 = -c2; a3 = -c3
+                        if( a1 < gl_lo1 .or. a1 > gl_hi1 ) cycle
+                        if( self%grid_cnt(a1,a2,a3) < 1 ) cycle
+                        shell = nint(sqrt(real(a1*a1 + a2*a2 + a3*a3, dp)))
+                        prior = 0.d0
+                        if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
+                        denom = self%grid_den(a1,a2,a3) + prior
+                        if( shell >= kfromto(1) .and. shell <= kfromto(2) .and. &
+                            &shell >= prior_start .and. prior <= DTINY )then
+                            denom = denom + unsampled_floor(self%grid_den(a1,a2,a3))
+                        endif
+                        if( denom <= DTINY ) cycle
+                        cell_num = conjg(self%grid_num(a1,a2,a3))
+                    else
+                        if( c1 > gl_hi1 ) cycle
+                        if( self%grid_cnt(c1,c2,c3) < 1 ) cycle
+                        shell = nint(sqrt(real(c1*c1 + c2*c2 + c3*c3, dp)))
+                        prior = 0.d0
+                        if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
+                        denom = self%grid_den(c1,c2,c3) + prior
+                        if( shell >= kfromto(1) .and. shell <= kfromto(2) .and. &
+                            &shell >= prior_start .and. prior <= DTINY )then
+                            denom = denom + unsampled_floor(self%grid_den(c1,c2,c3))
+                        endif
+                        if( denom <= DTINY ) cycle
+                        cell_num = self%grid_num(c1,c2,c3)
+                    endif
+                    acc  = acc + wd * cell_num / denom
+                    denw = denw + wd * denom
+                enddo
+            enddo
+        enddo
+        if( denw > DTINY )then
+            value      = acc
+            have_value = .true.
+        endif
+    end subroutine obsfield_gather_restored_at
+
+    subroutine shell_cache_extract_polar( self, eulspace, nrefs, polar_x, polar_y, pfts_even, pfts_odd, pfts_merg )
+        class(spherical_shell_cache_eo), intent(in)    :: self
+        class(oris),                     intent(in)    :: eulspace
+        integer,                         intent(in)    :: nrefs
+        real(sp),                        intent(in)    :: polar_x(:,:), polar_y(:,:)
+        complex(dp),                     intent(inout) :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
+        complex(dp) :: val_even, val_odd
+        real(dp)    :: den_even, den_odd, denom_weight
+        real(sp)    :: R(3,3), loc(3), px, py
+        integer     :: iproj, irot, shell, ishell, kloc, pftsz
+        if( .not. self%initialized ) return
+        pftsz = size(polar_x,1)
+        pfts_even(:,:,1:nrefs) = DCMPLX_ZERO
+        pfts_odd( :,:,1:nrefs) = DCMPLX_ZERO
+        pfts_merg(:,:,1:nrefs) = DCMPLX_ZERO
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+        !$omp private(iproj,R,shell,ishell,kloc,irot,px,py,loc,val_even,val_odd,den_even,den_odd,denom_weight)
+        do iproj = 1, nrefs
+            R = eulspace%get_mat(iproj)
+            do shell = self%kfromto(1), self%kfromto(2)
+                ishell = shell - self%kfromto(1) + 1
+                kloc   = ishell
+                do irot = 1, pftsz
+                    px     = polar_x(irot,kloc)
+                    py     = polar_y(irot,kloc)
+                    loc(1) = px*R(1,1) + py*R(2,1)
+                    loc(2) = px*R(1,2) + py*R(2,2)
+                    loc(3) = px*R(1,3) + py*R(2,3)
+                    call shell_map_lookup(self%shells(ishell), loc, val_even, val_odd, den_even, den_odd)
+                    pfts_even(irot,kloc,iproj) = val_even
+                    pfts_odd( irot,kloc,iproj) = val_odd
+                    denom_weight = den_even + den_odd
+                    if( denom_weight > DTINY )then
+                        pfts_merg(irot,kloc,iproj) = (val_even * den_even + val_odd * den_odd) / denom_weight
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine shell_cache_extract_polar
+
+    subroutine shell_map_lookup( map, loc, val_even, val_odd, den_even, den_odd )
+        type(spherical_shell_map), intent(in)  :: map
+        real(sp),                  intent(in)  :: loc(3)
+        complex(dp),               intent(out) :: val_even, val_odd
+        real(dp),                  intent(out) :: den_even, den_odd
+        real(dp) :: x, y, z, r, theta, phi, u, v, ft, fp
+        real(dp) :: w00, w10, w01, w11
+        integer  :: it0, it1, ip0, ip1
+        val_even = DCMPLX_ZERO
+        val_odd  = DCMPLX_ZERO
+        den_even = 0.d0
+        den_odd  = 0.d0
+        if( map%ntheta < 1 .or. map%nphi < 1 ) return
+        x = real(loc(1),dp)
+        y = real(loc(2),dp)
+        z = real(loc(3),dp)
+        r = sqrt(x*x + y*y + z*z)
+        if( r <= DTINY ) return
+        z = max(-1.d0, min(1.d0, z / r))
+        theta = acos(z)
+        phi   = atan2(y, x)
+        if( phi < 0.d0 ) phi = phi + DTWOPI
+        u = theta * real(map%ntheta,dp) / DPI + 0.5d0
+        if( u <= 1.d0 )then
+            it0 = 1; it1 = 1; ft = 0.d0
+        elseif( u >= real(map%ntheta,dp) )then
+            it0 = map%ntheta; it1 = map%ntheta; ft = 0.d0
+        else
+            it0 = int(floor(u))
+            it1 = it0 + 1
+            ft  = u - real(it0,dp)
+        endif
+        v   = phi * real(map%nphi,dp) / DTWOPI + 1.d0
+        ip0 = int(floor(v))
+        fp  = v - real(ip0,dp)
+        if( ip0 < 1 )then
+            ip0 = 1
+            fp  = 0.d0
+        elseif( ip0 > map%nphi )then
+            ip0 = 1
+            fp  = 0.d0
+        endif
+        ip1 = ip0 + 1
+        if( ip1 > map%nphi ) ip1 = 1
+        w00 = (1.d0 - ft) * (1.d0 - fp)
+        w10 = ft * (1.d0 - fp)
+        w01 = (1.d0 - ft) * fp
+        w11 = ft * fp
+        val_even = w00 * map%even(it0,ip0) + w10 * map%even(it1,ip0) + &
+            &w01 * map%even(it0,ip1) + w11 * map%even(it1,ip1)
+        val_odd = w00 * map%odd(it0,ip0) + w10 * map%odd(it1,ip0) + &
+            &w01 * map%odd(it0,ip1) + w11 * map%odd(it1,ip1)
+        den_even = w00 * map%den_even(it0,ip0) + w10 * map%den_even(it1,ip0) + &
+            &w01 * map%den_even(it0,ip1) + w11 * map%den_even(it1,ip1)
+        den_odd = w00 * map%den_odd(it0,ip0) + w10 * map%den_odd(it1,ip0) + &
+            &w01 * map%den_odd(it0,ip1) + w11 * map%den_odd(it1,ip1)
+    end subroutine shell_map_lookup
 
     integer function obsfield_get_nobs( self )
         class(fgrid_obs_field), intent(in) :: self
