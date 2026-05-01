@@ -941,8 +941,9 @@ contains
         real(sp),                  intent(in)  :: loc(3)
         complex(dp),               intent(out) :: val_even, val_odd
         real(dp),                  intent(out) :: den_even, den_odd
+        complex(dp) :: vals(4)
         real(dp) :: x, y, z, r, theta, phi, u, v, ft, fp
-        real(dp) :: w00, w10, w01, w11
+        real(dp) :: w00, w10, w01, w11, weights(4), dens(4)
         integer  :: it0, it1, ip0, ip1
         val_even = DCMPLX_ZERO
         val_odd  = DCMPLX_ZERO
@@ -984,15 +985,36 @@ contains
         w10 = ft * (1.d0 - fp)
         w01 = (1.d0 - ft) * fp
         w11 = ft * fp
-        val_even = w00 * map%even(it0,ip0) + w10 * map%even(it1,ip0) + &
-            &w01 * map%even(it0,ip1) + w11 * map%even(it1,ip1)
-        val_odd = w00 * map%odd(it0,ip0) + w10 * map%odd(it1,ip0) + &
-            &w01 * map%odd(it0,ip1) + w11 * map%odd(it1,ip1)
-        den_even = w00 * map%den_even(it0,ip0) + w10 * map%den_even(it1,ip0) + &
-            &w01 * map%den_even(it0,ip1) + w11 * map%den_even(it1,ip1)
-        den_odd = w00 * map%den_odd(it0,ip0) + w10 * map%den_odd(it1,ip0) + &
-            &w01 * map%den_odd(it0,ip1) + w11 * map%den_odd(it1,ip1)
+        weights = [w00, w10, w01, w11]
+        vals    = [map%even(it0,ip0), map%even(it1,ip0), map%even(it0,ip1), map%even(it1,ip1)]
+        dens    = [map%den_even(it0,ip0), map%den_even(it1,ip0), map%den_even(it0,ip1), map%den_even(it1,ip1)]
+        call shell_cache_blend_populated(vals, dens, weights, val_even, den_even)
+        vals    = [map%odd(it0,ip0), map%odd(it1,ip0), map%odd(it0,ip1), map%odd(it1,ip1)]
+        dens    = [map%den_odd(it0,ip0), map%den_odd(it1,ip0), map%den_odd(it0,ip1), map%den_odd(it1,ip1)]
+        call shell_cache_blend_populated(vals, dens, weights, val_odd, den_odd)
     end subroutine shell_map_lookup
+
+    pure subroutine shell_cache_blend_populated( vals, dens, weights, val, den )
+        complex(dp), intent(in)  :: vals(4)
+        real(dp),    intent(in)  :: dens(4), weights(4)
+        complex(dp), intent(out) :: val
+        real(dp),    intent(out) :: den
+        real(dp) :: wsum
+        integer  :: i
+        val  = DCMPLX_ZERO
+        den  = 0.d0
+        wsum = 0.d0
+        do i = 1,4
+            if( dens(i) <= DTINY ) cycle
+            val  = val  + weights(i) * vals(i)
+            den  = den  + weights(i) * dens(i)
+            wsum = wsum + weights(i)
+        enddo
+        if( wsum > DTINY )then
+            val = val / wsum
+            den = den / wsum
+        endif
+    end subroutine shell_cache_blend_populated
 
     integer function obsfield_get_nobs( self )
         class(fgrid_obs_field), intent(in) :: self

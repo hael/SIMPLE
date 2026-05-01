@@ -482,11 +482,11 @@ contains
                         allocate(shell_merg(self%pftsz,kspan(2)-kspan(1)+1,nrefs), source=DCMPLX_ZERO)
                         call self%obsfields(state)%extract_polar_shell_cache(reforis, nrefs, kspan, hcoords, kcoords, &
                             &invtau2_even, invtau2_odd, prior_start, shell_even, shell_odd, shell_merg)
-                        call log_obsfield_shell_cache_delta(state, 'even', &
+                        call log_obsfield_shell_cache_delta(state, 'even', kspan, &
                             &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), shell_even)
-                        call log_obsfield_shell_cache_delta(state, 'odd', &
+                        call log_obsfield_shell_cache_delta(state, 'odd', kspan, &
                             &self%pfts_odd(:,kspan(1):kspan(2),base+1:base+nrefs), shell_odd)
-                        call log_obsfield_shell_cache_delta(state, 'merged', &
+                        call log_obsfield_shell_cache_delta(state, 'merged', kspan, &
                             &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs), shell_merg)
                         deallocate(shell_even, shell_odd, shell_merg)
                     endif
@@ -1065,16 +1065,19 @@ contains
         end where
     end subroutine shell_floor_norm
 
-    subroutine log_obsfield_shell_cache_delta( state, label, ref, shell )
-        integer,     intent(in) :: state
+    subroutine log_obsfield_shell_cache_delta( state, label, kspan, ref, shell )
+        integer,     intent(in) :: state, kspan(2)
         character(len=*), intent(in) :: label
         complex(dp), intent(in) :: ref(:,:,:), shell(:,:,:)
         real(dp) :: diff_abs, max_abs, sumsq_diff, sumsq_ref, rms_diff, rms_ref, rel_rms
-        integer  :: i, j, k, nvals
+        real(dp) :: shell_max_abs, shell_sumsq_diff, shell_sumsq_ref, shell_rms_diff, shell_rms_ref, shell_rel_rms
+        integer  :: i, j, k, nvals, shell_nvals, ref_nz, shell_nz, shell_ref_nz, shell_shell_nz
         max_abs    = 0.d0
         sumsq_diff = 0.d0
         sumsq_ref  = 0.d0
         nvals      = size(ref)
+        ref_nz     = 0
+        shell_nz   = 0
         do k = 1, size(ref,3)
             do j = 1, size(ref,2)
                 do i = 1, size(ref,1)
@@ -1082,6 +1085,8 @@ contains
                     max_abs    = max(max_abs, diff_abs)
                     sumsq_diff = sumsq_diff + diff_abs * diff_abs
                     sumsq_ref  = sumsq_ref + abs(ref(i,j,k)) * abs(ref(i,j,k))
+                    if( abs(ref(i,j,k))   > DTINY ) ref_nz   = ref_nz   + 1
+                    if( abs(shell(i,j,k)) > DTINY ) shell_nz = shell_nz + 1
                 enddo
             enddo
         enddo
@@ -1097,9 +1102,39 @@ contains
         else
             rel_rms = 0.d0
         endif
-        write(logfhandle,'(A,I4,2X,A,2X,A,1PE12.4,2X,A,1PE12.4,2X,A,1PE12.4)') &
+        write(logfhandle,'(A,I4,2X,A,2X,A,1PE12.4,2X,A,1PE12.4,2X,A,1PE12.4,2X,A,I0,2X,A,I0)') &
             &'obsfield shell-cache compare state=', state, trim(label), &
-            &'max_abs=', max_abs, 'rms_abs=', rms_diff, 'rel_rms=', rel_rms
+            &'max_abs=', max_abs, 'rms_abs=', rms_diff, 'rel_rms=', rel_rms, &
+            &'ref_nz=', ref_nz, 'shell_nz=', shell_nz
+        shell_nvals = size(ref,1) * size(ref,3)
+        do j = 1, size(ref,2)
+            shell_max_abs    = 0.d0
+            shell_sumsq_diff = 0.d0
+            shell_sumsq_ref  = 0.d0
+            shell_ref_nz     = 0
+            shell_shell_nz   = 0
+            do k = 1, size(ref,3)
+                do i = 1, size(ref,1)
+                    diff_abs         = abs(shell(i,j,k) - ref(i,j,k))
+                    shell_max_abs    = max(shell_max_abs, diff_abs)
+                    shell_sumsq_diff = shell_sumsq_diff + diff_abs * diff_abs
+                    shell_sumsq_ref  = shell_sumsq_ref + abs(ref(i,j,k)) * abs(ref(i,j,k))
+                    if( abs(ref(i,j,k))   > DTINY ) shell_ref_nz   = shell_ref_nz   + 1
+                    if( abs(shell(i,j,k)) > DTINY ) shell_shell_nz = shell_shell_nz + 1
+                enddo
+            enddo
+            shell_rms_diff = sqrt(shell_sumsq_diff / real(shell_nvals,dp))
+            shell_rms_ref  = sqrt(shell_sumsq_ref  / real(shell_nvals,dp))
+            if( shell_rms_ref > DTINY )then
+                shell_rel_rms = shell_rms_diff / shell_rms_ref
+            else
+                shell_rel_rms = 0.d0
+            endif
+            write(logfhandle,'(A,I4,2X,A,2X,A,I4,2X,A,1PE12.4,2X,A,1PE12.4,2X,A,1PE12.4,2X,A,I0,2X,A,I0)') &
+                &'obsfield shell-cache shell state=', state, trim(label), 'k=', kspan(1)+j-1, &
+                &'max_abs=', shell_max_abs, 'rms_abs=', shell_rms_diff, 'rel_rms=', shell_rel_rms, &
+                &'ref_nz=', shell_ref_nz, 'shell_nz=', shell_shell_nz
+        enddo
     end subroutine log_obsfield_shell_cache_delta
 
 end submodule simple_polarft_ops_restore
