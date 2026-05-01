@@ -537,7 +537,7 @@ contains
         type(stream_http_communicator)  :: http_communicator
         type(ran_tabu)                  :: rt
         type(sp_project)                :: spproj
-        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)
+        integer,            allocatable :: states(:), ptcls_in_state(:)
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines, fnr, noris, i, nstks, noris_in_state
         integer                         :: state
@@ -571,16 +571,17 @@ contains
                 call pos%get_pinds(1,            'state', ptcls_in_state)
             endif
             noris_in_state = size(ptcls_in_state)
-            if( params%nran >= noris_in_state ) THROW_HARD('Random sample size (nran) too small, input a number larger than '//int2str(noris_in_state))
+            if( params%nran >= noris_in_state ) THROW_HARD('Random sample size (nran) too small, input a number larger than '//int2str(noris_in_state))            
             rt = ran_tabu(noris_in_state)
-            allocate(ptcls_rnd(params%nran), source=0)
-            call rt%ne_ran_iarr(ptcls_rnd)
+            call rt%shuffle(ptcls_in_state)
+            ptcls_in_state = ptcls_in_state(1:params%nran)
             call rt%kill
             ! allocate states and set the state-flags
             allocate(states(noris), source=0)
             do i=1,params%nran
-                states(ptcls_rnd(i)) = 1
+                states(ptcls_in_state(i)) = 1
             enddo
+            deallocate(ptcls_in_state)
         else if( cline%defined('state') )then
             call pos%get_pinds(params%state, 'state', ptcls_in_state, l_require_updated= .true.)
             noris_in_state = size(ptcls_in_state)
