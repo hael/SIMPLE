@@ -46,6 +46,8 @@ type :: fgrid_obs_field
     procedure, public  :: insert_plane_oversamp
     procedure, public  :: append_field           => obsfield_append_field
     procedure, public  :: blend_field            => obsfield_blend_field
+    procedure, public  :: restore_field          => obsfield_restore_field
+    procedure, public  :: blend_restored_field   => obsfield_blend_restored_field
     procedure, public  :: extract_polar          => obsfield_extract_polar
     procedure, public  :: calc_invtau2           => obsfield_calc_invtau2
     procedure, public  :: log_shell_budget_stats => obsfield_log_shell_budget_stats
@@ -68,6 +70,10 @@ type :: fgrid_obsfield_eo
     procedure, public :: insert_plane  => obsfield_eo_insert_plane
     procedure, public :: append_field  => obsfield_eo_append_field
     procedure, public :: blend_field   => obsfield_eo_blend_field
+    procedure, public :: restore_field => obsfield_eo_restore_field
+    procedure, public :: blend_restored_field => obsfield_eo_blend_restored_field
+    procedure, public :: insert_lowres_merged => obsfield_eo_insert_lowres_merged
+    procedure, public :: calc_fsc      => obsfield_eo_calc_fsc
     procedure, public :: extract_polar => obsfield_eo_extract_polar
     procedure, public :: log_shell_budget_stats => obsfield_eo_log_shell_budget_stats
     procedure, public :: write_merged_volume => obsfield_eo_write_merged_volume
@@ -344,9 +350,9 @@ contains
         class(fgrid_obs_field), intent(in)    :: prev
         real(dp),                intent(in)    :: update_frac
         real(dp) :: weight_prev
-        integer  :: lo(3), hi(3)
+        integer  :: lo(3), hi(3), gl_lo(3), gl_hi(3)
         integer  :: h, k, l, nobs_new
-        logical  :: l_intersection_subset
+        logical  :: l_intersection_subset, l_in_prev
         if( .not. self%initialized ) THROW_HARD('destination not initialized; obsfield_blend_field')
         if( .not. prev%initialized ) return
         if( self%pf /= prev%pf ) THROW_HARD('incompatible observation field oversampling; obsfield_blend_field')
@@ -354,38 +360,125 @@ contains
         weight_prev = 1.d0 - update_frac
         lo = max(self%grid_lims(:,1), prev%grid_lims(:,1))
         hi = min(self%grid_lims(:,2), prev%grid_lims(:,2))
-        if( any(hi < lo) )then
-            self%nobs = count(self%grid_obs)
-            return
-        endif
+        gl_lo = self%grid_lims(:,1)
+        gl_hi = self%grid_lims(:,2)
         l_intersection_subset = any(lo /= self%grid_lims(:,1)) .or. any(hi /= self%grid_lims(:,2)) .or. &
             &any(lo /= prev%grid_lims(:,1)) .or. any(hi /= prev%grid_lims(:,2))
-        if( l_intersection_subset .or. self%nyq /= prev%nyq .or. any(self%lims /= prev%lims) )then
+        if( any(hi < lo) .or. l_intersection_subset .or. self%nyq /= prev%nyq .or. any(self%lims /= prev%lims) )then
             write(logfhandle,'(A,2(A,I0),A,6(I0,1X),A,6(I0,1X),A,6(I0,1X))') &
                 &'WARNING: obsfield trailing blend uses grid intersection;', &
                 &' current_nyq=', self%nyq, ' prev_nyq=', prev%nyq, &
                 &' current_grid_lims=', self%grid_lims, ' prev_grid_lims=', prev%grid_lims, ' overlap=', lo, hi
         endif
         nobs_new = 0
-        !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l) reduction(+:nobs_new) proc_bind(close)
-        do l = lo(3), hi(3)
-            do k = lo(2), hi(2)
-                do h = lo(1), hi(1)
-                    self%grid_num(h,k,l) = update_frac * self%grid_num(h,k,l) + weight_prev * prev%grid_num(h,k,l)
-                    self%grid_den(h,k,l) = update_frac * self%grid_den(h,k,l) + weight_prev * prev%grid_den(h,k,l)
-                    self%grid_obs(h,k,l) = ((update_frac > DTINY) .and. self%grid_obs(h,k,l)) .or. &
-                        &((weight_prev > DTINY) .and. prev%grid_obs(h,k,l))
+        !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l,l_in_prev) &
+        !$omp& reduction(+:nobs_new) proc_bind(close)
+        do l = gl_lo(3), gl_hi(3)
+            do k = gl_lo(2), gl_hi(2)
+                do h = gl_lo(1), gl_hi(1)
+                    l_in_prev = (h >= lo(1) .and. h <= hi(1)) .and. &
+                        &(k >= lo(2) .and. k <= hi(2)) .and. &
+                        &(l >= lo(3) .and. l <= hi(3))
+                    if( l_in_prev )then
+                        self%grid_num(h,k,l) = update_frac * self%grid_num(h,k,l) + weight_prev * prev%grid_num(h,k,l)
+                        self%grid_den(h,k,l) = update_frac * self%grid_den(h,k,l) + weight_prev * prev%grid_den(h,k,l)
+                        self%grid_obs(h,k,l) = ((update_frac > DTINY) .and. self%grid_obs(h,k,l)) .or. &
+                            &((weight_prev > DTINY) .and. prev%grid_obs(h,k,l))
+                    else
+                        self%grid_num(h,k,l) = update_frac * self%grid_num(h,k,l)
+                        self%grid_den(h,k,l) = update_frac * self%grid_den(h,k,l)
+                        self%grid_obs(h,k,l) = (update_frac > DTINY) .and. self%grid_obs(h,k,l)
+                    endif
                     if( self%grid_obs(h,k,l) ) nobs_new = nobs_new + 1
                 enddo
             enddo
         enddo
         !$omp end parallel do
-        if( l_intersection_subset )then
-            self%nobs = count(self%grid_obs)
-        else
-            self%nobs = nobs_new
-        endif
+        self%nobs = nobs_new
     end subroutine obsfield_blend_field
+
+    subroutine obsfield_restore_field( self, kfromto, invtau2, prior_start )
+        class(fgrid_obs_field), intent(inout) :: self
+        integer,                intent(in)    :: kfromto(2), prior_start
+        real(dp),               intent(in)    :: invtau2(kfromto(1):kfromto(2))
+        real(dp) :: denom, prior
+        integer  :: h, k, l, shell, nobs_new
+        if( .not. self%initialized ) return
+        nobs_new = 0
+        !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l,shell,prior,denom) &
+        !$omp& reduction(+:nobs_new) proc_bind(close)
+        do l = self%grid_lims(3,1), self%grid_lims(3,2)
+            do k = self%grid_lims(2,1), self%grid_lims(2,2)
+                do h = self%grid_lims(1,1), self%grid_lims(1,2)
+                    if( .not. self%grid_obs(h,k,l) ) cycle
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    prior = 0.d0
+                    if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
+                    denom = self%grid_den(h,k,l) + prior
+                    if( shell >= kfromto(1) .and. shell <= kfromto(2) .and. &
+                        &shell >= prior_start .and. prior <= DTINY )then
+                        denom = denom + unsampled_floor(self%grid_den(h,k,l))
+                    endif
+                    if( denom <= DTINY )then
+                        self%grid_num(h,k,l) = DCMPLX_ZERO
+                        self%grid_den(h,k,l) = 0.d0
+                        self%grid_obs(h,k,l) = .false.
+                    else
+                        self%grid_num(h,k,l) = self%grid_num(h,k,l) / denom
+                        self%grid_den(h,k,l) = 1.d0
+                        nobs_new = nobs_new + 1
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        self%nobs = nobs_new
+    end subroutine obsfield_restore_field
+
+    subroutine obsfield_blend_restored_field( self, prev, update_frac )
+        class(fgrid_obs_field), intent(inout) :: self
+        class(fgrid_obs_field), intent(in)    :: prev
+        real(dp),                intent(in)    :: update_frac
+        real(dp) :: weight_prev
+        integer  :: lo(3), hi(3), h, k, l, nobs_new
+        logical  :: l_in_prev, l_obs
+        if( .not. self%initialized ) THROW_HARD('destination not initialized; obsfield_blend_restored_field')
+        if( .not. prev%initialized ) return
+        if( self%pf /= prev%pf ) THROW_HARD('incompatible observation field oversampling; obsfield_blend_restored_field')
+        weight_prev = 1.d0 - update_frac
+        lo = max(self%grid_lims(:,1), prev%grid_lims(:,1))
+        hi = min(self%grid_lims(:,2), prev%grid_lims(:,2))
+        nobs_new = 0
+        !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l,l_in_prev,l_obs) &
+        !$omp& reduction(+:nobs_new) proc_bind(close)
+        do l = self%grid_lims(3,1), self%grid_lims(3,2)
+            do k = self%grid_lims(2,1), self%grid_lims(2,2)
+                do h = self%grid_lims(1,1), self%grid_lims(1,2)
+                    l_in_prev = (h >= lo(1) .and. h <= hi(1)) .and. &
+                        &(k >= lo(2) .and. k <= hi(2)) .and. &
+                        &(l >= lo(3) .and. l <= hi(3))
+                    l_obs = ((update_frac > DTINY) .and. self%grid_obs(h,k,l))
+                    if( l_in_prev ) l_obs = l_obs .or. ((weight_prev > DTINY) .and. prev%grid_obs(h,k,l))
+                    if( l_obs )then
+                        self%grid_num(h,k,l) = update_frac * merge(self%grid_num(h,k,l), DCMPLX_ZERO, self%grid_obs(h,k,l))
+                        if( l_in_prev )then
+                            if( prev%grid_obs(h,k,l) ) self%grid_num(h,k,l) = self%grid_num(h,k,l) + &
+                                &weight_prev * prev%grid_num(h,k,l)
+                        endif
+                        self%grid_den(h,k,l) = 1.d0
+                        self%grid_obs(h,k,l) = .true.
+                        nobs_new = nobs_new + 1
+                    else
+                        self%grid_num(h,k,l) = DCMPLX_ZERO
+                        self%grid_den(h,k,l) = 0.d0
+                        self%grid_obs(h,k,l) = .false.
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        self%nobs = nobs_new
+    end subroutine obsfield_blend_restored_field
 
     subroutine obsfield_calc_invtau2( self, kfromto, fsc, fudge, prior_start, invtau2 )
         class(fgrid_obs_field), intent(in)  :: self
@@ -1133,6 +1226,116 @@ contains
         call self%even%blend_field(prev%even, update_frac)
         call self%odd%blend_field( prev%odd,  update_frac)
     end subroutine obsfield_eo_blend_field
+
+    subroutine obsfield_eo_restore_field( self, kfromto, invtau2_even, invtau2_odd, prior_start )
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        integer,                  intent(in)    :: kfromto(2), prior_start
+        real(dp),                 intent(in)    :: invtau2_even(kfromto(1):kfromto(2))
+        real(dp),                 intent(in)    :: invtau2_odd( kfromto(1):kfromto(2))
+        call self%even%restore_field(kfromto, invtau2_even, prior_start)
+        call self%odd%restore_field( kfromto, invtau2_odd,  prior_start)
+    end subroutine obsfield_eo_restore_field
+
+    subroutine obsfield_eo_blend_restored_field( self, prev, update_frac )
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo), intent(in)    :: prev
+        real(dp),                  intent(in)    :: update_frac
+        call self%even%blend_restored_field(prev%even, update_frac)
+        call self%odd%blend_restored_field( prev%odd,  update_frac)
+    end subroutine obsfield_eo_blend_restored_field
+
+    subroutine obsfield_eo_insert_lowres_merged( self, find )
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        integer,                  intent(in)    :: find
+        complex(dp) :: even_val, odd_val, merged_val
+        integer     :: h, k, l, shell, nobs_even, nobs_odd
+        logical     :: l_even_obs, l_odd_obs
+        if( find < 0 ) return
+        if( .not. self%even%initialized .or. .not. self%odd%initialized ) return
+        if( .not. self%even%compatible_with(self%odd) )then
+            THROW_HARD('incompatible even/odd obsfields; obsfield_eo_insert_lowres_merged')
+        endif
+        nobs_even = 0
+        nobs_odd  = 0
+        !$omp parallel do collapse(3) default(shared) schedule(static) &
+        !$omp& private(h,k,l,shell,l_even_obs,l_odd_obs,even_val,odd_val,merged_val) &
+        !$omp& reduction(+:nobs_even,nobs_odd) proc_bind(close)
+        do l = self%even%grid_lims(3,1), self%even%grid_lims(3,2)
+            do k = self%even%grid_lims(2,1), self%even%grid_lims(2,2)
+                do h = self%even%grid_lims(1,1), self%even%grid_lims(1,2)
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    if( shell <= find )then
+                        l_even_obs = self%even%grid_obs(h,k,l)
+                        l_odd_obs  = self%odd%grid_obs( h,k,l)
+                        if( l_even_obs .or. l_odd_obs )then
+                            even_val = merge(self%even%grid_num(h,k,l), DCMPLX_ZERO, l_even_obs)
+                            odd_val  = merge(self%odd%grid_num( h,k,l), DCMPLX_ZERO, l_odd_obs)
+                            merged_val = 0.5d0 * (even_val + odd_val)
+                            self%even%grid_num(h,k,l) = merged_val
+                            self%odd%grid_num( h,k,l) = merged_val
+                            self%even%grid_den(h,k,l) = 1.d0
+                            self%odd%grid_den( h,k,l) = 1.d0
+                            self%even%grid_obs(h,k,l) = .true.
+                            self%odd%grid_obs( h,k,l) = .true.
+                        endif
+                    endif
+                    if( self%even%grid_obs(h,k,l) ) nobs_even = nobs_even + 1
+                    if( self%odd%grid_obs( h,k,l) ) nobs_odd  = nobs_odd  + 1
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        self%even%nobs = nobs_even
+        self%odd%nobs  = nobs_odd
+    end subroutine obsfield_eo_insert_lowres_merged
+
+    subroutine obsfield_eo_calc_fsc( self, kfromto, fsc )
+        class(fgrid_obsfield_eo), intent(in)  :: self
+        integer,                  intent(in)  :: kfromto(2)
+        real(dp),                 intent(out) :: fsc(kfromto(1):kfromto(2))
+        complex(dp) :: even_val, odd_val
+        real(dp)    :: vare(kfromto(1):kfromto(2)), varo(kfromto(1):kfromto(2))
+        integer     :: lo(3), hi(3), h, k, l, shell
+        if( .not. self%even%initialized .or. .not. self%odd%initialized )then
+            fsc = 0.d0
+            return
+        endif
+        if( self%even%pf /= self%odd%pf )then
+            THROW_HARD('incompatible even/odd obsfield oversampling; obsfield_eo_calc_fsc')
+        endif
+        lo = max(self%even%grid_lims(:,1), self%odd%grid_lims(:,1))
+        hi = min(self%even%grid_lims(:,2), self%odd%grid_lims(:,2))
+        fsc  = 0.d0
+        vare = 0.d0
+        varo = 0.d0
+        if( any(hi < lo) ) return
+        !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l,shell,even_val,odd_val) &
+        !$omp& reduction(+:fsc,vare,varo) proc_bind(close)
+        do l = lo(3), hi(3)
+            do k = lo(2), hi(2)
+                do h = lo(1), hi(1)
+                    if( .not. self%even%grid_obs(h,k,l) ) cycle
+                    if( .not. self%odd%grid_obs( h,k,l) ) cycle
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                    if( self%even%grid_den(h,k,l) <= DTINY ) cycle
+                    if( self%odd%grid_den( h,k,l) <= DTINY ) cycle
+                    even_val = self%even%grid_num(h,k,l) / self%even%grid_den(h,k,l)
+                    odd_val  = self%odd%grid_num( h,k,l) / self%odd%grid_den( h,k,l)
+                    fsc(shell)  = fsc(shell)  + real(even_val * conjg(odd_val), dp)
+                    vare(shell) = vare(shell) + real(even_val * conjg(even_val), dp)
+                    varo(shell) = varo(shell) + real(odd_val  * conjg(odd_val),  dp)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        vare = vare * varo
+        where( vare > DTINY )
+            fsc = fsc / sqrt(vare)
+        elsewhere
+            fsc = 0.d0
+        end where
+    end subroutine obsfield_eo_calc_fsc
 
     subroutine obsfield_eo_write( self, fname )
         class(fgrid_obsfield_eo), intent(in) :: self

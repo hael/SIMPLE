@@ -128,7 +128,7 @@ contains
         class(shell_field_geom), intent(in) :: self
         character(len=*),        intent(in) :: label
         real(dp) :: mem_mb, min_support, max_support, budget_ratio
-        integer :: min_nodes, max_nodes
+        integer :: min_nodes, max_nodes, min_cart_cells, max_cart_cells, total_cart_cells
         if( .not. allocated(self%shell_nodes) ) return
         mem_mb = 0.d0
         if( allocated(self%node_dir) )then
@@ -145,6 +145,15 @@ contains
             &'total_nodes=', self%total_nodes, 'budget_ratio=', budget_ratio, 'nodes_min=', min_nodes, 'nodes_max=', max_nodes, &
             &'support_min_deg=', rad2deg(real(min_support)), &
             &'support_max_deg=', rad2deg(real(max_support)), 'dir_mem_mb=', mem_mb
+        if( allocated(self%cart_cells) )then
+            total_cart_cells = sum(self%cart_cells)
+            min_cart_cells   = minval(self%cart_cells)
+            max_cart_cells   = maxval(self%cart_cells)
+            write(logfhandle,'(A,1X,A,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0)') &
+                &'obsfield shell-geom cache', trim(label), 'nk=', self%nk, 'kmin=', self%kfromto(1), 'kmax=', self%kfromto(2), &
+                &'cart_budget=', self%cart_budget, 'cart_cells_sum=', total_cart_cells, &
+                &'cart_cells_min=', min_cart_cells, 'cart_cells_max=', max_cart_cells
+        endif
     end subroutine shell_geom_log_summary
 
     subroutine shell_geom_log_stats( self, label )

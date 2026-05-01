@@ -111,7 +111,7 @@ contains
         endif
         ! Wiener normalization
         call self%restore_references(reforis, pfts_even, pfts_odd, ctf2_even, ctf2_odd)
-        call average_lowres_eo_for_docking(self, fsc_boxcrop)
+        call insert_lowres_merged_refs(self, fsc_boxcrop)
         if( allocated(prev_sums_even) ) deallocate(prev_sums_even)
         if( allocated(prev_sums_odd)  ) deallocate(prev_sums_odd)
         if( allocated(prev_ctf2_even) ) deallocate(prev_ctf2_even)
@@ -375,15 +375,13 @@ contains
         real,                intent(in)    :: update_frac
         real(timer_int_kind), optional, intent(out) :: bench(:)
         type(class_frcs)         :: frcs
-        complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
         type(fgrid_obsfield_eo) :: prev_obsfield
         type(shell_field_geom) :: shell_geom
         type(sym) :: shell_sym
         type(string) :: obsfield_name, obsfield_tmp_name, volname, write_obsfield_vols_arg
         character(len=STDLEN) :: shell_mode, shell_label
         integer, allocatable :: shell_nodes(:), shell_cell_counts(:)
-        real(dp)    :: fsc(self%kfromto(1):self%interpklim)
-        real(dp)    :: fsc_prior_state(self%kfromto(1):self%interpklim)
+        real(dp)    :: fsc_prior_states(self%kfromto(1):self%interpklim,self%p_ptr%nstates)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
         real(dp)    :: invtau2_even(self%kfromto(1):self%interpklim), invtau2_odd(self%kfromto(1):self%interpklim)
         real(sp)    :: hcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
@@ -393,11 +391,10 @@ contains
         real(timer_int_kind) :: rt_prepare_prev_refs, rt_coord_setup, rt_shell_geom, rt_prev_read, rt_blend_prev
         real(timer_int_kind) :: rt_checkpoint_write, rt_calc_invtau2, rt_extract_polar, rt_write_volume
         real(timer_int_kind) :: rt_rename_obsfields, rt_mirror, rt_fsc_frc
-        real(timer_int_kind) :: rt_prepare_detail(8)
         integer(timer_int_kind) :: t_step
-        integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2), shell_cart_budget
-        integer     :: prev_pftsz, prev_nrefs
-        logical     :: have_prev_refs, have_prev_obsfields, need_prev_refs, write_cartesian_vols, use_trail_rec
+        integer     :: i, state, base, nprojs, nrefs, noris, prior_start, extract_prior_start, kspan(2), shell_cart_budget
+        integer     :: find4eoavg
+        logical     :: have_prev_obsfields, write_cartesian_vols, use_trail_rec
         rt_prepare_prev_refs = 0.
         rt_coord_setup       = 0.
         rt_shell_geom        = 0.
@@ -410,7 +407,6 @@ contains
         rt_rename_obsfields  = 0.
         rt_mirror            = 0.
         rt_fsc_frc           = 0.
-        rt_prepare_detail     = 0.
         if( present(bench) ) bench = 0.
         if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
         nprojs = self%p_ptr%nspace
@@ -425,25 +421,7 @@ contains
             THROW_HARD('not enough reference orientations for obsfield polar extraction')
         endif
         nrefs = nprojs / 2
-        prev_pftsz = 0
-        prev_nrefs = 0
-        need_prev_refs = self%p_ptr%l_ml_reg
-        have_prev_refs = need_prev_refs .and. file_exists(refine3D_polar_refs_fname('even')) .and. &
-            &file_exists(refine3D_polar_refs_fname('odd'))
-        if( have_prev_refs )then
-            call self%get_pft_array_dims(refine3D_polar_refs_fname('even'), prev_pftsz, nrefs=prev_nrefs)
-            have_prev_refs = (prev_pftsz == self%pftsz) .and. (prev_nrefs <= self%ncls) .and. &
-                &(mod(self%ncls,self%p_ptr%nstates) == 0) .and. (mod(prev_nrefs,self%p_ptr%nstates) == 0)
-        endif
         use_trail_rec = self%p_ptr%l_trail_rec
-        ! Previous restored references provide only the prior FSC/SSNR estimate
-        ! needed before obsfield extraction. The FSC written below is computed
-        ! from the current restored obsfield references after mirroring.
-        if( have_prev_refs )then
-            if( L_BENCH_GLOB ) t_step = tic()
-            call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd, rt_prepare_detail )
-            if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
-        endif
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
         else
@@ -502,43 +480,53 @@ contains
                 endif
             enddo
             if( .not. have_prev_obsfields )then
-                write(logfhandle,'(A)') 'WARNING: previous obsfields are unavailable; obsfield trailing reconstruction uses current fields as seed'
+                THROW_HARD('previous restored obsfields are required when trail_rec=yes; polar_cavger_normalize_obsfield_refs')
             endif
+        endif
+        fsc_prior_states = 0.d0
+        if( self%p_ptr%l_ml_reg )then
+            if( L_BENCH_GLOB ) t_step = tic()
+            do state = 1,self%p_ptr%nstates
+                if( use_trail_rec )then
+                    obsfield_name = refine3D_obsfield_fname(state)
+                    call prev_obsfield%read(obsfield_name)
+                    call prev_obsfield%calc_fsc(kspan, fsc_prior_states(:,state))
+                    call prev_obsfield%kill
+                else
+                    call self%obsfields(state)%calc_fsc(kspan, fsc_prior_states(:,state))
+                endif
+            enddo
+            if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
         endif
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
             obsfield_name = refine3D_obsfield_fname(state)
+            invtau2_even = 0.d0
+            invtau2_odd  = 0.d0
+            if( self%p_ptr%l_ml_reg )then
+                if( L_BENCH_GLOB ) t_step = tic()
+                call self%obsfields(state)%even%calc_invtau2(kspan, fsc_prior_states(:,state), real(self%p_ptr%tau,dp), &
+                    &prior_start, invtau2_even)
+                call self%obsfields(state)%odd%calc_invtau2( kspan, fsc_prior_states(:,state), real(self%p_ptr%tau,dp), &
+                    &prior_start, invtau2_odd )
+                if( L_BENCH_GLOB ) rt_calc_invtau2 = rt_calc_invtau2 + toc(t_step)
+            endif
+            call self%obsfields(state)%restore_field(kspan, invtau2_even, invtau2_odd, prior_start)
             if( have_prev_obsfields )then
                 if( L_BENCH_GLOB ) t_step = tic()
                 call prev_obsfield%read(obsfield_name)
                 if( L_BENCH_GLOB ) rt_prev_read = rt_prev_read + toc(t_step)
                 if( L_BENCH_GLOB ) t_step = tic()
-                call self%obsfields(state)%blend_field(prev_obsfield, ufrac_trec)
+                call self%obsfields(state)%blend_restored_field(prev_obsfield, ufrac_trec)
                 if( L_BENCH_GLOB ) rt_blend_prev = rt_blend_prev + toc(t_step)
                 call prev_obsfield%kill
             endif
-            obsfield_tmp_name = obsfield_name//'_tmp'
-            if( L_BENCH_GLOB ) t_step = tic()
-            call self%obsfields(state)%write(obsfield_tmp_name)
-            if( L_BENCH_GLOB ) rt_checkpoint_write = rt_checkpoint_write + toc(t_step)
-            if( have_prev_refs )then
-                call calc_fsc_from_refs(self, prev_even, prev_odd, base+1, base+nprojs, fsc_prior_state)
-            else
-                fsc_prior_state = 0.d0
-            endif
             invtau2_even = 0.d0
             invtau2_odd  = 0.d0
-            if( self%p_ptr%l_ml_reg )then
-                if( L_BENCH_GLOB ) t_step = tic()
-                call self%obsfields(state)%even%calc_invtau2(kspan, fsc_prior_state, real(self%p_ptr%tau,dp), &
-                    &prior_start, invtau2_even)
-                call self%obsfields(state)%odd%calc_invtau2( kspan, fsc_prior_state, real(self%p_ptr%tau,dp), &
-                    &prior_start, invtau2_odd )
-                if( L_BENCH_GLOB ) rt_calc_invtau2 = rt_calc_invtau2 + toc(t_step)
-            endif
+            extract_prior_start = self%interpklim + 1
             if( L_BENCH_GLOB ) t_step = tic()
             call self%obsfields(state)%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
-                &invtau2_even, invtau2_odd, prior_start, &
+                &invtau2_even, invtau2_odd, extract_prior_start, &
                 &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
@@ -549,37 +537,21 @@ contains
                 volname = refine3D_state_vol_fname(state)
                 if( L_BENCH_GLOB ) t_step = tic()
                 call self%obsfields(state)%write_merged_volume(volname, self%p_ptr%box_crop, self%p_ptr%smpd_crop, &
-                    &kspan, invtau2_even, invtau2_odd, prior_start, real(self%p_ptr%box))
+                    &kspan, invtau2_even, invtau2_odd, extract_prior_start, real(self%p_ptr%box))
                 if( L_BENCH_GLOB ) rt_write_volume = rt_write_volume + toc(t_step)
             endif
         enddo
-        if( L_BENCH_GLOB ) t_step = tic()
-        do state = 1,self%p_ptr%nstates
-            obsfield_name = refine3D_obsfield_fname(state)
-            obsfield_tmp_name = obsfield_name//'_tmp'
-            call simple_rename(obsfield_tmp_name, obsfield_name, overwrite=.false.)
-        enddo
-        if( L_BENCH_GLOB ) rt_rename_obsfields = rt_rename_obsfields + toc(t_step)
         if( write_cartesian_vols ) call volname%kill
-        call obsfield_name%kill
-        call obsfield_tmp_name%kill
         call prev_obsfield%kill
         call write_obsfield_vols_arg%kill
         if( L_BENCH_GLOB ) t_step = tic()
         call mirror_slices_obsfield( self, reforis )
         if( L_BENCH_GLOB ) rt_mirror = rt_mirror + toc(t_step)
         if( L_BENCH_GLOB ) t_step = tic()
-        call calc_fsc_from_refs(self, self%pfts_even, self%pfts_odd, 1, self%ncls, fsc)
-        fsc_boxcrop(                 :self%kfromto(1)) = 1.0
-        fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc(self%kfromto(1):self%interpklim))
-        if( self%interpklim < size(fsc_boxcrop) )then
-            fsc_boxcrop(self%interpklim+1:)            = 0.0
-        endif
-        call average_lowres_eo_for_docking(self, fsc_boxcrop)
         call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
-            call calc_fsc_from_refs(self, self%pfts_even, self%pfts_odd, base+1, base+nprojs, fsc_state)
+            call self%obsfields(state)%calc_fsc(kspan, fsc_state)
             fsc_boxcrop(                 :self%kfromto(1)) = 1.0
             fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc_state(self%kfromto(1):self%interpklim))
             if( self%interpklim < size(fsc_boxcrop) )then
@@ -590,10 +562,32 @@ contains
                 ! FRCs are set to the state-local FSC. to check if we are using those
                 call frcs%set_frc(i, fsc_boxcrop, state)
             enddo
+            call insert_lowres_merged_refs(self, fsc_boxcrop, base+1, base+nprojs, find4eoavg)
+            call self%obsfields(state)%insert_lowres_merged(find4eoavg)
+            obsfield_name = refine3D_obsfield_fname(state)
+            obsfield_tmp_name = obsfield_name//'_tmp'
+            if( L_BENCH_GLOB )then
+                rt_fsc_frc = rt_fsc_frc + toc(t_step)
+                t_step = tic()
+            endif
+            call self%obsfields(state)%write(obsfield_tmp_name)
+            if( L_BENCH_GLOB )then
+                rt_checkpoint_write = rt_checkpoint_write + toc(t_step)
+                t_step = tic()
+            endif
         enddo
         call frcs%write(string(FRCS_FILE))
         call frcs%kill
         if( L_BENCH_GLOB ) rt_fsc_frc = rt_fsc_frc + toc(t_step)
+        if( L_BENCH_GLOB ) t_step = tic()
+        do state = 1,self%p_ptr%nstates
+            obsfield_name = refine3D_obsfield_fname(state)
+            obsfield_tmp_name = obsfield_name//'_tmp'
+            call simple_rename(obsfield_tmp_name, obsfield_name, overwrite=.false.)
+        enddo
+        if( L_BENCH_GLOB ) rt_rename_obsfields = rt_rename_obsfields + toc(t_step)
+        call obsfield_name%kill
+        call obsfield_tmp_name%kill
         if( present(bench) )then
             if( size(bench) >= 1  ) bench(1)  = rt_prepare_prev_refs
             if( size(bench) >= 2  ) bench(2)  = rt_coord_setup
@@ -607,34 +601,33 @@ contains
             if( size(bench) >= 10 ) bench(10) = rt_rename_obsfields
             if( size(bench) >= 11 ) bench(11) = rt_mirror
             if( size(bench) >= 12 ) bench(12) = rt_fsc_frc
-            if( size(bench) >= 13 ) bench(13) = rt_prepare_detail(1)
-            if( size(bench) >= 14 ) bench(14) = rt_prepare_detail(2)
-            if( size(bench) >= 15 ) bench(15) = rt_prepare_detail(3)
-            if( size(bench) >= 16 ) bench(16) = rt_prepare_detail(4)
-            if( size(bench) >= 17 ) bench(17) = rt_prepare_detail(5)
-            if( size(bench) >= 18 ) bench(18) = rt_prepare_detail(6)
-            if( size(bench) >= 19 ) bench(19) = rt_prepare_detail(7)
-            if( size(bench) >= 20 ) bench(20) = rt_prepare_detail(8)
         endif
-        if( allocated(prev_even) ) deallocate(prev_even)
-        if( allocated(prev_odd)  ) deallocate(prev_odd)
     end subroutine polar_cavger_normalize_obsfield_refs
 
-    subroutine average_lowres_eo_for_docking( self, fsc_boxcrop )
+    subroutine insert_lowres_merged_refs( self, fsc_boxcrop, ref_first, ref_last, find4eoavg )
         class(polarft_calc), intent(inout) :: self
         real,                intent(in)    :: fsc_boxcrop(:)
-        integer :: find4eoavg
+        integer, optional,   intent(in)    :: ref_first, ref_last
+        integer, optional,   intent(out)   :: find4eoavg
+        integer :: first_ref, last_ref, find4eoavg_l
         ! Only this low-resolution range is averaged into both half maps.
         ! Higher-frequency even/odd references remain independently restored.
-        find4eoavg = max(K4EOAVGLB, calc_fourier_index(FREQ4EOAVG3D, self%p_ptr%box, self%p_ptr%smpd))
-        find4eoavg = min(find4eoavg, get_find_at_crit(fsc_boxcrop, FSC4EOAVG3D))
-        find4eoavg = min(self%interpklim, find4eoavg)
-        if( find4eoavg < self%kfromto(1) ) return
+        first_ref = 1
+        last_ref  = self%ncls
+        if( present(ref_first) ) first_ref = ref_first
+        if( present(ref_last)  ) last_ref  = ref_last
+        find4eoavg_l = max(K4EOAVGLB, calc_fourier_index(FREQ4EOAVG3D, self%p_ptr%box, self%p_ptr%smpd))
+        find4eoavg_l = min(find4eoavg_l, get_find_at_crit(fsc_boxcrop, FSC4EOAVG3D))
+        find4eoavg_l = min(self%interpklim, find4eoavg_l)
+        if( present(find4eoavg) ) find4eoavg = find4eoavg_l
+        if( find4eoavg_l < self%kfromto(1) ) return
         !$omp parallel workshare proc_bind(close)
-        self%pfts_even(:,self%kfromto(1):find4eoavg,:) = self%pfts_merg(:,self%kfromto(1):find4eoavg,:)
-        self%pfts_odd(:, self%kfromto(1):find4eoavg,:) = self%pfts_merg(:,self%kfromto(1):find4eoavg,:)
+        self%pfts_even(:,self%kfromto(1):find4eoavg_l,first_ref:last_ref) = &
+            &self%pfts_merg(:,self%kfromto(1):find4eoavg_l,first_ref:last_ref)
+        self%pfts_odd(:, self%kfromto(1):find4eoavg_l,first_ref:last_ref) = &
+            &self%pfts_merg(:,self%kfromto(1):find4eoavg_l,first_ref:last_ref)
         !$omp end parallel workshare
-    end subroutine average_lowres_eo_for_docking
+    end subroutine insert_lowres_merged_refs
 
     !>  \brief Generate the mirror slices for restored obsfield references
     !!         iref runs through the unique half (un-mirrored references), the
@@ -683,135 +676,6 @@ contains
         enddo
         !$omp end parallel do
     end subroutine mirror_slices_obsfield
-
-    !>  \brief local private routine for trailing reconstruction weighing
-    !!         and dimension checking/editing for polar modes
-    subroutine prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd, bench )
-        class(polarft_calc),       intent(in) :: self
-        type(oris),                intent(in) :: reforis
-        complex(dp), allocatable, intent(out) :: prev_even(:,:,:), prev_odd(:,:,:)
-        real(timer_int_kind), optional, intent(out) :: bench(:)
-        type(string) :: fname
-        type(sym)    :: symop
-        type(oris)   :: prev_eulspace
-        integer(timer_int_kind) :: t_step
-        real(timer_int_kind) :: rt_dim_read, rt_fast_read_even, rt_fast_read_odd, rt_remap_setup
-        real(timer_int_kind) :: rt_remap_read_even, rt_remap_copy_even, rt_remap_read_odd, rt_remap_copy_odd
-        integer      :: prev_pftsz, prev_klims(2), prev_nrefs, ks, ke
-        integer      :: current_nspace, prev_nspace
-        logical      :: l_pad
-        rt_dim_read        = 0.
-        rt_fast_read_even  = 0.
-        rt_fast_read_odd   = 0.
-        rt_remap_setup     = 0.
-        rt_remap_read_even = 0.
-        rt_remap_copy_even = 0.
-        rt_remap_read_odd  = 0.
-        rt_remap_copy_odd  = 0.
-        if( present(bench) ) bench = 0.
-        if( L_BENCH_GLOB ) t_step = tic()
-        call self%get_pft_array_dims(refine3D_polar_refs_fname('even'), prev_pftsz, prev_klims, prev_nrefs)
-        if( L_BENCH_GLOB ) rt_dim_read = rt_dim_read + toc(t_step)
-        ! PFT arrays are state-major blocks of per-projection obsfield sections.
-        ! The angular shell size must match; frequency ranges can be padded.
-        ! When per-state nspace grows, each current projection is sourced from
-        ! the closest previous projection in the same state.
-        if( (prev_nrefs == self%ncls) .and. (prev_pftsz == self%pftsz) )then
-            if( L_BENCH_GLOB ) t_step = tic()
-            call self%read_pft_array(refine3D_polar_refs_fname('even'), prev_even)
-            if( L_BENCH_GLOB ) rt_fast_read_even = rt_fast_read_even + toc(t_step)
-            if( L_BENCH_GLOB ) t_step = tic()
-            call self%read_pft_array(refine3D_polar_refs_fname('odd'),  prev_odd)
-            if( L_BENCH_GLOB ) rt_fast_read_odd = rt_fast_read_odd + toc(t_step)
-        else
-            if( prev_pftsz /= self%pftsz )then
-                THROW_HARD('Previous refs have different pftsz, cannot be used for trailing reconstruction')
-            endif
-            if( prev_nrefs > self%ncls )then
-                THROW_HARD('Previous per-state nspace is larger than current, cannot remap trailing reconstruction refs')
-            else
-                ! Previous refs have different dimensions and need to be mapped to current space
-                if( mod(self%ncls, self%p_ptr%nstates) /= 0 )then
-                    THROW_HARD('Current state-major reference count is not divisible by nstates')
-                endif
-                if( mod(prev_nrefs, self%p_ptr%nstates) /= 0 )then
-                    THROW_HARD('Previous state-major reference count is not divisible by nstates')
-                endif
-                if( L_BENCH_GLOB ) t_step = tic()
-                current_nspace = self%ncls / self%p_ptr%nstates
-                prev_nspace    = prev_nrefs / self%p_ptr%nstates
-                call symop%new(self%p_ptr%pgrp)
-                call prev_eulspace%new(prev_nspace, is_ptcl=.false.)
-                call symop%build_refspiral(prev_eulspace)
-                ks = max(self%kfromto(1), prev_klims(1))
-                ke = min(self%interpklim, prev_klims(2))
-                ! Compare full requested/stored ranges, not just intersection
-                ! bounds, so missing low/high frequencies trigger zero padding.
-                l_pad = (self%kfromto(1) /= prev_klims(1)) .or. (self%interpklim /= prev_klims(2))
-                if( L_BENCH_GLOB ) rt_remap_setup = rt_remap_setup + toc(t_step)
-                fname = refine3D_polar_refs_fname('even')
-                call map_current_refs_to_closest_previous_refs(fname, prev_even, rt_remap_read_even, rt_remap_copy_even)
-                fname = refine3D_polar_refs_fname('odd')
-                call map_current_refs_to_closest_previous_refs(fname, prev_odd, rt_remap_read_odd, rt_remap_copy_odd)
-                call symop%kill
-                call prev_eulspace%kill
-                call fname%kill
-            endif
-        endif
-        if( present(bench) )then
-            if( size(bench) >= 1 ) bench(1) = rt_dim_read
-            if( size(bench) >= 2 ) bench(2) = rt_fast_read_even
-            if( size(bench) >= 3 ) bench(3) = rt_fast_read_odd
-            if( size(bench) >= 4 ) bench(4) = rt_remap_setup
-            if( size(bench) >= 5 ) bench(5) = rt_remap_read_even
-            if( size(bench) >= 6 ) bench(6) = rt_remap_copy_even
-            if( size(bench) >= 7 ) bench(7) = rt_remap_read_odd
-            if( size(bench) >= 8 ) bench(8) = rt_remap_copy_odd
-        endif
-        contains
-
-            subroutine map_current_refs_to_closest_previous_refs( fname, array, rt_read, rt_copy )
-                type(string),             intent(in)  :: fname
-                complex(dp), allocatable, intent(out) :: array(:,:,:)
-                real(timer_int_kind),     intent(out) :: rt_read, rt_copy
-                complex(sp), allocatable :: src(:,:,:)
-                type(ori) :: o
-                integer(timer_int_kind) :: t_local
-                integer   :: state, iproj, i, j, cur_base, prev_base, prev_ref
-                rt_read = 0.
-                rt_copy = 0.
-                if( L_BENCH_GLOB ) t_local = tic()
-                call self%read_any_pft_array(fname, src)
-                if( L_BENCH_GLOB ) rt_read = rt_read + toc(t_local)
-                if( L_BENCH_GLOB ) t_local = tic()
-                if( l_pad )then
-                    allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls), source=DCMPLX_ZERO)
-                else
-                    allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
-                endif
-                !$omp parallel do default(shared) proc_bind(close) private(i,o,j,state,iproj,cur_base,prev_base,prev_ref) &
-                !$omp& schedule(static)
-                do i = 1,self%ncls
-                    state = (i - 1) / current_nspace + 1
-                    iproj = i - (state - 1) * current_nspace
-                    cur_base  = (state - 1) * current_nspace
-                    prev_base = (state - 1) * prev_nspace
-                    call reforis%get_ori(iproj, o)
-                    j = prev_eulspace%find_closest_proj(o)
-                    prev_ref = prev_base + j
-                    if( l_pad )then
-                        if( ks <= ke ) array(:,ks:ke,cur_base+iproj) = cmplx(src(:,ks:ke,prev_ref), kind=dp)
-                    else
-                        array(:,:,cur_base+iproj) = cmplx(src(:,:,prev_ref), kind=dp)
-                    endif
-                enddo
-                !$omp end parallel do
-                if( L_BENCH_GLOB ) rt_copy = rt_copy + toc(t_local)
-                deallocate(src)
-                call o%kill
-            end subroutine map_current_refs_to_closest_previous_refs
-
-    end subroutine prepare_trail_rec_arrays
 
     subroutine prepare_trail_rec_stats( self, reforis, pfts_even, pfts_odd, ctf2_even, ctf2_odd, ufrac_trec, &
             &prev_sums_even, prev_sums_odd, prev_ctf2_even, prev_ctf2_odd )
@@ -1039,38 +903,6 @@ contains
             fsc = 0.d0
         end where
     end subroutine calc_fsc_range
-
-    subroutine calc_fsc_from_refs( self, restored_even, restored_odd, ref_first, ref_last, fsc )
-        class(polarft_calc), intent(in)  :: self
-        complex(dp),         intent(in)  :: restored_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        complex(dp),         intent(in)  :: restored_odd( self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
-        integer,             intent(in)  :: ref_first, ref_last
-        real(dp),            intent(out) :: fsc(self%kfromto(1):self%interpklim)
-        real(dp) :: vare(self%kfromto(1):self%interpklim), varo(self%kfromto(1):self%interpklim)
-        integer  :: icls, k
-        if( ref_first < 1 .or. ref_last > self%ncls .or. ref_first > ref_last )then
-            THROW_HARD('invalid reference range in calc_fsc_from_refs')
-        endif
-        fsc  = 0.d0
-        vare = 0.d0
-        varo = 0.d0
-        ! Reference-domain FSC for already-restored polar refs read from POLAR_REFS_even/odd.
-        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(icls,k) reduction(+:fsc,vare,varo)
-        do icls = ref_first,ref_last
-            do k = self%kfromto(1),self%interpklim
-                fsc(k)  = fsc(k)  + sum(real(restored_even(:,k,icls) * conjg(restored_odd(:,k,icls)), dp))
-                vare(k) = vare(k) + sum(real(restored_even(:,k,icls) * conjg(restored_even(:,k,icls)), dp))
-                varo(k) = varo(k) + sum(real(restored_odd( :,k,icls) * conjg(restored_odd( :,k,icls)), dp))
-            enddo
-        enddo
-        !$omp end parallel do
-        vare = vare * varo
-        where( vare > DTINY )
-            fsc = fsc / sqrt(vare)
-        elsewhere
-            fsc = 0.d0
-        end where
-    end subroutine calc_fsc_from_refs
 
     integer function ml_prior_start( self )
         class(polarft_calc), intent(in) :: self

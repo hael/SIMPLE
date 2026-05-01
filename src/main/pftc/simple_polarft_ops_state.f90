@@ -62,14 +62,24 @@ contains
         endif
     end subroutine obsfield_lims_from_params
 
+    integer function obsfield_interp_limit( self )
+        class(polarft_calc), intent(in) :: self
+        obsfield_interp_limit = fdim(self%p_ptr%box_crop) - 1
+        if( obsfield_interp_limit < self%interpklim )then
+            write(logfhandle,*) 'obsfield/interpolation limits: ', obsfield_interp_limit, self%interpklim
+            THROW_HARD('obsfield support is smaller than reprojection interpolation limit')
+        endif
+    end function obsfield_interp_limit
+
     subroutine ensure_obsfields_allocated( self )
         class(polarft_calc), intent(inout) :: self
-        integer :: lims(3,2), istate
+        integer :: lims(3,2), istate, nyq_obsfield
         if( allocated(self%obsfields) ) return
         call obsfield_lims_from_params(self, lims)
+        nyq_obsfield = obsfield_interp_limit(self)
         allocate(self%obsfields(self%p_ptr%nstates))
         do istate = 1, self%p_ptr%nstates
-            call self%obsfields(istate)%new(lims, self%interpklim)
+            call self%obsfields(istate)%new(lims, nyq_obsfield)
         enddo
     end subroutine ensure_obsfields_allocated
 
