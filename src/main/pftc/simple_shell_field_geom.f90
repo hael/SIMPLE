@@ -15,7 +15,7 @@ type :: shell_field_geom
     integer :: total_nodes = 0
     integer :: target_nodes = 0
     integer :: cart_budget  = 0
-    integer,  allocatable :: full_nodes(:), shell_nodes(:), offsets(:)
+    integer,  allocatable :: full_nodes(:), shell_nodes(:), cart_cells(:), offsets(:)
     real(dp), allocatable :: theta_support(:)
     real(sp), allocatable :: node_dir(:,:) ! (3,total_nodes)
     real(sp), allocatable :: sym_rmat(:,:,:) ! (3,3,nsym)
@@ -25,15 +25,26 @@ type :: shell_field_geom
     procedure :: log_summary => shell_geom_log_summary
     procedure :: log_stats   => shell_geom_log_stats
     procedure :: get_shell_nodes => shell_geom_get_shell_nodes
+    procedure :: get_shell_cell_counts => shell_geom_get_shell_cell_counts
+    procedure :: is_initialized  => shell_geom_is_initialized
+    procedure :: get_kfromto     => shell_geom_get_kfromto
+    procedure :: get_nk          => shell_geom_get_nk
+    procedure :: get_nsym        => shell_geom_get_nsym
+    procedure :: get_total_nodes => shell_geom_get_total_nodes
+    procedure :: get_shell_node_count => shell_geom_get_shell_node_count
+    procedure :: get_shell_node_range => shell_geom_get_shell_node_range
+    procedure :: get_shell_dirs       => shell_geom_get_shell_dirs
+    procedure :: get_node_dir         => shell_geom_get_node_dir
 end type shell_field_geom
 
 contains
 
-    subroutine shell_geom_new( self, symop, kfromto, cart_budget )
+    subroutine shell_geom_new( self, symop, kfromto, cart_budget, cart_shell_cells )
         class(shell_field_geom), intent(inout) :: self
         class(sym),              intent(in)    :: symop
         integer,                 intent(in)    :: kfromto(2)
         integer,                 intent(in)    :: cart_budget
+        integer, optional,        intent(in)    :: cart_shell_cells(:)
         real(sp), allocatable :: tmp_dirs(:,:,:)
         real(sp) :: rsym(3,3), q(3)
         integer, allocatable :: target_shell_nodes(:)
@@ -48,6 +59,7 @@ contains
         self%target_nodes = max(cart_budget, self%nk)
         allocate(self%full_nodes(self%nk),   source=0)
         allocate(self%shell_nodes(self%nk),  source=0)
+        allocate(self%cart_cells(self%nk),   source=0)
         allocate(self%offsets(self%nk+1),    source=1)
         allocate(self%theta_support(self%nk), source=0.d0)
         allocate(self%sym_rmat(3,3,self%nsym), source=0._sp)
@@ -56,6 +68,12 @@ contains
             self%sym_rmat(:,:,isym) = rsym
         enddo
         call distribute_shell_budget(kfromto, self%target_nodes, target_shell_nodes)
+        if( present(cart_shell_cells) )then
+            if( size(cart_shell_cells) /= self%nk ) THROW_HARD('invalid shell cell count size; shell_geom_new')
+            self%cart_cells = cart_shell_cells
+        else
+            self%cart_cells = target_shell_nodes
+        endif
         do ik = 1,self%nk
             self%full_nodes(ik) = max(12, target_shell_nodes(ik) * max(1,self%nsym))
             self%theta_support(ik) = sqrt(4.d0 * DPI / real(self%full_nodes(ik),dp))
@@ -93,6 +111,7 @@ contains
         class(shell_field_geom), intent(inout) :: self
         if( allocated(self%full_nodes) ) deallocate(self%full_nodes)
         if( allocated(self%shell_nodes) ) deallocate(self%shell_nodes)
+        if( allocated(self%cart_cells) ) deallocate(self%cart_cells)
         if( allocated(self%offsets) ) deallocate(self%offsets)
         if( allocated(self%theta_support) ) deallocate(self%theta_support)
         if( allocated(self%node_dir) ) deallocate(self%node_dir)
@@ -148,6 +167,92 @@ contains
         endif
         allocate(shell_nodes(size(self%shell_nodes)), source=self%shell_nodes)
     end subroutine shell_geom_get_shell_nodes
+
+    subroutine shell_geom_get_shell_cell_counts( self, shell_cells )
+        class(shell_field_geom),  intent(in)  :: self
+        integer, allocatable,     intent(out) :: shell_cells(:)
+        if( .not. allocated(self%cart_cells) )then
+            allocate(shell_cells(0))
+            return
+        endif
+        allocate(shell_cells(size(self%cart_cells)), source=self%cart_cells)
+    end subroutine shell_geom_get_shell_cell_counts
+
+    logical function shell_geom_is_initialized( self )
+        class(shell_field_geom), intent(in) :: self
+        shell_geom_is_initialized = allocated(self%node_dir) .and. allocated(self%shell_nodes) .and. &
+            &allocated(self%cart_cells) .and. allocated(self%offsets)
+    end function shell_geom_is_initialized
+
+    subroutine shell_geom_get_kfromto( self, kfromto )
+        class(shell_field_geom), intent(in)  :: self
+        integer,                 intent(out) :: kfromto(2)
+        kfromto = self%kfromto
+    end subroutine shell_geom_get_kfromto
+
+    integer function shell_geom_get_nk( self )
+        class(shell_field_geom), intent(in) :: self
+        shell_geom_get_nk = self%nk
+    end function shell_geom_get_nk
+
+    integer function shell_geom_get_nsym( self )
+        class(shell_field_geom), intent(in) :: self
+        shell_geom_get_nsym = self%nsym
+    end function shell_geom_get_nsym
+
+    integer function shell_geom_get_total_nodes( self )
+        class(shell_field_geom), intent(in) :: self
+        shell_geom_get_total_nodes = self%total_nodes
+    end function shell_geom_get_total_nodes
+
+    integer function shell_geom_get_shell_node_count( self, shell )
+        class(shell_field_geom), intent(in) :: self
+        integer,                 intent(in) :: shell
+        integer :: ik
+        shell_geom_get_shell_node_count = 0
+        if( .not. allocated(self%shell_nodes) ) return
+        ik = shell - self%kfromto(1) + 1
+        if( ik < 1 .or. ik > self%nk ) return
+        shell_geom_get_shell_node_count = self%shell_nodes(ik)
+    end function shell_geom_get_shell_node_count
+
+    subroutine shell_geom_get_shell_node_range( self, shell, node_first, node_last )
+        class(shell_field_geom), intent(in)  :: self
+        integer,                 intent(in)  :: shell
+        integer,                 intent(out) :: node_first, node_last
+        integer :: ik
+        node_first = 0
+        node_last  = -1
+        if( .not. allocated(self%offsets) ) return
+        ik = shell - self%kfromto(1) + 1
+        if( ik < 1 .or. ik > self%nk ) return
+        node_first = self%offsets(ik)
+        node_last  = self%offsets(ik+1) - 1
+    end subroutine shell_geom_get_shell_node_range
+
+    subroutine shell_geom_get_shell_dirs( self, shell, dirs )
+        class(shell_field_geom), intent(in)  :: self
+        integer,                 intent(in)  :: shell
+        real(sp), allocatable,   intent(out) :: dirs(:,:)
+        integer :: node_first, node_last, nnodes
+        call self%get_shell_node_range(shell, node_first, node_last)
+        nnodes = max(0, node_last - node_first + 1)
+        allocate(dirs(3,nnodes), source=0._sp)
+        if( nnodes > 0 ) dirs = self%node_dir(:,node_first:node_last)
+    end subroutine shell_geom_get_shell_dirs
+
+    subroutine shell_geom_get_node_dir( self, shell, inode, dir )
+        class(shell_field_geom), intent(in)  :: self
+        integer,                 intent(in)  :: shell, inode
+        real(sp),                intent(out) :: dir(3)
+        integer :: node_first, node_last, node
+        dir = 0._sp
+        call self%get_shell_node_range(shell, node_first, node_last)
+        if( node_last < node_first ) return
+        node = node_first + inode - 1
+        if( node < node_first .or. node > node_last ) return
+        dir = self%node_dir(:,node)
+    end subroutine shell_geom_get_node_dir
 
     subroutine log_shell_stats( self, ik, shell )
         class(shell_field_geom), intent(in) :: self

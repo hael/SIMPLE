@@ -591,12 +591,17 @@ contains
         integer :: klo, khi
         ! Read stored (single-precision) array payload
         read(unit=funit, pos=(sizeof(dims)+1)) buffer
-        ! Default to zero padding everywhere
-        array(:,:,:) = (0.0_dp, 0.0_dp)
         ! Copy only the overlap in k between requested kfromto and stored dims(2:3)
         klo = max(self%kfromto(1), dims(2))
         khi = min(self%interpklim, dims(3))
-        if( klo <= khi ) array(:,klo:khi,:) = cmplx(buffer(:,klo:khi,:), kind=dp)
+        if( klo == self%kfromto(1) .and. khi == self%interpklim )then
+            array = cmplx(buffer, kind=dp)
+        else
+            ! Default to zero padding everywhere when the stored k-range does not
+            ! cover the requested destination range.
+            array(:,:,:) = (0.0_dp, 0.0_dp)
+            if( klo <= khi ) array(:,klo:khi,:) = cmplx(buffer(:,klo:khi,:), kind=dp)
+        endif
     end subroutine transfer_pft_array_buffer
 
     ! private helper

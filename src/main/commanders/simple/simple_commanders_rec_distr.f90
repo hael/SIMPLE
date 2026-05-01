@@ -68,7 +68,7 @@ contains
         type(string) :: benchfname
         integer(timer_int_kind) :: t_tot, t_setup, t_reduce, t_normalize, t_resolution, t_write
         real(timer_int_kind)    :: rt_tot, rt_setup, rt_reduce, rt_normalize, rt_resolution, rt_write
-        real(timer_int_kind)    :: rt_obs_reduce_detail(2), rt_obs_norm_detail(12)
+        real(timer_int_kind)    :: rt_obs_reduce_detail(2), rt_obs_norm_detail(20)
         real                   :: update_frac_eff
         integer :: fnr, nrefs
         rt_obs_reduce_detail = 0.
@@ -143,6 +143,14 @@ contains
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield rename fields      : ', rt_obs_norm_detail(10)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield mirror refs        : ', rt_obs_norm_detail(11)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield fsc/frc bookkeeping: ', rt_obs_norm_detail(12)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prep dims read     : ', rt_obs_norm_detail(13)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prep read even     : ', rt_obs_norm_detail(14)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prep read odd      : ', rt_obs_norm_detail(15)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prep remap setup   : ', rt_obs_norm_detail(16)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prep remap read even: ', rt_obs_norm_detail(17)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prep remap copy even: ', rt_obs_norm_detail(18)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prep remap read odd: ', rt_obs_norm_detail(19)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prep remap copy odd: ', rt_obs_norm_detail(20)
                 case('yes')
                     write(fnr,'(a,t52,f9.2)') 'volassemble reduce polar sums           : ', rt_reduce
                     write(fnr,'(a,t52,f9.2)') 'volassemble normalize common-line refs  : ', rt_normalize

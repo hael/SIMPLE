@@ -381,7 +381,7 @@ contains
         type(sym) :: shell_sym
         type(string) :: obsfield_name, obsfield_tmp_name, volname, write_obsfield_vols_arg
         character(len=STDLEN) :: shell_mode, shell_label
-        integer, allocatable :: shell_nodes(:)
+        integer, allocatable :: shell_nodes(:), shell_cell_counts(:)
         real(dp)    :: fsc(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_prior_state(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
@@ -393,6 +393,7 @@ contains
         real(timer_int_kind) :: rt_prepare_prev_refs, rt_coord_setup, rt_shell_geom, rt_prev_read, rt_blend_prev
         real(timer_int_kind) :: rt_checkpoint_write, rt_calc_invtau2, rt_extract_polar, rt_write_volume
         real(timer_int_kind) :: rt_rename_obsfields, rt_mirror, rt_fsc_frc
+        real(timer_int_kind) :: rt_prepare_detail(8)
         integer(timer_int_kind) :: t_step
         integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2), shell_cart_budget
         integer     :: prev_pftsz, prev_nrefs
@@ -409,6 +410,7 @@ contains
         rt_rename_obsfields  = 0.
         rt_mirror            = 0.
         rt_fsc_frc           = 0.
+        rt_prepare_detail     = 0.
         if( present(bench) ) bench = 0.
         if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
         nprojs = self%p_ptr%nspace
@@ -439,7 +441,7 @@ contains
         ! from the current restored obsfield references after mirroring.
         if( have_prev_refs )then
             if( L_BENCH_GLOB ) t_step = tic()
-            call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
+            call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd, rt_prepare_detail )
             if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
         endif
         if( self%p_ptr%l_trail_rec )then
@@ -466,9 +468,10 @@ contains
         shell_mode = lowercase(trim(self%p_ptr%obsfield_shell_repr))
         if( trim(shell_mode) /= 'no' )then
             if( L_BENCH_GLOB ) t_step = tic()
-            shell_cart_budget = self%obsfields(1)%even%get_ncells()
+            call self%obsfields(1)%even%count_shell_cell_counts(kspan, shell_cell_counts)
+            shell_cart_budget = sum(shell_cell_counts)
             call shell_sym%new(self%p_ptr%pgrp)
-            call shell_geom%new(shell_sym, kspan, shell_cart_budget)
+            call shell_geom%new(shell_sym, kspan, shell_cart_budget, shell_cell_counts)
             if( trim(self%p_ptr%obsfield_shell_stats) == 'yes' )then
                 call shell_geom%log_stats('fixed_asym_shells')
                 call shell_geom%get_shell_nodes(shell_nodes)
@@ -480,6 +483,7 @@ contains
             else
                 call shell_geom%log_summary('fixed_asym_shells')
             endif
+            if( allocated(shell_cell_counts) ) deallocate(shell_cell_counts)
             if( trim(shell_mode) /= 'geom' )then
                 write(logfhandle,'(A)') 'obsfield shell-geom development mode: diagnostics only; using Cartesian obsfield references'
             endif
@@ -603,6 +607,14 @@ contains
             if( size(bench) >= 10 ) bench(10) = rt_rename_obsfields
             if( size(bench) >= 11 ) bench(11) = rt_mirror
             if( size(bench) >= 12 ) bench(12) = rt_fsc_frc
+            if( size(bench) >= 13 ) bench(13) = rt_prepare_detail(1)
+            if( size(bench) >= 14 ) bench(14) = rt_prepare_detail(2)
+            if( size(bench) >= 15 ) bench(15) = rt_prepare_detail(3)
+            if( size(bench) >= 16 ) bench(16) = rt_prepare_detail(4)
+            if( size(bench) >= 17 ) bench(17) = rt_prepare_detail(5)
+            if( size(bench) >= 18 ) bench(18) = rt_prepare_detail(6)
+            if( size(bench) >= 19 ) bench(19) = rt_prepare_detail(7)
+            if( size(bench) >= 20 ) bench(20) = rt_prepare_detail(8)
         endif
         if( allocated(prev_even) ) deallocate(prev_even)
         if( allocated(prev_odd)  ) deallocate(prev_odd)
@@ -674,24 +686,43 @@ contains
 
     !>  \brief local private routine for trailing reconstruction weighing
     !!         and dimension checking/editing for polar modes
-    subroutine prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
+    subroutine prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd, bench )
         class(polarft_calc),       intent(in) :: self
         type(oris),                intent(in) :: reforis
         complex(dp), allocatable, intent(out) :: prev_even(:,:,:), prev_odd(:,:,:)
+        real(timer_int_kind), optional, intent(out) :: bench(:)
         type(string) :: fname
         type(sym)    :: symop
         type(oris)   :: prev_eulspace
+        integer(timer_int_kind) :: t_step
+        real(timer_int_kind) :: rt_dim_read, rt_fast_read_even, rt_fast_read_odd, rt_remap_setup
+        real(timer_int_kind) :: rt_remap_read_even, rt_remap_copy_even, rt_remap_read_odd, rt_remap_copy_odd
         integer      :: prev_pftsz, prev_klims(2), prev_nrefs, ks, ke
         integer      :: current_nspace, prev_nspace
         logical      :: l_pad
+        rt_dim_read        = 0.
+        rt_fast_read_even  = 0.
+        rt_fast_read_odd   = 0.
+        rt_remap_setup     = 0.
+        rt_remap_read_even = 0.
+        rt_remap_copy_even = 0.
+        rt_remap_read_odd  = 0.
+        rt_remap_copy_odd  = 0.
+        if( present(bench) ) bench = 0.
+        if( L_BENCH_GLOB ) t_step = tic()
         call self%get_pft_array_dims(refine3D_polar_refs_fname('even'), prev_pftsz, prev_klims, prev_nrefs)
+        if( L_BENCH_GLOB ) rt_dim_read = rt_dim_read + toc(t_step)
         ! PFT arrays are state-major blocks of per-projection obsfield sections.
         ! The angular shell size must match; frequency ranges can be padded.
         ! When per-state nspace grows, each current projection is sourced from
         ! the closest previous projection in the same state.
         if( (prev_nrefs == self%ncls) .and. (prev_pftsz == self%pftsz) )then
+            if( L_BENCH_GLOB ) t_step = tic()
             call self%read_pft_array(refine3D_polar_refs_fname('even'), prev_even)
+            if( L_BENCH_GLOB ) rt_fast_read_even = rt_fast_read_even + toc(t_step)
+            if( L_BENCH_GLOB ) t_step = tic()
             call self%read_pft_array(refine3D_polar_refs_fname('odd'),  prev_odd)
+            if( L_BENCH_GLOB ) rt_fast_read_odd = rt_fast_read_odd + toc(t_step)
         else
             if( prev_pftsz /= self%pftsz )then
                 THROW_HARD('Previous refs have different pftsz, cannot be used for trailing reconstruction')
@@ -706,6 +737,7 @@ contains
                 if( mod(prev_nrefs, self%p_ptr%nstates) /= 0 )then
                     THROW_HARD('Previous state-major reference count is not divisible by nstates')
                 endif
+                if( L_BENCH_GLOB ) t_step = tic()
                 current_nspace = self%ncls / self%p_ptr%nstates
                 prev_nspace    = prev_nrefs / self%p_ptr%nstates
                 call symop%new(self%p_ptr%pgrp)
@@ -716,25 +748,47 @@ contains
                 ! Compare full requested/stored ranges, not just intersection
                 ! bounds, so missing low/high frequencies trigger zero padding.
                 l_pad = (self%kfromto(1) /= prev_klims(1)) .or. (self%interpklim /= prev_klims(2))
+                if( L_BENCH_GLOB ) rt_remap_setup = rt_remap_setup + toc(t_step)
                 fname = refine3D_polar_refs_fname('even')
-                call map_current_refs_to_closest_previous_refs(fname, prev_even)
+                call map_current_refs_to_closest_previous_refs(fname, prev_even, rt_remap_read_even, rt_remap_copy_even)
                 fname = refine3D_polar_refs_fname('odd')
-                call map_current_refs_to_closest_previous_refs(fname, prev_odd)
+                call map_current_refs_to_closest_previous_refs(fname, prev_odd, rt_remap_read_odd, rt_remap_copy_odd)
                 call symop%kill
                 call prev_eulspace%kill
                 call fname%kill
             endif
         endif
+        if( present(bench) )then
+            if( size(bench) >= 1 ) bench(1) = rt_dim_read
+            if( size(bench) >= 2 ) bench(2) = rt_fast_read_even
+            if( size(bench) >= 3 ) bench(3) = rt_fast_read_odd
+            if( size(bench) >= 4 ) bench(4) = rt_remap_setup
+            if( size(bench) >= 5 ) bench(5) = rt_remap_read_even
+            if( size(bench) >= 6 ) bench(6) = rt_remap_copy_even
+            if( size(bench) >= 7 ) bench(7) = rt_remap_read_odd
+            if( size(bench) >= 8 ) bench(8) = rt_remap_copy_odd
+        endif
         contains
 
-            subroutine map_current_refs_to_closest_previous_refs( fname, array )
+            subroutine map_current_refs_to_closest_previous_refs( fname, array, rt_read, rt_copy )
                 type(string),             intent(in)  :: fname
                 complex(dp), allocatable, intent(out) :: array(:,:,:)
+                real(timer_int_kind),     intent(out) :: rt_read, rt_copy
                 complex(sp), allocatable :: src(:,:,:)
                 type(ori) :: o
+                integer(timer_int_kind) :: t_local
                 integer   :: state, iproj, i, j, cur_base, prev_base, prev_ref
+                rt_read = 0.
+                rt_copy = 0.
+                if( L_BENCH_GLOB ) t_local = tic()
                 call self%read_any_pft_array(fname, src)
-                allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls), source=DCMPLX_ZERO)
+                if( L_BENCH_GLOB ) rt_read = rt_read + toc(t_local)
+                if( L_BENCH_GLOB ) t_local = tic()
+                if( l_pad )then
+                    allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls), source=DCMPLX_ZERO)
+                else
+                    allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls))
+                endif
                 !$omp parallel do default(shared) proc_bind(close) private(i,o,j,state,iproj,cur_base,prev_base,prev_ref) &
                 !$omp& schedule(static)
                 do i = 1,self%ncls
@@ -752,6 +806,7 @@ contains
                     endif
                 enddo
                 !$omp end parallel do
+                if( L_BENCH_GLOB ) rt_copy = rt_copy + toc(t_local)
                 deallocate(src)
                 call o%kill
             end subroutine map_current_refs_to_closest_previous_refs

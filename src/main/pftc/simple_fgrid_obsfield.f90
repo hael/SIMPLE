@@ -49,6 +49,8 @@ type :: fgrid_obs_field
     procedure, public  :: extract_polar          => obsfield_extract_polar
     procedure, public  :: calc_invtau2           => obsfield_calc_invtau2
     procedure, public  :: log_shell_budget_stats => obsfield_log_shell_budget_stats
+    procedure, public  :: count_shell_cells      => obsfield_count_shell_cells
+    procedure, public  :: count_shell_cell_counts => obsfield_count_shell_cell_counts
     procedure, public  :: get_nobs               => obsfield_get_nobs
     procedure, public  :: get_ncells             => obsfield_get_ncells
     procedure, private :: compatible_with        => obsfield_compatible_with
@@ -438,6 +440,46 @@ contains
         call log_single_field_shell_budget(self, kfromto, shell_nodes, label, 'single')
     end subroutine obsfield_log_shell_budget_stats
 
+    integer function obsfield_count_shell_cells( self, kfromto )
+        class(fgrid_obs_field), intent(in) :: self
+        integer,                intent(in) :: kfromto(2)
+        integer, allocatable :: shell_cells(:)
+        obsfield_count_shell_cells = 0
+        call self%count_shell_cell_counts(kfromto, shell_cells)
+        if( allocated(shell_cells) )then
+            obsfield_count_shell_cells = sum(shell_cells)
+            deallocate(shell_cells)
+        endif
+    end function obsfield_count_shell_cells
+
+    subroutine obsfield_count_shell_cell_counts( self, kfromto, shell_cells )
+        class(fgrid_obs_field), intent(in)  :: self
+        integer,                intent(in)  :: kfromto(2)
+        integer, allocatable,   intent(out) :: shell_cells(:)
+        integer :: h, k, l, shell, ik, nk
+        nk = kfromto(2) - kfromto(1) + 1
+        if( nk < 1 )then
+            allocate(shell_cells(0))
+            return
+        endif
+        allocate(shell_cells(nk), source=0)
+        if( .not. self%initialized )then
+            return
+        endif
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,shell,ik) reduction(+:shell_cells) schedule(static) proc_bind(close)
+        do l = self%lims(3,1), self%lims(3,2)
+            do k = self%lims(2,1), self%lims(2,2)
+                do h = self%lims(1,1), self%lims(1,2)
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                    ik = shell - kfromto(1) + 1
+                    shell_cells(ik) = shell_cells(ik) + 1
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine obsfield_count_shell_cell_counts
+
     ! Reconstructor-like obsfield extraction: restore each Cartesian cell as
     ! grid_num / (grid_den + prior(shell)) before KB gathering. This avoids the
     ! non-equivalent polar-space pattern gather(num)/(gather(den)+prior).
@@ -709,7 +751,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        call log_shell_budget_summary(label, half, shell_nodes, cell_count, obs_count, den_sum)
+        call log_shell_budget_summary(label, half, kfromto, shell_nodes, cell_count, obs_count, den_sum)
         do ik = 1,nk
             node_count = max(1, shell_nodes(ik))
             coverage = real(obs_count(ik),dp) / real(node_count,dp)
@@ -762,7 +804,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        call log_shell_budget_summary(label, half, shell_nodes, cell_count, obs_count, den_sum)
+        call log_shell_budget_summary(label, half, kfromto, shell_nodes, cell_count, obs_count, den_sum)
         do ik = 1,nk
             node_count = max(1, shell_nodes(ik))
             coverage = real(obs_count(ik),dp) / real(node_count,dp)
@@ -781,8 +823,9 @@ contains
         deallocate(obs_count, cell_count, den_sum, den_min, den_max)
     end subroutine log_merged_field_shell_budget
 
-    subroutine log_shell_budget_summary( label, half, shell_nodes, cell_count, obs_count, den_sum )
+    subroutine log_shell_budget_summary( label, half, kfromto, shell_nodes, cell_count, obs_count, den_sum )
         character(len=*), intent(in) :: label, half
+        integer,          intent(in) :: kfromto(2)
         integer,          intent(in) :: shell_nodes(:), cell_count(:), obs_count(:)
         real(dp),         intent(in) :: den_sum(:)
         real(dp) :: obs_per_node, obs_per_cell
@@ -796,7 +839,74 @@ contains
             &'obsfield shell-accum summary', trim(label), 'half=', trim(half), &
             &'field_nodes=', total_nodes, 'cart_cells=', total_cells, 'obs_cells=', total_obs, &
             &'obs_per_node=', obs_per_node, 'obs_per_cell=', obs_per_cell, 'den_sum=', sum(den_sum)
+        call log_shell_budget_mismatch(label, half, kfromto, shell_nodes, cell_count)
     end subroutine log_shell_budget_summary
+
+    subroutine log_shell_budget_mismatch( label, half, kfromto, shell_nodes, cell_count )
+        character(len=*), intent(in) :: label, half
+        integer,          intent(in) :: kfromto(2)
+        integer,          intent(in) :: shell_nodes(:), cell_count(:)
+        real(dp) :: rel, rel_min, rel_max, rel_sum, rel_sumsq, rel_absmax, total_rel
+        real(dp) :: rel_cell_sumsq, rel_cell_rms, cell_weight
+        real(dp) :: band_sumsq(3), band_rms(3)
+        integer  :: i, nvalid, iband, band_count(3), band_first(3), band_last(3)
+        integer  :: n, total_nodes, total_cells, shell
+        n = size(shell_nodes)
+        if( n < 1 .or. size(cell_count) /= n ) return
+        rel_min    =  huge(0.d0)
+        rel_max    = -huge(0.d0)
+        rel_sum    = 0.d0
+        rel_sumsq  = 0.d0
+        rel_cell_sumsq = 0.d0
+        rel_cell_rms   = 0.d0
+        rel_absmax = 0.d0
+        band_sumsq = 0.d0
+        band_rms   = 0.d0
+        band_count = 0
+        band_first = huge(0)
+        band_last  = -huge(0)
+        nvalid     = 0
+        do i = 1,n
+            if( cell_count(i) < 1 ) cycle
+            shell      = kfromto(1) + i - 1
+            rel        = real(shell_nodes(i),dp) / real(cell_count(i),dp) - 1.d0
+            cell_weight = real(cell_count(i),dp)
+            rel_min    = min(rel_min, rel)
+            rel_max    = max(rel_max, rel)
+            rel_absmax = max(rel_absmax, abs(rel))
+            rel_sum    = rel_sum + rel
+            rel_sumsq  = rel_sumsq + rel * rel
+            rel_cell_sumsq = rel_cell_sumsq + cell_weight * rel * rel
+            iband = min(3, max(1, 1 + (3 * (i - 1)) / n))
+            band_count(iband) = band_count(iband) + 1
+            band_sumsq(iband) = band_sumsq(iband) + rel * rel
+            band_first(iband) = min(band_first(iband), shell)
+            band_last(iband)  = max(band_last(iband),  shell)
+            nvalid = nvalid + 1
+        enddo
+        if( nvalid < 1 ) return
+        do iband = 1,3
+            if( band_count(iband) > 0 )then
+                band_rms(iband) = sqrt(band_sumsq(iband) / real(band_count(iband),dp))
+            else
+                band_first(iband) = 0
+                band_last(iband)  = 0
+            endif
+        enddo
+        total_nodes = sum(shell_nodes)
+        total_cells = sum(cell_count)
+        total_rel = real(total_nodes,dp) / real(max(1,total_cells),dp) - 1.d0
+        if( total_cells > 0 ) rel_cell_rms = sqrt(rel_cell_sumsq / real(total_cells,dp))
+        write(logfhandle,'(A,1X,A,2X,A,1X,A,2X,A,I0,A,I0,2X,A,I0,A,I0,2X,A,I0,A,I0,2X,*(A,ES12.4,2X))') &
+            &'obsfield shell-budget mismatch', trim(label), 'half=', trim(half), &
+            &'low_k=', band_first(1), ':', band_last(1), &
+            &'mid_k=', band_first(2), ':', band_last(2), &
+            &'high_k=', band_first(3), ':', band_last(3), &
+            &'total_rel=', total_rel, 'rel_mean=', rel_sum / real(nvalid,dp), &
+            &'rel_rms=', sqrt(rel_sumsq / real(nvalid,dp)), 'rel_cell_rms=', rel_cell_rms, 'rel_min=', rel_min, &
+            &'rel_max=', rel_max, 'rel_absmax=', rel_absmax, &
+            &'low_rms=', band_rms(1), 'mid_rms=', band_rms(2), 'high_rms=', band_rms(3)
+    end subroutine log_shell_budget_mismatch
 
     subroutine obsfield_eo_write_merged_volume( self, fname, box, smpd, kfromto, invtau2_even, invtau2_odd, &
             &prior_start, mag_correction )
