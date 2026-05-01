@@ -19,7 +19,7 @@ integer, parameter :: NEIGH_NSPACES(2)           = [126,5000]
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
     type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk
-    integer :: iter, inspace, inspace_next, inspace_sub, imaxits, nsample_dyn, ipftsz
+    integer :: iter, inspace, inspace_next, inspace_sub, imaxits, nsample_dyn, ipftsz, ipftsz_next
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
 end type refine3D_stage_cfg
@@ -280,6 +280,7 @@ contains
         integer,                  intent(in)    :: route
         integer :: stage_last
         cfg%ipftsz = 0
+        cfg%ipftsz_next = 0
         stage_last = active_refine3D_nstages()
         select case(route)
             case(REFINE3D_ROUTE_STD)
@@ -333,6 +334,13 @@ contains
                         cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(max(1,stage_last-1))%box_crop)
                     else
                         cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
+                    endif
+                endif
+                if( cfg_next%trail_rec == 'yes' )then
+                    if( trim(params%multivol_mode)=='docked' )then
+                        cfg%ipftsz_next = magic_pftsz(params%msk, params%box, lpinfo(max(1,stage_last-1))%box_crop)
+                    else
+                        cfg%ipftsz_next = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
                     endif
                 endif
             endif
@@ -426,11 +434,15 @@ contains
             call cline_refine3D%delete('gaufreq')
         endif
         call cline_refine3D%delete('ipftsz')
+        call cline_refine3D%delete('pftsz_next')
         select case(route)
             case(REFINE3D_ROUTE_POLAR)
                 call cline_refine3D%set('center_type',    'params')
                 if( cfg%ipftsz > 0 )then
                     call cline_refine3D%set('pftsz',      cfg%ipftsz)
+                endif
+                if( cfg%ipftsz_next > 0 )then
+                    call cline_refine3D%set('pftsz_next', cfg%ipftsz_next)
                 endif
         end select
     end subroutine emit_refine3D_stage_cfg

@@ -1,6 +1,6 @@
 !@descr: submodule for class average restoration in the polar Fourier domain
 submodule (simple_polarft_calc) simple_polarft_ops_restore
-use simple_refine3D_fnames, only: refine3D_fsc_fname, refine3D_polar_refs_fname, refine3D_state_vol_fname
+use simple_refine3D_fnames,     only: refine3D_fsc_fname, refine3D_polar_refs_fname, refine3D_state_vol_fname
 use simple_refnode_shell_graph, only: refnode_shell_graph
 implicit none
 #include "simple_local_flags.inc"
@@ -395,6 +395,7 @@ contains
         integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2)
         integer     :: prev_pftsz, prev_nrefs
         logical     :: have_prev_refs, need_prev_refs, write_cartesian_vols, use_trail_rec
+        logical     :: refnode_diag_iter, refnode_need_graph
         if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
         nprojs = self%p_ptr%nspace
         if( mod(nprojs,2) /= 0 )then
@@ -408,6 +409,8 @@ contains
             THROW_HARD('not enough reference orientations for obsfield polar extraction')
         endif
         nrefs = nprojs / 2
+        prev_pftsz = 0
+        prev_nrefs = 0
         need_prev_refs = self%p_ptr%l_ml_reg .or. self%p_ptr%l_trail_rec
         have_prev_refs = need_prev_refs .and. file_exists(refine3D_polar_refs_fname('even')) .and. &
             &file_exists(refine3D_polar_refs_fname('odd'))
@@ -417,6 +420,8 @@ contains
                 &(mod(self%ncls,self%p_ptr%nstates) == 0) .and. (mod(prev_nrefs,self%p_ptr%nstates) == 0)
         endif
         if( self%p_ptr%l_trail_rec .and. (.not. have_prev_refs) )then
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') 'obsfield trailing POLAR_REFS mismatch: prev_pftsz=', &
+                &prev_pftsz, ' current_pftsz=', self%pftsz, ' prev_nrefs=', prev_nrefs, ' current_nrefs=', self%ncls
             THROW_HARD('compatible previous polar references are required for obsfield trailing reconstruction')
         endif
         use_trail_rec = self%p_ptr%l_trail_rec
@@ -446,12 +451,16 @@ contains
         hcoords = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
         kcoords = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
         refnode_mode = lowercase(trim(self%p_ptr%obsfield_refnodes))
-        if( trim(refnode_mode) /= 'no' )then
+        refnode_diag_iter = self%p_ptr%which_iter == 0 .or. self%p_ptr%which_iter <= self%p_ptr%startit
+        refnode_need_graph = trim(refnode_mode) /= 'no' .and. (trim(refnode_mode) /= 'geom' .or. refnode_diag_iter)
+        if( refnode_need_graph )then
             call refnode_sym%new(self%p_ptr%pgrp)
             call refnodes%new(reforis, refnode_sym, hcoords, kcoords, kspan, nprojs, &
                 &self%p_ptr%obsfield_refnode_support_mult)
-            if( trim(self%p_ptr%obsfield_refnode_stats) == 'yes' .or. trim(refnode_mode) == 'geom' )then
+            if( trim(self%p_ptr%obsfield_refnode_stats) == 'yes' )then
                 call refnodes%log_stats('asym_refspace')
+            elseif( trim(refnode_mode) == 'geom' )then
+                call refnodes%log_summary('asym_refspace')
             endif
             call refnodes%kill
             call refnode_sym%kill
