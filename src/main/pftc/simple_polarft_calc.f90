@@ -771,9 +771,10 @@ interface
         class(polarft_calc), intent(inout) :: self
     end subroutine polar_cavger_write_obsfield_parts
 
-    module subroutine polar_cavger_assemble_obsfields_from_parts( self, reforis )
+    module subroutine polar_cavger_assemble_obsfields_from_parts( self, reforis, bench )
         class(polarft_calc), intent(inout) :: self
         class(oris), target, intent(inout) :: reforis
+        real(timer_int_kind), optional, intent(out) :: bench(:)
     end subroutine polar_cavger_assemble_obsfields_from_parts
 
     module subroutine polar_cavger_kill( self )
@@ -809,11 +810,12 @@ interface
         real,                intent(in)    :: update_frac
     end subroutine polar_cavger_normalize_commonline_refs
 
-    module subroutine polar_cavger_normalize_obsfield_refs( self, reforis, cline, update_frac )
+    module subroutine polar_cavger_normalize_obsfield_refs( self, reforis, cline, update_frac, bench )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
+        real(timer_int_kind), optional, intent(out) :: bench(:)
     end subroutine polar_cavger_normalize_obsfield_refs
 
     module subroutine mirror_slices( self, ref_space )

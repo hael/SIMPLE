@@ -2,6 +2,7 @@
 submodule (simple_polarft_calc) simple_polarft_ops_restore
 use simple_refine3D_fnames,     only: refine3D_fsc_fname, refine3D_obsfield_fname, refine3D_polar_ctf2_fname, &
     &refine3D_polar_refs_fname, refine3D_polar_sums_fname, refine3D_state_vol_fname
+use simple_shell_field_geom,    only: shell_field_geom
 implicit none
 #include "simple_local_flags.inc"
 contains               
@@ -367,15 +368,20 @@ contains
 
     ! 3D SECTION - Polar references are sampled from assembled Cartesian observation fields
 
-    module subroutine polar_cavger_normalize_obsfield_refs( self, reforis, cline, update_frac )
+    module subroutine polar_cavger_normalize_obsfield_refs( self, reforis, cline, update_frac, bench )
         class(polarft_calc), intent(inout) :: self
         type(oris),          intent(in)    :: reforis
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
+        real(timer_int_kind), optional, intent(out) :: bench(:)
         type(class_frcs)         :: frcs
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:)
         type(fgrid_obsfield_eo) :: prev_obsfield
+        type(shell_field_geom) :: shell_geom
+        type(sym) :: shell_sym
         type(string) :: obsfield_name, obsfield_tmp_name, volname, write_obsfield_vols_arg
+        character(len=STDLEN) :: shell_mode, shell_label
+        integer, allocatable :: shell_nodes(:)
         real(dp)    :: fsc(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_prior_state(self%kfromto(1):self%interpklim)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
@@ -384,9 +390,26 @@ contains
         real(sp)    :: kcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
         real(dp)    :: ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
-        integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2)
+        real(timer_int_kind) :: rt_prepare_prev_refs, rt_coord_setup, rt_shell_geom, rt_prev_read, rt_blend_prev
+        real(timer_int_kind) :: rt_checkpoint_write, rt_calc_invtau2, rt_extract_polar, rt_write_volume
+        real(timer_int_kind) :: rt_rename_obsfields, rt_mirror, rt_fsc_frc
+        integer(timer_int_kind) :: t_step
+        integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2), shell_cart_budget
         integer     :: prev_pftsz, prev_nrefs
         logical     :: have_prev_refs, have_prev_obsfields, need_prev_refs, write_cartesian_vols, use_trail_rec
+        rt_prepare_prev_refs = 0.
+        rt_coord_setup       = 0.
+        rt_shell_geom        = 0.
+        rt_prev_read         = 0.
+        rt_blend_prev        = 0.
+        rt_checkpoint_write  = 0.
+        rt_calc_invtau2      = 0.
+        rt_extract_polar     = 0.
+        rt_write_volume      = 0.
+        rt_rename_obsfields  = 0.
+        rt_mirror            = 0.
+        rt_fsc_frc           = 0.
+        if( present(bench) ) bench = 0.
         if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
         nprojs = self%p_ptr%nspace
         if( mod(nprojs,2) /= 0 )then
@@ -415,7 +438,9 @@ contains
         ! needed before obsfield extraction. The FSC written below is computed
         ! from the current restored obsfield references after mirroring.
         if( have_prev_refs )then
+            if( L_BENCH_GLOB ) t_step = tic()
             call prepare_trail_rec_arrays( self, reforis, prev_even, prev_odd )
+            if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
         endif
         if( self%p_ptr%l_trail_rec )then
             ufrac_trec = real(merge(self%p_ptr%ufrac_trec ,update_frac , cline%defined('ufrac_trec')),dp)
@@ -434,8 +459,34 @@ contains
         else
             prior_start = self%interpklim + 1
         endif
+        if( L_BENCH_GLOB ) t_step = tic()
         hcoords = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
         kcoords = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
+        if( L_BENCH_GLOB ) rt_coord_setup = rt_coord_setup + toc(t_step)
+        shell_mode = lowercase(trim(self%p_ptr%obsfield_shell_repr))
+        if( trim(shell_mode) /= 'no' )then
+            if( L_BENCH_GLOB ) t_step = tic()
+            shell_cart_budget = self%obsfields(1)%even%get_ncells()
+            call shell_sym%new(self%p_ptr%pgrp)
+            call shell_geom%new(shell_sym, kspan, shell_cart_budget)
+            if( trim(self%p_ptr%obsfield_shell_stats) == 'yes' )then
+                call shell_geom%log_stats('fixed_asym_shells')
+                call shell_geom%get_shell_nodes(shell_nodes)
+                do state = 1,self%p_ptr%nstates
+                    write(shell_label,'(A,I0)') 'state=', state
+                    call self%obsfields(state)%log_shell_budget_stats(kspan, shell_nodes, trim(shell_label))
+                enddo
+                if( allocated(shell_nodes) ) deallocate(shell_nodes)
+            else
+                call shell_geom%log_summary('fixed_asym_shells')
+            endif
+            if( trim(shell_mode) /= 'geom' )then
+                write(logfhandle,'(A)') 'obsfield shell-geom development mode: diagnostics only; using Cartesian obsfield references'
+            endif
+            call shell_geom%kill
+            call shell_sym%kill
+            if( L_BENCH_GLOB ) rt_shell_geom = rt_shell_geom + toc(t_step)
+        endif
         have_prev_obsfields = .false.
         if( use_trail_rec )then
             have_prev_obsfields = .true.
@@ -454,12 +505,18 @@ contains
             base = (state - 1) * nprojs
             obsfield_name = refine3D_obsfield_fname(state)
             if( have_prev_obsfields )then
+                if( L_BENCH_GLOB ) t_step = tic()
                 call prev_obsfield%read(obsfield_name)
+                if( L_BENCH_GLOB ) rt_prev_read = rt_prev_read + toc(t_step)
+                if( L_BENCH_GLOB ) t_step = tic()
                 call self%obsfields(state)%blend_field(prev_obsfield, ufrac_trec)
+                if( L_BENCH_GLOB ) rt_blend_prev = rt_blend_prev + toc(t_step)
                 call prev_obsfield%kill
             endif
             obsfield_tmp_name = obsfield_name//'_tmp'
+            if( L_BENCH_GLOB ) t_step = tic()
             call self%obsfields(state)%write(obsfield_tmp_name)
+            if( L_BENCH_GLOB ) rt_checkpoint_write = rt_checkpoint_write + toc(t_step)
             if( have_prev_refs )then
                 call calc_fsc_from_refs(self, prev_even, prev_odd, base+1, base+nprojs, fsc_prior_state)
             else
@@ -468,35 +525,46 @@ contains
             invtau2_even = 0.d0
             invtau2_odd  = 0.d0
             if( self%p_ptr%l_ml_reg )then
+                if( L_BENCH_GLOB ) t_step = tic()
                 call self%obsfields(state)%even%calc_invtau2(kspan, fsc_prior_state, real(self%p_ptr%tau,dp), &
                     &prior_start, invtau2_even)
                 call self%obsfields(state)%odd%calc_invtau2( kspan, fsc_prior_state, real(self%p_ptr%tau,dp), &
                     &prior_start, invtau2_odd )
+                if( L_BENCH_GLOB ) rt_calc_invtau2 = rt_calc_invtau2 + toc(t_step)
             endif
+            if( L_BENCH_GLOB ) t_step = tic()
             call self%obsfields(state)%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
                 &invtau2_even, invtau2_odd, prior_start, &
                 &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
+            if( L_BENCH_GLOB ) rt_extract_polar = rt_extract_polar + toc(t_step)
             if( write_cartesian_vols )then
                 ! Keep the Cartesian stage representative tied to the same restored
                 ! obsfield that generated the polar references at the stage handoff.
                 volname = refine3D_state_vol_fname(state)
+                if( L_BENCH_GLOB ) t_step = tic()
                 call self%obsfields(state)%write_merged_volume(volname, self%p_ptr%box_crop, self%p_ptr%smpd_crop, &
                     &kspan, invtau2_even, invtau2_odd, prior_start, real(self%p_ptr%box))
+                if( L_BENCH_GLOB ) rt_write_volume = rt_write_volume + toc(t_step)
             endif
         enddo
+        if( L_BENCH_GLOB ) t_step = tic()
         do state = 1,self%p_ptr%nstates
             obsfield_name = refine3D_obsfield_fname(state)
             obsfield_tmp_name = obsfield_name//'_tmp'
             call simple_rename(obsfield_tmp_name, obsfield_name, overwrite=.false.)
         enddo
+        if( L_BENCH_GLOB ) rt_rename_obsfields = rt_rename_obsfields + toc(t_step)
         if( write_cartesian_vols ) call volname%kill
         call obsfield_name%kill
         call obsfield_tmp_name%kill
         call prev_obsfield%kill
         call write_obsfield_vols_arg%kill
+        if( L_BENCH_GLOB ) t_step = tic()
         call mirror_slices_obsfield( self, reforis )
+        if( L_BENCH_GLOB ) rt_mirror = rt_mirror + toc(t_step)
+        if( L_BENCH_GLOB ) t_step = tic()
         call calc_fsc_from_refs(self, self%pfts_even, self%pfts_odd, 1, self%ncls, fsc)
         fsc_boxcrop(                 :self%kfromto(1)) = 1.0
         fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc(self%kfromto(1):self%interpklim))
@@ -521,6 +589,21 @@ contains
         enddo
         call frcs%write(string(FRCS_FILE))
         call frcs%kill
+        if( L_BENCH_GLOB ) rt_fsc_frc = rt_fsc_frc + toc(t_step)
+        if( present(bench) )then
+            if( size(bench) >= 1  ) bench(1)  = rt_prepare_prev_refs
+            if( size(bench) >= 2  ) bench(2)  = rt_coord_setup
+            if( size(bench) >= 3  ) bench(3)  = rt_shell_geom
+            if( size(bench) >= 4  ) bench(4)  = rt_prev_read
+            if( size(bench) >= 5  ) bench(5)  = rt_blend_prev
+            if( size(bench) >= 6  ) bench(6)  = rt_checkpoint_write
+            if( size(bench) >= 7  ) bench(7)  = rt_calc_invtau2
+            if( size(bench) >= 8  ) bench(8)  = rt_extract_polar
+            if( size(bench) >= 9  ) bench(9)  = rt_write_volume
+            if( size(bench) >= 10 ) bench(10) = rt_rename_obsfields
+            if( size(bench) >= 11 ) bench(11) = rt_mirror
+            if( size(bench) >= 12 ) bench(12) = rt_fsc_frc
+        endif
         if( allocated(prev_even) ) deallocate(prev_even)
         if( allocated(prev_odd)  ) deallocate(prev_odd)
     end subroutine polar_cavger_normalize_obsfield_refs
@@ -704,7 +787,7 @@ contains
             call read_ctf2_array(self, fname, prev_ctf2_odd)
         else
             if( prev_pftsz /= self%pftsz )then
-                THROW_HARD('Previous polar sums have different pftsz, cannot be used for trailing reconstruction')
+                THROW_HARD('No current policy for trailing reconstruction with polar=yes when pftsz changes between stages')
             endif
             if( prev_nrefs > self%ncls )then
                 THROW_HARD('Previous per-state nspace is larger than current, cannot remap trailing reconstruction sums')

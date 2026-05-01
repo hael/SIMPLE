@@ -319,22 +319,36 @@ contains
         call fname%kill
     end subroutine polar_cavger_write_obsfield_parts
 
-    module subroutine polar_cavger_assemble_obsfields_from_parts( self, reforis )
+    module subroutine polar_cavger_assemble_obsfields_from_parts( self, reforis, bench )
         class(polarft_calc), intent(inout) :: self
         class(oris), target, intent(inout) :: reforis
+        real(timer_int_kind), optional, intent(out) :: bench(:)
         type(fgrid_obsfield_eo) :: obs_part
         type(string) :: fname
+        integer(timer_int_kind) :: t_read, t_append
         integer :: istate, ipart
+        real(timer_int_kind) :: rt_read, rt_append
+        rt_read   = 0.
+        rt_append = 0.
+        if( present(bench) ) bench = 0.
         call ensure_obsfields_allocated(self)
         do istate = 1, self%p_ptr%nstates
             call self%obsfields(istate)%reset
             do ipart = 1, self%p_ptr%nparts
                 fname = refine3D_obsfield_part_fname(istate, ipart, self%p_ptr%numlen)
+                if( L_BENCH_GLOB ) t_read = tic()
                 call obs_part%read(fname)
+                if( L_BENCH_GLOB ) rt_read = rt_read + toc(t_read)
+                if( L_BENCH_GLOB ) t_append = tic()
                 call self%obsfields(istate)%append_field(obs_part)
+                if( L_BENCH_GLOB ) rt_append = rt_append + toc(t_append)
                 call obs_part%kill
             enddo
         enddo
+        if( present(bench) )then
+            if( size(bench) >= 1 ) bench(1) = rt_read
+            if( size(bench) >= 2 ) bench(2) = rt_append
+        endif
         call obs_part%kill
         call fname%kill
     end subroutine polar_cavger_assemble_obsfields_from_parts

@@ -48,6 +48,7 @@ type :: fgrid_obs_field
     procedure, public  :: blend_field            => obsfield_blend_field
     procedure, public  :: extract_polar          => obsfield_extract_polar
     procedure, public  :: calc_invtau2           => obsfield_calc_invtau2
+    procedure, public  :: log_shell_budget_stats => obsfield_log_shell_budget_stats
     procedure, public  :: get_nobs               => obsfield_get_nobs
     procedure, public  :: get_ncells             => obsfield_get_ncells
     procedure, private :: compatible_with        => obsfield_compatible_with
@@ -66,6 +67,7 @@ type :: fgrid_obsfield_eo
     procedure, public :: append_field  => obsfield_eo_append_field
     procedure, public :: blend_field   => obsfield_eo_blend_field
     procedure, public :: extract_polar => obsfield_eo_extract_polar
+    procedure, public :: log_shell_budget_stats => obsfield_eo_log_shell_budget_stats
     procedure, public :: write_merged_volume => obsfield_eo_write_merged_volume
     procedure, public :: write         => obsfield_eo_write
     procedure, public :: read          => obsfield_eo_read
@@ -80,13 +82,17 @@ contains
         unsampled_floor = min(OBSFIELD_UNSAMPLED_FLOOR, OBSFIELD_UNSAMPLED_FLOOR * grid_den)
     end function unsampled_floor
 
-    subroutine obsfield_new( self, lims, nyq )
+    subroutine obsfield_new( self, lims, nyq, zero_init )
         class(fgrid_obs_field), intent(inout) :: self
         integer,                intent(in)    :: lims(3,2)
         integer,                intent(in)    :: nyq
+        logical, optional,      intent(in)    :: zero_init
         real(dp) :: ncells_dp
         integer  :: dim
+        logical  :: l_zero_init
         call self%kill
+        l_zero_init = .true.
+        if( present(zero_init) ) l_zero_init = zero_init
         if( nyq < 1 ) THROW_HARD('invalid nyq; obsfield_new')
         if( any(lims(:,2) < lims(:,1)) ) THROW_HARD('invalid limits; obsfield_new')
         ! KBALPHA selects the standard kernel shape; obsfield coordinates
@@ -106,24 +112,48 @@ contains
         ncells_dp = real(self%grid_shape(1),dp) * real(self%grid_shape(2),dp) * real(self%grid_shape(3),dp)
         if( ncells_dp > real(huge(0),dp) ) THROW_HARD('grid exceeds default integer range; obsfield_new')
         self%ncells = int(ncells_dp)
-        allocate(self%grid_num(self%grid_lims(1,1):self%grid_lims(1,2), &
-            self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
-            source=DCMPLX_ZERO)
-        allocate(self%grid_den(self%grid_lims(1,1):self%grid_lims(1,2), &
-            self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
-            source=0.d0)
-        allocate(self%grid_obs(self%grid_lims(1,1):self%grid_lims(1,2), &
-            self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
-            source=.false.)
+        if( l_zero_init )then
+            allocate(self%grid_num(self%grid_lims(1,1):self%grid_lims(1,2), &
+                self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
+                source=DCMPLX_ZERO)
+            allocate(self%grid_den(self%grid_lims(1,1):self%grid_lims(1,2), &
+                self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
+                source=0.d0)
+            allocate(self%grid_obs(self%grid_lims(1,1):self%grid_lims(1,2), &
+                self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)), &
+                source=.false.)
+        else
+            allocate(self%grid_num(self%grid_lims(1,1):self%grid_lims(1,2), &
+                self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)))
+            allocate(self%grid_den(self%grid_lims(1,1):self%grid_lims(1,2), &
+                self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)))
+            allocate(self%grid_obs(self%grid_lims(1,1):self%grid_lims(1,2), &
+                self%grid_lims(2,1):self%grid_lims(2,2), self%grid_lims(3,1):self%grid_lims(3,2)))
+        endif
         self%initialized = .true.
     end subroutine obsfield_new
 
     subroutine obsfield_reset( self )
         class(fgrid_obs_field), intent(inout) :: self
+        integer :: h, k, l
         self%nobs      = 0
-        if( allocated(self%grid_num) ) self%grid_num = DCMPLX_ZERO
-        if( allocated(self%grid_den) ) self%grid_den = 0.d0
-        if( allocated(self%grid_obs) ) self%grid_obs = .false.
+        if( allocated(self%grid_num) .and. allocated(self%grid_den) .and. allocated(self%grid_obs) )then
+            !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l) proc_bind(close)
+            do l = lbound(self%grid_num,3), ubound(self%grid_num,3)
+                do k = lbound(self%grid_num,2), ubound(self%grid_num,2)
+                    do h = lbound(self%grid_num,1), ubound(self%grid_num,1)
+                        self%grid_num(h,k,l) = DCMPLX_ZERO
+                        self%grid_den(h,k,l) = 0.d0
+                        self%grid_obs(h,k,l) = .false.
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+        else
+            if( allocated(self%grid_num) ) self%grid_num = DCMPLX_ZERO
+            if( allocated(self%grid_den) ) self%grid_den = 0.d0
+            if( allocated(self%grid_obs) ) self%grid_obs = .false.
+        endif
     end subroutine obsfield_reset
 
     subroutine obsfield_kill( self )
@@ -287,13 +317,24 @@ contains
     subroutine obsfield_append_field( self, src )
         class(fgrid_obs_field), intent(inout) :: self
         class(fgrid_obs_field), intent(in)    :: src
+        integer :: h, k, l, nobs_new
         if( .not. src%initialized ) return
         if( .not. self%initialized ) THROW_HARD('destination not initialized; obsfield_append_field')
         if( .not. self%compatible_with(src) ) THROW_HARD('incompatible observation fields; obsfield_append_field')
-        self%grid_num = self%grid_num + src%grid_num
-        self%grid_den = self%grid_den + src%grid_den
-        self%grid_obs = self%grid_obs .or. src%grid_obs
-        self%nobs      = count(self%grid_obs)
+        nobs_new = 0
+        !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l) reduction(+:nobs_new) proc_bind(close)
+        do l = lbound(self%grid_num,3), ubound(self%grid_num,3)
+            do k = lbound(self%grid_num,2), ubound(self%grid_num,2)
+                do h = lbound(self%grid_num,1), ubound(self%grid_num,1)
+                    self%grid_num(h,k,l) = self%grid_num(h,k,l) + src%grid_num(h,k,l)
+                    self%grid_den(h,k,l) = self%grid_den(h,k,l) + src%grid_den(h,k,l)
+                    self%grid_obs(h,k,l) = self%grid_obs(h,k,l) .or. src%grid_obs(h,k,l)
+                    if( self%grid_obs(h,k,l) ) nobs_new = nobs_new + 1
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        self%nobs = nobs_new
     end subroutine obsfield_append_field
 
     subroutine obsfield_blend_field( self, prev, update_frac )
@@ -302,6 +343,7 @@ contains
         real(dp),                intent(in)    :: update_frac
         real(dp) :: weight_prev
         integer  :: lo(3), hi(3)
+        integer  :: h, k, l, nobs_new
         logical  :: l_intersection_subset
         if( .not. self%initialized ) THROW_HARD('destination not initialized; obsfield_blend_field')
         if( .not. prev%initialized ) return
@@ -322,16 +364,25 @@ contains
                 &' current_nyq=', self%nyq, ' prev_nyq=', prev%nyq, &
                 &' current_grid_lims=', self%grid_lims, ' prev_grid_lims=', prev%grid_lims, ' overlap=', lo, hi
         endif
-        self%grid_num(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = &
-            &update_frac * self%grid_num(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) + &
-            &weight_prev * prev%grid_num(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
-        self%grid_den(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = &
-            &update_frac * self%grid_den(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) + &
-            &weight_prev * prev%grid_den(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
-        self%grid_obs(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = &
-            &((update_frac > DTINY) .and. self%grid_obs(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))) .or. &
-            &((weight_prev > DTINY) .and. prev%grid_obs(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-        self%nobs = count(self%grid_obs)
+        nobs_new = 0
+        !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l) reduction(+:nobs_new) proc_bind(close)
+        do l = lo(3), hi(3)
+            do k = lo(2), hi(2)
+                do h = lo(1), hi(1)
+                    self%grid_num(h,k,l) = update_frac * self%grid_num(h,k,l) + weight_prev * prev%grid_num(h,k,l)
+                    self%grid_den(h,k,l) = update_frac * self%grid_den(h,k,l) + weight_prev * prev%grid_den(h,k,l)
+                    self%grid_obs(h,k,l) = ((update_frac > DTINY) .and. self%grid_obs(h,k,l)) .or. &
+                        &((weight_prev > DTINY) .and. prev%grid_obs(h,k,l))
+                    if( self%grid_obs(h,k,l) ) nobs_new = nobs_new + 1
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        if( l_intersection_subset )then
+            self%nobs = count(self%grid_obs)
+        else
+            self%nobs = nobs_new
+        endif
     end subroutine obsfield_blend_field
 
     subroutine obsfield_calc_invtau2( self, kfromto, fsc, fudge, prior_start, invtau2 )
@@ -379,6 +430,13 @@ contains
         enddo
         deallocate(rsum, sig2, ssnr, tau2, cnt)
     end subroutine obsfield_calc_invtau2
+
+    subroutine obsfield_log_shell_budget_stats( self, kfromto, shell_nodes, label )
+        class(fgrid_obs_field), intent(in) :: self
+        integer,                intent(in) :: kfromto(2), shell_nodes(:)
+        character(len=*),       intent(in) :: label
+        call log_single_field_shell_budget(self, kfromto, shell_nodes, label, 'single')
+    end subroutine obsfield_log_shell_budget_stats
 
     ! Reconstructor-like obsfield extraction: restore each Cartesian cell as
     ! grid_num / (grid_den + prior(shell)) before KB gathering. This avoids the
@@ -609,6 +667,137 @@ contains
         !$omp end parallel
     end subroutine obsfield_eo_extract_polar
 
+    subroutine obsfield_eo_log_shell_budget_stats( self, kfromto, shell_nodes, label )
+        class(fgrid_obsfield_eo), intent(in) :: self
+        integer,                  intent(in) :: kfromto(2), shell_nodes(:)
+        character(len=*),         intent(in) :: label
+        call log_single_field_shell_budget(self%even, kfromto, shell_nodes, label, 'even')
+        call log_single_field_shell_budget(self%odd,  kfromto, shell_nodes, label, 'odd')
+        call log_merged_field_shell_budget(self, kfromto, shell_nodes, label, 'merged')
+    end subroutine obsfield_eo_log_shell_budget_stats
+
+    subroutine log_single_field_shell_budget( self, kfromto, shell_nodes, label, half )
+        class(fgrid_obs_field), intent(in) :: self
+        integer,                intent(in) :: kfromto(2), shell_nodes(:)
+        character(len=*),       intent(in) :: label, half
+        real(dp), allocatable :: den_sum(:), den_min(:), den_max(:)
+        integer,  allocatable :: obs_count(:), cell_count(:)
+        real(dp) :: coverage, den_mean
+        integer  :: h, k, l, shell, ik, nk, node_count
+        if( .not. self%initialized ) return
+        nk = kfromto(2) - kfromto(1) + 1
+        if( nk < 1 .or. size(shell_nodes) /= nk ) return
+        allocate(obs_count(nk), cell_count(nk), source=0)
+        allocate(den_sum(nk), source=0.d0)
+        allocate(den_min(nk), source=huge(0.d0))
+        allocate(den_max(nk), source=0.d0)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,shell,ik) &
+        !$omp reduction(+:obs_count,cell_count,den_sum) reduction(min:den_min) reduction(max:den_max) schedule(static) proc_bind(close)
+        do l = self%lims(3,1), self%lims(3,2)
+            do k = self%lims(2,1), self%lims(2,2)
+                do h = self%lims(1,1), self%lims(1,2)
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                    ik = shell - kfromto(1) + 1
+                    cell_count(ik) = cell_count(ik) + 1
+                    if( .not. self%grid_obs(h,k,l) ) cycle
+                    obs_count(ik) = obs_count(ik) + 1
+                    den_sum(ik) = den_sum(ik) + self%grid_den(h,k,l)
+                    den_min(ik) = min(den_min(ik), self%grid_den(h,k,l))
+                    den_max(ik) = max(den_max(ik), self%grid_den(h,k,l))
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        call log_shell_budget_summary(label, half, shell_nodes, cell_count, obs_count, den_sum)
+        do ik = 1,nk
+            node_count = max(1, shell_nodes(ik))
+            coverage = real(obs_count(ik),dp) / real(node_count,dp)
+            if( obs_count(ik) > 0 )then
+                den_mean = den_sum(ik) / real(obs_count(ik),dp)
+            else
+                den_mean = 0.d0
+                den_min(ik) = 0.d0
+            endif
+            write(logfhandle,'(A,1X,A,2X,A,1X,A,2X,A,I4,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3,2X,A,ES12.4,2X,A,ES12.4,2X,A,ES12.4,2X,A,ES12.4)') &
+                &'obsfield shell-accum', trim(label), 'half=', trim(half), 'k=', kfromto(1)+ik-1, &
+                &'field_nodes=', shell_nodes(ik), 'cart_cells=', cell_count(ik), 'obs_cells=', obs_count(ik), &
+                &'obs_per_node=', coverage, 'den_sum=', den_sum(ik), 'den_mean=', den_mean, &
+                &'den_min=', den_min(ik), 'den_max=', den_max(ik)
+        enddo
+        deallocate(obs_count, cell_count, den_sum, den_min, den_max)
+    end subroutine log_single_field_shell_budget
+
+    subroutine log_merged_field_shell_budget( self, kfromto, shell_nodes, label, half )
+        class(fgrid_obsfield_eo), intent(in) :: self
+        integer,                  intent(in) :: kfromto(2), shell_nodes(:)
+        character(len=*),         intent(in) :: label, half
+        real(dp), allocatable :: den_sum(:), den_min(:), den_max(:)
+        integer,  allocatable :: obs_count(:), cell_count(:)
+        real(dp) :: coverage, den_here, den_mean
+        integer  :: h, k, l, shell, ik, nk, node_count
+        if( .not. self%even%initialized .or. .not. self%odd%initialized ) return
+        nk = kfromto(2) - kfromto(1) + 1
+        if( nk < 1 .or. size(shell_nodes) /= nk ) return
+        allocate(obs_count(nk), cell_count(nk), source=0)
+        allocate(den_sum(nk), source=0.d0)
+        allocate(den_min(nk), source=huge(0.d0))
+        allocate(den_max(nk), source=0.d0)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,shell,ik,den_here) &
+        !$omp reduction(+:obs_count,cell_count,den_sum) reduction(min:den_min) reduction(max:den_max) schedule(static) proc_bind(close)
+        do l = self%even%lims(3,1), self%even%lims(3,2)
+            do k = self%even%lims(2,1), self%even%lims(2,2)
+                do h = self%even%lims(1,1), self%even%lims(1,2)
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                    ik = shell - kfromto(1) + 1
+                    cell_count(ik) = cell_count(ik) + 1
+                    if( .not. (self%even%grid_obs(h,k,l) .or. self%odd%grid_obs(h,k,l)) ) cycle
+                    den_here = self%even%grid_den(h,k,l) + self%odd%grid_den(h,k,l)
+                    obs_count(ik) = obs_count(ik) + 1
+                    den_sum(ik) = den_sum(ik) + den_here
+                    den_min(ik) = min(den_min(ik), den_here)
+                    den_max(ik) = max(den_max(ik), den_here)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        call log_shell_budget_summary(label, half, shell_nodes, cell_count, obs_count, den_sum)
+        do ik = 1,nk
+            node_count = max(1, shell_nodes(ik))
+            coverage = real(obs_count(ik),dp) / real(node_count,dp)
+            if( obs_count(ik) > 0 )then
+                den_mean = den_sum(ik) / real(obs_count(ik),dp)
+            else
+                den_mean = 0.d0
+                den_min(ik) = 0.d0
+            endif
+            write(logfhandle,'(A,1X,A,2X,A,1X,A,2X,A,I4,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3,2X,A,ES12.4,2X,A,ES12.4,2X,A,ES12.4,2X,A,ES12.4)') &
+                &'obsfield shell-accum', trim(label), 'half=', trim(half), 'k=', kfromto(1)+ik-1, &
+                &'field_nodes=', shell_nodes(ik), 'cart_cells=', cell_count(ik), 'obs_cells=', obs_count(ik), &
+                &'obs_per_node=', coverage, 'den_sum=', den_sum(ik), 'den_mean=', den_mean, &
+                &'den_min=', den_min(ik), 'den_max=', den_max(ik)
+        enddo
+        deallocate(obs_count, cell_count, den_sum, den_min, den_max)
+    end subroutine log_merged_field_shell_budget
+
+    subroutine log_shell_budget_summary( label, half, shell_nodes, cell_count, obs_count, den_sum )
+        character(len=*), intent(in) :: label, half
+        integer,          intent(in) :: shell_nodes(:), cell_count(:), obs_count(:)
+        real(dp),         intent(in) :: den_sum(:)
+        real(dp) :: obs_per_node, obs_per_cell
+        integer  :: total_nodes, total_cells, total_obs
+        total_nodes = sum(shell_nodes)
+        total_cells = sum(cell_count)
+        total_obs   = sum(obs_count)
+        obs_per_node = real(total_obs,dp) / real(max(1,total_nodes),dp)
+        obs_per_cell = real(total_obs,dp) / real(max(1,total_cells),dp)
+        write(logfhandle,'(A,1X,A,2X,A,1X,A,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3,2X,A,F8.3,2X,A,ES12.4)') &
+            &'obsfield shell-accum summary', trim(label), 'half=', trim(half), &
+            &'field_nodes=', total_nodes, 'cart_cells=', total_cells, 'obs_cells=', total_obs, &
+            &'obs_per_node=', obs_per_node, 'obs_per_cell=', obs_per_cell, 'den_sum=', sum(den_sum)
+    end subroutine log_shell_budget_summary
+
     subroutine obsfield_eo_write_merged_volume( self, fname, box, smpd, kfromto, invtau2_even, invtau2_odd, &
             &prior_start, mag_correction )
         class(fgrid_obsfield_eo), intent(in) :: self
@@ -761,7 +950,7 @@ contains
             THROW_HARD('obsfield file lacks gate-format marker; remove stale obsfield parts: '//trim(label))
         endif
         ncells     = header(21) / OBSFIELD_GATE_FORMAT_SIGN
-        call self%new(lims, header(2))
+        call self%new(lims, header(2), zero_init=.false.)
         if( self%pf /= header(1) .or. self%iwinsz /= header(3) .or. self%wdim /= header(4) ) &
             &THROW_HARD('obsfield scalar header mismatch; '//trim(label))
         if( any(self%grid_lims /= grid_lims) .or. any(self%grid_shape /= grid_shape) .or. &

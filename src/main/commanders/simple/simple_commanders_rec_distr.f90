@@ -68,8 +68,11 @@ contains
         type(string) :: benchfname
         integer(timer_int_kind) :: t_tot, t_setup, t_reduce, t_normalize, t_resolution, t_write
         real(timer_int_kind)    :: rt_tot, rt_setup, rt_reduce, rt_normalize, rt_resolution, rt_write
+        real(timer_int_kind)    :: rt_obs_reduce_detail(2), rt_obs_norm_detail(12)
         real                   :: update_frac_eff
         integer :: fnr, nrefs
+        rt_obs_reduce_detail = 0.
+        rt_obs_norm_detail   = 0.
         call build%init_params_and_build_general_tbox(cline, params)
         if( L_BENCH_GLOB ) t_tot = tic()
         ! Matchers write partition-local Cartesian partial reconstructions,
@@ -92,10 +95,10 @@ contains
         select case(trim(params%polar))
             case('obsfield')
                 if( L_BENCH_GLOB ) t_reduce = tic()
-                call build%pftc%polar_cavger_assemble_obsfields_from_parts(build%eulspace)
+                call build%pftc%polar_cavger_assemble_obsfields_from_parts(build%eulspace, rt_obs_reduce_detail)
                 if( L_BENCH_GLOB ) rt_reduce = toc(t_reduce)
                 if( L_BENCH_GLOB ) t_normalize = tic()
-                call build%pftc%polar_cavger_normalize_obsfield_refs(build%eulspace, cline, update_frac_eff)
+                call build%pftc%polar_cavger_normalize_obsfield_refs(build%eulspace, cline, update_frac_eff, rt_obs_norm_detail)
                 if( L_BENCH_GLOB ) rt_normalize = toc(t_normalize)
             case('yes')
                 if( L_BENCH_GLOB ) t_reduce = tic()
@@ -125,7 +128,21 @@ contains
             select case(trim(params%polar))
                 case('obsfield')
                     write(fnr,'(a,t52,f9.2)') 'volassemble reduce obsfield parts       : ', rt_reduce
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield read parts         : ', rt_obs_reduce_detail(1)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield append parts       : ', rt_obs_reduce_detail(2)
                     write(fnr,'(a,t52,f9.2)') 'volassemble normalize obsfield refs     : ', rt_normalize
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prepare prev refs  : ', rt_obs_norm_detail(1)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield coord setup        : ', rt_obs_norm_detail(2)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield shell geom         : ', rt_obs_norm_detail(3)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield read previous      : ', rt_obs_norm_detail(4)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield blend previous     : ', rt_obs_norm_detail(5)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield checkpoint write   : ', rt_obs_norm_detail(6)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield calc invtau2       : ', rt_obs_norm_detail(7)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield extract polar      : ', rt_obs_norm_detail(8)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield write merged vol   : ', rt_obs_norm_detail(9)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield rename fields      : ', rt_obs_norm_detail(10)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield mirror refs        : ', rt_obs_norm_detail(11)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield fsc/frc bookkeeping: ', rt_obs_norm_detail(12)
                 case('yes')
                     write(fnr,'(a,t52,f9.2)') 'volassemble reduce polar sums           : ', rt_reduce
                     write(fnr,'(a,t52,f9.2)') 'volassemble normalize common-line refs  : ', rt_normalize
