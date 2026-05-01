@@ -355,7 +355,8 @@ contains
         class(commander_base), optional, intent(inout) :: xrec3D
         type(commander_symmetrize_map) :: xsymmap
         type(cmdline)                  :: cline_asymrec, cline_symrec
-        type(string) :: vol_iter, vol_sym, vol_diag
+        type(string) :: vol_iter, vol_sym, stage, vol_stage, vol_lp_stage
+        real :: lp_snapshot
         real :: lpsym
         if( l_symran )then
             call se1%symrandomize(spproj%os_ptcl3D)
@@ -382,8 +383,6 @@ contains
                 call xrec3D%execute(cline_asymrec)
                 vol_iter = 'asymmetric_map'//MRC_EXT
                 call simple_copy_file(refine3D_state_vol_fname(1), vol_iter)
-                vol_diag = add2fbody(vol_iter, MRC_EXT, LP_SUFFIX)
-                call write_abinitio_lowpass_snapshot(vol_iter, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
                 call cline_asymrec%kill
             else
                 ! Volume from previous stage
@@ -403,8 +402,6 @@ contains
             write(logfhandle,'(A)') '>>> MAP SYMMETRIZATION'
             write(logfhandle,'(A)') '>>>'
             call xsymmap%execute(cline_symmap)
-            vol_diag = add2fbody(vol_sym, MRC_EXT, LP_SUFFIX)
-            call write_abinitio_lowpass_snapshot(vol_sym, lpsym, vol_diag, lpinfo(istage)%smpd_crop)
             call del_file('SYMAXIS_SEARCH_FINISHED')
             if( present(xrec3D) )then
                 ! symmetric reconstruction
@@ -422,17 +419,22 @@ contains
                 call xrec3D%execute(cline_symrec)
                 vol_sym = refine3D_state_vol_fname(1)
                 call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
-                vol_diag = add2fbody(string('symmetric_map')//MRC_EXT, MRC_EXT, LP_SUFFIX)
-                call write_abinitio_lowpass_snapshot(string('symmetric_map')//MRC_EXT, lpinfo(istage)%lp, vol_diag, lpinfo(istage)%smpd_crop)
                 call cline_symrec%kill
             endif
+            stage        = '_stage'//int2str_pad(istage,2)
+            vol_stage    = add2fbody(refine3D_state_vol_fname(1), string(MRC_EXT), stage)
+            vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
+            lp_snapshot  = abinitio_state_fsc_lowpass(1, lpinfo(istage)%box_crop, &
+                &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+            call write_abinitio_lowpass_snapshot(vol_sym, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
             if( l_polar )then
                 call inject_polar_refine3D_volume(params, 1, vol_sym)
             else
                 call inject_refine3D_volume(params, 1, vol_sym)
             endif
         endif
-        call vol_diag%kill
+        call vol_stage%kill
+        call vol_lp_stage%kill
     end subroutine symmetrize
 
     ! Performs reconstruction at some set stages when polar mode is enabled

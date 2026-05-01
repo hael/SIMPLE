@@ -745,6 +745,9 @@ contains
                 endif
             endif
             if( .not. vol_defined )then
+                if( params%l_polar .and. trim(params%polar) == 'obsfield' )then
+                    THROW_HARD('obsfield refine3D initialization requires obsfield-derived POLAR_REFS; Cartesian bootstrap is not allowed')
+                endif
                 ! reconstructions needed
                 cline_tmp = self%cline_rec3D
                 call cline_tmp%delete('trail_rec')

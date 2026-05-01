@@ -295,9 +295,9 @@ contains
                     else
                         cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
                     endif
-                    ! obsfield remaps refs onto the current space directly,
-                    ! so inspace should reflect the natural stage spacing (2500 at prob stages 5-6)
-                    if( .not. polar_mode_remaps_refs(params%polar) ) cfg%inspace = NSPACE(stage_last)
+                    if( .not. polar_mode_remaps_refs(params%polar) )then
+                        cfg%inspace = NSPACE(stage_last)
+                    endif
                 endif
         end select
         select case(cfg%refine%to_char())
@@ -305,9 +305,8 @@ contains
                 cfg%inspace_sub = NEIGH_NSPACES(1)
                 cfg%inspace     = NEIGH_NSPACES(2)
         end select
-        ! Legacy polar trailing reconstruction still expects matching reference
-        ! arrays. obsfield remaps previous references onto the current
-        ! space directly.
+        ! Legacy polar trailing reconstruction expects matching reference
+        ! arrays. obsfield remaps previous nspace onto the current space.
         if( params%l_polar .and. (.not. polar_mode_remaps_refs(params%polar)) )then
             select case(cfg%refine%to_char())
                 case('prob_neigh')
@@ -321,8 +320,22 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
+        type(refine3D_stage_cfg) :: cfg_next
+        integer :: stage_last
+        stage_last = active_refine3D_nstages()
         if( istage < active_refine3D_nstages() )then
             cfg%inspace_next = max(cfg%inspace, refine3D_stage_nspace(params, istage + 1, route))
+            if( params%l_polar .and. polar_mode_remaps_refs(params%polar) )then
+                call set_refine3D_mode_policy( cfg_next, params, istage + 1, route )
+                call set_refine3D_trailrec_policy( cfg_next, params, istage + 1 )
+                if( cfg_next%trail_rec == 'yes' .and. cfg%ipftsz == 0 )then
+                    if( trim(params%multivol_mode)=='docked' )then
+                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(max(1,stage_last-1))%box_crop)
+                    else
+                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
+                    endif
+                endif
+            endif
         else
             cfg%inspace_next = NSPACE_NEXT_NONE
         endif

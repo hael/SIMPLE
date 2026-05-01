@@ -246,8 +246,6 @@ type :: parameters
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: polar='no'           !< Polar restoration mode(no|yes|obsfield){no}
-    character(len=STDLEN)     :: obsfield_shell_cache='no' !< Experimental obsfield shell-cache extraction(no|yes|compare){no}
-    character(len=STDLEN)     :: obsfield_shell_direct='no' !< Experimental direct obsfield shell extraction(no|yes|compare){no}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
@@ -372,7 +370,6 @@ type :: parameters
     integer :: numlen=0            !< length of number string
     integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correction{5}
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
-    integer :: obsfield_shell_os=1 !< direct obsfield shell angular oversampling factor{1}
     integer :: offset=20           !< pixels offset{20}
     integer :: optics_offset=0
     integer :: part=1
@@ -815,8 +812,6 @@ contains
         call check_carg('platonic',       self%platonic)
         call check_carg('plot_key',       self%plot_key)
         call check_carg('polar',          self%polar)
-        call check_carg('obsfield_shell_cache', self%obsfield_shell_cache)
-        call check_carg('obsfield_shell_direct', self%obsfield_shell_direct)
         call check_carg('postprocess',    self%postprocess)
         call check_carg('pre_norm',       self%pre_norm)
         call check_carg('prg',            self%prg)
@@ -1025,7 +1020,6 @@ contains
         call check_iarg('numlen',         self%numlen)
         call check_iarg('nxpatch',        self%nxpatch)
         call check_iarg('nypatch',        self%nypatch)
-        call check_iarg('obsfield_shell_os', self%obsfield_shell_os)
         call check_iarg('offset',         self%offset)
         call check_iarg('optics_offset',  self%optics_offset)
         call check_iarg('part',           self%part)
@@ -1650,17 +1644,6 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported POLAR argument: '//trim(self%polar))
         end select
-        select case(trim(self%obsfield_shell_cache))
-            case('no','yes','compare')
-            case DEFAULT
-                THROW_HARD('Unsupported obsfield_shell_cache argument: '//trim(self%obsfield_shell_cache))
-        end select
-        select case(trim(self%obsfield_shell_direct))
-            case('no','yes','compare')
-            case DEFAULT
-                THROW_HARD('Unsupported obsfield_shell_direct argument: '//trim(self%obsfield_shell_direct))
-        end select
-        if( self%obsfield_shell_os < 1 ) THROW_HARD('obsfield_shell_os must be >= 1')
         if( self%l_polar )then
             ! deactivate post-alignment cartesian reconstruction
             self%volrec = 'no'
