@@ -1,0 +1,4 @@
+<div id="waitinggauze"
+     class="flex flex-1 items-center justify-center text-[10px] text-streamlabel bg-streambar">
+    {% if "stage" in jobstats %}{{ jobstats.stage }}{% else %}waiting{% endif %} &hellip;
+</div>

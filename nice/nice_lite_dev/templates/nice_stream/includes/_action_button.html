@@ -1,0 +1,15 @@
+{% comment %}
+  _action_button.html — bouncing accent action button in a centred GET form.
+
+  Parameters:
+    label      — button text
+    action_url — named URL for the form action (passed through {% url %} by the caller)
+    jobid      — job primary key, passed as hidden selected_job_id field
+{% endcomment %}
+<div class="flex justify-center pb-3">
+    <form method="GET" action="{{ action_url }}" target="_parent">
+        {% csrf_token %}
+        <input name="selected_job_id" value="{{ jobid }}" type="hidden">
+        <button class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-streamring/15 text-streamaccent hover:bg-streamring/30 transition-colors animate-bounce cursor-pointer" type="submit">{{ label }}</button>
+    </form>
+</div>

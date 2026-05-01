@@ -29,22 +29,21 @@
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
     <!-- Loading gauze -->
-    {% include 'nice_stream/_panel_gauze_loading.html' %}
-
-    <!-- Waiting gauze: shown until particles arrive -->
-    {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
-        <div id="waitinggauze"
-             class="absolute inset-0 flex items-center justify-center text-[10px] text-streamlabel bg-streambar transition-opacity duration-300 delay-300 ease-in-out z-10">
-            waiting for particles&hellip;
-        </div>
-    {% endif %}
+    {% include 'nice_stream/includes/_panel_gauze_loading.html' %}
 
     <!-- Transient status overlays -->
-    {% include 'nice_stream/_panel_status_overlay.html' %}
+    {% include 'nice_stream/includes/_panel_status_overlay.html' %}
 
     <div class="flex flex-col h-full">
 
         <!-- Header: status · title · zoom · stop/restart -->
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+        {% include 'nice_stream/_panel_header.html' with panel_title="particle sieving" zoom_url="nice_lite:view_stream_sieve_particles_zoom" terminate_field="terminate_particle_sieving" restart_field="restart_particle_sieving" last_import=jobstats.last_micrograph_imported use_js=True %}
+
+        <!-- Particles pie chart -->
+        {% include 'nice_stream/_pie_chart.html' with count=jobstats.particles_imported label_text="particles" chart_class="particles_pie_chart" data_imported=jobstats.particles_imported data_middle=jobstats.particles_accepted data_rejected=jobstats.particles_rejected legend_1="unclassified" %}
+=======
         {% include 'nice_stream/_panel_header.html' with panel_title="particle sieving" zoom_url="nice_lite:view_stream_sieve_particles_zoom" terminate_field="terminate_particle_sieving" restart_field="restart_particle_sieving" last_import=jobstats.last_micrograph_imported use_js=True user_input_url="nice_lite:view_stream_sieve_particles_zoom" user_input_title="update reference selection" %}
 
         <!-- Count tiles -->
@@ -52,6 +51,21 @@
             {% include 'nice_stream/_count_tile.html' with count=jobstats.particles_accepted label="accepted" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%}
             {% include 'nice_stream/_count_tile.html' with count=jobstats.particles_rejected label="rejected" sublabel=jobstats.particles_imported sublabel_sep="/" variant="rejected"%}
         </div>
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+        {% include 'nice_stream/includes/_panel_header.html' with panel_title="particle sieving" zoom_url="nice_lite:view_stream_sieve_particles_zoom" terminate_field="terminate_particle_sieving" restart_field="restart_particle_sieving" last_import=jobstats.last_micrograph_imported use_js=True user_input_url="nice_lite:view_stream_sieve_particles_zoom" user_input_title="update reference selection" %}
+
+        <!-- Waiting gauze: shown until particles arrive (below header) -->
+        {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
+            {% include 'nice_stream/includes/_panel_waiting_gauze.html' %}
+        {% else %}
+
+        <!-- Count tiles -->
+        <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="accepted" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%}
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_rejected label="rejected" sublabel=jobstats.particles_imported sublabel_sep="/" variant="rejected"%}
+        </div>
+>>>>>>> Stashed changes
 
         <!-- Status message while sieving (no ref classes yet) -->
         {% if status == "running" and "ref_cls2D" not in jobstats %}
@@ -62,6 +76,31 @@
 
         <!-- Reference class gallery -->
         {% if "ref_cls2D" in jobstats and jobstats.ref_cls2D|length > 0 %}
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+            <div class="flex flex-col px-4 pt-3 flex-1">
+=======
+            <div class="flex flex-col px-4 pt-2 flex-1">
+>>>>>>> Stashed changes
+                <span class="text-[10px] text-streamlabel mb-2">reference classes</span>
+                <div class="flex items-center gap-1">
+
+                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
+
+                    <div class="flex flex-row flex-1 scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
+                        <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-3">
+                            {% for cls2D in jobstats.ref_cls2D %}
+<<<<<<< Updated upstream
+                                <div class="snap-center sieveclscontainer"
+                                     data-pop="{{ cls2D.pop }}"
+                                     data-res="{{ cls2D.res|floatformat:1 }}"
+                                     title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res|floatformat:1 }}Å">
+                                    <div oncontextmenu="showMenu(this, event)"
+                                         data-idx="{{ cls2D.idx }}"
+                                         style="background:url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%"
+                                         class="sievecls h-[70px] w-[70px] rounded m-[2px]"></div>
+                                </div>
+=======
             <div class="flex flex-col px-4 pt-2 flex-1">
                 <span class="text-[10px] text-streamlabel mb-2">reference classes</span>
                 <div class="flex items-center gap-1">
@@ -71,6 +110,8 @@
                     <div class="flex flex-row flex-1 scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
                         <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-3">
                             {% for cls2D in jobstats.ref_cls2D %}
+=======
+>>>>>>> Stashed changes
                                 {% if cls2D.selected %}
                                     <div class="snap-center sieveclscontainer"
                                         data-pop="{{ cls2D.pop }}"
@@ -82,6 +123,10 @@
                                             class="sievecls h-[66px] w-[66px] rounded m-[2px]"></div>
                                     </div>
                                 {% endif %}
+<<<<<<< Updated upstream
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+>>>>>>> Stashed changes
                             {% endfor %}
                         </div>
 
@@ -89,12 +134,41 @@
                         <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
                             <div name="selectmenubox"
                                  class="absolute flex flex-col bg-streambar border border-streamline rounded-lg shadow-sm text-[11px] text-streamtext p-1">
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                                <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+=======
                                 <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
                                 <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                                <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
+                                <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
+>>>>>>> Stashed changes
                             </div>
                         </div>
                     </div>
 
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                    <button type="button" class="text-streamaccent hover:text-streamtext transition-colors flex-shrink-0"
+                            onclick="scrlRight(this, event)">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                            <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+=======
+                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
+>>>>>>> Stashed changes
+
+                </div>
+            </div>
+        {% endif %}
+        {% endif %}
+
+<<<<<<< Updated upstream
+=======
                     {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
 
                 </div>
@@ -102,6 +176,10 @@
         {% endif %}
 
 
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+
+>>>>>>> Stashed changes
     </div>
 
 </body>

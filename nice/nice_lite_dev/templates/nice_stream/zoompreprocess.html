@@ -9,29 +9,24 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
     <script src={% static 'nice_stream/panelpreprocess.js' %}></script>
 </head>
-<body class="w-full h-screen flex flex-col bg-nice4bg text-nice4dark">
-    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
-        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:view_stream' jobid %} title="back">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
-            </svg>
-        </a>
-        <div class="px-[10px] text-[18px]">{{ displayid }} stream - preprocessing</div>
-    </div>
+<body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
+    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='preprocessing' %}
     <div class="w-full flex flex-row p-[10px]">
-        <div class="flex flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
-            <div class="flex flex-row">
-                {% if "movies_imported" in jobstats and "movies_processed" in jobstats and "movies_rejected" in jobstats and jobstats.movies_imported > 0 %}
-                    <div class="flex flex-col">
-                        <div class="font-bold text-[12px] pl-[10px]">movies</div>
-                        <div class="h-[50px] w-[150px] m-auto">
-                            <canvas class="movies_pie_chart" data-imported={{ jobstats.movies_imported }} data-processed={{ jobstats.movies_processed }} data-rejected={{ jobstats.movies_rejected }}></canvas>
-                        </div>
+        <div class="flex flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline">
+            {% if "movies_imported" in jobstats and "movies_processed" in jobstats and "movies_rejected" in jobstats and jobstats.movies_imported > 0 %}
+                <div class="flex flex-col w-full">
+                    <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px]">movies</div>
+                    <div class="flex gap-2 p-[10px] pb-[6px]">
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_processed label='processed' %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_imported label='imported' variant='neutral' %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_rejected label='rejected' variant='rejected' %}
                     </div>
-                {% endif %}
+                </div>
+            {% endif %}
+            <div class="flex flex-row flex-wrap gap-[10px] p-[5px]">
                 {% if "histograms" in jobstats and "ctfres" in jobstats.histograms %}
-                    <div class="flex flex-col ml-[15px]">
-                        <div class="font-bold text-[12px] pl-[10px]">ctf resolution</div>
+                    <div class="flex flex-col">
+                        <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px]">ctf resolution</div>
                         <div class="h-[100px] w-[240px] ml-[15px]">
                             <form id="update_preprocess_ctfres" class="hidden" method="POST" action={% url 'nice_lite:update_stream_parameters' %}>
                                 {% csrf_token %}
@@ -42,11 +37,9 @@
                         </div>
                     </div>
                 {% endif %}
-            </div>
-            <div class="flex flex-row mt-[20px]">
                 {% if "histograms" in jobstats and "astig" in jobstats.histograms %}
                     <div class="flex flex-col">
-                        <div class="font-bold text-[12px] pl-[10px]">astigmatism</div>
+                        <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px]">astigmatism</div>
                         <div class="h-[100px] w-[240px] ml-[15px]">
                             <form id="update_preprocess_astig" class="hidden" method="POST" action={% url 'nice_lite:update_stream_parameters' %}>
                                 {% csrf_token %}
@@ -58,8 +51,8 @@
                     </div>
                 {% endif %}
                 {% if "histograms" in jobstats and "icefrac" in jobstats.histograms %}
-                    <div class="flex flex-col ml-[15px]">
-                        <div class="font-bold text-[12px] pl-[10px]">ice score</div>
+                    <div class="flex flex-col">
+                        <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px]">ice score</div>
                         <div class="h-[100px] w-[240px] ml-[15px]">
                             <form id="update_preprocess_icescore" class="hidden" method="POST" action={% url 'nice_lite:update_stream_parameters' %}>
                                 {% csrf_token %}
@@ -72,26 +65,14 @@
                 {% endif %}
             </div>
         </div>
-        <div class="flex ml-[10px] flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
-            <div class="font-bold text-[12px]">log</div>
-            <div class="logtext h-[200px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
-                <pre class="text-[10px]">{{log}}</pre>
-            </div>
-            <div class="font-bold text-[12px]">errors</div>
-            <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
-                <pre class="text-[10px]">{{error}}</pre>
-            </div>
+        <div class="flex ml-[10px] flex-1 flex-col bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline overflow-hidden">
+            {% include 'nice_stream/includes/_zoom_log_errors_pre_body.html' %}
         </div>
-        <div class="flex ml-[10px] flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
-            <div class="font-bold text-[12px] pl-[10px]">help</div>
-            <div class="flex-1 w-[200px] overflow-auto mx-[10px] p-[5px]">
-                <div class="text-[10px]">some help text</div>
-            </div>
-        </div>
+        {% include 'nice_stream/includes/_zoom_help_panel.html' %}
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
-        <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
-            <div class="font-bold text-[12px]">latest micrographs</div>
+        <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline">
+            <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest mb-2">latest micrographs</div>
             {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
                 <div class="flex flex-row flex-wrap overflow-y-scroll snap-y snap-mandatory">
                    {% for micrograph in jobstats.latest_micrographs %}
@@ -100,17 +81,17 @@
                         </div>
                      {% endfor %} 
                      <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                        <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] p-[2px] rounded">
+                        <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-streambar m-[5px] border-streamline border p-[2px] rounded">
                             <div class="flex flex-col">
-                                <div class="font-bold">contrast</div>
+                                <div class="text-[10px] text-streamlabel">contrast</div>
                                 <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
                             </div>
                             <div class="flex flex-col">
-                                <div class="font-bold">brightness</div>
+                                <div class="text-[10px] text-streamlabel">brightness</div>
                                 <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
                             </div>
                             <div class="flex flex-col">
-                                <div class="font-bold">scale</div>
+                                <div class="text-[10px] text-streamlabel">scale</div>
                                 <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="1000" min="100" step="10" value="600"></input> 
                             </div>
                         </div>

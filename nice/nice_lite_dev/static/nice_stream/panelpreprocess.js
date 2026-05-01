@@ -1,6 +1,52 @@
 let lastinteraction = Date.now();
 const autoscrolls = new Map();
+<<<<<<< Updated upstream
+=======
 
+const stopAutoscroll = (slider) => {
+    if (autoscrolls.has(slider)) {
+        clearInterval(autoscrolls.get(slider));
+        autoscrolls.delete(slider);
+    }
+};
+
+const startAutoscroll = (slider) => {
+    const id = setInterval(() => {
+        const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
+        slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + slider.clientWidth;
+        updateLabel(slider);
+    }, 5000);
+    autoscrolls.set(slider, id);
+};
+
+const updateLabel = (slider) => {
+    const label = slider.closest('.flex-col')?.querySelector('[id$="_label"]');
+    if (!label) return;
+    const idx = Math.round(slider.scrollLeft / slider.clientWidth);
+    const slide = slider.children[idx];
+    if (!slide) return;
+    const newText = slide.dataset.label ?? '';
+    if (label.textContent === newText) return;
+    label.style.opacity = '0';
+    setTimeout(() => {
+        label.textContent = newText;
+        label.style.opacity = '1';
+    }, 150);
+};
+>>>>>>> Stashed changes
+
+<<<<<<< HEAD
+const scrlRight = (element, event) => {
+    event.preventDefault();
+    const slider = element.previousElementSibling;
+    const count = slider.children.length;
+    if (!count) return;
+    const w = slider.scrollWidth / count;
+    const idx = Math.round(slider.scrollLeft / w);
+    slider.scrollLeft = ((idx + 1) % count) * w;
+    lastinteraction = Date.now();
+<<<<<<< Updated upstream
+=======
 const stopAutoscroll = (slider) => {
     if (autoscrolls.has(slider)) {
         clearInterval(autoscrolls.get(slider));
@@ -42,10 +88,19 @@ const scrlRight = (element, event) => {
     slider.scrollLeft = ((idx + 1) % count) * w;
     lastinteraction = Date.now();
     stopAutoscroll(slider);
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+    stopAutoscroll(slider);
+>>>>>>> Stashed changes
 };
 
 const scrlLeft = (element, event) => {
     event.preventDefault();
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+    document.getElementById('micrograph_slider').scrollLeft -= 200;
+    lastinteraction = Date.now();
+=======
     const slider = element.nextElementSibling;
     const count = slider.children.length;
     if (!count) return;
@@ -54,6 +109,17 @@ const scrlLeft = (element, event) => {
     slider.scrollLeft = ((idx - 1 + count) % count) * w;
     lastinteraction = Date.now();
     stopAutoscroll(slider);
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+    const slider = element.nextElementSibling;
+    const count = slider.children.length;
+    if (!count) return;
+    const w = slider.scrollWidth / count;
+    const idx = Math.round(slider.scrollLeft / w);
+    slider.scrollLeft = ((idx - 1 + count) % count) * w;
+    lastinteraction = Date.now();
+    stopAutoscroll(slider);
+>>>>>>> Stashed changes
 };
 
 const showMenu = (element, event) => {
@@ -184,7 +250,15 @@ const buildDraggerHistogram = (canvas, formId, fieldName, labelFn) => {
             labels,
             datasets: [{
                 data,
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                backgroundColor: style.getPropertyValue('--color-streamring').trim(),
+=======
                 backgroundColor: style.getPropertyValue('--color-streamring').trim() + '33',
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                backgroundColor: style.getPropertyValue('--color-streamring').trim() + '33',
+>>>>>>> Stashed changes
                 borderColor:     style.getPropertyValue('--color-streambar').trim(),
                 hoverOffset: 4
             }]
@@ -236,6 +310,46 @@ window.addEventListener('load', () => {
         );
     }
 
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+    // // Movies doughnut
+    // const style = getComputedStyle(document.body);
+    // for (const canvas of document.getElementsByClassName('movies_pie_chart')) {
+    //     new Chart(canvas.getContext('2d'), {
+    //         type: 'doughnut',
+    //         options: {
+    //             responsive: false,
+    //             plugins: {
+    //                 legend: {
+    //                     position: 'right',
+    //                     labels: { boxWidth: 10, padding: 2, font: { size: 9 } }
+    //                 }
+    //             }
+    //         },
+    //         data: {
+    //             labels: ['queued', 'processed', 'rejected'],
+    //             datasets: [{
+    //                 data: [
+    //                     Number(canvas.dataset.imported) - Number(canvas.dataset.processed) - Number(canvas.dataset.rejected),
+    //                     Number(canvas.dataset.processed),
+    //                     Number(canvas.dataset.rejected)
+    //                 ],
+    //                 backgroundColor: [
+    //                     style.getPropertyValue('--color-streamring').trim(),
+    //                     style.getPropertyValue('--color-streamicon').trim(),
+    //                     style.getPropertyValue('--color-streamrejected').trim(),
+    //                 ],
+    //                 hoverOffset: 4,
+    //                 borderColor: style.getPropertyValue('--color-streambar').trim()
+    //             }]
+    //         }
+    //     });
+    // }
+
+=======
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+>>>>>>> Stashed changes
     // Dragger histograms
     for (const canvas of document.getElementsByClassName('ctfres_histogram')) {
         buildDraggerHistogram(canvas, 'update_preprocess_ctfres', 'ctfres', v => v + 'Å');
@@ -252,6 +366,11 @@ window.addEventListener('load', () => {
     gauze.style.opacity = '0';
     setTimeout(() => { gauze.style.display = 'none'; }, 600);
 
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> Stashed changes
     // Initialise labels and auto-advance sliders every 5 s.
     const histSlider = document.getElementById('histogram_slider');
     if (histSlider) {
@@ -263,6 +382,10 @@ window.addEventListener('load', () => {
     const micSlider = document.getElementById('micrograph_slider');
     if (micSlider && micSlider.scrollWidth > micSlider.clientWidth) startAutoscroll(micSlider);
 
+<<<<<<< Updated upstream
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+>>>>>>> Stashed changes
 }, false);
 
 window.addEventListener('visibilitychange', () => {

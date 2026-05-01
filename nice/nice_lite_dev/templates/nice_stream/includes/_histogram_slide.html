@@ -1,0 +1,29 @@
+{% comment %}
+  _histogram_slide.html — one snap-center slide in a histogram slider.
+
+  Parameters:
+    label        — display label above the canvas
+    canvas_class — CSS class used by JS to locate this canvas
+    labels       — JSON list for data-labels
+    values       — JSON list for data-values
+    values2      — (optional) second dataset for stacked bar charts
+    savedval     — (optional) current cutoff value for annotation line (data-savedval)
+    form_id      — (optional) id of hidden POST form for cutoff updates
+    form_field   — (optional) POST field name for the cutoff parameter
+                   (requires jobid from parent context)
+{% endcomment %}
+<div class="snap-center flex flex-col gap-1 flex-shrink-0 w-full" data-label="{{ label }}">
+    {% if not no_label %}<span class="text-[10px] text-streamlabel w-full block">{{ label }}</span>{% endif %}
+    {% if form_id %}
+        <form id="{{ form_id }}" class="hidden" method="POST" action="{% url 'nice_lite:update_stream_parameters' %}">
+            {% csrf_token %}
+            <input type="hidden" name="selected_job_id" value="{{ jobid }}">
+            <input type="hidden" name="{{ form_field }}" value="0">
+        </form>
+    {% endif %}
+    <canvas class="{{ canvas_class }}" width="200" height="60"
+            {% if savedval %}data-savedval="{{ savedval }}"{% endif %}
+            data-labels="{{ labels }}"
+            data-values="{{ values }}"
+            {% if values2 %}data-values2="{{ values2 }}"{% endif %}></canvas>
+</div>

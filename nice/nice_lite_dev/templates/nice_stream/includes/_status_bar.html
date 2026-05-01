@@ -1,0 +1,77 @@
+{% comment %}
+  _status_bar.html — segmented status bar with hover tooltips
+
+  Parameters:
+    data_imported   — count of imported items
+    data_middle     — count of middle status (accepted/processed)
+    data_rejected   — count of rejected items
+    label_1         — label for first segment (default: "unclassified")
+    label_2         — label for second segment (default: "accepted")
+    label_3         — label for third segment (default: "rejected")
+    title           — bar title/header (default: "Status")
+
+  Example usage:
+    {% include 'nice_stream/includes/_status_bar.html' with
+       data_imported=jobstats.particles_imported
+       data_middle=jobstats.particles_accepted
+       data_rejected=jobstats.particles_rejected
+       label_1="unclassified"
+       title="Particles" %}
+{% endcomment %}
+{% load humanize %}
+
+{% if data_imported and data_imported > 0 %}
+    {% with mid=data_middle|default:0 rej=data_rejected|default:0 %}
+    {% with total=data_imported|add:mid|add:rej %}
+        {% widthratio data_imported total 100 as width_1 %}
+        {% widthratio mid total 100 as width_2 %}
+        {% widthratio rej total 100 as width_3 %}
+
+    <div class="px-4 py-2 flex items-center gap-3">
+        <p class="text-[11px] font-medium text-streamlabel flex-shrink-0">status</p>
+
+        <!-- Segmented bar with hover tooltips -->
+        <div class="relative flex rounded-full overflow-visible h-1 gap-px flex-1" id="statusBar">
+
+            <!-- First segment: rounded-r if no later segments are shown -->
+            <div class="relative group bg-streamring rounded-l-full {% if not mid and not rej %}rounded-r-full{% endif %} hover:brightness-110 transition-all cursor-default" style="width:{{ width_1 }}%">
+                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 hidden group-hover:flex flex-col items-center pointer-events-none z-10">
+                    <div class="bg-neutral-900 text-white rounded-lg px-2.5 py-1.5 text-center whitespace-nowrap shadow-lg">
+                        <p class="text-[10px] text-neutral-400 leading-none mb-0.5">{{ label_1|default:"unclassified" }}</p>
+                        <p class="text-sm font-semibold leading-none">{{ data_imported|intcomma }}</p>
+                    </div>
+                    <div class="w-2 h-2 bg-neutral-900 rotate-45 -mt-1"></div>
+                </div>
+            </div>
+
+            <!-- Second segment: rounded-r if no rejected segment -->
+            {% if mid and mid > 0 %}
+                <div class="relative group bg-streamaccent {% if not rej %}rounded-r-full{% endif %} hover:brightness-95 transition-all cursor-default" style="width:{{ width_2 }}%">
+                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 hidden group-hover:flex flex-col items-center pointer-events-none z-10">
+                        <div class="bg-neutral-900 text-white rounded-lg px-2.5 py-1.5 text-center whitespace-nowrap shadow-lg">
+                            <p class="text-[10px] text-neutral-400 leading-none mb-0.5">{{ label_2|default:"accepted" }}</p>
+                            <p class="text-sm font-semibold leading-none">{{ data_middle|intcomma }}</p>
+                        </div>
+                        <div class="w-2 h-2 bg-neutral-900 rotate-45 -mt-1"></div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Third segment -->
+            {% if data_rejected and data_rejected > 0 %}
+                <div class="relative group bg-streamrejected rounded-r-full hover:brightness-110 transition-all cursor-default" style="width:{{ width_3 }}%">
+                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 hidden group-hover:flex flex-col items-center pointer-events-none z-10">
+                        <div class="bg-neutral-900 text-white rounded-lg px-2.5 py-1.5 text-center whitespace-nowrap shadow-lg">
+                            <p class="text-[10px] text-neutral-400 leading-none mb-0.5">{{ label_3|default:"rejected" }}</p>
+                            <p class="text-sm font-semibold leading-none">{{ data_rejected|intcomma }}</p>
+                        </div>
+                        <div class="w-2 h-2 bg-neutral-900 rotate-45 -mt-1"></div>
+                    </div>
+                </div>
+            {% endif %}
+
+        </div>
+    </div>
+    {% endwith %}
+    {% endwith %}
+{% endif %}

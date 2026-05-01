@@ -32,33 +32,83 @@
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
     <!-- Loading gauze -->
-    {% include 'nice_stream/_panel_gauze_loading.html' %}
-
-    <!-- Waiting gauze: shown until sieved particles arrive -->
-    {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
-        <div id="waitinggauze"
-             class="absolute inset-0 flex items-center justify-center text-[10px] text-streamlabel bg-streambar transition-opacity duration-300 delay-300 ease-in-out z-10">
-            waiting for sieved particles&hellip;
-        </div>
-    {% endif %}
+    {% include 'nice_stream/includes/_panel_gauze_loading.html' %}
 
     <!-- Transient status overlays -->
-    {% include 'nice_stream/_panel_status_overlay.html' %}
+    {% include 'nice_stream/includes/_panel_status_overlay.html' %}
 
     <div class="flex flex-col h-full">
 
         <!-- Header: status · title · zoom · stop/restart -->
         {# terminate_field fixed: was "restart_pool2D" (copy-paste error) — must be "terminate_pool2D". #}
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+        {% include 'nice_stream/_panel_header.html' with panel_title="2D classification" zoom_url="nice_lite:view_stream_classification_2D_zoom" terminate_field="terminate_pool2D" restart_field="restart_pool2D" last_import=jobstats.last_particles_imported use_js=True %}
+=======
+        {% include 'nice_stream/includes/_panel_header.html' with panel_title="2D classification" zoom_url="nice_lite:view_stream_classification_2D_zoom" terminate_field="terminate_pool2D" restart_field="restart_pool2D" last_import=jobstats.last_particles_imported use_js=True user_input_url="nice_lite:view_stream_classification_2D_zoom" user_input_title="select classes" %}
+>>>>>>> Stashed changes
+
+        <!-- Waiting gauze: shown until sieved particles arrive (below header) -->
+        {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
+            {% include 'nice_stream/includes/_panel_waiting_gauze.html' %}
+        {% else %}
+
+<<<<<<< Updated upstream
+        <!-- Mask diameter stat -->
+        <div class="divide-y divide-streamdivider px-4 flex-shrink-0">
+            {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 and "mskdiam" in jobstats.latest_cls2D.0 %}
+                <div class="flex items-baseline justify-between py-2">
+                    <span class="text-[11px] text-streamlabel">mask diameter</span>
+                    <span class="text-[11px] font-medium text-streaminput font-mono">{{ jobstats.latest_cls2D.0.mskdiam }} Å</span>
+                </div>
+            {% endif %}
+=======
         {% include 'nice_stream/_panel_header.html' with panel_title="2D classification" zoom_url="nice_lite:view_stream_classification_2D_zoom" terminate_field="terminate_pool2D" restart_field="restart_pool2D" last_import=jobstats.last_particles_imported use_js=True user_input_url="nice_lite:view_stream_classification_2D_zoom" user_input_title="select classes" %}
 
         <!-- Count tiles -->
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
             {% include 'nice_stream/_count_tile.html' with count=jobstats.particles_accepted label="assigned" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%}
             {% include 'nice_stream/_count_tile.html' with count=jobstats.particles_rejected label="resolution" sublabel=jobstats.particles_imported %}
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+        <!-- Count tiles -->
+        <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="assigned" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%}
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_rejected label="resolution" sublabel=jobstats.particles_imported %}
+>>>>>>> Stashed changes
         </div>
 
         <!-- Latest classes gallery (user-input mode, iteration > 0) -->
         {% if jobstats.user_input is True and "latest_cls2D" in jobstats and "iteration" in jobstats and jobstats.iteration > 0 %}
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+            <div class="flex flex-col px-4 pt-3 flex-1 max-w-[465px]">
+                <span class="text-[10px] text-streamlabel mb-2">latest classes (iteration {{ jobstats.iteration }})</span>
+=======
+            <div class="flex flex-col px-4 pt-2 flex-1 max-w-[465px]">
+                <span class="text-[10px] text-streamlabel mb-2">latest classes</span>
+>>>>>>> Stashed changes
+                <div class="flex items-center gap-1">
+
+                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
+
+                    <div class="flex flex-row flex-1 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+                        <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-3">
+                            {% for cls2D in jobstats.latest_cls2D %}
+                                <div class="cls2dcontainer snap-center w-[68px] h-[68px] m-[1px] overflow-hidden bg-black rounded"
+                                     data-res="{{ cls2D.res|floatformat:1 }}"
+                                     data-pop="{{ cls2D.pop }}"
+                                    >
+                                    <div oncontextmenu="showMenu(this, event)"
+                                         data-idx="{{ cls2D.mrcidx }}"
+                                         style="background:url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%"
+                                         class="cls2D cls2Dimg h-[68px] w-[68px] rounded m-auto">
+                                        <canvas class="mskcanvas z-1" height="70" width="70"
+                                                data-mskscale="{{ cls2D.mskscale }}"
+                                                data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
+<<<<<<< Updated upstream
+                                        <div class="xmark hidden h-[70px] w-[70px] text-streamerror flex items-center justify-center">
+=======
             <div class="flex flex-col px-4 pt-2 flex-1 max-w-[465px]">
                 <span class="text-[10px] text-streamlabel mb-2">latest classes</span>
                 <div class="flex items-center gap-1">
@@ -80,6 +130,10 @@
                                                 data-mskscale="{{ cls2D.mskscale }}"
                                                 data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
                                         <div class="xmark hidden h-[66px] w-[66px] text-streamerror flex items-center justify-center">
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                                        <div class="xmark hidden h-[66px] w-[66px] text-streamerror flex items-center justify-center">
+>>>>>>> Stashed changes
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
                                                 <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                             </svg>
@@ -93,14 +147,46 @@
                         <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
                             <div name="selectmenubox"
                                  class="absolute flex flex-col bg-streambar border border-streamline rounded-lg shadow-sm text-[11px] text-streamtext p-1">
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                                <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                                <div id="selectabove" class="hidden userbutton w-auto text-center">select above</div>
+                                <div id="selectbelow" class="hidden userbutton w-auto text-center">select below</div>
+=======
+=======
+>>>>>>> Stashed changes
                                 <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
                                 <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
                                 <div id="selectabove" class="hidden px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">select above</div>
                                 <div id="selectbelow" class="hidden px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">select below</div>
+<<<<<<< Updated upstream
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+>>>>>>> Stashed changes
                             </div>
                         </div>
                     </div>
 
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                    <button type="button" class="text-streamaccent hover:text-streamtext transition-colors flex-shrink-0"
+                            onclick="scrlRight(this, event)">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                            <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+=======
+                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
+>>>>>>> Stashed changes
+
+                </div>
+            </div>
+        {% endif %}
+        {% endif %}
+
+<<<<<<< Updated upstream
+=======
                     {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
 
                 </div>
@@ -108,6 +194,10 @@
         {% endif %}
 
 
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+
+>>>>>>> Stashed changes
     </div>
 
 </body>

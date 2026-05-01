@@ -3,7 +3,7 @@
 
   Renders: status indicator · panel title · zoom button · stop/restart button.
 
-  Pass via {% include 'nice_stream/_panel_header.html' with key=value ... %}:
+  Pass via {% include 'nice_stream/includes/_panel_header.html' with key=value ... %}:
 
     panel_title     — display name shown in the header (e.g. "preprocessing")
     zoom_url        — URL name for the full-screen zoom view
@@ -21,13 +21,10 @@
     use_js          — truthy if stop/restart use JS handlers (stopProcess /
                       restartProcess) instead of native confirm dialogs
                       (default falsy — omit for panels that use confirm)
-<<<<<<< HEAD
-=======
     user_input_url   — URL name for user-input zoom view; when set, shows a
                        raised-hand icon (blue, bouncing) while status=="running"
                        and jobstats.user_input is True
     user_input_title — tooltip text for the raised-hand button (e.g. "select classes")
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
 
   These variables are read directly from the parent context (no need to pass):
     status, jobid, jobstats
@@ -37,15 +34,10 @@
 
     <!-- Status indicator -->
     {% if status == "running" %}
-<<<<<<< HEAD
         <span class="w-2 h-2 rounded-full bg-streamring animate-pulse flex-shrink-0"
-              title="{{ jobstats.stage }}&#013;last import: {{ last_import|print_timestamp }}"></span>
-=======
-        <span class="w-2 h-2 rounded-full bg-streamaction animate-pulse flex-shrink-0"
               title="status: running&#013;stage: {{ jobstats.stage }}&#013;last import: {{ last_import|print_timestamp }}"></span>
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
     {% elif status == "finished" or has_skipped and status == "skipped" %}
-        <span class="w-2 h-2 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+        <span class="w-2 h-2 rounded-full bg-streamicon flex-shrink-0" title="{{ status }}"></span>
     {% elif status == "failed" %}
         <span class="w-2 h-2 rounded-full bg-streamerror flex-shrink-0" title="failed"></span>
     {% else %}
@@ -55,8 +47,6 @@
     <!-- Title -->
     <span class="text-[10px] font-medium text-streamlabel uppercase tracking-widest flex-1">{{ panel_title }}</span>
 
-<<<<<<< HEAD
-=======
     <!-- User-input raised-hand button -->
     {% if user_input_url and jobstats.user_input is True and status == "running" %}
         <form method="GET" action="{% url user_input_url %}" target="_parent" class="flex">
@@ -73,7 +63,6 @@
         </form>
     {% endif %}
 
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
     <!-- Zoom button -->
     <form method="{{ zoom_method|default:'GET' }}" action="{% url zoom_url %}" target="_parent" class="flex">
         {% csrf_token %}
@@ -99,11 +88,7 @@
                 <button type="submit" class="text-streamicon hover:text-streamerror transition-colors"
                         onclick="return confirm('please confirm that you wish to terminate this process')" title="stop">
             {% endif %}
-<<<<<<< HEAD
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4">
-=======
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-3 h-3">
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
                     <rect x="3" y="3" width="10" height="10" rx="1.5"/>
                 </svg>
             </button>
@@ -116,10 +101,10 @@
             <input name="selected_job_id" value="{{ jobid }}" type="hidden">
             <input name="{{ restart_field }}" type="hidden">
             {% if use_js %}
-                <button type="button" class="text-streamaccent hover:text-streamtext transition-colors"
+                <button type="button" class="text-streamicon hover:text-streamaccent transition-colors"
                         onclick="restartProcess(this)" title="restart">
             {% else %}
-                <button type="submit" class="text-streamaccent hover:text-streamtext transition-colors"
+                <button type="submit" class="text-streamicon hover:text-streamaccent transition-colors"
                         onclick="return confirm('please confirm that you wish to restart this process')" title="restart">
             {% endif %}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4">

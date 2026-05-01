@@ -14,7 +14,7 @@
     legend_3        — third legend label (default: "rejected")
 
   Example usage:
-    {% include 'nice_stream/_pie_chart.html' with
+    {% include 'nice_stream/includes/_pie_chart.html' with
        count=jobstats.particles_imported
        label_text="particles"
        chart_class="particles_pie_chart"
@@ -22,7 +22,7 @@
        data_middle=jobstats.particles_accepted
        data_rejected=jobstats.particles_rejected %}
 
-    {% include 'nice_stream/_pie_chart.html' with
+    {% include 'nice_stream/includes/_pie_chart.html' with
        count=jobstats.micrographs_imported
        label_text="micrographs"
        chart_class="micrographs_pie_chart"
@@ -33,45 +33,18 @@
        legend_1="queued" %}
 {% endcomment %}
 {% load humanize %}
-<<<<<<< HEAD
-
-{% if count and data_imported and data_rejected and data_imported > 0 %}
-    <div class="flex items-center gap-3 px-4 pt-3 flex-shrink-0">
-=======
 {% if count and count > 0 %}
     <div class="flex items-center gap-3 px-4 pt-2 flex-shrink-0">
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
         <div class="flex flex-col gap-1">
             <span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamaccent">
                 <span class="w-1.5 h-1.5 rounded-full bg-streamaccent"></span>
                 {{ count|intcomma }} {{ label_text }}
             </span>
-<<<<<<< HEAD
-            <div class="h-[40px] w-[150px]">
-=======
             <div class="flex flex-row">
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
                 <canvas class="{{ chart_class }}" width="40" height="40"
                         data-imported="{{ data_imported }}"
                         data-{{ data_middle_key|default:"accepted" }}="{{ data_middle }}"
                         data-rejected="{{ data_rejected }}"></canvas>
-<<<<<<< HEAD
-            </div>
-        </div>
-        <!-- Legend -->
-        <div class="flex flex-col self-end">
-            <div class="flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-sm bg-streamring"></span>
-                <span class="text-[10px] text-streamsubtle">{{ legend_1|default:"unclassified" }}</span>
-            </div>
-            <div class="flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-sm bg-streamaccent"></span>
-                <span class="text-[10px] text-streamsubtle">{{ legend_2|default:"accepted" }}</span>
-            </div>
-            <div class="flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-sm bg-streamrejected"></span>
-                <span class="text-[10px] text-streamsubtle">{{ legend_3|default:"rejected" }}</span>
-=======
                 <!-- Legend -->
                 <div class="flex flex-col self-end">
                     <div class="flex items-center gap-1">
@@ -87,7 +60,6 @@
                         <span class="text-[10px] text-streamsubtle">{{ legend_3|default:"rejected" }}</span>
                     </div>
                 </div>
->>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
             </div>
         </div>
     </div>

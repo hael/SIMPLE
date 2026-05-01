@@ -31,6 +31,7 @@
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
     <!-- Loading gauze -->
+<<<<<<< Updated upstream
     {% include 'nice_stream/_panel_gauze_loading.html' %}
 
     <!-- Waiting gauze: shown until particles arrive -->
@@ -38,6 +39,47 @@
         <div id="waitinggauze"
              class="absolute inset-0 flex items-center justify-center text-[10px] text-streamlabel bg-streambar transition-opacity duration-300 delay-300 ease-in-out z-10">
             waiting for particles&hellip;
+<<<<<<< HEAD
+        </div>
+    {% endif %}
+=======
+    {% include 'nice_stream/includes/_panel_gauze_loading.html' %}
+>>>>>>> Stashed changes
+
+    <!-- Transient status overlays -->
+    {% include 'nice_stream/includes/_panel_status_overlay.html' %}
+
+    <div class="flex flex-col h-full">
+
+        <!-- Header: status · title · zoom · stop/restart -->
+        {% include 'nice_stream/includes/_panel_header.html' with panel_title="opening 2D classification" zoom_url="nice_lite:view_stream_generate_pickrefs_zoom" terminate_field="terminate_generate_pickrefs" restart_field="restart_generate_pickrefs" last_import=jobstats.last_micrograph_imported has_skipped=True user_input_url="nice_lite:view_stream_generate_pickrefs_zoom" user_input_title="select references" %}
+
+        <!-- Waiting gauze: shown until particles arrive (below header) -->
+        {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
+            {% include 'nice_stream/includes/_panel_waiting_gauze.html' %}
+        {% else %}
+        
+        <!-- Stats row -->
+        <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+            {% if "latest_cls2D" in jobstats or "final_cls2D" in jobstats %}
+                {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_imported label="particles classified" sublabel=jobstats.particles_accepted sublabel_sep="/" %}
+            {% else %}
+                {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_imported label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%} 
+            {% endif %}
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.mask_diam label="mask" count_unit="Å" %}
+        </div>
+
+        <!-- Selected references gallery -->
+        {% if "final_cls2D" in jobstats and jobstats.final_cls2D|length > 0 %}
+            <div class="flex flex-col px-4 pt-2 flex-shrink-0">
+                <span class="text-[10px] text-streamlabel mb-2">selected references</span>
+                <div class="flex items-center gap-1">
+
+                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
+
+<<<<<<< Updated upstream
+                    <div class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+=======
         </div>
     {% endif %}
 
@@ -66,21 +108,45 @@
                     {% include 'nice_stream/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
 
                     <div class="flex flex-row flex-1 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                    <div class="flex flex-row flex-1 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+>>>>>>> Stashed changes
                         <div id="picking_references_final" class="grid grid-flow-col grid-rows-3 gap-[2px]">
                             {% for template in jobstats.final_cls2D %}
                                 <div class="snap-center picktemplatecontainer rounded bg-black relative"
                                      oncontextmenu="showMenu(this, event)"
                                      data-res="{{ template.res|floatformat:1 }}"
                                      data-pop="{{ template.pop }}"
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                                     title="particles: {{ template.pop }}&#013;resolution: {{ template.res|floatformat:1 }}Å">
+                                    {% if "mskscale" in jobstats and "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
+                                        <canvas class="mskcanvas z-1 absolute" height="70" width="70"
+=======
                                     >
                                     {% if "mskscale" in jobstats and "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
                                         <canvas class="mskcanvas z-1 absolute" height="60" width="60"
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                                    >
+                                    {% if "mskscale" in jobstats and "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
+                                        <canvas class="mskcanvas z-1 absolute" height="60" width="60"
+>>>>>>> Stashed changes
                                                 data-mskscale="{{ jobstats.mskscale }}"
                                                 data-mskdiam="{{ jobstats.mask_diam }}"></canvas>
                                     {% endif %}
                                     <div data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}"
                                          style="background:url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%"
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                                         class="picktemplate h-[70px] w-[70px] rounded m-auto"></div>
+=======
                                          class="picktemplate h-[60px] w-[60px] rounded m-auto"></div>
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                                         class="picktemplate h-[60px] w-[60px] rounded m-auto"></div>
+>>>>>>> Stashed changes
                                 </div>
                             {% endfor %}
                         </div>
@@ -89,13 +155,36 @@
                         <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
                             <div name="selectmenubox"
                                  class="absolute flex flex-col bg-streambar border border-streamline rounded-lg shadow-sm text-[11px] text-streamtext p-1">
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                                <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+=======
                                 <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
                                 <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                                <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
+                                <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
+>>>>>>> Stashed changes
                             </div>
                         </div>
                     </div>
 
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                    <button type="button" class="text-streamaccent hover:text-streamtext transition-colors flex-shrink-0"
+                            onclick="scrlRight(this, event)">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                            <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+=======
                     {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
+>>>>>>> Stashed changes
 
                 </div>
             </div>
@@ -103,6 +192,20 @@
 
         <!-- Available templates gallery (user-input mode) -->
         {% if status == "running" and jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+            <div class="flex flex-col px-4 pt-3 flex-1">
+=======
+            <div class="flex flex-col px-4 pt-2 flex-1">
+>>>>>>> Stashed changes
+                <span class="text-[10px] text-streamlabel mb-2">available templates</span>
+                <div class="flex items-center gap-1">
+
+                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
+
+<<<<<<< Updated upstream
+                    <div class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
+=======
             <div class="flex flex-col px-4 pt-2 flex-1">
                 <span class="text-[10px] text-streamlabel mb-2">available templates</span>
                 <div class="flex items-center gap-1">
@@ -110,12 +213,24 @@
                     {% include 'nice_stream/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
 
                     <div class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                    <div class="flex flex-row w-[215px] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+>>>>>>> Stashed changes
                         <div id="picking_references_available" class="grid grid-flow-col grid-rows-3 gap-[2px]">
                             {% for template in jobstats.latest_cls2D %}
                                 <div class="snap-center picktemplatecontainer rounded bg-black"
                                      data-res="{{ template.res|floatformat:1 }}"
                                      data-pop="{{ template.pop }}"
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                                     title="particles: {{ template.pop }}&#013;resolution: {{ template.res|floatformat:1 }}Å">
+=======
                                     >
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                                    >
+>>>>>>> Stashed changes
                                     <div oncontextmenu="showMenu(this, event)"
                                          data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}"
                                          style="background:url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%"
@@ -134,13 +249,36 @@
                         <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
                             <div name="selectmenubox"
                                  class="absolute flex flex-col bg-streambar border border-streamline rounded-lg shadow-sm text-[11px] text-streamtext p-1">
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                                <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+=======
                                 <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
                                 <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                                <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
+                                <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
+>>>>>>> Stashed changes
                             </div>
                         </div>
                     </div>
 
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+                    <button type="button" class="text-streamaccent hover:text-streamtext transition-colors flex-shrink-0"
+                            onclick="scrlRight(this, event)">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                            <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+=======
                     {% include 'nice_stream/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
+>>>>>>> Stashed changes
 
                 </div>
             </div>
@@ -152,10 +290,21 @@
         {% elif status == "running" %}
             <div class="flex flex-1 items-center justify-center text-[11px] text-streamlabel">
                 generating references&hellip;
+<<<<<<< HEAD
+            </div>
+        {% endif %}
+        {% endif %}
+
+<<<<<<< Updated upstream
+=======
             </div>
         {% endif %}
 
 
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+
+>>>>>>> Stashed changes
     </div>
 
 </body>

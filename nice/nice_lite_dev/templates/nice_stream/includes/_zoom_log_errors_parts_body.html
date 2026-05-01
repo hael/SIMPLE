@@ -1,0 +1,25 @@
+<div class="flex items-center justify-between px-2">
+    <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">log</div>
+    <div class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-streamring animate-pulse"></span>
+        <span class="text-[10px] text-streamlabel">running</span>
+    </div>
+</div>
+<div class="logtext h-[200px] overflow-auto mx-[2px] mt-2 p-3 bg-streambg border border-streamdivider rounded-lg">
+    {% for logpart in log %}
+        {% if "text" in logpart %}
+            <pre class="text-[10px] text-streamsubtle">{{ logpart.text }}</pre>
+        {% elif "image" in logpart %}
+            <img src="{% url 'nice_lite:image' logpart.image %}"/>
+        {% endif %}
+    {% endfor %}
+</div>
+<div class="flex items-center gap-2 mt-2 px-2">
+    <svg class="w-3.5 h-3.5 text-streamerror flex-shrink-0" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="7" cy="7" r="5.5"/><line x1="7" y1="5" x2="7" y2="7.5"/><circle cx="7" cy="9.5" r="0.5" fill="currentColor"/>
+    </svg>
+    <span class="text-[11px] text-streamsubtle">errors</span>
+</div>
+<div class="h-[75px] overflow-auto mx-[2px] mt-1 p-3 bg-streamerrorsurface border border-streamerrorline rounded-lg">
+    <pre class="text-[10px] text-streamerror">{{error}}</pre>
+</div>

@@ -54,7 +54,15 @@ const scrlLeft = (element, event)  => {
   lastinteraction = Date.now();
 }
 
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+const scrlRejectedRight = (telementhis, event)  => {
+=======
 const scrlRejectedRight = (element, event)  => {
+>>>>>>> a1e410fad146030f3fcbc61f288170a806ef2b04
+=======
+const scrlRejectedRight = (element, event)  => {
+>>>>>>> Stashed changes
   event.preventDefault()
   const slider = document.getElementById("rejected_cls2D_slider").parentElement;
   const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;

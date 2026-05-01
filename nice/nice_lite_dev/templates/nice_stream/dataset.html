@@ -58,7 +58,7 @@
     <div class="flex-1 min-h-0 overflow-y-auto px-5 pb-4">
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 content-start">
             {% for job in jobs %}
-                {% include 'nice_stream/_stream_card.html' %}
+                {% include 'nice_stream/includes/_stream_card.html' %}
             {% empty %}
                 <div class="col-span-full flex items-center justify-center py-24 text-streamlabel text-sm">
                     no streams yet — click + to create one

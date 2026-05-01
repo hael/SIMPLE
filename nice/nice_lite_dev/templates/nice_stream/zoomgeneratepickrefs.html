@@ -10,53 +10,52 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
     <script src={% static 'nice_stream/panelgeneratepickrefs.js' %}></script>
 </head>
-<body class="w-full h-screen flex flex-col bg-nice4bg text-nice4dark">
-    <div class="flex flex-row font-bold m-[10px] mb-[0px] items-center">
-        <a class="text-nice4header hover:text-nice4dark cursor-pointer" href={% url 'nice_lite:view_stream' jobid %} title="back">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-4.28 9.22a.75.75 0 0 0 0 1.06l3 3a.75.75 0 1 0 1.06-1.06l-1.72-1.72h5.69a.75.75 0 0 0 0-1.5h-5.69l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3Z" clip-rule="evenodd" />
-            </svg>
-        </a>
-        <div class="px-[10px] text-[18px]">{{ displayid }} stream - opening 2D classification</div>
-    </div>
+<body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
+    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='opening 2D classification' %}
     <div class="w-full flex flex-row p-[10px]">
-        <div class="flex flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
-            <div class="flex flex-row">
-                {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
-                    <div class="flex flex-col">
-                        <div class="font-bold text-[12px] pl-[10px]">particles</div>
-                        <div class="h-[50px] w-[240px] ml-[15px]">
-                            <canvas class="particles_pie_chart" data-imported={{ jobstats.particles_imported }} data-processed={{ jobstats.particles_accepted }} data-rejected={{ jobstats.particles_rejected }}></canvas>
-                        </div>
+        <div class="flex flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline">
+            {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
+                <div class="flex flex-col w-full">
+                    <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px]">particles</div>
+                    <div class="flex gap-2 p-[10px] pb-[6px]">
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label='accepted' %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_imported label='imported' variant='neutral' %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_rejected label='rejected' variant='rejected' %}
+                    </div>
+                </div>
+            {% endif %}
+            <div class="flex flex-col divide-y divide-streamline mx-[10px] mt-[5px]">
+                {% if "box_size" in jobstats and jobstats.box_size > 0 %}
+                    <div class="flex items-baseline justify-between py-1.5">
+                        <span class="text-[11px] text-streamlabel">box size</span>
+                        <span class="text-[11px] font-medium text-streamtext font-mono">{{ jobstats.box_size|intcomma }} px</span>
+                    </div>
+                {% endif %}
+                {% if "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
+                    <div class="flex items-baseline justify-between py-1.5">
+                        <span class="text-[11px] text-streamlabel">mask diameter</span>
+                        <span class="text-[11px] font-medium text-streamtext font-mono">{{ jobstats.mask_diam|intcomma }} Å</span>
+                    </div>
+                {% endif %}
+                {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+                    <div class="flex items-baseline justify-between py-1.5">
+                        <span class="text-[11px] text-streamlabel">clusters</span>
+                        <span id="clustercount" class="text-[11px] font-medium text-streamtext font-mono"></span>
+                    </div>
+                    <div class="flex items-baseline justify-between py-1.5">
+                        <span class="text-[11px] text-streamlabel">particles</span>
+                        <span id="particlecount" class="text-[11px] font-medium text-streamtext font-mono"></span>
                     </div>
                 {% endif %}
             </div>
-            <div class="flex flex-row">
-                <div class="grid grid-cols-2 gap-1 text-[12px] pl-[10px] mt-[10px]">
-                    {% if "box_size" in jobstats and jobstats.box_size > 0 %}
-                        <div class="font-bold">box size</div>
-                        <div>{{ jobstats.box_size|intcomma }} px</div>
-                    {% endif %}
-                    {% if "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
-                        <div class="font-bold">mask diameter</div>
-                        <div>{{ jobstats.mask_diam|intcomma }} Å</div>
-                    {% endif %}
-                    {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
-                        <div class="font-bold mr-[5px]">clusters</div>
-                        <div id="clustercount"></div>
-                        <div class="font-bold mr-[5px]">particles</div>
-                        <div id="particlecount"></div>
-                    {% endif %}
-                </div>
-            </div>
             {% if status == "running" and jobstats.user_input is True %}
                 <div class="flex flex-row flex-1 justify-center items-center">
-                    <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:regenerate_pickrefs' %}>
+                    <form class="flex flex-col text-streamlabel items-center" method="POST" action={% url 'nice_lite:regenerate_pickrefs' %}>
                         {% csrf_token %}
                         <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
                         <button class="userbutton animate-bounce !text-[14px]" onclick="this.form.submit()">use more particles</button>
                     </form> 
-                    <form class="flex flex-col text-nice4header items-center" method="POST" action={% url 'nice_lite:select_pickrefs' %}>
+                    <form class="flex flex-col text-streamlabel items-center" method="POST" action={% url 'nice_lite:select_pickrefs' %}>
                         {% csrf_token %}
                         <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
                         <input type="hidden" id="final_selection" name="final_selection" value=""/>
@@ -67,58 +66,28 @@
                 </div>
             {% endif %}
         </div>
-        <div class="flex ml-[10px] flex-1 flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
-            <div class="font-bold text-[12px]">log</div>
-            <div class="logtext h-[200px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
-                {% for logpart in log %}
-                    {% if "text" in logpart %}
-                        <pre class="text-[10px]">{{ logpart.text }}</pre>
-                    {% elif "image" in logpart %}
-                        <img src="{% url 'nice_lite:image' logpart.image %}"/>
-                    {% endif %}
-                {% endfor %}
-            </div>
-            <div class="font-bold text-[12px]">errors</div>
-            <div class="h-[75px] overflow-auto mx-[10px] p-[5px] bg-nice4bg rounded">
-                <pre class="text-[10px]">{{error}}</pre>
-            </div>
+        <div class="flex ml-[10px] flex-1 flex-col bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline overflow-hidden">
+            {% include 'nice_stream/includes/_zoom_log_errors_parts_body.html' %}
         </div>
-        <div class="flex ml-[10px] flex-col bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header overflow-hidden">
-            <div class="font-bold text-[12px] pl-[10px]">help</div>
-            <div class="flex-1 w-[200px] overflow-auto mx-[10px] p-[5px]">
-                <div class="text-[10px]">some help text</div>
-            </div>
-        </div>
+        {% include 'nice_stream/includes/_zoom_help_panel.html' %}
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
-        <div class="flex mx-[10px] flex-1 flex-col h-full bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header">
+        <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline">
             {% if status == "running" %}
                 {% if status == "running" and jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
-                    <div class="font-bold text-[12px]">available templates</div>
+                    <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest mb-2">available templates</div>
                     <div class="flex flex-1 flex-row items-baseline m-auto overflow-auto">
                         <div class="flex flex-row w-full overflow-x-hidden overflow-y-scroll snap-y snap-mandatory">
                             <div id="picking_references" class="flex flex-wrap">
                                 {% for template in jobstats.latest_cls2D %}
-                                    <div class="flex flex-col snap-center picktemplatecontainer rounded bg-nice4bg m-[5px] p-[5px] border-[1px] border-nice4header" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
-                                        <div class="flex text-[10px]">
-                                            <div class="font-bold">
-                                                population : 
-                                            </div>
-                                            <div class="pl-[5px]">
-                                                {{ template.pop|intcomma }}
-                                            </div>
-                                        </div>
-                                        <div class="flex text-[10px]">
-                                            <div class="font-bold">
-                                                resolution : 
-                                            </div>
-                                            <div class="pl-[5px]">
-                                                {{ template.res|floatformat:1 }}Å
-                                            </div>
-                                        </div>
+                                    <div class="flex flex-col snap-center picktemplatecontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
+                                    <div class="flex justify-between mb-1.5">
+                                        <span class="text-[10px] font-medium text-streamtext">{{ template.pop|intcomma }}</span>
+                                        <span class="text-[10px] text-streamlabel">{{ template.res|floatformat:1 }}Å</span>
+                                    </div>
                                         <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-pop="{{ template.pop }}" data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}" class="picktemplate disabledbutton bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
                                             <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%; filter:contrast(var(--genpickrefs-contrast)) brightness(var(--genpickrefs-brightness));" class="picktemplateimg bg-black h-[100px] w-[100px] relative">
-                                                <div class="xmark h-[30px] w-[30px] text-nice4alert flex items-center justify-center top-[0px] absolute">
+                                                <div class="xmark h-[30px] w-[30px] text-streamerror flex items-center justify-center top-[0px] absolute">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
                                                         <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                     </svg>
@@ -129,17 +98,17 @@
                                 {% endfor %}
                             </div>
                             <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-streambar m-[5px] border-streamline border rounded">
                                     <div class="flex flex-col">
-                                        <div class="font-bold">contrast</div>
+                                        <div class="text-[10px] text-streamlabel">contrast</div>
                                         <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
                                     </div>
                                     <div class="flex flex-col">
-                                        <div class="font-bold">brightness</div>
+                                        <div class="text-[10px] text-streamlabel">brightness</div>
                                         <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
                                     </div>
                                     <div class="flex flex-col">
-                                        <div class="font-bold">scale</div>
+                                        <div class="text-[10px] text-streamlabel">scale</div>
                                         <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="400" min="20" step="10" value="100"></input> 
                                     </div>
                                     <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
@@ -157,34 +126,22 @@
                 {% endif %}
             {% endif %}
             {% if "final_cls2D" in jobstats and jobstats.final_cls2D|length > 0 %}
-                <div class="font-bold text-[12px]">selected picking templates</div>
+                <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest mb-2">selected picking templates</div>
                     <div class="flex flex-1 flex-row items-baseline m-auto overflow-auto">
                     <div class="flex flex-row w-full overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden">
                         <div id="picking_references" class="flex flex-wrap">
                             {% for template in jobstats.final_cls2D %}
-                                <div class="flex flex-col snap-center picktemplatecontainer rounded bg-nice4bg m-[5px] p-[5px] border-[1px] border-nice4header" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
-                                    <div class="flex text-[10px]">
-                                        <div class="font-bold">
-                                            population : 
-                                        </div>
-                                        <div class="pl-[5px]">
-                                            {{ template.pop|intcomma }}
-                                        </div>
-                                    </div>
-                                    <div class="flex text-[10px]">
-                                        <div class="font-bold">
-                                            resolution : 
-                                        </div>
-                                        <div class="pl-[5px]">
-                                            {{ template.res|floatformat:1 }}Å
-                                        </div>
+                                <div class="flex flex-col snap-center picktemplatecontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline" data-res={{ template.res | floatformat:1 }} data-pop={{ template.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
+                                    <div class="flex justify-between mb-1.5">
+                                        <span class="text-[10px] font-medium text-streamtext">{{ template.pop|intcomma }}</span>
+                                        <span class="text-[10px] text-streamlabel">{{ template.res|floatformat:1 }}Å</span>
                                     </div>
                                     <div oncontextmenu="showMenu(this, event)" data-pop="{{ template.pop }}" data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}" class="picktemplate bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto relative">
                                         {% if "mskscale" in jobstats and "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
                                             <canvas class="mskcanvas z-1 absolute" height=100 width=100 data-mskscale="{{ jobstats.mskscale }}" data-mskdiam="{{ jobstats.mask_diam }}"></canvas>
                                         {% endif %}
                                         <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%; filter:contrast(var(--genpickrefs-contrast)) brightness(var(--genpickrefs-brightness));" class="picktemplateimg bg-black h-[100px] w-[100px]">
-                                            <div class="xmark hidden h-[100px] w-[100px] text-nice4alert flex items-center justify-center">
+                                            <div class="xmark hidden h-[100px] w-[100px] text-streamerror flex items-center justify-center">
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
                                                     <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                                                 </svg>
@@ -195,17 +152,17 @@
                             {% endfor %}
                         </div>
                         <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                            <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-nice4bubble m-[5px] border-nice4header border-[2px] rounded">
+                            <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-streambar m-[5px] border-streamline border rounded">
                                 <div class="flex flex-col">
-                                    <div class="font-bold">contrast</div>
+                                    <div class="text-[10px] text-streamlabel">contrast</div>
                                     <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
                                 </div>
                                 <div class="flex flex-col">
-                                    <div class="font-bold">brightness</div>
+                                    <div class="text-[10px] text-streamlabel">brightness</div>
                                     <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
                                 </div>
                                 <div class="flex flex-col">
-                                    <div class="font-bold">scale</div>
+                                    <div class="text-[10px] text-streamlabel">scale</div>
                                     <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="400" min="20" step="10" value="100"></input> 
                                 </div>
                                 <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
