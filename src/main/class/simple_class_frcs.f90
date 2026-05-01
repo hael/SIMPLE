@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_fsc
 implicit none
 
-public :: class_frcs
+public :: class_frcs, resample_filter
 private
 #include "simple_local_flags.inc"
 

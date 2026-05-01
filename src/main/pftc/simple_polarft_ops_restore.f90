@@ -2,6 +2,7 @@
 submodule (simple_polarft_calc) simple_polarft_ops_restore
 use simple_refine3D_fnames,     only: refine3D_fsc_fname, refine3D_obsfield_fname, refine3D_polar_ctf2_fname, &
     &refine3D_polar_refs_fname, refine3D_polar_sums_fname, refine3D_state_vol_fname
+use simple_class_frcs,          only: resample_filter
 use simple_shell_field_geom,    only: shell_field_geom
 implicit none
 #include "simple_local_flags.inc"
@@ -487,14 +488,8 @@ contains
         if( self%p_ptr%l_ml_reg )then
             if( L_BENCH_GLOB ) t_step = tic()
             do state = 1,self%p_ptr%nstates
-                if( use_trail_rec )then
-                    obsfield_name = refine3D_obsfield_fname(state)
-                    call prev_obsfield%read(obsfield_name)
-                    call prev_obsfield%calc_fsc(kspan, fsc_prior_states(:,state))
-                    call prev_obsfield%kill
-                else
-                    call self%obsfields(state)%calc_fsc(kspan, fsc_prior_states(:,state))
-                endif
+                obsfield_name = refine3D_fsc_fname(state)
+                call read_resampled_fsc_prior(self, obsfield_name, fsc_prior_states(:,state))
             enddo
             if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
         endif
@@ -551,7 +546,7 @@ contains
         call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
-            call self%obsfields(state)%calc_fsc(kspan, fsc_state)
+            call calc_fsc_from_reprojection_model(self, self%pfts_even, self%pfts_odd, base+1, base+nprojs, fsc_state)
             fsc_boxcrop(                 :self%kfromto(1)) = 1.0
             fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc_state(self%kfromto(1):self%interpklim))
             if( self%interpklim < size(fsc_boxcrop) )then
@@ -628,6 +623,69 @@ contains
             &self%pfts_merg(:,self%kfromto(1):find4eoavg_l,first_ref:last_ref)
         !$omp end parallel workshare
     end subroutine insert_lowres_merged_refs
+
+    subroutine read_resampled_fsc_prior( self, fname, fsc_out )
+        class(polarft_calc), intent(in)  :: self
+        class(string),       intent(in)  :: fname
+        real(dp),            intent(out) :: fsc_out(self%kfromto(1):self%interpklim)
+        real, allocatable :: fsc_in(:), fsc_resamp(:), res_orig(:), res_new(:)
+        integer :: prev_box, filtsz
+        fsc_out = 0.d0
+        if( .not. file_exists(fname) ) return
+        fsc_in = file2rarr(fname)
+        if( size(fsc_in) < self%kfromto(1) )then
+            deallocate(fsc_in)
+            return
+        endif
+        filtsz = fdim(self%p_ptr%box_crop) - 1
+        if( size(fsc_in) == filtsz .and. size(fsc_in) >= self%interpklim )then
+            fsc_out = real(fsc_in(self%kfromto(1):self%interpklim), dp)
+        else
+            prev_box = 2 * size(fsc_in)
+            res_orig = get_resarr(prev_box, self%p_ptr%smpd_crop)
+            res_new  = get_resarr(self%p_ptr%box_crop, self%p_ptr%smpd_crop)
+            fsc_resamp = resample_filter(fsc_in, res_orig, res_new)
+            fsc_out = real(fsc_resamp(self%kfromto(1):self%interpklim), dp)
+            if( allocated(fsc_resamp) ) deallocate(fsc_resamp)
+            if( allocated(res_orig) ) deallocate(res_orig)
+            if( allocated(res_new)  ) deallocate(res_new)
+        endif
+        if( allocated(fsc_in) ) deallocate(fsc_in)
+    end subroutine read_resampled_fsc_prior
+
+    subroutine calc_fsc_from_reprojection_model( self, restored_even, restored_odd, ref_first, ref_last, fsc )
+        class(polarft_calc), intent(in)  :: self
+        complex(dp),         intent(in)  :: restored_even(:,self%kfromto(1):,:)
+        complex(dp),         intent(in)  :: restored_odd( :,self%kfromto(1):,:)
+        integer,             intent(in)  :: ref_first, ref_last
+        real(dp),            intent(out) :: fsc(self%kfromto(1):self%interpklim)
+        real(dp) :: vare(self%kfromto(1):self%interpklim), varo(self%kfromto(1):self%interpklim)
+        integer  :: icls, k
+        if( ref_first < 1 .or. ref_last > size(restored_even,3) .or. ref_first > ref_last )then
+            THROW_HARD('invalid reference range in calc_fsc_from_reprojection_model')
+        endif
+        if( size(restored_even,1) /= self%pftsz .or. size(restored_odd,1) /= self%pftsz )then
+            THROW_HARD('invalid angular dimension in calc_fsc_from_reprojection_model')
+        endif
+        fsc  = 0.d0
+        vare = 0.d0
+        varo = 0.d0
+        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(icls,k) reduction(+:fsc,vare,varo)
+        do icls = ref_first,ref_last
+            do k = self%kfromto(1),self%interpklim
+                fsc(k)  = fsc(k)  + sum(real(restored_even(:,k,icls) * conjg(restored_odd(:,k,icls)), dp))
+                vare(k) = vare(k) + sum(real(restored_even(:,k,icls) * conjg(restored_even(:,k,icls)), dp))
+                varo(k) = varo(k) + sum(real(restored_odd( :,k,icls) * conjg(restored_odd( :,k,icls)), dp))
+            enddo
+        enddo
+        !$omp end parallel do
+        vare = vare * varo
+        where( vare > DTINY )
+            fsc = fsc / sqrt(vare)
+        elsewhere
+            fsc = 0.d0
+        end where
+    end subroutine calc_fsc_from_reprojection_model
 
     !>  \brief Generate the mirror slices for restored obsfield references
     !!         iref runs through the unique half (un-mirrored references), the

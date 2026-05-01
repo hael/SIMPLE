@@ -131,7 +131,7 @@ contains
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield read parts         : ', rt_obs_reduce_detail(1)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield append parts       : ', rt_obs_reduce_detail(2)
                     write(fnr,'(a,t52,f9.2)') 'volassemble normalize obsfield refs     : ', rt_normalize
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield calc FSC prior     : ', rt_obs_norm_detail(1)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield read FSC prior     : ', rt_obs_norm_detail(1)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield coord setup        : ', rt_obs_norm_detail(2)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield shell geom         : ', rt_obs_norm_detail(3)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield read previous      : ', rt_obs_norm_detail(4)

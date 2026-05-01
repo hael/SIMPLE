@@ -73,7 +73,6 @@ type :: fgrid_obsfield_eo
     procedure, public :: restore_field => obsfield_eo_restore_field
     procedure, public :: blend_restored_field => obsfield_eo_blend_restored_field
     procedure, public :: insert_lowres_merged => obsfield_eo_insert_lowres_merged
-    procedure, public :: calc_fsc      => obsfield_eo_calc_fsc
     procedure, public :: extract_polar => obsfield_eo_extract_polar
     procedure, public :: log_shell_budget_stats => obsfield_eo_log_shell_budget_stats
     procedure, public :: write_merged_volume => obsfield_eo_write_merged_volume
@@ -1288,54 +1287,6 @@ contains
         self%even%nobs = nobs_even
         self%odd%nobs  = nobs_odd
     end subroutine obsfield_eo_insert_lowres_merged
-
-    subroutine obsfield_eo_calc_fsc( self, kfromto, fsc )
-        class(fgrid_obsfield_eo), intent(in)  :: self
-        integer,                  intent(in)  :: kfromto(2)
-        real(dp),                 intent(out) :: fsc(kfromto(1):kfromto(2))
-        complex(dp) :: even_val, odd_val
-        real(dp)    :: vare(kfromto(1):kfromto(2)), varo(kfromto(1):kfromto(2))
-        integer     :: lo(3), hi(3), h, k, l, shell
-        if( .not. self%even%initialized .or. .not. self%odd%initialized )then
-            fsc = 0.d0
-            return
-        endif
-        if( self%even%pf /= self%odd%pf )then
-            THROW_HARD('incompatible even/odd obsfield oversampling; obsfield_eo_calc_fsc')
-        endif
-        lo = max(self%even%grid_lims(:,1), self%odd%grid_lims(:,1))
-        hi = min(self%even%grid_lims(:,2), self%odd%grid_lims(:,2))
-        fsc  = 0.d0
-        vare = 0.d0
-        varo = 0.d0
-        if( any(hi < lo) ) return
-        !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l,shell,even_val,odd_val) &
-        !$omp& reduction(+:fsc,vare,varo) proc_bind(close)
-        do l = lo(3), hi(3)
-            do k = lo(2), hi(2)
-                do h = lo(1), hi(1)
-                    if( .not. self%even%grid_obs(h,k,l) ) cycle
-                    if( .not. self%odd%grid_obs( h,k,l) ) cycle
-                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
-                    if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
-                    if( self%even%grid_den(h,k,l) <= DTINY ) cycle
-                    if( self%odd%grid_den( h,k,l) <= DTINY ) cycle
-                    even_val = self%even%grid_num(h,k,l) / self%even%grid_den(h,k,l)
-                    odd_val  = self%odd%grid_num( h,k,l) / self%odd%grid_den( h,k,l)
-                    fsc(shell)  = fsc(shell)  + real(even_val * conjg(odd_val), dp)
-                    vare(shell) = vare(shell) + real(even_val * conjg(even_val), dp)
-                    varo(shell) = varo(shell) + real(odd_val  * conjg(odd_val),  dp)
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        vare = vare * varo
-        where( vare > DTINY )
-            fsc = fsc / sqrt(vare)
-        elsewhere
-            fsc = 0.d0
-        end where
-    end subroutine obsfield_eo_calc_fsc
 
     subroutine obsfield_eo_write( self, fname )
         class(fgrid_obsfield_eo), intent(in) :: self
