@@ -177,17 +177,13 @@ contains
         if( l_force .and. params%can_promote_assembly_ref_nspace() .and. params%nspace_next > params%nspace )then
             call cline_assembly%set('nspace', params%nspace_next)
             call cline_assembly%delete('nspace_next')
-            if( cline_assembly%defined('pftsz_next') )then
-                call cline_assembly%set('pftsz', cline_assembly%get_iarg('pftsz_next'))
-                call cline_assembly%delete('pftsz_next')
-            endif
+            if( params%pftsz_next > 0 ) call cline_assembly%set('pftsz', params%pftsz_next)
+            call cline_assembly%delete('pftsz_next')
         else if( params%uses_next_assembly_ref_nspace() )then
             call cline_assembly%set('nspace', params%assembly_ref_nspace())
             call cline_assembly%delete('nspace_next')
-            if( cline_assembly%defined('pftsz_next') )then
-                call cline_assembly%set('pftsz', cline_assembly%get_iarg('pftsz_next'))
-                call cline_assembly%delete('pftsz_next')
-            endif
+            if( params%pftsz_next > 0 ) call cline_assembly%set('pftsz', params%pftsz_next)
+            call cline_assembly%delete('pftsz_next')
         endif
     end subroutine promote_assembly_nspace_if_needed
 

@@ -378,6 +378,7 @@ type :: parameters
     integer :: period=0           !< periodic window step in frames (0 means disabled)
     integer :: pid=0               !< process ID
     integer :: pftsz=0             !< Desired size of polarft_calc object (half the # of rotations)
+    integer :: pftsz_next=0        !< Desired pftsz for next-stage promoted polar reference sections
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
     integer :: ref_ind=0           !> reference index
@@ -1030,6 +1031,7 @@ contains
         call check_iarg('part',           self%part)
         call check_iarg('period',         self%period)
         call check_iarg('pftsz',          self%pftsz)
+        call check_iarg('pftsz_next',     self%pftsz_next)
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('ref_ind',        self%ref_ind)
         call check_iarg('shift_stage',    self%shift_stage)
