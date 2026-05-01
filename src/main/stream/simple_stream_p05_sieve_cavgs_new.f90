@@ -114,7 +114,7 @@ contains
         call simple_mkdir(PATH_HERE // DIR_STREAM_COMPLETED)
         ! initialise the queue environment and worker pool
         params%workers     = params%nchunks
-        params%worker_nthr = params%nthr 
+        params%worker_nthr = params%nthr * params%nparts
         call init_stream_qenv(params, qenv, string(SIMPLE_STREAM_CHUNK_PARTITION))
         ! Sanity-check: must start from an empty project
         call spproj_glob%read(params%projfile)

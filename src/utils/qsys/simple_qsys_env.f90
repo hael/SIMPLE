@@ -206,6 +206,7 @@ contains
             if( params%workers > 0     ) n_workers    = params%workers
             if( params%worker_nthr > 0 ) nthr_workers = params%worker_nthr
             if( present(qsys_nthr)     ) nthr_workers = qsys_nthr
+            call self%qdescr%set('job_cpus_per_task', int2str(nthr_workers)) ! workers use the main thread count for their own per-task CPU allocation; nthr_workers is only for the worker server
             ! Build two separate backends: base backend launches workers via the underlying scheduler;
             ! dispatch backend routes tasks to the running TCP worker pool.
             call self%qsys_fac_base%new(qsnam, self%base_qsys)

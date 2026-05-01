@@ -616,9 +616,14 @@ contains
         state       = pool_proj%os_ptcl2D%get_all_asint('state')
         class_match = pool_proj%os_ptcl2D%get_all_asint('class_match')
         do i = 1, nptcls
-            if( any(match_selection == class_match(i)) ) then
+            if( class_match(i) == 0 ) then
+                ! class_match=0 particles are always rejected
+                state(i) = 0
+            else if( any(match_selection == class_match(i)) ) then
+                ! accepted if class_match is in the selection mask
                 state(i) = 1
             else
+                ! rejected otherwise
                 state(i) = 0
             end if
         end do

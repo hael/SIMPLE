@@ -33,6 +33,7 @@ program simple_persistent_worker
     use unix,                  only: c_time,                                   &
                                      c_pthread_t, c_pthread_mutex_t,           &
                                      c_pthread_create, c_pthread_join,         &
+                                     c_pthread_cancel,                         &
                                      c_pthread_mutex_init,                     &
                                      c_pthread_mutex_destroy,                  &
                                      c_pthread_mutex_lock,                     &
@@ -98,7 +99,7 @@ program simple_persistent_worker
 
     ! Loop / scratch
     logical                :: found, l_terminate
-    logical                :: slot_started
+    logical                :: slot_started, slot_complete
     logical                :: safe_path
     integer                :: argcnt, iarg, cmdlen, reply_len, buffer_type, i, rc, server_len
     integer(timer_int_kind):: t0
@@ -255,13 +256,21 @@ program simple_persistent_worker
             write(*,*) 'Worker: c_pthread_mutex_lock failed in cleanup for slot', i, 'rc=', rc
             cycle
         end if
-        slot_started = threads(i)%started
+        slot_started  = threads(i)%started
+        slot_complete = threads(i)%complete
         rc = c_pthread_mutex_unlock(threads(i)%mutex)
         if( rc /= 0 ) then
             write(*,*) 'Worker: c_pthread_mutex_unlock failed in cleanup for slot', i, 'rc=', rc
             cycle
         end if
         if( slot_started ) then
+            ! Ensure the pthread is not left running at process teardown.
+            if( .not. slot_complete ) then
+                rc = c_pthread_cancel(threads(i)%thread)
+                if( rc /= 0 ) then
+                    write(*,*) 'Worker: c_pthread_cancel failed in cleanup for slot', i, 'rc=', rc
+                end if
+            end if
             rc = c_pthread_join(threads(i)%thread, thread_retval)
             if( rc /= 0 ) then
                 write(*,*) 'Worker: c_pthread_join failed in cleanup for slot', i, 'rc=', rc
@@ -303,8 +312,8 @@ contains
                 cycle
             end if
             if( threads(slot_i)%nthr == 0 ) then
-                ! If a prior thread finished in this slot, join it before reusing
-                ! the stored pthread handle.
+                ! If a prior pthread still exists in this slot, ensure it is
+                ! terminated and joined before slot reuse.
                 if( threads(slot_i)%started ) then
                     if( threads(slot_i)%complete ) then
                         slot_rc = c_pthread_mutex_unlock(threads(slot_i)%mutex)
@@ -327,8 +336,26 @@ contains
                         slot_rc = c_pthread_mutex_unlock(threads(slot_i)%mutex)
                         if( slot_rc /= 0 ) then
                             write(*,*) 'Worker: unlock failed for busy slot', slot_i, 'rc=', slot_rc
+                            cycle
                         end if
-                        cycle
+                        slot_rc = c_pthread_cancel(threads(slot_i)%thread)
+                        if( slot_rc /= 0 ) then
+                            write(*,*) 'Worker: cancel failed before slot reuse for slot', slot_i, 'rc=', slot_rc
+                            cycle
+                        end if
+                        slot_rc = c_pthread_join(threads(slot_i)%thread, local_retval)
+                        if( slot_rc /= 0 ) then
+                            write(*,*) 'Worker: join failed after cancel for slot', slot_i, 'rc=', slot_rc
+                            cycle
+                        end if
+                        slot_rc = c_pthread_mutex_lock(threads(slot_i)%mutex)
+                        if( slot_rc /= 0 ) then
+                            write(*,*) 'Worker: relock failed after cancel/join for slot', slot_i, 'rc=', slot_rc
+                            cycle
+                        end if
+                        threads(slot_i)%started = .false.
+                        threads(slot_i)%complete = .true.
+                        threads(slot_i)%nthr = 0
                     end if
                 end if
                 ! Claim slot before releasing the lock so no other caller

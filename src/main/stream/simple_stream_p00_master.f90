@@ -817,7 +817,7 @@ contains
             call cline_particle_sieving%set('nthr',                                   16)
             call cline_particle_sieving%set('mkdir',                               'yes')
             call cline_particle_sieving%set('nparts',                                  1)
-            call cline_particle_sieving%set('nchunks',                                 4)
+            call cline_particle_sieving%set('nchunks',                                 8)
         end subroutine init_cline_particle_sieving
 
         subroutine init_metadata_particle_sieving()
