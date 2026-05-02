@@ -52,6 +52,7 @@ type :: fgrid_obs_field
     procedure, public  :: calc_invtau2               => obsfield_calc_invtau2
     procedure, public  :: log_shell_budget_stats     => obsfield_log_shell_budget_stats
     procedure, public  :: log_shell_cache_assignment => obsfield_log_shell_cache_assignment
+    procedure, public  :: log_shell_cache_accum_compare => obsfield_log_shell_cache_accum_compare
     procedure, public  :: count_shell_cells          => obsfield_count_shell_cells
     procedure, public  :: count_shell_cell_counts    => obsfield_count_shell_cell_counts
     procedure, public  :: get_nobs                   => obsfield_get_nobs
@@ -74,6 +75,7 @@ type :: fgrid_obsfield_eo
     procedure, public :: extract_polar          => obsfield_eo_extract_polar
     procedure, public :: extract_restored_polar => obsfield_eo_extract_restored_polar
     procedure, public :: log_shell_budget_stats => obsfield_eo_log_shell_budget_stats
+    procedure, public :: log_shell_cache_accum_compare => obsfield_eo_log_shell_cache_accum_compare
     procedure, public :: write_merged_volume    => obsfield_eo_write_merged_volume
     procedure, public :: write                  => obsfield_eo_write
     procedure, public :: read                   => obsfield_eo_read
@@ -553,6 +555,125 @@ contains
         deallocate(shell_cells, shell_seen, shell_stride)
     end subroutine obsfield_log_shell_cache_assignment
 
+    subroutine obsfield_log_shell_cache_accum_compare( self, kfromto, geom, label, half )
+        class(fgrid_obs_field), intent(in) :: self
+        integer,                intent(in) :: kfromto(2)
+        type(shell_field_geom), intent(in) :: geom
+        character(len=*),       intent(in) :: label, half
+        integer,  allocatable :: ref_obs(:), assigned_obs(:), unique_nodes(:)
+        integer,  allocatable :: node_ncells(:)
+        real(dp), allocatable :: ref_den(:), node_den(:), cache_den(:)
+        integer  :: h, k, l, shell, ik, nk, inode, nmiss, total_nodes
+        integer  :: node_first, node_last, node, iband
+        integer  :: obs_ref_total, obs_cache_total, unique_total, multi_nodes, max_cells_per_node
+        integer  :: band_ref(3), band_cache(3), band_unique(3), band_first(3), band_last(3)
+        real(dp) :: den_ref_total, den_cache_total, rel_den
+        real(dp) :: unique_per_obs, assigned_per_ref, band_unique_per_obs(3), band_assigned_per_ref(3)
+        real(dp) :: cos_best
+        if( .not. self%initialized ) return
+        if( .not. geom%is_initialized() ) return
+        nk = kfromto(2) - kfromto(1) + 1
+        if( nk < 1 ) return
+        total_nodes = geom%get_total_nodes()
+        if( total_nodes < 1 ) return
+        allocate(ref_obs(nk), assigned_obs(nk), unique_nodes(nk), source=0)
+        allocate(ref_den(nk), cache_den(nk), source=0.d0)
+        allocate(node_ncells(total_nodes), source=0)
+        allocate(node_den(total_nodes), source=0.d0)
+        nmiss = 0
+        do l = self%lims(3,1), self%lims(3,2)
+            do k = self%lims(2,1), self%lims(2,2)
+                do h = self%lims(1,1), self%lims(1,2)
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                    if( .not. self%grid_obs(h,k,l) ) cycle
+                    ik = shell - kfromto(1) + 1
+                    ref_obs(ik) = ref_obs(ik) + 1
+                    ref_den(ik) = ref_den(ik) + self%grid_den(h,k,l)
+                    call geom%nearest_node(shell, real([h,k,l],sp), inode, cos_best)
+                    if( inode < 1 )then
+                        nmiss = nmiss + 1
+                        cycle
+                    endif
+                    assigned_obs(ik) = assigned_obs(ik) + 1
+                    node_ncells(inode) = node_ncells(inode) + 1
+                    node_den(inode) = node_den(inode) + self%grid_den(h,k,l)
+                enddo
+            enddo
+        enddo
+        do ik = 1,nk
+            shell = kfromto(1) + ik - 1
+            call geom%get_shell_node_range(shell, node_first, node_last)
+            do node = node_first,node_last
+                if( node_ncells(node) < 1 ) cycle
+                unique_nodes(ik) = unique_nodes(ik) + 1
+                cache_den(ik) = cache_den(ik) + node_den(node)
+            enddo
+        enddo
+        obs_ref_total    = sum(ref_obs)
+        obs_cache_total  = sum(assigned_obs)
+        unique_total     = sum(unique_nodes)
+        den_ref_total    = sum(ref_den)
+        den_cache_total  = sum(cache_den)
+        multi_nodes      = count(node_ncells > 1)
+        max_cells_per_node = maxval(node_ncells)
+        if( obs_ref_total > 0 )then
+            unique_per_obs   = real(unique_total,dp) / real(obs_ref_total,dp)
+            assigned_per_ref = real(obs_cache_total,dp) / real(obs_ref_total,dp)
+        else
+            unique_per_obs   = 0.d0
+            assigned_per_ref = 0.d0
+        endif
+        if( abs(den_ref_total) > DTINY )then
+            rel_den = (den_cache_total - den_ref_total) / den_ref_total
+        else
+            rel_den = 0.d0
+        endif
+        band_ref = 0
+        band_cache = 0
+        band_unique = 0
+        band_first = huge(0)
+        band_last  = -huge(0)
+        do ik = 1,nk
+            shell = kfromto(1) + ik - 1
+            iband = min(3, max(1, 1 + (3 * (ik - 1)) / nk))
+            band_ref(iband)    = band_ref(iband) + ref_obs(ik)
+            band_cache(iband)  = band_cache(iband) + assigned_obs(ik)
+            band_unique(iband) = band_unique(iband) + unique_nodes(ik)
+            band_first(iband)  = min(band_first(iband), shell)
+            band_last(iband)   = max(band_last(iband),  shell)
+        enddo
+        do iband = 1,3
+            if( band_ref(iband) > 0 )then
+                band_unique_per_obs(iband) = real(band_unique(iband),dp) / real(band_ref(iband),dp)
+                band_assigned_per_ref(iband) = real(band_cache(iband),dp) / real(band_ref(iband),dp)
+            else
+                band_unique_per_obs(iband) = 0.d0
+                band_assigned_per_ref(iband) = 0.d0
+                band_first(iband) = 0
+                band_last(iband)  = 0
+            endif
+        enddo
+        write(logfhandle,'(A,1X,A,2X,A,1X,A,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3,2X,A,F8.3)') &
+            &'obsfield shell-cache accum-compare', trim(label), 'half=', trim(half), &
+            &'obs_cells_ref=', obs_ref_total, 'obs_cells_cache=', obs_cache_total, 'missed=', nmiss, &
+            &'unique_nodes=', unique_total, 'assigned_per_ref=', assigned_per_ref, 'unique_per_obs=', unique_per_obs
+        write(logfhandle,'(A,1X,A,2X,A,1X,A,2X,A,ES12.4,2X,A,ES12.4,2X,A,ES12.4,2X,A,I0,2X,A,I0)') &
+            &'obsfield shell-cache accum-density', trim(label), 'half=', trim(half), &
+            &'den_sum_ref=', den_ref_total, 'den_sum_cache=', den_cache_total, 'rel_den_diff=', rel_den, &
+            &'multi_nodes=', multi_nodes, 'max_cells_per_node=', max_cells_per_node
+        write(logfhandle,'(A,1X,A,2X,A,1X,A,2X,A,I0,A,I0,2X,A,I0,A,I0,2X,A,I0,A,I0,2X,A,F8.3,2X,A,F8.3,2X,A,F8.3,2X,A,F8.3,2X,A,F8.3,2X,A,F8.3)') &
+            &'obsfield shell-cache accum-bands', trim(label), 'half=', trim(half), &
+            &'low_k=', band_first(1), ':', band_last(1), &
+            &'mid_k=', band_first(2), ':', band_last(2), &
+            &'high_k=', band_first(3), ':', band_last(3), &
+            &'low_unique_per_obs=', band_unique_per_obs(1), 'mid_unique_per_obs=', band_unique_per_obs(2), &
+            &'high_unique_per_obs=', band_unique_per_obs(3), &
+            &'low_assigned_per_ref=', band_assigned_per_ref(1), 'mid_assigned_per_ref=', band_assigned_per_ref(2), &
+            &'high_assigned_per_ref=', band_assigned_per_ref(3)
+        deallocate(ref_obs, assigned_obs, unique_nodes, node_ncells, ref_den, node_den, cache_den)
+    end subroutine obsfield_log_shell_cache_accum_compare
+
     integer function obsfield_count_shell_cells( self, kfromto )
         class(fgrid_obs_field), intent(in) :: self
         integer,                intent(in) :: kfromto(2)
@@ -859,6 +980,15 @@ contains
         call log_single_field_shell_budget(self%odd,  kfromto, shell_nodes, label, 'odd')
         call log_merged_field_shell_budget(self, kfromto, shell_nodes, label, 'merged')
     end subroutine obsfield_eo_log_shell_budget_stats
+
+    subroutine obsfield_eo_log_shell_cache_accum_compare( self, kfromto, geom, label )
+        class(fgrid_obsfield_eo), intent(in) :: self
+        integer,                  intent(in) :: kfromto(2)
+        type(shell_field_geom),   intent(in) :: geom
+        character(len=*),         intent(in) :: label
+        call self%even%log_shell_cache_accum_compare(kfromto, geom, label, 'even')
+        call self%odd%log_shell_cache_accum_compare(kfromto, geom, label, 'odd')
+    end subroutine obsfield_eo_log_shell_cache_accum_compare
 
     subroutine log_single_field_shell_budget( self, kfromto, shell_nodes, label, half )
         class(fgrid_obs_field), intent(in) :: self

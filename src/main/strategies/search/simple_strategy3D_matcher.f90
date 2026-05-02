@@ -82,7 +82,7 @@ contains
         integer(timer_int_kind) :: t_prep_ref_sections, t_memoize_refs
         real(timer_int_kind)    :: rt_startup, rt_build_batch_ptcls, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
         real(timer_int_kind)    :: rt_alloc_ptcl_imgs
-        real(timer_int_kind)    :: rt_prep_ref_sections, rt_memoize_refs
+        real(timer_int_kind)    :: rt_prep_ref_sections, rt_memoize_refs, rt_rec_accum, rt_rec_write
 
         p_ptr => params
         b_ptr => build
@@ -102,8 +102,16 @@ contains
         call prepare_particles_batches( nptcls2update )
         if( ctrl%do_bench )then
             rt_startup = toc(t_startup)
+            rt_build_batch_ptcls = 0.0
             rt_alloc_ptcl_imgs   = 0.0
             rt_prep_ref_sections = 0.0
+            rt_memoize_refs      = 0.0
+            rt_prep_orisrch      = 0.0
+            rt_align             = 0.0
+            rt_projio            = 0.0
+            rt_rec               = 0.0
+            rt_rec_accum         = 0.0
+            rt_rec_write         = 0.0
         endif
         call prepare_refs_sigmas_and_pftc()
         if( ctrl%do_bench ) t_memoize_refs = tic()
@@ -122,7 +130,6 @@ contains
             rt_prep_orisrch     = toc(t_prep_orisrch)
             rt_build_batch_ptcls= 0.0
             rt_align            = 0.0
-            rt_rec              = 0.0
         endif
         call maybe_init_reconstruction()
         allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0)
@@ -187,7 +194,7 @@ contains
                 call write_partial_recs(params, build, cline, fpls)
                 call finalize_rec_objs(params, build)
             endif
-            if( ctrl%do_bench ) rt_rec = rt_rec + toc(t_rec)
+            if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
         if( allocated(fpls) .and. ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
             do iptcl_batch = 1,size(fpls)
@@ -201,12 +208,36 @@ contains
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
 
         if( ctrl%do_bench )then
+            rt_rec = rt_rec_accum + rt_rec_write
             rt_tot = toc(t_tot)
             doprint = .true.
             if( p_ptr%part /= 1 ) doprint = .false.
             if( doprint )then
                 benchfname = refine3D_bench_fname(which_iter)
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+                write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+                write(fnr,'(a,a)')  'match3D refine mode                 : ', trim(ctrl%refine_mode)
+                write(fnr,'(a,a)')  'match3D polar mode                  : ', trim(ctrl%polar_mode)
+                write(fnr,'(a,l1)') 'match3D write partial outputs       : ', ctrl%do_write_partial_recs
+                write(fnr,'(a,i0)') 'match3D nspace                      : ', p_ptr%nspace
+                write(fnr,'(a,i0)') 'match3D nstates                     : ', p_ptr%nstates
+                write(fnr,'(a,i0)') 'match3D kfrom                       : ', p_ptr%kfromto(1)
+                write(fnr,'(a,i0)') 'match3D kto                         : ', p_ptr%kfromto(2)
+                write(fnr,'(a)') ''
+                write(fnr,'(a)') '*** COMPARABLE TIMINGS (s) ***'
+                write(fnr,'(a,t52,f9.2)') 'match3D common startup/setup        : ', rt_startup
+                write(fnr,'(a,t52,f9.2)') 'match3D particle input preparation  : ', rt_build_batch_ptcls
+                write(fnr,'(a,t52,f9.2)') 'match3D particle image allocation   : ', rt_alloc_ptcl_imgs
+                write(fnr,'(a,t52,f9.2)') 'match3D reference preparation       : ', rt_prep_ref_sections
+                write(fnr,'(a,t52,f9.2)') 'match3D reference memoization       : ', rt_memoize_refs
+                write(fnr,'(a,t52,f9.2)') 'match3D orientation-search setup    : ', rt_prep_orisrch
+                write(fnr,'(a,t52,f9.2)') 'match3D orientation-search execute  : ', rt_align
+                write(fnr,'(a,t52,f9.2)') 'match3D project metadata I/O        : ', rt_projio
+                write(fnr,'(a,t52,f9.2)') 'match3D partial update accumulation : ', rt_rec_accum
+                write(fnr,'(a,t52,f9.2)') 'match3D partial output write        : ', rt_rec_write
+                write(fnr,'(a,t52,f9.2)') 'match3D partial output total        : ', rt_rec
+                write(fnr,'(a,t52,f9.2)') 'match3D total time                  : ', rt_tot
+                write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,t52,f9.2)') 'match3D startup_overhead : ',          rt_startup
                 write(fnr,'(a,t52,f9.2)') 'match3D build_batch_particles3D : ',   rt_build_batch_ptcls
@@ -224,6 +255,19 @@ contains
                     write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction : ', rt_rec
                 endif
                 write(fnr,'(a,t52,f9.2)') 'match3D total time : ',                rt_tot
+                write(fnr,'(a)') ''
+                write(fnr,'(a)') '*** COMPARABLE RELATIVE TIMINGS (%) ***'
+                write(fnr,'(a,t52,f9.2)') 'match3D common startup/setup        : ', (rt_startup/rt_tot)           * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D particle input preparation  : ', (rt_build_batch_ptcls/rt_tot) * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D particle image allocation   : ', (rt_alloc_ptcl_imgs/rt_tot)   * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D reference preparation       : ', (rt_prep_ref_sections/rt_tot) * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D reference memoization       : ', (rt_memoize_refs/rt_tot)      * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D orientation-search setup    : ', (rt_prep_orisrch/rt_tot)      * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D orientation-search execute  : ', (rt_align/rt_tot)             * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D project metadata I/O        : ', (rt_projio/rt_tot)            * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D partial update accumulation : ', (rt_rec_accum/rt_tot)         * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D partial output write        : ', (rt_rec_write/rt_tot)         * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D partial output total        : ', (rt_rec/rt_tot)               * 100.
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
                 write(fnr,'(a,t52,f9.2)') 'match3D startup_overhead : ',          (rt_startup/rt_tot)                     * 100.
@@ -474,7 +518,7 @@ contains
                     pinds(batch_start:batch_end), fpls(:batchsz))
                 call update_rec(params, b_ptr, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
             endif
-            if( ctrl%do_bench ) rt_rec = rt_rec + toc(t_rec)
+            if( ctrl%do_bench ) rt_rec_accum = rt_rec_accum + toc(t_rec)
         end subroutine maybe_restore_batch
 
         subroutine maybe_write_orientations()

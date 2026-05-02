@@ -48,6 +48,7 @@ end type refine3D_bench_state
 
 type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     logical :: l_sigma
+    type(refine3D_bench_state), private :: bench
     type(cmdline) :: cline_calc_group_sigmas
     type(convergence) :: conv
 contains
@@ -281,6 +282,66 @@ contains
         endif
     end subroutine remove_partial_assembly_input_files
 
+    subroutine reset_refine3D_bench( bench )
+        type(refine3D_bench_state), intent(inout) :: bench
+        bench%t_init      = 0
+        bench%t_prob      = 0
+        bench%t_sched     = 0
+        bench%t_assemble  = 0
+        bench%t_tot       = 0
+        bench%rt_init     = 0.
+        bench%rt_prob     = 0.
+        bench%rt_sched    = 0.
+        bench%rt_assemble = 0.
+        bench%rt_tot      = 0.
+    end subroutine reset_refine3D_bench
+
+    real(timer_int_kind) function bench_pct( part, total ) result(pct)
+        real(timer_int_kind), intent(in) :: part, total
+        if( total > 0. )then
+            pct = (part / total) * 100.
+        else
+            pct = 0.
+        endif
+    end function bench_pct
+
+    subroutine write_strategy_bench_report( params, bench, execution_mode )
+        type(parameters),             intent(in) :: params
+        type(refine3D_bench_state),   intent(in) :: bench
+        character(len=*),             intent(in) :: execution_mode
+        type(string) :: benchfname
+        real(timer_int_kind) :: rt_accounted
+        integer :: fnr
+        if( .not. L_BENCH_GLOB ) return
+        rt_accounted = bench%rt_init + bench%rt_prob + bench%rt_sched + bench%rt_assemble
+        benchfname = refine3D_strategy_bench_fname(params%which_iter)
+        call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+        write(fnr,'(a,a)')  'refine3D execution mode             : ', trim(execution_mode)
+        write(fnr,'(a,a)')  'refine3D refine mode                : ', trim(params%refine)
+        write(fnr,'(a,a)')  'refine3D polar mode                 : ', trim(params%polar)
+        write(fnr,'(a,i0)') 'refine3D nspace                     : ', params%nspace
+        write(fnr,'(a,i0)') 'refine3D nstates                    : ', params%nstates
+        write(fnr,'(a,i0)') 'refine3D kfrom                      : ', params%kfromto(1)
+        write(fnr,'(a,i0)') 'refine3D kto                        : ', params%kfromto(2)
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** COMPARABLE TIMINGS (s) ***'
+        write(fnr,'(a,t52,f9.2)') 'refine3D strategy setup/init        : ', bench%rt_init
+        write(fnr,'(a,t52,f9.2)') 'refine3D probabilistic pre-step     : ', bench%rt_prob
+        write(fnr,'(a,t52,f9.2)') 'refine3D matcher/scheduler          : ', bench%rt_sched
+        write(fnr,'(a,t52,f9.2)') 'refine3D assembly/postprocess       : ', bench%rt_assemble
+        write(fnr,'(a,t52,f9.2)') 'refine3D total time                 : ', bench%rt_tot
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** COMPARABLE RELATIVE TIMINGS (%) ***'
+        write(fnr,'(a,t52,f9.2)') 'refine3D strategy setup/init        : ', bench_pct(bench%rt_init, bench%rt_tot)
+        write(fnr,'(a,t52,f9.2)') 'refine3D probabilistic pre-step     : ', bench_pct(bench%rt_prob, bench%rt_tot)
+        write(fnr,'(a,t52,f9.2)') 'refine3D matcher/scheduler          : ', bench_pct(bench%rt_sched, bench%rt_tot)
+        write(fnr,'(a,t52,f9.2)') 'refine3D assembly/postprocess       : ', bench_pct(bench%rt_assemble, bench%rt_tot)
+        write(fnr,'(a,t52,f9.2)') 'refine3D % accounted for            : ', bench_pct(rt_accounted, bench%rt_tot)
+        call fclose(fnr)
+        call benchfname%kill
+    end subroutine write_strategy_bench_report
+
     subroutine delete_volume_source_keys( cline, nstates )
         type(cmdline), intent(inout) :: cline
         integer,       intent(in)    :: nstates
@@ -413,6 +474,11 @@ contains
         logical                           :: l_write_partial_recs
         type(string)                      :: volname
         601 format(A,1X,F12.3)
+        if( L_BENCH_GLOB )then
+            call reset_refine3D_bench(self%bench)
+            self%bench%t_init = tic()
+            self%bench%t_tot  = self%bench%t_init
+        endif
         iter      = params%which_iter
         extr_iter = params%extr_iter
         call self%conv%print_iteration(params%which_iter)
@@ -456,6 +522,10 @@ contains
             endif
         endif
         ! refine=prob* pre-step
+        if( L_BENCH_GLOB )then
+            self%bench%rt_init = toc(self%bench%t_init)
+            self%bench%t_prob  = tic()
+        endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
@@ -481,6 +551,10 @@ contains
             ! make sure prob_align and refine see the same information
             if( cline%defined('lp') ) params%lp = cline%get_rarg('lp')
         endif
+        if( L_BENCH_GLOB )then
+            self%bench%rt_prob = toc(self%bench%t_prob)
+            self%bench%t_sched = tic()
+        endif
         ! main refinement step
         l_write_partial_recs = trim(params%volrec) .eq. 'yes' .or. params%l_polar
         if( l_write_partial_recs )then
@@ -490,6 +564,10 @@ contains
             call remove_partial_assembly_input_files(params)
         endif
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
+        if( L_BENCH_GLOB )then
+            self%bench%rt_sched   = toc(self%bench%t_sched)
+            self%bench%t_assemble = tic()
+        endif
         if( l_write_partial_recs )then
             call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
             call promote_assembly_nspace_if_needed(params, cline_volassemble)
@@ -525,6 +603,10 @@ contains
         endif
         ! input volume should only be used once in polar mode
         if( params%l_polar ) call delete_volume_source_keys(cline, params%nstates)
+        if( L_BENCH_GLOB )then
+            self%bench%rt_assemble = toc(self%bench%t_assemble)
+            self%bench%rt_tot      = toc(self%bench%t_tot)
+        endif
     end subroutine inmem_execute_iteration
 
     subroutine inmem_finalize_iteration(self, params, build)
@@ -534,6 +616,7 @@ contains
         ! Shared-memory rebuilds the builder every iteration, so persist the
         ! updated orientations before the next rebuild reads the project file.
         if( trim(params%refine) /= 'sigma' ) call build%spproj%write_segment_inside(params%oritype)
+        call write_strategy_bench_report(params, self%bench, 'shared-memory')
     end subroutine inmem_finalize_iteration
 
     subroutine inmem_finalize_run(self, params, build, cline)
@@ -840,8 +923,9 @@ contains
         integer :: state, iter
         logical :: l_prob_state_mode, l_prob_neigh_mode
         if( L_BENCH_GLOB )then
+            call reset_refine3D_bench(self%bench)
             self%bench%t_init = tic()
-            self%bench%t_tot  = tic()
+            self%bench%t_tot  = self%bench%t_init
         endif
         601 format(A,1X,F12.3)
         iter     = params%which_iter
@@ -983,7 +1067,6 @@ contains
                         enddo
                     endif
             end select
-            if( L_BENCH_GLOB ) self%bench%rt_assemble = toc(self%bench%t_assemble)
         endif
         ! convergence
         ! For strict same-iteration metrics, evaluate convergence after assembly
@@ -1015,6 +1098,7 @@ contains
                 call del_file(refine3D_iter_refs_fname(iter-1))
             endif
         endif
+        if( L_BENCH_GLOB ) self%bench%rt_assemble = toc(self%bench%t_assemble)
         ! combine even/odd final iteration
         if ( self%l_combine_eo .and. converged )then
             converged            = .false.
@@ -1085,6 +1169,7 @@ contains
                 &self%bench%rt_assemble)/self%bench%rt_tot) * 100.
             call fclose(fnr)
         endif
+        call write_strategy_bench_report(params, self%bench, 'distributed')
     end subroutine distr_finalize_iteration
 
     subroutine distr_finalize_run(self, params, build, cline)

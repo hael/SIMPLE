@@ -382,6 +382,14 @@ All polar insertion, mirroring, common-line normalization, obsfield normalizatio
 
 Common-line normalization is intra-state only. Cross-state common lines are not physical.
 
+### 5.11 Policy: abinitio3D stage low-pass snapshots
+
+`abinitio3D` and `abinitio3D_cavgs` write stage volume snapshots and matching `_lp` diagnostic snapshots through `simple_abinitio_utils.f90`.
+
+The stage planner's `lpinfo(istage)%lp` controls the staged search/reference schedule. It is not the policy cutoff for the saved `_stageNN_lp.mrc` diagnostic volume.
+
+Saved stage `_lp` volumes must be low-pass filtered to the current state FSC resolution when an FSC file exists. The planned stage LP is only a fallback when no valid FSC-derived resolution is available. This keeps the diagnostic stage volume tied to measured even/odd agreement rather than to the intended search schedule.
+
 ---
 
 ## 6. Particle-Domain and Volume-Domain Boundary

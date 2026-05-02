@@ -34,6 +34,7 @@ public :: refine3D_polar_refs_fbody
 public :: refine3D_polar_refs_fname
 public :: refine3D_polar_ref_part_fname
 public :: refine3D_bench_fname
+public :: refine3D_strategy_bench_fname
 public :: refine3D_distr_bench_fname
 public :: refine3D_volassemble_bench_fname
 
@@ -234,6 +235,11 @@ contains
         integer, intent(in) :: iter
         fname = string('REFINE3D_BENCH_ITER')//iter_tag(iter)//TXT_EXT
     end function refine3D_bench_fname
+
+    type(string) function refine3D_strategy_bench_fname( iter ) result(fname)
+        integer, intent(in) :: iter
+        fname = string('REFINE3D_STRATEGY_BENCH_ITER')//iter_tag(iter)//TXT_EXT
+    end function refine3D_strategy_bench_fname
 
     type(string) function refine3D_distr_bench_fname( iter ) result(fname)
         integer, intent(in) :: iter

@@ -457,6 +457,7 @@ contains
                 do state = 1,self%p_ptr%nstates
                     write(shell_label,'(A,I0)') 'state=', state
                     call self%obsfields(state)%log_shell_budget_stats(kspan, shell_nodes, trim(shell_label))
+                    call self%obsfields(state)%log_shell_cache_accum_compare(kspan, shell_geom, trim(shell_label))
                 enddo
                 if( allocated(shell_nodes) ) deallocate(shell_nodes)
             else
