@@ -618,15 +618,17 @@ contains
     end subroutine read_pft_array
 
     ! private helper, no checks are performed on dimensions
-    module subroutine read_any_pft_array( self, fname, array )
+    module subroutine read_any_pft_array( self, fname, array, dims_out )
         class(polarft_calc),      intent(in)    :: self
         class(string),            intent(in)    :: fname
         complex(sp), allocatable, intent(inout) :: array(:,:,:)
+        integer, optional,        intent(out)   :: dims_out(4)
         integer :: dims(4), funit, io_stat
         if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
         call fileiochk('read_any_pft_array: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) dims
+        if( present(dims_out) ) dims_out = dims
         if( allocated(array) ) deallocate(array)
         allocate(array(dims(1),dims(2):dims(3),dims(4)))
         read(unit=funit, pos=(sizeof(dims)+1)) array

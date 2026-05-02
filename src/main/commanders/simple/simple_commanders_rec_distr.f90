@@ -66,8 +66,8 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(string) :: benchfname
-        integer(timer_int_kind) :: t_tot, t_setup, t_reduce, t_normalize, t_resolution, t_write
-        real(timer_int_kind)    :: rt_tot, rt_setup, rt_reduce, rt_normalize, rt_resolution, rt_write
+        integer(timer_int_kind) :: t_tot, t_setup, t_reduce, t_normalize, t_resolution, t_write, t_cleanup
+        real(timer_int_kind)    :: rt_tot, rt_setup, rt_reduce, rt_normalize, rt_resolution, rt_write, rt_cleanup
         real(timer_int_kind)    :: rt_cmp_restore, rt_cmp_accounted
         real(timer_int_kind)    :: rt_obs_reduce_detail(2), rt_obs_norm_detail(20)
         real                   :: update_frac_eff
@@ -117,13 +117,17 @@ contains
         if( L_BENCH_GLOB ) t_write = tic()
         call build%pftc%polar_cavger_writeall(refine3D_polar_refs_fbody())
         if( L_BENCH_GLOB ) rt_write = toc(t_write)
+        if( L_BENCH_GLOB ) t_cleanup = tic()
         call build%pftc%polar_cavger_kill
         call build%pftc%kill
         call build%kill_general_tbox
+        call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
+        call simple_touch('VOLASSEMBLE_FINISHED')
+        if( L_BENCH_GLOB ) rt_cleanup = toc(t_cleanup)
         if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)
-            rt_cmp_restore  = rt_normalize + rt_resolution
-            rt_cmp_accounted= rt_setup + rt_reduce + rt_cmp_restore + rt_write
+            rt_cmp_restore  = rt_normalize
+            rt_cmp_accounted= rt_setup + rt_reduce + rt_cmp_restore + rt_resolution + rt_write + rt_cleanup
             benchfname = refine3D_volassemble_bench_fname(params%which_iter)
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
@@ -139,7 +143,9 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble restore/reconstruct refs: ', rt_cmp_restore
             write(fnr,'(a,t52,f9.2)') 'volassemble automasking             : ', 0.
             write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform filtering    : ', 0.
+            write(fnr,'(a,t52,f9.2)') 'volassemble project metadata        : ', rt_resolution
             write(fnr,'(a,t52,f9.2)') 'volassemble reference handoff write : ', rt_write
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize        : ', rt_cleanup
             write(fnr,'(a,t52,f9.2)') 'volassemble total time              : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** COMPARABLE DETAIL TIMINGS (s) ***'
@@ -149,6 +155,7 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble lowres even/odd insert  : ', rt_obs_norm_detail(6)
             write(fnr,'(a,t52,f9.2)') 'volassemble FSC/FRC bookkeeping     : ', rt_obs_norm_detail(12)
             write(fnr,'(a,t52,f9.2)') 'volassemble resolution metadata     : ', rt_resolution
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize        : ', rt_cleanup
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,t52,f9.2)') 'volassemble polar assembly setup     : ', rt_setup
@@ -175,6 +182,7 @@ contains
             end select
             write(fnr,'(a,t52,f9.2)') 'volassemble resolution metadata      : ', rt_resolution
             write(fnr,'(a,t52,f9.2)') 'volassemble write POLAR_REFS handoff : ', rt_write
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize         : ', rt_cleanup
             write(fnr,'(a,t52,f9.2)') 'volassemble polar assembly total     : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** COMPARABLE RELATIVE TIMINGS (%) ***'
@@ -183,7 +191,9 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble restore/reconstruct refs: ', (rt_cmp_restore/rt_tot) * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble automasking             : ', 0.
             write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform filtering    : ', 0.
+            write(fnr,'(a,t52,f9.2)') 'volassemble project metadata        : ', (rt_resolution/rt_tot) * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble reference handoff write : ', (rt_write/rt_tot)       * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize        : ', (rt_cleanup/rt_tot)     * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble % accounted for         : ', (rt_cmp_accounted/rt_tot)* 100.
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
@@ -198,12 +208,11 @@ contains
             end select
             write(fnr,'(a,t52,f9.2)') 'volassemble resolution metadata      : ', (rt_resolution/rt_tot)* 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble write POLAR_REFS handoff : ', (rt_write/rt_tot)     * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize         : ', (rt_cleanup/rt_tot)   * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble % accounted for          : ', &
-                ((rt_setup+rt_reduce+rt_normalize+rt_resolution+rt_write)/rt_tot) * 100.
+                ((rt_setup+rt_reduce+rt_normalize+rt_resolution+rt_write+rt_cleanup)/rt_tot) * 100.
             call fclose(fnr)
         endif
-        call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
-        call simple_touch('VOLASSEMBLE_FINISHED')
     end subroutine exec_polar_assembly
 
     subroutine update_polar_resolution_fields( params, build )
@@ -279,11 +288,11 @@ contains
         integer                       :: which_iter
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_automask, t_nonuniform
-        integer(timer_int_kind)       :: t_project_refs, t_tot
+        integer(timer_int_kind)       :: t_project_refs, t_project_metadata, t_cleanup, t_tot
         integer(timer_int_kind)       :: t_prev_ref_read, t_prev_fsc_prior, t_lowres_insert, t_trailing_refs
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
         real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_automask, rt_nonuniform
-        real(timer_int_kind)          :: rt_project_refs, rt_tot, rt_accounted
+        real(timer_int_kind)          :: rt_project_refs, rt_project_metadata, rt_cleanup, rt_tot, rt_accounted
         real(timer_int_kind)          :: rt_prev_ref_read, rt_prev_fsc_prior, rt_lowres_insert, rt_trailing_refs
         real(timer_int_kind)          :: rt_cmp_reduce, rt_cmp_restore
         if( L_BENCH_GLOB )then
@@ -317,6 +326,8 @@ contains
             rt_automask                = 0.
             rt_nonuniform              = 0.
             rt_project_refs            = 0.
+            rt_project_metadata        = 0.
+            rt_cleanup                 = 0.
             rt_prev_ref_read           = 0.
             rt_prev_fsc_prior          = 0.
             rt_lowres_insert           = 0.
@@ -535,6 +546,7 @@ contains
             call volname%kill
         end do
         ! Update per-particle FSC(0.143) resolution using the values computed in assembly.
+        if( L_BENCH_GLOB ) t_project_metadata = tic()
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
         else
@@ -545,6 +557,7 @@ contains
                 endif
             end do
         endif
+        if( L_BENCH_GLOB ) rt_project_metadata = rt_project_metadata + toc(t_project_metadata)
         ! Cartesian refinement still matches in polar central-section space.
         ! Refinement assembly refreshes the projected reference sections for the
         ! next matcher/probability-table pass. Standalone/final reconstruct3D
@@ -558,8 +571,11 @@ contains
             call build%pftc%kill
             if( L_BENCH_GLOB ) rt_project_refs = rt_project_refs + toc(t_project_refs)
         endif
+        if( L_BENCH_GLOB ) t_project_metadata = tic()
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        if( L_BENCH_GLOB ) rt_project_metadata = rt_project_metadata + toc(t_project_metadata)
         ! destruct
+        if( L_BENCH_GLOB ) t_cleanup = tic()
         call gridcorr_img%kill
         call build%kill_general_tbox
         call build%eorecvol%kill_exp
@@ -588,6 +604,7 @@ contains
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
         call simple_touch('VOLASSEMBLE_FINISHED')
+        if( L_BENCH_GLOB ) rt_cleanup = toc(t_cleanup)
         if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)
             rt_cmp_reduce  = rt_read + rt_sum_reduce
@@ -607,7 +624,9 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble restore/reconstruct refs: ', rt_cmp_restore
             write(fnr,'(a,t52,f9.2)') 'volassemble automasking             : ', rt_automask
             write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform filtering    : ', rt_nonuniform
+            write(fnr,'(a,t52,f9.2)') 'volassemble project metadata        : ', rt_project_metadata
             write(fnr,'(a,t52,f9.2)') 'volassemble reference handoff write : ', rt_project_refs
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize        : ', rt_cleanup
             write(fnr,'(a,t52,f9.2)') 'volassemble total time              : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** COMPARABLE DETAIL TIMINGS (s) ***'
@@ -616,7 +635,8 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble trailing blend/refs     : ', rt_trailing_refs
             write(fnr,'(a,t52,f9.2)') 'volassemble lowres even/odd insert  : ', rt_lowres_insert
             write(fnr,'(a,t52,f9.2)') 'volassemble FSC/FRC bookkeeping     : ', rt_sampl_dens_correct_eos
-            write(fnr,'(a,t52,f9.2)') 'volassemble resolution metadata     : ', 0.
+            write(fnr,'(a,t52,f9.2)') 'volassemble resolution metadata     : ', rt_project_metadata
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize        : ', rt_cleanup
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,t52,f9.2)') 'volassemble initialisation           : ', rt_init
@@ -628,7 +648,9 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble averaging eo-pairs       : ', rt_eoavg
             write(fnr,'(a,t52,f9.2)') 'volassemble automasking              : ', rt_automask
             write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform filtering     : ', rt_nonuniform
+            write(fnr,'(a,t52,f9.2)') 'volassemble project metadata         : ', rt_project_metadata
             write(fnr,'(a,t52,f9.2)') 'volassemble polar ref projection     : ', rt_project_refs
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize         : ', rt_cleanup
             write(fnr,'(a,t52,f9.2)') 'volassemble total time               : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** COMPARABLE RELATIVE TIMINGS (%) ***'
@@ -637,8 +659,11 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble restore/reconstruct refs: ', (rt_cmp_restore/rt_tot)  * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble automasking             : ', (rt_automask/rt_tot)     * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform filtering    : ', (rt_nonuniform/rt_tot)   * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble project metadata        : ', (rt_project_metadata/rt_tot) * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble reference handoff write : ', (rt_project_refs/rt_tot) * 100.
-            rt_accounted = rt_init + rt_cmp_reduce + rt_cmp_restore + rt_automask + rt_nonuniform + rt_project_refs
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize        : ', (rt_cleanup/rt_tot)     * 100.
+            rt_accounted = rt_init + rt_cmp_reduce + rt_cmp_restore + rt_automask + rt_nonuniform + &
+                &rt_project_metadata + rt_project_refs + rt_cleanup
             write(fnr,'(a,t52,f9.2)') 'volassemble % accounted for         : ', (rt_accounted/rt_tot)    * 100.
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
@@ -651,9 +676,12 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble automasking              : ', (rt_automask/rt_tot)               * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform filtering     : ', (rt_nonuniform/rt_tot)             * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble project metadata         : ', (rt_project_metadata/rt_tot)       * 100.
             write(fnr,'(a,t52,f9.2)') 'volassemble polar ref projection     : ', (rt_project_refs/rt_tot)          * 100.
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup/finalize         : ', (rt_cleanup/rt_tot)               * 100.
             rt_accounted = rt_init + rt_read + rt_sum_reduce + rt_sum_eos + rt_sampl_dens_correct_eos + &
-                &rt_sampl_dens_correct_sum + rt_eoavg + rt_automask + rt_nonuniform + rt_project_refs
+                &rt_sampl_dens_correct_sum + rt_eoavg + rt_automask + rt_nonuniform + rt_project_metadata + &
+                &rt_project_refs + rt_cleanup
             write(fnr,'(a,t52,f9.2)') 'volassemble % accounted for          : ', (rt_accounted/rt_tot) * 100.
             call fclose(fnr)
         endif

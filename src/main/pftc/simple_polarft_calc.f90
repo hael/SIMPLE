@@ -980,10 +980,11 @@ interface
         complex(dp), allocatable, intent(inout) :: array(:,:,:)
     end subroutine read_pft_array
 
-    module subroutine read_any_pft_array( self, fname, array )
+    module subroutine read_any_pft_array( self, fname, array, dims_out )
         class(polarft_calc),      intent(in)    :: self
         class(string),            intent(in)    :: fname
         complex(sp), allocatable, intent(inout) :: array(:,:,:)
+        integer, optional,        intent(out)   :: dims_out(4)
     end subroutine read_any_pft_array
 
     module subroutine open_ctf2_array_for_read( self, fname, array, funit, dims, buffer )

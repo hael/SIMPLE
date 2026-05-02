@@ -20,10 +20,11 @@ real(dp), parameter :: OBSFIELD_UNSAMPLED_FLOOR  = 1.d3
 ! Part-local Fourier-grid observation field. This is intentionally volume-like:
 ! particle Fourier components are accumulated into dense expanded-grid
 ! numerator/density arrays, and requested polar central sections are gathered
-! directly from those arrays. Insertion uses weighted nearest-cell assignment:
-! each sample updates one native grid cell with a center-normalized KB factor
-! from its sub-cell offset. This avoids full insertion-side splatting and the
-! hash-table overhead that made the first obsfield prototype slow.
+! directly from those arrays. Insertion defaults to weighted nearest-cell
+! assignment, but can be switched to the full KB splat used by the Cartesian
+! polar=no reconstructor for robustness experiments.
+logical, parameter :: OBSFIELD_FULL_SPLAT_INSERT_DEFAULT = .true.
+
 type :: fgrid_obs_field
     private
     type(kbinterpol)       :: kb
@@ -38,26 +39,40 @@ type :: fgrid_obs_field
     integer                :: ncells        = 0
     logical                :: initialized   = .false.
     logical                :: restored      = .false.
+    logical                :: full_splat_insert = OBSFIELD_FULL_SPLAT_INSERT_DEFAULT
     complex(dp), allocatable :: grid_num(:,:,:)
     real(dp),    allocatable :: grid_den(:,:,:)
     logical,     allocatable :: grid_obs(:,:,:)
+    integer                :: shell_cache_kfromto(2) = 0
+    integer                :: shell_cache_nodes      = 0
+    logical                :: shell_cache_initialized = .false.
+    complex(dp), allocatable :: shell_cache_num(:)
+    real(dp),    allocatable :: shell_cache_den(:)
+    logical,     allocatable :: shell_cache_obs(:)
+    integer,     allocatable :: shell_cache_ncells(:)
+    integer,     allocatable :: shell_cache_shell(:)
   contains
     procedure, public  :: new                        => obsfield_new
     procedure, public  :: reset                      => obsfield_reset
     procedure, public  :: kill                       => obsfield_kill
+    procedure, public  :: set_full_splat_insert      => obsfield_set_full_splat_insert
     procedure, public  :: insert_plane_oversamp
     procedure, public  :: append_field               => obsfield_append_field
     procedure, public  :: restore_field              => obsfield_restore_field
     procedure, public  :: extract_polar              => obsfield_extract_polar
+    procedure, public  :: extract_restored_shell_cache_polar => obsfield_extract_restored_shell_cache_polar
     procedure, public  :: calc_invtau2               => obsfield_calc_invtau2
     procedure, public  :: log_shell_budget_stats     => obsfield_log_shell_budget_stats
     procedure, public  :: log_shell_cache_assignment => obsfield_log_shell_cache_assignment
     procedure, public  :: log_shell_cache_accum_compare => obsfield_log_shell_cache_accum_compare
+    procedure, public  :: build_shell_cache          => obsfield_build_shell_cache
     procedure, public  :: count_shell_cells          => obsfield_count_shell_cells
     procedure, public  :: count_shell_cell_counts    => obsfield_count_shell_cell_counts
     procedure, public  :: get_nobs                   => obsfield_get_nobs
     procedure, public  :: get_ncells                 => obsfield_get_ncells
+    procedure, private :: insert_plane_oversamp_splat => obsfield_insert_plane_oversamp_splat
     procedure, private :: compatible_with            => obsfield_compatible_with
+    procedure, private :: clear_shell_cache          => obsfield_clear_shell_cache
 end type fgrid_obs_field
 
 ! Even/odd wrapper matching the reconstruction convention:
@@ -69,13 +84,17 @@ type :: fgrid_obsfield_eo
     procedure, public :: new                    => obsfield_eo_new
     procedure, public :: reset                  => obsfield_eo_reset
     procedure, public :: kill                   => obsfield_eo_kill
+    procedure, public :: set_full_splat_insert  => obsfield_eo_set_full_splat_insert
     procedure, public :: insert_plane           => obsfield_eo_insert_plane
     procedure, public :: append_field           => obsfield_eo_append_field
     procedure, public :: restore_field          => obsfield_eo_restore_field
     procedure, public :: extract_polar          => obsfield_eo_extract_polar
     procedure, public :: extract_restored_polar => obsfield_eo_extract_restored_polar
+    procedure, public :: extract_restored_shell_cache_polar => obsfield_eo_extract_restored_shell_cache_polar
     procedure, public :: log_shell_budget_stats => obsfield_eo_log_shell_budget_stats
     procedure, public :: log_shell_cache_accum_compare => obsfield_eo_log_shell_cache_accum_compare
+    procedure, public :: log_shell_cache_extract_compare => obsfield_eo_log_shell_cache_extract_compare
+    procedure, public :: build_shell_cache      => obsfield_eo_build_shell_cache
     procedure, public :: write_merged_volume    => obsfield_eo_write_merged_volume
     procedure, public :: write                  => obsfield_eo_write
     procedure, public :: read                   => obsfield_eo_read
@@ -90,17 +109,20 @@ contains
         unsampled_floor = min(OBSFIELD_UNSAMPLED_FLOOR, OBSFIELD_UNSAMPLED_FLOOR * grid_den)
     end function unsampled_floor
 
-    subroutine obsfield_new( self, lims, nyq, zero_init )
+    subroutine obsfield_new( self, lims, nyq, zero_init, full_splat_insert )
         class(fgrid_obs_field), intent(inout) :: self
         integer,                intent(in)    :: lims(3,2)
         integer,                intent(in)    :: nyq
         logical, optional,      intent(in)    :: zero_init
+        logical, optional,      intent(in)    :: full_splat_insert
         real(dp) :: ncells_dp
         integer  :: dim
         logical  :: l_zero_init
         call self%kill
         l_zero_init = .true.
         if( present(zero_init) ) l_zero_init = zero_init
+        self%full_splat_insert = OBSFIELD_FULL_SPLAT_INSERT_DEFAULT
+        if( present(full_splat_insert) ) self%full_splat_insert = full_splat_insert
         if( nyq < 1 ) THROW_HARD('invalid nyq; obsfield_new')
         if( any(lims(:,2) < lims(:,1)) ) THROW_HARD('invalid limits; obsfield_new')
         ! KBALPHA selects the standard kernel shape; obsfield coordinates
@@ -145,6 +167,7 @@ contains
     subroutine obsfield_reset( self )
         class(fgrid_obs_field), intent(inout) :: self
         integer :: h, k, l
+        call self%clear_shell_cache
         self%nobs      = 0
         self%restored  = .false.
         if( allocated(self%grid_num) .and. allocated(self%grid_den) .and. allocated(self%grid_obs) )then
@@ -168,6 +191,7 @@ contains
 
     subroutine obsfield_kill( self )
         class(fgrid_obs_field), intent(inout) :: self
+        call self%clear_shell_cache
         if( allocated(self%grid_num) ) deallocate(self%grid_num)
         if( allocated(self%grid_den) ) deallocate(self%grid_den)
         if( allocated(self%grid_obs) ) deallocate(self%grid_obs)
@@ -182,14 +206,18 @@ contains
         self%ncells      = 0
         self%initialized = .false.
         self%restored    = .false.
+        self%full_splat_insert = OBSFIELD_FULL_SPLAT_INSERT_DEFAULT
     end subroutine obsfield_kill
 
-    ! Insert one particle Fourier plane by weighted nearest-cell assignment.
-    ! Coordinates are computed exactly as in reconstructor%insert_plane_oversamp,
-    ! but each experimental component updates only the closest native 3D grid cell.
-    !
-    ! Nearest-cell insertion touches one destination cell per Fourier sample.
-    ! Use two h-colors to avoid write collisions without OpenMP atomics.
+    subroutine obsfield_set_full_splat_insert( self, full_splat_insert )
+        class(fgrid_obs_field), intent(inout) :: self
+        logical,                intent(in)    :: full_splat_insert
+        self%full_splat_insert = full_splat_insert
+    end subroutine obsfield_set_full_splat_insert
+
+    ! Insert one particle Fourier plane. The default path is weighted
+    ! nearest-cell assignment; full_splat_insert switches to the full KB splat
+    ! used by reconstructor%insert_plane_oversamp.
     subroutine insert_plane_oversamp( self, se, o, fpl, pwght, shift_crop )
         use simple_math,    only: ceil_div, floor_div
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
@@ -215,6 +243,15 @@ contains
         logical     :: l_shift
         if( .not. self%initialized ) THROW_HARD('obsfield not initialized; insert_plane_oversamp')
         if( pwght < TINY ) return
+        if( self%full_splat_insert )then
+            if( present(shift_crop) )then
+                call self%insert_plane_oversamp_splat(se, o, fpl, pwght, shift_crop=shift_crop)
+            else
+                call self%insert_plane_oversamp_splat(se, o, fpl, pwght)
+            endif
+            return
+        endif
+        if( self%shell_cache_initialized ) call self%clear_shell_cache
         self%restored = .false.
         nobs_add      = 0
         ! rotation matrices (one per sym) in native Fourier-grid units
@@ -326,6 +363,119 @@ contains
         if( nsym > 1 ) call o_sym%kill
     end subroutine insert_plane_oversamp
 
+    subroutine obsfield_insert_plane_oversamp_splat( self, se, o, fpl, pwght, shift_crop )
+        use simple_math,    only: ceil_div, floor_div
+        use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
+        class(fgrid_obs_field), intent(inout) :: self
+        class(sym),             intent(inout) :: se
+        class(ori),             intent(inout) :: o
+        class(fplane_type),     intent(in)    :: fpl
+        real,                   intent(in)    :: pwght
+        real, optional,         intent(in)    :: shift_crop(2)
+        type(ori)   :: o_sym
+        complex(sp) :: cmplx_raw
+        complex(sp) :: phase_h, phase_k, phase_shift, w_k
+        complex(dp) :: comp
+        real(dp)    :: ctfval, pwght_dp, pwght_pf2_dp, pshift_pf(2)
+        real(sp)    :: ctfsq_raw
+        real(sp)    :: loc(3), R(3,3), w(self%wdim,self%wdim,self%wdim)
+        real        :: rotmats(se%get_nsym(),3,3)
+        integer     :: fpllims_pd(3,2), fpllims(3,2), win(2,3)
+        integer     :: nsym, isym, h, k, hp, kp, pf_local, l, stride
+        integer     :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
+        integer     :: nobs_add, ncell_window
+        logical     :: l_shift
+        if( .not. self%initialized ) THROW_HARD('obsfield not initialized; obsfield_insert_plane_oversamp_splat')
+        if( pwght < TINY ) return
+        if( self%shell_cache_initialized ) call self%clear_shell_cache
+        self%restored = .false.
+        nobs_add      = 0
+        nsym = se%get_nsym()
+        rotmats(1,:,:) = o%get_mat()
+        if( nsym > 1 )then
+            do isym = 2, nsym
+                call se%apply(o, isym, o_sym)
+                rotmats(isym,:,:) = o_sym%get_mat()
+            enddo
+        endif
+        pf_local     = self%pf
+        fpllims_pd   = fpl%frlims
+        fpllims      = fpllims_pd
+        fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf_local)
+        fpllims(1,2) = floor_div(fpllims_pd(1,2), pf_local)
+        fpllims(2,1) = ceil_div (fpllims_pd(2,1), pf_local)
+        fpllims(2,2) = floor_div(fpllims_pd(2,2), pf_local)
+        pwght_dp     = real(pwght, dp)
+        pwght_pf2_dp = pwght_dp * real(pf_local*pf_local, dp)
+        l_shift      = .false.
+        if( present(shift_crop) ) l_shift = any(abs(shift_crop) > 1.e-6)
+        if( l_shift )then
+            pshift_pf = real(-shift_crop * fpl%shconst(1:2), dp) * real(pf_local, dp)
+            w_k       = cmplx(real(cos(pshift_pf(2)),sp), real(sin(pshift_pf(2)),sp), kind=sp)
+        endif
+        nyq_disk    = self%nyq * (self%nyq + 1)
+        stride      = self%wdim
+        ncell_window = self%wdim * self%wdim * self%wdim
+        !$omp parallel default(shared) private(isym,R,l,h,k,h_sq,k_max_h,k_lo,k_hi,&
+        !$omp& cmplx_raw,ctfsq_raw,comp,ctfval,loc,win,w,hp,kp)&
+        !$omp& private(phase_h,phase_k,phase_shift)&
+        !$omp& reduction(+:nobs_add) proc_bind(close)
+        do isym = 1, nsym
+            R = rotmats(isym,:,:)
+            do l = 0, stride-1
+                !$omp do schedule(static)
+                do h = fpllims(1,1)+l, fpllims(1,2), stride
+                    h_sq = h*h
+                    if( h_sq > nyq_disk ) cycle
+                    k_max_h = int(sqrt(real(nyq_disk - h_sq, sp)))
+                    k_lo    = max(fpllims(2,1), -k_max_h)
+                    k_hi    = min(fpllims(2,2),  k_max_h)
+                    hp = h * pf_local
+                    if( l_shift )then
+                        phase_h = cmplx(real(cos(real(h,dp)*pshift_pf(1)),sp), &
+                            real(sin(real(h,dp)*pshift_pf(1)),sp), kind=sp)
+                        phase_k = cmplx(real(cos(real(k_lo,dp)*pshift_pf(2)),sp), &
+                            real(sin(real(k_lo,dp)*pshift_pf(2)),sp), kind=sp)
+                    endif
+                    do k = k_lo, k_hi
+                        kp = k * pf_local
+                        if( l_shift )then
+                            phase_shift = phase_h * phase_k
+                            phase_k     = phase_k * w_k
+                        endif
+                        cmplx_raw = fplane_get_cmplx(fpl, hp, kp)
+                        ctfsq_raw = fplane_get_ctfsq(fpl, hp, kp)
+                        if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
+                            ctfsq_raw <= TINY ) cycle
+                        if( l_shift ) cmplx_raw = cmplx_raw * phase_shift
+                        loc(1) = real(h,sp)*R(1,1) + real(k,sp)*R(2,1)
+                        loc(2) = real(h,sp)*R(1,2) + real(k,sp)*R(2,2)
+                        loc(3) = real(h,sp)*R(1,3) + real(k,sp)*R(2,3)
+                        win(1,:) = nint(loc)
+                        win(2,:) = win(1,:) + self%iwinsz
+                        win(1,:) = win(1,:) - self%iwinsz
+                        if( win(2,1) < self%lims(1,1) ) cycle
+                        comp   = pwght_pf2_dp * cmplx(cmplx_raw, kind=dp)
+                        ctfval = pwght_dp * real(ctfsq_raw, dp)
+                        call self%kb%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                        self%grid_num(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) = &
+                            self%grid_num(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + &
+                            &comp * real(w, dp)
+                        self%grid_den(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) = &
+                            self%grid_den(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + &
+                            &ctfval * real(w, dp)
+                        self%grid_obs(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) = .true.
+                        nobs_add = nobs_add + ncell_window
+                    enddo
+                enddo
+                !$omp end do
+            enddo
+        enddo
+        !$omp end parallel
+        self%nobs = self%nobs + nobs_add
+        if( nsym > 1 ) call o_sym%kill
+    end subroutine obsfield_insert_plane_oversamp_splat
+
     subroutine obsfield_append_field( self, src )
         class(fgrid_obs_field), intent(inout) :: self
         class(fgrid_obs_field), intent(in)    :: src
@@ -336,6 +486,7 @@ contains
         if( self%restored .or. src%restored )then
             THROW_HARD('cannot append restored observation fields; obsfield_append_field')
         endif
+        if( self%shell_cache_initialized ) call self%clear_shell_cache
         self%restored = .false.
         nobs_new = 0
         !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l) reduction(+:nobs_new) proc_bind(close)
@@ -358,7 +509,7 @@ contains
         integer,                intent(in)    :: kfromto(2), prior_start
         real(dp),               intent(in)    :: invtau2(kfromto(1):kfromto(2))
         real(dp) :: denom, prior
-        integer  :: h, k, l, shell, nobs_new
+        integer  :: h, k, l, shell, nobs_new, node
         if( .not. self%initialized ) return
         nobs_new = 0
         !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l,shell,prior,denom) &
@@ -389,6 +540,34 @@ contains
         enddo
         !$omp end parallel do
         self%nobs = nobs_new
+        if( self%shell_cache_initialized )then
+            if( any(self%shell_cache_kfromto /= kfromto) )then
+                THROW_HARD('shell cache k-range mismatch; obsfield_restore_field')
+            endif
+            !$omp parallel do default(shared) schedule(static) private(node,shell,prior,denom) &
+            !$omp& proc_bind(close)
+            do node = 1,self%shell_cache_nodes
+                if( .not. self%shell_cache_obs(node) ) cycle
+                shell = self%shell_cache_shell(node)
+                prior = 0.d0
+                if( shell >= kfromto(1) .and. shell <= kfromto(2) ) prior = invtau2(shell)
+                denom = self%shell_cache_den(node) + prior
+                if( shell >= kfromto(1) .and. shell <= kfromto(2) .and. &
+                    &shell >= prior_start .and. prior <= DTINY )then
+                    denom = denom + unsampled_floor(self%shell_cache_den(node))
+                endif
+                if( denom <= DTINY )then
+                    self%shell_cache_num(node) = DCMPLX_ZERO
+                    self%shell_cache_den(node) = 0.d0
+                    self%shell_cache_obs(node) = .false.
+                    self%shell_cache_ncells(node) = 0
+                else
+                    self%shell_cache_num(node) = self%shell_cache_num(node) / denom
+                    self%shell_cache_den(node) = 1.d0
+                endif
+            enddo
+            !$omp end parallel do
+        endif
         self%restored = .true.
     end subroutine obsfield_restore_field
 
@@ -554,6 +733,110 @@ contains
             &'dist_support_frac=', real(worst_ratio)
         deallocate(shell_cells, shell_seen, shell_stride)
     end subroutine obsfield_log_shell_cache_assignment
+
+    subroutine obsfield_build_shell_cache( self, kfromto, geom, label, half, verbose )
+        class(fgrid_obs_field), intent(inout) :: self
+        integer,                intent(in)    :: kfromto(2)
+        type(shell_field_geom), intent(in)    :: geom
+        character(len=*),       intent(in)    :: label, half
+        logical, optional,      intent(in)    :: verbose
+        complex(dp) :: num_ref_total, num_cache_total
+        real(dp)    :: den_ref_total, den_cache_total, rel_den, rel_num
+        real(dp)    :: unique_per_obs, assigned_per_ref, cos_best
+        integer     :: h, k, l, shell, ik, nk, inode, nmiss, geom_kfromto(2)
+        integer     :: node, node_first, node_last, total_nodes
+        integer     :: obs_ref_total, obs_cache_total, unique_total, multi_nodes, max_cells_per_node
+        logical     :: l_verbose
+        if( .not. self%initialized ) return
+        if( .not. geom%is_initialized() ) return
+        call geom%get_kfromto(geom_kfromto)
+        if( any(geom_kfromto /= kfromto) ) THROW_HARD('geometry/cache k-range mismatch; obsfield_build_shell_cache')
+        nk = kfromto(2) - kfromto(1) + 1
+        if( nk < 1 ) return
+        total_nodes = geom%get_total_nodes()
+        if( total_nodes < 1 ) return
+        l_verbose = .false.
+        if( present(verbose) ) l_verbose = verbose
+        call self%clear_shell_cache
+        self%shell_cache_kfromto = kfromto
+        self%shell_cache_nodes   = total_nodes
+        allocate(self%shell_cache_num(total_nodes), source=DCMPLX_ZERO)
+        allocate(self%shell_cache_den(total_nodes), source=0.d0)
+        allocate(self%shell_cache_obs(total_nodes), source=.false.)
+        allocate(self%shell_cache_ncells(total_nodes), source=0)
+        allocate(self%shell_cache_shell(total_nodes), source=0)
+        do ik = 1,nk
+            shell = kfromto(1) + ik - 1
+            call geom%get_shell_node_range(shell, node_first, node_last)
+            if( node_first <= node_last ) self%shell_cache_shell(node_first:node_last) = shell
+        enddo
+        nmiss = 0
+        obs_ref_total = 0
+        den_ref_total = 0.d0
+        num_ref_total = DCMPLX_ZERO
+        do l = self%lims(3,1), self%lims(3,2)
+            do k = self%lims(2,1), self%lims(2,2)
+                do h = self%lims(1,1), self%lims(1,2)
+                    shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
+                    if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                    if( .not. self%grid_obs(h,k,l) ) cycle
+                    obs_ref_total = obs_ref_total + 1
+                    den_ref_total = den_ref_total + self%grid_den(h,k,l)
+                    num_ref_total = num_ref_total + self%grid_num(h,k,l)
+                    call geom%nearest_node(shell, real([h,k,l],sp), inode, cos_best)
+                    if( inode < 1 )then
+                        nmiss = nmiss + 1
+                        cycle
+                    endif
+                    self%shell_cache_num(inode) = self%shell_cache_num(inode) + self%grid_num(h,k,l)
+                    self%shell_cache_den(inode) = self%shell_cache_den(inode) + self%grid_den(h,k,l)
+                    self%shell_cache_ncells(inode) = self%shell_cache_ncells(inode) + 1
+                    self%shell_cache_obs(inode) = .true.
+                enddo
+            enddo
+        enddo
+        obs_cache_total = 0
+        unique_total = 0
+        den_cache_total = 0.d0
+        num_cache_total = DCMPLX_ZERO
+        do node = 1,total_nodes
+            if( .not. self%shell_cache_obs(node) ) cycle
+            unique_total = unique_total + 1
+            obs_cache_total = obs_cache_total + self%shell_cache_ncells(node)
+            den_cache_total = den_cache_total + self%shell_cache_den(node)
+            num_cache_total = num_cache_total + self%shell_cache_num(node)
+        enddo
+        multi_nodes = count(self%shell_cache_ncells > 1)
+        max_cells_per_node = maxval(self%shell_cache_ncells)
+        if( obs_ref_total > 0 )then
+            unique_per_obs   = real(unique_total,dp) / real(obs_ref_total,dp)
+            assigned_per_ref = real(obs_cache_total,dp) / real(obs_ref_total,dp)
+        else
+            unique_per_obs   = 0.d0
+            assigned_per_ref = 0.d0
+        endif
+        if( abs(den_ref_total) > DTINY )then
+            rel_den = (den_cache_total - den_ref_total) / den_ref_total
+        else
+            rel_den = 0.d0
+        endif
+        if( abs(num_ref_total) > DTINY )then
+            rel_num = abs(num_cache_total - num_ref_total) / abs(num_ref_total)
+        else
+            rel_num = abs(num_cache_total - num_ref_total)
+        endif
+        self%shell_cache_initialized = .true.
+        if( l_verbose )then
+            write(logfhandle,'(A,1X,A,2X,A,1X,A,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3,2X,A,F8.3)') &
+                &'obsfield shell-cache build', trim(label), 'half=', trim(half), &
+                &'obs_cells_ref=', obs_ref_total, 'obs_cells_cache=', obs_cache_total, 'missed=', nmiss, &
+                &'unique_nodes=', unique_total, 'assigned_per_ref=', assigned_per_ref, 'unique_per_obs=', unique_per_obs
+            write(logfhandle,'(A,1X,A,2X,A,1X,A,2X,A,ES12.4,2X,A,ES12.4,2X,A,ES12.4,2X,A,I0,2X,A,I0)') &
+                &'obsfield shell-cache build-parity', trim(label), 'half=', trim(half), &
+                &'den_rel_diff=', rel_den, 'num_rel_diff=', rel_num, 'den_sum_cache=', den_cache_total, &
+                &'multi_nodes=', multi_nodes, 'max_cells_per_node=', max_cells_per_node
+        endif
+    end subroutine obsfield_build_shell_cache
 
     subroutine obsfield_log_shell_cache_accum_compare( self, kfromto, geom, label, half )
         class(fgrid_obs_field), intent(in) :: self
@@ -824,6 +1107,66 @@ contains
         !$omp end parallel
     end subroutine obsfield_extract_polar
 
+    subroutine obsfield_extract_restored_shell_cache_polar( self, eulspace, nrefs, kfromto, geom, polar_x, polar_y, pfts, denw )
+        class(fgrid_obs_field), intent(in)    :: self
+        class(oris),            intent(in)    :: eulspace
+        integer,                intent(in)    :: nrefs, kfromto(2)
+        type(shell_field_geom), intent(in)    :: geom
+        real(sp),               intent(in)    :: polar_x(:,:), polar_y(:,:)
+        complex(dp),            intent(inout) :: pfts(:,:,:)
+        real(dp), optional,     intent(inout) :: denw(:,:,:)
+        real(dp)    :: cos_best
+        real(sp)    :: R(3,3), loc(3), q(3), px, py
+        integer     :: iproj, irot, k, kloc, pftsz, kfromto1, inode, lim1_lo
+        logical     :: l_conj
+        if( .not. self%restored )then
+            THROW_HARD('shell-cache polar extraction requires restore_field to be called first')
+        endif
+        if( .not. self%shell_cache_initialized )then
+            THROW_HARD('shell-cache polar extraction requires build_shell_cache')
+        endif
+        if( any(self%shell_cache_kfromto /= kfromto) )then
+            THROW_HARD('shell cache k-range mismatch; obsfield_extract_restored_shell_cache_polar')
+        endif
+        if( .not. geom%is_initialized() )then
+            THROW_HARD('shell-cache polar extraction requires live shell geometry')
+        endif
+        pftsz = size(polar_x,1)
+        pfts(:,:,1:nrefs) = DCMPLX_ZERO
+        if( present(denw) ) denw(:,:,1:nrefs) = 0.d0
+        if( .not. any(self%shell_cache_obs) ) return
+        lim1_lo  = self%lims(1,1)
+        kfromto1 = kfromto(1)
+        !$omp parallel do default(shared) schedule(static) private(iproj,R,k,kloc,irot,px,py,loc,q,inode,cos_best,l_conj) &
+        !$omp& proc_bind(close)
+        do iproj = 1,nrefs
+            R = eulspace%get_mat(iproj)
+            do k = kfromto1,kfromto(2)
+                kloc = k - kfromto1 + 1
+                do irot = 1,pftsz
+                    px     = polar_x(irot,kloc)
+                    py     = polar_y(irot,kloc)
+                    loc(1) = px*R(1,1) + py*R(2,1)
+                    loc(2) = px*R(1,2) + py*R(2,2)
+                    loc(3) = px*R(1,3) + py*R(2,3)
+                    l_conj = loc(1) < real(lim1_lo,sp)
+                    if( l_conj )then
+                        q = -loc
+                    else
+                        q = loc
+                    endif
+                    call geom%nearest_node(k, q, inode, cos_best)
+                    if( inode < 1 .or. inode > self%shell_cache_nodes ) cycle
+                    if( .not. self%shell_cache_obs(inode) ) cycle
+                    pfts(irot,kloc,iproj) = self%shell_cache_num(inode)
+                    if( l_conj ) pfts(irot,kloc,iproj) = conjg(pfts(irot,kloc,iproj))
+                    if( present(denw) ) denw(irot,kloc,iproj) = real(max(1,self%shell_cache_ncells(inode)),dp)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine obsfield_extract_restored_shell_cache_polar
+
     ! Gather even/odd half-map references through one shared geometry/KB walk,
     ! then derive the merged reference with the same denominator weighting used
     ! by the separate extraction path.
@@ -972,6 +1315,56 @@ contains
             &invtau2_zero, invtau2_zero, kfromto(2) + 1, pfts_even, pfts_odd, pfts_merg)
     end subroutine obsfield_eo_extract_restored_polar
 
+    subroutine obsfield_eo_extract_restored_shell_cache_polar( self, eulspace, nrefs, kfromto, geom, polar_x, polar_y, &
+            &pfts_even, pfts_odd, pfts_merg )
+        class(fgrid_obsfield_eo), intent(in)    :: self
+        class(oris),              intent(in)    :: eulspace
+        integer,                  intent(in)    :: nrefs, kfromto(2)
+        type(shell_field_geom),   intent(in)    :: geom
+        real(sp),                 intent(in)    :: polar_x(:,:), polar_y(:,:)
+        complex(dp),              intent(inout) :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
+        real(dp), allocatable :: den_even(:,:,:), den_odd(:,:,:)
+        real(dp) :: denom_weight
+        integer  :: iproj, ik, irot
+        if( .not. self%even%restored .or. .not. self%odd%restored )then
+            THROW_HARD('shell-cache even/odd extraction requires restore_field to be called first')
+        endif
+        allocate(den_even(size(pfts_even,1),size(pfts_even,2),size(pfts_even,3)), source=0.d0)
+        allocate(den_odd( size(pfts_odd, 1),size(pfts_odd, 2),size(pfts_odd, 3)), source=0.d0)
+        call self%even%extract_restored_shell_cache_polar(eulspace, nrefs, kfromto, geom, polar_x, polar_y, &
+            &pfts_even, den_even)
+        call self%odd%extract_restored_shell_cache_polar( eulspace, nrefs, kfromto, geom, polar_x, polar_y, &
+            &pfts_odd,  den_odd )
+        pfts_merg(:,:,1:nrefs) = DCMPLX_ZERO
+        do iproj = 1,nrefs
+            do ik = 1,size(pfts_merg,2)
+                do irot = 1,size(pfts_merg,1)
+                    denom_weight = den_even(irot,ik,iproj) + den_odd(irot,ik,iproj)
+                    if( denom_weight <= DTINY ) cycle
+                    pfts_merg(irot,ik,iproj) = (pfts_even(irot,ik,iproj) * den_even(irot,ik,iproj) + &
+                        &pfts_odd(irot,ik,iproj) * den_odd(irot,ik,iproj)) / denom_weight
+                enddo
+            enddo
+        enddo
+        deallocate(den_even, den_odd)
+    end subroutine obsfield_eo_extract_restored_shell_cache_polar
+
+    subroutine obsfield_eo_log_shell_cache_extract_compare( self, label, ref_even, ref_odd, ref_merg, cache_even, cache_odd, cache_merg )
+        class(fgrid_obsfield_eo), intent(in) :: self
+        character(len=*),         intent(in) :: label
+        complex(dp),              intent(in) :: ref_even(:,:,:), ref_odd(:,:,:), ref_merg(:,:,:)
+        complex(dp),              intent(in) :: cache_even(:,:,:), cache_odd(:,:,:), cache_merg(:,:,:)
+        real(dp) :: even_rel, odd_rel, merg_rel, even_abs, odd_abs, merg_abs
+        call polar_diff_stats(ref_even, cache_even, even_rel, even_abs)
+        call polar_diff_stats(ref_odd,  cache_odd,  odd_rel,  odd_abs )
+        call polar_diff_stats(ref_merg, cache_merg, merg_rel, merg_abs)
+        write(logfhandle,'(A,1X,A,2X,*(A,ES12.4,2X))') &
+            &'obsfield shell-cache extract-compare', trim(label), &
+            &'even_rel_rms=', even_rel, 'even_absmax=', even_abs, &
+            &'odd_rel_rms=', odd_rel, 'odd_absmax=', odd_abs, &
+            &'merg_rel_rms=', merg_rel, 'merg_absmax=', merg_abs
+    end subroutine obsfield_eo_log_shell_cache_extract_compare
+
     subroutine obsfield_eo_log_shell_budget_stats( self, kfromto, shell_nodes, label )
         class(fgrid_obsfield_eo), intent(in) :: self
         integer,                  intent(in) :: kfromto(2), shell_nodes(:)
@@ -989,6 +1382,41 @@ contains
         call self%even%log_shell_cache_accum_compare(kfromto, geom, label, 'even')
         call self%odd%log_shell_cache_accum_compare(kfromto, geom, label, 'odd')
     end subroutine obsfield_eo_log_shell_cache_accum_compare
+
+    subroutine obsfield_eo_build_shell_cache( self, kfromto, geom, label, verbose )
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        integer,                  intent(in)    :: kfromto(2)
+        type(shell_field_geom),   intent(in)    :: geom
+        character(len=*),         intent(in)    :: label
+        logical, optional,        intent(in)    :: verbose
+        logical :: l_verbose
+        l_verbose = .false.
+        if( present(verbose) ) l_verbose = verbose
+        call self%even%build_shell_cache(kfromto, geom, label, 'even', verbose=l_verbose)
+        call self%odd%build_shell_cache( kfromto, geom, label, 'odd',  verbose=l_verbose)
+    end subroutine obsfield_eo_build_shell_cache
+
+    subroutine polar_diff_stats( ref, candidate, rel_rms, absmax )
+        complex(dp), intent(in)  :: ref(:,:,:), candidate(:,:,:)
+        real(dp),    intent(out) :: rel_rms, absmax
+        real(dp) :: ref_norm, diff_norm
+        if( any(shape(ref) /= shape(candidate)) )then
+            THROW_HARD('polar array shape mismatch; polar_diff_stats')
+        endif
+        if( size(ref) < 1 )then
+            rel_rms = 0.d0
+            absmax  = 0.d0
+            return
+        endif
+        ref_norm  = sum(abs(ref)**2)
+        diff_norm = sum(abs(candidate - ref)**2)
+        absmax    = maxval(abs(candidate - ref))
+        if( ref_norm > DTINY )then
+            rel_rms = sqrt(diff_norm / ref_norm)
+        else
+            rel_rms = sqrt(diff_norm / real(max(1,size(ref)),dp))
+        endif
+    end subroutine polar_diff_stats
 
     subroutine log_single_field_shell_budget( self, kfromto, shell_nodes, label, half )
         class(fgrid_obs_field), intent(in) :: self
@@ -1291,6 +1719,18 @@ contains
         obsfield_get_ncells = self%ncells
     end function obsfield_get_ncells
 
+    subroutine obsfield_clear_shell_cache( self )
+        class(fgrid_obs_field), intent(inout) :: self
+        if( allocated(self%shell_cache_num) ) deallocate(self%shell_cache_num)
+        if( allocated(self%shell_cache_den) ) deallocate(self%shell_cache_den)
+        if( allocated(self%shell_cache_obs) ) deallocate(self%shell_cache_obs)
+        if( allocated(self%shell_cache_ncells) ) deallocate(self%shell_cache_ncells)
+        if( allocated(self%shell_cache_shell) ) deallocate(self%shell_cache_shell)
+        self%shell_cache_kfromto = 0
+        self%shell_cache_nodes = 0
+        self%shell_cache_initialized = .false.
+    end subroutine obsfield_clear_shell_cache
+
     logical function obsfield_compatible_with( self, other )
         class(fgrid_obs_field), intent(in) :: self, other
         obsfield_compatible_with = self%initialized .and. other%initialized
@@ -1314,7 +1754,7 @@ contains
         header(5:10)  = reshape(self%lims,      [6])
         header(11:16) = reshape(self%grid_lims, [6])
         header(17:19) = self%grid_shape
-        header(20:21) = [self%nobs, OBSFIELD_GATE_FORMAT_SIGN * self%ncells]
+        header(20:21) = [count(self%grid_obs), OBSFIELD_GATE_FORMAT_SIGN * self%ncells]
         write(funit, iostat=io_stat) header
         call fileiochk('obsfield_write_local header; '//trim(label), io_stat)
         write(funit, iostat=io_stat) self%grid_num
@@ -1355,11 +1795,17 @@ contains
         self%restored = .false.
     end subroutine obsfield_read_local
 
-    subroutine obsfield_eo_new( self, lims, nyq )
+    subroutine obsfield_eo_new( self, lims, nyq, full_splat_insert )
         class(fgrid_obsfield_eo), intent(inout) :: self
         integer,                   intent(in)    :: lims(3,2), nyq
-        call self%even%new(lims, nyq)
-        call self%odd%new( lims, nyq)
+        logical, optional,         intent(in)    :: full_splat_insert
+        if( present(full_splat_insert) )then
+            call self%even%new(lims, nyq, full_splat_insert=full_splat_insert)
+            call self%odd%new( lims, nyq, full_splat_insert=full_splat_insert)
+        else
+            call self%even%new(lims, nyq)
+            call self%odd%new( lims, nyq)
+        endif
     end subroutine obsfield_eo_new
 
     subroutine obsfield_eo_reset( self )
@@ -1373,6 +1819,13 @@ contains
         call self%even%kill
         call self%odd%kill
     end subroutine obsfield_eo_kill
+
+    subroutine obsfield_eo_set_full_splat_insert( self, full_splat_insert )
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        logical,                  intent(in)    :: full_splat_insert
+        call self%even%set_full_splat_insert(full_splat_insert)
+        call self%odd%set_full_splat_insert( full_splat_insert)
+    end subroutine obsfield_eo_set_full_splat_insert
 
     subroutine obsfield_eo_insert_plane( self, se, o, fpl, eo, pwght, shift_crop )
         class(fgrid_obsfield_eo), intent(inout) :: self

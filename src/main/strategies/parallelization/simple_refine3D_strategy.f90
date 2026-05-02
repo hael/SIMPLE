@@ -39,6 +39,7 @@ type :: refine3D_bench_state
     real(timer_int_kind)    :: rt_prob     = 0.
     real(timer_int_kind)    :: rt_sched    = 0.
     real(timer_int_kind)    :: rt_assemble = 0.
+    real(timer_int_kind)    :: rt_obsfield_setup = 0.
     real(timer_int_kind)    :: rt_tot      = 0.
 end type refine3D_bench_state
 
@@ -293,6 +294,7 @@ contains
         bench%rt_prob     = 0.
         bench%rt_sched    = 0.
         bench%rt_assemble = 0.
+        bench%rt_obsfield_setup = 0.
         bench%rt_tot      = 0.
     end subroutine reset_refine3D_bench
 
@@ -331,6 +333,9 @@ contains
         write(fnr,'(a,t52,f9.2)') 'refine3D matcher/scheduler          : ', bench%rt_sched
         write(fnr,'(a,t52,f9.2)') 'refine3D assembly/postprocess       : ', bench%rt_assemble
         write(fnr,'(a,t52,f9.2)') 'refine3D total time                 : ', bench%rt_tot
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** COMPARABLE DETAIL TIMINGS (s) ***'
+        write(fnr,'(a,t52,f9.2)') 'refine3D obsfield strategy setup    : ', bench%rt_obsfield_setup
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** COMPARABLE RELATIVE TIMINGS (%) ***'
         write(fnr,'(a,t52,f9.2)') 'refine3D strategy setup/init        : ', bench_pct(bench%rt_init, bench%rt_tot)
@@ -470,6 +475,7 @@ contains
         type(cmdline)                     :: cline_volassemble
         type(cmdline)                     :: cline_build
         integer                           :: state, iter, extr_iter
+        integer(timer_int_kind)           :: t_obsfield_setup
         logical                           :: l_prob_state_mode, l_prob_neigh_mode
         logical                           :: l_write_partial_recs
         type(string)                      :: volname
@@ -517,8 +523,12 @@ contains
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         if( params%l_polar .and. (.not. params%l_prob_align_mode) )then
             if( .not. complete_volume_source_defined(cline, params%nstates) )then
+                if( L_BENCH_GLOB .and. trim(params%polar) == 'obsfield' ) t_obsfield_setup = tic()
                 call set_bp_range3D(params, build, cline)
                 call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D shared-memory iteration')
+                if( L_BENCH_GLOB .and. trim(params%polar) == 'obsfield' )then
+                    self%bench%rt_obsfield_setup = self%bench%rt_obsfield_setup + toc(t_obsfield_setup)
+                endif
             endif
         endif
         ! refine=prob* pre-step
@@ -921,6 +931,7 @@ contains
         real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:)
         integer :: state, iter
+        integer(timer_int_kind) :: t_obsfield_setup
         logical :: l_prob_state_mode, l_prob_neigh_mode
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
@@ -948,18 +959,22 @@ contains
         if( self%have_oris .or. iter > params%startit )then
             call build%spproj%read(params%projfile)
         endif
-        ! prob refinement
-        if( L_BENCH_GLOB )then
-            self%bench%rt_init = toc(self%bench%t_init)
-            self%bench%t_prob  = tic()
-        endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         if( params%l_polar .and. (.not. params%l_prob_align_mode) )then
             if( .not. complete_volume_source_defined(cline, params%nstates) )then
+                if( L_BENCH_GLOB .and. trim(params%polar) == 'obsfield' ) t_obsfield_setup = tic()
                 call set_bp_range3D(params, build, cline)
                 call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D distributed iteration')
+                if( L_BENCH_GLOB .and. trim(params%polar) == 'obsfield' )then
+                    self%bench%rt_obsfield_setup = self%bench%rt_obsfield_setup + toc(t_obsfield_setup)
+                endif
             endif
+        endif
+        ! prob refinement
+        if( L_BENCH_GLOB )then
+            self%bench%rt_init = toc(self%bench%t_init)
+            self%bench%t_prob  = tic()
         endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
