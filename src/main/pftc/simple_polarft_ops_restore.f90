@@ -1,8 +1,7 @@
 !@descr: submodule for class average restoration in the polar Fourier domain
 submodule (simple_polarft_calc) simple_polarft_ops_restore
-use simple_refine3D_fnames,     only: refine3D_fsc_fname, refine3D_obsfield_fname, refine3D_polar_ctf2_fname, &
+use simple_refine3D_fnames,     only: refine3D_fsc_fname, refine3D_polar_ctf2_fname, &
     &refine3D_polar_refs_fname, refine3D_polar_sums_fname, refine3D_state_vol_fname
-use simple_class_frcs,          only: resample_filter
 use simple_shell_field_geom,    only: shell_field_geom
 implicit none
 #include "simple_local_flags.inc"
@@ -376,12 +375,12 @@ contains
         real,                intent(in)    :: update_frac
         real(timer_int_kind), optional, intent(out) :: bench(:)
         type(class_frcs)         :: frcs
-        type(fgrid_obsfield_eo) :: prev_obsfield
         type(shell_field_geom) :: shell_geom
         type(sym) :: shell_sym
-        type(string) :: obsfield_name, obsfield_tmp_name, volname, write_obsfield_vols_arg
+        type(string) :: volname, write_obsfield_vols_arg
         character(len=STDLEN) :: shell_mode, shell_label
         integer, allocatable :: shell_nodes(:), shell_cell_counts(:)
+        complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:), prev_merg(:,:,:)
         real(dp)    :: fsc_prior_states(self%kfromto(1):self%interpklim,self%p_ptr%nstates)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
         real(dp)    :: invtau2_even(self%kfromto(1):self%interpklim), invtau2_odd(self%kfromto(1):self%interpklim)
@@ -390,22 +389,21 @@ contains
         real(dp)    :: ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
         real(timer_int_kind) :: rt_prepare_prev_refs, rt_coord_setup, rt_shell_geom, rt_prev_read, rt_blend_prev
-        real(timer_int_kind) :: rt_checkpoint_write, rt_calc_invtau2, rt_extract_polar, rt_write_volume
-        real(timer_int_kind) :: rt_rename_obsfields, rt_mirror, rt_fsc_frc
+        real(timer_int_kind) :: rt_lowres_insert, rt_calc_invtau2, rt_extract_polar, rt_write_volume
+        real(timer_int_kind) :: rt_mirror, rt_fsc_frc
         integer(timer_int_kind) :: t_step
         integer     :: i, state, base, nprojs, nrefs, noris, prior_start, extract_prior_start, kspan(2), shell_cart_budget
         integer     :: find4eoavg
-        logical     :: have_prev_obsfields, write_cartesian_vols, use_trail_rec
+        logical     :: have_prev_refs, have_prev_merg, need_prev_refs, write_cartesian_vols, use_trail_rec
         rt_prepare_prev_refs = 0.
         rt_coord_setup       = 0.
         rt_shell_geom        = 0.
         rt_prev_read         = 0.
         rt_blend_prev        = 0.
-        rt_checkpoint_write  = 0.
+        rt_lowres_insert     = 0.
         rt_calc_invtau2      = 0.
         rt_extract_polar     = 0.
         rt_write_volume      = 0.
-        rt_rename_obsfields  = 0.
         rt_mirror            = 0.
         rt_fsc_frc           = 0.
         if( present(bench) ) bench = 0.
@@ -453,6 +451,8 @@ contains
             call shell_geom%new(shell_sym, kspan, shell_cart_budget, shell_cell_counts)
             if( trim(self%p_ptr%obsfield_shell_stats) == 'yes' )then
                 call shell_geom%log_stats('fixed_asym_shells')
+                call log_shell_geom_accum_smoke(shell_geom, 'fixed_asym_shells', verbose=.true.)
+                call self%obsfields(1)%even%log_shell_cache_assignment(kspan, shell_geom, 'fixed_asym_shells')
                 call shell_geom%get_shell_nodes(shell_nodes)
                 do state = 1,self%p_ptr%nstates
                     write(shell_label,'(A,I0)') 'state=', state
@@ -461,6 +461,7 @@ contains
                 if( allocated(shell_nodes) ) deallocate(shell_nodes)
             else
                 call shell_geom%log_summary('fixed_asym_shells')
+                call log_shell_geom_accum_smoke(shell_geom, 'fixed_asym_shells')
             endif
             if( allocated(shell_cell_counts) ) deallocate(shell_cell_counts)
             if( trim(shell_mode) /= 'geom' )then
@@ -470,32 +471,29 @@ contains
             call shell_sym%kill
             if( L_BENCH_GLOB ) rt_shell_geom = rt_shell_geom + toc(t_step)
         endif
-        have_prev_obsfields = .false.
-        if( use_trail_rec )then
-            have_prev_obsfields = .true.
-            do state = 1,self%p_ptr%nstates
-                obsfield_name = refine3D_obsfield_fname(state)
-                if( .not. file_exists(obsfield_name) )then
-                    have_prev_obsfields = .false.
-                    exit
-                endif
-            enddo
-            if( .not. have_prev_obsfields )then
-                THROW_HARD('previous restored obsfields are required when trail_rec=yes; polar_cavger_normalize_obsfield_refs')
-            endif
+        need_prev_refs = self%p_ptr%l_ml_reg .or. use_trail_rec
+        have_prev_refs = need_prev_refs .and. file_exists(refine3D_polar_refs_fname('even')) .and. &
+            &file_exists(refine3D_polar_refs_fname('odd'))
+        if( use_trail_rec .and. (.not. have_prev_refs) )then
+            THROW_HARD('previous reprojection references are required when trail_rec=yes; polar_cavger_normalize_obsfield_refs')
+        endif
+        have_prev_merg = .false.
+        if( have_prev_refs )then
+            if( L_BENCH_GLOB ) t_step = tic()
+            call prepare_reprojection_trail_refs(self, reforis, prev_even, prev_odd, prev_merg, have_prev_merg)
+            if( L_BENCH_GLOB ) rt_prev_read = rt_prev_read + toc(t_step)
         endif
         fsc_prior_states = 0.d0
-        if( self%p_ptr%l_ml_reg )then
+        if( self%p_ptr%l_ml_reg .and. have_prev_refs )then
             if( L_BENCH_GLOB ) t_step = tic()
             do state = 1,self%p_ptr%nstates
-                obsfield_name = refine3D_fsc_fname(state)
-                call read_resampled_fsc_prior(self, obsfield_name, fsc_prior_states(:,state))
+                base = (state - 1) * nprojs
+                call calc_fsc_from_reprojection_model(self, prev_even, prev_odd, base+1, base+nprojs, fsc_prior_states(:,state))
             enddo
             if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
         endif
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
-            obsfield_name = refine3D_obsfield_fname(state)
             invtau2_even = 0.d0
             invtau2_odd  = 0.d0
             if( self%p_ptr%l_ml_reg )then
@@ -507,21 +505,11 @@ contains
                 if( L_BENCH_GLOB ) rt_calc_invtau2 = rt_calc_invtau2 + toc(t_step)
             endif
             call self%obsfields(state)%restore_field(kspan, invtau2_even, invtau2_odd, prior_start)
-            if( have_prev_obsfields )then
-                if( L_BENCH_GLOB ) t_step = tic()
-                call prev_obsfield%read(obsfield_name)
-                if( L_BENCH_GLOB ) rt_prev_read = rt_prev_read + toc(t_step)
-                if( L_BENCH_GLOB ) t_step = tic()
-                call self%obsfields(state)%blend_restored_field(prev_obsfield, ufrac_trec)
-                if( L_BENCH_GLOB ) rt_blend_prev = rt_blend_prev + toc(t_step)
-                call prev_obsfield%kill
-            endif
             invtau2_even = 0.d0
             invtau2_odd  = 0.d0
             extract_prior_start = self%interpklim + 1
             if( L_BENCH_GLOB ) t_step = tic()
-            call self%obsfields(state)%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
-                &invtau2_even, invtau2_odd, extract_prior_start, &
+            call self%obsfields(state)%extract_restored_polar(reforis, nrefs, kspan, hcoords, kcoords, &
                 &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
@@ -537,11 +525,15 @@ contains
             endif
         enddo
         if( write_cartesian_vols ) call volname%kill
-        call prev_obsfield%kill
         call write_obsfield_vols_arg%kill
         if( L_BENCH_GLOB ) t_step = tic()
         call mirror_slices_obsfield( self, reforis )
         if( L_BENCH_GLOB ) rt_mirror = rt_mirror + toc(t_step)
+        if( use_trail_rec )then
+            if( L_BENCH_GLOB ) t_step = tic()
+            call apply_reprojection_trail_rec(self, ufrac_trec, prev_even, prev_odd, prev_merg, have_prev_merg)
+            if( L_BENCH_GLOB ) rt_blend_prev = rt_blend_prev + toc(t_step)
+        endif
         if( L_BENCH_GLOB ) t_step = tic()
         call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         do state = 1,self%p_ptr%nstates
@@ -557,47 +549,83 @@ contains
                 ! FRCs are set to the state-local FSC. to check if we are using those
                 call frcs%set_frc(i, fsc_boxcrop, state)
             enddo
-            call insert_lowres_merged_refs(self, fsc_boxcrop, base+1, base+nprojs, find4eoavg)
-            call self%obsfields(state)%insert_lowres_merged(find4eoavg)
-            obsfield_name = refine3D_obsfield_fname(state)
-            obsfield_tmp_name = obsfield_name//'_tmp'
             if( L_BENCH_GLOB )then
                 rt_fsc_frc = rt_fsc_frc + toc(t_step)
                 t_step = tic()
             endif
-            call self%obsfields(state)%write(obsfield_tmp_name)
-            if( L_BENCH_GLOB )then
-                rt_checkpoint_write = rt_checkpoint_write + toc(t_step)
-                t_step = tic()
-            endif
+            call insert_lowres_merged_refs(self, fsc_boxcrop, base+1, base+nprojs, find4eoavg)
+            if( L_BENCH_GLOB ) rt_lowres_insert = rt_lowres_insert + toc(t_step)
+            if( L_BENCH_GLOB ) t_step = tic()
         enddo
         call frcs%write(string(FRCS_FILE))
         call frcs%kill
         if( L_BENCH_GLOB ) rt_fsc_frc = rt_fsc_frc + toc(t_step)
-        if( L_BENCH_GLOB ) t_step = tic()
-        do state = 1,self%p_ptr%nstates
-            obsfield_name = refine3D_obsfield_fname(state)
-            obsfield_tmp_name = obsfield_name//'_tmp'
-            call simple_rename(obsfield_tmp_name, obsfield_name, overwrite=.false.)
-        enddo
-        if( L_BENCH_GLOB ) rt_rename_obsfields = rt_rename_obsfields + toc(t_step)
-        call obsfield_name%kill
-        call obsfield_tmp_name%kill
+        if( allocated(prev_even) ) deallocate(prev_even)
+        if( allocated(prev_odd)  ) deallocate(prev_odd)
+        if( allocated(prev_merg) ) deallocate(prev_merg)
         if( present(bench) )then
             if( size(bench) >= 1  ) bench(1)  = rt_prepare_prev_refs
             if( size(bench) >= 2  ) bench(2)  = rt_coord_setup
             if( size(bench) >= 3  ) bench(3)  = rt_shell_geom
             if( size(bench) >= 4  ) bench(4)  = rt_prev_read
             if( size(bench) >= 5  ) bench(5)  = rt_blend_prev
-            if( size(bench) >= 6  ) bench(6)  = rt_checkpoint_write
+            if( size(bench) >= 6  ) bench(6)  = rt_lowres_insert
             if( size(bench) >= 7  ) bench(7)  = rt_calc_invtau2
             if( size(bench) >= 8  ) bench(8)  = rt_extract_polar
             if( size(bench) >= 9  ) bench(9)  = rt_write_volume
-            if( size(bench) >= 10 ) bench(10) = rt_rename_obsfields
             if( size(bench) >= 11 ) bench(11) = rt_mirror
             if( size(bench) >= 12 ) bench(12) = rt_fsc_frc
         endif
     end subroutine polar_cavger_normalize_obsfield_refs
+
+    subroutine log_shell_geom_accum_smoke( geom, label, verbose )
+        type(shell_field_geom), intent(in) :: geom
+        character(len=*),       intent(in) :: label
+        logical, optional,      intent(in) :: verbose
+        integer, allocatable :: shell_cells(:)
+        real(dp) :: cells_per_node, nodes_per_cell
+        integer :: ik, kfromto(2), shell, node_first, node_last, range_nodes, shell_nodes
+        integer :: nk, nsym, total_nodes, total_cells, empty_ranges, range_mismatch
+        logical :: l_verbose
+        if( .not. geom%is_initialized() ) return
+        l_verbose = .false.
+        if( present(verbose) ) l_verbose = verbose
+        call geom%get_kfromto(kfromto)
+        call geom%get_shell_cell_counts(shell_cells)
+        nk = geom%get_nk()
+        if( nk < 1 .or. size(shell_cells) /= nk )then
+            if( allocated(shell_cells) ) deallocate(shell_cells)
+            return
+        endif
+        nsym           = geom%get_nsym()
+        total_nodes    = geom%get_total_nodes()
+        total_cells    = sum(shell_cells)
+        empty_ranges   = 0
+        range_mismatch = 0
+        do ik = 1,nk
+            shell = kfromto(1) + ik - 1
+            call geom%get_shell_node_range(shell, node_first, node_last)
+            range_nodes = max(0, node_last - node_first + 1)
+            shell_nodes = geom%get_shell_node_count(shell)
+            if( range_nodes < 1 ) empty_ranges = empty_ranges + 1
+            if( range_nodes /= shell_nodes ) range_mismatch = range_mismatch + 1
+            if( l_verbose )then
+                cells_per_node = real(shell_cells(ik),dp) / real(max(1,shell_nodes),dp)
+                write(logfhandle,'(A,1X,A,2X,A,I4,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3)') &
+                    &'obsfield shell-accum smoke', trim(label), 'k=', shell, &
+                    &'field_nodes=', shell_nodes, 'cart_cells=', shell_cells(ik), &
+                    &'node_first=', node_first, 'node_last=', node_last, 'cells_per_node=', cells_per_node
+            endif
+        enddo
+        nodes_per_cell = real(total_nodes,dp) / real(max(1,total_cells),dp)
+        cells_per_node = real(total_cells,dp) / real(max(1,total_nodes),dp)
+        write(logfhandle,'(A,1X,A,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3,2X,A,F8.3,2X,A,I0,2X,A,I0,2X,A,I0)') &
+            &'obsfield shell-accum smoke summary', trim(label), 'nk=', nk, 'nsym=', nsym, &
+            &'field_nodes=', total_nodes, 'cart_cells=', total_cells, &
+            &'nodes_per_cell=', nodes_per_cell, 'cells_per_node=', cells_per_node, &
+            &'empty_ranges=', empty_ranges, 'range_mismatch=', range_mismatch, 'cart_cells_max=', maxval(shell_cells)
+        deallocate(shell_cells)
+    end subroutine log_shell_geom_accum_smoke
 
     subroutine insert_lowres_merged_refs( self, fsc_boxcrop, ref_first, ref_last, find4eoavg )
         class(polarft_calc), intent(inout) :: self
@@ -623,35 +651,6 @@ contains
             &self%pfts_merg(:,self%kfromto(1):find4eoavg_l,first_ref:last_ref)
         !$omp end parallel workshare
     end subroutine insert_lowres_merged_refs
-
-    subroutine read_resampled_fsc_prior( self, fname, fsc_out )
-        class(polarft_calc), intent(in)  :: self
-        class(string),       intent(in)  :: fname
-        real(dp),            intent(out) :: fsc_out(self%kfromto(1):self%interpklim)
-        real, allocatable :: fsc_in(:), fsc_resamp(:), res_orig(:), res_new(:)
-        integer :: prev_box, filtsz
-        fsc_out = 0.d0
-        if( .not. file_exists(fname) ) return
-        fsc_in = file2rarr(fname)
-        if( size(fsc_in) < self%kfromto(1) )then
-            deallocate(fsc_in)
-            return
-        endif
-        filtsz = fdim(self%p_ptr%box_crop) - 1
-        if( size(fsc_in) == filtsz .and. size(fsc_in) >= self%interpklim )then
-            fsc_out = real(fsc_in(self%kfromto(1):self%interpklim), dp)
-        else
-            prev_box = 2 * size(fsc_in)
-            res_orig = get_resarr(prev_box, self%p_ptr%smpd_crop)
-            res_new  = get_resarr(self%p_ptr%box_crop, self%p_ptr%smpd_crop)
-            fsc_resamp = resample_filter(fsc_in, res_orig, res_new)
-            fsc_out = real(fsc_resamp(self%kfromto(1):self%interpklim), dp)
-            if( allocated(fsc_resamp) ) deallocate(fsc_resamp)
-            if( allocated(res_orig) ) deallocate(res_orig)
-            if( allocated(res_new)  ) deallocate(res_new)
-        endif
-        if( allocated(fsc_in) ) deallocate(fsc_in)
-    end subroutine read_resampled_fsc_prior
 
     subroutine calc_fsc_from_reprojection_model( self, restored_even, restored_odd, ref_first, ref_last, fsc )
         class(polarft_calc), intent(in)  :: self
@@ -686,6 +685,141 @@ contains
             fsc = 0.d0
         end where
     end subroutine calc_fsc_from_reprojection_model
+
+    subroutine prepare_reprojection_trail_refs( self, reforis, prev_even, prev_odd, prev_merg, have_prev_merg )
+        class(polarft_calc),       intent(in)  :: self
+        type(oris),                intent(in)  :: reforis
+        complex(dp), allocatable, intent(out)  :: prev_even(:,:,:), prev_odd(:,:,:), prev_merg(:,:,:)
+        logical,                  intent(out)  :: have_prev_merg
+        type(string) :: fname_even, fname_odd, fname_merg
+        type(sym)    :: symop
+        type(oris)   :: prev_eulspace
+        integer :: prev_pftsz, prev_klims(2), prev_nrefs
+        integer :: current_nspace, prev_nspace
+        logical :: l_use_mapping, l_mapping_context
+        fname_even = refine3D_polar_refs_fname('even')
+        fname_odd  = refine3D_polar_refs_fname('odd')
+        fname_merg = refine3D_polar_refs_fname()
+        call self%get_pft_array_dims(fname_even, prev_pftsz, prev_klims, prev_nrefs)
+        if( prev_pftsz /= self%pftsz )then
+            THROW_HARD('Previous reprojection refs have different pftsz, cannot trail obsfield assembly')
+        endif
+        if( mod(self%ncls,self%p_ptr%nstates) /= 0 )then
+            THROW_HARD('Current state-major reference count is not divisible by nstates')
+        endif
+        if( mod(prev_nrefs,self%p_ptr%nstates) /= 0 )then
+            THROW_HARD('Previous state-major reference count is not divisible by nstates')
+        endif
+        if( prev_nrefs > self%ncls )then
+            THROW_HARD('Previous per-state nspace is larger than current, cannot remap obsfield trailing refs')
+        endif
+        current_nspace = self%ncls / self%p_ptr%nstates
+        prev_nspace    = prev_nrefs / self%p_ptr%nstates
+        l_use_mapping     = (prev_nrefs /= self%ncls) .or. any(prev_klims /= [self%kfromto(1), self%interpklim])
+        l_mapping_context = .false.
+        if( l_use_mapping )then
+            call symop%new(self%p_ptr%pgrp)
+            call prev_eulspace%new(prev_nspace, is_ptcl=.false.)
+            call symop%build_refspiral(prev_eulspace)
+            l_mapping_context = .true.
+            call map_current_refs_to_previous(fname_even, prev_even)
+            call map_current_refs_to_previous(fname_odd,  prev_odd)
+        else
+            call self%read_pft_array(fname_even, prev_even)
+            call self%read_pft_array(fname_odd,  prev_odd)
+        endif
+        have_prev_merg = file_exists(fname_merg)
+        if( have_prev_merg )then
+            call self%get_pft_array_dims(fname_merg, prev_pftsz, prev_klims, prev_nrefs)
+            have_prev_merg = (prev_pftsz == self%pftsz) .and. (prev_nrefs <= self%ncls) .and. &
+                &(mod(prev_nrefs,self%p_ptr%nstates) == 0)
+        endif
+        if( have_prev_merg )then
+            if( l_use_mapping .or. (prev_nrefs /= self%ncls) .or. any(prev_klims /= [self%kfromto(1), self%interpklim]) )then
+                if( .not. l_mapping_context )then
+                    call symop%new(self%p_ptr%pgrp)
+                    call prev_eulspace%new(prev_nspace, is_ptcl=.false.)
+                    call symop%build_refspiral(prev_eulspace)
+                    l_mapping_context = .true.
+                endif
+                call map_current_refs_to_previous(fname_merg, prev_merg)
+            else
+                call self%read_pft_array(fname_merg, prev_merg)
+            endif
+        endif
+        if( l_mapping_context )then
+            call symop%kill
+            call prev_eulspace%kill
+        endif
+        call fname_even%kill
+        call fname_odd%kill
+        call fname_merg%kill
+        contains
+
+            subroutine map_current_refs_to_previous( fname, array )
+                type(string),             intent(in)  :: fname
+                complex(dp), allocatable, intent(out) :: array(:,:,:)
+                complex(sp), allocatable :: src(:,:,:)
+                type(ori) :: o
+                integer :: src_pftsz, src_klims(2), src_nrefs, src_nspace
+                integer :: state, iproj, i, j, cur_base, prev_base, prev_ref, ks, ke
+                call self%get_pft_array_dims(fname, src_pftsz, src_klims, src_nrefs)
+                if( src_pftsz /= self%pftsz )then
+                    THROW_HARD('Previous reprojection refs have different pftsz, cannot remap')
+                endif
+                if( src_nrefs > self%ncls )then
+                    THROW_HARD('Previous per-state nspace is larger than current, cannot remap')
+                endif
+                if( mod(src_nrefs,self%p_ptr%nstates) /= 0 )then
+                    THROW_HARD('Previous state-major reference count is not divisible by nstates')
+                endif
+                src_nspace = src_nrefs / self%p_ptr%nstates
+                if( src_nspace /= prev_nspace )then
+                    THROW_HARD('Previous reprojection refs use inconsistent per-state nspace')
+                endif
+                ks = max(self%kfromto(1), src_klims(1))
+                ke = min(self%interpklim, src_klims(2))
+                call self%read_any_pft_array(fname, src)
+                allocate(array(self%pftsz,self%kfromto(1):self%interpklim,self%ncls), source=DCMPLX_ZERO)
+                !$omp parallel do default(shared) proc_bind(close) private(i,o,j,state,iproj,cur_base,prev_base,prev_ref) &
+                !$omp& schedule(static)
+                do i = 1,self%ncls
+                    state = (i - 1) / current_nspace + 1
+                    iproj = i - (state - 1) * current_nspace
+                    cur_base  = (state - 1) * current_nspace
+                    prev_base = (state - 1) * src_nspace
+                    call reforis%get_ori(iproj, o)
+                    j = prev_eulspace%find_closest_proj(o)
+                    prev_ref = prev_base + j
+                    if( ks <= ke ) array(:,ks:ke,cur_base+iproj) = cmplx(src(:,ks:ke,prev_ref), kind=dp)
+                enddo
+                !$omp end parallel do
+                deallocate(src)
+                call o%kill
+            end subroutine map_current_refs_to_previous
+    end subroutine prepare_reprojection_trail_refs
+
+    subroutine apply_reprojection_trail_rec( self, ufrac_trec, prev_even, prev_odd, prev_merg, have_prev_merg )
+        class(polarft_calc),      intent(inout) :: self
+        real(dp),                 intent(in)    :: ufrac_trec
+        complex(dp),              intent(in)    :: prev_even(self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp),              intent(in)    :: prev_odd( self%pftsz,self%kfromto(1):self%interpklim,self%ncls)
+        complex(dp), allocatable, intent(in)    :: prev_merg(:,:,:)
+        logical,                  intent(in)    :: have_prev_merg
+        !$omp parallel workshare proc_bind(close)
+        self%pfts_even = ufrac_trec * self%pfts_even + (1.d0 - ufrac_trec) * prev_even
+        self%pfts_odd  = ufrac_trec * self%pfts_odd  + (1.d0 - ufrac_trec) * prev_odd
+        !$omp end parallel workshare
+        if( have_prev_merg .and. allocated(prev_merg) )then
+            !$omp parallel workshare proc_bind(close)
+            self%pfts_merg = ufrac_trec * self%pfts_merg + (1.d0 - ufrac_trec) * prev_merg
+            !$omp end parallel workshare
+        else
+            !$omp parallel workshare proc_bind(close)
+            self%pfts_merg = 0.5d0 * (self%pfts_even + self%pfts_odd)
+            !$omp end parallel workshare
+        endif
+    end subroutine apply_reprojection_trail_rec
 
     !>  \brief Generate the mirror slices for restored obsfield references
     !!         iref runs through the unique half (un-mirrored references), the

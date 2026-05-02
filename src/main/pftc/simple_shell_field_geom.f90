@@ -33,8 +33,10 @@ type :: shell_field_geom
     procedure :: get_total_nodes => shell_geom_get_total_nodes
     procedure :: get_shell_node_count => shell_geom_get_shell_node_count
     procedure :: get_shell_node_range => shell_geom_get_shell_node_range
+    procedure :: get_shell_support    => shell_geom_get_shell_support
     procedure :: get_shell_dirs       => shell_geom_get_shell_dirs
     procedure :: get_node_dir         => shell_geom_get_node_dir
+    procedure :: nearest_node         => shell_geom_nearest_node
 end type shell_field_geom
 
 contains
@@ -225,6 +227,17 @@ contains
         shell_geom_get_shell_node_count = self%shell_nodes(ik)
     end function shell_geom_get_shell_node_count
 
+    real(dp) function shell_geom_get_shell_support( self, shell )
+        class(shell_field_geom), intent(in) :: self
+        integer,                 intent(in) :: shell
+        integer :: ik
+        shell_geom_get_shell_support = 0.d0
+        if( .not. allocated(self%theta_support) ) return
+        ik = shell - self%kfromto(1) + 1
+        if( ik < 1 .or. ik > self%nk ) return
+        shell_geom_get_shell_support = self%theta_support(ik)
+    end function shell_geom_get_shell_support
+
     subroutine shell_geom_get_shell_node_range( self, shell, node_first, node_last )
         class(shell_field_geom), intent(in)  :: self
         integer,                 intent(in)  :: shell
@@ -262,6 +275,33 @@ contains
         if( node < node_first .or. node > node_last ) return
         dir = self%node_dir(:,node)
     end subroutine shell_geom_get_node_dir
+
+    subroutine shell_geom_nearest_node( self, shell, q, inode, cos_best )
+        class(shell_field_geom), intent(in)  :: self
+        integer,                 intent(in)  :: shell
+        real(sp),                intent(in)  :: q(3)
+        integer,                 intent(out) :: inode
+        real(dp),                intent(out) :: cos_best
+        real(sp) :: qcanon(3)
+        real(dp) :: qnorm, dotv
+        integer  :: node_first, node_last, node
+        inode    = 0
+        cos_best = -1.d0
+        if( .not. allocated(self%node_dir) ) return
+        qnorm = sqrt(sum(real(q,dp) * real(q,dp)))
+        if( qnorm <= DTINY ) return
+        call canonicalize_dir(self, real(real(q,dp) / qnorm, sp), qcanon)
+        call self%get_shell_node_range(shell, node_first, node_last)
+        if( node_last < node_first ) return
+        do node = node_first,node_last
+            dotv = sum(real(qcanon,dp) * real(self%node_dir(:,node),dp))
+            if( dotv > cos_best )then
+                cos_best = dotv
+                inode    = node
+            endif
+        enddo
+        cos_best = min(1.d0, max(-1.d0, cos_best))
+    end subroutine shell_geom_nearest_node
 
     subroutine log_shell_stats( self, ik, shell )
         class(shell_field_geom), intent(in) :: self
@@ -363,6 +403,19 @@ contains
             endif
         enddo
     end function canonical_under_symmetry
+
+    subroutine canonicalize_dir( self, q, qcanon )
+        class(shell_field_geom), intent(in)  :: self
+        real(sp),                intent(in)  :: q(3)
+        real(sp),                intent(out) :: qcanon(3)
+        real(sp) :: qs(3)
+        integer  :: isym
+        qcanon = q
+        do isym = 2,self%nsym
+            qs = matmul(self%sym_rmat(:,:,isym), q)
+            if( lex_less(qs, qcanon) ) qcanon = qs
+        enddo
+    end subroutine canonicalize_dir
 
     logical function lex_less( a, b )
         real(sp), intent(in) :: a(3), b(3)
