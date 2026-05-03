@@ -145,16 +145,29 @@ Cartesian matching still uses projected polar central sections, so refinement-ow
 
 `polar=obsfield` is a Cartesian observation-field assembly path followed by
 polar sampling of the assembled fields. It must not apply an additional polar
-Jacobian or shell-density normalization to the extracted central sections. ML
-regularization derives the FSC/SSNR estimate from the previous compatible
-even/odd reference pair when one is available. On bootstrap, it uses the same
-FSC=0 input with the low-end FSC clamp as the regularization formula rather
-than disabling the FSC-derived prior. The denominator scale comes from the
-current Cartesian observation-field density, and the prior is applied per
-Cartesian grid cell before KB gathering: each half-map cell contributes
+Jacobian or shell-density normalization to the extracted central sections. The
+ML prior may be applied directly to the assembled observation fields before
+reprojection, because the numerator and density statistics live in Fourier
+space just as they do in the Cartesian reconstructor. The FSC itself must not
+be calculated directly from the sparse observation-field grid; nearest-cell
+insertion makes that representation too incomplete for a faithful FSC. The
+current unregularized reprojection model must be extracted first, mirrored to
+the full state-local reference set, and used for the current FSC. Trailing
+iterations use the previous compatible reprojection reference pair, matching
+the Cartesian previous-halfmap prior policy. On bootstrap, the FSC=0 input with
+the low-end FSC clamp is the regularization formula rather than a disabled
+prior. The denominator scale comes from the current Cartesian observation-field
+density, and the prior is applied per Cartesian grid cell before KB gathering:
+each half-map cell contributes
 `grid_num / (grid_den + prior(shell))` to the polar extraction. This keeps
 obsfield restoration close to the Cartesian reconstructor policy and avoids a
 separate sampling-density compensation in polar space.
+
+Obsfield ML-prior density estimation must account for the insertion policy.
+The full-splat path uses the dense Cartesian shell support, matching the
+Cartesian reconstructor's rho-counting convention. The nearest-cell path uses
+only cells touched by observation insertion, because its empty cells are a
+sparse-representation artifact and are skipped by restoration and extraction.
 
 The merged obsfield reference must not be the unweighted average of the
 already-restored halves. For performance, the implementation avoids a third KB

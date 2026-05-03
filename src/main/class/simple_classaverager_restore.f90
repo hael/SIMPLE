@@ -362,7 +362,6 @@ contains
             precs(i)%ctfparams%dfy     = precs(i)%dfy
             precs(i)%ctfparams%angast  = precs(i)%angast
             ! Build Fourier plane with shift, CTF and optional ML regularization
-            ! gen_fplane4rec applies the minus sign internally.
             if( p_ptr%l_ml_reg ) then
                 call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
                     precs(i)%ctfparams, precs(i)%shift, fplanes(ithr), &

@@ -481,7 +481,7 @@ contains
             endif
             if( L_BENCH_GLOB ) rt_shell_geom = rt_shell_geom + toc(t_step)
         endif
-        need_prev_refs = self%p_ptr%l_ml_reg .or. use_trail_rec
+        need_prev_refs = use_trail_rec
         have_prev_refs = need_prev_refs .and. file_exists(refine3D_polar_refs_fname('even')) .and. &
             &file_exists(refine3D_polar_refs_fname('odd'))
         if( use_trail_rec .and. (.not. have_prev_refs) )then
@@ -494,11 +494,34 @@ contains
             if( L_BENCH_GLOB ) rt_prev_read = rt_prev_read + toc(t_step)
         endif
         fsc_prior_states = 0.d0
-        if( self%p_ptr%l_ml_reg .and. have_prev_refs )then
+        if( self%p_ptr%l_ml_reg .and. use_trail_rec .and. have_prev_refs )then
             if( L_BENCH_GLOB ) t_step = tic()
             do state = 1,self%p_ptr%nstates
                 base = (state - 1) * nprojs
                 call calc_fsc_from_reprojection_model(self, prev_even, prev_odd, base+1, base+nprojs, fsc_prior_states(:,state))
+            enddo
+            if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
+        elseif( self%p_ptr%l_ml_reg )then
+            extract_prior_start = self%interpklim + 1
+            invtau2_even = 0.d0
+            invtau2_odd  = 0.d0
+            if( L_BENCH_GLOB ) t_step = tic()
+            ! The nearest-cell obsfield support is too sparse for a direct
+            ! field FSC. Build an unregularized reprojection model first, then
+            ! calculate the prior FSC from that dense polar reference set.
+            do state = 1,self%p_ptr%nstates
+                base = (state - 1) * nprojs
+                call self%obsfields(state)%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
+                    &invtau2_even, invtau2_odd, extract_prior_start, &
+                    &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
+                    &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
+                    &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
+            enddo
+            call mirror_slices_obsfield(self, reforis)
+            do state = 1,self%p_ptr%nstates
+                base = (state - 1) * nprojs
+                call calc_fsc_from_reprojection_model(self, self%pfts_even, self%pfts_odd, &
+                    &base+1, base+nprojs, fsc_prior_states(:,state))
             enddo
             if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
         endif

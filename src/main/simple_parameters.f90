@@ -92,6 +92,7 @@ type :: parameters
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_corrs='no'     !< exporting corrs during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
+    character(len=3)          :: projrec='no'         !< reconstruct from summed projection directions(yes|no){no}
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
@@ -827,6 +828,7 @@ contains
         call check_carg('projfile_merged',self%projfile_merged)
         call check_carg('projfile_optics',self%projfile_optics)
         call check_carg('projname',       self%projname)
+        call check_carg('projrec',        self%projrec)
         call check_carg('projstats',      self%projstats)
         call check_carg('protocol',       self%protocol)
         call check_carg('prune',          self%prune)

@@ -218,7 +218,7 @@ contains
     ! Insert one particle Fourier plane. The default path is weighted
     ! nearest-cell assignment; full_splat_insert switches to the full KB splat
     ! used by reconstructor%insert_plane_oversamp.
-    subroutine insert_plane_oversamp( self, se, o, fpl, pwght, shift_crop )
+    subroutine insert_plane_oversamp( self, se, o, fpl, pwght )
         use simple_math,    only: ceil_div, floor_div
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
         class(fgrid_obs_field), intent(inout) :: self
@@ -226,12 +226,10 @@ contains
         class(ori),             intent(inout) :: o
         class(fplane_type),     intent(in)    :: fpl
         real,                   intent(in)    :: pwght
-        real, optional,         intent(in)    :: shift_crop(2)
         type(ori)   :: o_sym
         complex(sp) :: cmplx_raw
-        complex(sp) :: phase_h, phase_k, phase_shift, w_k
         complex(dp) :: comp
-        real(dp)    :: ctfval, pwght_dp, pwght_pf2_dp, cell_w, cell_w_norm, pshift_pf(2)
+        real(dp)    :: ctfval, pwght_dp, pwght_pf2_dp, cell_w, cell_w_norm
         real(sp)    :: ctfsq_raw
         real(sp)    :: loc(3), delta(3), R(3,3)
         real        :: rotmats(se%get_nsym(),3,3)
@@ -240,15 +238,10 @@ contains
         integer     :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
         integer     :: lim1_lo, gl_lo1, gl_lo2, gl_lo3, gl_hi1, gl_hi2, gl_hi3
         integer     :: nobs_add
-        logical     :: l_shift
         if( .not. self%initialized ) THROW_HARD('obsfield not initialized; insert_plane_oversamp')
         if( pwght < TINY ) return
         if( self%full_splat_insert )then
-            if( present(shift_crop) )then
-                call self%insert_plane_oversamp_splat(se, o, fpl, pwght, shift_crop=shift_crop)
-            else
-                call self%insert_plane_oversamp_splat(se, o, fpl, pwght)
-            endif
+            call self%insert_plane_oversamp_splat(se, o, fpl, pwght)
             return
         endif
         if( self%shell_cache_initialized ) call self%clear_shell_cache
@@ -276,12 +269,6 @@ contains
         pwght_pf2_dp = pwght_dp * real(pf_local*pf_local, dp)
         cell_w_norm  = real(self%kb%apod_fast(0._sp), dp)
         cell_w_norm  = 1.d0 / (cell_w_norm * cell_w_norm * cell_w_norm)
-        l_shift      = .false.
-        if( present(shift_crop) ) l_shift = any(abs(shift_crop) > 1.e-6)
-        if( l_shift )then
-            pshift_pf = real(-shift_crop * fpl%shconst(1:2), dp) * real(pf_local, dp)
-            w_k       = cmplx(real(cos(pshift_pf(2)),sp), real(sin(pshift_pf(2)),sp), kind=sp)
-        endif
         ! integer disk gate: bit-exact equivalent of original nint(sqrt(h^2+k^2)) > nyq
         ! since for non-negative integer n,  n > nyq*(nyq+1)  <=>  nint(sqrt(n)) > nyq
         nyq_disk     = self%nyq * (self%nyq + 1)
@@ -291,7 +278,6 @@ contains
         gl_lo3 = self%grid_lims(3,1); gl_hi3 = self%grid_lims(3,2)
         !$omp parallel default(shared) private(isym,R,l,h,k,h_sq,k_max_h,k_lo,k_hi,&
         !$omp& cmplx_raw,ctfsq_raw,comp,ctfval,loc,delta,coord,hp,kp,cell_w)&
-        !$omp& private(phase_h,phase_k,phase_shift)&
         !$omp& reduction(+:nobs_add) proc_bind(close)
         do isym = 1, nsym
             R = rotmats(isym,:,:)
@@ -305,24 +291,13 @@ contains
                     k_lo    = max(fpllims(2,1), -k_max_h)
                     k_hi    = min(fpllims(2,2),  k_max_h)
                     hp = h * pf_local
-                    if( l_shift )then
-                        phase_h = cmplx(real(cos(real(h,dp)*pshift_pf(1)),sp), &
-                            real(sin(real(h,dp)*pshift_pf(1)),sp), kind=sp)
-                        phase_k = cmplx(real(cos(real(k_lo,dp)*pshift_pf(2)),sp), &
-                            real(sin(real(k_lo,dp)*pshift_pf(2)),sp), kind=sp)
-                    endif
                     do k = k_lo, k_hi
                         kp = k * pf_local
-                        if( l_shift )then
-                            phase_shift = phase_h * phase_k
-                            phase_k     = phase_k * w_k
-                        endif
                         ! raw padded-plane samples (single precision); cheap zero-skip
                         cmplx_raw = fplane_get_cmplx(fpl, hp, kp)
                         ctfsq_raw = fplane_get_ctfsq(fpl, hp, kp)
                         if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
                             ctfsq_raw <= TINY ) cycle
-                        if( l_shift ) cmplx_raw = cmplx_raw * phase_shift
                         ! rotated location on the native lattice; third h-component
                         ! is zero, so 6 muls instead of matmul's 9
                         loc(1) = real(h,sp)*R(1,1) + real(k,sp)*R(2,1)
@@ -363,7 +338,7 @@ contains
         if( nsym > 1 ) call o_sym%kill
     end subroutine insert_plane_oversamp
 
-    subroutine obsfield_insert_plane_oversamp_splat( self, se, o, fpl, pwght, shift_crop )
+    subroutine obsfield_insert_plane_oversamp_splat( self, se, o, fpl, pwght )
         use simple_math,    only: ceil_div, floor_div
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
         class(fgrid_obs_field), intent(inout) :: self
@@ -371,12 +346,10 @@ contains
         class(ori),             intent(inout) :: o
         class(fplane_type),     intent(in)    :: fpl
         real,                   intent(in)    :: pwght
-        real, optional,         intent(in)    :: shift_crop(2)
         type(ori)   :: o_sym
         complex(sp) :: cmplx_raw
-        complex(sp) :: phase_h, phase_k, phase_shift, w_k
         complex(dp) :: comp
-        real(dp)    :: ctfval, pwght_dp, pwght_pf2_dp, pshift_pf(2)
+        real(dp)    :: ctfval, pwght_dp, pwght_pf2_dp
         real(sp)    :: ctfsq_raw
         real(sp)    :: loc(3), R(3,3), w(self%wdim,self%wdim,self%wdim)
         real        :: rotmats(se%get_nsym(),3,3)
@@ -384,7 +357,6 @@ contains
         integer     :: nsym, isym, h, k, hp, kp, pf_local, l, stride
         integer     :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
         integer     :: nobs_add, ncell_window
-        logical     :: l_shift
         if( .not. self%initialized ) THROW_HARD('obsfield not initialized; obsfield_insert_plane_oversamp_splat')
         if( pwght < TINY ) return
         if( self%shell_cache_initialized ) call self%clear_shell_cache
@@ -407,18 +379,11 @@ contains
         fpllims(2,2) = floor_div(fpllims_pd(2,2), pf_local)
         pwght_dp     = real(pwght, dp)
         pwght_pf2_dp = pwght_dp * real(pf_local*pf_local, dp)
-        l_shift      = .false.
-        if( present(shift_crop) ) l_shift = any(abs(shift_crop) > 1.e-6)
-        if( l_shift )then
-            pshift_pf = real(-shift_crop * fpl%shconst(1:2), dp) * real(pf_local, dp)
-            w_k       = cmplx(real(cos(pshift_pf(2)),sp), real(sin(pshift_pf(2)),sp), kind=sp)
-        endif
         nyq_disk    = self%nyq * (self%nyq + 1)
         stride      = self%wdim
         ncell_window = self%wdim * self%wdim * self%wdim
         !$omp parallel default(shared) private(isym,R,l,h,k,h_sq,k_max_h,k_lo,k_hi,&
         !$omp& cmplx_raw,ctfsq_raw,comp,ctfval,loc,win,w,hp,kp)&
-        !$omp& private(phase_h,phase_k,phase_shift)&
         !$omp& reduction(+:nobs_add) proc_bind(close)
         do isym = 1, nsym
             R = rotmats(isym,:,:)
@@ -431,23 +396,12 @@ contains
                     k_lo    = max(fpllims(2,1), -k_max_h)
                     k_hi    = min(fpllims(2,2),  k_max_h)
                     hp = h * pf_local
-                    if( l_shift )then
-                        phase_h = cmplx(real(cos(real(h,dp)*pshift_pf(1)),sp), &
-                            real(sin(real(h,dp)*pshift_pf(1)),sp), kind=sp)
-                        phase_k = cmplx(real(cos(real(k_lo,dp)*pshift_pf(2)),sp), &
-                            real(sin(real(k_lo,dp)*pshift_pf(2)),sp), kind=sp)
-                    endif
                     do k = k_lo, k_hi
                         kp = k * pf_local
-                        if( l_shift )then
-                            phase_shift = phase_h * phase_k
-                            phase_k     = phase_k * w_k
-                        endif
                         cmplx_raw = fplane_get_cmplx(fpl, hp, kp)
                         ctfsq_raw = fplane_get_ctfsq(fpl, hp, kp)
                         if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
                             ctfsq_raw <= TINY ) cycle
-                        if( l_shift ) cmplx_raw = cmplx_raw * phase_shift
                         loc(1) = real(h,sp)*R(1,1) + real(k,sp)*R(2,1)
                         loc(2) = real(h,sp)*R(1,2) + real(k,sp)*R(2,2)
                         loc(3) = real(h,sp)*R(1,3) + real(k,sp)*R(2,3)
@@ -581,16 +535,23 @@ contains
         integer,  allocatable :: cnt(:)
         real(dp) :: cc
         integer  :: h, k, l, shell
+        logical  :: dense_support
         invtau2 = 0.d0
         if( .not. self%initialized ) return
         if( kfromto(1) > kfromto(2) ) THROW_HARD('invalid k-range; obsfield_calc_invtau2')
         allocate(rsum(kfromto(1):kfromto(2)), sig2(kfromto(1):kfromto(2)), &
             &ssnr(kfromto(1):kfromto(2)), tau2(kfromto(1):kfromto(2)), source=0.d0)
         allocate(cnt(kfromto(1):kfromto(2)), source=0)
+        ! Full-splat insertion mirrors the Cartesian reconstructor's dense
+        ! rho support. Nearest-cell insertion is intentionally sparse, so its
+        ! empty cells are insertion artifacts and should not dilute the shell
+        ! density used for the ML prior.
+        dense_support = self%full_splat_insert
         !$omp parallel do collapse(3) default(shared) schedule(static) proc_bind(close) private(h,k,l,shell) reduction(+:cnt,rsum)
         do h = self%lims(1,1), self%lims(1,2)
             do k = self%lims(2,1), self%lims(2,2)
                 do l = self%lims(3,1), self%lims(3,2)
+                    if( (.not. dense_support) .and. (.not. self%grid_obs(h,k,l)) ) cycle
                     shell = nint(sqrt(real(h*h + k*k + l*l, dp)))
                     if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
                     cnt(shell)  = cnt(shell) + 1
@@ -1827,27 +1788,18 @@ contains
         call self%odd%set_full_splat_insert( full_splat_insert)
     end subroutine obsfield_eo_set_full_splat_insert
 
-    subroutine obsfield_eo_insert_plane( self, se, o, fpl, eo, pwght, shift_crop )
+    subroutine obsfield_eo_insert_plane( self, se, o, fpl, eo, pwght )
         class(fgrid_obsfield_eo), intent(inout) :: self
         class(sym),                intent(inout) :: se
         class(ori),                intent(inout) :: o
         class(fplane_type),        intent(in)    :: fpl
         integer,                   intent(in)    :: eo
         real,                      intent(in)    :: pwght
-        real, optional,            intent(in)    :: shift_crop(2)
         select case(eo)
             case(-1,0)
-                if( present(shift_crop) )then
-                    call self%even%insert_plane_oversamp(se, o, fpl, pwght, shift_crop=shift_crop)
-                else
-                    call self%even%insert_plane_oversamp(se, o, fpl, pwght)
-                endif
+                call self%even%insert_plane_oversamp(se, o, fpl, pwght)
             case(1)
-                if( present(shift_crop) )then
-                    call self%odd%insert_plane_oversamp(se, o, fpl, pwght, shift_crop=shift_crop)
-                else
-                    call self%odd%insert_plane_oversamp(se, o, fpl, pwght)
-                endif
+                call self%odd%insert_plane_oversamp(se, o, fpl, pwght)
             case DEFAULT
                 THROW_HARD('unsupported eo flag; obsfield_eo_insert_plane')
         end select

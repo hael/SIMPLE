@@ -754,17 +754,13 @@ interface
         logical,           optional, intent(in)    :: is3d
     end subroutine polar_cavger_update_sums
 
-    module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls, &
-        &reforis_in, nspace_out, incr_shifts )
+    module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
         class(polarft_calc),        intent(inout) :: self
         class(oris), target,        intent(inout) :: eulspace
         class(oris),  pointer,      intent(inout) :: ptcl_field
         class(sym),                 intent(inout) :: symop
         integer,                    intent(in)    :: nptcls, pinds(nptcls)
         class(fplane_type), target, intent(inout) :: fpls(nptcls)
-        class(oris), target, optional, intent(inout) :: reforis_in
-        integer,          optional, intent(in)    :: nspace_out
-        real,             optional, intent(in)    :: incr_shifts(2,nptcls)
     end subroutine polar_cavger_insert_ptcls_obsfield
 
     module subroutine polar_cavger_write_obsfield_parts( self )
