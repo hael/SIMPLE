@@ -7,8 +7,6 @@ public :: shell_field_geom
 private
 #include "simple_local_flags.inc"
 
-real(dp), parameter :: SHELL_SUPPORT_MAX_RAD = 10.d0 * DPI / 180.d0
-
 type :: shell_field_geom
     private
     integer :: nk         = 0
@@ -82,7 +80,7 @@ contains
         endif
         do ik = 1,self%nk
             self%full_nodes(ik) = max(12, target_shell_nodes(ik) * max(1,self%nsym))
-            self%theta_support(ik) = min(SHELL_SUPPORT_MAX_RAD, sqrt(4.d0 * DPI / real(self%full_nodes(ik),dp)))
+            self%theta_support(ik) = sqrt(4.d0 * DPI / real(self%full_nodes(ik),dp))
         enddo
         max_full = maxval(self%full_nodes)
         allocate(tmp_dirs(3,max_full,self%nk), source=0._sp)
@@ -322,7 +320,7 @@ contains
         integer,                 intent(out) :: nfound
         real(sp) :: qcanon(3)
         real(dp), allocatable :: dots(:)
-        real(dp) :: qnorm, dotv, dist, sigma, cos_support, wsum
+        real(dp) :: qnorm, dotv, dist, sigma, wsum
         integer  :: node_first, node_last, node, ik, j, nkeep
         inodes  = 0
         weights = 0.d0
@@ -349,18 +347,14 @@ contains
             enddo
         endif
         sigma = max(self%theta_support(ik), 1.d-6)
-        cos_support = cos(sigma)
         wsum = 0.d0
         do j = 1,nkeep
             if( inodes(j) < 1 ) cycle
-            dotv = min(1.d0, max(-1.d0, dots(j)))
-            if( dotv < cos_support .and. nfound > 0 ) cycle
-            if( dotv < cos_support .and. j > 1 ) cycle
-            dist = acos(dotv)
             nfound = nfound + 1
             inodes(nfound) = inodes(j)
-            weights(j) = exp(-0.5d0 * (dist / sigma)**2)
-            if( nfound /= j ) weights(nfound) = weights(j)
+            dotv = min(1.d0, max(-1.d0, dots(j)))
+            dist = acos(dotv)
+            weights(nfound) = exp(-0.5d0 * (dist / sigma)**2)
             wsum = wsum + weights(nfound)
         enddo
         if( wsum > DTINY )then
