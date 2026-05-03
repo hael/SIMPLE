@@ -8,8 +8,7 @@ use simple_builder,                 only: builder
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
-use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs, &
-    &calc_projdir3Drec
+use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
 use simple_matcher_pftc_prep,       only: prep_pftc4align3D
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, sample_ptcls4fillin, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
@@ -38,7 +37,6 @@ type :: refine3D_ctrl
     logical :: do_polar_prepare
     logical :: do_prob_align
     logical :: do_polar
-    logical :: do_projrec
     logical :: do_sigma_mode
     logical :: do_write_oris
     logical :: do_bench
@@ -193,12 +191,8 @@ contains
                 endif
                 call b_ptr%pftc%polar_cavger_kill
             else
-                if( ctrl%do_projrec )then
-                    call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
-                else
-                    call write_partial_recs(params, build, cline, fpls)
-                    call finalize_rec_objs(params, build)
-                endif
+                call write_partial_recs(params, build, cline, fpls)
+                call finalize_rec_objs(params, build)
             endif
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
@@ -305,7 +299,6 @@ contains
             ctrl%polar_mode    = trim(p_ptr%polar)
             ctrl%oritype       = trim(p_ptr%oritype)
             ctrl%do_polar      = p_ptr%l_polar
-            ctrl%do_projrec    = (.not. ctrl%do_polar) .and. (trim(p_ptr%projrec) == 'yes')
             ctrl%do_prob_align = p_ptr%l_prob_align_mode
             ctrl%do_bench      = L_BENCH_GLOB
             ctrl%do_sigma_mode = (ctrl%refine_mode == 'sigma')
@@ -413,7 +406,6 @@ contains
 
         subroutine maybe_init_reconstruction()
             if( .not. ctrl%do_write_partial_recs ) return
-            if( ctrl%do_projrec ) return
             if( ctrl%do_polar )then
                 if( trim(ctrl%polar_mode).eq.'obsfield' )then
                     call init_rec(params, build, batchsz_max, fpls, init_volumes=.false.)
@@ -427,7 +419,7 @@ contains
 
         subroutine build_batch_particles_local()
             logical :: need_rec_imgs
-            need_rec_imgs = ctrl%do_write_partial_recs .and. (.not. ctrl%do_projrec) .and. &
+            need_rec_imgs = ctrl%do_write_partial_recs .and. &
                 &((.not. ctrl%do_polar) .or. trim(ctrl%polar_mode) == 'obsfield')
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             if( ctrl%do_polar )then
@@ -513,7 +505,6 @@ contains
 
         subroutine maybe_restore_batch()
             if( .not. ctrl%do_write_partial_recs ) return
-            if( ctrl%do_projrec ) return
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)

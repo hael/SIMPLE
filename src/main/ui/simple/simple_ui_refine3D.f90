@@ -123,8 +123,6 @@ contains
         ! search controls
         call reconstruct3D%add_input(UI_SRCH, pgrp)
         call reconstruct3D%add_input(UI_SRCH, frac)
-        call reconstruct3D%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction pre-averaging',&
-        &'Reconstruct from projection-direction pre-averages(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! filter controls
         call reconstruct3D%add_input(UI_FILT, envfsc)
         call reconstruct3D%add_input(UI_FILT, wiener)
@@ -170,9 +168,6 @@ contains
         call refine3D%add_input(UI_SRCH, maxits, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, update_frac, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, frac, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction pre-averaging',&
-        &'For polar=no, reconstruct from projection-direction pre-averages(yes|no){no}', '(yes|no){no}', .false., 'no',&
-        &gui_submenu="search", gui_advanced=.true.)
         call refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
         call refine3D%add_input(UI_SRCH, nstates, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, objfun, gui_submenu="search")

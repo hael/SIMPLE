@@ -5,7 +5,7 @@ use simple_parameters,           only: parameters
 use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
 use simple_matcher_3Dpolar,      only: calc_polar_partials
-use simple_matcher_3Drec,        only: calc_3Drec, calc_projdir3Drec
+use simple_matcher_3Drec,        only: calc_3Drec
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_commanders_rec_distr, only: commander_cartesian_volassemble, commander_polar_volassemble
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_iter_refs_fname, refine3D_state_vol_fname
@@ -172,11 +172,7 @@ contains
             ! Legacy handshake for rec-writing helpers that still inspect this key.
             ! The strategy owns the actual assembly dispatch decision.
             call cline%set('force_volassemble', 'yes')
-            if( trim(params%projrec) == 'yes' )then
-                call calc_projdir3Drec( params, build, cline, nptcls2update, pinds )
-            else
-                call calc_3Drec( params, build, cline, nptcls2update, pinds )
-            endif
+            call calc_3Drec( params, build, cline, nptcls2update, pinds )
             cline_volassemble = cline
             call cline_volassemble%set('prg',  'volassemble')
             call cline_volassemble%set('nthr', params%nthr)
