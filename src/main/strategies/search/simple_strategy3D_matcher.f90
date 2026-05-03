@@ -248,11 +248,11 @@ contains
                 write(fnr,'(a,t52,f9.2)') 'match3D 3D alignment : ',              rt_align
                 write(fnr,'(a,t52,f9.2)') 'match3D project file I/O : ',          rt_projio
                 if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
-                    write(fnr,'(a,t52,f9.2)') 'match3D obsfield rec accumulation : ', rt_rec
+                    write(fnr,'(a,t52,f9.2)') 'match3D Cartesian partial reconstruction : ', rt_rec
                 else if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'yes' )then
                     write(fnr,'(a,t52,f9.2)') 'match3D polar-sum accumulation : ', rt_rec
                 else
-                    write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction : ', rt_rec
+                    write(fnr,'(a,t52,f9.2)') 'match3D Cartesian partial reconstruction : ', rt_rec
                 endif
                 write(fnr,'(a,t52,f9.2)') 'match3D total time : ',                rt_tot
                 write(fnr,'(a)') ''
@@ -279,11 +279,13 @@ contains
                 write(fnr,'(a,t52,f9.2)') 'match3D 3D alignment : ',              (rt_align/rt_tot)                       * 100.
                 write(fnr,'(a,t52,f9.2)') 'match3D project file I/O : ',          (rt_projio/rt_tot)                      * 100.
                 if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
-                    write(fnr,'(a,t52,f9.2)') 'match3D obsfield rec accumulation : ', (rt_rec/rt_tot)                         * 100.
+                    write(fnr,'(a,t52,f9.2)') 'match3D Cartesian partial reconstruction : ', &
+                        (rt_rec/rt_tot) * 100.
                 else if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'yes' )then
                     write(fnr,'(a,t52,f9.2)') 'match3D polar-sum accumulation : ', (rt_rec/rt_tot)                         * 100.
                 else
-                    write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction : ', (rt_rec/rt_tot)                         * 100.
+                    write(fnr,'(a,t52,f9.2)') 'match3D Cartesian partial reconstruction : ', &
+                        (rt_rec/rt_tot) * 100.
                 endif
                 write(fnr,'(a,t52,f9.2)') 'match3D % accounted for : ', &
                     ((rt_startup+rt_build_batch_ptcls+rt_alloc_ptcl_imgs+ &

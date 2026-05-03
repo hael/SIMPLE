@@ -327,7 +327,7 @@ contains
         write(fnr,'(a,t52,f9.2)') 'refine3D total time                 : ', bench%rt_tot
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** COMPARABLE DETAIL TIMINGS (s) ***'
-        write(fnr,'(a,t52,f9.2)') 'refine3D obsfield strategy setup    : ', bench%rt_obsfield_setup
+        write(fnr,'(a,t52,f9.2)') 'refine3D POLAR_REFS setup           : ', bench%rt_obsfield_setup
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** COMPARABLE RELATIVE TIMINGS (%) ***'
         write(fnr,'(a,t52,f9.2)') 'refine3D strategy setup/init        : ', bench_pct(bench%rt_init, bench%rt_tot)
@@ -853,7 +853,7 @@ contains
             endif
             if( .not. vol_defined )then
                 if( params%l_polar .and. trim(params%polar) == 'obsfield' )then
-                    THROW_HARD('obsfield refine3D initialization requires obsfield-derived POLAR_REFS; Cartesian bootstrap is not allowed')
+                    THROW_HARD('polar=obsfield requires assembly-derived POLAR_REFS')
                 endif
                 ! reconstructions needed
                 cline_tmp = self%cline_rec3D

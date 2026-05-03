@@ -82,7 +82,7 @@ contains
         real(timer_int_kind)    :: rt_cmp_restore, rt_cmp_accounted
         real(timer_int_kind)    :: rt_obs_reduce_detail(2), rt_obs_norm_detail(20)
         real                   :: update_frac_eff, update_frac_trail_rec, weight_prev
-        integer :: fnr, nrefs, state, part, numlen_part, find4eoavg, ldim(3), ldim_pd(3), iproj
+        integer :: fnr, nrefs, state, part, numlen_part, find4eoavg, ldim(3), ldim_pd(3), iproj, iref
         logical :: l_refs_written
         rt_tot               = 0.
         rt_setup             = 0.
@@ -97,12 +97,13 @@ contains
         call build%init_params_and_build_general_tbox(cline, params)
         if( L_BENCH_GLOB ) t_tot = tic()
         ! Matchers write partition-local Cartesian partial reconstructions,
-        ! polar partial sums (polar=yes), or obsfield Cartesian partials, while
+        ! polar partial sums (polar=yes), or Cartesian partial reconstructions
+        ! for the polar=obsfield direct-polar-handoff benchmark, while
         ! the assembly commander owns shared-memory reduction and reference update.
         if( L_BENCH_GLOB ) t_setup = tic()
         call set_bp_range3D(params, build, cline)
         ! The assembly cline may have promoted nspace_next/pftsz_next into the
-        ! live nspace/pftsz values; project obsfield volumes on that grid.
+        ! live nspace/pftsz values; project restored half volumes on that grid.
         if( build%eulspace%get_noris() /= params%nspace )then
             call build%eulspace%kill
             call build%eulspace%new(params%nspace, is_ptcl=.false.)
@@ -195,27 +196,39 @@ contains
                     if( L_BENCH_GLOB ) rt_obs_norm_detail(7) = rt_obs_norm_detail(7) + toc(t_obs_detail)
                     if( L_BENCH_GLOB ) t_obs_detail = tic()
                     call build%vol%fft
-                    call build%vol2%zero_and_unflag_ft
-                    call build%vol2%read(eonames(1))
-                    call build%vol2%fft()
-                    call build%vol2%insert_lowres(build%vol, find4eoavg)
-                    call build%vol2%ifft()
-                    call build%vol2%mul(gridcorr_img)
-                    call build%vol2%write(eonames(1), del_if_exists=.true.)
-                    call vol_e%copy(build%vol2)
-                    call build%vol2%zero_and_unflag_ft
-                    call build%vol2%read(eonames(2))
-                    call build%vol2%fft()
-                    call build%vol2%insert_lowres(build%vol, find4eoavg)
-                    call build%vol2%ifft()
-                    call build%vol2%mul(gridcorr_img)
-                    call build%vol2%write(eonames(2), del_if_exists=.true.)
-                    call build%vol%copy(vol_e)
-                    call vol_merged%copy(vol_e)
-                    call vol_merged%add(build%vol2)
-                    call vol_merged%mul(0.5)
-                    call vol_merged%write(volname, del_if_exists=.true.)
+                    if( .not. params%l_lpset )then
+                        call build%vol2%zero_and_unflag_ft
+                        call build%vol2%read(eonames(1))
+                        call build%vol2%fft()
+                        call build%vol2%insert_lowres(build%vol, find4eoavg)
+                        call build%vol2%ifft()
+                        call build%vol2%mul(gridcorr_img)
+                        call build%vol2%write(eonames(1), del_if_exists=.true.)
+                        call vol_e%copy(build%vol2)
+                        call build%vol2%zero_and_unflag_ft
+                        call build%vol2%read(eonames(2))
+                        call build%vol2%fft()
+                        call build%vol2%insert_lowres(build%vol, find4eoavg)
+                        call build%vol2%ifft()
+                        call build%vol2%mul(gridcorr_img)
+                        call build%vol2%write(eonames(2), del_if_exists=.true.)
+                    endif
+                    ! Search handoff starts from the corrected summed reconstruction.
+                    ! Gold-standard mode also docks the even/odd maps at low resolution;
+                    ! lp-set mode skips that and uses a merged trailed volume below.
+                    call build%vol%ifft
+                    call build%vol%mul(gridcorr_img)
+                    call build%vol%write(volname, del_if_exists=.true.)
                     call wait_for_closure(volname)
+                    call vol_merged%copy(build%vol)
+                    if( params%l_lpset )then
+                        if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
+                            call build%vol%read(eonames(1))
+                            call build%vol2%read(eonames(2))
+                        endif
+                    else
+                        call build%vol%copy(vol_e)
+                    endif
                     if( L_BENCH_GLOB ) rt_obs_norm_detail(6) = rt_obs_norm_detail(6) + toc(t_obs_detail)
                     if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
                         if( L_BENCH_GLOB ) t_obs_detail = tic()
@@ -228,23 +241,43 @@ contains
                         call build%vol2%add(vol_prev_odd)
                         call build%vol%write(eonames(1))
                         call build%vol2%write(eonames(2))
+                        if( params%l_lpset )then
+                            call vol_merged%copy(build%vol)
+                            call vol_merged%add(build%vol2)
+                            call vol_merged%mul(0.5)
+                            call vol_merged%write(volname, del_if_exists=.true.)
+                            call wait_for_closure(volname)
+                        endif
                         if( L_BENCH_GLOB ) rt_obs_norm_detail(5) = rt_obs_norm_detail(5) + toc(t_obs_detail)
                     endif
                     if( L_BENCH_GLOB ) t_obs_detail = tic()
-                    call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
-                        &params%smpd_crop, wthreads=.true.)
-                    call build%vol%pad_fft(build%vol_pad)
-                    call build%vol_pad%expand_cmat(params%box)
-                    call vol_pad2ref_pfts(build%pftc, build%vol_pad, build%eulspace, state, .true.)
-                    call build%vol_pad%kill
-                    call build%vol_pad%kill_expanded
-                    call build%vol_odd_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
-                        &params%smpd_crop, wthreads=.true.)
-                    call build%vol2%pad_fft(build%vol_odd_pad)
-                    call build%vol_odd_pad%expand_cmat(params%box)
-                    call vol_pad2ref_pfts(build%pftc, build%vol_odd_pad, build%eulspace, state, .false.)
-                    call build%vol_odd_pad%kill
-                    call build%vol_odd_pad%kill_expanded
+                    if( params%l_lpset )then
+                        call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
+                            &params%smpd_crop, wthreads=.true.)
+                        call vol_merged%pad_fft(build%vol_pad)
+                        call build%vol_pad%expand_cmat(params%box)
+                        call vol_pad2ref_pfts(build%pftc, build%vol_pad, build%eulspace, state, .true.)
+                        do iref = (state - 1) * params%nspace + 1, state * params%nspace
+                            call build%pftc%cp_even2odd_ref(iref)
+                        enddo
+                        call build%vol_pad%kill
+                        call build%vol_pad%kill_expanded
+                    else
+                        call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
+                            &params%smpd_crop, wthreads=.true.)
+                        call build%vol_odd_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
+                            &params%smpd_crop, wthreads=.true.)
+                        call build%vol%pad_fft(build%vol_pad)
+                        call build%vol2%pad_fft(build%vol_odd_pad)
+                        call build%vol_pad%expand_cmat(params%box)
+                        call vol_pad2ref_pfts(build%pftc, build%vol_pad, build%eulspace, state, .true.)
+                        call build%vol_pad%kill
+                        call build%vol_pad%kill_expanded
+                        call build%vol_odd_pad%expand_cmat(params%box)
+                        call vol_pad2ref_pfts(build%pftc, build%vol_odd_pad, build%eulspace, state, .false.)
+                        call build%vol_odd_pad%kill
+                        call build%vol_odd_pad%kill_expanded
+                    endif
                     if( L_BENCH_GLOB ) rt_obs_norm_detail(8) = rt_obs_norm_detail(8) + toc(t_obs_detail)
                     fsc_file = refine3D_fsc_fname(state)
                     if( allocated(fsc_state) ) deallocate(fsc_state)
@@ -329,8 +362,8 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble total time              : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** COMPARABLE DETAIL TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'volassemble obsfield volume restore : ', rt_obs_norm_detail(7)
-            write(fnr,'(a,t52,f9.2)') 'volassemble obsfield polar project  : ', rt_obs_norm_detail(8)
+            write(fnr,'(a,t52,f9.2)') 'volassemble direct volume restore   : ', rt_obs_norm_detail(7)
+            write(fnr,'(a,t52,f9.2)') 'volassemble direct polar projection : ', rt_obs_norm_detail(8)
             write(fnr,'(a,t52,f9.2)') 'volassemble previous reference read : ', rt_obs_norm_detail(4)
             write(fnr,'(a,t52,f9.2)') 'volassemble trailing blend/vols     : ', rt_obs_norm_detail(5)
             write(fnr,'(a,t52,f9.2)') 'volassemble lowres even/odd insert  : ', rt_obs_norm_detail(6)
@@ -342,16 +375,16 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble polar assembly setup     : ', rt_setup
             select case(trim(params%polar))
                 case('obsfield')
-                    write(fnr,'(a,t52,f9.2)') 'volassemble reduce obsfield rec partials: ', rt_reduce
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield read parts         : ', rt_obs_reduce_detail(1)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield sum partial recs   : ', rt_obs_reduce_detail(2)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble normalize obsfield refs     : ', rt_normalize
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield read prev refs     : ', rt_obs_norm_detail(4)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield trail volumes      : ', rt_obs_norm_detail(5)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield lowres ref insert  : ', rt_obs_norm_detail(6)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield volume restore     : ', rt_obs_norm_detail(7)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield polar project      : ', rt_obs_norm_detail(8)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield fsc/frc bookkeeping: ', rt_obs_norm_detail(12)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble reduce Cartesian rec partials: ', rt_reduce
+                    write(fnr,'(a,t52,f9.2)') 'volassemble read Cartesian rec partials  : ', rt_obs_reduce_detail(1)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble sum Cartesian rec partials   : ', rt_obs_reduce_detail(2)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble restore/project polar refs   : ', rt_normalize
+                    write(fnr,'(a,t52,f9.2)') 'volassemble read previous halfmaps       : ', rt_obs_norm_detail(4)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble trailing blend/vols          : ', rt_obs_norm_detail(5)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble lowres even/odd insert       : ', rt_obs_norm_detail(6)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble direct volume restore        : ', rt_obs_norm_detail(7)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble direct polar projection      : ', rt_obs_norm_detail(8)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble FSC/FRC bookkeeping          : ', rt_obs_norm_detail(12)
                 case('yes')
                     write(fnr,'(a,t52,f9.2)') 'volassemble reduce polar sums           : ', rt_reduce
                     write(fnr,'(a,t52,f9.2)') 'volassemble normalize common-line refs  : ', rt_normalize
@@ -376,8 +409,8 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble polar assembly setup     : ', (rt_setup/rt_tot)     * 100.
             select case(trim(params%polar))
                 case('obsfield')
-                    write(fnr,'(a,t52,f9.2)') 'volassemble reduce obsfield rec partials: ', (rt_reduce/rt_tot)    * 100.
-                    write(fnr,'(a,t52,f9.2)') 'volassemble normalize obsfield refs     : ', (rt_normalize/rt_tot) * 100.
+                    write(fnr,'(a,t52,f9.2)') 'volassemble reduce Cartesian rec partials: ', (rt_reduce/rt_tot)    * 100.
+                    write(fnr,'(a,t52,f9.2)') 'volassemble restore/project polar refs   : ', (rt_normalize/rt_tot) * 100.
                 case('yes')
                     write(fnr,'(a,t52,f9.2)') 'volassemble reduce polar sums           : ', (rt_reduce/rt_tot)    * 100.
                     write(fnr,'(a,t52,f9.2)') 'volassemble normalize common-line refs  : ', (rt_normalize/rt_tot) * 100.
@@ -586,32 +619,43 @@ contains
             if( L_BENCH_GLOB ) t_sampl_dens_correct_sum = tic()
             call build%eorecvol%sampl_dens_correct_sum( build%vol )
             if( L_BENCH_GLOB ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
-            ! need to put the sum back at lowres for the eo pairs
+            ! Gold-standard mode needs low-resolution insertion between
+            ! even/odd maps to keep the independent references docked.  In
+            ! lp-set mode the matcher consumes the merged full-volume path.
             if( L_BENCH_GLOB ) t_eoavg = tic()
             if( L_BENCH_GLOB ) t_lowres_insert = tic()
             call build%vol%fft
-            call build%vol2%zero_and_unflag_ft
-            call build%vol2%read(eonames(1))
-            call build%vol2%fft()
-            call build%vol2%insert_lowres(build%vol, find4eoavg)
-            call build%vol2%ifft()
-            call build%vol2%mul(gridcorr_img)
-            call build%vol2%write(eonames(1), del_if_exists=.true.)
-            call vol_e%copy(build%vol2)
-            call build%vol2%zero_and_unflag_ft
-            call build%vol2%read(eonames(2))
-            call build%vol2%fft()
-            call build%vol2%insert_lowres(build%vol, find4eoavg)
-            call build%vol2%ifft()
-            call build%vol2%mul(gridcorr_img)
-            call build%vol2%write(eonames(2), del_if_exists=.true.)
-            call build%vol%copy(vol_e)
-            ! merged volume in separate object to preserve even/odd in memory
-            call vol_merged%copy(vol_e)
-            call vol_merged%add(build%vol2)
-            call vol_merged%mul(0.5)
-            call vol_merged%write( volname, del_if_exists=.true. )
+            if( .not. params%l_lpset )then
+                call build%vol2%zero_and_unflag_ft
+                call build%vol2%read(eonames(1))
+                call build%vol2%fft()
+                call build%vol2%insert_lowres(build%vol, find4eoavg)
+                call build%vol2%ifft()
+                call build%vol2%mul(gridcorr_img)
+                call build%vol2%write(eonames(1), del_if_exists=.true.)
+                call vol_e%copy(build%vol2)
+                call build%vol2%zero_and_unflag_ft
+                call build%vol2%read(eonames(2))
+                call build%vol2%fft()
+                call build%vol2%insert_lowres(build%vol, find4eoavg)
+                call build%vol2%ifft()
+                call build%vol2%mul(gridcorr_img)
+                call build%vol2%write(eonames(2), del_if_exists=.true.)
+            endif
+            ! Search handoff starts from the corrected summed reconstruction.
+            ! lp-set + trailing rewrites it below from the merged trailed maps.
+            call build%vol%ifft
+            call build%vol%mul(gridcorr_img)
+            call build%vol%write( volname, del_if_exists=.true. )
             call wait_for_closure( volname )
+            if( params%l_lpset )then
+                if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
+                    call build%vol%read(eonames(1))
+                    call build%vol2%read(eonames(2))
+                endif
+            else
+                call build%vol%copy(vol_e)
+            endif
             if( L_BENCH_GLOB ) rt_lowres_insert = rt_lowres_insert + toc(t_lowres_insert)
             if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
                 if( L_BENCH_GLOB ) t_trailing_refs = tic()
@@ -624,6 +668,13 @@ contains
                 call build%vol2%add(vol_prev_odd)
                 call build%vol%write(eonames(1))  ! even trailed
                 call build%vol2%write(eonames(2)) ! odd trailed
+                if( params%l_lpset )then
+                    call vol_merged%copy(build%vol)
+                    call vol_merged%add(build%vol2)
+                    call vol_merged%mul(0.5)
+                    call vol_merged%write(volname, del_if_exists=.true.)
+                    call wait_for_closure(volname)
+                endif
                 call vol_prev_even%kill
                 call vol_prev_odd%kill
                 if( L_BENCH_GLOB ) rt_trailing_refs = rt_trailing_refs + toc(t_trailing_refs)
