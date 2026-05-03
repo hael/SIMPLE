@@ -3,8 +3,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 real,    parameter :: UPDATE_FRAC_MIN            = 0.1                   ! 10% of the particles updated each iteration
-integer, parameter :: NSPACE(8)                  = [500,500,1000,1000,2500,2500,5000,5000]
-integer, parameter :: NSPACE_CAVGS(8)            = [500,500,1000,1000,1000,1000,1000,1000] ! cavgs route: capped at 1000 from stage 3
+integer, parameter :: NSPACE(8)                  = [500,1000,1000,1000,2500,2500,5000,5000]
 integer, parameter :: SHC_REFINE_STAGE           = 1                     ! shc-style refinement stages 1-4
 integer, parameter :: PROB_REFINE_STAGE          = 5                     ! prob refinement stages 5-6
 integer, parameter :: PROB_NEIGH_REFINE_STAGE    = 7                     ! prob_neigh refinement stages 7-8
@@ -14,7 +13,7 @@ integer, parameter :: REFINE3D_ROUTE_STD         = 1
 integer, parameter :: REFINE3D_ROUTE_CAVGS       = 2
 integer, parameter :: REFINE3D_ROUTE_POLAR       = 3
 integer, parameter :: NSPACE_NEXT_NONE           = 0
-integer, parameter :: NEIGH_NSPACES(2)           = [126,5000]
+integer, parameter :: NSPACE_SUB                 = 126
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
@@ -71,7 +70,7 @@ contains
         call set_refine3D_symmetry_policy( cfg, params, istage )
         call set_refine3D_mode_policy( cfg, params, istage, route )
         call set_refine3D_balance_policy( cfg )
-        call set_refine3D_gauref_policy( cfg, params, istage )
+        call set_refine3D_gauref_policy( cfg, params, istage, route )
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_automsk_policy( cfg, params, istage, route )
@@ -153,12 +152,15 @@ contains
         cfg%balance = 'yes'
     end subroutine set_refine3D_balance_policy
 
-    subroutine set_refine3D_gauref_policy( cfg, params, istage )
+    subroutine set_refine3D_gauref_policy( cfg, params, istage, route )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        integer,                  intent(in)    :: route
         cfg%gaufreq = -1.
-        if( istage <= GAUREF_LAST_STAGE )then
+        if( route == REFINE3D_ROUTE_CAVGS )then
+            cfg%gaufreq = lpinfo(istage)%lp
+        else if( istage <= GAUREF_LAST_STAGE )then
             cfg%gaufreq = lpinfo(istage)%lp
         endif
     end subroutine set_refine3D_gauref_policy
@@ -226,11 +228,7 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         integer,                  intent(in)    :: route
-        if( route == REFINE3D_ROUTE_CAVGS )then
-            cfg%inspace = NSPACE_CAVGS(istage)
-        else
-            cfg%inspace = NSPACE(istage)
-        endif
+        cfg%inspace = NSPACE(istage)
         select case(istage)
             case(1,2)
                 cfg%imaxits       = MAXITS(istage)
@@ -303,8 +301,7 @@ contains
         end select
         select case(cfg%refine%to_char())
             case('prob_neigh')
-                cfg%inspace_sub = NEIGH_NSPACES(1)
-                cfg%inspace     = NEIGH_NSPACES(2)
+                cfg%inspace_sub = NSPACE_SUB
         end select
         ! Legacy polar trailing reconstruction expects matching reference
         ! arrays. obsfield remaps previous nspace onto the current space.
@@ -356,7 +353,7 @@ contains
         integer,           intent(in) :: route
         type(refine3D_stage_cfg) :: cfg_stage
         call set_refine3D_mode_policy( cfg_stage, params, istage, route )
-        call set_refine3D_gauref_policy( cfg_stage, params, istage )
+        call set_refine3D_gauref_policy( cfg_stage, params, istage, route )
         call set_refine3D_trailrec_policy( cfg_stage, params, istage )
         call set_refine3D_automsk_policy( cfg_stage, params, istage, route )
         call set_refine3D_stage_controls( cfg_stage, params, istage, route )
