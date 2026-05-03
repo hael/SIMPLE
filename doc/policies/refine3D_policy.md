@@ -151,14 +151,18 @@ reprojection, because the numerator and density statistics live in Fourier
 space just as they do in the Cartesian reconstructor. The FSC itself must not
 be calculated directly from the sparse observation-field grid; nearest-cell
 insertion makes that representation too incomplete for a faithful FSC. The
-current unregularized reprojection model must be extracted first, mirrored to
-the full state-local reference set, and used for the current FSC. Trailing
-iterations use the previous compatible reprojection reference pair, matching
-the Cartesian previous-halfmap prior policy. On bootstrap, the FSC=0 input with
-the low-end FSC clamp is the regularization formula rather than a disabled
-prior. The denominator scale comes from the current Cartesian observation-field
-density, and the prior is applied per Cartesian grid cell before KB gathering:
-each half-map cell contributes
+obsfield ML-regularization sequence mirrors `polar=yes`: extract the current
+unregularized reprojection model, mirror it to the full state-local reference
+set, apply trailing in reprojection space when `trail_rec=yes`, calculate the
+per-state FSC from that reprojection model, add the FSC-derived prior to the
+assembled field denominators, then extract the restored reprojection model.
+When `trail_rec=yes`, the same reprojection-space trailing blend is applied to
+the restored model before final FSC/FRC bookkeeping and handoff. Bootstrap
+iterations use the current unregularized reprojection model for the prior FSC,
+just as `polar=yes` uses the current assembled polar reference statistics. The
+denominator scale comes from the current Cartesian observation-field density,
+and the prior is applied per Cartesian grid cell before KB gathering: each
+half-map cell contributes
 `grid_num / (grid_den + prior(shell))` to the polar extraction. This keeps
 obsfield restoration close to the Cartesian reconstructor policy and avoids a
 separate sampling-density compensation in polar space.

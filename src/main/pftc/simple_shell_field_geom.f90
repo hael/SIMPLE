@@ -1,4 +1,4 @@
-!@descr: development scaffold for stage-independent spherical-shell geometry
+!@descr: stage-independent spherical-shell observation geometry
 module simple_shell_field_geom
 use simple_pftc_api
 implicit none
@@ -14,8 +14,9 @@ type :: shell_field_geom
     integer :: nsym       = 1
     integer :: total_nodes = 0
     integer :: target_nodes = 0
-    integer :: cart_budget  = 0
-    integer,  allocatable :: full_nodes(:), shell_nodes(:), cart_cells(:), offsets(:)
+    integer :: shell_budget = 0
+    integer,  allocatable :: full_nodes(:), shell_nodes(:), shell_cell_budget(:), offsets(:)
+    integer,  allocatable :: bin_nz(:), bin_nphi(:), bin_offsets(:), bin_head(:), bin_next(:)
     real(dp), allocatable :: theta_support(:)
     real(sp), allocatable :: node_dir(:,:) ! (3,total_nodes)
     real(sp), allocatable :: sym_rmat(:,:,:) ! (3,3,nsym)
@@ -37,31 +38,32 @@ type :: shell_field_geom
     procedure :: get_shell_dirs       => shell_geom_get_shell_dirs
     procedure :: get_node_dir         => shell_geom_get_node_dir
     procedure :: nearest_node         => shell_geom_nearest_node
+    procedure :: nearest_nodes        => shell_geom_nearest_nodes
 end type shell_field_geom
 
 contains
 
-    subroutine shell_geom_new( self, symop, kfromto, cart_budget, cart_shell_cells )
+    subroutine shell_geom_new( self, symop, kfromto, shell_budget, shell_cell_counts )
         class(shell_field_geom), intent(inout) :: self
         class(sym),              intent(in)    :: symop
         integer,                 intent(in)    :: kfromto(2)
-        integer,                 intent(in)    :: cart_budget
-        integer, optional,        intent(in)    :: cart_shell_cells(:)
+        integer,                 intent(in)    :: shell_budget
+        integer, optional,        intent(in)    :: shell_cell_counts(:)
         real(sp), allocatable :: tmp_dirs(:,:,:)
         real(sp) :: rsym(3,3), q(3)
         integer, allocatable :: target_shell_nodes(:)
         integer :: isym, ik, ifull, nfull, nkeep, pos, max_full
         call self%kill
         if( kfromto(1) > kfromto(2) ) THROW_HARD('invalid k range; shell_geom_new')
-        if( cart_budget < 1 ) THROW_HARD('invalid Cartesian budget; shell_geom_new')
+        if( shell_budget < 1 ) THROW_HARD('invalid shell budget; shell_geom_new')
         self%kfromto      = kfromto
         self%nk           = kfromto(2) - kfromto(1) + 1
         self%nsym         = symop%get_nsym()
-        self%cart_budget  = cart_budget
-        self%target_nodes = max(cart_budget, self%nk)
+        self%shell_budget = shell_budget
+        self%target_nodes = max(shell_budget, self%nk)
         allocate(self%full_nodes(self%nk),   source=0)
         allocate(self%shell_nodes(self%nk),  source=0)
-        allocate(self%cart_cells(self%nk),   source=0)
+        allocate(self%shell_cell_budget(self%nk), source=0)
         allocate(self%offsets(self%nk+1),    source=1)
         allocate(self%theta_support(self%nk), source=0.d0)
         allocate(self%sym_rmat(3,3,self%nsym), source=0._sp)
@@ -70,11 +72,11 @@ contains
             self%sym_rmat(:,:,isym) = rsym
         enddo
         call distribute_shell_budget(kfromto, self%target_nodes, target_shell_nodes)
-        if( present(cart_shell_cells) )then
-            if( size(cart_shell_cells) /= self%nk ) THROW_HARD('invalid shell cell count size; shell_geom_new')
-            self%cart_cells = cart_shell_cells
+        if( present(shell_cell_counts) )then
+            if( size(shell_cell_counts) /= self%nk ) THROW_HARD('invalid shell cell count size; shell_geom_new')
+            self%shell_cell_budget = shell_cell_counts
         else
-            self%cart_cells = target_shell_nodes
+            self%shell_cell_budget = target_shell_nodes
         endif
         do ik = 1,self%nk
             self%full_nodes(ik) = max(12, target_shell_nodes(ik) * max(1,self%nsym))
@@ -105,6 +107,7 @@ contains
                 self%node_dir(:,pos:pos+self%shell_nodes(ik)-1) = tmp_dirs(:,:self%shell_nodes(ik),ik)
             endif
         enddo
+        call build_shell_bins(self)
         deallocate(tmp_dirs)
         deallocate(target_shell_nodes)
     end subroutine shell_geom_new
@@ -113,8 +116,13 @@ contains
         class(shell_field_geom), intent(inout) :: self
         if( allocated(self%full_nodes) ) deallocate(self%full_nodes)
         if( allocated(self%shell_nodes) ) deallocate(self%shell_nodes)
-        if( allocated(self%cart_cells) ) deallocate(self%cart_cells)
+        if( allocated(self%shell_cell_budget) ) deallocate(self%shell_cell_budget)
         if( allocated(self%offsets) ) deallocate(self%offsets)
+        if( allocated(self%bin_nz) ) deallocate(self%bin_nz)
+        if( allocated(self%bin_nphi) ) deallocate(self%bin_nphi)
+        if( allocated(self%bin_offsets) ) deallocate(self%bin_offsets)
+        if( allocated(self%bin_head) ) deallocate(self%bin_head)
+        if( allocated(self%bin_next) ) deallocate(self%bin_next)
         if( allocated(self%theta_support) ) deallocate(self%theta_support)
         if( allocated(self%node_dir) ) deallocate(self%node_dir)
         if( allocated(self%sym_rmat) ) deallocate(self%sym_rmat)
@@ -123,14 +131,14 @@ contains
         self%nsym         = 1
         self%total_nodes  = 0
         self%target_nodes = 0
-        self%cart_budget  = 0
+        self%shell_budget = 0
     end subroutine shell_geom_kill
 
     subroutine shell_geom_log_summary( self, label )
         class(shell_field_geom), intent(in) :: self
         character(len=*),        intent(in) :: label
         real(dp) :: mem_mb, min_support, max_support, budget_ratio
-        integer :: min_nodes, max_nodes, min_cart_cells, max_cart_cells, total_cart_cells
+        integer :: min_nodes, max_nodes, min_shell_cells, max_shell_cells, total_shell_cells
         if( .not. allocated(self%shell_nodes) ) return
         mem_mb = 0.d0
         if( allocated(self%node_dir) )then
@@ -140,21 +148,21 @@ contains
         max_nodes   = maxval(self%shell_nodes)
         min_support = minval(self%theta_support)
         max_support = maxval(self%theta_support)
-        budget_ratio = real(self%total_nodes,dp) / real(max(1,self%cart_budget),dp)
+        budget_ratio = real(self%total_nodes,dp) / real(max(1,self%shell_budget),dp)
         write(logfhandle,'(A,1X,A,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3,2X,A,I0,2X,A,I0,2X,A,F8.3,2X,A,F8.3,2X,A,F10.3)') &
             &'obsfield shell-geom', trim(label), 'nk=', self%nk, 'kmin=', self%kfromto(1), 'kmax=', self%kfromto(2), &
-            &'nsym=', self%nsym, 'cart_budget=', self%cart_budget, 'target_nodes=', self%target_nodes, &
+            &'nsym=', self%nsym, 'shell_budget=', self%shell_budget, 'target_nodes=', self%target_nodes, &
             &'total_nodes=', self%total_nodes, 'budget_ratio=', budget_ratio, 'nodes_min=', min_nodes, 'nodes_max=', max_nodes, &
             &'support_min_deg=', rad2deg(real(min_support)), &
             &'support_max_deg=', rad2deg(real(max_support)), 'dir_mem_mb=', mem_mb
-        if( allocated(self%cart_cells) )then
-            total_cart_cells = sum(self%cart_cells)
-            min_cart_cells   = minval(self%cart_cells)
-            max_cart_cells   = maxval(self%cart_cells)
+        if( allocated(self%shell_cell_budget) )then
+            total_shell_cells = sum(self%shell_cell_budget)
+            min_shell_cells   = minval(self%shell_cell_budget)
+            max_shell_cells   = maxval(self%shell_cell_budget)
             write(logfhandle,'(A,1X,A,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0)') &
                 &'obsfield shell-geom cache', trim(label), 'nk=', self%nk, 'kmin=', self%kfromto(1), 'kmax=', self%kfromto(2), &
-                &'cart_budget=', self%cart_budget, 'cart_cells_sum=', total_cart_cells, &
-                &'cart_cells_min=', min_cart_cells, 'cart_cells_max=', max_cart_cells
+                &'shell_budget=', self%shell_budget, 'shell_cells_sum=', total_shell_cells, &
+                &'shell_cells_min=', min_shell_cells, 'shell_cells_max=', max_shell_cells
         endif
     end subroutine shell_geom_log_summary
 
@@ -182,17 +190,17 @@ contains
     subroutine shell_geom_get_shell_cell_counts( self, shell_cells )
         class(shell_field_geom),  intent(in)  :: self
         integer, allocatable,     intent(out) :: shell_cells(:)
-        if( .not. allocated(self%cart_cells) )then
+        if( .not. allocated(self%shell_cell_budget) )then
             allocate(shell_cells(0))
             return
         endif
-        allocate(shell_cells(size(self%cart_cells)), source=self%cart_cells)
+        allocate(shell_cells(size(self%shell_cell_budget)), source=self%shell_cell_budget)
     end subroutine shell_geom_get_shell_cell_counts
 
     logical function shell_geom_is_initialized( self )
         class(shell_field_geom), intent(in) :: self
         shell_geom_is_initialized = allocated(self%node_dir) .and. allocated(self%shell_nodes) .and. &
-            &allocated(self%cart_cells) .and. allocated(self%offsets)
+            &allocated(self%shell_cell_budget) .and. allocated(self%offsets) .and. allocated(self%bin_head)
     end function shell_geom_is_initialized
 
     subroutine shell_geom_get_kfromto( self, kfromto )
@@ -302,6 +310,147 @@ contains
         enddo
         cos_best = min(1.d0, max(-1.d0, cos_best))
     end subroutine shell_geom_nearest_node
+
+    subroutine shell_geom_nearest_nodes( self, shell, q, max_nodes, inodes, weights, nfound )
+        class(shell_field_geom), intent(in)  :: self
+        integer,                 intent(in)  :: shell, max_nodes
+        real(sp),                intent(in)  :: q(3)
+        integer,                 intent(out) :: inodes(:)
+        real(dp),                intent(out) :: weights(:)
+        integer,                 intent(out) :: nfound
+        real(sp) :: qcanon(3)
+        real(dp), allocatable :: dots(:)
+        real(dp) :: qnorm, dotv, dist, sigma, wsum
+        integer  :: node_first, node_last, node, ik, j, nkeep
+        inodes  = 0
+        weights = 0.d0
+        nfound  = 0
+        if( max_nodes < 1 ) return
+        nkeep = min(max_nodes, min(size(inodes), size(weights)))
+        if( nkeep < 1 ) return
+        if( .not. allocated(self%node_dir) ) return
+        qnorm = sqrt(sum(real(q,dp) * real(q,dp)))
+        if( qnorm <= DTINY ) return
+        ik = shell - self%kfromto(1) + 1
+        if( ik < 1 .or. ik > self%nk ) return
+        call canonicalize_dir(self, real(real(q,dp) / qnorm, sp), qcanon)
+        call self%get_shell_node_range(shell, node_first, node_last)
+        if( node_last < node_first ) return
+        allocate(dots(nkeep), source=-huge(1.d0))
+        call scan_shell_bins(self, ik, qcanon, nkeep, dots, inodes)
+        if( count(inodes > 0) < nkeep )then
+            dots   = -huge(1.d0)
+            inodes = 0
+            do node = node_first,node_last
+                dotv = sum(real(qcanon,dp) * real(self%node_dir(:,node),dp))
+                call insert_shell_candidate(dotv, node, nkeep, dots, inodes)
+            enddo
+        endif
+        sigma = max(self%theta_support(ik), 1.d-6)
+        wsum = 0.d0
+        do j = 1,nkeep
+            if( inodes(j) < 1 ) cycle
+            nfound = nfound + 1
+            dotv = min(1.d0, max(-1.d0, dots(j)))
+            dist = acos(dotv)
+            weights(j) = exp(-0.5d0 * (dist / sigma)**2)
+            wsum = wsum + weights(j)
+        enddo
+        if( wsum > DTINY )then
+            weights(1:nfound) = weights(1:nfound) / wsum
+        else if( nfound > 0 )then
+            weights(1:nfound) = 1.d0 / real(nfound,dp)
+        endif
+        deallocate(dots)
+    end subroutine shell_geom_nearest_nodes
+
+    subroutine build_shell_bins( self )
+        class(shell_field_geom), intent(inout) :: self
+        real(sp) :: dir(3)
+        integer :: ik, node, total_bins, ibin, iz, iphi
+        allocate(self%bin_nz(self%nk), source=0)
+        allocate(self%bin_nphi(self%nk), source=0)
+        allocate(self%bin_offsets(self%nk+1), source=1)
+        do ik = 1,self%nk
+            self%bin_nz(ik)   = max(4, int(sqrt(real(max(1,self%shell_nodes(ik)),dp) / 8.d0)))
+            self%bin_nphi(ik) = 2 * self%bin_nz(ik)
+            self%bin_offsets(ik+1) = self%bin_offsets(ik) + self%bin_nz(ik) * self%bin_nphi(ik)
+        enddo
+        total_bins = self%bin_offsets(self%nk+1) - 1
+        allocate(self%bin_head(total_bins), source=0)
+        allocate(self%bin_next(self%total_nodes), source=0)
+        do ik = 1,self%nk
+            do node = self%offsets(ik),self%offsets(ik+1)-1
+                dir = self%node_dir(:,node)
+                call shell_dir_bin(self, ik, dir, iz, iphi)
+                ibin = self%bin_offsets(ik) + (iz - 1) * self%bin_nphi(ik) + iphi - 1
+                self%bin_next(node) = self%bin_head(ibin)
+                self%bin_head(ibin) = node
+            enddo
+        enddo
+    end subroutine build_shell_bins
+
+    subroutine shell_dir_bin( self, ik, dir, iz, iphi )
+        class(shell_field_geom), intent(in)  :: self
+        integer,                 intent(in)  :: ik
+        real(sp),                intent(in)  :: dir(3)
+        integer,                 intent(out) :: iz, iphi
+        real(dp) :: zfrac, phi
+        zfrac = 0.5d0 * (real(dir(3),dp) + 1.d0)
+        iz = min(self%bin_nz(ik), max(1, int(zfrac * real(self%bin_nz(ik),dp)) + 1))
+        phi = atan2(real(dir(2),dp), real(dir(1),dp))
+        if( phi < 0.d0 ) phi = phi + 2.d0 * DPI
+        iphi = min(self%bin_nphi(ik), max(1, int(phi * real(self%bin_nphi(ik),dp) / (2.d0 * DPI)) + 1))
+    end subroutine shell_dir_bin
+
+    subroutine scan_shell_bins( self, ik, qcanon, nkeep, dots, inodes )
+        class(shell_field_geom), intent(in)    :: self
+        integer,                 intent(in)    :: ik, nkeep
+        real(sp),                intent(in)    :: qcanon(3)
+        real(dp),                intent(inout) :: dots(:)
+        integer,                 intent(inout) :: inodes(:)
+        real(dp) :: dotv
+        integer :: iz0, iphi0, iz, iphi, dz, dphi, ring, ibin, node, nfilled
+        if( .not. allocated(self%bin_head) ) return
+        call shell_dir_bin(self, ik, qcanon, iz0, iphi0)
+        do ring = 0,3
+            do dz = -ring,ring
+                iz = iz0 + dz
+                if( iz < 1 .or. iz > self%bin_nz(ik) ) cycle
+                do dphi = -ring,ring
+                    if( ring > 0 .and. abs(dz) < ring .and. abs(dphi) < ring ) cycle
+                    iphi = modulo(iphi0 + dphi - 1, self%bin_nphi(ik)) + 1
+                    ibin = self%bin_offsets(ik) + (iz - 1) * self%bin_nphi(ik) + iphi - 1
+                    node = self%bin_head(ibin)
+                    do while( node > 0 )
+                        dotv = sum(real(qcanon,dp) * real(self%node_dir(:,node),dp))
+                        call insert_shell_candidate(dotv, node, nkeep, dots, inodes)
+                        node = self%bin_next(node)
+                    enddo
+                enddo
+            enddo
+            nfilled = count(inodes > 0)
+            if( nfilled >= nkeep .and. dots(nkeep) > cos(2.d0 * self%theta_support(ik)) ) exit
+        enddo
+    end subroutine scan_shell_bins
+
+    subroutine insert_shell_candidate( dotv, node, nkeep, dots, inodes )
+        real(dp), intent(in)    :: dotv
+        integer,  intent(in)    :: node, nkeep
+        real(dp), intent(inout) :: dots(:)
+        integer,  intent(inout) :: inodes(:)
+        integer :: slot
+        if( dotv <= dots(nkeep) ) return
+        slot = nkeep
+        do while( slot > 1 )
+            if( dotv <= dots(slot-1) ) exit
+            dots(slot)   = dots(slot-1)
+            inodes(slot) = inodes(slot-1)
+            slot = slot - 1
+        enddo
+        dots(slot)   = dotv
+        inodes(slot) = node
+    end subroutine insert_shell_candidate
 
     subroutine log_shell_stats( self, ik, shell )
         class(shell_field_geom), intent(in) :: self

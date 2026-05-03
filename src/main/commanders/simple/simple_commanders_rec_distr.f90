@@ -149,7 +149,7 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble total time              : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** COMPARABLE DETAIL TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prior FSC setup: ', rt_obs_norm_detail(1)
+            write(fnr,'(a,t52,f9.2)') 'volassemble obsfield shell restore  : ', rt_obs_norm_detail(7)
             write(fnr,'(a,t52,f9.2)') 'volassemble previous reference read : ', rt_obs_norm_detail(4)
             write(fnr,'(a,t52,f9.2)') 'volassemble trailing blend/refs     : ', rt_obs_norm_detail(5)
             write(fnr,'(a,t52,f9.2)') 'volassemble lowres even/odd insert  : ', rt_obs_norm_detail(6)
@@ -165,15 +165,12 @@ contains
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield read parts         : ', rt_obs_reduce_detail(1)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield append parts       : ', rt_obs_reduce_detail(2)
                     write(fnr,'(a,t52,f9.2)') 'volassemble normalize obsfield refs     : ', rt_normalize
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield prior FSC setup    : ', rt_obs_norm_detail(1)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield coord setup        : ', rt_obs_norm_detail(2)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield shell geom         : ', rt_obs_norm_detail(3)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield read prev refs     : ', rt_obs_norm_detail(4)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield trail refs         : ', rt_obs_norm_detail(5)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield lowres ref insert  : ', rt_obs_norm_detail(6)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield calc invtau2       : ', rt_obs_norm_detail(7)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield extract polar      : ', rt_obs_norm_detail(8)
-                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield write merged vol   : ', rt_obs_norm_detail(9)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield shell restore      : ', rt_obs_norm_detail(7)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble obsfield shell extraction   : ', rt_obs_norm_detail(8)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield mirror refs        : ', rt_obs_norm_detail(11)
                     write(fnr,'(a,t52,f9.2)') 'volassemble obsfield fsc/frc bookkeeping: ', rt_obs_norm_detail(12)
                 case('yes')

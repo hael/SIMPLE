@@ -1,8 +1,7 @@
 !@descr: submodule for class average restoration in the polar Fourier domain
 submodule (simple_polarft_calc) simple_polarft_ops_restore
 use simple_refine3D_fnames,     only: refine3D_fsc_fname, refine3D_polar_ctf2_fname, &
-    &refine3D_polar_refs_fname, refine3D_polar_sums_fname, refine3D_state_vol_fname
-use simple_shell_field_geom,    only: shell_field_geom
+    &refine3D_polar_refs_fname, refine3D_polar_sums_fname
 implicit none
 #include "simple_local_flags.inc"
 contains               
@@ -366,7 +365,7 @@ contains
 
     end subroutine calc_comlin_contrib
 
-    ! 3D SECTION - Polar references are sampled from assembled Cartesian observation fields
+    ! 3D SECTION - Polar references are sampled from assembled shell observation fields
 
     module subroutine polar_cavger_normalize_obsfield_refs( self, reforis, cline, update_frac, bench )
         class(polarft_calc), intent(inout) :: self
@@ -375,14 +374,7 @@ contains
         real,                intent(in)    :: update_frac
         real(timer_int_kind), optional, intent(out) :: bench(:)
         type(class_frcs)         :: frcs
-        type(shell_field_geom) :: shell_geom
-        type(sym) :: shell_sym
-        type(string) :: volname, write_obsfield_vols_arg
-        character(len=STDLEN) :: shell_mode, shell_label
-        integer, allocatable :: shell_nodes(:), shell_cell_counts(:)
         complex(dp), allocatable :: prev_even(:,:,:), prev_odd(:,:,:), prev_merg(:,:,:)
-        complex(dp), allocatable :: cache_even(:,:,:), cache_odd(:,:,:), cache_merg(:,:,:)
-        real(dp)    :: fsc_prior_states(self%kfromto(1):self%interpklim,self%p_ptr%nstates)
         real(dp)    :: fsc_state(self%kfromto(1):self%interpklim)
         real(dp)    :: invtau2_even(self%kfromto(1):self%interpklim), invtau2_odd(self%kfromto(1):self%interpklim)
         real(sp)    :: hcoords(self%pftsz,self%interpklim-self%kfromto(1)+1)
@@ -390,26 +382,22 @@ contains
         real(dp)    :: ufrac_trec
         real        :: fsc_boxcrop(1:fdim(self%p_ptr%box_crop)-1)
         real(timer_int_kind) :: rt_prepare_prev_refs, rt_coord_setup, rt_shell_geom, rt_prev_read, rt_blend_prev
-        real(timer_int_kind) :: rt_lowres_insert, rt_calc_invtau2, rt_extract_polar, rt_write_volume
+        real(timer_int_kind) :: rt_lowres_insert, rt_shell_restore, rt_shell_extract
         real(timer_int_kind) :: rt_mirror, rt_fsc_frc
         integer(timer_int_kind) :: t_step
-        integer     :: i, state, base, nprojs, nrefs, noris, prior_start, extract_prior_start, kspan(2), shell_cart_budget
+        integer     :: i, state, base, nprojs, nrefs, noris, prior_start, kspan(2)
         integer     :: find4eoavg
-        logical     :: have_prev_refs, have_prev_merg, need_prev_refs, write_cartesian_vols, use_trail_rec
-        logical     :: shell_stats_verbose, shell_cache_geom_live
+        logical     :: have_prev_refs, have_prev_merg, need_prev_refs, use_trail_rec
         rt_prepare_prev_refs = 0.
         rt_coord_setup       = 0.
         rt_shell_geom        = 0.
         rt_prev_read         = 0.
         rt_blend_prev        = 0.
         rt_lowres_insert     = 0.
-        rt_calc_invtau2      = 0.
-        rt_extract_polar     = 0.
-        rt_write_volume      = 0.
+        rt_shell_restore     = 0.
+        rt_shell_extract     = 0.
         rt_mirror            = 0.
         rt_fsc_frc           = 0.
-        shell_stats_verbose  = .false.
-        shell_cache_geom_live = .false.
         if( present(bench) ) bench = 0.
         if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields are not allocated; polar_cavger_normalize_obsfield_refs')
         nprojs = self%p_ptr%nspace
@@ -430,57 +418,14 @@ contains
         else
             ufrac_trec = 1.d0
         endif
-        write_cartesian_vols = .true.
-        if( cline%defined('write_obsfield_vols') )then
-            write_obsfield_vols_arg = cline%get_carg('write_obsfield_vols')
-            write_cartesian_vols = write_obsfield_vols_arg%to_char() == 'yes'
-        endif
         ! write down FRCs
         kspan  = [self%kfromto(1), self%interpklim]
-        if( self%p_ptr%l_ml_reg )then
-            prior_start = ml_prior_start(self)
-        else
-            prior_start = self%interpklim + 1
-        endif
+        prior_start = self%interpklim + 1
         if( L_BENCH_GLOB ) t_step = tic()
         hcoords = transpose(self%polar(1,self%kfromto(1):self%interpklim,1:self%pftsz))
         kcoords = transpose(self%polar(2,self%kfromto(1):self%interpklim,1:self%pftsz))
         if( L_BENCH_GLOB ) rt_coord_setup = rt_coord_setup + toc(t_step)
-        shell_mode = lowercase(trim(self%p_ptr%obsfield_shell_repr))
-        if( trim(shell_mode) /= 'no' )then
-            if( L_BENCH_GLOB ) t_step = tic()
-            call self%obsfields(1)%even%count_shell_cell_counts(kspan, shell_cell_counts)
-            shell_cart_budget = sum(shell_cell_counts)
-            call shell_sym%new(self%p_ptr%pgrp)
-            call shell_geom%new(shell_sym, kspan, shell_cart_budget, shell_cell_counts)
-            shell_stats_verbose = trim(self%p_ptr%obsfield_shell_stats) == 'yes'
-            if( shell_stats_verbose )then
-                call shell_geom%log_stats('fixed_asym_shells')
-                call log_shell_geom_accum_smoke(shell_geom, 'fixed_asym_shells', verbose=.true.)
-                call self%obsfields(1)%even%log_shell_cache_assignment(kspan, shell_geom, 'fixed_asym_shells')
-                call shell_geom%get_shell_nodes(shell_nodes)
-            else
-                call shell_geom%log_summary('fixed_asym_shells')
-                call log_shell_geom_accum_smoke(shell_geom, 'fixed_asym_shells')
-            endif
-            do state = 1,self%p_ptr%nstates
-                write(shell_label,'(A,I0)') 'state=', state
-                if( shell_stats_verbose )then
-                    call self%obsfields(state)%log_shell_budget_stats(kspan, shell_nodes, trim(shell_label))
-                    call self%obsfields(state)%log_shell_cache_accum_compare(kspan, shell_geom, trim(shell_label))
-                endif
-                call self%obsfields(state)%build_shell_cache(kspan, shell_geom, trim(shell_label), verbose=shell_stats_verbose)
-            enddo
-            if( allocated(shell_nodes) ) deallocate(shell_nodes)
-            if( allocated(shell_cell_counts) ) deallocate(shell_cell_counts)
-            shell_cache_geom_live = shell_stats_verbose
-            write(logfhandle,'(A)') 'obsfield shell-cache build mode: cached obsfield shadow built; Cartesian extraction remains active'
-            if( .not. shell_cache_geom_live )then
-                call shell_geom%kill
-                call shell_sym%kill
-            endif
-            if( L_BENCH_GLOB ) rt_shell_geom = rt_shell_geom + toc(t_step)
-        endif
+        write(logfhandle,'(A)') 'obsfield shell-cache build mode: primary shell obsfield active'
         need_prev_refs = use_trail_rec
         have_prev_refs = need_prev_refs .and. file_exists(refine3D_polar_refs_fname('even')) .and. &
             &file_exists(refine3D_polar_refs_fname('odd'))
@@ -493,95 +438,27 @@ contains
             call prepare_reprojection_trail_refs(self, reforis, prev_even, prev_odd, prev_merg, have_prev_merg)
             if( L_BENCH_GLOB ) rt_prev_read = rt_prev_read + toc(t_step)
         endif
-        fsc_prior_states = 0.d0
-        if( self%p_ptr%l_ml_reg .and. use_trail_rec .and. have_prev_refs )then
-            if( L_BENCH_GLOB ) t_step = tic()
-            do state = 1,self%p_ptr%nstates
-                base = (state - 1) * nprojs
-                call calc_fsc_from_reprojection_model(self, prev_even, prev_odd, base+1, base+nprojs, fsc_prior_states(:,state))
-            enddo
-            if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
-        elseif( self%p_ptr%l_ml_reg )then
-            extract_prior_start = self%interpklim + 1
-            invtau2_even = 0.d0
-            invtau2_odd  = 0.d0
-            if( L_BENCH_GLOB ) t_step = tic()
-            ! The nearest-cell obsfield support is too sparse for a direct
-            ! field FSC. Build an unregularized reprojection model first, then
-            ! calculate the prior FSC from that dense polar reference set.
-            do state = 1,self%p_ptr%nstates
-                base = (state - 1) * nprojs
-                call self%obsfields(state)%extract_polar(reforis, nrefs, kspan, hcoords, kcoords, &
-                    &invtau2_even, invtau2_odd, extract_prior_start, &
-                    &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
-                    &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
-                    &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
-            enddo
-            call mirror_slices_obsfield(self, reforis)
-            do state = 1,self%p_ptr%nstates
-                base = (state - 1) * nprojs
-                call calc_fsc_from_reprojection_model(self, self%pfts_even, self%pfts_odd, &
-                    &base+1, base+nprojs, fsc_prior_states(:,state))
-            enddo
-            if( L_BENCH_GLOB ) rt_prepare_prev_refs = rt_prepare_prev_refs + toc(t_step)
-        endif
         do state = 1,self%p_ptr%nstates
-            write(shell_label,'(A,I0)') 'state=', state
             base = (state - 1) * nprojs
             invtau2_even = 0.d0
             invtau2_odd  = 0.d0
-            if( self%p_ptr%l_ml_reg )then
-                if( L_BENCH_GLOB ) t_step = tic()
-                call self%obsfields(state)%even%calc_invtau2(kspan, fsc_prior_states(:,state), real(self%p_ptr%tau,dp), &
-                    &prior_start, invtau2_even)
-                call self%obsfields(state)%odd%calc_invtau2( kspan, fsc_prior_states(:,state), real(self%p_ptr%tau,dp), &
-                    &prior_start, invtau2_odd )
-                if( L_BENCH_GLOB ) rt_calc_invtau2 = rt_calc_invtau2 + toc(t_step)
-            endif
-            call self%obsfields(state)%restore_field(kspan, invtau2_even, invtau2_odd, prior_start)
-            invtau2_even = 0.d0
-            invtau2_odd  = 0.d0
-            extract_prior_start = self%interpklim + 1
             if( L_BENCH_GLOB ) t_step = tic()
-            call self%obsfields(state)%extract_restored_polar(reforis, nrefs, kspan, hcoords, kcoords, &
+            call self%obsfields(state)%restore_field(kspan, invtau2_even, invtau2_odd, prior_start)
+            if( L_BENCH_GLOB ) rt_shell_restore = rt_shell_restore + toc(t_step)
+            if( L_BENCH_GLOB ) t_step = tic()
+            call self%obsfields(state)%extract_restored_shell_cache_polar(reforis, nrefs, kspan, hcoords, kcoords, &
                 &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
                 &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs))
-            if( shell_cache_geom_live )then
-                allocate(cache_even(self%pftsz,kspan(2)-kspan(1)+1,nrefs), source=DCMPLX_ZERO)
-                allocate(cache_odd( self%pftsz,kspan(2)-kspan(1)+1,nrefs), source=DCMPLX_ZERO)
-                allocate(cache_merg(self%pftsz,kspan(2)-kspan(1)+1,nrefs), source=DCMPLX_ZERO)
-                call self%obsfields(state)%extract_restored_shell_cache_polar(reforis, nrefs, kspan, shell_geom, hcoords, kcoords, &
-                    &cache_even, cache_odd, cache_merg)
-                call self%obsfields(state)%log_shell_cache_extract_compare(trim(shell_label), &
-                    &self%pfts_even(:,kspan(1):kspan(2),base+1:base+nrefs), &
-                    &self%pfts_odd( :,kspan(1):kspan(2),base+1:base+nrefs), &
-                    &self%pfts_merg(:,kspan(1):kspan(2),base+1:base+nrefs), &
-                    &cache_even, cache_odd, cache_merg)
-                deallocate(cache_even, cache_odd, cache_merg)
-            endif
-            if( L_BENCH_GLOB ) rt_extract_polar = rt_extract_polar + toc(t_step)
-            if( write_cartesian_vols )then
-                ! Keep the Cartesian stage representative tied to the same restored
-                ! obsfield that generated the polar references at the stage handoff.
-                volname = refine3D_state_vol_fname(state)
-                if( L_BENCH_GLOB ) t_step = tic()
-                call self%obsfields(state)%write_merged_volume(volname, self%p_ptr%box_crop, self%p_ptr%smpd_crop, &
-                    &kspan, invtau2_even, invtau2_odd, extract_prior_start, real(self%p_ptr%box))
-                if( L_BENCH_GLOB ) rt_write_volume = rt_write_volume + toc(t_step)
-            endif
+            if( L_BENCH_GLOB ) rt_shell_extract = rt_shell_extract + toc(t_step)
         enddo
-        if( write_cartesian_vols ) call volname%kill
-        if( shell_cache_geom_live )then
-            call shell_geom%kill
-            call shell_sym%kill
-        endif
-        call write_obsfield_vols_arg%kill
         if( L_BENCH_GLOB ) t_step = tic()
         call mirror_slices_obsfield( self, reforis )
         if( L_BENCH_GLOB ) rt_mirror = rt_mirror + toc(t_step)
         if( use_trail_rec )then
             if( L_BENCH_GLOB ) t_step = tic()
+            ! Obsfield now restores shell data directly; trailing remains a
+            ! reprojection-space blend just like the polar=yes path.
             call apply_reprojection_trail_rec(self, ufrac_trec, prev_even, prev_odd, prev_merg, have_prev_merg)
             if( L_BENCH_GLOB ) rt_blend_prev = rt_blend_prev + toc(t_step)
         endif
@@ -621,62 +498,12 @@ contains
             if( size(bench) >= 4  ) bench(4)  = rt_prev_read
             if( size(bench) >= 5  ) bench(5)  = rt_blend_prev
             if( size(bench) >= 6  ) bench(6)  = rt_lowres_insert
-            if( size(bench) >= 7  ) bench(7)  = rt_calc_invtau2
-            if( size(bench) >= 8  ) bench(8)  = rt_extract_polar
-            if( size(bench) >= 9  ) bench(9)  = rt_write_volume
+            if( size(bench) >= 7  ) bench(7)  = rt_shell_restore
+            if( size(bench) >= 8  ) bench(8)  = rt_shell_extract
             if( size(bench) >= 11 ) bench(11) = rt_mirror
             if( size(bench) >= 12 ) bench(12) = rt_fsc_frc
         endif
     end subroutine polar_cavger_normalize_obsfield_refs
-
-    subroutine log_shell_geom_accum_smoke( geom, label, verbose )
-        type(shell_field_geom), intent(in) :: geom
-        character(len=*),       intent(in) :: label
-        logical, optional,      intent(in) :: verbose
-        integer, allocatable :: shell_cells(:)
-        real(dp) :: cells_per_node, nodes_per_cell
-        integer :: ik, kfromto(2), shell, node_first, node_last, range_nodes, shell_nodes
-        integer :: nk, nsym, total_nodes, total_cells, empty_ranges, range_mismatch
-        logical :: l_verbose
-        if( .not. geom%is_initialized() ) return
-        l_verbose = .false.
-        if( present(verbose) ) l_verbose = verbose
-        call geom%get_kfromto(kfromto)
-        call geom%get_shell_cell_counts(shell_cells)
-        nk = geom%get_nk()
-        if( nk < 1 .or. size(shell_cells) /= nk )then
-            if( allocated(shell_cells) ) deallocate(shell_cells)
-            return
-        endif
-        nsym           = geom%get_nsym()
-        total_nodes    = geom%get_total_nodes()
-        total_cells    = sum(shell_cells)
-        empty_ranges   = 0
-        range_mismatch = 0
-        do ik = 1,nk
-            shell = kfromto(1) + ik - 1
-            call geom%get_shell_node_range(shell, node_first, node_last)
-            range_nodes = max(0, node_last - node_first + 1)
-            shell_nodes = geom%get_shell_node_count(shell)
-            if( range_nodes < 1 ) empty_ranges = empty_ranges + 1
-            if( range_nodes /= shell_nodes ) range_mismatch = range_mismatch + 1
-            if( l_verbose )then
-                cells_per_node = real(shell_cells(ik),dp) / real(max(1,shell_nodes),dp)
-                write(logfhandle,'(A,1X,A,2X,A,I4,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3)') &
-                    &'obsfield shell-accum smoke', trim(label), 'k=', shell, &
-                    &'field_nodes=', shell_nodes, 'cart_cells=', shell_cells(ik), &
-                    &'node_first=', node_first, 'node_last=', node_last, 'cells_per_node=', cells_per_node
-            endif
-        enddo
-        nodes_per_cell = real(total_nodes,dp) / real(max(1,total_cells),dp)
-        cells_per_node = real(total_cells,dp) / real(max(1,total_nodes),dp)
-        write(logfhandle,'(A,1X,A,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,I0,2X,A,F8.3,2X,A,F8.3,2X,A,I0,2X,A,I0,2X,A,I0)') &
-            &'obsfield shell-accum smoke summary', trim(label), 'nk=', nk, 'nsym=', nsym, &
-            &'field_nodes=', total_nodes, 'cart_cells=', total_cells, &
-            &'nodes_per_cell=', nodes_per_cell, 'cells_per_node=', cells_per_node, &
-            &'empty_ranges=', empty_ranges, 'range_mismatch=', range_mismatch, 'cart_cells_max=', maxval(shell_cells)
-        deallocate(shell_cells)
-    end subroutine log_shell_geom_accum_smoke
 
     subroutine insert_lowres_merged_refs( self, fsc_boxcrop, ref_first, ref_last, find4eoavg )
         class(polarft_calc), intent(inout) :: self

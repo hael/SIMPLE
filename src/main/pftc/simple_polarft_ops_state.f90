@@ -3,6 +3,7 @@ submodule (simple_polarft_calc) simple_polarft_ops_state
 use simple_memoize_ft_maps, only: memoize_ft_maps
 use simple_refine3D_fnames, only: refine3D_obsfield_part_fname
 use simple_fgrid_obsfield,  only: fgrid_obsfield_eo
+use simple_shell_field_geom, only: shell_field_geom
 implicit none
 #include "simple_local_flags.inc"
 
@@ -74,6 +75,10 @@ contains
     subroutine ensure_obsfields_allocated( self )
         class(polarft_calc), intent(inout) :: self
         integer :: lims(3,2), istate, nyq_obsfield
+        integer, allocatable :: shell_cell_counts(:)
+        integer :: kspan(2), shell_budget
+        type(shell_field_geom) :: shell_geom
+        type(sym) :: shell_sym
         if( allocated(self%obsfields) ) return
         call obsfield_lims_from_params(self, lims)
         nyq_obsfield = obsfield_interp_limit(self)
@@ -81,6 +86,22 @@ contains
         do istate = 1, self%p_ptr%nstates
             call self%obsfields(istate)%new(lims, nyq_obsfield)
         enddo
+        kspan = [self%kfromto(1), self%interpklim]
+        call self%obsfields(1)%even%count_shell_cell_counts(kspan, shell_cell_counts)
+        shell_budget = sum(shell_cell_counts)
+        call shell_sym%new(self%p_ptr%pgrp)
+        call shell_geom%new(shell_sym, kspan, shell_budget, shell_cell_counts)
+        do istate = 1, self%p_ptr%nstates
+            call self%obsfields(istate)%init_shell_cache(shell_geom)
+        enddo
+        if( trim(self%p_ptr%obsfield_shell_stats) == 'yes' )then
+            call shell_geom%log_stats('primary_shells')
+        else
+            call shell_geom%log_summary('primary_shells')
+        endif
+        deallocate(shell_cell_counts)
+        call shell_geom%kill
+        call shell_sym%kill
     end subroutine ensure_obsfields_allocated
 
     module subroutine polar_cavger_set_ref_pft( self, icls, which )

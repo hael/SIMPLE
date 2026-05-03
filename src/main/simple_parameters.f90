@@ -247,7 +247,6 @@ type :: parameters
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: polar='no'           !< Polar restoration mode(no|yes|obsfield){no}
-    character(len=STDLEN)     :: obsfield_shell_repr='no' !< Development spherical-shell obsfield path(no|geom|compare|yes){no}
     character(len=STDLEN)     :: obsfield_shell_stats='no' !< Print spherical-shell geometry diagnostics(yes|no){no}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
@@ -817,7 +816,6 @@ contains
         call check_carg('platonic',       self%platonic)
         call check_carg('plot_key',       self%plot_key)
         call check_carg('polar',          self%polar)
-        call check_carg('obsfield_shell_repr',  self%obsfield_shell_repr)
         call check_carg('obsfield_shell_stats', self%obsfield_shell_stats)
         call check_carg('postprocess',    self%postprocess)
         call check_carg('pre_norm',       self%pre_norm)
@@ -1652,11 +1650,6 @@ contains
                 self%l_polar = .true.
             case DEFAULT
                 THROW_HARD('Unsupported POLAR argument: '//trim(self%polar))
-        end select
-        select case(trim(self%obsfield_shell_repr))
-            case('no','geom','compare','yes')
-            case DEFAULT
-                THROW_HARD('Unsupported obsfield_shell_repr argument: '//trim(self%obsfield_shell_repr))
         end select
         select case(trim(self%obsfield_shell_stats))
             case('no','yes')
