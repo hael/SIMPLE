@@ -426,12 +426,20 @@ contains
         end subroutine maybe_init_reconstruction
 
         subroutine build_batch_particles_local()
+            logical :: need_rec_imgs
+            need_rec_imgs = ctrl%do_write_partial_recs .and. (.not. ctrl%do_projrec) .and. &
+                &((.not. ctrl%do_polar) .or. trim(ctrl%polar_mode) == 'obsfield')
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             if( ctrl%do_polar )then
                 select case(ctrl%polar_mode)
                     case('obsfield')
-                        call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                            ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
+                        if( need_rec_imgs )then
+                            call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                                ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(:batchsz))
+                        else
+                            call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                                ptcl_match_imgs, ptcl_match_imgs_pad)
+                        endif
                     case('yes')
                         call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
                             ptcl_match_imgs, ptcl_match_imgs_pad)
@@ -439,9 +447,9 @@ contains
                         THROW_HARD('unsupported POLAR mode: '//ctrl%polar_mode)
                 end select
             else
-                if( ctrl%do_write_partial_recs )then
+                if( need_rec_imgs )then
                     call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                        ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(1:batchsz))
+                        ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(:batchsz))
                 else
                     call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
                         ptcl_match_imgs, ptcl_match_imgs_pad)
