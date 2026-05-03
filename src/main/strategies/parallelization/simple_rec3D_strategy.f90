@@ -159,8 +159,15 @@ contains
         ! Reconstruction kernel
         if( params%l_polar) then
             call cline%set('force_volassemble', 'yes')
-            call set_bp_range3D(params, build, cline)
-            call calc_polar_partials( params, build, cline, nptcls2update, pinds )
+            select case(trim(params%polar))
+                case('yes')
+                    call set_bp_range3D(params, build, cline)
+                    call calc_polar_partials( params, build, nptcls2update, pinds )
+                case('obsfield')
+                    call calc_3Drec( params, build, cline, nptcls2update, pinds )
+                case default
+                    THROW_HARD('unsupported POLAR mode for rec3D strategy: '//trim(params%polar))
+            end select
             cline_volassemble = cline
             call cline_volassemble%set('prg',  'volassemble')
             call cline_volassemble%set('nthr', params%nthr)
@@ -248,7 +255,11 @@ contains
         if( fall_over ) THROW_HARD('No images found!')
         ! avoid nested directory structure for jobs
         call cline%set('mkdir', 'no')
-        if( params%l_polar ) call cline%set('prg', 'polar_reconstruct3D')
+        if( trim(params%polar) == 'yes' )then
+            call cline%set('prg', 'polar_reconstruct3D')
+        else if( trim(params%polar) == 'obsfield' )then
+            call cline%set('prg', 'reconstruct3D')
+        endif
         ! Even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo

@@ -369,9 +369,13 @@ contains
                     call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
                 else
                     if( ctrl%do_bench ) t_prep_ref_sections = tic()
-                    call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
-                    call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
-                    call write_polar_refs_from_current_pftc(p_ptr, b_ptr, skip_distr_nonroot=.true.)
+                    if( polar_ref_sections_available(p_ptr) )then
+                        call prep_pftc4align3D(p_ptr, b_ptr, cline, batchsz_max)
+                    else
+                        call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
+                        call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
+                        call write_polar_refs_from_current_pftc(p_ptr, b_ptr, skip_distr_nonroot=.true.)
+                    endif
                     if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
                 endif
             endif

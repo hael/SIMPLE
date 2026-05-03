@@ -170,11 +170,13 @@ contains
             &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
             THROW_HARD('incomplete multi-state volume source; provide vol1..volN or use POLAR_REFS; '//caller)
         endif
+        ! Refinement assembly owns the next-iteration POLAR_REFS* handoff.
+        ! Fresh starting volumes must invalidate stale refs before reaching here.
+        if( polar_ref_sections_available(params) ) return
         if( complete_volume_source_defined(cline, params%nstates) )then
             call materialize_polar_refs_from_volume_source(params, build, cline, batchsz, cleanup_pftc=.true.)
             return
         endif
-        if( polar_ref_sections_available(params) ) return
         if( complete_volume_source_available(params) )then
             call materialize_polar_refs_from_volume_source(params, build, cline, batchsz, cleanup_pftc=.true.)
             return

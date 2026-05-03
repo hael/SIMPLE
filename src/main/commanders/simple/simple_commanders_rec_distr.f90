@@ -19,10 +19,24 @@ type, extends(commander_base) :: commander_polar_volassemble
 end type commander_polar_volassemble
 
 type, extends(commander_base) :: commander_polar_rec3D_worker
-  ! Polar partial-reference worker for distributed reconstruct3D.
+  ! Legacy polar=yes partial-reference worker for distributed reconstruct3D.
   contains
     procedure :: execute => exec_polar_rec3D_worker
 end type commander_polar_rec3D_worker
+
+type :: cartesian_state_restore_timings
+    real(timer_int_kind) :: read                  = 0.
+    real(timer_int_kind) :: sum_reduce            = 0.
+    real(timer_int_kind) :: sum_eos               = 0.
+    real(timer_int_kind) :: eos_restore_total     = 0.
+    real(timer_int_kind) :: prev_ref_read         = 0.
+    real(timer_int_kind) :: prev_fsc_prior        = 0.
+    real(timer_int_kind) :: fsc_bookkeeping       = 0.
+    real(timer_int_kind) :: sum_restore           = 0.
+    real(timer_int_kind) :: lowres_insert         = 0.
+    real(timer_int_kind) :: trailing_refs         = 0.
+    real(timer_int_kind) :: eoavg                 = 0.
+end type cartesian_state_restore_timings
 
 contains
 
@@ -39,7 +53,9 @@ contains
         integer              :: nptcls2update
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
-        if( .not. params%l_polar ) THROW_HARD('polar_rec3D worker requires POLAR=yes|obsfield')
+        if( trim(params%polar) /= 'yes' )then
+            THROW_HARD('polar_rec3D worker requires POLAR=yes; polar=obsfield uses reconstruct3D workers')
+        endif
         if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds)
         else
@@ -51,7 +67,7 @@ contains
             call build%esig%read_groups(build%spproj_field)
         end if
         call set_bp_range3D(params, build, cline)
-        call calc_polar_partials(params, build, cline, nptcls2update, pinds)
+        call calc_polar_partials(params, build, nptcls2update, pinds)
         if( allocated(pinds) ) deallocate(pinds)
         call build%esig%kill
         call build%kill_strategy3D_tbox
@@ -73,16 +89,17 @@ contains
         type(reconstructor_eo) :: eorecvol_read
         type(class_frcs)       :: obs_frcs
         type(image)            :: vol_prev_even, vol_prev_odd, gridcorr_img, vol_e, vol_merged
-        type(string)           :: recname, volname, volname_prev, fsc_file, fsc_txt_file
-        type(string)           :: volname_prev_even, volname_prev_odd, eonames(2), benchfname
-        real, allocatable      :: fsc(:), fsc_state(:)
+        type(string)           :: volname, fsc_file
+        type(string)           :: eonames(2), benchfname
+        type(cartesian_state_restore_timings) :: restore_timings
+        real, allocatable      :: fsc_state(:)
         integer(timer_int_kind) :: t_tot, t_setup, t_reduce, t_normalize, t_resolution, t_write, t_cleanup
         integer(timer_int_kind) :: t_obs_detail
         real(timer_int_kind)    :: rt_tot, rt_setup, rt_reduce, rt_normalize, rt_resolution, rt_write, rt_cleanup
         real(timer_int_kind)    :: rt_cmp_restore, rt_cmp_accounted
         real(timer_int_kind)    :: rt_obs_reduce_detail(2), rt_obs_norm_detail(20)
-        real                   :: update_frac_eff, update_frac_trail_rec, weight_prev
-        integer :: fnr, nrefs, state, part, numlen_part, find4eoavg, ldim(3), ldim_pd(3), iproj, iref
+        real                   :: update_frac_eff, update_frac_trail_rec, res05, res0143
+        integer :: fnr, nrefs, state, numlen_part, ldim(3), ldim_pd(3), iproj, iref
         logical :: l_refs_written
         rt_tot               = 0.
         rt_setup             = 0.
@@ -139,117 +156,10 @@ contains
                 gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params%smpd_crop)
                 call obs_frcs%new(params%nspace, params%box_crop, params%smpd_crop, params%nstates)
                 do state = 1, params%nstates
-                    call build%eorecvol%reset_all
-                    do part = 1, params%nparts
-                        if( L_BENCH_GLOB ) t_obs_detail = tic()
-                        call eorecvol_read%read_eos(refine3D_partial_rec_fbody(state, part, numlen_part))
-                        if( L_BENCH_GLOB )then
-                            rt_obs_reduce_detail(1) = rt_obs_reduce_detail(1) + toc(t_obs_detail)
-                            t_obs_detail = tic()
-                        endif
-                        call build%eorecvol%sum_reduce(eorecvol_read)
-                        if( L_BENCH_GLOB ) rt_obs_reduce_detail(2) = rt_obs_reduce_detail(2) + toc(t_obs_detail)
-                    enddo
                     if( L_BENCH_GLOB ) t_normalize = tic()
-                    recname    = refine3D_state_vol_fbody(state)
-                    volname    = refine3D_state_vol_fname(state)
-                    eonames(1) = refine3D_state_halfvol_fname(state, 'even')
-                    eonames(2) = refine3D_state_halfvol_fname(state, 'odd')
-                    if( params%l_ml_reg )then
-                        ! The Cartesian path sums even/odd after ML regularization.
-                    else
-                        call build%eorecvol%sum_eos
-                    endif
-                    if( params%l_trail_rec )then
-                        if( cline%defined('vol'//int2str(state)) )then
-                            volname_prev = cline%get_carg('vol'//int2str(state))
-                        else
-                            volname_prev = refine3D_state_vol_fname(state)
-                        endif
-                        volname_prev_even = add2fbody(volname_prev, MRC_EXT, '_even')
-                        volname_prev_odd  = add2fbody(volname_prev, MRC_EXT, '_odd')
-                        if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//volname_prev_even%to_char()//' does not exist!')
-                        if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//volname_prev_odd%to_char()//' does not exist!')
-                        if( L_BENCH_GLOB ) t_obs_detail = tic()
-                        call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
-                        call vol_prev_odd%read_and_crop( volname_prev_odd,  params%smpd, params%box_crop, params%smpd_crop)
-                        if( L_BENCH_GLOB ) rt_obs_norm_detail(4) = rt_obs_norm_detail(4) + toc(t_obs_detail)
-                        if( allocated(fsc) ) deallocate(fsc)
-                        if( L_BENCH_GLOB ) t_obs_detail = tic()
-                        call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
-                        call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc)
-                        if( L_BENCH_GLOB ) rt_obs_norm_detail(12) = rt_obs_norm_detail(12) + toc(t_obs_detail)
-                    else
-                        if( L_BENCH_GLOB ) t_obs_detail = tic()
-                        call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
-                        if( L_BENCH_GLOB ) rt_obs_norm_detail(12) = rt_obs_norm_detail(12) + toc(t_obs_detail)
-                    endif
-                    if( cline%defined('which_iter') )then
-                        fsc_txt_file = refine3D_resolution_txt_fbody(state, params%which_iter)
-                    else
-                        fsc_txt_file = refine3D_resolution_txt_fbody(state)
-                    endif
-                    call build%eorecvol%write_fsc2txt(fsc_txt_file)
-                    if( params%l_ml_reg ) call build%eorecvol%sum_eos
-                    if( L_BENCH_GLOB ) t_obs_detail = tic()
-                    call build%eorecvol%sampl_dens_correct_sum(build%vol)
-                    if( L_BENCH_GLOB ) rt_obs_norm_detail(7) = rt_obs_norm_detail(7) + toc(t_obs_detail)
-                    if( L_BENCH_GLOB ) t_obs_detail = tic()
-                    call build%vol%fft
-                    if( .not. params%l_lpset )then
-                        call build%vol2%zero_and_unflag_ft
-                        call build%vol2%read(eonames(1))
-                        call build%vol2%fft()
-                        call build%vol2%insert_lowres(build%vol, find4eoavg)
-                        call build%vol2%ifft()
-                        call build%vol2%mul(gridcorr_img)
-                        call build%vol2%write(eonames(1), del_if_exists=.true.)
-                        call vol_e%copy(build%vol2)
-                        call build%vol2%zero_and_unflag_ft
-                        call build%vol2%read(eonames(2))
-                        call build%vol2%fft()
-                        call build%vol2%insert_lowres(build%vol, find4eoavg)
-                        call build%vol2%ifft()
-                        call build%vol2%mul(gridcorr_img)
-                        call build%vol2%write(eonames(2), del_if_exists=.true.)
-                    endif
-                    ! Search handoff starts from the corrected summed reconstruction.
-                    ! Gold-standard mode also docks the even/odd maps at low resolution;
-                    ! lp-set mode skips that and uses a merged trailed volume below.
-                    call build%vol%ifft
-                    call build%vol%mul(gridcorr_img)
-                    call build%vol%write(volname, del_if_exists=.true.)
-                    call wait_for_closure(volname)
-                    call vol_merged%copy(build%vol)
-                    if( params%l_lpset )then
-                        if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
-                            call build%vol%read(eonames(1))
-                            call build%vol2%read(eonames(2))
-                        endif
-                    else
-                        call build%vol%copy(vol_e)
-                    endif
-                    if( L_BENCH_GLOB ) rt_obs_norm_detail(6) = rt_obs_norm_detail(6) + toc(t_obs_detail)
-                    if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
-                        if( L_BENCH_GLOB ) t_obs_detail = tic()
-                        weight_prev = 1. - update_frac_trail_rec
-                        call vol_prev_even%mul(weight_prev)
-                        call vol_prev_odd%mul(weight_prev)
-                        call build%vol%mul(update_frac_trail_rec)
-                        call build%vol2%mul(update_frac_trail_rec)
-                        call build%vol%add(vol_prev_even)
-                        call build%vol2%add(vol_prev_odd)
-                        call build%vol%write(eonames(1))
-                        call build%vol2%write(eonames(2))
-                        if( params%l_lpset )then
-                            call vol_merged%copy(build%vol)
-                            call vol_merged%add(build%vol2)
-                            call vol_merged%mul(0.5)
-                            call vol_merged%write(volname, del_if_exists=.true.)
-                            call wait_for_closure(volname)
-                        endif
-                        if( L_BENCH_GLOB ) rt_obs_norm_detail(5) = rt_obs_norm_detail(5) + toc(t_obs_detail)
-                    endif
+                    call restore_cartesian_state_from_partials(params, build, cline, eorecvol_read, state, &
+                        &numlen_part, update_frac_trail_rec, gridcorr_img, vol_prev_even, vol_prev_odd, &
+                        &vol_e, vol_merged, .true., volname, eonames, res05, res0143, restore_timings)
                     if( L_BENCH_GLOB ) t_obs_detail = tic()
                     if( params%l_lpset )then
                         call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
@@ -286,10 +196,16 @@ contains
                         call obs_frcs%set_frc(iproj, fsc_state, state)
                     enddo
                     if( allocated(fsc_state) ) deallocate(fsc_state)
-                    call vol_prev_even%kill
-                    call vol_prev_odd%kill
                     if( L_BENCH_GLOB ) rt_normalize = rt_normalize + toc(t_normalize)
                 enddo
+                rt_obs_reduce_detail(1) = restore_timings%read
+                rt_obs_reduce_detail(2) = restore_timings%sum_reduce
+                rt_obs_norm_detail(4)  = restore_timings%prev_ref_read
+                rt_obs_norm_detail(5)  = restore_timings%trailing_refs
+                rt_obs_norm_detail(6)  = restore_timings%lowres_insert
+                rt_obs_norm_detail(7)  = restore_timings%sum_restore
+                rt_obs_norm_detail(11) = restore_timings%prev_fsc_prior
+                rt_obs_norm_detail(12) = restore_timings%fsc_bookkeeping
                 call obs_frcs%write(string(FRCS_FILE))
                 call obs_frcs%kill
                 if( L_BENCH_GLOB ) t_write = tic()
@@ -300,13 +216,7 @@ contains
                 call vol_e%kill
                 call vol_merged%kill
                 call fsc_file%kill
-                call fsc_txt_file%kill
-                call recname%kill
                 call volname%kill
-                call volname_prev%kill
-                call volname_prev_even%kill
-                call volname_prev_odd%kill
-                if( allocated(fsc) ) deallocate(fsc)
                 if( allocated(fsc_state) ) deallocate(fsc_state)
                 if( L_BENCH_GLOB ) rt_reduce = rt_obs_reduce_detail(1) + rt_obs_reduce_detail(2)
             case('yes')
@@ -364,6 +274,7 @@ contains
             write(fnr,'(a)') '*** COMPARABLE DETAIL TIMINGS (s) ***'
             write(fnr,'(a,t52,f9.2)') 'volassemble direct volume restore   : ', rt_obs_norm_detail(7)
             write(fnr,'(a,t52,f9.2)') 'volassemble direct polar projection : ', rt_obs_norm_detail(8)
+            write(fnr,'(a,t52,f9.2)') 'volassemble previous FSC/prior      : ', rt_obs_norm_detail(11)
             write(fnr,'(a,t52,f9.2)') 'volassemble previous reference read : ', rt_obs_norm_detail(4)
             write(fnr,'(a,t52,f9.2)') 'volassemble trailing blend/vols     : ', rt_obs_norm_detail(5)
             write(fnr,'(a,t52,f9.2)') 'volassemble lowres even/odd insert  : ', rt_obs_norm_detail(6)
@@ -384,6 +295,7 @@ contains
                     write(fnr,'(a,t52,f9.2)') 'volassemble lowres even/odd insert       : ', rt_obs_norm_detail(6)
                     write(fnr,'(a,t52,f9.2)') 'volassemble direct volume restore        : ', rt_obs_norm_detail(7)
                     write(fnr,'(a,t52,f9.2)') 'volassemble direct polar projection      : ', rt_obs_norm_detail(8)
+                    write(fnr,'(a,t52,f9.2)') 'volassemble previous FSC/prior           : ', rt_obs_norm_detail(11)
                     write(fnr,'(a,t52,f9.2)') 'volassemble FSC/FRC bookkeeping          : ', rt_obs_norm_detail(12)
                 case('yes')
                     write(fnr,'(a,t52,f9.2)') 'volassemble reduce polar sums           : ', rt_reduce
@@ -464,6 +376,164 @@ contains
         if( allocated(has_fsc)  ) deallocate(has_fsc)
     end subroutine update_polar_resolution_fields
 
+    subroutine restore_cartesian_state_from_partials( params, build, cline, eorecvol_read, state, numlen_part, &
+        &update_frac_trail_rec, gridcorr_img, vol_prev_even, vol_prev_odd, vol_e, vol_merged, keep_merged, &
+        &volname, eonames, res05, res0143, timings )
+        use simple_reconstructor_eo, only: reconstructor_eo
+        type(parameters),                       intent(in)    :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(in)    :: cline
+        type(reconstructor_eo),                 intent(inout) :: eorecvol_read
+        integer,                                intent(in)    :: state, numlen_part
+        real,                                   intent(in)    :: update_frac_trail_rec
+        type(image),                            intent(inout) :: gridcorr_img
+        type(image),                            intent(inout) :: vol_prev_even, vol_prev_odd, vol_e, vol_merged
+        logical,                                intent(in)    :: keep_merged
+        type(string),                           intent(inout) :: volname, eonames(2)
+        real,                                   intent(out)   :: res05, res0143
+        type(cartesian_state_restore_timings),  intent(inout) :: timings
+        type(string) :: volname_prev, volname_prev_even, volname_prev_odd, fsc_txt_file
+        real, allocatable :: fsc(:)
+        real    :: weight_prev
+        integer :: part, find4eoavg
+        integer(timer_int_kind) :: t_read, t_sum_reduce, t_sum_eos, t_eos_restore
+        integer(timer_int_kind) :: t_prev_ref_read, t_prev_fsc_prior, t_fsc_bookkeeping
+        integer(timer_int_kind) :: t_sum_restore, t_eoavg, t_lowres_insert, t_trailing_refs
+        call build%eorecvol%reset_all
+        do part = 1, params%nparts
+            if( L_BENCH_GLOB ) t_read = tic()
+            call eorecvol_read%read_eos(refine3D_partial_rec_fbody(state, part, numlen_part))
+            if( L_BENCH_GLOB )then
+                timings%read = timings%read + toc(t_read)
+                t_sum_reduce = tic()
+            endif
+            call build%eorecvol%sum_reduce(eorecvol_read)
+            if( L_BENCH_GLOB ) timings%sum_reduce = timings%sum_reduce + toc(t_sum_reduce)
+        enddo
+        volname    = refine3D_state_vol_fname(state)
+        eonames(1) = refine3D_state_halfvol_fname(state, 'even')
+        eonames(2) = refine3D_state_halfvol_fname(state, 'odd')
+        if( params%l_ml_reg )then
+            ! The sum is done after regularization.
+        else
+            if( L_BENCH_GLOB ) t_sum_eos = tic()
+            call build%eorecvol%sum_eos
+            if( L_BENCH_GLOB ) timings%sum_eos = timings%sum_eos + toc(t_sum_eos)
+        endif
+        if( L_BENCH_GLOB ) t_eos_restore = tic()
+        if( params%l_trail_rec )then
+            if( .not. cline%defined('vol'//int2str(state)) )then
+                THROW_HARD('vol'//int2str(state)//' required in volassemble cline when trail_rec==yes')
+            endif
+            volname_prev      = cline%get_carg('vol'//int2str(state))
+            volname_prev_even = add2fbody(volname_prev, MRC_EXT, '_even')
+            volname_prev_odd  = add2fbody(volname_prev, MRC_EXT, '_odd')
+            if( .not. file_exists(volname_prev_even) )then
+                THROW_HARD('File: '//volname_prev_even%to_char()//' does not exist!')
+            endif
+            if( .not. file_exists(volname_prev_odd) )then
+                THROW_HARD('File: '//volname_prev_odd%to_char()//' does not exist!')
+            endif
+            if( L_BENCH_GLOB ) t_prev_ref_read = tic()
+            call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
+            call vol_prev_odd%read_and_crop( volname_prev_odd,  params%smpd, params%box_crop, params%smpd_crop)
+            if( L_BENCH_GLOB ) timings%prev_ref_read = timings%prev_ref_read + toc(t_prev_ref_read)
+            if( allocated(fsc) ) deallocate(fsc)
+            if( L_BENCH_GLOB )then
+                t_fsc_bookkeeping = tic()
+                t_prev_fsc_prior  = tic()
+            endif
+            call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
+            if( L_BENCH_GLOB ) timings%prev_fsc_prior = timings%prev_fsc_prior + toc(t_prev_fsc_prior)
+            call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc)
+            if( L_BENCH_GLOB ) timings%fsc_bookkeeping = timings%fsc_bookkeeping + toc(t_fsc_bookkeeping)
+        else
+            if( L_BENCH_GLOB ) t_fsc_bookkeeping = tic()
+            call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
+            if( L_BENCH_GLOB ) timings%fsc_bookkeeping = timings%fsc_bookkeeping + toc(t_fsc_bookkeeping)
+        endif
+        if( cline%defined('which_iter') )then
+            fsc_txt_file = refine3D_resolution_txt_fbody(state, params%which_iter)
+        else
+            fsc_txt_file = refine3D_resolution_txt_fbody(state)
+        endif
+        call build%eorecvol%write_fsc2txt(fsc_txt_file)
+        if( L_BENCH_GLOB ) timings%eos_restore_total = timings%eos_restore_total + toc(t_eos_restore)
+        if( params%l_ml_reg )then
+            if( L_BENCH_GLOB ) t_sum_eos = tic()
+            call build%eorecvol%sum_eos
+            if( L_BENCH_GLOB ) timings%sum_eos = timings%sum_eos + toc(t_sum_eos)
+        endif
+        call build%eorecvol%get_res(res05, res0143)
+        if( L_BENCH_GLOB ) t_sum_restore = tic()
+        call build%eorecvol%sampl_dens_correct_sum(build%vol)
+        if( L_BENCH_GLOB ) timings%sum_restore = timings%sum_restore + toc(t_sum_restore)
+        if( L_BENCH_GLOB )then
+            t_eoavg         = tic()
+            t_lowres_insert = tic()
+        endif
+        call build%vol%fft
+        if( .not. params%l_lpset )then
+            call build%vol2%zero_and_unflag_ft
+            call build%vol2%read(eonames(1))
+            call build%vol2%fft()
+            call build%vol2%insert_lowres(build%vol, find4eoavg)
+            call build%vol2%ifft()
+            call build%vol2%mul(gridcorr_img)
+            call build%vol2%write(eonames(1), del_if_exists=.true.)
+            call vol_e%copy(build%vol2)
+            call build%vol2%zero_and_unflag_ft
+            call build%vol2%read(eonames(2))
+            call build%vol2%fft()
+            call build%vol2%insert_lowres(build%vol, find4eoavg)
+            call build%vol2%ifft()
+            call build%vol2%mul(gridcorr_img)
+            call build%vol2%write(eonames(2), del_if_exists=.true.)
+        endif
+        call build%vol%ifft
+        call build%vol%mul(gridcorr_img)
+        call build%vol%write(volname, del_if_exists=.true.)
+        call wait_for_closure(volname)
+        if( keep_merged ) call vol_merged%copy(build%vol)
+        if( params%l_lpset )then
+            if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
+                call build%vol%read(eonames(1))
+                call build%vol2%read(eonames(2))
+            endif
+        else
+            call build%vol%copy(vol_e)
+        endif
+        if( L_BENCH_GLOB ) timings%lowres_insert = timings%lowres_insert + toc(t_lowres_insert)
+        if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
+            if( L_BENCH_GLOB ) t_trailing_refs = tic()
+            weight_prev = 1. - update_frac_trail_rec
+            call vol_prev_even%mul(weight_prev)
+            call vol_prev_odd%mul(weight_prev)
+            call build%vol%mul(update_frac_trail_rec)
+            call build%vol2%mul(update_frac_trail_rec)
+            call build%vol%add(vol_prev_even)
+            call build%vol2%add(vol_prev_odd)
+            call build%vol%write(eonames(1))
+            call build%vol2%write(eonames(2))
+            if( params%l_lpset )then
+                call vol_merged%copy(build%vol)
+                call vol_merged%add(build%vol2)
+                call vol_merged%mul(0.5)
+                call vol_merged%write(volname, del_if_exists=.true.)
+                call wait_for_closure(volname)
+            endif
+            if( L_BENCH_GLOB ) timings%trailing_refs = timings%trailing_refs + toc(t_trailing_refs)
+        endif
+        if( L_BENCH_GLOB ) timings%eoavg = timings%eoavg + toc(t_eoavg)
+        call vol_prev_even%kill
+        call vol_prev_odd%kill
+        call fsc_txt_file%kill
+        call volname_prev%kill
+        call volname_prev_even%kill
+        call volname_prev_odd%kill
+        if( allocated(fsc) ) deallocate(fsc)
+    end subroutine restore_cartesian_state_from_partials
+
     subroutine exec_cartesian_assembly( self, cline )
         use simple_reconstructor_eo,        only: reconstructor_eo
         use simple_gridding,                only: prep3D_inv_instrfun4mul
@@ -484,21 +554,19 @@ contains
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
         type(image_msk)               :: mskvol
         type(image_bin)               :: state_mask_bin
-        type(string)                  :: recname, volname, volname_prev, fsc_txt_file
-        type(string)                  :: volname_prev_even, volname_prev_odd
+        type(string)                  :: volname
         type(string)                  :: eonames(2), eonames_nu(2), volname_nu, benchfname, write_polar_refs_arg
+        type(cartesian_state_restore_timings) :: restore_timings
         type(vol_pproc_plan) :: pp_plan
         logical, allocatable          :: l_mask(:,:,:)
         logical                       :: l_nonuniform_mode, l_write_polar_refs
         integer, allocatable          :: imat(:,:,:)
-        real, allocatable             :: fsc(:), res05s(:), res0143s(:)
-        real                          :: weight_prev, update_frac_trail_rec, mskrad_px
-        integer                       :: part, state, iptcl, istate, find4eoavg, fnr, ldim(3), ldim_pd(3), numlen_part
+        real, allocatable             :: res05s(:), res0143s(:)
+        real                          :: update_frac_trail_rec, mskrad_px
+        integer                       :: state, iptcl, istate, fnr, ldim(3), ldim_pd(3), numlen_part
         integer                       :: which_iter
-        integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
-        integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_automask, t_nonuniform
+        integer(timer_int_kind)       :: t_init, t_automask, t_nonuniform
         integer(timer_int_kind)       :: t_project_refs, t_project_metadata, t_cleanup, t_tot
-        integer(timer_int_kind)       :: t_prev_ref_read, t_prev_fsc_prior, t_lowres_insert, t_trailing_refs
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
         real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_automask, rt_nonuniform
         real(timer_int_kind)          :: rt_project_refs, rt_project_metadata, rt_cleanup, rt_tot, rt_accounted
@@ -558,131 +626,12 @@ contains
         gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params%smpd_crop)
         ! assemble volumes
         do state=1,params%nstates
-            call build%eorecvol%reset_all
-            ! assemble volumes
-            do part=1,params%nparts
-                if( L_BENCH_GLOB ) t_read = tic()
-                call eorecvol_read%read_eos(refine3D_partial_rec_fbody(state, part, numlen_part))
-                ! sum the Fourier coefficients
-                if( L_BENCH_GLOB )then
-                    rt_read       = rt_read + toc(t_read)
-                    t_sum_reduce  = tic()
-                endif
-                call build%eorecvol%sum_reduce(eorecvol_read)
-                if( L_BENCH_GLOB ) rt_sum_reduce = rt_sum_reduce + toc(t_sum_reduce)
-            end do
-            ! correct for sampling density and estimate resolution
-            recname    = refine3D_state_vol_fbody(state)
-            volname    = refine3D_state_vol_fname(state)
-            eonames(1) = refine3D_state_halfvol_fname(state, 'even')
-            eonames(2) = refine3D_state_halfvol_fname(state, 'odd')
-            if( params%l_ml_reg )then
-                ! the sum is done after regularization
-            else
-                if( L_BENCH_GLOB ) t_sum_eos = tic()
-                call build%eorecvol%sum_eos
-                if( L_BENCH_GLOB ) rt_sum_eos = rt_sum_eos + toc(t_sum_eos)
-            endif
-            if( L_BENCH_GLOB ) t_sampl_dens_correct_eos = tic()
-            if( params%l_trail_rec )then
-                if( .not. cline%defined('vol'//int2str(state)) ) THROW_HARD('vol'//int2str(state)//' required in volassemble cline when trail_rec==yes')
-                volname_prev      = cline%get_carg('vol'//int2str(state))
-                volname_prev_even = add2fbody(volname_prev, MRC_EXT, '_even')
-                volname_prev_odd  = add2fbody(volname_prev, MRC_EXT, '_odd')
-                if( .not. file_exists(volname_prev_even) ) THROW_HARD('File: '//volname_prev_even%to_char()//' does not exist!')
-                if( .not. file_exists(volname_prev_odd)  ) THROW_HARD('File: '//volname_prev_odd%to_char()//' does not exist!')
-                if( L_BENCH_GLOB ) t_prev_ref_read = tic()
-                call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
-                call vol_prev_odd%read_and_crop( volname_prev_odd,  params%smpd, params%box_crop, params%smpd_crop)
-                if( L_BENCH_GLOB ) rt_prev_ref_read = rt_prev_ref_read + toc(t_prev_ref_read)
-                if( allocated(fsc) ) deallocate(fsc)
-                if( L_BENCH_GLOB ) t_prev_fsc_prior = tic()
-                call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
-                if( L_BENCH_GLOB ) rt_prev_fsc_prior = rt_prev_fsc_prior + toc(t_prev_fsc_prior)
-                call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc)
-            else 
-                call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
-            endif
-            if( cline%defined('which_iter') )then
-                fsc_txt_file = refine3D_resolution_txt_fbody(state, params%which_iter)
-            else
-                fsc_txt_file = refine3D_resolution_txt_fbody(state)
-            endif
-            call build%eorecvol%write_fsc2txt(fsc_txt_file)
-            if( L_BENCH_GLOB ) rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
-            if( params%l_ml_reg )then
-                if( L_BENCH_GLOB ) t_sum_eos = tic()
-                call build%eorecvol%sum_eos
-                if( L_BENCH_GLOB ) rt_sum_eos = rt_sum_eos + toc(t_sum_eos)
-            endif
-            call build%eorecvol%get_res(res05s(state), res0143s(state))
-            if( L_BENCH_GLOB ) t_sampl_dens_correct_sum = tic()
-            call build%eorecvol%sampl_dens_correct_sum( build%vol )
-            if( L_BENCH_GLOB ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
-            ! Gold-standard mode needs low-resolution insertion between
-            ! even/odd maps to keep the independent references docked.  In
-            ! lp-set mode the matcher consumes the merged full-volume path.
-            if( L_BENCH_GLOB ) t_eoavg = tic()
-            if( L_BENCH_GLOB ) t_lowres_insert = tic()
-            call build%vol%fft
-            if( .not. params%l_lpset )then
-                call build%vol2%zero_and_unflag_ft
-                call build%vol2%read(eonames(1))
-                call build%vol2%fft()
-                call build%vol2%insert_lowres(build%vol, find4eoavg)
-                call build%vol2%ifft()
-                call build%vol2%mul(gridcorr_img)
-                call build%vol2%write(eonames(1), del_if_exists=.true.)
-                call vol_e%copy(build%vol2)
-                call build%vol2%zero_and_unflag_ft
-                call build%vol2%read(eonames(2))
-                call build%vol2%fft()
-                call build%vol2%insert_lowres(build%vol, find4eoavg)
-                call build%vol2%ifft()
-                call build%vol2%mul(gridcorr_img)
-                call build%vol2%write(eonames(2), del_if_exists=.true.)
-            endif
-            ! Search handoff starts from the corrected summed reconstruction.
-            ! lp-set + trailing rewrites it below from the merged trailed maps.
-            call build%vol%ifft
-            call build%vol%mul(gridcorr_img)
-            call build%vol%write( volname, del_if_exists=.true. )
-            call wait_for_closure( volname )
-            if( params%l_lpset )then
-                if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
-                    call build%vol%read(eonames(1))
-                    call build%vol2%read(eonames(2))
-                endif
-            else
-                call build%vol%copy(vol_e)
-            endif
-            if( L_BENCH_GLOB ) rt_lowres_insert = rt_lowres_insert + toc(t_lowres_insert)
-            if( params%l_trail_rec .and. update_frac_trail_rec < 0.99 )then
-                if( L_BENCH_GLOB ) t_trailing_refs = tic()
-                weight_prev = 1. - update_frac_trail_rec
-                call vol_prev_even%mul(weight_prev)
-                call vol_prev_odd%mul (weight_prev)
-                call build%vol%mul(update_frac_trail_rec)
-                call build%vol2%mul(update_frac_trail_rec)
-                call build%vol%add(vol_prev_even)
-                call build%vol2%add(vol_prev_odd)
-                call build%vol%write(eonames(1))  ! even trailed
-                call build%vol2%write(eonames(2)) ! odd trailed
-                if( params%l_lpset )then
-                    call vol_merged%copy(build%vol)
-                    call vol_merged%add(build%vol2)
-                    call vol_merged%mul(0.5)
-                    call vol_merged%write(volname, del_if_exists=.true.)
-                    call wait_for_closure(volname)
-                endif
-                call vol_prev_even%kill
-                call vol_prev_odd%kill
-                if( L_BENCH_GLOB ) rt_trailing_refs = rt_trailing_refs + toc(t_trailing_refs)
-            endif
+            call restore_cartesian_state_from_partials(params, build, cline, eorecvol_read, state, numlen_part, &
+                &update_frac_trail_rec, gridcorr_img, vol_prev_even, vol_prev_odd, vol_e, vol_merged, .false., &
+                &volname, eonames, res05s(state), res0143s(state), restore_timings)
             params%vols(state)      = volname
             params%vols_even(state) = eonames(1)
             params%vols_odd(state)  = eonames(2)
-            if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
             which_iter = 1
             if( cline%defined('which_iter') ) which_iter = params%which_iter
             call plan_state_postprocess(params, state, which_iter, l_nonuniform_mode, pp_plan)
@@ -769,9 +718,18 @@ contains
                 call cleanup_nu_filter()
                 if( L_BENCH_GLOB ) rt_nonuniform = rt_nonuniform + toc(t_nonuniform)
             endif
-            call recname%kill
             call volname%kill
         end do
+        rt_read                   = restore_timings%read
+        rt_sum_reduce             = restore_timings%sum_reduce
+        rt_sum_eos                = restore_timings%sum_eos
+        rt_sampl_dens_correct_eos = restore_timings%eos_restore_total
+        rt_sampl_dens_correct_sum = restore_timings%sum_restore
+        rt_eoavg                  = restore_timings%eoavg
+        rt_prev_ref_read          = restore_timings%prev_ref_read
+        rt_prev_fsc_prior         = restore_timings%prev_fsc_prior
+        rt_lowres_insert          = restore_timings%lowres_insert
+        rt_trailing_refs          = restore_timings%trailing_refs
         ! Update per-particle FSC(0.143) resolution using the values computed in assembly.
         if( L_BENCH_GLOB ) t_project_metadata = tic()
         if( params%nstates == 1 )then

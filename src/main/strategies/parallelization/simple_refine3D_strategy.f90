@@ -168,6 +168,17 @@ contains
         call vol_in%kill
     end subroutine prepare_assembly_cline
 
+    subroutine invalidate_fresh_start_refs_from_volumes( params, cline, startit )
+        type(parameters), intent(in) :: params
+        type(cmdline),    intent(in) :: cline
+        integer,          intent(in) :: startit
+        if( trim(params%continue) == 'yes' ) return
+        if( startit /= 1 ) return
+        if( complete_volume_source_defined(cline, params%nstates) )then
+            call remove_polar_ref_section_files
+        endif
+    end subroutine invalidate_fresh_start_refs_from_volumes
+
     subroutine promote_assembly_nspace_if_needed( params, cline_assembly, force )
         type(parameters), intent(in)    :: params
         type(cmdline),    intent(inout) :: cline_assembly
@@ -412,6 +423,7 @@ contains
                 THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
             endif
         endif
+        call invalidate_fresh_start_refs_from_volumes(params, cline, startit)
         ! Initial orientation parameters
         if( build%spproj%is_virgin_field(params%oritype) )then
             call build%spproj_field%rnd_oris
@@ -878,8 +890,10 @@ contains
                     call simple_rename(refine3D_state_halfvol_fname(state, 'odd'), &
                         &refine3D_startvol_half_fname(state, 'odd'))
                 enddo
+                call remove_polar_ref_section_files
                 vol_defined = .true.
             endif
+            call invalidate_fresh_start_refs_from_volumes(params, cline, params%startit)
             ! euclid first-sigmas
             if( params%cc_objfun==OBJFUN_EUCLID )then
                 call self%cline_calc_group_sigmas%set('nthr', self%nthr_master)

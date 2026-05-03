@@ -133,15 +133,25 @@ This is the execution center of particle-domain refinement.
 
 `exec_cartesian_assembly` owns Cartesian volume assembly. It reduces partition-local Cartesian reconstruction updates, handles even/odd volumes, performs gridding correction, writes merged state volumes, updates per-particle FSC-derived resolution metadata, and runs shared-memory postprocessing such as automasking and nonuniform filtering.
 
-Cartesian matching still uses projected polar central sections, so refinement-owned Cartesian assembly also projects the prepared Cartesian volumes into `POLAR_REFS_even.bin` and `POLAR_REFS_odd.bin` for the next matcher or probability-table pass. Standalone or terminal `reconstruct3D` calls assemble volumes only; they do not refresh matcher handoff files because no next matching pass owns that range policy. The refinement projection is benchmarked as `polar ref projection`.
+Cartesian matching still uses projected polar central sections. In `refine3D`,
+Cartesian assembly owns the next-iteration reprojection handoff just as polar
+assembly does: after the assembled half volumes have been restored, trailed,
+low-resolution inserted, and FSC-filtered according to the Cartesian policy, the
+assembly commander refreshes `POLAR_REFS_even.bin` and
+`POLAR_REFS_odd.bin` for the next matcher or probability-table pass. The next
+pass should consume that compatible handoff instead of reprojecting the same
+volumes again. Volume reprojection is the bootstrap fallback for a fresh/random
+starting volume or for a missing/incompatible handoff. Standalone or terminal
+`reconstruct3D` calls assemble only volumes and do not own matcher handoff state.
 
 `exec_polar_assembly` owns polar reference assembly for `polar=yes` and for
-the current `polar=obsfield` direct-polar-handoff benchmark. The matcher writes
-partition-local polar partial sums for `polar=yes`. For `polar=obsfield`, the
-matcher writes the same partition-local Cartesian partial reconstructions used
-by `polar=no`, and polar assembly consumes those partials directly. The active
-path does not use an `fgrid_obsfield` observation-field accumulator. Polar
-assembly then:
+the current `polar=obsfield` direct-polar-handoff benchmark. The legacy polar
+worker writes partition-local polar partial sums for `polar=yes`. For
+`polar=obsfield`, reconstruction uses the normal `reconstruct3D` worker and
+`calc_3Drec`, writing the same partition-local Cartesian partial
+reconstructions used by `polar=no`; polar assembly consumes those partials
+directly. The active path does not use an `fgrid_obsfield` observation-field
+accumulator. Polar assembly then:
 
 - calculates polar populations
 - reduces polar partial sums or Cartesian reconstruction partials
@@ -161,9 +171,12 @@ performance experiment is not viable, not as a new method with separate quality
 criteria.
 
 `polar=obsfield` is currently a Cartesian-reconstructor accumulation path
-followed by Cartesian-style restoration and direct polar projection. It uses `prep_imgs4rec`,
-`update_rec`, and the normal partial reconstruction files, then reduces those
-partials in `exec_polar_assembly`. Assembly performs the same core
+followed by Cartesian-style restoration and direct polar projection. It uses the
+normal `calc_3Drec` path, including `prep_imgs4rec`, `update_rec`, and the
+normal partial reconstruction files, then reduces those partials in
+`exec_polar_assembly`. `exec_polar_rec3D_worker` is reserved for legacy
+`polar=yes` polar partial sums and must not be used for `polar=obsfield`.
+Assembly performs the same core
 sampling-density correction, FSC prior handling, and optional trailing blend as
 the `polar=no` volume assembly path, but does not run the post-assembly automask
 or nonuniform filtering stage. It also does not compute or consume common lines;
@@ -172,6 +185,13 @@ direct-polar-handoff benchmark. The final polar matcher references are generated
 with the current assembly-time `nspace` and `pftsz`; when the strategy promotes
 `nspace_next` or `pftsz_next`, that promoted grid defines the new reprojection
 model for the next iteration.
+
+The Cartesian restoration sequence is implemented once in
+`restore_cartesian_state_from_partials` and shared by `polar=no` and the
+`polar=obsfield` direct-polar-handoff benchmark. New changes to ML ordering,
+trailing reconstruction, FSC-prior use, low-resolution even/odd insertion, or
+`lpset` handling must be made in that shared restoration helper rather than
+copied into separate assembly branches.
 
 The direct-polar-handoff restoration sequence mirrors `polar=no`: reduce the current
 Cartesian half-map reconstruction partials, use previous half volumes as the
@@ -279,37 +299,58 @@ This section contains both policy rules and current implementation contracts. Th
 
 ### 5.1 Policy: source of truth for matching references
 
-The matcher-side reference contract is source based.
+The matcher-side reference contract is handoff based after assembly.
 
-For non-probabilistic matching, if a complete current `vol1..volN` set is provided, current matching references are derived directly from those volumes using the current matching settings.
+For normal iterative `refine3D`, assembly produces the reference representation
+that the next matcher or probability-table pass should consume. For `polar=no`
+and for the current `polar=obsfield` benchmark, that representation is the
+`POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` handoff emitted by assembly on the
+appropriate reference grid.
 
-If no complete current volume set is provided in polar mode, the matcher may consume the previous assembly handoff in `POLAR_REFS*`.
+A complete `vol1..volN` set is a bootstrap source only when no compatible
+assembly handoff exists, or when a content-changing fresh start has deliberately
+invalidated the existing handoff. In that case the volume source is reprojected
+once to seed `POLAR_REFS*`.
 
-Whenever a current-volume reprojection model is generated, materializing it to `POLAR_REFS*` creates a cache or handoff artifact. It does not change the source of truth for that matcher pass.
+This distinction must remain explicit. Assembly handoff files are authoritative
+for the next iterative pass; fresh starting volumes are authoritative only for
+the bootstrap pass that creates the first compatible handoff.
 
-This distinction must remain explicit. The current matcher source and the current handoff artifact must not be conflated.
+The matcher must not silently choose between a stale handoff and a fresh
+content-changing volume. The producer of the new content must invalidate stale
+`POLAR_REFS*` before consumers ask for references.
 
 ### 5.2 Policy: current-source rules by mode
 
-For Cartesian matching without a probabilistic pre-step, the matcher reprojects the current Cartesian volumes directly.
+For Cartesian matching without a probabilistic pre-step, the matcher consumes a
+compatible assembly-emitted `POLAR_REFS*` handoff when it exists. If the handoff
+is missing or incompatible, it reprojects the complete current volumes and
+materializes the result so later consumers do not repeat the same fallback work.
 
-For non-probabilistic polar matching, a fresh complete `vol1..volN` set is the current matching-reference source. It is reprojected directly by the matcher for the current iteration and is not first converted into a universal file-based input contract.
+For `polar=obsfield`, reconstruction workers write Cartesian partial
+reconstructions, and polar assembly converts the restored dense model into the
+next `POLAR_REFS*` handoff. The matcher consumes that handoff. It does not
+re-enter the volume domain except for the bootstrap fallback from an explicit
+starting volume.
 
-`POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` are cache and handoff artifacts used when no fresh complete volume set is supplied. This includes handoffs from:
+For legacy `polar=yes`, polar assembly remains the producer of state-major
+common-line normalized polar reference files.
 
-- class-average initialization
-- explicit reconstruction-before-stage steps
-- map symmetrization
-
-Existing `POLAR_REFS*` files are reusable only when no new starting-volume set is supplied.
+`POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` are the file
+contract for consumers that need central-section references across process
+boundaries, including matchers and probabilistic table workers.
 
 ### 5.3 Policy: centralized reference production
 
 Reference-section production is centralized in `simple_matcher_refvol_utils`.
 
-Consumers that require a file handoff may request materialization through the centralized utility path, but they do not define independent reprojection policy.
+Consumers that require a file handoff may request materialization through the
+centralized utility path, but they do not define independent reprojection policy.
 
-`prob_tab`, `prob_tab_neigh`, and `prep_pftc4align3D` are consumers. They do not own live reprojection of current reference volumes.
+`prob_tab`, `prob_tab_neigh`, and `prep_pftc4align3D` are consumers. They do not
+own live reprojection policy. When they need references, they should first use a
+compatible assembly handoff and materialize from volumes only as the bootstrap
+fallback.
 
 ### 5.4 Policy: gold-standard versus lp-set assembly handoff
 
@@ -337,21 +378,31 @@ This split applies to both `polar=no` Cartesian assembly and the
 
 ### 5.5 Implementation contract: materialization and distributed cache behavior
 
-If a current-volume reprojection model is generated, it is also materialized to `POLAR_REFS*` as a cache or handoff artifact.
+If a volume-derived reprojection model is generated as a bootstrap fallback, it
+is also materialized to `POLAR_REFS*` as the initial handoff artifact.
 
-In distributed matching, all workers generate the same current-volume reference model, so only the first worker materializes the shared cache to avoid concurrent writes to the same handoff files.
+In distributed matching, all workers can generate the same bootstrap
+volume-derived reference model, so only the first worker materializes the shared
+cache to avoid concurrent writes to the same handoff files.
 
-Generated polar reference sections are filled through the current run's interpolation limit. They do not try to anticipate a future iteration's interpolation limit; if the next iteration changes geometry or interpolation support, that iteration rebuilds the reference model under its own settled settings.
+Generated polar reference sections are filled through the interpolation limit of
+the consumer they are meant to serve. For iterative handoff, assembly owns that
+range and may promote the output grid through `nspace_next` / `pftsz_next`.
 
-Probabilistic modes are different. `prob_tab` and `prob_tab_neigh` consume `POLAR_REFS*` because they are separate worker programs and do not own a live volume-reprojection path. If a probabilistic pre-step is launched while `vol1..volN` is the current source, `prob_align` materializes `POLAR_REFS*` from those volumes before launching `prob_tab`. The subsequent matcher consumes the probabilistic assignment artifact. That is a probability-table handoff, not a declaration that all current matching input is file based.
+Probabilistic modes consume the same handoff. `prob_tab` and `prob_tab_neigh`
+are separate worker programs and do not own a live volume-reprojection path. If a
+probabilistic pre-step is launched before any compatible handoff exists,
+`prob_align` materializes `POLAR_REFS*` from the available starting volumes
+before launching the table workers. After assembly has run, the probability
+pre-step should reuse the assembly-emitted handoff.
 
 ### 5.6 Implementation contract: file-handoff reuse and validity
 
 Callers that need a file handoff use `ensure_polar_refs_on_disk`, which applies one policy:
 
-- a complete `vol1..volN` source forces fresh materialization
-- compatible existing `POLAR_REFS*` may be reused when no fresh source is present
-- missing files fall back to the parsed starting-volume set only when all state volumes exist
+- compatible existing `POLAR_REFS*` are reused first
+- missing or incompatible files fall back to a complete parsed volume set only when all state volumes exist
+- fresh content-changing volume starts must remove stale `POLAR_REFS*` before calling the helper
 
 For file-based polar handoffs, `polar_ref_sections_available` accepts either:
 
@@ -378,13 +429,15 @@ When `FRCS_FILE` is absent during the bootstrap pass, matcher preparation create
 
 There is one explicit bootstrap exception.
 
-If polar reference files are missing, no fresh complete `vol1..volN` set is being used for current matching, and the full starting-volume set is available, `ensure_polar_refs_on_disk` may materialize the initial `POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` pair from the parsed state volumes.
+If polar reference files are missing or incompatible and the full starting-volume
+set is available, `ensure_polar_refs_on_disk` may materialize the initial
+`POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` pair from the parsed state volumes.
 
 This bootstrap path uses the live `params`, `builder`, and `cmdline`. It does not create a second temporary builder.
 
 Matcher preparation also calls this helper as a last local fallback before
 reading `POLAR_REFS*`, so a freshly generated random/start volume can seed the
-first obsfield matching pass without relaxing the stale-reference checks.
+first matching pass without relaxing the stale-reference checks.
 
 `set_bp_range3D` is the owner of the 3D matching frequency-range policy. Callers must settle the PFTC range with `set_bp_range3D` before invoking `ensure_polar_refs_on_disk` or any path that materializes polar references from volumes. The requested search high-frequency index must not exceed the cropped interpolation limit before `polarft_calc` is constructed.
 
