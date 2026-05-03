@@ -34,6 +34,7 @@ type :: fgrid_obs_field
   contains
     procedure, public  :: new                   => obsfield_new
     procedure, public  :: init_shell_cache      => obsfield_init_shell_cache
+    procedure, public  :: copy_layout_from      => obsfield_copy_layout_from
     procedure, public  :: reset                 => obsfield_reset
     procedure, public  :: kill                  => obsfield_kill
     procedure, public  :: insert_plane_oversamp
@@ -55,6 +56,7 @@ type :: fgrid_obsfield_eo
   contains
     procedure, public :: new                   => obsfield_eo_new
     procedure, public :: init_shell_cache      => obsfield_eo_init_shell_cache
+    procedure, public :: copy_layout_from      => obsfield_eo_copy_layout_from
     procedure, public :: reset                 => obsfield_eo_reset
     procedure, public :: kill                  => obsfield_eo_kill
     procedure, public :: insert_plane          => obsfield_eo_insert_plane
@@ -115,6 +117,26 @@ contains
         self%restored = .false.
         self%nobs = 0
     end subroutine obsfield_init_shell_cache
+
+    subroutine obsfield_copy_layout_from( self, src )
+        class(fgrid_obs_field), intent(inout) :: self
+        class(fgrid_obs_field), intent(in)    :: src
+        if( .not. src%initialized ) THROW_HARD('source obsfield not initialized; obsfield_copy_layout_from')
+        if( .not. src%shell_initialized ) THROW_HARD('source shell obsfield not initialized; obsfield_copy_layout_from')
+        call self%new(src%lims, src%nyq)
+        self%shell_geom    = src%shell_geom
+        self%shell_kfromto = src%shell_kfromto
+        self%shell_nodes   = src%shell_nodes
+        self%ncells        = src%ncells
+        allocate(self%shell_num(self%shell_nodes),    source=DCMPLX_ZERO)
+        allocate(self%shell_den(self%shell_nodes),    source=0.d0)
+        allocate(self%shell_obs(self%shell_nodes),    source=.false.)
+        allocate(self%shell_ncells(self%shell_nodes), source=0)
+        allocate(self%shell_id(self%shell_nodes),     source=src%shell_id)
+        self%shell_initialized = .true.
+        self%restored = .false.
+        self%nobs = 0
+    end subroutine obsfield_copy_layout_from
 
     subroutine obsfield_reset( self )
         class(fgrid_obs_field), intent(inout) :: self
@@ -231,11 +253,12 @@ contains
         if( .not. self%initialized ) THROW_HARD('destination not initialized; obsfield_append_field')
         if( .not. self%compatible_with(src) ) THROW_HARD('incompatible shell observation fields; obsfield_append_field')
         if( self%restored .or. src%restored ) THROW_HARD('cannot append restored observation fields; obsfield_append_field')
+        if( src%nobs < 1 ) return
         self%shell_num    = self%shell_num + src%shell_num
         self%shell_den    = self%shell_den + src%shell_den
         self%shell_ncells = self%shell_ncells + src%shell_ncells
         self%shell_obs    = self%shell_obs .or. src%shell_obs
-        self%nobs = sum(self%shell_ncells)
+        self%nobs = self%nobs + src%nobs
         self%restored = .false.
     end subroutine obsfield_append_field
 
@@ -484,6 +507,13 @@ contains
         call self%even%init_shell_cache(geom)
         call self%odd%init_shell_cache(geom)
     end subroutine obsfield_eo_init_shell_cache
+
+    subroutine obsfield_eo_copy_layout_from( self, src )
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo), intent(in)    :: src
+        call self%even%copy_layout_from(src%even)
+        call self%odd%copy_layout_from( src%odd )
+    end subroutine obsfield_eo_copy_layout_from
 
     subroutine obsfield_eo_reset( self )
         class(fgrid_obsfield_eo), intent(inout) :: self

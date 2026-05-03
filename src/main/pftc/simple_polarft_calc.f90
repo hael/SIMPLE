@@ -97,6 +97,8 @@ type :: polarft_calc
     complex(dp),                   allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
     real(dp),                      allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
     type(fgrid_obsfield_eo),       allocatable :: obsfields(:)
+    type(fgrid_obsfield_eo),       allocatable :: obsfield_tls(:,:)
+    type(sym),                     allocatable :: obsfield_sym_tls(:)
     integer,                       allocatable :: prev_eo_pops(:,:), eo_pops(:,:)
     ! Others
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC

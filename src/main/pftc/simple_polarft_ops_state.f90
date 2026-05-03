@@ -104,6 +104,44 @@ contains
         call shell_sym%kill
     end subroutine ensure_obsfields_allocated
 
+    subroutine kill_obsfield_tls( self )
+        class(polarft_calc), intent(inout) :: self
+        integer :: ithr, istate
+        if( allocated(self%obsfield_tls) )then
+            do ithr = 1,size(self%obsfield_tls,1)
+                do istate = 1,size(self%obsfield_tls,2)
+                    call self%obsfield_tls(ithr,istate)%kill
+                enddo
+            enddo
+            deallocate(self%obsfield_tls)
+        endif
+        if( allocated(self%obsfield_sym_tls) )then
+            do ithr = 1,size(self%obsfield_sym_tls)
+                call self%obsfield_sym_tls(ithr)%kill
+            enddo
+            deallocate(self%obsfield_sym_tls)
+        endif
+    end subroutine kill_obsfield_tls
+
+    subroutine ensure_obsfield_tls_allocated( self )
+        class(polarft_calc), intent(inout) :: self
+        integer :: ithr, istate
+        if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields not allocated; ensure_obsfield_tls_allocated')
+        if( allocated(self%obsfield_tls) )then
+            if( size(self%obsfield_tls,1) == nthr_glob .and. size(self%obsfield_tls,2) == self%p_ptr%nstates .and. &
+                &allocated(self%obsfield_sym_tls) .and. size(self%obsfield_sym_tls) == nthr_glob ) return
+            call kill_obsfield_tls(self)
+        endif
+        allocate(self%obsfield_tls(nthr_glob,self%p_ptr%nstates))
+        allocate(self%obsfield_sym_tls(nthr_glob))
+        do ithr = 1,nthr_glob
+            call self%obsfield_sym_tls(ithr)%new(self%p_ptr%pgrp)
+            do istate = 1,self%p_ptr%nstates
+                call self%obsfield_tls(ithr,istate)%copy_layout_from(self%obsfields(istate))
+            enddo
+        enddo
+    end subroutine ensure_obsfield_tls_allocated
+
     module subroutine polar_cavger_set_ref_pft( self, icls, which )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: icls
@@ -307,9 +345,18 @@ contains
         class(fplane_type), target,    intent(inout) :: fpls(nptcls)
         type(ori) :: o
         real :: pw
-        integer :: i, iptcl, eo, pstate
+        integer :: i, iptcl, eo, pstate, ithr, istate
         if( nptcls < 1 ) return
         call ensure_obsfields_allocated(self)
+        call ensure_obsfield_tls_allocated(self)
+        !$omp parallel default(shared) proc_bind(close) &
+        !$omp private(i,ithr,iptcl,pstate,pw,eo,o)
+        ithr = omp_get_thread_num() + 1
+        do istate = 1,self%p_ptr%nstates
+            call self%obsfield_tls(ithr,istate)%reset
+        enddo
+        !$omp barrier
+        !$omp do schedule(dynamic,1)
         do i = 1, nptcls
             iptcl  = pinds(i)
             pstate = ptcl_field%get_state(iptcl)
@@ -319,9 +366,16 @@ contains
             if( pw < TINY ) cycle
             eo = ptcl_field%get_eo(iptcl)
             call ptcl_field%get_ori(iptcl, o)
-            call self%obsfields(pstate)%insert_plane(symop, o, fpls(i), eo, pw)
+            call self%obsfield_tls(ithr,pstate)%insert_plane(self%obsfield_sym_tls(ithr), o, fpls(i), eo, pw)
         enddo
+        !$omp end do
         call o%kill
+        !$omp end parallel
+        do ithr = 1,nthr_glob
+            do istate = 1,self%p_ptr%nstates
+                call self%obsfields(istate)%append_field(self%obsfield_tls(ithr,istate))
+            enddo
+        enddo
     end subroutine polar_cavger_insert_ptcls_obsfield
 
     module subroutine polar_cavger_write_obsfield_parts( self )
@@ -378,6 +432,7 @@ contains
         if( allocated(self%pfts_merg)    ) deallocate(self%pfts_merg)
         if( allocated(self%ctf2_even)    ) deallocate(self%ctf2_even)
         if( allocated(self%ctf2_odd)     ) deallocate(self%ctf2_odd)
+        call kill_obsfield_tls(self)
         if( allocated(self%obsfields) )then
             do istate = 1, size(self%obsfields)
                 call self%obsfields(istate)%kill
