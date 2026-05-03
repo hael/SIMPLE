@@ -371,10 +371,8 @@ contains
         !$omp end do
         call o%kill
         !$omp end parallel
-        do ithr = 1,nthr_glob
-            do istate = 1,self%p_ptr%nstates
-                call self%obsfields(istate)%append_field(self%obsfield_tls(ithr,istate))
-            enddo
+        do istate = 1,self%p_ptr%nstates
+            call self%obsfields(istate)%append_field_array(self%obsfield_tls(:,istate))
         enddo
     end subroutine polar_cavger_insert_ptcls_obsfield
 

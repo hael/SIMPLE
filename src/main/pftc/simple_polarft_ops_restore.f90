@@ -466,7 +466,7 @@ contains
         call frcs%new(nprojs, self%p_ptr%box_crop, self%p_ptr%smpd_crop, self%p_ptr%nstates)
         do state = 1,self%p_ptr%nstates
             base = (state - 1) * nprojs
-            call calc_fsc_from_reprojection_model(self, self%pfts_even, self%pfts_odd, base+1, base+nprojs, fsc_state)
+            call self%obsfields(state)%calc_shell_fsc(kspan, fsc_state)
             fsc_boxcrop(                 :self%kfromto(1)) = 1.0
             fsc_boxcrop(self%kfromto(1)  :self%interpklim) = real(fsc_state(self%kfromto(1):self%interpklim))
             if( self%interpklim < size(fsc_boxcrop) )then
@@ -529,40 +529,6 @@ contains
             &self%pfts_merg(:,self%kfromto(1):find4eoavg_l,first_ref:last_ref)
         !$omp end parallel workshare
     end subroutine insert_lowres_merged_refs
-
-    subroutine calc_fsc_from_reprojection_model( self, restored_even, restored_odd, ref_first, ref_last, fsc )
-        class(polarft_calc), intent(in)  :: self
-        complex(dp),         intent(in)  :: restored_even(:,self%kfromto(1):,:)
-        complex(dp),         intent(in)  :: restored_odd( :,self%kfromto(1):,:)
-        integer,             intent(in)  :: ref_first, ref_last
-        real(dp),            intent(out) :: fsc(self%kfromto(1):self%interpklim)
-        real(dp) :: vare(self%kfromto(1):self%interpklim), varo(self%kfromto(1):self%interpklim)
-        integer  :: icls, k
-        if( ref_first < 1 .or. ref_last > size(restored_even,3) .or. ref_first > ref_last )then
-            THROW_HARD('invalid reference range in calc_fsc_from_reprojection_model')
-        endif
-        if( size(restored_even,1) /= self%pftsz .or. size(restored_odd,1) /= self%pftsz )then
-            THROW_HARD('invalid angular dimension in calc_fsc_from_reprojection_model')
-        endif
-        fsc  = 0.d0
-        vare = 0.d0
-        varo = 0.d0
-        !$omp parallel do default(shared) schedule(static) proc_bind(close) private(icls,k) reduction(+:fsc,vare,varo)
-        do icls = ref_first,ref_last
-            do k = self%kfromto(1),self%interpklim
-                fsc(k)  = fsc(k)  + sum(real(restored_even(:,k,icls) * conjg(restored_odd(:,k,icls)), dp))
-                vare(k) = vare(k) + sum(real(restored_even(:,k,icls) * conjg(restored_even(:,k,icls)), dp))
-                varo(k) = varo(k) + sum(real(restored_odd( :,k,icls) * conjg(restored_odd( :,k,icls)), dp))
-            enddo
-        enddo
-        !$omp end parallel do
-        vare = vare * varo
-        where( vare > DTINY )
-            fsc = fsc / sqrt(vare)
-        elsewhere
-            fsc = 0.d0
-        end where
-    end subroutine calc_fsc_from_reprojection_model
 
     subroutine prepare_reprojection_trail_refs( self, reforis, prev_even, prev_odd, prev_merg, have_prev_merg )
         class(polarft_calc),       intent(in)  :: self

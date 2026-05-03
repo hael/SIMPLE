@@ -31,6 +31,8 @@ type :: fgrid_obs_field
     logical,     allocatable :: shell_obs(:)
     integer,     allocatable :: shell_ncells(:)
     integer,     allocatable :: shell_id(:)
+    logical,     allocatable :: shell_any_obs(:)
+    integer,     allocatable :: shell_obs_cnt(:)
   contains
     procedure, public  :: new                   => obsfield_new
     procedure, public  :: init_shell_cache      => obsfield_init_shell_cache
@@ -39,6 +41,7 @@ type :: fgrid_obs_field
     procedure, public  :: kill                  => obsfield_kill
     procedure, public  :: insert_plane_oversamp
     procedure, public  :: append_field          => obsfield_append_field
+    procedure, public  :: append_field_array    => obsfield_append_field_array
     procedure, public  :: restore_field         => obsfield_restore_field
     procedure, public  :: extract_restored_shell_cache_polar => obsfield_extract_restored_shell_cache_polar
     procedure, public  :: count_shell_cells     => obsfield_count_shell_cells
@@ -48,6 +51,7 @@ type :: fgrid_obs_field
     procedure, private :: compatible_with       => obsfield_compatible_with
     procedure, private :: clear_shell_cache     => obsfield_clear_shell_cache
     procedure, private :: zero_shell_cache      => obsfield_zero_shell_cache
+    procedure, private :: refresh_shell_obs_counts => obsfield_refresh_shell_obs_counts
 end type fgrid_obs_field
 
 type :: fgrid_obsfield_eo
@@ -61,8 +65,10 @@ type :: fgrid_obsfield_eo
     procedure, public :: kill                  => obsfield_eo_kill
     procedure, public :: insert_plane          => obsfield_eo_insert_plane
     procedure, public :: append_field          => obsfield_eo_append_field
+    procedure, public :: append_field_array    => obsfield_eo_append_field_array
     procedure, public :: restore_field         => obsfield_eo_restore_field
     procedure, public :: extract_restored_shell_cache_polar => obsfield_eo_extract_restored_shell_cache_polar
+    procedure, public :: calc_shell_fsc        => obsfield_eo_calc_shell_fsc
     procedure, public :: write                 => obsfield_eo_write
     procedure, public :: read                  => obsfield_eo_read
 end type fgrid_obsfield_eo
@@ -108,6 +114,8 @@ contains
         allocate(self%shell_obs(total_nodes),    source=.false.)
         allocate(self%shell_ncells(total_nodes), source=0)
         allocate(self%shell_id(total_nodes),     source=0)
+        allocate(self%shell_any_obs(nk),         source=.false.)
+        allocate(self%shell_obs_cnt(nk),         source=0)
         do ik = 1,nk
             shell = geom_kfromto(1) + ik - 1
             call geom%get_shell_node_range(shell, node_first, node_last)
@@ -133,6 +141,8 @@ contains
         allocate(self%shell_obs(self%shell_nodes),    source=.false.)
         allocate(self%shell_ncells(self%shell_nodes), source=0)
         allocate(self%shell_id(self%shell_nodes),     source=src%shell_id)
+        allocate(self%shell_any_obs(size(src%shell_any_obs)), source=.false.)
+        allocate(self%shell_obs_cnt(size(src%shell_obs_cnt)), source=0)
         self%shell_initialized = .true.
         self%restored = .false.
         self%nobs = 0
@@ -174,7 +184,7 @@ contains
         real        :: rotmats(se%get_nsym(),3,3)
         integer     :: node_ids(OBSFIELD_SHELL_NNODES)
         integer     :: fpllims_pd(3,2), fpllims(3,2)
-        integer     :: nsym, isym, h, k, hp, kp, pf_local, shell, inode, nfound, j
+        integer     :: nsym, isym, h, k, hp, kp, pf_local, shell, inode, nfound, j, ik
         integer     :: nyq_disk, h_sq, k_max_h, k_lo, k_hi, nobs_add
         logical     :: l_conj
         if( .not. self%initialized ) THROW_HARD('obsfield not initialized; insert_plane_oversamp')
@@ -230,13 +240,16 @@ contains
                     endif
                     ctfval = pwght_dp * real(ctfsq_raw, dp)
                     call self%shell_geom%nearest_nodes(shell, q, OBSFIELD_SHELL_NNODES, node_ids, node_w, nfound)
+                    ik = shell - self%shell_kfromto(1) + 1
                     do j = 1,nfound
                         inode = node_ids(j)
                         if( inode < 1 .or. inode > self%shell_nodes ) cycle
                         self%shell_num(inode) = self%shell_num(inode) + comp * node_w(j)
                         self%shell_den(inode) = self%shell_den(inode) + ctfval * node_w(j)
                         self%shell_ncells(inode) = self%shell_ncells(inode) + 1
+                        if( .not. self%shell_obs(inode) ) self%shell_obs_cnt(ik) = self%shell_obs_cnt(ik) + 1
                         self%shell_obs(inode) = .true.
+                        self%shell_any_obs(ik) = .true.
                         nobs_add = nobs_add + 1
                     enddo
                 enddo
@@ -259,8 +272,49 @@ contains
         self%shell_ncells = self%shell_ncells + src%shell_ncells
         self%shell_obs    = self%shell_obs .or. src%shell_obs
         self%nobs = self%nobs + src%nobs
+        call self%refresh_shell_obs_counts
         self%restored = .false.
     end subroutine obsfield_append_field
+
+    subroutine obsfield_append_field_array( self, src )
+        class(fgrid_obs_field), intent(inout) :: self
+        class(fgrid_obs_field), intent(in)    :: src(:)
+        complex(dp) :: num
+        real(dp)    :: den
+        logical     :: obs
+        integer     :: isrc, node, ncells, nobs_add
+        if( .not. self%initialized ) THROW_HARD('destination not initialized; obsfield_append_field_array')
+        nobs_add = 0
+        do isrc = 1,size(src)
+            if( .not. src(isrc)%initialized ) cycle
+            if( .not. self%compatible_with(src(isrc)) ) THROW_HARD('incompatible shell observation fields; obsfield_append_field_array')
+            if( self%restored .or. src(isrc)%restored ) THROW_HARD('cannot append restored observation fields; obsfield_append_field_array')
+            nobs_add = nobs_add + src(isrc)%nobs
+        enddo
+        if( nobs_add < 1 ) return
+        !$omp parallel do default(shared) schedule(static) private(node,isrc,num,den,ncells,obs) proc_bind(close)
+        do node = 1,self%shell_nodes
+            num    = self%shell_num(node)
+            den    = self%shell_den(node)
+            ncells = self%shell_ncells(node)
+            obs    = self%shell_obs(node)
+            do isrc = 1,size(src)
+                if( src(isrc)%nobs < 1 ) cycle
+                num    = num + src(isrc)%shell_num(node)
+                den    = den + src(isrc)%shell_den(node)
+                ncells = ncells + src(isrc)%shell_ncells(node)
+                obs    = obs .or. src(isrc)%shell_obs(node)
+            enddo
+            self%shell_num(node)    = num
+            self%shell_den(node)    = den
+            self%shell_ncells(node) = ncells
+            self%shell_obs(node)    = obs
+        enddo
+        !$omp end parallel do
+        self%nobs = self%nobs + nobs_add
+        call self%refresh_shell_obs_counts
+        self%restored = .false.
+    end subroutine obsfield_append_field_array
 
     subroutine obsfield_restore_field( self, kfromto, invtau2, prior_start )
         class(fgrid_obs_field), intent(inout) :: self
@@ -295,6 +349,7 @@ contains
         enddo
         !$omp end parallel do
         self%nobs = nobs_new
+        call self%refresh_shell_obs_counts
         self%restored = .true.
     end subroutine obsfield_restore_field
 
@@ -317,7 +372,6 @@ contains
         pftsz = size(polar_x,1)
         pfts(:,:,1:nrefs) = DCMPLX_ZERO
         if( present(denw) ) denw(:,:,1:nrefs) = 0.d0
-        if( .not. any(self%shell_obs) ) return
         !$omp parallel do default(shared) schedule(static) private(iproj,R,k,kloc,irot,px,py,loc,q,l_conj,node_ids,node_w,nfound,j,inode,denacc) &
         !$omp& proc_bind(close)
         do iproj = 1,nrefs
@@ -408,6 +462,8 @@ contains
         if( allocated(self%shell_obs) ) deallocate(self%shell_obs)
         if( allocated(self%shell_ncells) ) deallocate(self%shell_ncells)
         if( allocated(self%shell_id) ) deallocate(self%shell_id)
+        if( allocated(self%shell_any_obs) ) deallocate(self%shell_any_obs)
+        if( allocated(self%shell_obs_cnt) ) deallocate(self%shell_obs_cnt)
         call self%shell_geom%kill
         self%shell_kfromto = 0
         self%shell_nodes = 0
@@ -420,7 +476,24 @@ contains
         if( allocated(self%shell_den) ) self%shell_den = 0.d0
         if( allocated(self%shell_obs) ) self%shell_obs = .false.
         if( allocated(self%shell_ncells) ) self%shell_ncells = 0
+        if( allocated(self%shell_any_obs) ) self%shell_any_obs = .false.
+        if( allocated(self%shell_obs_cnt) ) self%shell_obs_cnt = 0
     end subroutine obsfield_zero_shell_cache
+
+    subroutine obsfield_refresh_shell_obs_counts( self )
+        class(fgrid_obs_field), intent(inout) :: self
+        integer :: ik, node
+        if( .not. allocated(self%shell_any_obs) ) return
+        self%shell_any_obs = .false.
+        self%shell_obs_cnt = 0
+        do node = 1,self%shell_nodes
+            if( .not. self%shell_obs(node) ) cycle
+            ik = self%shell_id(node) - self%shell_kfromto(1) + 1
+            if( ik < 1 .or. ik > size(self%shell_any_obs) ) cycle
+            self%shell_obs_cnt(ik) = self%shell_obs_cnt(ik) + 1
+        enddo
+        self%shell_any_obs = self%shell_obs_cnt > 0
+    end subroutine obsfield_refresh_shell_obs_counts
 
     logical function obsfield_compatible_with( self, other )
         class(fgrid_obs_field), intent(in) :: self, other
@@ -479,6 +552,8 @@ contains
         allocate(self%shell_obs(nnodes))
         allocate(self%shell_ncells(nnodes))
         allocate(self%shell_id(nnodes))
+        allocate(self%shell_any_obs(self%shell_kfromto(2)-self%shell_kfromto(1)+1), source=.false.)
+        allocate(self%shell_obs_cnt(self%shell_kfromto(2)-self%shell_kfromto(1)+1), source=0)
         read(funit, iostat=io_stat) self%shell_num
         call fileiochk('obsfield_read_local shell numerator; '//trim(label), io_stat)
         read(funit, iostat=io_stat) self%shell_den
@@ -491,6 +566,7 @@ contains
         call fileiochk('obsfield_read_local shell ids; '//trim(label), io_stat)
         self%shell_initialized = .true.
         self%nobs = sum(self%shell_ncells)
+        call self%refresh_shell_obs_counts
         self%restored = .false.
     end subroutine obsfield_read_local
 
@@ -551,6 +627,83 @@ contains
         call self%odd%append_field(src%odd)
     end subroutine obsfield_eo_append_field
 
+    subroutine obsfield_eo_append_field_array( self, src )
+        class(fgrid_obsfield_eo), intent(inout) :: self
+        class(fgrid_obsfield_eo), intent(in)    :: src(:)
+        call obsfield_append_eo_half_array(self%even, src, .false.)
+        call obsfield_append_eo_half_array(self%odd,  src, .true.)
+    end subroutine obsfield_eo_append_field_array
+
+    subroutine obsfield_append_eo_half_array( dest, src, l_odd )
+        class(fgrid_obs_field),    intent(inout) :: dest
+        class(fgrid_obsfield_eo),  intent(in)    :: src(:)
+        logical,                   intent(in)    :: l_odd
+        complex(dp) :: num
+        real(dp)    :: den
+        logical     :: obs
+        integer     :: isrc, node, ncells, nobs_add
+        if( .not. dest%initialized ) THROW_HARD('destination not initialized; obsfield_append_eo_half_array')
+        nobs_add = 0
+        if( l_odd )then
+            do isrc = 1,size(src)
+                if( .not. src(isrc)%odd%initialized ) cycle
+                if( .not. dest%compatible_with(src(isrc)%odd) ) THROW_HARD('incompatible odd shell observation fields; obsfield_append_eo_half_array')
+                if( dest%restored .or. src(isrc)%odd%restored ) THROW_HARD('cannot append restored odd observation fields; obsfield_append_eo_half_array')
+                nobs_add = nobs_add + src(isrc)%odd%nobs
+            enddo
+            if( nobs_add < 1 ) return
+            !$omp parallel do default(shared) schedule(static) private(node,isrc,num,den,ncells,obs) proc_bind(close)
+            do node = 1,dest%shell_nodes
+                num    = dest%shell_num(node)
+                den    = dest%shell_den(node)
+                ncells = dest%shell_ncells(node)
+                obs    = dest%shell_obs(node)
+                do isrc = 1,size(src)
+                    if( src(isrc)%odd%nobs < 1 ) cycle
+                    num    = num + src(isrc)%odd%shell_num(node)
+                    den    = den + src(isrc)%odd%shell_den(node)
+                    ncells = ncells + src(isrc)%odd%shell_ncells(node)
+                    obs    = obs .or. src(isrc)%odd%shell_obs(node)
+                enddo
+                dest%shell_num(node)    = num
+                dest%shell_den(node)    = den
+                dest%shell_ncells(node) = ncells
+                dest%shell_obs(node)    = obs
+            enddo
+            !$omp end parallel do
+        else
+            do isrc = 1,size(src)
+                if( .not. src(isrc)%even%initialized ) cycle
+                if( .not. dest%compatible_with(src(isrc)%even) ) THROW_HARD('incompatible even shell observation fields; obsfield_append_eo_half_array')
+                if( dest%restored .or. src(isrc)%even%restored ) THROW_HARD('cannot append restored even observation fields; obsfield_append_eo_half_array')
+                nobs_add = nobs_add + src(isrc)%even%nobs
+            enddo
+            if( nobs_add < 1 ) return
+            !$omp parallel do default(shared) schedule(static) private(node,isrc,num,den,ncells,obs) proc_bind(close)
+            do node = 1,dest%shell_nodes
+                num    = dest%shell_num(node)
+                den    = dest%shell_den(node)
+                ncells = dest%shell_ncells(node)
+                obs    = dest%shell_obs(node)
+                do isrc = 1,size(src)
+                    if( src(isrc)%even%nobs < 1 ) cycle
+                    num    = num + src(isrc)%even%shell_num(node)
+                    den    = den + src(isrc)%even%shell_den(node)
+                    ncells = ncells + src(isrc)%even%shell_ncells(node)
+                    obs    = obs .or. src(isrc)%even%shell_obs(node)
+                enddo
+                dest%shell_num(node)    = num
+                dest%shell_den(node)    = den
+                dest%shell_ncells(node) = ncells
+                dest%shell_obs(node)    = obs
+            enddo
+            !$omp end parallel do
+        endif
+        dest%nobs = dest%nobs + nobs_add
+        call dest%refresh_shell_obs_counts
+        dest%restored = .false.
+    end subroutine obsfield_append_eo_half_array
+
     subroutine obsfield_eo_restore_field( self, kfromto, invtau2_even, invtau2_odd, prior_start )
         class(fgrid_obsfield_eo), intent(inout) :: self
         integer,                  intent(in)    :: kfromto(2), prior_start
@@ -567,26 +720,97 @@ contains
         integer,                  intent(in)    :: nrefs, kfromto(2)
         real(sp),                 intent(in)    :: polar_x(:,:), polar_y(:,:)
         complex(dp),              intent(inout) :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
-        real(dp), allocatable :: den_even(:,:,:), den_odd(:,:,:)
-        real(dp) :: denom_weight
-        integer  :: iproj, ik, irot
-        allocate(den_even(size(pfts_even,1),size(pfts_even,2),size(pfts_even,3)), source=0.d0)
-        allocate(den_odd( size(pfts_odd, 1),size(pfts_odd, 2),size(pfts_odd, 3)), source=0.d0)
-        call self%even%extract_restored_shell_cache_polar(eulspace, nrefs, kfromto, polar_x, polar_y, pfts_even, den_even)
-        call self%odd%extract_restored_shell_cache_polar( eulspace, nrefs, kfromto, polar_x, polar_y, pfts_odd,  den_odd )
+        real(dp)    :: node_w(OBSFIELD_SHELL_NNODES), den_even, den_odd, denom_weight
+        complex(dp) :: acc_even, acc_odd
+        real(sp)    :: R(3,3), loc(3), q(3), px, py
+        integer     :: node_ids(OBSFIELD_SHELL_NNODES)
+        integer     :: iproj, irot, k, ik, pftsz, inode, nfound, j
+        logical     :: l_conj
+        if( .not. self%even%restored .or. .not. self%odd%restored ) THROW_HARD('shell obsfield extraction requires restored fields')
+        if( .not. self%even%compatible_with(self%odd) ) THROW_HARD('incompatible even/odd shell fields; obsfield extraction')
+        if( any(self%even%shell_kfromto /= kfromto) ) THROW_HARD('even shell k-range mismatch; obsfield extraction')
+        if( any(self%odd%shell_kfromto  /= kfromto) ) THROW_HARD('odd shell k-range mismatch; obsfield extraction')
+        if( .not. self%even%shell_geom%is_initialized() ) THROW_HARD('shell geometry not initialized; obsfield extraction')
+        pftsz = size(polar_x,1)
+        pfts_even(:,:,1:nrefs) = DCMPLX_ZERO
+        pfts_odd( :,:,1:nrefs) = DCMPLX_ZERO
         pfts_merg(:,:,1:nrefs) = DCMPLX_ZERO
+        !$omp parallel do default(shared) schedule(static) private(iproj,R,k,ik,irot,px,py,loc,q,l_conj,node_ids,node_w,nfound,j,inode,acc_even,acc_odd,den_even,den_odd,denom_weight) &
+        !$omp& proc_bind(close)
         do iproj = 1,nrefs
-            do ik = 1,size(pfts_merg,2)
-                do irot = 1,size(pfts_merg,1)
-                    denom_weight = den_even(irot,ik,iproj) + den_odd(irot,ik,iproj)
+            R = eulspace%get_mat(iproj)
+            do k = kfromto(1),kfromto(2)
+                ik = k - kfromto(1) + 1
+                do irot = 1,pftsz
+                    px     = polar_x(irot,ik)
+                    py     = polar_y(irot,ik)
+                    loc(1) = px*R(1,1) + py*R(2,1)
+                    loc(2) = px*R(1,2) + py*R(2,2)
+                    loc(3) = px*R(1,3) + py*R(2,3)
+                    l_conj = loc(1) < real(self%even%lims(1,1),sp)
+                    if( l_conj )then
+                        q = -loc
+                    else
+                        q = loc
+                    endif
+                    call self%even%shell_geom%nearest_nodes(k, q, OBSFIELD_SHELL_NNODES, node_ids, node_w, nfound)
+                    acc_even = DCMPLX_ZERO
+                    acc_odd  = DCMPLX_ZERO
+                    den_even = 0.d0
+                    den_odd  = 0.d0
+                    do j = 1,nfound
+                        inode = node_ids(j)
+                        if( inode < 1 .or. inode > self%even%shell_nodes ) cycle
+                        if( self%even%shell_obs(inode) )then
+                            acc_even = acc_even + node_w(j) * self%even%shell_num(inode)
+                            den_even = den_even + node_w(j) * self%even%shell_den(inode)
+                        endif
+                        if( self%odd%shell_obs(inode) )then
+                            acc_odd = acc_odd + node_w(j) * self%odd%shell_num(inode)
+                            den_odd = den_odd + node_w(j) * self%odd%shell_den(inode)
+                        endif
+                    enddo
+                    if( l_conj )then
+                        acc_even = conjg(acc_even)
+                        acc_odd  = conjg(acc_odd)
+                    endif
+                    pfts_even(irot,ik,iproj) = acc_even
+                    pfts_odd( irot,ik,iproj) = acc_odd
+                    denom_weight = den_even + den_odd
                     if( denom_weight <= DTINY ) cycle
-                    pfts_merg(irot,ik,iproj) = (pfts_even(irot,ik,iproj) * den_even(irot,ik,iproj) + &
-                        &pfts_odd(irot,ik,iproj) * den_odd(irot,ik,iproj)) / denom_weight
+                    pfts_merg(irot,ik,iproj) = (acc_even * den_even + acc_odd * den_odd) / denom_weight
                 enddo
             enddo
         enddo
-        deallocate(den_even, den_odd)
+        !$omp end parallel do
     end subroutine obsfield_eo_extract_restored_shell_cache_polar
+
+    subroutine obsfield_eo_calc_shell_fsc( self, kfromto, fsc )
+        class(fgrid_obsfield_eo), intent(in)  :: self
+        integer,                  intent(in)  :: kfromto(2)
+        real(dp),                 intent(out) :: fsc(kfromto(1):kfromto(2))
+        real(dp) :: vare(kfromto(1):kfromto(2)), varo(kfromto(1):kfromto(2))
+        integer  :: node, shell
+        if( .not. self%even%restored .or. .not. self%odd%restored ) THROW_HARD('shell FSC requires restored obsfields')
+        if( .not. self%even%compatible_with(self%odd) ) THROW_HARD('incompatible even/odd shell fields; obsfield_eo_calc_shell_fsc')
+        fsc  = 0.d0
+        vare = 0.d0
+        varo = 0.d0
+        do node = 1,self%even%shell_nodes
+            if( .not. self%even%shell_obs(node) .or. .not. self%odd%shell_obs(node) ) cycle
+            shell = self%even%shell_id(node)
+            if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+            fsc(shell)  = fsc(shell)  + real(self%even%shell_num(node) * conjg(self%odd%shell_num(node)), dp)
+            vare(shell) = vare(shell) + real(self%even%shell_num(node) * conjg(self%even%shell_num(node)), dp)
+            varo(shell) = varo(shell) + real(self%odd%shell_num(node)  * conjg(self%odd%shell_num(node)),  dp)
+        enddo
+        vare = vare * varo
+        where( vare > DTINY )
+            fsc = fsc / sqrt(vare)
+        elsewhere
+            fsc = 0.d0
+        end where
+    end subroutine obsfield_eo_calc_shell_fsc
 
     subroutine obsfield_eo_write( self, fname )
         class(fgrid_obsfield_eo), intent(in) :: self

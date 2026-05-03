@@ -7,6 +7,8 @@ public :: shell_field_geom
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: SHELL_NEAREST_STACK_MAX = 32
+
 type :: shell_field_geom
     private
     integer :: nk         = 0
@@ -16,7 +18,7 @@ type :: shell_field_geom
     integer :: target_nodes = 0
     integer :: shell_budget = 0
     integer,  allocatable :: full_nodes(:), shell_nodes(:), shell_cell_budget(:), offsets(:)
-    integer,  allocatable :: bin_nz(:), bin_nphi(:), bin_offsets(:), bin_head(:), bin_next(:)
+    integer,  allocatable :: bin_nz(:), bin_nphi(:), bin_offsets(:), bin_node_ptr(:), bin_node_idx(:)
     real(dp), allocatable :: theta_support(:)
     real(sp), allocatable :: node_dir(:,:) ! (3,total_nodes)
     real(sp), allocatable :: sym_rmat(:,:,:) ! (3,3,nsym)
@@ -121,8 +123,8 @@ contains
         if( allocated(self%bin_nz) ) deallocate(self%bin_nz)
         if( allocated(self%bin_nphi) ) deallocate(self%bin_nphi)
         if( allocated(self%bin_offsets) ) deallocate(self%bin_offsets)
-        if( allocated(self%bin_head) ) deallocate(self%bin_head)
-        if( allocated(self%bin_next) ) deallocate(self%bin_next)
+        if( allocated(self%bin_node_ptr) ) deallocate(self%bin_node_ptr)
+        if( allocated(self%bin_node_idx) ) deallocate(self%bin_node_idx)
         if( allocated(self%theta_support) ) deallocate(self%theta_support)
         if( allocated(self%node_dir) ) deallocate(self%node_dir)
         if( allocated(self%sym_rmat) ) deallocate(self%sym_rmat)
@@ -200,7 +202,7 @@ contains
     logical function shell_geom_is_initialized( self )
         class(shell_field_geom), intent(in) :: self
         shell_geom_is_initialized = allocated(self%node_dir) .and. allocated(self%shell_nodes) .and. &
-            &allocated(self%shell_cell_budget) .and. allocated(self%offsets) .and. allocated(self%bin_head)
+            &allocated(self%shell_cell_budget) .and. allocated(self%offsets) .and. allocated(self%bin_node_ptr)
     end function shell_geom_is_initialized
 
     subroutine shell_geom_get_kfromto( self, kfromto )
@@ -319,14 +321,16 @@ contains
         real(dp),                intent(out) :: weights(:)
         integer,                 intent(out) :: nfound
         real(sp) :: qcanon(3)
-        real(dp), allocatable :: dots(:)
+        real(dp) :: dots(SHELL_NEAREST_STACK_MAX)
         real(dp) :: qnorm, dotv, dist, sigma, wsum
-        integer  :: node_first, node_last, node, ik, j, nkeep
+        integer  :: node_first, node_last, node, ik, j, nkeep, nkeep_req
         inodes  = 0
         weights = 0.d0
         nfound  = 0
         if( max_nodes < 1 ) return
-        nkeep = min(max_nodes, min(size(inodes), size(weights)))
+        nkeep_req = min(max_nodes, min(size(inodes), size(weights)))
+        if( nkeep_req > SHELL_NEAREST_STACK_MAX ) THROW_HARD('nearest_nodes request exceeds stack buffer')
+        nkeep = nkeep_req
         if( nkeep < 1 ) return
         if( .not. allocated(self%node_dir) ) return
         qnorm = sqrt(sum(real(q,dp) * real(q,dp)))
@@ -336,10 +340,10 @@ contains
         call canonicalize_dir(self, real(real(q,dp) / qnorm, sp), qcanon)
         call self%get_shell_node_range(shell, node_first, node_last)
         if( node_last < node_first ) return
-        allocate(dots(nkeep), source=-huge(1.d0))
+        dots(1:nkeep) = -huge(1.d0)
         call scan_shell_bins(self, ik, qcanon, nkeep, dots, inodes)
         if( count(inodes > 0) < nkeep )then
-            dots   = -huge(1.d0)
+            dots(1:nkeep) = -huge(1.d0)
             inodes = 0
             do node = node_first,node_last
                 dotv = sum(real(qcanon,dp) * real(self%node_dir(:,node),dp))
@@ -362,13 +366,13 @@ contains
         else if( nfound > 0 )then
             weights(1:nfound) = 1.d0 / real(nfound,dp)
         endif
-        deallocate(dots)
     end subroutine shell_geom_nearest_nodes
 
     subroutine build_shell_bins( self )
         class(shell_field_geom), intent(inout) :: self
         real(sp) :: dir(3)
-        integer :: ik, node, total_bins, ibin, iz, iphi
+        integer, allocatable :: bin_counts(:)
+        integer :: ik, node, total_bins, ibin, iz, iphi, pos
         allocate(self%bin_nz(self%nk), source=0)
         allocate(self%bin_nphi(self%nk), source=0)
         allocate(self%bin_offsets(self%nk+1), source=1)
@@ -378,17 +382,32 @@ contains
             self%bin_offsets(ik+1) = self%bin_offsets(ik) + self%bin_nz(ik) * self%bin_nphi(ik)
         enddo
         total_bins = self%bin_offsets(self%nk+1) - 1
-        allocate(self%bin_head(total_bins), source=0)
-        allocate(self%bin_next(self%total_nodes), source=0)
+        allocate(bin_counts(total_bins), source=0)
         do ik = 1,self%nk
             do node = self%offsets(ik),self%offsets(ik+1)-1
                 dir = self%node_dir(:,node)
                 call shell_dir_bin(self, ik, dir, iz, iphi)
                 ibin = self%bin_offsets(ik) + (iz - 1) * self%bin_nphi(ik) + iphi - 1
-                self%bin_next(node) = self%bin_head(ibin)
-                self%bin_head(ibin) = node
+                bin_counts(ibin) = bin_counts(ibin) + 1
             enddo
         enddo
+        allocate(self%bin_node_ptr(total_bins+1), source=1)
+        do ibin = 1,total_bins
+            self%bin_node_ptr(ibin+1) = self%bin_node_ptr(ibin) + bin_counts(ibin)
+        enddo
+        allocate(self%bin_node_idx(self%total_nodes), source=0)
+        bin_counts = self%bin_node_ptr(1:total_bins)
+        do ik = 1,self%nk
+            do node = self%offsets(ik),self%offsets(ik+1)-1
+                dir = self%node_dir(:,node)
+                call shell_dir_bin(self, ik, dir, iz, iphi)
+                ibin = self%bin_offsets(ik) + (iz - 1) * self%bin_nphi(ik) + iphi - 1
+                pos = bin_counts(ibin)
+                self%bin_node_idx(pos) = node
+                bin_counts(ibin) = pos + 1
+            enddo
+        enddo
+        deallocate(bin_counts)
     end subroutine build_shell_bins
 
     subroutine shell_dir_bin( self, ik, dir, iz, iphi )
@@ -411,8 +430,8 @@ contains
         real(dp),                intent(inout) :: dots(:)
         integer,                 intent(inout) :: inodes(:)
         real(dp) :: dotv
-        integer :: iz0, iphi0, iz, iphi, dz, dphi, ring, ibin, node, nfilled
-        if( .not. allocated(self%bin_head) ) return
+        integer :: iz0, iphi0, iz, iphi, dz, dphi, ring, ibin, node, nfilled, pos
+        if( .not. allocated(self%bin_node_ptr) ) return
         call shell_dir_bin(self, ik, qcanon, iz0, iphi0)
         do ring = 0,3
             do dz = -ring,ring
@@ -422,11 +441,10 @@ contains
                     if( ring > 0 .and. abs(dz) < ring .and. abs(dphi) < ring ) cycle
                     iphi = modulo(iphi0 + dphi - 1, self%bin_nphi(ik)) + 1
                     ibin = self%bin_offsets(ik) + (iz - 1) * self%bin_nphi(ik) + iphi - 1
-                    node = self%bin_head(ibin)
-                    do while( node > 0 )
+                    do pos = self%bin_node_ptr(ibin),self%bin_node_ptr(ibin+1)-1
+                        node = self%bin_node_idx(pos)
                         dotv = sum(real(qcanon,dp) * real(self%node_dir(:,node),dp))
                         call insert_shell_candidate(dotv, node, nkeep, dots, inodes)
-                        node = self%bin_next(node)
                     enddo
                 enddo
             enddo
