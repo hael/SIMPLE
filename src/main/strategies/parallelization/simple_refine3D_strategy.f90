@@ -155,9 +155,6 @@ contains
         call cline_assembly%set('nthr',       nthr)
         call cline_assembly%set('combine_eo', params%combine_eo)
         if( params%l_update_frac ) call cline_assembly%set('update_frac', params%update_frac)
-        if( params%l_polar .and. trim(params%polar) == 'obsfield' )then
-            call cline_assembly%set('write_obsfield_vols', 'yes')
-        endif
         do state = 1, params%nstates
             volname = refine3D_state_vol_fname(state)
             if( cline_assembly%defined('vol'//int2str(state)) )then
@@ -179,16 +176,15 @@ contains
         l_force = .false.
         if( present(force) ) l_force = force
         ! Cartesian and polar=obsfield can emit the next iteration's reference grid.
-        if( l_force .and. params%can_promote_assembly_ref_nspace() .and. &
-            &params%nspace_next > params%nspace )then
-            call cline_assembly%set('nspace', params%nspace_next)
+        if( l_force .and. params%has_next_assembly_ref_grid() )then
+            if( params%nspace_next > params%nspace ) call cline_assembly%set('nspace', params%nspace_next)
             call cline_assembly%delete('nspace_next')
             if( params%pftsz_next > 0 ) call cline_assembly%set('pftsz', params%pftsz_next)
             call cline_assembly%delete('pftsz_next')
-        else if( params%uses_next_assembly_ref_nspace() )then
-            call cline_assembly%set('nspace', params%assembly_ref_nspace())
+        else if( params%uses_next_assembly_ref_grid() )then
+            if( params%uses_next_assembly_ref_nspace() ) call cline_assembly%set('nspace', params%assembly_ref_nspace())
             call cline_assembly%delete('nspace_next')
-            if( params%pftsz_next > 0 ) call cline_assembly%set('pftsz', params%pftsz_next)
+            if( params%pftsz_next > 0 ) call cline_assembly%set('pftsz', params%assembly_ref_pftsz())
             call cline_assembly%delete('pftsz_next')
         endif
     end subroutine promote_assembly_nspace_if_needed
@@ -235,7 +231,7 @@ contains
     subroutine remove_polar_partial_sum_files( params )
         type(parameters), intent(in) :: params
         type(string) :: fname
-        integer :: ipart, numlen_part, state
+        integer :: ipart, numlen_part
         numlen_part = max(1, params%numlen)
         do ipart = 1,max(1, params%nparts)
             fname = refine3D_polar_cavgs_part_fname('even', ipart, numlen_part)
@@ -246,10 +242,6 @@ contains
             if( file_exists(fname) ) call del_file(fname)
             fname = refine3D_polar_ctfsqsums_part_fname('odd', ipart, numlen_part)
             if( file_exists(fname) ) call del_file(fname)
-            do state = 1,max(1, params%nstates)
-                fname = refine3D_obsfield_part_fname(state, ipart, numlen_part)
-                if( file_exists(fname) ) call del_file(fname)
-            enddo
         end do
         call fname%kill
     end subroutine remove_polar_partial_sum_files
@@ -605,8 +597,7 @@ contains
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
         end select
         if( converged .and. params%l_polar .and. trim(params%polar) == 'obsfield' .and. &
-            &(.not. params%uses_next_assembly_ref_nspace()) .and. &
-            &params%can_promote_assembly_ref_nspace() .and. params%nspace_next > params%nspace )then
+            &(.not. params%uses_next_assembly_ref_grid()) .and. params%has_next_assembly_ref_grid() )then
             call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
             call promote_assembly_nspace_if_needed(params, cline_volassemble, force=.true.)
             call xpolar_volassemble%execute(cline_volassemble)
@@ -755,6 +746,7 @@ contains
         self%cline_calc_group_sigmas   = cline
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
         call self%cline_rec3D%delete( 'nspace_next' )
+        call self%cline_rec3D%delete( 'pftsz_next' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
@@ -1098,8 +1090,7 @@ contains
         ! Force termination at requested number of iterations (maxits is run-length)
         if( (iter - params%startit + 1) >= params%maxits ) converged = .true.
         if( converged .and. params%l_polar .and. trim(params%polar) == 'obsfield' .and. &
-            &(.not. params%uses_next_assembly_ref_nspace()) .and. &
-            &params%can_promote_assembly_ref_nspace() .and. params%nspace_next > params%nspace )then
+            &(.not. params%uses_next_assembly_ref_grid()) .and. params%has_next_assembly_ref_grid() )then
             call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
             call promote_assembly_nspace_if_needed(params, cline_volassemble, force=.true.)
             call xpolar_volassemble%execute(cline_volassemble)

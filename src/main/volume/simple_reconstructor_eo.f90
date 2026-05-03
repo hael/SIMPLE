@@ -60,6 +60,7 @@ type :: reconstructor_eo
     procedure          :: grid_plane_nn
     procedure          :: compress_exp
     procedure          :: expand_exp
+    procedure          :: project_polar
     procedure          :: sum_eos    !< for merging even and odd into sum
     procedure          :: sum_reduce !< for summing eo_recs obtained by parallel exec
     procedure          :: sampl_dens_correct_eos
@@ -434,6 +435,18 @@ contains
         call self%odd%expand_exp
     end subroutine expand_exp
 
+    subroutine project_polar( self, eulspace, nspace, kfromto, polar_x, polar_y, &
+            &pfts_even, pfts_odd, ctf2_even, ctf2_odd )
+        class(reconstructor_eo), intent(inout) :: self
+        class(oris),             intent(inout) :: eulspace
+        integer,                 intent(in)    :: nspace, kfromto(2)
+        real(sp),                intent(in)    :: polar_x(:,:), polar_y(:,:)
+        complex(dp),             intent(out)   :: pfts_even(:,:,:), pfts_odd(:,:,:)
+        real(dp),                intent(out)   :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
+        call self%even%project_polar(eulspace, nspace, kfromto, polar_x, polar_y, pfts_even, ctf2_even)
+        call self%odd%project_polar( eulspace, nspace, kfromto, polar_x, polar_y, pfts_odd,  ctf2_odd )
+    end subroutine project_polar
+
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg, fsc_in )
         class(reconstructor_eo), intent(inout) :: self                   !< instance
@@ -597,7 +610,6 @@ contains
         ! create temporary e/o:s
         call even_tmp%copy(even)
         call odd_tmp%copy(odd)
-        ! masking
         call even_tmp%mask3D_soft(self%msk, backgr=0.)
         call odd_tmp%mask3D_soft(self%msk, backgr=0.)
         ! calculate FSC

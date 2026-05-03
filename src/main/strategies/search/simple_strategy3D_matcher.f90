@@ -184,7 +184,7 @@ contains
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_polar )then
                 if( trim(ctrl%polar_mode) == 'obsfield' )then
-                    call b_ptr%pftc%polar_cavger_write_obsfield_parts
+                    call write_partial_recs(params, build, cline, fpls)
                     call finalize_rec_objs(params, build)
                 else
                     call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
@@ -248,7 +248,7 @@ contains
                 write(fnr,'(a,t52,f9.2)') 'match3D 3D alignment : ',              rt_align
                 write(fnr,'(a,t52,f9.2)') 'match3D project file I/O : ',          rt_projio
                 if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
-                    write(fnr,'(a,t52,f9.2)') 'match3D obsfield insertion : ',     rt_rec
+                    write(fnr,'(a,t52,f9.2)') 'match3D obsfield rec accumulation : ', rt_rec
                 else if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'yes' )then
                     write(fnr,'(a,t52,f9.2)') 'match3D polar-sum accumulation : ', rt_rec
                 else
@@ -279,7 +279,7 @@ contains
                 write(fnr,'(a,t52,f9.2)') 'match3D 3D alignment : ',              (rt_align/rt_tot)                       * 100.
                 write(fnr,'(a,t52,f9.2)') 'match3D project file I/O : ',          (rt_projio/rt_tot)                      * 100.
                 if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
-                    write(fnr,'(a,t52,f9.2)') 'match3D obsfield insertion : ',     (rt_rec/rt_tot)                         * 100.
+                    write(fnr,'(a,t52,f9.2)') 'match3D obsfield rec accumulation : ', (rt_rec/rt_tot)                         * 100.
                 else if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'yes' )then
                     write(fnr,'(a,t52,f9.2)') 'match3D polar-sum accumulation : ', (rt_rec/rt_tot)                         * 100.
                 else
@@ -354,10 +354,10 @@ contains
         subroutine prepare_refs_sigmas_and_pftc()
             integer :: nrefs
             nrefs = p_ptr%nspace * p_ptr%nstates
-            if( ctrl%do_polar_prepare )then
+            if( ctrl%do_polar_prepare .or. (ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield') )then
                 if( ctrl%do_bench ) t_prep_ref_sections = tic()
                 if( .not. polar_ref_sections_available(p_ptr) )then
-                    THROW_HARD('polar reference sections are missing; strategy must materialize POLAR_REFS before matching')
+                    call ensure_polar_refs_on_disk(p_ptr, b_ptr, cline, batchsz_max, 'refine3D matcher preparation')
                 endif
                 call prep_pftc4align3D(p_ptr, b_ptr, cline, batchsz_max)
                 if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
@@ -408,7 +408,7 @@ contains
             if( .not. ctrl%do_write_partial_recs ) return
             if( ctrl%do_polar )then
                 if( trim(ctrl%polar_mode).eq.'obsfield' )then
-                    call init_rec(params, build, batchsz_max, fpls, init_volumes=.false.)
+                    call init_rec(params, build, batchsz_max, fpls)
                     call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
                 endif
             else
@@ -511,8 +511,7 @@ contains
                     case('obsfield')
                         call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
                             pinds(batch_start:batch_end), fpls(:batchsz))
-                        call b_ptr%pftc%polar_cavger_insert_ptcls_obsfield(b_ptr%eulspace, b_ptr%spproj_field, &
-                            &b_ptr%pgrpsyms, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
+                        call update_rec(params, b_ptr, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
                     case('yes')
                         call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), &
                             b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)

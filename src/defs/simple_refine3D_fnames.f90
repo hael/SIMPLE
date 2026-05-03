@@ -28,8 +28,6 @@ public :: refine3D_polar_cavgs_part_fname
 public :: refine3D_polar_ctfsqsums_part_fname
 public :: refine3D_polar_sums_fname
 public :: refine3D_polar_ctf2_fname
-public :: refine3D_obsfield_part_fname
-public :: refine3D_obsfield_fname
 public :: refine3D_polar_refs_fbody
 public :: refine3D_polar_refs_fname
 public :: refine3D_polar_ref_part_fname
@@ -202,16 +200,6 @@ contains
         character(len=*), intent(in) :: half
         fname = string('polar_ctf2')//half_suffix(half)//BIN_EXT
     end function refine3D_polar_ctf2_fname
-
-    type(string) function refine3D_obsfield_part_fname( state, part, numlen ) result(fname)
-        integer, intent(in) :: state, part, numlen
-        fname = string('obsfield_state')//state_tag(state)//'_part'//part_tag(part, numlen)//BIN_EXT
-    end function refine3D_obsfield_part_fname
-
-    type(string) function refine3D_obsfield_fname( state ) result(fname)
-        integer, intent(in) :: state
-        fname = string('obsfield_state')//state_tag(state)//BIN_EXT
-    end function refine3D_obsfield_fname
 
     type(string) function refine3D_polar_refs_fbody() result(fname)
         fname = string(POLAR_REFS_FBODY)

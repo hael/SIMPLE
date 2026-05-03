@@ -128,6 +128,7 @@ contains
         call cline_rec3D%set('prg', 'reconstruct3D') ! required for distributed call
         call cline_rec3D%delete('trail_rec')
         call cline_rec3D%delete('nspace_next')
+        call cline_rec3D%delete('pftsz_next')
         call cline_rec3D%delete('objfun')
         call cline_rec3D%delete('sigma_est')
         call cline_rec3D%delete('update_frac')

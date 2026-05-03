@@ -246,7 +246,6 @@ type :: parameters
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: polar='no'           !< Polar restoration mode(no|yes|obsfield){no}
-    character(len=STDLEN)     :: obsfield_shell_stats='no' !< Print spherical-shell geometry diagnostics(yes|no){no}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
@@ -556,8 +555,12 @@ type :: parameters
     procedure          :: new
     procedure          :: is_final_planned_iter
     procedure          :: can_promote_assembly_ref_nspace
+    procedure          :: has_next_assembly_ref_grid
     procedure          :: uses_next_assembly_ref_nspace
+    procedure          :: uses_next_assembly_ref_pftsz
+    procedure          :: uses_next_assembly_ref_grid
     procedure          :: assembly_ref_nspace
+    procedure          :: assembly_ref_pftsz
     procedure, private :: set_img_format
 end type parameters
 
@@ -573,6 +576,13 @@ contains
         can_promote_assembly_ref_nspace = (.not. self%l_polar) .or. trim(self%polar) == 'obsfield'
     end function can_promote_assembly_ref_nspace
 
+    logical function has_next_assembly_ref_grid( self )
+        class(parameters), intent(in) :: self
+        has_next_assembly_ref_grid = self%can_promote_assembly_ref_nspace() &
+            &.and. ( (self%nspace_next > self%nspace) .or. &
+            &        (self%pftsz_next > 0 .and. self%pftsz_next /= self%pftsz) )
+    end function has_next_assembly_ref_grid
+
     logical function uses_next_assembly_ref_nspace( self )
         class(parameters), intent(in) :: self
         uses_next_assembly_ref_nspace = self%can_promote_assembly_ref_nspace() &
@@ -581,11 +591,31 @@ contains
             &.and. self%nspace_next > self%nspace
     end function uses_next_assembly_ref_nspace
 
+    logical function uses_next_assembly_ref_pftsz( self )
+        class(parameters), intent(in) :: self
+        uses_next_assembly_ref_pftsz = self%can_promote_assembly_ref_nspace() &
+            &.and. self%is_final_planned_iter()                               &
+            &.and. self%pftsz_next > 0                                        &
+            &.and. self%pftsz_next /= self%pftsz
+    end function uses_next_assembly_ref_pftsz
+
+    logical function uses_next_assembly_ref_grid( self )
+        class(parameters), intent(in) :: self
+        uses_next_assembly_ref_grid = self%uses_next_assembly_ref_nspace() .or. &
+            &self%uses_next_assembly_ref_pftsz()
+    end function uses_next_assembly_ref_grid
+
     integer function assembly_ref_nspace( self )
         class(parameters), intent(in) :: self
         assembly_ref_nspace = self%nspace
         if( self%uses_next_assembly_ref_nspace() ) assembly_ref_nspace = self%nspace_next
     end function assembly_ref_nspace
+
+    integer function assembly_ref_pftsz( self )
+        class(parameters), intent(in) :: self
+        assembly_ref_pftsz = self%pftsz
+        if( self%uses_next_assembly_ref_grid() .and. self%pftsz_next > 0 ) assembly_ref_pftsz = self%pftsz_next
+    end function assembly_ref_pftsz
 
     subroutine init_strings( self )
         class(parameters), intent(inout) :: self
@@ -815,7 +845,6 @@ contains
         call check_carg('platonic',       self%platonic)
         call check_carg('plot_key',       self%plot_key)
         call check_carg('polar',          self%polar)
-        call check_carg('obsfield_shell_stats', self%obsfield_shell_stats)
         call check_carg('postprocess',    self%postprocess)
         call check_carg('pre_norm',       self%pre_norm)
         call check_carg('prg',            self%prg)
@@ -1648,11 +1677,6 @@ contains
                 self%l_polar = .true.
             case DEFAULT
                 THROW_HARD('Unsupported POLAR argument: '//trim(self%polar))
-        end select
-        select case(trim(self%obsfield_shell_stats))
-            case('no','yes')
-            case DEFAULT
-                THROW_HARD('Unsupported obsfield_shell_stats argument: '//trim(self%obsfield_shell_stats))
         end select
         if( self%l_polar )then
             ! deactivate post-alignment cartesian reconstruction

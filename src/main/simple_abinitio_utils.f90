@@ -95,7 +95,6 @@ contains
         call cline_reconstruct3D%delete('refs')
         call cline_reconstruct3D%delete('refs_even')
         call cline_reconstruct3D%delete('refs_odd')
-        call cline_reconstruct3D%delete('write_obsfield_vols')
         ! re-project volume, only with cavgs
         call cline_reproject%set('prg',                  'reproject')
         call cline_reproject%set('pgrp',                 params%pgrp)
@@ -116,13 +115,13 @@ contains
         if( l_delete_which_iter ) call child_cline%delete('which_iter')
         call child_cline%delete('endit')
         call child_cline%delete('nspace_next')
+        call child_cline%delete('pftsz_next')
         call child_cline%delete('polar')
         call child_cline%delete('automsk')
         call child_cline%delete('filt_mode')
         call child_cline%delete('refs')
         call child_cline%delete('refs_even')
         call child_cline%delete('refs_odd')
-        call child_cline%delete('write_obsfield_vols')
     end subroutine strip_refine3D_planning_keys
 
     subroutine invalidate_polar_ref_sections

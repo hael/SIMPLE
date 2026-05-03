@@ -424,7 +424,7 @@ and comparison with the current `polar=no` workflow.
 - Normalization directly produces the polar reference model; no extra
   shell-to-reference interpolation or reprojection step is required in the
   exact-node prototype.
-- The method avoids direct common-line redistribution between target references.
+- The method avoids common-line redistribution between target references.
 - It creates a natural home for reusing prepared polar particle representatives.
 - It may remove the poor scaling behavior of `polar=yes` while preserving a
   genuinely polar intermediate representation.

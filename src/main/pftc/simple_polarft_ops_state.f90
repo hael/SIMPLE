@@ -1,9 +1,5 @@
 !@descr: submodule for controlling various state-related things in the polarops module
 submodule (simple_polarft_calc) simple_polarft_ops_state
-use simple_memoize_ft_maps, only: memoize_ft_maps
-use simple_refine3D_fnames, only: refine3D_obsfield_part_fname
-use simple_fgrid_obsfield,  only: fgrid_obsfield_eo
-use simple_shell_field_geom, only: shell_field_geom
 implicit none
 #include "simple_local_flags.inc"
 
@@ -25,10 +21,8 @@ contains
         allocate(self%pfts_even(self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
                 &self%pfts_odd( self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
                 &self%pfts_merg(self%pftsz, self%kfromto(1):self%interpklim, self%ncls))
-        if( trim(self%p_ptr%polar) /= 'obsfield' )then
-            allocate(self%ctf2_even(self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
-                    &self%ctf2_odd( self%pftsz, self%kfromto(1):self%interpklim, self%ncls))
-        endif
+        allocate(self%ctf2_even(self%pftsz, self%kfromto(1):self%interpklim, self%ncls),&
+                &self%ctf2_odd( self%pftsz, self%kfromto(1):self%interpklim, self%ncls))
         call self%polar_cavger_zero_pft_refs
         self%pfts_merg = DCMPLX_ZERO
     end subroutine polar_cavger_new
@@ -46,101 +40,6 @@ contains
             !$omp end parallel workshare
         endif
     end subroutine polar_cavger_zero_pft_refs
-
-    subroutine obsfield_lims_from_params( self, lims )
-        class(polarft_calc), intent(in)  :: self
-        integer,             intent(out) :: lims(3,2)
-        integer :: box
-        box = self%p_ptr%box_crop
-        if( is_even(box) )then
-            lims(1,:) = [0, box/2]
-            lims(2,:) = [-box/2, box/2-1]
-            lims(3,:) = [-box/2, box/2-1]
-        else
-            lims(1,:) = [0, (box-1)/2]
-            lims(2,:) = [-(box-1)/2, (box-1)/2]
-            lims(3,:) = [-(box-1)/2, (box-1)/2]
-        endif
-    end subroutine obsfield_lims_from_params
-
-    integer function obsfield_interp_limit( self )
-        class(polarft_calc), intent(in) :: self
-        obsfield_interp_limit = fdim(self%p_ptr%box_crop) - 1
-        if( obsfield_interp_limit < self%interpklim )then
-            write(logfhandle,*) 'obsfield/interpolation limits: ', obsfield_interp_limit, self%interpklim
-            THROW_HARD('obsfield support is smaller than reprojection interpolation limit')
-        endif
-    end function obsfield_interp_limit
-
-    subroutine ensure_obsfields_allocated( self )
-        class(polarft_calc), intent(inout) :: self
-        integer :: lims(3,2), istate, nyq_obsfield
-        integer, allocatable :: shell_cell_counts(:)
-        integer :: kspan(2), shell_budget
-        type(shell_field_geom) :: shell_geom
-        type(sym) :: shell_sym
-        if( allocated(self%obsfields) ) return
-        call obsfield_lims_from_params(self, lims)
-        nyq_obsfield = obsfield_interp_limit(self)
-        allocate(self%obsfields(self%p_ptr%nstates))
-        do istate = 1, self%p_ptr%nstates
-            call self%obsfields(istate)%new(lims, nyq_obsfield)
-        enddo
-        kspan = [self%kfromto(1), self%interpklim]
-        call self%obsfields(1)%even%count_shell_cell_counts(kspan, shell_cell_counts)
-        shell_budget = sum(shell_cell_counts)
-        call shell_sym%new(self%p_ptr%pgrp)
-        call shell_geom%new(shell_sym, kspan, shell_budget, shell_cell_counts)
-        do istate = 1, self%p_ptr%nstates
-            call self%obsfields(istate)%init_shell_cache(shell_geom)
-        enddo
-        if( trim(self%p_ptr%obsfield_shell_stats) == 'yes' )then
-            call shell_geom%log_stats('primary_shells')
-        else
-            call shell_geom%log_summary('primary_shells')
-        endif
-        deallocate(shell_cell_counts)
-        call shell_geom%kill
-        call shell_sym%kill
-    end subroutine ensure_obsfields_allocated
-
-    subroutine kill_obsfield_tls( self )
-        class(polarft_calc), intent(inout) :: self
-        integer :: ithr, istate
-        if( allocated(self%obsfield_tls) )then
-            do ithr = 1,size(self%obsfield_tls,1)
-                do istate = 1,size(self%obsfield_tls,2)
-                    call self%obsfield_tls(ithr,istate)%kill
-                enddo
-            enddo
-            deallocate(self%obsfield_tls)
-        endif
-        if( allocated(self%obsfield_sym_tls) )then
-            do ithr = 1,size(self%obsfield_sym_tls)
-                call self%obsfield_sym_tls(ithr)%kill
-            enddo
-            deallocate(self%obsfield_sym_tls)
-        endif
-    end subroutine kill_obsfield_tls
-
-    subroutine ensure_obsfield_tls_allocated( self )
-        class(polarft_calc), intent(inout) :: self
-        integer :: ithr, istate
-        if( .not. allocated(self%obsfields) ) THROW_HARD('obsfields not allocated; ensure_obsfield_tls_allocated')
-        if( allocated(self%obsfield_tls) )then
-            if( size(self%obsfield_tls,1) == nthr_glob .and. size(self%obsfield_tls,2) == self%p_ptr%nstates .and. &
-                &allocated(self%obsfield_sym_tls) .and. size(self%obsfield_sym_tls) == nthr_glob ) return
-            call kill_obsfield_tls(self)
-        endif
-        allocate(self%obsfield_tls(nthr_glob,self%p_ptr%nstates))
-        allocate(self%obsfield_sym_tls(nthr_glob))
-        do ithr = 1,nthr_glob
-            call self%obsfield_sym_tls(ithr)%new(self%p_ptr%pgrp)
-            do istate = 1,self%p_ptr%nstates
-                call self%obsfield_tls(ithr,istate)%copy_layout_from(self%obsfields(istate))
-            enddo
-        enddo
-    end subroutine ensure_obsfield_tls_allocated
 
     module subroutine polar_cavger_set_ref_pft( self, icls, which )
         class(polarft_calc), intent(inout) :: self
@@ -333,110 +232,13 @@ contains
         nullify(spproj_field)
     end subroutine polar_cavger_update_sums
 
-    ! Observation-field restoration experiment. Workers only accumulate dense
-    ! state-local observation fields here; assembly later extracts polar sections
-    ! from the reduced fields, matching the polar=no insert-then-assemble shape.
-    module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
-        class(polarft_calc),           intent(inout) :: self
-        class(oris), target,           intent(inout) :: eulspace
-        class(oris), pointer,          intent(inout) :: ptcl_field
-        class(sym),                    intent(inout) :: symop
-        integer,                       intent(in)    :: nptcls, pinds(nptcls)
-        class(fplane_type), target,    intent(inout) :: fpls(nptcls)
-        type(ori) :: o
-        real :: pw
-        integer :: i, iptcl, eo, pstate, ithr, istate
-        if( nptcls < 1 ) return
-        call ensure_obsfields_allocated(self)
-        call ensure_obsfield_tls_allocated(self)
-        !$omp parallel default(shared) proc_bind(close) &
-        !$omp private(i,ithr,iptcl,pstate,pw,eo,o)
-        ithr = omp_get_thread_num() + 1
-        do istate = 1,self%p_ptr%nstates
-            call self%obsfield_tls(ithr,istate)%reset
-        enddo
-        !$omp barrier
-        !$omp do schedule(dynamic,1)
-        do i = 1, nptcls
-            iptcl  = pinds(i)
-            pstate = ptcl_field%get_state(iptcl)
-            if( pstate < 1 .or. pstate > self%p_ptr%nstates ) cycle
-            pw = 1.0
-            if( ptcl_field%isthere(iptcl,'w') ) pw = ptcl_field%get(iptcl,'w')
-            if( pw < TINY ) cycle
-            eo = ptcl_field%get_eo(iptcl)
-            call ptcl_field%get_ori(iptcl, o)
-            call self%obsfield_tls(ithr,pstate)%insert_plane(self%obsfield_sym_tls(ithr), o, fpls(i), eo, pw)
-        enddo
-        !$omp end do
-        call o%kill
-        !$omp end parallel
-        do istate = 1,self%p_ptr%nstates
-            call self%obsfields(istate)%append_field_array(self%obsfield_tls(:,istate))
-        enddo
-    end subroutine polar_cavger_insert_ptcls_obsfield
-
-    module subroutine polar_cavger_write_obsfield_parts( self )
-        class(polarft_calc), intent(inout) :: self
-        type(string) :: fname
-        integer :: istate
-        call ensure_obsfields_allocated(self)
-        do istate = 1, self%p_ptr%nstates
-            fname = refine3D_obsfield_part_fname(istate, self%p_ptr%part, self%p_ptr%numlen)
-            call self%obsfields(istate)%write(fname)
-        enddo
-        call fname%kill
-    end subroutine polar_cavger_write_obsfield_parts
-
-    module subroutine polar_cavger_assemble_obsfields_from_parts( self, reforis, bench )
-        class(polarft_calc), intent(inout) :: self
-        class(oris), target, intent(inout) :: reforis
-        real(timer_int_kind), optional, intent(out) :: bench(:)
-        type(fgrid_obsfield_eo) :: obs_part
-        type(string) :: fname
-        integer(timer_int_kind) :: t_read, t_append
-        integer :: istate, ipart
-        real(timer_int_kind) :: rt_read, rt_append
-        rt_read   = 0.
-        rt_append = 0.
-        if( present(bench) ) bench = 0.
-        call ensure_obsfields_allocated(self)
-        do istate = 1, self%p_ptr%nstates
-            call self%obsfields(istate)%reset
-            do ipart = 1, self%p_ptr%nparts
-                fname = refine3D_obsfield_part_fname(istate, ipart, self%p_ptr%numlen)
-                if( L_BENCH_GLOB ) t_read = tic()
-                call obs_part%read(fname)
-                if( L_BENCH_GLOB ) rt_read = rt_read + toc(t_read)
-                if( L_BENCH_GLOB ) t_append = tic()
-                call self%obsfields(istate)%append_field(obs_part)
-                if( L_BENCH_GLOB ) rt_append = rt_append + toc(t_append)
-                call obs_part%kill
-            enddo
-        enddo
-        if( present(bench) )then
-            if( size(bench) >= 1 ) bench(1) = rt_read
-            if( size(bench) >= 2 ) bench(2) = rt_append
-        endif
-        call obs_part%kill
-        call fname%kill
-    end subroutine polar_cavger_assemble_obsfields_from_parts
-
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self
-        integer :: istate
         if( allocated(self%pfts_even)    ) deallocate(self%pfts_even)
         if( allocated(self%pfts_odd)     ) deallocate(self%pfts_odd)
         if( allocated(self%pfts_merg)    ) deallocate(self%pfts_merg)
         if( allocated(self%ctf2_even)    ) deallocate(self%ctf2_even)
         if( allocated(self%ctf2_odd)     ) deallocate(self%ctf2_odd)
-        call kill_obsfield_tls(self)
-        if( allocated(self%obsfields) )then
-            do istate = 1, size(self%obsfields)
-                call self%obsfields(istate)%kill
-            enddo
-            deallocate(self%obsfields)
-        endif
         if( allocated(self%eo_pops)      ) deallocate(self%eo_pops)
         if( allocated(self%prev_eo_pops) ) deallocate(self%prev_eo_pops)
         self%ncls     = 0

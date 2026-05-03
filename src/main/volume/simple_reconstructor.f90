@@ -60,6 +60,7 @@ type, extends(image) :: reconstructor
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     procedure          :: expand_exp
+    procedure          :: project_polar
     ! SUMMATION
     procedure          :: sum_reduce
     procedure          :: add_invtausq2rho
@@ -312,7 +313,7 @@ contains
 
     !> insert Fourier plane into the expanded Fourier volume by weighted nearest
     !> cell assignment. This mirrors insert_plane_oversamp geometry, but replaces
-    !> the full KB splat with the same one-cell KB confidence used by fgrid_obsfield.
+    !> nearest-cell splat variant for sparse/diagnostic reconstruction paths.
     subroutine insert_plane_oversamp_nn( self, se, o, fpl, pwght )
         use simple_math,    only: ceil_div, floor_div
         use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
@@ -518,6 +519,82 @@ contains
         end do
         !$omp end parallel do
     end subroutine expand_exp
+
+    subroutine project_polar( self, eulspace, nspace, kfromto, polar_x, polar_y, pfts_state, ctf2_state )
+        class(reconstructor), intent(inout) :: self
+        class(oris),          intent(inout) :: eulspace
+        integer,              intent(in)    :: nspace, kfromto(2)
+        real(sp),             intent(in)    :: polar_x(:,:), polar_y(:,:)
+        complex(dp),          intent(out)   :: pfts_state(:,:,:)
+        real(dp),             intent(out)   :: ctf2_state(:,:,:)
+        integer :: iproj, irot, k, kloc, kfrom, kto, pftsz, noris
+        real    :: e_rotmat(3,3), loc(3), px, py
+        kfrom = kfromto(1)
+        kto   = kfromto(2)
+        pftsz = size(polar_x,1)
+        noris = eulspace%get_noris()
+        if( .not. allocated(self%cmat_exp) .or. .not. allocated(self%rho_exp) )then
+            THROW_HARD('expanded matrices do not exist; reconstructor project_polar')
+        endif
+        if( kfrom < 1 .or. kfrom > kto ) THROW_HARD('invalid kfromto; reconstructor project_polar')
+        if( noris < nspace )             THROW_HARD('eulspace smaller than nspace; reconstructor project_polar')
+        if( size(polar_x,2) /= (kto-kfrom+1) ) THROW_HARD('polar_x k-span mismatch; reconstructor project_polar')
+        if( size(polar_y,1) /= pftsz .or. size(polar_y,2) /= size(polar_x,2) )then
+            THROW_HARD('polar coordinate shape mismatch; reconstructor project_polar')
+        endif
+        if( size(pfts_state,1) /= pftsz .or. size(pfts_state,2) /= size(polar_x,2) .or. &
+            &size(pfts_state,3) /= nspace )then
+            THROW_HARD('pfts_state shape mismatch; reconstructor project_polar')
+        endif
+        if( any(shape(ctf2_state) /= shape(pfts_state)) )then
+            THROW_HARD('ctf2_state shape mismatch; reconstructor project_polar')
+        endif
+        call self%expand_exp
+        !$omp parallel do default(shared) private(iproj,e_rotmat,irot,k,kloc,loc,px,py) schedule(static) proc_bind(close)
+        do iproj = 1, nspace
+            e_rotmat = eulspace%get_mat(iproj)
+            do k = kfrom, kto
+                kloc = k - kfrom + 1
+                do irot = 1, pftsz
+                    px     = real(polar_x(irot,kloc))
+                    py     = real(polar_y(irot,kloc))
+                    loc(1) = px*e_rotmat(1,1) + py*e_rotmat(2,1)
+                    loc(2) = px*e_rotmat(1,2) + py*e_rotmat(2,2)
+                    loc(3) = px*e_rotmat(1,3) + py*e_rotmat(2,3)
+                    pfts_state(irot,kloc,iproj) = cmplx(interp_cmat_exp(self, loc), kind=dp)
+                    ctf2_state(irot,kloc,iproj) = real(max(0., interp_rho_exp(self, loc)), kind=dp)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine project_polar
+
+    pure function interp_cmat_exp( self, loc ) result( comp )
+        class(reconstructor), intent(in) :: self
+        real,                 intent(in) :: loc(3)
+        complex :: comp
+        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
+        integer :: iwinsz, win(2,3)
+        iwinsz   = ceiling(KBWINSZ - 0.5)
+        win(1,:) = nint(loc)
+        win(2,:) = win(1,:) + iwinsz
+        win(1,:) = win(1,:) - iwinsz
+        call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
+        comp = sum(w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)))
+    end function interp_cmat_exp
+
+    pure real function interp_rho_exp( self, loc ) result( rho )
+        class(reconstructor), intent(in) :: self
+        real,                 intent(in) :: loc(3)
+        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
+        integer :: iwinsz, win(2,3)
+        iwinsz   = ceiling(KBWINSZ - 0.5)
+        win(1,:) = nint(loc)
+        win(2,:) = win(1,:) + iwinsz
+        win(1,:) = win(1,:) - iwinsz
+        call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
+        rho = sum(w * self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)))
+    end function interp_rho_exp
 
     subroutine write_rho_as_mrc( self, fname )
         class(reconstructor), intent(inout) :: self

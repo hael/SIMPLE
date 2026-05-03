@@ -1,18 +1,18 @@
 # Observation-backed polar restore design note
 
 ## Status
-This is a design note, not an implementation policy. A first testable prototype now
-exists in `src/main/pftc/simple_fgrid_obsfield.f90` and is wired as
-`polar=obsfield`.
+This is a design note, not an implementation policy. The first dense-grid prototype
+was removed after validation showed that it was neither quality-equivalent to
+`polar=no` nor likely to beat the Cartesian path. Current `polar=obsfield`
+experiments should reuse the normal Cartesian partial-reconstruction machinery.
 
-The existing `polar=direct` class-average path should remain unchanged. The class-average
-case is currently fast and robust, and it exercises a different regime: few input
-observations, no particle CTF variation, and much less pressure from particle-count
-scaling.
+Class-average restoration is out of scope for this note. It exercises a different
+regime: few input observations, no particle CTF variation, and much less pressure
+from particle-count scaling.
 
-This note is about a possible particle-path replacement for the direct common-line
-restore formulation. The current `polar=obsfield` prototype now uses a dense
-volume-like Fourier grid. The strategy is deliberately simple:
+This note preserves the design constraints for any future attempt to revive a
+particle-path replacement for the retired common-line restore experiment. The
+deleted dense-grid prototype used a deliberately simple volume-like Fourier grid:
 
 ```text
 particle Fourier samples
@@ -20,20 +20,20 @@ particle Fourier samples
   -> KB interpolation of polar central sections from those raw grid sums
 ```
 
-There is no insertion-side interpolation, no common-line redistribution, and no
-intermediate reconstructed volume. The accumulated grid values are the object that is
+That prototype had no insertion-side interpolation, no common-line redistribution, and
+no intermediate reconstructed volume. The accumulated grid values were the object
 sampled to make polar references.
 
-Symmetry follows the Cartesian reconstructor convention: each particle plane is
-inserted once for each symmetry-related orientation. Extraction does not apply
-additional symmetry operators; it interpolates from the already symmetry-expanded
-observation field.
+Any future observation-field design should still follow the Cartesian reconstructor
+symmetry convention: each particle plane is inserted once for each symmetry-related
+orientation. Extraction should not apply additional symmetry operators; it should
+interpolate from the already symmetry-expanded field.
 
 ## Motivation
-The current `polar=direct` particle path avoids reprojection from a Cartesian volume, but
-it still scales poorly with particle batch size. In the common-line formulation, each
-particle contributes to every projection direction except the one it is assigned to.
-That makes the dominant restore cost scale roughly like:
+The retired particle common-line experiment avoided reprojection from a Cartesian
+volume, but it still scaled poorly with particle batch size. In that formulation,
+each particle contributed to every projection direction except the one it was
+assigned to. That made the dominant restore cost scale roughly like:
 
 ```text
 nparticles_in_part * nrefs * radial_samples * symmetry_factor
@@ -51,10 +51,10 @@ The Cartesian route pays for a volume interpolation step, but it separates parti
 accumulation from reference extraction. Once the volume has been built, extracting more
 reference sections does not revisit every particle-reference pair.
 
-The direct polar path removes the Cartesian volume, but at the cost of coupling
-particle count and reference count directly. That is likely why it behaves beautifully
-for around 100 class averages but becomes much less attractive for particle batches
-around 1024 or larger.
+That common-line particle path removed the Cartesian volume, but at the cost of
+coupling particle count and reference count directly. That is likely why the idea
+looked attractive for small class-average-style inputs but became much less
+attractive for particle batches around 1024 or larger.
 
 ## Hypothesis
 We may want an intermediate representation that keeps the useful part of the Cartesian
@@ -175,7 +175,7 @@ weights in native destination-grid coordinates. This matches the expanded Fourie
 volume lattice that receives the update. The padded Fourier plane remains only the
 source from which samples are read with `hp=h*pf` and `kp=k*pf`.
 
-This convention matches the coordinate system used by `fgrid_obsfield` extraction and
+This convention matches the coordinate system used by the retired dense-field extraction and
 avoids weighting native destination cells with a padded-coordinate stencil.
 
 ## Distributed Execution Model
@@ -224,12 +224,11 @@ avoid.
    requested sample, it contributes through the same kernel and weighting model as all
    other observations.
 
-4. Keep class averages on the current direct path by default.
+4. Keep class averages outside this particle-path experiment by default.
 
-   The class-average path is the case where `polar=direct` already has the right
-   performance and convergence behavior. `polar=obsfield` is exposed for controlled
-   testing, but it should not displace the direct default for class averages without
-   benchmark evidence.
+   Class averages have different scaling and convergence behavior. `polar=obsfield`
+   is exposed for controlled particle-path testing, but it should not displace
+   class-average restoration without benchmark evidence.
 
 5. Preserve additive even/odd numerator and denominator semantics.
 
@@ -264,19 +263,15 @@ avoid.
 The numerical backend likely belongs near the polar restore/pftc boundary, while the
 workflow integration belongs in the 3D matcher strategy.
 
-Prototype building block:
+Retired prototype building block:
 
-- `src/main/pftc/simple_fgrid_obsfield.f90` defines a part-local dense observation
-  field and an `insert_plane_oversamp` fill method that assigns particle Fourier
-  samples to their nearest 3D grid cells with one-cell KB weighting.
-- Symmetry is handled during insertion by applying every symmetry operator to the
-  particle orientation and depositing through the resulting rotation matrices.
-- The current prototype stores accumulated grid-cell numerator, denominator, and
-  insertion-weight values, not raw observation records.
-- `polar_cavger_insert_ptcls_obsfield` is wired as the `polar=obsfield` restore mode.
-  It fills the dense field, immediately extracts even/odd polar partial sums from the
-  accumulated grid arrays, and adds them to the existing `pfts_even/odd` and
-  `ctf2_even/odd` payloads.
+- The deleted `simple_fgrid_obsfield` prototype defined a part-local dense
+  observation field and a nearest-cell fill method. It was useful for isolating
+  the scaling idea, but it diverged from the `polar=no` reconstruction stencil and
+  therefore was not a clean quality comparison.
+- Current follow-up work should start from `reconstructor_eo` partials so particle
+  preparation, symmetry handling, gridding, and distributed reduction match
+  `polar=no`.
 
 Candidate ownership:
 
@@ -309,7 +304,7 @@ A useful validation sequence would be:
 2. Add CTF/noise weighting.
 
    Compare numerator and denominator shell statistics against the Cartesian reference
-   and the current direct-polar path.
+   and, where useful, archived results from the retired common-line experiment.
 
 3. Distributed additivity check.
 
@@ -333,7 +328,8 @@ A useful validation sequence would be:
 
 ## Decision Point
 This direction is worth considering because it targets the specific scaling failure:
-the current direct particle path couples particle count and reference count too tightly.
+the retired common-line particle experiment coupled particle count and reference count
+too tightly.
 The observation field would preserve the experimental observation geometry while
 recovering the `polar=no` path's useful separation between accumulation and reference
 extraction.

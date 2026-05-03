@@ -160,7 +160,7 @@ contains
         if( params%l_polar) then
             call cline%set('force_volassemble', 'yes')
             call set_bp_range3D(params, build, cline)
-            call calc_polar_partials( params, build, nptcls2update, pinds )
+            call calc_polar_partials( params, build, cline, nptcls2update, pinds )
             cline_volassemble = cline
             call cline_volassemble%set('prg',  'volassemble')
             call cline_volassemble%set('nthr', params%nthr)

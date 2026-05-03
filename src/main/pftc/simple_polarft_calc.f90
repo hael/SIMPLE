@@ -1,7 +1,6 @@
 !@descr: polarft class complete interface
 module simple_polarft_calc
 use simple_pftc_api
-use simple_fgrid_obsfield, only: fgrid_obsfield_eo, unsampled_floor
 use simple_refine3D_fnames, only: refine3D_polar_refs_fname
 implicit none
 
@@ -96,9 +95,6 @@ type :: polarft_calc
     ! for the subset of polarft_ops submodules
     complex(dp),                   allocatable :: pfts_even(:,:,:), pfts_odd(:,:,:), pfts_merg(:,:,:)
     real(dp),                      allocatable :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
-    type(fgrid_obsfield_eo),       allocatable :: obsfields(:)
-    type(fgrid_obsfield_eo),       allocatable :: obsfield_tls(:,:)
-    type(sym),                     allocatable :: obsfield_sym_tls(:)
     integer,                       allocatable :: prev_eo_pops(:,:), eo_pops(:,:)
     ! Others
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
@@ -193,16 +189,12 @@ type :: polarft_calc
     procedure          :: polar_cavger_set_ref_pft
     procedure          :: polar_cavger_calc_pops
     procedure          :: polar_cavger_update_sums
-    procedure          :: polar_cavger_insert_ptcls_obsfield
-    procedure          :: polar_cavger_write_obsfield_parts
-    procedure          :: polar_cavger_assemble_obsfields_from_parts
     procedure          :: polar_cavger_kill
     procedure          :: center_3Dpolar_refs
     ! ===== RESTORE: simple_polarft_ops_restore.f90
     procedure          :: polar_filterrefs
     procedure, private :: polar_cavger_calc_frc
     procedure          :: polar_cavger_normalize_commonline_refs
-    procedure          :: polar_cavger_normalize_obsfield_refs
     procedure, private :: mirror_slices
     procedure, private :: calc_fsc
     procedure, private :: add_invtausq2rho
@@ -756,25 +748,6 @@ interface
         logical,           optional, intent(in)    :: is3d
     end subroutine polar_cavger_update_sums
 
-    module subroutine polar_cavger_insert_ptcls_obsfield( self, eulspace, ptcl_field, symop, nptcls, pinds, fpls )
-        class(polarft_calc),        intent(inout) :: self
-        class(oris), target,        intent(inout) :: eulspace
-        class(oris),  pointer,      intent(inout) :: ptcl_field
-        class(sym),                 intent(inout) :: symop
-        integer,                    intent(in)    :: nptcls, pinds(nptcls)
-        class(fplane_type), target, intent(inout) :: fpls(nptcls)
-    end subroutine polar_cavger_insert_ptcls_obsfield
-
-    module subroutine polar_cavger_write_obsfield_parts( self )
-        class(polarft_calc), intent(inout) :: self
-    end subroutine polar_cavger_write_obsfield_parts
-
-    module subroutine polar_cavger_assemble_obsfields_from_parts( self, reforis, bench )
-        class(polarft_calc), intent(inout) :: self
-        class(oris), target, intent(inout) :: reforis
-        real(timer_int_kind), optional, intent(out) :: bench(:)
-    end subroutine polar_cavger_assemble_obsfields_from_parts
-
     module subroutine polar_cavger_kill( self )
         class(polarft_calc), intent(inout) :: self
     end subroutine polar_cavger_kill
@@ -807,14 +780,6 @@ interface
         type(cmdline),       intent(in)    :: cline
         real,                intent(in)    :: update_frac
     end subroutine polar_cavger_normalize_commonline_refs
-
-    module subroutine polar_cavger_normalize_obsfield_refs( self, reforis, cline, update_frac, bench )
-        class(polarft_calc), intent(inout) :: self
-        type(oris),          intent(in)    :: reforis
-        type(cmdline),       intent(in)    :: cline
-        real,                intent(in)    :: update_frac
-        real(timer_int_kind), optional, intent(out) :: bench(:)
-    end subroutine polar_cavger_normalize_obsfield_refs
 
     module subroutine mirror_slices( self, ref_space )
         class(polarft_calc), intent(inout) :: self
