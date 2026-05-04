@@ -697,6 +697,7 @@ contains
         call enable_splflags(spproj%os_cls2D, self%starfile%clusters2D%flags)
         call self%export_stardata(spproj, self%starfile%clusters2D%flags, spproj%os_cls2D, "clusters", mapstks=.false.)
         call spproj%os_cls2D%delete_entry("stk")
+        call stkname%kill
     end subroutine export_cls2D
 
     subroutine export_iter3D(self, spproj, states, iter)

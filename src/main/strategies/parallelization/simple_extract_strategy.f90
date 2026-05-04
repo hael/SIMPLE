@@ -153,6 +153,7 @@ contains
         do ibox = 1, size(boxfiles)
             if( basename(boxfiles(ibox)).eq.box_from_mic )then
                 boxfile = boxfiles(ibox)
+                call box_from_mic%kill
                 return
             endif
         end do

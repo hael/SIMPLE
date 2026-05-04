@@ -129,7 +129,10 @@ contains
                 end if
             end if
         end do
-        if( allocated(keys) ) deallocate(keys)
+        if( allocated(keys) )then
+            call keys%kill
+            deallocate(keys)
+        endif
         call testori%kill
     end subroutine enable_splflags
 

@@ -168,6 +168,9 @@ contains
         endif
         ! Write starfile
         call starproj%export_cls2D(build%spproj, params%which_iter)
+        ! cleanup
+        call starproj%kill
+        call cline_prob_align%kill
     end subroutine inmem_execute_iteration
 
     subroutine inmem_finalize_iteration( self, params, build)

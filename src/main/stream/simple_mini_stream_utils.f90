@@ -64,6 +64,12 @@ contains
         end do
         call picker%kill
         call mic_name%kill
+        call mic_raw%kill
+        call mic_shrink%kill
+        call mic_den_name%kill
+        call mic_topo_name%kill
+        call mic_bin_name%kill
+        call mic_diam_name%kill
     end subroutine segdiampick_preprocess
 
     subroutine segdiampick_mics( spproj, pcontrast, mic_to, moldiam_max, box_in_pix, mskdiam )
@@ -226,6 +232,10 @@ contains
         ! write output to disk
         call spproj%write_segment_inside('mic')
         if( allocated(orimap) ) deallocate(orimap)
+        ! cleanup
+        call mic_raw%kill
+        call mic_shrink%kill
+        call mic_den%kill
     end subroutine segdiampick_mics
 
 end module simple_mini_stream_utils

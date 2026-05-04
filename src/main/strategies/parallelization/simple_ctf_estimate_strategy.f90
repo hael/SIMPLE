@@ -220,6 +220,9 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         call spproj%kill
+        call intg_forctf%kill
+        call output_dir%kill
+        call imgkind%kill
     end subroutine inmem_execute
 
     subroutine inmem_finalize_run(self, params, cline)

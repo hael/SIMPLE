@@ -218,6 +218,9 @@ contains
         ! cleanup locals
         call o%kill
         call spproj%kill
+        call output_dir%kill
+        call moviename%kill
+        call fbody%kill
     end subroutine inmem_execute
 
     subroutine inmem_finalize_run(self, params, cline)

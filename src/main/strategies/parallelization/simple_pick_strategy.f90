@@ -303,7 +303,6 @@ contains
         type(string)      :: output_dir, intg_name, imgkind
         type(string)      :: boxfile, thumb_den
         integer           :: fromto(2), imic, ntot, nptcls_out, cnt, state
-        
         output_dir = PATH_HERE
         ! loop range
         if( params%stream .eq. 'yes' )then
@@ -341,6 +340,11 @@ contains
         call o%kill
         call spproj%kill
         call piter%kill
+        call output_dir%kill
+        call intg_name%kill
+        call imgkind%kill
+        call boxfile%kill
+        call thumb_den%kill
     end subroutine inmem_execute
 
     subroutine inmem_finalize_run(self, params, cline)

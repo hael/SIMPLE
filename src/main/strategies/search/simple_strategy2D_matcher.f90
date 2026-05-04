@@ -355,8 +355,8 @@ contains
             type(strategy2D_per_ptcl), allocatable, intent(inout) :: strategy2Dsrch(:)
             integer, allocatable, intent(inout) :: pinds(:), batches(:,:)
             type(eul_prob_tab2D), intent(inout) :: eulprob_obj_part
-            integer, intent(in) :: batchsz_max
-            type(ori), intent(inout) :: orientation
+            integer,              intent(in)    :: batchsz_max
+            type(ori),            intent(inout) :: orientation
             integer :: i
             call clean_strategy2D
             call orientation%kill
@@ -382,10 +382,10 @@ contains
 
         subroutine finalize_restoration_and_convergence(states, cline, conv, which_iter, converged)
             real, allocatable, intent(inout) :: states(:)
-            class(cmdline), intent(inout) :: cline
+            class(cmdline),    intent(inout) :: cline
             type(convergence), intent(inout) :: conv
-            integer, intent(in) :: which_iter
-            logical, intent(inout) :: converged
+            integer,           intent(in)    :: which_iter
+            logical,           intent(inout) :: converged
             if( ctrl%l_assignment_only )then
                 converged = .true.
                 return
