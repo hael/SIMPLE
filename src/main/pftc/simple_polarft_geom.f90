@@ -14,6 +14,16 @@ contains
         shmat = cmplx(self%heap_vars(ithr)%shmat_8)
     end subroutine gen_shmat
 
+    !>  Generate polar shift matrix by means of de Moivre's formula
+    module subroutine gen_shmat4aln(self, ithr, shift, shmat)
+        class(polarft_calc),  intent(inout) :: self
+        integer,              intent(in)    :: ithr
+        real(sp),             intent(in)    :: shift(2)
+        complex(sp), pointer, intent(inout) :: shmat(:,:)
+        call self%gen_shmat4aln_8(ithr, real(shift,dp), self%heap_vars(ithr)%shmat_8)
+        shmat = cmplx(self%heap_vars(ithr)%shmat_8)
+    end subroutine gen_shmat4aln
+
     !>  Generate polar shift matrix by means of de Moivre's formula, double precision
     module subroutine gen_shmat_8(self, ithr, shift_8, shmat_8)
         class(polarft_calc),  intent(inout) :: self
@@ -38,6 +48,36 @@ contains
         ! argmat  =  self%argtransf(:self%pftsz,:)*shvec(1) + self%argtransf(self%pftsz + 1:,:)*shvec(2)
         ! shmat   =  cmplx(cos(argmat),sin(argmat),dp)
     end subroutine gen_shmat_8
+
+    !>  Generate polar shift matrix by means of de Moivre's formula, double precision
+    !>  To be used only for alignment as it is band-passed within [kfromto(1);kfromto(2)]
+    module subroutine gen_shmat4aln_8(self, ithr, shift_8, shmat_8)
+        class(polarft_calc),  intent(inout) :: self
+        integer,              intent(in)    :: ithr
+        real(dp),             intent(in)    :: shift_8(2)
+        complex(dp), pointer, intent(inout) :: shmat_8(:,:)
+        real(dp) :: rarg
+        integer  :: k,p
+        ! per shell multiplicative increment
+        do p = 1,self%pftsz
+            rarg =        self%argtransf_shellone(           p) * shift_8(1)
+            rarg = rarg + self%argtransf_shellone(self%pftsz+p) * shift_8(2)
+            self%heap_vars(ithr)%shvec(p) = cmplx(cos(rarg), sin(rarg), kind=dp)
+        enddo
+        ! first shell
+        k = self%kfromto(1)
+        do p = 1,self%pftsz
+            rarg         =        self%argtransf(           p,k) * shift_8(1)
+            rarg         = rarg + self%argtransf(self%pftsz+p,k) * shift_8(2)
+            shmat_8(p,k) = cmplx(cos(rarg), sin(rarg), kind=dp)
+        enddo
+        ! remaining shells, cos(kx)+isin(kx) = (cos(x)+isin(x))**k-1 * (cos(x)+isin(x))
+        do k = self%kfromto(1)+1,self%kfromto(2)
+            do p = 1,self%pftsz
+                shmat_8(p,k) = shmat_8(p,k-1) * self%heap_vars(ithr)%shvec(p)
+            enddo
+        enddo
+    end subroutine gen_shmat4aln_8
 
     module subroutine shift_ptcl( self, iptcl, shvec)
         class(polarft_calc), intent(inout) :: self

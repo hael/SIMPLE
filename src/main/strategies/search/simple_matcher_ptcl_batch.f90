@@ -29,6 +29,7 @@ contains
                 call build%esig%read_part(  build%spproj_field)
                 call build%esig%read_groups(build%spproj_field)
             endif
+            call fname%kill
         end if
     end subroutine prep_sigmas_objfun
 
@@ -94,9 +95,6 @@ contains
         complex, allocatable :: pft(:,:)
         integer :: iptcl_batch, iptcl, ithr
         call discrete_read_imgbatch(params, build, nptcls_here, pinds, [1,nptcls_here])
-        do iptcl_batch = 1,nptcls_here
-            call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
-        enddo
         call build%pftc%reallocate_ptcls(nptcls_here, pinds)
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(build%pftc%get_pdim_interp())
         call ptcl_match_imgs(1)%memoize_mask_coords
@@ -105,6 +103,7 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
+            call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
             call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             pft = build%pftc%allocate_pft()
             call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft)
