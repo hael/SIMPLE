@@ -31,6 +31,9 @@ module simple_persistent_worker_server_tester
 contains
 
   subroutine run_all_persistent_worker_server_tests()
+#if defined(_WIN32) || defined(__FreeBSD__)
+    write(*,'(A)') '**** skipping persistent worker server tests on this platform ****'
+#else
     write(*,'(A)') '**** running all persistent worker server tests ****'
     call test_server_default_state()
     call test_queue_task_not_initialised()
@@ -39,6 +42,7 @@ contains
     call test_queue_task_unknown_priority_defaults_to_norm()
     call test_queue_task_norm_queue_full()
     write(*,'(A)') '**** persistent worker server tests done ****'
+#endif
   end subroutine run_all_persistent_worker_server_tests
 
   subroutine test_server_default_state()

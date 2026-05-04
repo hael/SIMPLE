@@ -234,11 +234,11 @@ module simple_ipc_tcp_socket
     ips = self%host_ips
   end function get_host_ips
 
-  !> Run 'hostname -I', collect all space-delimited tokens that are not
+  !> Discover host IPv4 addresses, collect all whitespace-delimited tokens
   !> loopback (127.*), and store them comma-separated in self%host_ips.
   subroutine find_host_ips( self )
     class(ipc_tcp_socket), intent(inout) :: self
-    character(kind=c_char, len=16)  :: cmd
+    character(kind=c_char, len=96)  :: cmd
     character(kind=c_char, len=16)  :: mode
     character(kind=c_char)         :: buf(1024)
     type(c_ptr)                    :: pipe, ret
@@ -248,13 +248,16 @@ module simple_ipc_tcp_socket
     character(len=64)              :: token
     logical                        :: first
     self%host_ips = string('')
-#if defined(_WIN32)
-    ! On Windows builds, the current socket layer is POSIX-stubbed; use loopback.
+#if defined(_WIN32) || defined(__FreeBSD__)
+  ! On _WIN32 and __FreeBSD__ builds, use loopback.
     self%host_ips = string('127.0.0.1')
     write(logfhandle,'(A,A)')'>>> IPC_TCP_SOCKET host IPs: ', self%host_ips%to_char()
     return
+#elif defined(__linux__)
+  cmd  = 'hostname -I' // c_null_char
 #else
-    cmd  = 'hostname -I' // c_null_char
+  ! Fallback for POSIX-like environments where hostname -I may be unavailable.
+    cmd  = 'ifconfig 2>/dev/null | awk ''/inet /{print $2}''' // c_null_char
 #endif
     mode = 'r'           // c_null_char
     pipe = c_popen(cmd, mode)
@@ -292,6 +295,7 @@ module simple_ipc_tcp_socket
         token_start = i + 1
       end if
     end do
+    if( self%host_ips%strlen_trim() == 0 ) self%host_ips = string('127.0.0.1')
     write(logfhandle,'(A,A)')'>>> IPC_TCP_SOCKET host IPs: ', self%host_ips%to_char()
   end subroutine find_host_ips
 
@@ -376,20 +380,20 @@ module simple_ipc_tcp_socket
   end subroutine find_available_server
 
   subroutine send_recv_msg( self, buffer, timeout_ms, max_retries, sent, reply, nread )
-    class(ipc_tcp_socket),                intent(in)    :: self
-    character(len=:), allocatable, target, intent(in)   :: buffer
-    integer,                               intent(in)   :: timeout_ms
-    integer,                               intent(in)   :: max_retries
-    logical,                               intent(out)  :: sent
+    class(ipc_tcp_socket),                intent(in)     :: self
+    character(len=:), allocatable, target, intent(in)    :: buffer
+    integer,                               intent(in)    :: timeout_ms
+    integer,                               intent(in)    :: max_retries
+    logical,                               intent(out)   :: sent
     character(kind=c_char),        target, intent(inout) :: reply(TCP_MAX_MSG)
-    integer,                               intent(out),  optional :: nread
-    type(tcp_sockaddr_in),          target :: addr
-    type(c_timeval),                target :: tv
-    integer(kind=c_socklen_t)              :: addrlen, tv_sz
-    integer(kind=c_int)                    :: fd, rc
-    integer(kind=c_size_t)                 :: nr
-    character(len=65), target              :: ip_cstr
-    integer                                :: itry, iplen
+    integer,  optional,                    intent(out)   :: nread
+    type(tcp_sockaddr_in), target :: addr
+    type(c_timeval),       target :: tv
+    integer(kind=c_socklen_t)     :: addrlen, tv_sz
+    integer(kind=c_int)           :: fd, rc
+    integer(kind=c_size_t)        :: nr
+    character(len=65), target     :: ip_cstr
+    integer                       :: itry, iplen
     sent = .false.
     if( present(nread) ) nread = 0
     if( self%port < 0 ) return
@@ -400,16 +404,16 @@ module simple_ipc_tcp_socket
     ip_cstr                  = ''
     ip_cstr(1:iplen)         = self%server_ip%to_char()
     ip_cstr(iplen+1:iplen+1) = c_null_char
-    addrlen = int(storage_size(addr) / 8, c_socklen_t)
-    tv_sz   = int(storage_size(tv)   / 8, c_socklen_t)
+    addrlen    = int(storage_size(addr) / 8, c_socklen_t)
+    tv_sz      = int(storage_size(tv)   / 8, c_socklen_t)
     ! convert timeout_ms -> timeval
     tv%tv_sec  = int(timeout_ms / 1000,            c_long)
     tv%tv_usec = int(mod(timeout_ms, 1000) * 1000, c_long)
     do itry = 1, max_retries
       fd = c_socket(AF_INET, SOCK_STREAM, 0_c_int)
       if( fd < 0 ) then
-        rc = c_usleep(int(timeout_ms * 1000, c_useconds_t))
-        cycle
+          rc = c_usleep(int(timeout_ms * 1000, c_useconds_t))
+          cycle
       end if
       ! set per-socket send/receive timeout
       rc = c_setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, c_loc(tv), tv_sz)
@@ -419,10 +423,10 @@ module simple_ipc_tcp_socket
       addr%sin_addr   = int(c_inet_addr(ip_cstr), c_int32_t)
       rc = c_connect(fd, c_loc(addr), addrlen)
       if( rc == 0 ) then
-        rc = int(c_send(fd, c_loc(buffer), int(len(buffer), c_size_t), 0_c_int))
+        rc = int(c_send(fd, c_loc(buffer(1:1)), int(len(buffer), c_size_t), 0_c_int))
         if( rc >= 0 ) then
           sent = .true.
-          nr = c_read(fd, c_loc(reply), int(size(reply), c_size_t))
+          nr = c_read(fd, c_loc(reply(1)), int(size(reply), c_size_t))
           if( present(nread) ) nread = int(nr)
           rc = c_close(fd)
           return
@@ -438,22 +442,22 @@ module simple_ipc_tcp_socket
   !> Accept one connection on server_fd, read into buf, close the connection.
   !> ok=.false. if accept() failed — caller should exit the accept loop.
   subroutine recv_msg( server_fd, conn_fd, buf, nread, ok, close_after_read )
-    integer(kind=c_int),           intent(in)         :: server_fd
+    integer(kind=c_int),           intent(in)            :: server_fd
     character(kind=c_char, len=*), intent(inout), target :: buf
     integer(kind=c_int),           intent(inout)         :: conn_fd
-    integer,                       intent(out)        :: nread
-    logical,                       intent(out)        :: ok
-    logical, optional,             intent(in)         :: close_after_read
+    integer,                       intent(out)           :: nread
+    logical,                       intent(out)           :: ok
+    logical, optional,             intent(in)            :: close_after_read
     integer(kind=c_int)    :: rc
     integer(kind=c_size_t) :: nr
-    logical                 :: l_close_conn
+    logical                :: l_close_conn
     l_close_conn = .true.
     if( present(close_after_read) ) l_close_conn = close_after_read
-    ok    = .false.
-    nread = 0
+    ok      = .false.
+    nread   = 0
     conn_fd = c_accept(server_fd, c_null_ptr, int(0, c_socklen_t))
     if( conn_fd < 0 ) return
-    nr    = c_read(conn_fd, c_loc(buf), int(len(buf), c_size_t))
+    nr    = c_read(conn_fd, c_loc(buf(1:1)), int(len(buf), c_size_t))
     if( l_close_conn ) rc = c_close(conn_fd)
     nread = int(nr)
     ok    = .true.
@@ -465,14 +469,11 @@ module simple_ipc_tcp_socket
     integer,                       intent(out)        :: nread
     logical,                       intent(out)        :: ok
     integer(kind=c_int)    :: rc
-    integer(kind=c_size_t) :: nr
     ok    = .false.
-    rc    = int(c_send(conn_fd, c_loc(buf), int(len(buf), c_size_t), 0_c_int))
+    nread = 0
+    rc    = int(c_send(conn_fd, c_loc(buf(1:1)), int(len(buf), c_size_t), 0_c_int))
     rc    = c_close(conn_fd)
-    nread = int(nr)
     ok    = .true.
   end subroutine repl_msg
-
-
 
 end module simple_ipc_tcp_socket

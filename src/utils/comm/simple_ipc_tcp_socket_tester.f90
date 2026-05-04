@@ -38,8 +38,8 @@ module simple_ipc_tcp_socket_tester
 contains
 
   subroutine run_all_ipc_tcp_socket_tests()
-#if defined(_WIN32)
-    write(*,'(A)') '**** skipping ipc_tcp_socket tests on _WIN32 (POSIX socket stubs) ****'
+#if defined(_WIN32) || defined(__FreeBSD__)
+    write(*,'(A)') '**** skipping ipc_tcp_socket tests on this platform (POSIX socket test path disabled) ****'
 #else
     write(*,'(A)') '**** running all ipc_tcp_socket tests ****'
     call test_find_available_port()

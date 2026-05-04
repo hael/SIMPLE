@@ -50,7 +50,7 @@ contains
 
   ! Run all ipc_mq unit tests. Linux-only; compiled to a no-op elsewhere.
   subroutine run_all_ipc_mq_tests()
-#if !defined(_WIN32)
+#if defined(__linux__)
     write(*,'(A)') '**** running all ipc mq tests ****'
     call test_create_and_kill()
     call test_create_and_kill_maxmsg()
