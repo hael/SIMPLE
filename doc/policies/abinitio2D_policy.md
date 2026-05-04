@@ -12,7 +12,8 @@ It mirrors the recent `refine3D` cleanup where the same design pressure exists:
 - make sampled-update and probabilistic handoffs explicit
 - treat class-average files, assignment files, FRCs, and partial sums as workflow contracts rather than incidental scratch files
 
-The 2D workflow is intentionally Cartesian. `polar=yes` is not supported for `abinitio2D` or `cluster2D`.
+The 2D workflow is intentionally Cartesian. The old `polar` command-line branch
+selector has been removed for `abinitio2D` and `cluster2D`.
 
 ## 2. Architectural Policy
 
@@ -147,7 +148,7 @@ For any `abinitio2D` or `cluster2D` change, check:
 
 ## 8. Rules to Preserve During Refactors
 
-- Do not reintroduce `polar=yes` into `abinitio2D`.
+- Do not reintroduce a `polar` branch selector into `abinitio2D`.
 - Do not bury stage-policy tables in the matcher.
 - Do not let probabilistic pre-alignment and matcher update sample different particle subsets.
 - Do not make distributed-only class-average assembly semantics diverge from shared-memory scientific behavior.

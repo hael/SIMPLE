@@ -1,7 +1,7 @@
 !@descr: operations on image stacks
 module simple_commanders_stkops
 use simple_commanders_api
-use simple_pftc_srch_api
+use simple_imgarr_utils, only: dealloc_imgarr, read_stk_into_imgarr, write_imgarr
 use simple_strategy2D_utils, only: calc_cluster_cavgs_dmat, calc_match_cavgs_dmat
 implicit none
 #include "simple_local_flags.inc"
@@ -156,17 +156,13 @@ contains
         type(ori)                 :: o, o2
         integer,      allocatable :: pinds(:)
         type(string)              :: fname
-        type(polarft_calc)        :: pftc
-        type(image)               :: img
-        integer :: i, s, cnt, nincl, j, k
+        integer :: i, s, cnt, nincl, j
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! ------------------------------------------------------------------
         ! main control flow: first matching branch wins
         ! ------------------------------------------------------------------
-        if( cline%defined('polar') ) then
-            call handle_polar_representation()
-        else if( cline%defined('nran') ) then
+        if( cline%defined('nran') ) then
             call handle_random_selection()
         else if( cline%defined('frac') ) then
             call handle_fishing_frac_only()
@@ -223,35 +219,6 @@ contains
         call finish_cleanup()
 
     contains
-
-        ! ------------------------------------------------------------------
-        ! POLAR REPRESENTATION
-        ! ------------------------------------------------------------------
-        subroutine handle_polar_representation()
-            complex, allocatable :: pft(:,:)
-            call pftc%new(params, params%nptcls, [1,params%nptcls], params%kfromto)
-            call  build%img_crop%memoize4polarize(pftc%get_pdim_srch())
-            pft = pftc%allocate_pft()
-            do i = 1, params%nptcls
-                call build%img_crop%read(params%stk, i)
-                call build%img_crop%fft
-                call build%img_crop%polarize(pft)
-                call pftc%set_ref_pft(i, pft, iseven=.true.)
-            end do
-            call img%new([pftc%get_pftsz(), params%kfromto(2), 1], 1.0)
-            do i = 1, params%nptcls
-                call pftc%get_ref_pft(i, .true.,  pft)
-                img = 0.
-                do j = 1, pftc%get_pftsz()
-                    do k = params%kfromto(1), params%kfromto(2)
-                        call img%set([j,k,1], real(abs(pft(j,k))))
-                    end do
-                end do
-                call img%write(params%outstk, i)
-            end do
-            call img%kill
-            if( allocated(pft) ) deallocate(pft)
-        end subroutine handle_polar_representation
 
         ! ------------------------------------------------------------------
         ! RANDOM SELECTION

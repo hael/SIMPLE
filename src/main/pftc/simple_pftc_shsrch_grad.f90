@@ -10,7 +10,6 @@ public :: pftc_shsrch_grad
 private
 #include "simple_local_flags.inc"
 
-real(dp), parameter :: init_range       = 2.0_dp  ! range for random initialization (negative to positive)
 integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
 
 type :: pftc_shsrch_grad
@@ -18,8 +17,6 @@ type :: pftc_shsrch_grad
     type(opt_spec)            :: ospec                  !< optimizer specification object
     class(optimizer), pointer :: opt_obj => null()      !< optimizer object
     class(builder),   pointer :: b_ptr   => null()      !< pointer to polarft_calc object for cost function evaluations
-    integer,      allocatable :: irefs(:)               !< reference indeces
-    real,         allocatable :: prefs(:)               !< reference probs
     integer                   :: reference    = 0       !< reference pft
     integer                   :: particle     = 0       !< particle pft
     integer                   :: nrots        = 0       !< # rotations
@@ -27,7 +24,6 @@ type :: pftc_shsrch_grad
     logical                   :: shbarr       = .true.  !< shift barrier constraint or not
     integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
     integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
-    real                      :: max_shift    = 0.      !< maximal shift
     logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
 contains
@@ -324,18 +320,5 @@ contains
             nullify(self%b_ptr)
         end if
     end subroutine grad_shsrch_kill
-
-    function grad_shsrch_get_nevals( self ) result( nevals )
-        class(pftc_shsrch_grad), intent(inout) :: self
-        integer :: nevals
-        nevals = self%ospec%nevals
-    end function grad_shsrch_get_nevals
-
-    subroutine grad_shsrch_get_peaks( self, peaks )
-        class(pftc_shsrch_grad), intent(inout) :: self
-        real, allocatable,       intent(out)   :: peaks(:,:) !< output peak matrix
-        allocate(peaks(1,2))
-        peaks(1,:) = self%ospec%x
-    end subroutine grad_shsrch_get_peaks
 
 end module simple_pftc_shsrch_grad

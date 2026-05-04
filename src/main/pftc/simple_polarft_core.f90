@@ -288,13 +288,15 @@ contains
         class(oris),         intent(inout) :: eulspace
         integer,             intent(in)    :: state
         logical,             intent(in)    :: iseven
-        real(sp) :: hcoords(self%pftsz, self%interpklim-self%kfromto(1)+1)
-        real(sp) :: kcoords(self%pftsz, self%interpklim-self%kfromto(1)+1)
+        real(sp) :: hcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
+        real(sp) :: kcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
         integer  :: iref_from, iref_to, kproj(2)
         if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
         iref_from = (state - 1) * self%p_ptr%nspace + 1
         iref_to   = iref_from + self%p_ptr%nspace - 1
-        kproj     = [self%kfromto(1), self%interpklim]
+        ! The refine3D driver materializes exactly the search shell range
+        ! used for this iteration; downstream workers consume that contract.
+        kproj     = self%kfromto
         hcoords   = transpose(self%polar(1, kproj(1):kproj(2), 1:self%pftsz))
         kcoords   = transpose(self%polar(2, kproj(1):kproj(2), 1:self%pftsz))
         if( trim(self%p_ptr%mirr_proj).ne.'yes' )then

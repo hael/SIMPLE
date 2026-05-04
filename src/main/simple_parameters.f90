@@ -126,7 +126,6 @@ type :: parameters
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
     character(len=3)          :: write_imgarr='no'    !< write out cavgs
-    character(len=3)          :: write_polar_refs='yes' !< write out polar references(yes|no){yes}f
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     ! default initialization is done in the init_strings method below
@@ -245,7 +244,6 @@ type :: parameters
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
-    character(len=STDLEN)     :: polar='no'           !< Polar restoration mode(no|yes|obsfield){no}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
@@ -358,7 +356,6 @@ type :: parameters
     integer :: nsample_stop=0      !< # particles to sample in refinement with fractional update, upper bound
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
-    integer :: nspace_next=0       !< # projection directions to use for next-stage reference sections
     integer :: nspace_sub=500      !< # projection directions in subspace
     integer :: nspace_max=1500     !< Maximum # of projection directions
     integer :: nstages=8           !< # low-pass limit stages
@@ -376,7 +373,6 @@ type :: parameters
     integer :: period=0           !< periodic window step in frames (0 means disabled)
     integer :: pid=0               !< process ID
     integer :: pftsz=0             !< Desired size of polarft_calc object (half the # of rotations)
-    integer :: pftsz_next=0        !< Desired pftsz for next-stage promoted polar reference sections
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
     integer :: ref_ind=0           !> reference index
@@ -502,7 +498,6 @@ type :: parameters
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization
-    real    :: stoch_rate=100.     !< percentage of stoch in polar cavgs
     real    :: tau=TAU_DEFAULT     !< for empirical scaling of cc-based particle weights
     real    :: tilt_thres=0.05
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
@@ -543,7 +538,6 @@ type :: parameters
     logical :: l_noise_reg       = .false.
     logical :: l_neigh           = .false.
     logical :: l_phaseplate      = .false.
-    logical :: l_polar           = .false. 
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
     logical :: l_sigma_glob      = .false.
@@ -554,13 +548,6 @@ type :: parameters
     procedure, private :: init_strings
     procedure          :: new
     procedure          :: is_final_planned_iter
-    procedure          :: can_promote_assembly_ref_nspace
-    procedure          :: has_next_assembly_ref_grid
-    procedure          :: uses_next_assembly_ref_nspace
-    procedure          :: uses_next_assembly_ref_pftsz
-    procedure          :: uses_next_assembly_ref_grid
-    procedure          :: assembly_ref_nspace
-    procedure          :: assembly_ref_pftsz
     procedure, private :: set_img_format
 end type parameters
 
@@ -570,52 +557,6 @@ contains
         class(parameters), intent(in) :: self
         is_final_planned_iter = (self%which_iter - self%startit + 1) >= self%maxits
     end function is_final_planned_iter
-
-    logical function can_promote_assembly_ref_nspace( self )
-        class(parameters), intent(in) :: self
-        can_promote_assembly_ref_nspace = (.not. self%l_polar) .or. trim(self%polar) == 'obsfield'
-    end function can_promote_assembly_ref_nspace
-
-    logical function has_next_assembly_ref_grid( self )
-        class(parameters), intent(in) :: self
-        has_next_assembly_ref_grid = self%can_promote_assembly_ref_nspace() &
-            &.and. ( (self%nspace_next > self%nspace) .or. &
-            &        (self%pftsz_next > 0 .and. self%pftsz_next /= self%pftsz) )
-    end function has_next_assembly_ref_grid
-
-    logical function uses_next_assembly_ref_nspace( self )
-        class(parameters), intent(in) :: self
-        uses_next_assembly_ref_nspace = self%can_promote_assembly_ref_nspace() &
-            &.and. self%is_final_planned_iter()                               &
-            &.and. self%nspace_next > 0                                        &
-            &.and. self%nspace_next > self%nspace
-    end function uses_next_assembly_ref_nspace
-
-    logical function uses_next_assembly_ref_pftsz( self )
-        class(parameters), intent(in) :: self
-        uses_next_assembly_ref_pftsz = self%can_promote_assembly_ref_nspace() &
-            &.and. self%is_final_planned_iter()                               &
-            &.and. self%pftsz_next > 0                                        &
-            &.and. self%pftsz_next /= self%pftsz
-    end function uses_next_assembly_ref_pftsz
-
-    logical function uses_next_assembly_ref_grid( self )
-        class(parameters), intent(in) :: self
-        uses_next_assembly_ref_grid = self%uses_next_assembly_ref_nspace() .or. &
-            &self%uses_next_assembly_ref_pftsz()
-    end function uses_next_assembly_ref_grid
-
-    integer function assembly_ref_nspace( self )
-        class(parameters), intent(in) :: self
-        assembly_ref_nspace = self%nspace
-        if( self%uses_next_assembly_ref_nspace() ) assembly_ref_nspace = self%nspace_next
-    end function assembly_ref_nspace
-
-    integer function assembly_ref_pftsz( self )
-        class(parameters), intent(in) :: self
-        assembly_ref_pftsz = self%pftsz
-        if( self%uses_next_assembly_ref_grid() .and. self%pftsz_next > 0 ) assembly_ref_pftsz = self%pftsz_next
-    end function assembly_ref_pftsz
 
     subroutine init_strings( self )
         class(parameters), intent(inout) :: self
@@ -844,7 +785,6 @@ contains
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
         call check_carg('plot_key',       self%plot_key)
-        call check_carg('polar',          self%polar)
         call check_carg('postprocess',    self%postprocess)
         call check_carg('pre_norm',       self%pre_norm)
         call check_carg('prg',            self%prg)
@@ -905,7 +845,6 @@ contains
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wiener',         self%wiener)
         call check_carg('write_imgarr',   self%write_imgarr)
-        call check_carg('write_polar_refs', self%write_polar_refs)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')
@@ -1029,7 +968,6 @@ contains
         call check_iarg('nsample_start',  self%nsample_start)
         call check_iarg('nsample_stop',   self%nsample_stop)
         call check_iarg('nspace',         self%nspace)
-        call check_iarg('nspace_next',    self%nspace_next)
         call check_iarg('nspace_sub',     self%nspace_sub)
         call check_iarg('nspace_max',     self%nspace_max)
         call check_iarg('nstages',        self%nstages)
@@ -1058,7 +996,6 @@ contains
         call check_iarg('part',           self%part)
         call check_iarg('period',         self%period)
         call check_iarg('pftsz',          self%pftsz)
-        call check_iarg('pftsz_next',     self%pftsz_next)
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('ref_ind',        self%ref_ind)
         call check_iarg('shift_stage',    self%shift_stage)
@@ -1166,7 +1103,6 @@ contains
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
         call check_rarg('snr_noise_reg',  self%snr_noise_reg)
-        call check_rarg('stoch_rate',     self%stoch_rate)
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
@@ -1667,20 +1603,6 @@ contains
             if( .not.cline%defined('pftsz') )then
                 self%pftsz = magic_pftsz(self%msk_crop)
             endif
-        endif
-        ! automasking options
-        ! comlin generation
-        select case(trim(self%polar))
-            case('no')
-                self%l_polar = .false.
-            case('yes','obsfield')
-                self%l_polar = .true.
-            case DEFAULT
-                THROW_HARD('Unsupported POLAR argument: '//trim(self%polar))
-        end select
-        if( self%l_polar )then
-            ! deactivate post-alignment cartesian reconstruction
-            self%volrec = 'no'
         endif
         ! set lpset flag
         self%l_lpset  = cline%defined('lp')

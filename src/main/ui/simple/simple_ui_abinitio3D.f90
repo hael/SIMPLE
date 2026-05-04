@@ -53,12 +53,6 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         call abinitio3D%add_input(UI_SRCH, pgrp, gui_submenu="model", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, pgrp_start, gui_submenu="model")
-        call abinitio3D%add_input(UI_SRCH, 'polar', 'multi', 'Polar restoration mode',&
-        &'Polar restoration mode(no|yes|obsfield){no}. no uses Cartesian reconstruction; yes uses legacy &
-        &common-line polar restoration. &
-        &obsfield writes Cartesian partial reconstructions and projects restored half-volumes into polar references',&
-        &'(no|yes|obsfield){no}', .false., 'no',&
-        &gui_submenu="model", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         call abinitio3D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, 'nsample_start', 'num', 'Dynamic particle sampling lower bound', 'Dynamic particle sampling lower bound', 'min # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
@@ -114,12 +108,6 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call abinitio3D_cavgs%add_input(UI_SRCH, pgrp)
         call abinitio3D_cavgs%add_input(UI_SRCH, pgrp_start)
-        call abinitio3D_cavgs%add_input(UI_SRCH, 'polar', 'multi', 'Polar restoration mode',&
-        &'Polar restoration mode(no|yes|obsfield){obsfield}. no uses Cartesian reconstruction; yes uses legacy &
-        &common-line polar restoration. &
-        &obsfield writes Cartesian partial reconstructions and projects restored half-volumes into polar references',&
-        &'(no|yes|obsfield){obsfield}', .false.,&
-        &'obsfield', gui_advanced=.true.)
         ! filter controls
         call abinitio3D_cavgs%add_input(UI_FILT, hp, gui_submenu="filter")
         call abinitio3D_cavgs%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

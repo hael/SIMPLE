@@ -1,4 +1,4 @@
-!@descr: per-state automask and nonuniform-filter policy decisions consumed by Cartesian assembly
+!@descr: per-state automask and nonuniform-filter policy decisions consumed by volume assembly
 module simple_vol_pproc_policy
 use simple_core_module_api
 use simple_parameters, only: parameters

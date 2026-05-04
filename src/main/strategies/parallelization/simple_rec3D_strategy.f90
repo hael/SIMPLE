@@ -4,11 +4,9 @@ use simple_builder,              only: builder
 use simple_parameters,           only: parameters
 use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
-use simple_matcher_3Dpolar,      only: calc_polar_partials
 use simple_matcher_3Drec,        only: calc_3Drec
-use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-use simple_commanders_rec_distr, only: commander_cartesian_volassemble, commander_polar_volassemble
-use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_iter_refs_fname, refine3D_state_vol_fname
+use simple_commanders_rec_distr, only: commander_volassemble
+use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
@@ -136,8 +134,7 @@ contains
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        type(commander_cartesian_volassemble) :: xvolassemble
-        type(commander_polar_volassemble)     :: xpolar_volassemble
+        type(commander_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in
         type(string)         :: fname
@@ -156,54 +153,30 @@ contains
             call build%esig%new(params, build%pftc, fname, params%box)
             call build%esig%read_groups(build%spproj_field)
         endif
-        ! Reconstruction kernel
-        if( params%l_polar) then
-            call cline%set('force_volassemble', 'yes')
-            select case(trim(params%polar))
-                case('yes')
-                    call set_bp_range3D(params, build, cline)
-                    call calc_polar_partials( params, build, nptcls2update, pinds )
-                case('obsfield')
-                    call calc_3Drec( params, build, cline, nptcls2update, pinds )
-                case default
-                    THROW_HARD('unsupported POLAR mode for rec3D strategy: '//trim(params%polar))
-            end select
-            cline_volassemble = cline
-            call cline_volassemble%set('prg',  'volassemble')
-            call cline_volassemble%set('nthr', params%nthr)
-            call xpolar_volassemble%execute(cline_volassemble)
-            params%refs = refine3D_iter_refs_fname(params%which_iter)
-            call cline%delete('force_volassemble')
-            call cline_volassemble%kill
-        else
-            ! Legacy handshake for rec-writing helpers that still inspect this key.
-            ! The strategy owns the actual assembly dispatch decision.
-            call cline%set('force_volassemble', 'yes')
-            call calc_3Drec( params, build, cline, nptcls2update, pinds )
-            cline_volassemble = cline
-            call cline_volassemble%set('prg',  'volassemble')
-            call cline_volassemble%set('nthr', params%nthr)
-            if( .not. cline_volassemble%defined('write_polar_refs') )then
-                call cline_volassemble%set('write_polar_refs', 'no')
-            endif
-            do state = 1, params%nstates
-                volname = refine3D_state_vol_fname(state)
-                if( cline_volassemble%defined('vol'//int2str(state)) )then
-                    vol_in = cline_volassemble%get_carg('vol'//int2str(state))
-                    if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
-                        if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
-                    endif
+        ! Legacy handshake for rec-writing helpers that still inspect this key.
+        ! The strategy owns the actual assembly dispatch decision.
+        call cline%set('force_volassemble', 'yes')
+        call calc_3Drec( params, build, cline, nptcls2update, pinds )
+        cline_volassemble = cline
+        call cline_volassemble%set('prg',  'volassemble')
+        call cline_volassemble%set('nthr', params%nthr)
+        do state = 1, params%nstates
+            volname = refine3D_state_vol_fname(state)
+            if( cline_volassemble%defined('vol'//int2str(state)) )then
+                vol_in = cline_volassemble%get_carg('vol'//int2str(state))
+                if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
+                    if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
                 endif
-            end do
-            call xvolassemble%execute(cline_volassemble)
-            do state = 1, params%nstates
-                volname = refine3D_state_vol_fname(state)
-                params%vols(state) = volname
-                call cline%set('vol'//int2str(state), volname)
-            end do
-            call cline%delete('force_volassemble')
-            call cline_volassemble%kill
-        endif
+            endif
+        end do
+        call xvolassemble%execute(cline_volassemble)
+        do state = 1, params%nstates
+            volname = refine3D_state_vol_fname(state)
+            params%vols(state) = volname
+            call cline%set('vol'//int2str(state), volname)
+        end do
+        call cline%delete('force_volassemble')
+        call cline_volassemble%kill
         if( allocated(pinds) ) deallocate(pinds)
         if( params%l_ml_reg ) call fname%kill
     end subroutine inmem_execute
@@ -255,11 +228,6 @@ contains
         if( fall_over ) THROW_HARD('No images found!')
         ! avoid nested directory structure for jobs
         call cline%set('mkdir', 'no')
-        if( trim(params%polar) == 'yes' )then
-            call cline%set('prg', 'polar_reconstruct3D')
-        else if( trim(params%polar) == 'obsfield' )then
-            call cline%set('prg', 'reconstruct3D')
-        endif
         ! Even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
@@ -288,8 +256,7 @@ contains
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        type(commander_cartesian_volassemble) :: xvolassemble
-        type(commander_polar_volassemble)     :: xpolar_volassemble
+        type(commander_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in
         integer                     :: state
@@ -298,9 +265,6 @@ contains
         cline_volassemble = cline
         call cline_volassemble%set('prg',  'volassemble')
         call cline_volassemble%set('nthr', self%nthr_master)
-        if( .not. cline_volassemble%defined('write_polar_refs') )then
-            call cline_volassemble%set('write_polar_refs', 'no')
-        endif
         do state = 1, params%nstates
             volname = refine3D_state_vol_fname(state)
             if( cline_volassemble%defined('vol'//int2str(state)) )then
@@ -310,11 +274,7 @@ contains
                 endif
             endif
         end do
-        if( params%l_polar )then
-            call xpolar_volassemble%execute(cline_volassemble)
-        else
-            call xvolassemble%execute(cline_volassemble)
-        endif
+        call xvolassemble%execute(cline_volassemble)
         call cline_volassemble%kill
     end subroutine distr_execute
 

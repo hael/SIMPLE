@@ -9,7 +9,6 @@ type(ui_program), target :: ft_expanded
 type(ui_program), target :: gencorrs_fft
 type(ui_program), target :: order_corr
 type(ui_program), target :: phasecorr
-type(ui_program), target :: polarops
 type(ui_program), target :: rank_weights
 type(ui_program), target :: rotate_ref
 
@@ -23,7 +22,6 @@ contains
         call new_gencorrs_fft(tsttab)
         call new_order_corr(tsttab)
         call new_phasecorr(tsttab)
-        call new_polarops(tsttab)
         call new_rank_weights(tsttab)
         call new_rotate_ref(tsttab)
     end subroutine construct_test_fft_programs
@@ -37,7 +35,6 @@ contains
         write(logfhandle,'(A)') gencorrs_fft%name%to_char()
         write(logfhandle,'(A)') order_corr%name%to_char()
         write(logfhandle,'(A)') phasecorr%name%to_char()
-        write(logfhandle,'(A)') polarops%name%to_char()
         write(logfhandle,'(A)') rank_weights%name%to_char()
         write(logfhandle,'(A)') rotate_ref%name%to_char()
         write(logfhandle,'(A)') ''
@@ -194,34 +191,6 @@ contains
         ! add to ui_hash
         call add_ui_program('phasecorr', phasecorr, tsttab)
     end subroutine new_phasecorr
-
-    subroutine new_polarops( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call polarops%new(&
-        &'polarops',&                         ! name
-        &'polarops ',&                        ! descr_short
-        &'is a test program for ',&
-        &'simple_test_exec',&                 ! executable
-        &.false.)                             ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        !call polarops%add_input(UI_IO, )
-        ! parameter input/output
-        !call polarops%add_input(UI_IMG, )
-        ! alternative inputs
-        !call polarops%add_input(UI_PARM, )
-        ! search controls
-        !call polarops%add_input(UI_SRCH, )
-        ! filter controls
-        !call polarops%add_input(UI_FILT, )
-        ! mask controls
-        !call polarops%add_input(UI_MASK, )
-        ! computer controls
-        !call polarops%add_input(UI_COMP, )
-        ! add to ui_hash
-        call add_ui_program('polarops', polarops, tsttab)
-    end subroutine new_polarops
 
     subroutine new_rank_weights( tsttab )
         class(ui_hash), intent(inout) :: tsttab

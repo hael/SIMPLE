@@ -347,10 +347,7 @@
         - `simple_polarft_ctf.f90` — polarft class submodule for dealing with CTF-related things
         - `simple_polarft_geom.f90` — polarft class submodule for geometry-related things: shift, rotate, mirror etc.
         - `simple_polarft_memo.f90` — polarft class submodule for memoization for performance
-        - `simple_polarft_ops_io.f90` — submodule for parallel I/O and polar->Cartesian conversion
-        - `simple_polarft_ops_restore.f90` — submodule for class average restoration in the polar Fourier domain
-        - `simple_polarft_ops_state.f90` — submodule for controlling various state-related things in the polarops module
-        - `simple_polarft_vis.f90` — polarft class submodule supporting visualization
+        - `simple_polarft_ops_io.f90` — particle polar Fourier line streaming I/O
       - **pick/** — home of modules for particle picking
         - `simple_picker_iter.f90` — particle picker iterator
         - `simple_picker_utils.f90` — routines for executing reference-based, segmentation-based, and Gaussian picking

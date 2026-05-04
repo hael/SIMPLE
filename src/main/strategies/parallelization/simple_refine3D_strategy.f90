@@ -10,7 +10,6 @@ use simple_convergence,             only: convergence
 use simple_decay_funs,              only: inv_cos_decay, cos_decay
 use simple_cluster_seed,            only: gen_labelling
 use simple_euclid_sigma2,           only: sigma2_star_from_iter
-use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -30,16 +29,15 @@ contains
 end type refine3D_strategy
 
 type :: refine3D_bench_state
-    integer(timer_int_kind) :: t_init     = 0
-    integer(timer_int_kind) :: t_prob     = 0
-    integer(timer_int_kind) :: t_sched    = 0
-    integer(timer_int_kind) :: t_assemble = 0
-    integer(timer_int_kind) :: t_tot      = 0
+    integer(timer_int_kind) :: t_init      = 0
+    integer(timer_int_kind) :: t_prob      = 0
+    integer(timer_int_kind) :: t_sched     = 0
+    integer(timer_int_kind) :: t_assemble  = 0
+    integer(timer_int_kind) :: t_tot       = 0
     real(timer_int_kind)    :: rt_init     = 0.
     real(timer_int_kind)    :: rt_prob     = 0.
     real(timer_int_kind)    :: rt_sched    = 0.
     real(timer_int_kind)    :: rt_assemble = 0.
-    real(timer_int_kind)    :: rt_obsfield_setup = 0.
     real(timer_int_kind)    :: rt_tot      = 0.
 end type refine3D_bench_state
 
@@ -48,10 +46,10 @@ end type refine3D_bench_state
 ! ======================================================================
 
 type, extends(refine3D_strategy) :: refine3D_inmem_strategy
-    logical :: l_sigma
     type(refine3D_bench_state), private :: bench
-    type(cmdline) :: cline_calc_group_sigmas
+    type(cmdline)     :: cline_calc_group_sigmas
     type(convergence) :: conv
+    logical :: l_sigma
 contains
     procedure :: initialize         => inmem_initialize
     procedure :: execute_iteration  => inmem_execute_iteration
@@ -65,9 +63,9 @@ end type refine3D_inmem_strategy
 ! ======================================================================
 
 type, extends(refine3D_strategy) :: refine3D_distr_strategy
+    type(refine3D_bench_state), private :: bench
     type(qsys_env) :: qenv
     type(chash)    :: job_descr
-    type(refine3D_bench_state), private :: bench
     integer        :: nthr_master
     logical        :: have_oris
     logical        :: l_multistates
@@ -175,30 +173,9 @@ contains
         if( trim(params%continue) == 'yes' ) return
         if( startit /= 1 ) return
         if( complete_volume_source_defined(cline, params%nstates) )then
-            call remove_polar_ref_section_files
+            call remove_ref_section_files
         endif
     end subroutine invalidate_fresh_start_refs_from_volumes
-
-    subroutine promote_assembly_nspace_if_needed( params, cline_assembly, force )
-        type(parameters), intent(in)    :: params
-        type(cmdline),    intent(inout) :: cline_assembly
-        logical, optional, intent(in)   :: force
-        logical :: l_force
-        l_force = .false.
-        if( present(force) ) l_force = force
-        ! Cartesian and polar=obsfield can emit the next iteration's reference grid.
-        if( l_force .and. params%has_next_assembly_ref_grid() )then
-            if( params%nspace_next > params%nspace ) call cline_assembly%set('nspace', params%nspace_next)
-            call cline_assembly%delete('nspace_next')
-            if( params%pftsz_next > 0 ) call cline_assembly%set('pftsz', params%pftsz_next)
-            call cline_assembly%delete('pftsz_next')
-        else if( params%uses_next_assembly_ref_grid() )then
-            if( params%uses_next_assembly_ref_nspace() ) call cline_assembly%set('nspace', params%assembly_ref_nspace())
-            call cline_assembly%delete('nspace_next')
-            if( params%pftsz_next > 0 ) call cline_assembly%set('pftsz', params%assembly_ref_pftsz())
-            call cline_assembly%delete('pftsz_next')
-        endif
-    end subroutine promote_assembly_nspace_if_needed
 
     subroutine refresh_resolution_fields_from_fsc( params, build )
         type(parameters), intent(in)    :: params
@@ -239,24 +216,6 @@ contains
         if( allocated(has_fsc)  ) deallocate(has_fsc)
     end subroutine refresh_resolution_fields_from_fsc
 
-    subroutine remove_polar_partial_sum_files( params )
-        type(parameters), intent(in) :: params
-        type(string) :: fname
-        integer :: ipart, numlen_part
-        numlen_part = max(1, params%numlen)
-        do ipart = 1,max(1, params%nparts)
-            fname = refine3D_polar_cavgs_part_fname('even', ipart, numlen_part)
-            if( file_exists(fname) ) call del_file(fname)
-            fname = refine3D_polar_cavgs_part_fname('odd', ipart, numlen_part)
-            if( file_exists(fname) ) call del_file(fname)
-            fname = refine3D_polar_ctfsqsums_part_fname('even', ipart, numlen_part)
-            if( file_exists(fname) ) call del_file(fname)
-            fname = refine3D_polar_ctfsqsums_part_fname('odd', ipart, numlen_part)
-            if( file_exists(fname) ) call del_file(fname)
-        end do
-        call fname%kill
-    end subroutine remove_polar_partial_sum_files
-
     subroutine remove_cartesian_partial_rec_files( params )
         type(parameters), intent(in) :: params
         type(string) :: fname
@@ -279,12 +238,35 @@ contains
 
     subroutine remove_partial_assembly_input_files( params )
         type(parameters), intent(in) :: params
-        if( params%l_polar )then
-            call remove_polar_partial_sum_files(params)
-        else
-            call remove_cartesian_partial_rec_files(params)
-        endif
+        call remove_cartesian_partial_rec_files(params)
     end subroutine remove_partial_assembly_input_files
+
+    subroutine materialize_reprojection_model( params, cline, current_build, nthr )
+        use simple_matcher_smpl_and_lplims, only: set_bp_range3D
+        type(parameters), intent(inout) :: params
+        type(cmdline),    intent(inout) :: cline
+        type(builder),    intent(inout), optional :: current_build
+        integer,          intent(in),    optional :: nthr
+        type(builder) :: refbuild
+        type(cmdline) :: cline_ref
+        if( present(current_build) )then
+            call set_bp_range3D(params, current_build, cline)
+            call materialize_reprojection_model_from_volumes(params, current_build, cline, cleanup_pftc=.true.)
+            call current_build%spproj%write_segment_inside(params%oritype)
+            return
+        endif
+        cline_ref = cline
+        if( present(nthr) ) call cline_ref%set('nthr', nthr)
+        call refbuild%build_spproj(params, cline_ref)
+        call refbuild%build_general_tbox(params, cline_ref, do3d=.true.)
+        call refbuild%build_strategy3D_tbox(params)
+        call set_bp_range3D(params, refbuild, cline_ref)
+        call materialize_reprojection_model_from_volumes(params, refbuild, cline_ref, cleanup_pftc=.true.)
+        call refbuild%spproj%write_segment_inside(params%oritype)
+        call refbuild%kill_strategy3D_tbox
+        call refbuild%kill_general_tbox
+        call cline_ref%kill
+    end subroutine materialize_reprojection_model
 
     subroutine reset_refine3D_bench( bench )
         type(refine3D_bench_state), intent(inout) :: bench
@@ -297,76 +279,35 @@ contains
         bench%rt_prob     = 0.
         bench%rt_sched    = 0.
         bench%rt_assemble = 0.
-        bench%rt_obsfield_setup = 0.
         bench%rt_tot      = 0.
     end subroutine reset_refine3D_bench
-
-    real(timer_int_kind) function bench_pct( part, total ) result(pct)
-        real(timer_int_kind), intent(in) :: part, total
-        if( total > 0. )then
-            pct = (part / total) * 100.
-        else
-            pct = 0.
-        endif
-    end function bench_pct
 
     subroutine write_strategy_bench_report( params, bench, execution_mode )
         type(parameters),             intent(in) :: params
         type(refine3D_bench_state),   intent(in) :: bench
         character(len=*),             intent(in) :: execution_mode
         type(string) :: benchfname
-        real(timer_int_kind) :: rt_accounted
         integer :: fnr
         if( .not. L_BENCH_GLOB ) return
-        rt_accounted = bench%rt_init + bench%rt_prob + bench%rt_sched + bench%rt_assemble
         benchfname = refine3D_strategy_bench_fname(params%which_iter)
         call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
         write(fnr,'(a,a)')  'refine3D execution mode             : ', trim(execution_mode)
         write(fnr,'(a,a)')  'refine3D refine mode                : ', trim(params%refine)
-        write(fnr,'(a,a)')  'refine3D polar mode                 : ', trim(params%polar)
         write(fnr,'(a,i0)') 'refine3D nspace                     : ', params%nspace
         write(fnr,'(a,i0)') 'refine3D nstates                    : ', params%nstates
         write(fnr,'(a,i0)') 'refine3D kfrom                      : ', params%kfromto(1)
         write(fnr,'(a,i0)') 'refine3D kto                        : ', params%kfromto(2)
         write(fnr,'(a)') ''
-        write(fnr,'(a)') '*** COMPARABLE TIMINGS (s) ***'
+        write(fnr,'(a)') '*** TIMINGS (s) ***'
         write(fnr,'(a,t52,f9.2)') 'refine3D strategy setup/init        : ', bench%rt_init
         write(fnr,'(a,t52,f9.2)') 'refine3D probabilistic pre-step     : ', bench%rt_prob
         write(fnr,'(a,t52,f9.2)') 'refine3D matcher/scheduler          : ', bench%rt_sched
         write(fnr,'(a,t52,f9.2)') 'refine3D assembly/postprocess       : ', bench%rt_assemble
         write(fnr,'(a,t52,f9.2)') 'refine3D total time                 : ', bench%rt_tot
-        write(fnr,'(a)') ''
-        write(fnr,'(a)') '*** COMPARABLE DETAIL TIMINGS (s) ***'
-        write(fnr,'(a,t52,f9.2)') 'refine3D POLAR_REFS setup           : ', bench%rt_obsfield_setup
-        write(fnr,'(a)') ''
-        write(fnr,'(a)') '*** COMPARABLE RELATIVE TIMINGS (%) ***'
-        write(fnr,'(a,t52,f9.2)') 'refine3D strategy setup/init        : ', bench_pct(bench%rt_init, bench%rt_tot)
-        write(fnr,'(a,t52,f9.2)') 'refine3D probabilistic pre-step     : ', bench_pct(bench%rt_prob, bench%rt_tot)
-        write(fnr,'(a,t52,f9.2)') 'refine3D matcher/scheduler          : ', bench_pct(bench%rt_sched, bench%rt_tot)
-        write(fnr,'(a,t52,f9.2)') 'refine3D assembly/postprocess       : ', bench_pct(bench%rt_assemble, bench%rt_tot)
-        write(fnr,'(a,t52,f9.2)') 'refine3D % accounted for            : ', bench_pct(rt_accounted, bench%rt_tot)
         call fclose(fnr)
         call benchfname%kill
     end subroutine write_strategy_bench_report
-
-    subroutine delete_volume_source_keys( cline, nstates )
-        type(cmdline), intent(inout) :: cline
-        integer,       intent(in)    :: nstates
-        integer :: state
-        do state = 1,nstates
-            call cline%delete('vol'//int2str(state))
-        enddo
-    end subroutine delete_volume_source_keys
-
-    subroutine delete_volume_source_job_keys( job_descr, nstates )
-        type(chash), intent(inout) :: job_descr
-        integer,     intent(in)    :: nstates
-        integer :: state
-        do state = 1,nstates
-            call job_descr%delete('vol'//int2str(state))
-        enddo
-    end subroutine delete_volume_source_job_keys
 
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
@@ -380,7 +321,7 @@ contains
         type(cmdline),                  intent(inout) :: cline
         type(commander_calc_pspec)            :: xcalc_pspec
         type(cmdline)                         :: cline_calc_pspec
-        integer                               :: startit, state
+        integer                               :: startit
         logical                               :: l_proj_dirty
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
@@ -401,27 +342,8 @@ contains
             THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
         endif
         ! Input reference validation
-        if( params%l_polar )then
-            if( any_volume_source_defined(cline, params%nstates) &
-                &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
-                THROW_HARD('incomplete multi-state volume source; provide vol1..volN or use POLAR_REFS')
-            endif
-            if( complete_volume_source_defined(cline, params%nstates) )then
-                do state = 1, params%nstates
-                    if( .not. file_exists(params%vols(state)) ) then
-                        THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
-                    endif
-                end do
-            else
-                if( .not. polar_ref_sections_available(params) ) then
-                    call set_bp_range3D(params, build, cline)
-                    call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D shared-memory initialization')
-                endif
-            endif
-        else
-            if( .not. file_exists(params%vols(1)) ) then
-                THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
-            endif
+        if( .not. file_exists(params%vols(1)) ) then
+            THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
         endif
         call invalidate_fresh_start_refs_from_volumes(params, cline, startit)
         ! Initial orientation parameters
@@ -464,7 +386,7 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         use simple_commanders_euclid,  only: commander_calc_group_sigmas
         use simple_commanders_prob,    only: commander_prob_align, commander_prob_align_neigh
-        use simple_commanders_rec_distr, only: commander_cartesian_volassemble, commander_polar_volassemble
+        use simple_commanders_rec_distr, only: commander_volassemble
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -473,13 +395,11 @@ contains
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_prob_align)        :: xprob_align
         type(commander_prob_align_neigh)  :: xprob_align_neigh
-        type(commander_cartesian_volassemble) :: xvolassemble
-        type(commander_polar_volassemble) :: xpolar_volassemble
+        type(commander_volassemble) :: xvolassemble
         type(cmdline)                     :: cline_prob_align
         type(cmdline)                     :: cline_volassemble
         type(cmdline)                     :: cline_build
         integer                           :: state, iter, extr_iter
-        integer(timer_int_kind)           :: t_obsfield_setup
         logical                           :: l_prob_state_mode, l_prob_neigh_mode
         logical                           :: l_write_partial_recs
         type(string)                      :: volname
@@ -518,6 +438,7 @@ contains
             params%lambda = cos_decay(params%which_iter, params%maxits_glob, params%lam_bounds)
             write(logfhandle,601) '>>> LAMBDA, MAP CONNECTIVITY ANNEALING        ', params%lambda
         endif
+        call materialize_reprojection_model(params, cline, current_build=build)
         ! Per-iteration sigma update (euclid)
         if( self%l_sigma )then
             call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
@@ -525,16 +446,6 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        if( params%l_polar .and. (.not. params%l_prob_align_mode) )then
-            if( .not. complete_volume_source_defined(cline, params%nstates) )then
-                if( L_BENCH_GLOB .and. trim(params%polar) == 'obsfield' ) t_obsfield_setup = tic()
-                call set_bp_range3D(params, build, cline)
-                call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D shared-memory iteration')
-                if( L_BENCH_GLOB .and. trim(params%polar) == 'obsfield' )then
-                    self%bench%rt_obsfield_setup = self%bench%rt_obsfield_setup + toc(t_obsfield_setup)
-                endif
-            endif
-        endif
         ! refine=prob* pre-step
         if( L_BENCH_GLOB )then
             self%bench%rt_init = toc(self%bench%t_init)
@@ -548,11 +459,9 @@ contains
                 call cline_prob_align%set('prg', 'prob_align')
             endif
             call cline_prob_align%set('which_iter', params%which_iter)
-            if( .not.params%l_polar )then
-                do state = 1, params%nstates
-                    call cline_prob_align%set('vol'//int2str(state), params%vols(state))
-                enddo
-            endif
+            do state = 1, params%nstates
+                call cline_prob_align%set('vol'//int2str(state), params%vols(state))
+            enddo
             ! communicate changes to probabilistic alignment
             call build%spproj%write_segment_inside(params%oritype)
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
@@ -570,7 +479,7 @@ contains
             self%bench%t_sched = tic()
         endif
         ! main refinement step
-        l_write_partial_recs = trim(params%volrec) .eq. 'yes' .or. params%l_polar
+        l_write_partial_recs = trim(params%volrec) .eq. 'yes'
         if( l_write_partial_recs )then
             ! Legacy handshake for rec-writing helpers that still inspect this key.
             ! The strategy owns the actual assembly dispatch decision.
@@ -584,12 +493,7 @@ contains
         endif
         if( l_write_partial_recs )then
             call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
-            call promote_assembly_nspace_if_needed(params, cline_volassemble)
-            if( params%l_polar )then
-                call xpolar_volassemble%execute(cline_volassemble)
-            else
-                call xvolassemble%execute(cline_volassemble)
-            endif
+            call xvolassemble%execute(cline_volassemble)
             if( trim(params%volrec) .eq. 'yes' )then
                 do state = 1, params%nstates
                     volname = refine3D_state_vol_fname(state)
@@ -597,7 +501,6 @@ contains
                     call cline%set('vol'//int2str(state), volname)
                 end do
             endif
-            if( params%l_polar ) params%refs = refine3D_iter_refs_fname(params%which_iter)
             call cline%delete('force_volassemble')
         endif
         if( l_write_partial_recs ) call refresh_resolution_fields_from_fsc(params, build)
@@ -608,14 +511,6 @@ contains
             case default
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
         end select
-        if( converged .and. params%l_polar .and. trim(params%polar) == 'obsfield' .and. &
-            &(.not. params%uses_next_assembly_ref_grid()) .and. params%has_next_assembly_ref_grid() )then
-            call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
-            call promote_assembly_nspace_if_needed(params, cline_volassemble, force=.true.)
-            call xpolar_volassemble%execute(cline_volassemble)
-        endif
-        ! input volume should only be used once in polar mode
-        if( params%l_polar ) call delete_volume_source_keys(cline, params%nstates)
         if( L_BENCH_GLOB )then
             self%bench%rt_assemble = toc(self%bench%t_assemble)
             self%bench%rt_tot      = toc(self%bench%t_tot)
@@ -715,15 +610,6 @@ contains
         self%l_multistates = cline%defined('nstates')
         ! init project
         call build%init_params_and_build_spproj(cline, params)
-        ! Keep worker command lines explicit; assembly commanders own polar reference assembly.
-        if( params%l_polar )then
-            call cline%set('nspace', params%nspace)
-            ! build%fsc is normally allocated in build_general_tbox (not called for the distr master).
-            ! Allocate it here so that set_bp_range3D can read on-disk FSCs in distr_execute_iteration.
-            if( .not. allocated(build%fsc) .and. params%box_crop > 0 )then
-                allocate( build%fsc(params%nstates, fdim(params%box_crop)-1), source=0.0 )
-            endif
-        endif
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -757,8 +643,6 @@ contains
         self%cline_postprocess         = cline
         self%cline_calc_group_sigmas   = cline
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
-        call self%cline_rec3D%delete( 'nspace_next' )
-        call self%cline_rec3D%delete( 'pftsz_next' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
@@ -858,15 +742,7 @@ contains
                 self%have_oris = .true.
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            if( params%l_polar )then
-                if( .not.vol_defined )then
-                    if( polar_ref_sections_available(params) ) vol_defined = .true.
-                endif
-            endif
             if( .not. vol_defined )then
-                if( params%l_polar .and. trim(params%polar) == 'obsfield' )then
-                    THROW_HARD('polar=obsfield requires assembly-derived POLAR_REFS')
-                endif
                 ! reconstructions needed
                 cline_tmp = self%cline_rec3D
                 call cline_tmp%delete('trail_rec')
@@ -890,7 +766,7 @@ contains
                     call simple_rename(refine3D_state_halfvol_fname(state, 'odd'), &
                         &refine3D_startvol_half_fname(state, 'odd'))
                 enddo
-                call remove_polar_ref_section_files
+                call remove_ref_section_files
                 vol_defined = .true.
             endif
             call invalidate_fresh_start_refs_from_volumes(params, cline, params%startit)
@@ -912,7 +788,7 @@ contains
     end subroutine distr_initialize
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
-        use simple_commanders_rec_distr, only: commander_cartesian_volassemble, commander_polar_volassemble
+        use simple_commanders_rec_distr, only: commander_volassemble
         use simple_commanders_volops, only: commander_postprocess
         use simple_commanders_euclid, only: commander_calc_group_sigmas
         use simple_commanders_prob,   only: commander_prob_align, commander_prob_align_neigh
@@ -928,8 +804,7 @@ contains
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(commander_prob_align)        :: xprob_align_distr
         type(commander_prob_align_neigh)  :: xprob_align_neigh_distr
-        type(commander_cartesian_volassemble) :: xvolassemble
-        type(commander_polar_volassemble) :: xpolar_volassemble
+        type(commander_volassemble) :: xvolassemble
         type(cmdline) :: cline_prob_align, cline_volassemble
         type(string)  :: str
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
@@ -937,7 +812,6 @@ contains
         real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:)
         integer :: state, iter
-        integer(timer_int_kind) :: t_obsfield_setup
         logical :: l_prob_state_mode, l_prob_neigh_mode
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
@@ -956,6 +830,7 @@ contains
             params%lambda = cos_decay(iter, params%maxits_glob, params%lam_bounds)
             write(logfhandle,601) '>>> LAMBDA, MAP CONNECTIVITY ANNEALING        ', params%lambda
         endif
+        call materialize_reprojection_model(params, cline, nthr=self%nthr_master)
         ! per-iteration group sigmas (euclid)
         if( trim(params%objfun).eq.'euclid' )then
             call self%cline_calc_group_sigmas%set('which_iter', iter)
@@ -967,16 +842,6 @@ contains
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        if( params%l_polar .and. (.not. params%l_prob_align_mode) )then
-            if( .not. complete_volume_source_defined(cline, params%nstates) )then
-                if( L_BENCH_GLOB .and. trim(params%polar) == 'obsfield' ) t_obsfield_setup = tic()
-                call set_bp_range3D(params, build, cline)
-                call ensure_polar_refs_on_disk(params, build, cline, 1, 'refine3D distributed iteration')
-                if( L_BENCH_GLOB .and. trim(params%polar) == 'obsfield' )then
-                    self%bench%rt_obsfield_setup = self%bench%rt_obsfield_setup + toc(t_obsfield_setup)
-                endif
-            endif
-        endif
         ! prob refinement
         if( L_BENCH_GLOB )then
             self%bench%rt_init = toc(self%bench%t_init)
@@ -1008,7 +873,7 @@ contains
         call cline%set(          'extr_iter',  params%extr_iter)
         call self%job_descr%set( 'startit',    int2str(params%startit))
         call cline%set(          'startit',    params%startit)
-        if( (trim(params%volrec).eq.'yes') .or. params%l_polar )then
+        if( trim(params%volrec).eq.'yes' )then
             call remove_partial_assembly_input_files(params)
         endif
         ! schedule distributed jobs
@@ -1020,19 +885,13 @@ contains
             self%bench%rt_sched   = toc(self%bench%t_sched)
             self%bench%t_assemble = tic()
         endif
-        if( (trim(params%volrec).eq.'yes') .or. params%l_polar )then
+        if( trim(params%volrec).eq.'yes' )then
             select case(trim(params%refine))
                 case('eval')
                     ! nothing
                 case DEFAULT
                     call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
-                    call promote_assembly_nspace_if_needed(params, cline_volassemble)
-                    if( params%l_polar )then
-                        call xpolar_volassemble%execute(cline_volassemble)
-                        params%refs = refine3D_iter_refs_fname(iter)
-                    else
-                        call xvolassemble%execute(cline_volassemble)
-                    endif
+                    call xvolassemble%execute(cline_volassemble)
                     if( trim(params%volrec).eq.'yes' )then
                         ! rename & add volumes to project & update job_descr
                         call build%spproj_field%get_pops(state_pops, 'state')
@@ -1097,27 +956,12 @@ contains
             case('eval')
                 ! nothing
             case DEFAULT
-                if( (trim(params%volrec).eq.'yes') .or. params%l_polar ) call refresh_resolution_fields_from_fsc(params, build)
+                if( trim(params%volrec).eq.'yes' ) call refresh_resolution_fields_from_fsc(params, build)
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
                 converged = converged .and. (iter >= params%startit + 2)
         end select
         ! Force termination at requested number of iterations (maxits is run-length)
         if( (iter - params%startit + 1) >= params%maxits ) converged = .true.
-        if( converged .and. params%l_polar .and. trim(params%polar) == 'obsfield' .and. &
-            &(.not. params%uses_next_assembly_ref_grid()) .and. params%has_next_assembly_ref_grid() )then
-            call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
-            call promote_assembly_nspace_if_needed(params, cline_volassemble, force=.true.)
-            call xpolar_volassemble%execute(cline_volassemble)
-            params%refs = refine3D_iter_refs_fname(iter)
-        endif
-        ! polar reference bookkeeping; the polar assembly commander owns the actual reduction.
-        if( params%l_polar )then
-            call delete_volume_source_job_keys(self%job_descr, params%nstates)
-            call delete_volume_source_keys(cline, params%nstates)
-            if( iter > 1 .and. params%keepvol.eq.'no' )then
-                call del_file(refine3D_iter_refs_fname(iter-1))
-            endif
-        endif
         if( L_BENCH_GLOB ) self%bench%rt_assemble = toc(self%bench%t_assemble)
         ! combine even/odd final iteration
         if ( self%l_combine_eo .and. converged )then
@@ -1163,32 +1007,6 @@ contains
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(in)    :: params
         type(builder),                  intent(inout) :: build
-        type(string) :: benchfname
-        integer :: fnr
-        if( L_BENCH_GLOB )then
-            benchfname = refine3D_distr_bench_fname(params%which_iter)
-            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
-            write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'refine3D init, distributed              : ', self%bench%rt_init
-            write(fnr,'(a,t52,f9.2)') 'refine3D prob tab, distributed       : ', self%bench%rt_prob
-            write(fnr,'(a,t52,f9.2)') 'refine3D 3D align & rec, distributed : ', self%bench%rt_sched
-            write(fnr,'(a,t52,f9.2)') 'refine3D assemble parts              : ', self%bench%rt_assemble
-            write(fnr,'(a,t52,f9.2)') 'refine3D total time                  : ', self%bench%rt_tot
-            write(fnr,'(a)') ''
-            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,t52,f9.2)') 'refine3D init, distributed              : ', &
-                &(self%bench%rt_init/self%bench%rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'refine3D prob tab, distributed       : ', &
-                &(self%bench%rt_prob/self%bench%rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'refine3D 3D align & rec, distributed : ', &
-                &(self%bench%rt_sched/self%bench%rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'refine3D assemble parts              : ', &
-                &(self%bench%rt_assemble/self%bench%rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'refine3D % accounted for             : ',&
-                &((self%bench%rt_init + self%bench%rt_prob + self%bench%rt_sched + &
-                &self%bench%rt_assemble)/self%bench%rt_tot) * 100.
-            call fclose(fnr)
-        endif
         call write_strategy_bench_report(params, self%bench, 'distributed')
     end subroutine distr_finalize_iteration
 

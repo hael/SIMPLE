@@ -35,7 +35,6 @@ contains
         class(oris),       pointer :: spproj_field
         integer :: maxits, istage, last_iter, nptcls_eff, nstages, nsample_target_2D
         logical :: l_shmem
-        call enforce_cartesian_abinitio2D()
         call cline%set('oritype',   'ptcl2D')
         call cline%set('sigma_est', 'global')
         if( .not. cline%defined('autoscale')     ) call cline%set('autoscale',     'yes')
@@ -44,7 +43,6 @@ contains
         if( .not. cline%defined('center_type')   ) call cline%set('center_type',   'seg')
         if( .not. cline%defined('cls_init')      ) call cline%set('cls_init',      'rand')
         if( .not. cline%defined('gauref')        ) call cline%set('gauref',        'yes')
-        if( .not. cline%defined('polar')         ) call cline%set('polar',         'no')
         if( .not. cline%defined('extr_lim')      ) call cline%set('extr_lim',      EXTR_LIM_LOCAL)
         if( .not. cline%defined('nits_per_stage')) call cline%set('nits_per_stage',ITS_INCR)
         if( .not. cline%defined('eo_stage')      ) call cline%set('eo_stage',      EO_STAGE)
@@ -125,15 +123,6 @@ contains
         call simple_end('**** SIMPLE_ABINITIO2D NORMAL STOP ****')
         
       contains
-
-        subroutine enforce_cartesian_abinitio2D()
-            if( cline%defined('polar') )then
-                if( cline%get_carg('polar') .ne. 'no' )then
-                    THROW_HARD('polar=yes is no longer supported for abinitio2D; use cartesian abinitio2D')
-                endif
-            endif
-            call cline%set('polar', 'no')
-        end subroutine enforce_cartesian_abinitio2D
 
         ! Downscaling/cropping dimensions used throughout
         subroutine set_dims
@@ -348,7 +337,6 @@ contains
             finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
             ! classes generation
             cline_make_cavgs = cline ! ncls is transferred here
-            call cline_make_cavgs%delete('polar')
             call cline_make_cavgs%delete('autoscale')
             call cline_make_cavgs%delete('balance')
             call cline_make_cavgs%delete('smpd_crop')

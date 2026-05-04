@@ -1,7 +1,7 @@
-!@descr: filename helpers for refine3D handoff and output artifacts
+!@descr: filename helpers for refine3D output artifacts
 module simple_refine3D_fnames
 use simple_defs_fname, only: BIN_EXT, MRC_EXT, TXT_EXT, &
-    &CAVGS_ITER_FBODY, FSC_FBODY, POLAR_REFS_FBODY, STARTVOL_FBODY, VOL_FBODY
+    &CAVGS_ITER_FBODY, FSC_FBODY, STARTVOL_FBODY, VOL_FBODY
 use simple_string,       only: string
 use simple_string_utils, only: int2str_pad
 implicit none
@@ -24,16 +24,9 @@ public :: refine3D_partial_rec_fbody
 public :: refine3D_partial_rec_glob
 public :: refine3D_partial_rec_fname
 public :: refine3D_partial_rho_fname
-public :: refine3D_polar_cavgs_part_fname
-public :: refine3D_polar_ctfsqsums_part_fname
-public :: refine3D_polar_sums_fname
-public :: refine3D_polar_ctf2_fname
-public :: refine3D_polar_refs_fbody
-public :: refine3D_polar_refs_fname
-public :: refine3D_polar_ref_part_fname
+public :: refine3D_reproj_model_fname
 public :: refine3D_bench_fname
 public :: refine3D_strategy_bench_fname
-public :: refine3D_distr_bench_fname
 public :: refine3D_volassemble_bench_fname
 
 contains
@@ -179,45 +172,10 @@ contains
         fname = string('rho_')//refine3D_partial_rec_fname(state, part, numlen, half)
     end function refine3D_partial_rho_fname
 
-    type(string) function refine3D_polar_cavgs_part_fname( half, part, numlen ) result(fname)
+    type(string) function refine3D_reproj_model_fname( half ) result(fname)
         character(len=*), intent(in) :: half
-        integer,          intent(in) :: part, numlen
-        fname = string('cavgs')//half_suffix(half)//'_part'//part_tag(part, numlen)//BIN_EXT
-    end function refine3D_polar_cavgs_part_fname
-
-    type(string) function refine3D_polar_ctfsqsums_part_fname( half, part, numlen ) result(fname)
-        character(len=*), intent(in) :: half
-        integer,          intent(in) :: part, numlen
-        fname = string('ctfsqsums')//half_suffix(half)//'_part'//part_tag(part, numlen)//BIN_EXT
-    end function refine3D_polar_ctfsqsums_part_fname
-
-    type(string) function refine3D_polar_sums_fname( half ) result(fname)
-        character(len=*), intent(in) :: half
-        fname = string('polar_sums')//half_suffix(half)//BIN_EXT
-    end function refine3D_polar_sums_fname
-
-    type(string) function refine3D_polar_ctf2_fname( half ) result(fname)
-        character(len=*), intent(in) :: half
-        fname = string('polar_ctf2')//half_suffix(half)//BIN_EXT
-    end function refine3D_polar_ctf2_fname
-
-    type(string) function refine3D_polar_refs_fbody() result(fname)
-        fname = string(POLAR_REFS_FBODY)
-    end function refine3D_polar_refs_fbody
-
-    type(string) function refine3D_polar_refs_fname( half ) result(fname)
-        character(len=*), intent(in), optional :: half
-        fname = refine3D_polar_refs_fbody()
-        if( present(half) ) fname = fname//half_suffix(half)
-        fname = fname//BIN_EXT
-    end function refine3D_polar_refs_fname
-
-    type(string) function refine3D_polar_ref_part_fname( state, part, numlen, half ) result(fname)
-        integer,          intent(in) :: state, part, numlen
-        character(len=*), intent(in) :: half
-        fname = refine3D_polar_refs_fbody()//'_s'//state_tag(state)//'_part'//part_tag(part, numlen)//&
-            &half_suffix(half)//BIN_EXT
-    end function refine3D_polar_ref_part_fname
+        fname = string('reprojection_model')//half_suffix(half)//BIN_EXT
+    end function refine3D_reproj_model_fname
 
     type(string) function refine3D_bench_fname( iter ) result(fname)
         integer, intent(in) :: iter
@@ -228,11 +186,6 @@ contains
         integer, intent(in) :: iter
         fname = string('REFINE3D_STRATEGY_BENCH_ITER')//iter_tag(iter)//TXT_EXT
     end function refine3D_strategy_bench_fname
-
-    type(string) function refine3D_distr_bench_fname( iter ) result(fname)
-        integer, intent(in) :: iter
-        fname = string('DISTR_REFINE3D_BENCH_ITER')//iter_tag(iter)//TXT_EXT
-    end function refine3D_distr_bench_fname
 
     type(string) function refine3D_volassemble_bench_fname( iter ) result(fname)
         integer, intent(in) :: iter

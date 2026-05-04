@@ -1,21 +1,20 @@
 !@descr: shared helpers for reading, masking, filtering and reprojecting reference volumes
 module simple_matcher_refvol_utils
 use simple_core_module_api
-use simple_builder,       only: builder
-use simple_parameters,    only: parameters
-use simple_cmdline,       only: cmdline
-use simple_image,         only: image
-use simple_pftc_srch_api, only: polarft_dims_from_file_header
-use simple_refine3D_fnames, only: refine3D_polar_refs_fbody, refine3D_polar_refs_fname
+use simple_builder,         only: builder
+use simple_parameters,      only: parameters
+use simple_cmdline,         only: cmdline
+use simple_image,           only: image
+use simple_refine3D_fnames, only: refine3D_reproj_model_fname
 implicit none
 
 public :: read_mask_filter_reproject_refvols
 public :: pick_lp_est_state, estimate_lp_from_refs
 public :: any_volume_source_defined, complete_volume_source_defined
 public :: complete_volume_source_available
-public :: polar_ref_sections_available
-public :: ensure_polar_refs_on_disk, materialize_polar_refs_from_volume_source
-public :: remove_polar_ref_section_files, write_polar_refs_from_current_pftc
+public :: reprojection_model_available, adopt_reprojection_model_range
+public :: read_reprojection_model, materialize_reprojection_model_from_volumes
+public :: remove_ref_section_files
 private
 #include "simple_local_flags.inc"
 
@@ -59,130 +58,133 @@ contains
         enddo
     end function complete_volume_source_available
 
-    logical function polar_ref_sections_available( params )
+    logical function reprojection_model_available( params ) result( l_available )
         class(parameters), intent(in) :: params
-        type(string) :: refs, refs_even, refs_odd
-        logical      :: have_refs, have_even, have_odd
-        refs      = refine3D_polar_refs_fname()
-        refs_even = refine3D_polar_refs_fname('even')
-        refs_odd  = refine3D_polar_refs_fname('odd')
-        have_refs = file_exists(refs)
-        have_even = file_exists(refs_even)
-        have_odd  = file_exists(refs_odd)
-        if( have_even .neqv. have_odd )then
-            polar_ref_sections_available = .false.
-        elseif( have_refs .and. have_even )then
-            polar_ref_sections_available = polar_ref_file_compatible(refs) .and. &
-                &polar_ref_file_compatible(refs_even) .and. &
-                &polar_ref_file_compatible(refs_odd)
-        elseif( have_even )then
-            polar_ref_sections_available = polar_ref_file_compatible(refs_even) .and. &
-                &polar_ref_file_compatible(refs_odd)
-        elseif( have_refs )then
-            polar_ref_sections_available = polar_ref_file_compatible(refs)
-        else
-            polar_ref_sections_available = .false.
-        endif
-        call refs%kill
-        call refs_even%kill
-        call refs_odd%kill
+        integer :: header(4)
+        l_available = .false.
+        if( .not. file_exists(refine3D_reproj_model_fname('even')) ) return
+        if( .not. file_exists(refine3D_reproj_model_fname('odd'))  ) return
+        call read_reprojection_model_header(header)
+        l_available = reprojection_model_header_compatible(params, header)
+    end function reprojection_model_available
 
-    contains
-
-        logical function polar_ref_file_compatible( fname )
-            type(string), intent(in) :: fname
-            integer :: pftsz_here, kfromto_here(2), nrefs_here
-            integer :: expected_nrefs, expected_interpklim
-            if( .not. file_exists(fname) )then
-                polar_ref_file_compatible = .false.
-                return
-            endif
-            call polarft_dims_from_file_header(fname, pftsz_here, kfromto_here, nrefs_here)
-            expected_nrefs      = params%nspace * params%nstates
-            expected_interpklim = fdim(params%box_crop) - 1
-            ! Header-only gate for stale POLAR_REFS*. Lower-k range
-            ! differences are accepted because the reader owns overlap
-            ! transfer and k-range zero padding.
-            polar_ref_file_compatible = nrefs_here == expected_nrefs
-            polar_ref_file_compatible = polar_ref_file_compatible .and. pftsz_here == params%pftsz
-            polar_ref_file_compatible = polar_ref_file_compatible .and. kfromto_here(2) <= expected_interpklim
-        end function polar_ref_file_compatible
-        
-    end function polar_ref_sections_available
-
-    subroutine remove_polar_ref_section_files
-        type(string) :: refs, refs_even, refs_odd
-        refs      = refine3D_polar_refs_fname()
-        refs_even = refine3D_polar_refs_fname('even')
-        refs_odd  = refine3D_polar_refs_fname('odd')
-        if( file_exists(refs) )      call del_file(refs)
+    subroutine remove_ref_section_files
+        type(string) :: refs_even, refs_odd
+        refs_even = refine3D_reproj_model_fname('even')
+        refs_odd  = refine3D_reproj_model_fname('odd')
         if( file_exists(refs_even) ) call del_file(refs_even)
-        if( file_exists(refs_odd) )  call del_file(refs_odd)
-        call refs%kill
+        if( file_exists(refs_odd)  ) call del_file(refs_odd)
         call refs_even%kill
         call refs_odd%kill
-    end subroutine remove_polar_ref_section_files
+        ! Also clear legacy names if present from older branches.
+        if( file_exists(POLAR_REFS_FBODY//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//BIN_EXT)
+        if( file_exists(POLAR_REFS_FBODY//'_even'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_even'//BIN_EXT)
+        if( file_exists(POLAR_REFS_FBODY//'_odd'//BIN_EXT) ) call del_file(POLAR_REFS_FBODY//'_odd'//BIN_EXT)
+    end subroutine remove_ref_section_files
 
-    subroutine write_polar_refs_from_current_pftc( params, build, nspace_refs, skip_distr_nonroot )
-        class(parameters), intent(in)    :: params
+    subroutine adopt_reprojection_model_range( params, build )
+        class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
-        integer, optional, intent(in)    :: nspace_refs
-        logical, optional, intent(in)    :: skip_distr_nonroot
-        integer :: nspace_write, nrefs_write
-        if( present(skip_distr_nonroot) )then
-            if( skip_distr_nonroot .and. params%l_distr_worker .and. params%part /= 1 ) return
+        integer :: header(4)
+        call read_reprojection_model_header(header)
+        if( .not. reprojection_model_header_compatible(params, header) )then
+            write(logfhandle,*) 'pftsz, kfrom, kto, nrefs in model: ', header
+            write(logfhandle,*) 'expected pftsz/nrefs: ', params%pftsz, params%nspace * params%nstates
+            THROW_HARD('incompatible refine3D reprojection model')
         endif
-        nspace_write = params%nspace
-        if( present(nspace_refs) ) nspace_write = nspace_refs
-        nrefs_write = nspace_write * params%nstates
-        call remove_polar_ref_section_files
-        call build%pftc%polar_cavger_new(.true., nrefs=nrefs_write)
-        call build%pftc%polar_cavger_write_eo_pftcrefs(refine3D_polar_refs_fbody())
-    end subroutine write_polar_refs_from_current_pftc
+        params%kfromto = header(2:3)
+        params%lp      = calc_lowpass_lim(params%kfromto(2), params%box, params%smpd)
+        if( associated(build%spproj_field) ) call build%spproj_field%set_all2single('lp', params%lp)
+    end subroutine adopt_reprojection_model_range
 
-    subroutine materialize_polar_refs_from_volume_source( params, build, cline, batchsz, cleanup_pftc )
+    subroutine read_reprojection_model( params, build, batchsz )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: batchsz
+        integer :: nrefs
+        type(string) :: refs_even, refs_odd
+        call adopt_reprojection_model_range(params, build)
+        if( build%eulspace%get_noris() /= params%nspace )then
+            call build%eulspace%kill
+            call build%eulspace%new(params%nspace, is_ptcl=.false.)
+            call build%pgrpsyms%build_refspiral(build%eulspace)
+        endif
+        nrefs = params%nspace * params%nstates
+        call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+        refs_even = refine3D_reproj_model_fname('even')
+        refs_odd  = refine3D_reproj_model_fname('odd')
+        call build%pftc%read_ref_pfts(refs_even, .true.)
+        call build%pftc%read_ref_pfts(refs_odd,  .false.)
+        call refs_even%kill
+        call refs_odd%kill
+    end subroutine read_reprojection_model
+
+    subroutine materialize_reprojection_model_from_volumes( params, build, cline, cleanup_pftc )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(in)    :: cline
-        integer,           intent(in)    :: batchsz
         logical, optional, intent(in)    :: cleanup_pftc
         logical :: l_cleanup
-        if( .not. complete_volume_source_available(params) )then
-            THROW_HARD('cannot materialize POLAR_REFS without complete volume source files')
-        endif
-        call read_mask_filter_reproject_refvols(params, build, cline, batchsz)
-        call write_polar_refs_from_current_pftc(params, build)
+        type(string) :: refs_even, refs_odd
+        call read_mask_filter_reproject_refvols(params, build, cline, map_shift=.true.)
+        call remove_ref_section_files
+        refs_even = refine3D_reproj_model_fname('even')
+        refs_odd  = refine3D_reproj_model_fname('odd')
+        call build%pftc%write_ref_pfts(refs_even, .true.)
+        call build%pftc%write_ref_pfts(refs_odd,  .false.)
         l_cleanup = .false.
         if( present(cleanup_pftc) ) l_cleanup = cleanup_pftc
         if( l_cleanup )then
-            call build%pftc%polar_cavger_kill
             call build%pftc%kill
+            call build%vol%kill
+            call build%vol_odd%kill
+            call build%vol2%kill
         endif
-    end subroutine materialize_polar_refs_from_volume_source
+        call refs_even%kill
+        call refs_odd%kill
+    end subroutine materialize_reprojection_model_from_volumes
 
-    subroutine ensure_polar_refs_on_disk( params, build, cline, batchsz, caller )
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        class(cmdline),    intent(in)    :: cline
-        integer,           intent(in)    :: batchsz
-        character(len=*),  intent(in)    :: caller
-        if( any_volume_source_defined(cline, params%nstates) &
-            &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
-            THROW_HARD('incomplete multi-state volume source; provide vol1..volN or use POLAR_REFS; '//caller)
+    subroutine read_reprojection_model_header( header )
+        integer, intent(out) :: header(4)
+        integer :: even_header(4), odd_header(4)
+        type(string) :: refs_even, refs_odd
+        refs_even = refine3D_reproj_model_fname('even')
+        refs_odd  = refine3D_reproj_model_fname('odd')
+        call read_reprojection_model_file_header(refs_even, even_header)
+        call read_reprojection_model_file_header(refs_odd,  odd_header)
+        if( any(even_header /= odd_header) )then
+            write(logfhandle,*) 'even header: ', even_header
+            write(logfhandle,*) 'odd header:  ', odd_header
+            THROW_HARD('even/odd reprojection model headers differ')
         endif
-        ! Refinement assembly owns the next-iteration POLAR_REFS* handoff.
-        ! Fresh starting volumes must invalidate stale refs before reaching here.
-        if( polar_ref_sections_available(params) ) return
-        if( complete_volume_source_defined(cline, params%nstates) )then
-            call materialize_polar_refs_from_volume_source(params, build, cline, batchsz, cleanup_pftc=.true.)
-            return
-        endif
-        if( complete_volume_source_available(params) )then
-            call materialize_polar_refs_from_volume_source(params, build, cline, batchsz, cleanup_pftc=.true.)
-            return
-        endif
-        THROW_HARD('polar reference sections are missing and no complete volume source is available; '//caller)
-    end subroutine ensure_polar_refs_on_disk
+        header = even_header
+        call refs_even%kill
+        call refs_odd%kill
+    end subroutine read_reprojection_model_header
+
+    subroutine read_reprojection_model_file_header( fname, header )
+        class(string), intent(in)  :: fname
+        integer,       intent(out) :: header(4)
+        integer :: funit, io_stat
+        if( .not. file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist; read_reprojection_model_file_header')
+        call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('read_reprojection_model_file_header: '//fname%to_char(), io_stat)
+        read(unit=funit,pos=1) header
+        call fclose(funit)
+    end subroutine read_reprojection_model_file_header
+
+    logical function reprojection_model_header_compatible( params, header ) result( l_compatible )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: header(4)
+        integer :: expected_nrefs, interp_limit
+        expected_nrefs = params%nspace * params%nstates
+        interp_limit   = fdim(params%box_crop) - 1
+        l_compatible = header(1) == params%pftsz
+        l_compatible = l_compatible .and. header(2) >= 1
+        l_compatible = l_compatible .and. header(3) >= header(2)
+        l_compatible = l_compatible .and. header(3) <= interp_limit
+        l_compatible = l_compatible .and. header(4) == expected_nrefs
+    end function reprojection_model_header_compatible
 
     !>  \brief  determines the reference volume shift and map shifts back to particles
     !>          reference volume shifting is performed in shift_and_mask_refvol
@@ -335,7 +337,7 @@ contains
         class(builder),    intent(in)  :: build
         integer,           intent(out) :: state
         integer :: s
-        real    :: res_avg(params%nstates), res_val
+        real    :: res_avg(params%nstates)
         integer :: n_particles
         logical, allocatable :: mask(:)
         integer, allocatable :: states(:)
@@ -357,7 +359,6 @@ contains
 
     subroutine estimate_lp_from_refs( params, build, cline, lpstart, lpstop, state )
         use simple_opt_filter,   only: estimate_lplim3D
-        use simple_polarft_calc, only: polarft_estimate_lplim3D
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(in)    :: cline
@@ -370,18 +371,14 @@ contains
         if( lpstart < lpstop )then
             THROW_HARD('Invalid low-pass range ordering: lpstart must be >= lpstop')
         endif
-        if( params%l_polar .and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
-            call polarft_estimate_lplim3D(params%box_crop, params%smpd_crop, lpstart, lpstop, lpopt)
-        else
-            ! Use circular mask for low-pass estimation (volassemble handles automasking)
-            call mskvol%disc([params%box_crop,  params%box_crop, params%box_crop], params%smpd_crop,&
-                &params%msk_crop, npix )
-            vol_even = params%vols_even(state)
-            vol_odd  = params%vols_odd(state)
-            call build%vol%read_and_crop(    vol_even, params%smpd, params%box_crop, params%smpd_crop)
-            call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
-            call estimate_lplim3D(build%vol_odd, build%vol, mskvol, lpstart, lpstop, lpopt)
-        endif
+        ! Use circular mask for low-pass estimation (volassemble handles automasking)
+        call mskvol%disc([params%box_crop,  params%box_crop, params%box_crop], params%smpd_crop,&
+            &params%msk_crop, npix )
+        vol_even = params%vols_even(state)
+        vol_odd  = params%vols_odd(state)
+        call build%vol%read_and_crop(    vol_even, params%smpd, params%box_crop, params%smpd_crop)
+        call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
+        call estimate_lplim3D(build%vol_odd, build%vol, mskvol, lpstart, lpstop, lpopt)
         call build%spproj_field%set_all2single('lp_est', lpopt)
         if( params%l_lpauto )then
             params%lp = lpopt
@@ -391,15 +388,24 @@ contains
         call mskvol%kill
     end subroutine estimate_lp_from_refs
 
-    subroutine read_mask_filter_reproject_refvols( params, build, cline, batchsz )
+    subroutine read_mask_filter_reproject_refvols( params, build, cline, map_shift )
         use simple_polarft_calc, only: vol_pad2ref_pfts
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(in)    :: cline
-        integer,           intent(in)    :: batchsz
+        logical, optional, intent(in)    :: map_shift
         real      :: xyz(3)
         integer   :: s, nrefs, state
-        logical   :: do_center
+        logical   :: do_center, l_map_shift
+        l_map_shift = .true.
+        if( present(map_shift) ) l_map_shift = map_shift
+        if( any_volume_source_defined(cline, params%nstates) &
+            &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
+            THROW_HARD('incomplete multi-state volume source; provide vol1..volN')
+        endif
+        if( .not. complete_volume_source_available(params) )then
+            THROW_HARD('cannot prepare reference sections without complete volume source files')
+        endif
         call pick_lp_est_state(params, build, state)
         if( trim(params%filt_mode).eq.'uniform' .and. &
             &cline%defined('lpstart') .and. cline%defined('lpstop') )then
@@ -413,13 +419,8 @@ contains
         nrefs = params%nspace * params%nstates
         call build%pftc%new(params, nrefs, [1, 1], params%kfromto)
         do s = 1, params%nstates
-            if( params%l_prob_align_mode )then
-                call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
-                    & do_center, xyz, map_shift=l_distr_worker_glob)
-            else
-                call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
-                    & do_center, xyz, map_shift=.true.)
-            endif
+            call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
+                & do_center, xyz, map_shift=l_map_shift)
             call read_mask_filter_refvols(params, build, s)
             call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
                 & params%smpd_crop, wthreads=.true.)

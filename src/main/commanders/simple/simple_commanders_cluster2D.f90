@@ -49,12 +49,6 @@ contains
         ! local defaults (kept consistent with previous distributed master)
         call cline%set('prg', 'cluster2D')
         call set_cluster2D_defaults(cline)
-        if( cline%defined('polar') )then
-            if( cline%get_carg('polar') .ne. 'no' )then
-                THROW_HARD('polar=yes is no longer supported for 2D workflows; use cartesian cluster2D')
-            endif
-        endif
-        call cline%set('polar', 'no')
         ! Select execution strategy (shared-memory vs distributed master)
         strategy = create_cluster2D_strategy(cline)
         call strategy%initialize(params, build, cline)
@@ -111,12 +105,6 @@ contains
         type(builder)    :: build
         logical          :: converged
         call set_cluster2D_defaults(cline)
-        if( cline%defined('polar') )then
-            if( cline%get_carg('polar') .ne. 'no' )then
-                THROW_HARD('polar=yes is no longer supported for 2D workflows; use cartesian cluster2D')
-            endif
-        endif
-        call cline%set('polar', 'no')
         ! Flags required for worker execution
         if( .not. cline%defined('part')    ) THROW_HARD('PART must be defined for distributed worker execution')
         if( .not. cline%defined('outfile') ) THROW_HARD('OUTFILE must be defined for distributed worker execution')

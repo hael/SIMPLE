@@ -11,14 +11,12 @@ integer, parameter :: STOCH_SAMPL_STAGE          = PROB_REFINE_STAGE     ! we sw
 integer, parameter :: LPAUTO_STAGE               = PROB_REFINE_STAGE + 1 ! we switch on automatic low-pass limit estimation after one prob stage
 integer, parameter :: REFINE3D_ROUTE_STD         = 1
 integer, parameter :: REFINE3D_ROUTE_CAVGS       = 2
-integer, parameter :: REFINE3D_ROUTE_POLAR       = 3
-integer, parameter :: NSPACE_NEXT_NONE           = 0
 integer, parameter :: NSPACE_SUB                 = 126
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
     type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk
-    integer :: iter, inspace, inspace_next, inspace_sub, imaxits, nsample_dyn, ipftsz, ipftsz_next
+    integer :: iter, inspace, inspace_sub, imaxits, nsample_dyn
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
 end type refine3D_stage_cfg
@@ -29,22 +27,10 @@ contains
         logical, intent(in) :: l_cavgs
         if( l_cavgs )then
             route = REFINE3D_ROUTE_CAVGS
-        else if( l_polar )then
-            route = REFINE3D_ROUTE_POLAR
         else
             route = REFINE3D_ROUTE_STD
         endif
     end function classify_refine3D_route
-
-    logical function polar_mode_remaps_refs( mode )
-        character(len=*), intent(in) :: mode
-        select case(trim(mode))
-            case('obsfield')
-                polar_mode_remaps_refs = .true.
-            case default
-                polar_mode_remaps_refs = .false.
-        end select
-    end function polar_mode_remaps_refs
 
     integer function active_refine3D_nstages() result(nstages)
         nstages = min(nstages_refine3D, size(NSPACE), size(MAXITS))
@@ -56,7 +42,7 @@ contains
         integer :: route
         route = classify_refine3D_route(l_cavgs)
         call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs, route )
-        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, route )
+        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
     end procedure set_cline_refine3D
 
     subroutine build_refine3D_stage_cfg( cfg, params, istage, l_cavgs, route )
@@ -74,9 +60,8 @@ contains
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_automsk_policy( cfg, params, istage, route )
-        call set_refine3D_stage_controls( cfg, params, istage, route )
+        call set_refine3D_stage_controls( cfg, params, istage )
         call apply_refine3D_route_overrides( cfg, params, route )
-        call set_refine3D_next_space( cfg, params, istage, route )
     end subroutine build_refine3D_stage_cfg
 
     subroutine init_refine3D_iteration( cfg )
@@ -86,7 +71,6 @@ contains
             cfg%iter = cline_refine3D%get_iarg('endit')
         endif
         cfg%iter = cfg%iter + 1
-        cfg%inspace_next = NSPACE_NEXT_NONE
         cfg%inspace_sub = 0
     end subroutine init_refine3D_iteration
 
@@ -223,11 +207,10 @@ contains
         endif
     end subroutine set_refine3D_automsk_policy
 
-    subroutine set_refine3D_stage_controls( cfg, params, istage, route )
+    subroutine set_refine3D_stage_controls( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        integer,                  intent(in)    :: route
         cfg%inspace = NSPACE(istage)
         select case(istage)
             case(1,2)
@@ -276,97 +259,23 @@ contains
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: route
-        integer :: stage_last
-        cfg%ipftsz = 0
-        cfg%ipftsz_next = 0
-        stage_last = active_refine3D_nstages()
         select case(route)
             case(REFINE3D_ROUTE_STD)
                 ! nothing to override for the standard route
             case(REFINE3D_ROUTE_CAVGS)
                 cfg%ml_reg = 'no'
-            case(REFINE3D_ROUTE_POLAR)
-                if( trim(params%gauref).eq.'no' ) cfg%gaufreq = -1.
-                if( cfg%ml_reg.eq.'yes' )         cfg%gaufreq = -1.
-                if( cfg%trail_rec=='yes' )then
-                    if( trim(params%multivol_mode)=='docked' )then
-                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(max(1,stage_last-1))%box_crop)
-                    else
-                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
-                    endif
-                    if( .not. polar_mode_remaps_refs(params%polar) )then
-                        cfg%inspace = NSPACE(stage_last)
-                    endif
-                endif
         end select
         select case(cfg%refine%to_char())
             case('prob_neigh')
                 cfg%inspace_sub = NSPACE_SUB
         end select
-        ! Legacy polar trailing reconstruction expects matching reference
-        ! arrays. obsfield remaps previous nspace onto the current space.
-        if( params%l_polar .and. (.not. polar_mode_remaps_refs(params%polar)) )then
-            select case(cfg%refine%to_char())
-                case('prob_neigh')
-                    cfg%inspace = NSPACE(stage_last)
-            end select
-        endif
     end subroutine apply_refine3D_route_overrides
 
-    subroutine set_refine3D_next_space( cfg, params, istage, route )
-        type(refine3D_stage_cfg), intent(inout) :: cfg
-        class(parameters),        intent(in)    :: params
-        integer,                  intent(in)    :: istage
-        integer,                  intent(in)    :: route
-        type(refine3D_stage_cfg) :: cfg_next
-        integer :: stage_last
-        stage_last = active_refine3D_nstages()
-        if( istage < active_refine3D_nstages() )then
-            cfg%inspace_next = refine3D_stage_nspace(params, istage + 1, route)
-            if( params%l_polar .and. polar_mode_remaps_refs(params%polar) )then
-                call set_refine3D_mode_policy( cfg_next, params, istage + 1, route )
-                call set_refine3D_trailrec_policy( cfg_next, params, istage + 1 )
-                if( cfg_next%trail_rec == 'yes' .and. cfg%ipftsz == 0 )then
-                    if( trim(params%multivol_mode)=='docked' )then
-                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(max(1,stage_last-1))%box_crop)
-                    else
-                        cfg%ipftsz = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
-                    endif
-                endif
-                if( cfg_next%trail_rec == 'yes' )then
-                    if( trim(params%multivol_mode)=='docked' )then
-                        cfg%ipftsz_next = magic_pftsz(params%msk, params%box, lpinfo(max(1,stage_last-1))%box_crop)
-                    else
-                        cfg%ipftsz_next = magic_pftsz(params%msk, params%box, lpinfo(stage_last)%box_crop)
-                    endif
-                endif
-            endif
-        else
-            cfg%inspace_next = NSPACE_NEXT_NONE
-        endif
-        if( cfg%inspace_next == cfg%inspace ) cfg%inspace_next = NSPACE_NEXT_NONE
-    end subroutine set_refine3D_next_space
-
-    integer function refine3D_stage_nspace( params, istage, route ) result(inspace)
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage
-        integer,           intent(in) :: route
-        type(refine3D_stage_cfg) :: cfg_stage
-        call set_refine3D_mode_policy( cfg_stage, params, istage, route )
-        call set_refine3D_gauref_policy( cfg_stage, params, istage, route )
-        call set_refine3D_trailrec_policy( cfg_stage, params, istage )
-        call set_refine3D_automsk_policy( cfg_stage, params, istage, route )
-        call set_refine3D_stage_controls( cfg_stage, params, istage, route )
-        call apply_refine3D_route_overrides( cfg_stage, params, route )
-        inspace = cfg_stage%inspace
-    end function refine3D_stage_nspace
-
-    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, route )
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
-        integer,                  intent(in) :: route
         call cline_refine3D%set('prg',                     'refine3D')
         if( l_update_frac_dyn .or. istage == active_refine3D_nstages() )then
             call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
@@ -401,11 +310,6 @@ contains
             write(logfhandle,'(A,I0,A)') 'emit_refine3D_stage_cfg: stage=', istage, ' automsk active, deleting lp for gold-standard refinement'
         endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
-        if( cfg%inspace_next /= NSPACE_NEXT_NONE )then
-            call cline_refine3D%set('nspace_next',         cfg%inspace_next)
-        else
-            call cline_refine3D%delete('nspace_next')
-        endif
         if( cfg%inspace_sub > 0 )then
             call cline_refine3D%set('nspace_sub',         cfg%inspace_sub)
         else
@@ -430,18 +334,6 @@ contains
             call cline_refine3D%delete('gauref')
             call cline_refine3D%delete('gaufreq')
         endif
-        call cline_refine3D%delete('ipftsz')
-        call cline_refine3D%delete('pftsz_next')
-        select case(route)
-            case(REFINE3D_ROUTE_POLAR)
-                call cline_refine3D%set('center_type',    'params')
-                if( cfg%ipftsz > 0 )then
-                    call cline_refine3D%set('pftsz',      cfg%ipftsz)
-                endif
-                if( cfg%ipftsz_next > 0 )then
-                    call cline_refine3D%set('pftsz_next', cfg%ipftsz_next)
-                endif
-        end select
     end subroutine emit_refine3D_stage_cfg
 
 end submodule simple_abinitio_controller

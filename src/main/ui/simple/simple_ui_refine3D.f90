@@ -157,12 +157,6 @@ contains
         ! <empty>
         ! search controls
         call refine3D%add_input(UI_SRCH, nspace, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, 'polar', 'multi', 'Polar restoration mode',&
-        &'Polar restoration mode(no|yes|obsfield){no}. no uses Cartesian reconstruction; yes uses legacy &
-        &common-line polar restoration. &
-        &obsfield writes Cartesian partial reconstructions and projects restored half-volumes into polar references',&
-        &'(no|yes|obsfield){no}', .false., 'no',&
-        &gui_submenu="search", gui_advanced=.true.)
         call refine3D%add_input(UI_SRCH, trs, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="search")

@@ -87,7 +87,6 @@ contains
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
-        607 format(A,1X,F4.2)
         609 format(A)
         states         = os%get_all('state')
         scores         = os%get_all('corr')
@@ -262,7 +261,6 @@ contains
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
-        607 format(A,1X,F4.2)
         609 format(A)
         states         = os%get_all('state')
         scores         = os%get_all('corr')
@@ -368,11 +366,6 @@ contains
         else
         write(logfhandle,609) '>>> | FILLIN PARTICLE SAMPLING      | off'
         endif
-        endif
-        if( params%l_polar )then
-        write(logfhandle,609) '>>> | REPRESENTATION                | polar='//trim(params%polar)
-        else
-        write(logfhandle,609) '>>> | REPRESENTATION                | cartesian'
         endif
         write(logfhandle,609) '>>> --------------------------------------------------'
         ! dynamic shift search range update

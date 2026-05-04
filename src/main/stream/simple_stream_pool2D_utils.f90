@@ -178,8 +178,6 @@ contains
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
-        ! polar representation
-        if( master_cline%defined('polar') ) call cline_cluster2D_pool%set('polar', params%polar)
         ! Determines dimensions for downscaling
         call set_pool_dimensions(params)
         ! updates command-lines with resolution limits

@@ -59,6 +59,7 @@ type strategy3D_srch
   contains
     procedure :: new
     procedure :: prep4srch
+    procedure :: prep4prob_assign
     procedure :: inpl_srch_first
     procedure :: inpl_srch
     procedure :: inpl_srch_peaks
@@ -104,14 +105,36 @@ contains
         call self%opeaks%new(self%npeaks, is_ptcl=.true.)
         ! create in-plane search objects
         self%nrots = self%b_ptr%pftc%get_nrots()
-        call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
-        &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
-        call self%grad_shsrch_obj2%new(self%b_ptr, lims, lims_init=lims_init, maxits=self%p_ptr%maxits_sh,&
-        &shbarrier=self%p_ptr%shbarrier, opt_angle=.false.)
-        call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
-        &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+        if( .not. str_has_substr(self%refine, 'prob') )then
+            call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+            &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
+            call self%grad_shsrch_obj2%new(self%b_ptr, lims, lims_init=lims_init, maxits=self%p_ptr%maxits_sh,&
+            &shbarrier=self%p_ptr%shbarrier, opt_angle=.false.)
+            call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+            &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+        endif
         self%exists = .true.
     end subroutine new
+
+    subroutine prep4prob_assign( self )
+        class(strategy3D_srch), intent(inout) :: self
+        call self%b_ptr%spproj_field%get_ori(self%iptcl, self%o_prev)         ! previous ori
+        self%prev_state = self%o_prev%get_state()                             ! state index
+        self%prev_roind = self%b_ptr%pftc%get_roind(360.-self%o_prev%e3get()) ! in-plane angle index
+        self%prev_shvec = self%o_prev%get_2Dshift()                           ! shift vector
+        self%prev_proj  = self%b_ptr%eulspace%find_closest_proj(self%o_prev)  ! previous projection direction
+        self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj
+        call self%b_ptr%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
+        call prep_strategy3D_thread(self%ithr)
+        self%nsolns     = 0
+        self%nrefs_eval = 0
+        self%ntrs_eval  = 0
+        self%prev_corr  = 0.
+        if( self%prev_state > 0 )then
+            if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4prob_assign')
+            if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4prob_assign')
+        endif
+    end subroutine prep4prob_assign
 
     subroutine prep4srch( self )
         class(strategy3D_srch), intent(inout) :: self

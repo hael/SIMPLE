@@ -127,8 +127,6 @@ contains
         cline_rec3D = cline
         call cline_rec3D%set('prg', 'reconstruct3D') ! required for distributed call
         call cline_rec3D%delete('trail_rec')
-        call cline_rec3D%delete('nspace_next')
-        call cline_rec3D%delete('pftsz_next')
         call cline_rec3D%delete('objfun')
         call cline_rec3D%delete('sigma_est')
         call cline_rec3D%delete('update_frac')
@@ -218,7 +216,7 @@ contains
         use simple_core_module_api
         use simple_strategy3D_matcher, only: refine3D_exec
         class(commander_refine3D_distr_worker), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
+        class(cmdline),                         intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         logical          :: converged
@@ -231,7 +229,7 @@ contains
         if( params%which_iter < 1 ) params%which_iter = max(1, params%startit)
         if( .not. cline%defined('extr_iter') ) params%extr_iter = params%which_iter
         call cline%set('which_iter', int2str(params%which_iter))
-        l_write_partial_recs = trim(params%volrec) .eq. 'yes' .or. params%l_polar
+        l_write_partial_recs = trim(params%volrec) .eq. 'yes'
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox

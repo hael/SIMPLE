@@ -7,14 +7,14 @@ use File::Path qw(make_path);
 
 # Parse benchmark text files (*_BENCH_ITER*.txt) and emit matrix CSVs.
 #
-# New sectioned benchmark files may contain:
+# Benchmark files may contain:
 #   *** BENCHMARK CONTEXT ***
-#   *** COMPARABLE TIMINGS (s) ***
-#   *** COMPARABLE DETAIL TIMINGS (s) ***
-#   *** COMPARABLE RELATIVE TIMINGS (%) ***
+#   *** TIMINGS (s) ***
+#   *** RELATIVE TIMINGS (%) ***
 #
-# The parser prefers the COMPARABLE sections when present and falls back to the
-# older TIMINGS / RELATIVE TIMINGS sections for files that have not been updated.
+# Any header ending in TIMINGS (s) is treated as a seconds section. When no
+# relative-timing section is present, percentages are derived from the parsed
+# total-time entry.
 #
 # Usage:
 #   perl parse_bench.pl [glob] [outdir]
@@ -93,8 +93,7 @@ sub parse_bench_file {
     open my $fh, '<', $file or die "Cannot open $file: $!\n";
 
     my %context;
-    my (%sec_comparable, %sec_detail, %sec_legacy);
-    my (%pct_comparable, %pct_legacy);
+    my (%sec, %pct);
     my $section = '';
 
     while (my $line = <$fh>) {
@@ -104,16 +103,10 @@ sub parse_bench_file {
             my $header = normalize_header($1);
             if ($header eq 'BENCHMARK CONTEXT') {
                 $section = 'context';
-            } elsif ($header eq 'COMPARABLE TIMINGS (S)') {
-                $section = 'sec_comparable';
-            } elsif ($header eq 'COMPARABLE DETAIL TIMINGS (S)') {
-                $section = 'sec_detail';
-            } elsif ($header eq 'TIMINGS (S)') {
-                $section = 'sec_legacy';
-            } elsif ($header eq 'COMPARABLE RELATIVE TIMINGS (%)') {
-                $section = 'pct_comparable';
-            } elsif ($header eq 'RELATIVE TIMINGS (%)') {
-                $section = 'pct_legacy';
+            } elsif ($header =~ /TIMINGS \(S\)$/) {
+                $section = 'sec';
+            } elsif ($header =~ /RELATIVE TIMINGS \(%\)$/) {
+                $section = 'pct';
             } else {
                 $section = '';
             }
@@ -135,27 +128,55 @@ sub parse_bench_file {
         my ($metric, $value) = parse_metric_value($line);
         next unless defined $metric;
 
-        if ($section eq 'sec_comparable') {
-            $sec_comparable{$metric} = $value;
-        } elsif ($section eq 'sec_detail') {
-            $sec_detail{$metric} = $value;
-        } elsif ($section eq 'sec_legacy') {
-            $sec_legacy{$metric} = $value;
-        } elsif ($section eq 'pct_comparable') {
-            $pct_comparable{$metric} = $value;
-        } elsif ($section eq 'pct_legacy') {
-            $pct_legacy{$metric} = $value;
+        if ($section eq 'sec') {
+            $sec{$metric} = $value;
+        } elsif ($section eq 'pct') {
+            $pct{$metric} = $value;
         }
     }
 
     close $fh;
 
-    my %file_sec = ((keys %sec_comparable) || (keys %sec_detail))
-        ? (%sec_comparable, %sec_detail)
-        : %sec_legacy;
-    my %file_pct = (keys %pct_comparable) ? %pct_comparable : %pct_legacy;
+    if (!keys %pct) {
+        %pct = derive_percentages(\%sec);
+    }
 
-    return (\%context, \%file_sec, \%file_pct);
+    return (\%context, \%sec, \%pct);
+}
+
+sub derive_percentages {
+    my ($sec_ref) = @_;
+    my %pct;
+    my $total_metric = find_total_metric($sec_ref);
+    return %pct unless defined $total_metric;
+
+    my $total = $sec_ref->{$total_metric};
+    return %pct unless defined $total && $total > 0;
+
+    for my $metric (keys %{$sec_ref}) {
+        next if $metric eq $total_metric;
+        $pct{$metric} = ($sec_ref->{$metric} / $total) * 100.0;
+    }
+
+    my $accounted = 0.0;
+    for my $value (values %pct) {
+        $accounted += $value;
+    }
+    my $prefix = $total_metric;
+    $prefix =~ s/\s*total time\s*$//i;
+    $prefix =~ s/\s+$//;
+    my $accounted_metric = length($prefix) ? "$prefix % accounted for" : '% accounted for';
+    $pct{$accounted_metric} = $accounted;
+
+    return %pct;
+}
+
+sub find_total_metric {
+    my ($sec_ref) = @_;
+    for my $metric (sort keys %{$sec_ref}) {
+        return $metric if lc($metric) =~ /\btotal time$/;
+    }
+    return;
 }
 
 sub parse_metric_value {

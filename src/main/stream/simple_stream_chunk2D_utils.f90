@@ -91,8 +91,6 @@ contains
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
-        ! polar representation
-        if( master_cline%defined('polar') ) call cline_cluster2D_chunk%set('polar', params%polar)
         ! Determines dimensions for downscaling
         call set_chunk_dimensions( params )
         ! updates command-line with resolution limits, defaults are handled by abinitio2D

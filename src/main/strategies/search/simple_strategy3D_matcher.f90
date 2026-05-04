@@ -9,10 +9,9 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
 use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
-use simple_matcher_pftc_prep,       only: prep_pftc4align3D
-use simple_matcher_smpl_and_lplims, only: set_bp_range3D, sample_ptcls4fillin, sample_ptcls4update3D
+use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
-use simple_refine3D_fnames,         only: refine3D_bench_fname, refine3D_polar_refs_fbody
+use simple_refine3D_fnames,         only: refine3D_bench_fname
 use simple_strategy3D_eval,         only: strategy3D_eval
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
@@ -31,12 +30,9 @@ private
 
 type :: refine3D_ctrl
     character(len=:), allocatable :: refine_mode
-    character(len=:), allocatable :: polar_mode
     character(len=:), allocatable :: oritype
     logical :: do_write_partial_recs
-    logical :: do_polar_prepare
     logical :: do_prob_align
-    logical :: do_polar
     logical :: do_sigma_mode
     logical :: do_write_oris
     logical :: do_bench
@@ -73,16 +69,14 @@ contains
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical             :: doprint, has_been_searched
         logical             :: l_write_partial_recs_present, l_write_partial_recs_value
-
         ! benchmarking
         type(string) :: benchfname
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
         integer(timer_int_kind) :: t_alloc_ptcl_imgs
-        integer(timer_int_kind) :: t_prep_ref_sections, t_memoize_refs
+        integer(timer_int_kind) :: t_prep_refs, t_memoize_refs
         real(timer_int_kind)    :: rt_startup, rt_build_batch_ptcls, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
         real(timer_int_kind)    :: rt_alloc_ptcl_imgs
-        real(timer_int_kind)    :: rt_prep_ref_sections, rt_memoize_refs, rt_rec_accum, rt_rec_write
-
+        real(timer_int_kind)    :: rt_prep_refs, rt_memoize_refs, rt_rec_accum, rt_rec_write
         p_ptr => params
         b_ptr => build
         l_write_partial_recs_present = present(l_write_partial_recs)
@@ -96,14 +90,14 @@ contains
         endif
         call ensure_even_odd_partition()
         has_been_searched = .not. b_ptr%spproj%is_virgin_field(p_ptr%oritype)
-        call set_bp_range3D(p_ptr, b_ptr, cline)
+        call adopt_reprojection_model_range(p_ptr, b_ptr)
         call sample_particles_for_update( pinds, nptcls2update )
         call prepare_particles_batches( nptcls2update )
         if( ctrl%do_bench )then
             rt_startup = toc(t_startup)
             rt_build_batch_ptcls = 0.0
             rt_alloc_ptcl_imgs   = 0.0
-            rt_prep_ref_sections = 0.0
+            rt_prep_refs = 0.0
             rt_memoize_refs      = 0.0
             rt_prep_orisrch      = 0.0
             rt_align             = 0.0
@@ -168,7 +162,6 @@ contains
         call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
         if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
         call maybe_write_orientations()
-
         do iptcl_batch = 1, batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
         enddo
@@ -179,34 +172,15 @@ contains
         call b_ptr%vol%kill
         call orientation%kill
         call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_rec_imgs)
-
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
-            if( ctrl%do_polar )then
-                if( trim(ctrl%polar_mode) == 'obsfield' )then
-                    call write_partial_recs(params, build, cline, fpls)
-                    call finalize_rec_objs(params, build)
-                else
-                    call b_ptr%pftc%polar_cavger_readwrite_partial_sums('write')
-                endif
-                call b_ptr%pftc%polar_cavger_kill
-            else
-                call write_partial_recs(params, build, cline, fpls)
-                call finalize_rec_objs(params, build)
-            endif
+            call write_partial_recs(params, build, cline, fpls)
+            call finalize_rec_objs(params, build)
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
-        endif
-        if( allocated(fpls) .and. ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
-            do iptcl_batch = 1,size(fpls)
-                if( allocated(fpls(iptcl_batch)%cmplx_plane) ) deallocate(fpls(iptcl_batch)%cmplx_plane)
-                if( allocated(fpls(iptcl_batch)%ctfsq_plane) ) deallocate(fpls(iptcl_batch)%ctfsq_plane)
-            enddo
-            deallocate(fpls)
         endif
         call b_ptr%pftc%kill
         call b_ptr%esig%kill
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
-
         if( ctrl%do_bench )then
             rt_rec = rt_rec_accum + rt_rec_write
             rt_tot = toc(t_tot)
@@ -217,79 +191,20 @@ contains
                 call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
                 write(fnr,'(a,a)')  'match3D refine mode                 : ', trim(ctrl%refine_mode)
-                write(fnr,'(a,a)')  'match3D polar mode                  : ', trim(ctrl%polar_mode)
                 write(fnr,'(a,l1)') 'match3D write partial outputs       : ', ctrl%do_write_partial_recs
                 write(fnr,'(a,i0)') 'match3D nspace                      : ', p_ptr%nspace
                 write(fnr,'(a,i0)') 'match3D nstates                     : ', p_ptr%nstates
                 write(fnr,'(a,i0)') 'match3D kfrom                       : ', p_ptr%kfromto(1)
                 write(fnr,'(a,i0)') 'match3D kto                         : ', p_ptr%kfromto(2)
                 write(fnr,'(a)') ''
-                write(fnr,'(a)') '*** COMPARABLE TIMINGS (s) ***'
-                write(fnr,'(a,t52,f9.2)') 'match3D common startup/setup        : ', rt_startup
-                write(fnr,'(a,t52,f9.2)') 'match3D particle input preparation  : ', rt_build_batch_ptcls
-                write(fnr,'(a,t52,f9.2)') 'match3D particle image allocation   : ', rt_alloc_ptcl_imgs
-                write(fnr,'(a,t52,f9.2)') 'match3D reference preparation       : ', rt_prep_ref_sections
-                write(fnr,'(a,t52,f9.2)') 'match3D reference memoization       : ', rt_memoize_refs
-                write(fnr,'(a,t52,f9.2)') 'match3D orientation-search setup    : ', rt_prep_orisrch
-                write(fnr,'(a,t52,f9.2)') 'match3D orientation-search execute  : ', rt_align
-                write(fnr,'(a,t52,f9.2)') 'match3D project metadata I/O        : ', rt_projio
-                write(fnr,'(a,t52,f9.2)') 'match3D partial update accumulation : ', rt_rec_accum
-                write(fnr,'(a,t52,f9.2)') 'match3D partial output write        : ', rt_rec_write
-                write(fnr,'(a,t52,f9.2)') 'match3D partial output total        : ', rt_rec
-                write(fnr,'(a,t52,f9.2)') 'match3D total time                  : ', rt_tot
-                write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,t52,f9.2)') 'match3D startup_overhead : ',          rt_startup
-                write(fnr,'(a,t52,f9.2)') 'match3D build_batch_particles3D : ',   rt_build_batch_ptcls
-                write(fnr,'(a,t52,f9.2)') 'match3D alloc_ptcl_imgs : ',           rt_alloc_ptcl_imgs
-                write(fnr,'(a,t52,f9.2)') 'match3D prepare matching refs : ',     rt_prep_ref_sections
-                write(fnr,'(a,t52,f9.2)') 'match3D memoize matching refs : ',     rt_memoize_refs
-                write(fnr,'(a,t52,f9.2)') 'match3D orisrch3D preparation : ',     rt_prep_orisrch
-                write(fnr,'(a,t52,f9.2)') 'match3D 3D alignment : ',              rt_align
-                write(fnr,'(a,t52,f9.2)') 'match3D project file I/O : ',          rt_projio
-                if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
-                    write(fnr,'(a,t52,f9.2)') 'match3D Cartesian partial reconstruction : ', rt_rec
-                else if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'yes' )then
-                    write(fnr,'(a,t52,f9.2)') 'match3D polar-sum accumulation : ', rt_rec
-                else
-                    write(fnr,'(a,t52,f9.2)') 'match3D Cartesian partial reconstruction : ', rt_rec
-                endif
-                write(fnr,'(a,t52,f9.2)') 'match3D total time : ',                rt_tot
-                write(fnr,'(a)') ''
-                write(fnr,'(a)') '*** COMPARABLE RELATIVE TIMINGS (%) ***'
-                write(fnr,'(a,t52,f9.2)') 'match3D common startup/setup        : ', (rt_startup/rt_tot)           * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D particle input preparation  : ', (rt_build_batch_ptcls/rt_tot) * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D particle image allocation   : ', (rt_alloc_ptcl_imgs/rt_tot)   * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D reference preparation       : ', (rt_prep_ref_sections/rt_tot) * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D reference memoization       : ', (rt_memoize_refs/rt_tot)      * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D orientation-search setup    : ', (rt_prep_orisrch/rt_tot)      * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D orientation-search execute  : ', (rt_align/rt_tot)             * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D project metadata I/O        : ', (rt_projio/rt_tot)            * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D partial update accumulation : ', (rt_rec_accum/rt_tot)         * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D partial output write        : ', (rt_rec_write/rt_tot)         * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D partial output total        : ', (rt_rec/rt_tot)               * 100.
-                write(fnr,'(a)') ''
-                write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-                write(fnr,'(a,t52,f9.2)') 'match3D startup_overhead : ',          (rt_startup/rt_tot)                     * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D build_batch_particles3D : ',   (rt_build_batch_ptcls/rt_tot)           * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D alloc_ptcl_imgs : ',           (rt_alloc_ptcl_imgs/rt_tot)             * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D prepare matching refs : ',     (rt_prep_ref_sections/rt_tot)           * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D memoize matching refs : ',     (rt_memoize_refs/rt_tot)                * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D orisrch3D preparation : ',     (rt_prep_orisrch/rt_tot)                * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D 3D alignment : ',              (rt_align/rt_tot)                       * 100.
-                write(fnr,'(a,t52,f9.2)') 'match3D project file I/O : ',          (rt_projio/rt_tot)                      * 100.
-                if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield' )then
-                    write(fnr,'(a,t52,f9.2)') 'match3D Cartesian partial reconstruction : ', &
-                        (rt_rec/rt_tot) * 100.
-                else if( ctrl%do_polar .and. trim(ctrl%polar_mode) == 'yes' )then
-                    write(fnr,'(a,t52,f9.2)') 'match3D polar-sum accumulation : ', (rt_rec/rt_tot)                         * 100.
-                else
-                    write(fnr,'(a,t52,f9.2)') 'match3D Cartesian partial reconstruction : ', &
-                        (rt_rec/rt_tot) * 100.
-                endif
-                write(fnr,'(a,t52,f9.2)') 'match3D % accounted for : ', &
-                    ((rt_startup+rt_build_batch_ptcls+rt_alloc_ptcl_imgs+ &
-                    rt_prep_ref_sections+rt_memoize_refs+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
+                write(fnr,'(a,t52,f9.2)') 'match3D startup/setup              : ', rt_startup
+                write(fnr,'(a,t52,f9.2)') 'match3D particle preparation       : ', rt_build_batch_ptcls + rt_alloc_ptcl_imgs
+                write(fnr,'(a,t52,f9.2)') 'match3D reference preparation      : ', rt_prep_refs + rt_memoize_refs
+                write(fnr,'(a,t52,f9.2)') 'match3D orientation search         : ', rt_prep_orisrch + rt_align
+                write(fnr,'(a,t52,f9.2)') 'match3D project metadata I/O       : ', rt_projio
+                write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction     : ', rt_rec
+                write(fnr,'(a,t52,f9.2)') 'match3D total time                 : ', rt_tot
                 call fclose(fnr)
             endif
         endif
@@ -298,9 +213,7 @@ contains
 
         subroutine init_ctrl()
             ctrl%refine_mode   = trim(p_ptr%refine)
-            ctrl%polar_mode    = trim(p_ptr%polar)
             ctrl%oritype       = trim(p_ptr%oritype)
-            ctrl%do_polar      = p_ptr%l_polar
             ctrl%do_prob_align = p_ptr%l_prob_align_mode
             ctrl%do_bench      = L_BENCH_GLOB
             ctrl%do_sigma_mode = (ctrl%refine_mode == 'sigma')
@@ -315,11 +228,6 @@ contains
                         ctrl%do_write_partial_recs = .true.
                     endif
             end select
-            if( ctrl%do_polar .and. any_volume_source_defined(cline, p_ptr%nstates) &
-                &.and. (.not. complete_volume_source_defined(cline, p_ptr%nstates)) )then
-                THROW_HARD('incomplete multi-state volume source; provide vol1..volN or use POLAR_REFS')
-            endif
-            ctrl%do_polar_prepare = ctrl%do_polar .and. .not. complete_volume_source_defined(cline, p_ptr%nstates)
         end subroutine init_ctrl
 
         subroutine ensure_even_odd_partition()
@@ -354,104 +262,34 @@ contains
         end subroutine prepare_particles_batches
 
         subroutine prepare_refs_sigmas_and_pftc()
-            integer :: nrefs
-            nrefs = p_ptr%nspace * p_ptr%nstates
-            if( ctrl%do_polar_prepare .or. (ctrl%do_polar .and. trim(ctrl%polar_mode) == 'obsfield') )then
-                if( ctrl%do_bench ) t_prep_ref_sections = tic()
-                if( .not. polar_ref_sections_available(p_ptr) )then
-                    call ensure_polar_refs_on_disk(p_ptr, b_ptr, cline, batchsz_max, 'refine3D matcher preparation')
-                endif
-                call prep_pftc4align3D(p_ptr, b_ptr, cline, batchsz_max)
-                if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
-            else
-                if( ctrl%do_prob_align )then
-                    call b_ptr%pftc%new(p_ptr, nrefs, [1,batchsz_max], p_ptr%kfromto)
-                    call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
-                else
-                    if( ctrl%do_bench ) t_prep_ref_sections = tic()
-                    if( polar_ref_sections_available(p_ptr) )then
-                        call prep_pftc4align3D(p_ptr, b_ptr, cline, batchsz_max)
-                    else
-                        call read_mask_filter_reproject_refvols(p_ptr, b_ptr, cline, batchsz_max)
-                        call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
-                        call write_polar_refs_from_current_pftc(p_ptr, b_ptr, skip_distr_nonroot=.true.)
-                    endif
-                    if( ctrl%do_bench ) rt_prep_ref_sections = toc(t_prep_ref_sections)
-                endif
-            endif
+            if( ctrl%do_bench ) t_prep_refs = tic()
+            call read_reprojection_model(p_ptr, b_ptr, batchsz_max)
+            call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
+            if( ctrl%do_bench ) rt_prep_refs = toc(t_prep_refs)
             if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
             call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
             if( ctrl%do_bench ) rt_alloc_ptcl_imgs = toc(t_alloc_ptcl_imgs)
             call build%vol%kill
             call build%vol_odd%kill
             call build%vol2%kill
-            if( ctrl%do_polar .and. ctrl%do_write_partial_recs )then
-                if( trim(ctrl%polar_mode) /= 'obsfield' )then
-                    if( complete_volume_source_defined(cline, p_ptr%nstates) )then
-                        call b_ptr%pftc%polar_cavger_new(.true.)
-                        if( p_ptr%l_trail_rec )then
-                            ! Only the direct non-probability volume path leaves freshly
-                            ! projected refs in pftc.
-                            ! In prob modes prob_align materializes POLAR_REFS* before
-                            ! prob_tab, while the main pass only stamps assignments and
-                            ! accumulates partial reconstruction sums.
-                            if( .not. ctrl%do_prob_align )then
-                                call b_ptr%pftc%polar_cavger_write_eo_pftcrefs(refine3D_polar_refs_fbody())
-                            endif
-                        endif
-                    endif
-                    call b_ptr%pftc%polar_cavger_zero_pft_refs
-                endif
-                if( file_exists(p_ptr%frcs) )then
-                    call b_ptr%clsfrcs%read(p_ptr%frcs)
-                else
-                    call b_ptr%clsfrcs%new(p_ptr%nspace, p_ptr%box_crop, p_ptr%smpd_crop, p_ptr%nstates)
-                endif
-            endif
         end subroutine prepare_refs_sigmas_and_pftc
 
         subroutine maybe_init_reconstruction()
             if( .not. ctrl%do_write_partial_recs ) return
-            if( ctrl%do_polar )then
-                if( trim(ctrl%polar_mode).eq.'obsfield' )then
-                    call init_rec(params, build, batchsz_max, fpls)
-                    call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
-                endif
-            else
-                call init_rec(params, build, batchsz_max, fpls)
-                call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
-            endif
+            call init_rec(params, build, batchsz_max, fpls)
+            call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
         end subroutine maybe_init_reconstruction
 
         subroutine build_batch_particles_local()
             logical :: need_rec_imgs
-            need_rec_imgs = ctrl%do_write_partial_recs .and. &
-                &((.not. ctrl%do_polar) .or. trim(ctrl%polar_mode) == 'obsfield')
+            need_rec_imgs = ctrl%do_write_partial_recs
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
-            if( ctrl%do_polar )then
-                select case(ctrl%polar_mode)
-                    case('obsfield')
-                        if( need_rec_imgs )then
-                            call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                                ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(:batchsz))
-                        else
-                            call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                                ptcl_match_imgs, ptcl_match_imgs_pad)
-                        endif
-                    case('yes')
-                        call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                            ptcl_match_imgs, ptcl_match_imgs_pad)
-                    case default
-                        THROW_HARD('unsupported POLAR mode: '//ctrl%polar_mode)
-                end select
+            if( need_rec_imgs )then
+                call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                    ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(:batchsz))
             else
-                if( need_rec_imgs )then
-                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                        ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(:batchsz))
-                else
-                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                        ptcl_match_imgs, ptcl_match_imgs_pad)
-                endif
+                call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                    ptcl_match_imgs, ptcl_match_imgs_pad)
             endif
             if( ctrl%do_bench ) rt_build_batch_ptcls = rt_build_batch_ptcls + toc(t_build_batch_ptcls)
         end subroutine build_batch_particles_local
@@ -512,23 +350,9 @@ contains
         subroutine maybe_restore_batch()
             if( .not. ctrl%do_write_partial_recs ) return
             if( ctrl%do_bench ) t_rec = tic()
-            if( ctrl%do_polar )then
-                select case(ctrl%polar_mode)
-                    case('obsfield')
-                        call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
-                            pinds(batch_start:batch_end), fpls(:batchsz))
-                        call update_rec(params, b_ptr, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
-                    case('yes')
-                        call b_ptr%pftc%polar_cavger_update_sums(batchsz, pinds(batch_start:batch_end), &
-                            b_ptr%spproj, incr_shifts(:,1:batchsz), is3D=.true.)
-                    case default
-                        THROW_HARD('unsupported POLAR mode: '//ctrl%polar_mode)
-                end select
-            else
-                call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
-                    pinds(batch_start:batch_end), fpls(:batchsz))
-                call update_rec(params, b_ptr, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
-            endif
+            call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
+                pinds(batch_start:batch_end), fpls(:batchsz))
+            call update_rec(params, b_ptr, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
             if( ctrl%do_bench ) rt_rec_accum = rt_rec_accum + toc(t_rec)
         end subroutine maybe_restore_batch
 
@@ -558,12 +382,9 @@ contains
     subroutine print_flags( ctrl )
         class(refine3D_ctrl), intent(in) :: ctrl
         write(logfhandle,*) 'refine_mode           : ', ctrl%refine_mode
-        write(logfhandle,*) 'polar_mode            : ', ctrl%polar_mode
         write(logfhandle,*) 'oritype               : ', ctrl%oritype
         write(logfhandle,*) 'do_write_partial_recs : ', ctrl%do_write_partial_recs
-        write(logfhandle,*) 'do_polar_prepare      : ', ctrl%do_polar_prepare
         write(logfhandle,*) 'do_prob_align         : ', ctrl%do_prob_align
-        write(logfhandle,*) 'do_polar              : ', ctrl%do_polar
         write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench

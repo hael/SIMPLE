@@ -38,10 +38,8 @@ contains
 
     subroutine exec_prob_tab( self, cline )
         use simple_matcher_2Dprep
-        use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_pftc_prep,       only: prep_pftc4align3D
-        use simple_matcher_refvol_utils,    only: polar_ref_sections_available
-        use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
+        use simple_matcher_refvol_utils,    only: read_reprojection_model
+        use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
         use simple_eul_prob_tab,            only: eul_prob_tab
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -54,7 +52,6 @@ contains
         integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range3D( params, build, cline )
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
@@ -64,10 +61,8 @@ contains
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        if( .not. polar_ref_sections_available(params) )then
-            THROW_HARD('polar reference sections are missing; prob_align must materialize POLAR_REFS before prob_tab')
-        endif
-        call prep_pftc4align3D( params, build, cline, nptcls )
+        call read_reprojection_model(params, build, nptcls)
+        call prep_sigmas_objfun(params, build, .false.)
         call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Build polar particle images
@@ -92,10 +87,8 @@ contains
 
     subroutine exec_prob_tab_neigh( self, cline )
         use simple_matcher_2Dprep
-        use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-        use simple_matcher_pftc_prep,       only: prep_pftc4align3D
-        use simple_matcher_refvol_utils,    only: polar_ref_sections_available
-        use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
+        use simple_matcher_refvol_utils,    only: read_reprojection_model
+        use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
         class(commander_prob_tab_neigh), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -108,7 +101,6 @@ contains
         integer :: nptcls
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call set_bp_range3D( params, build, cline )
         ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
@@ -116,10 +108,8 @@ contains
             THROW_HARD('exec_prob_tab_neigh requires prior particle sampling (in exec_prob_align)')
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        if( .not. polar_ref_sections_available(params) )then
-            THROW_HARD('polar reference sections are missing; prob_align must materialize POLAR_REFS before prob_tab_neigh')
-        endif
-        call prep_pftc4align3D( params, build, cline, nptcls )
+        call read_reprojection_model(params, build, nptcls)
+        call prep_sigmas_objfun(params, build, .false.)
         call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Build polar particle images
@@ -138,8 +128,7 @@ contains
 
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,            only: eul_prob_tab
-        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D, set_bp_range3D
-        use simple_matcher_refvol_utils,    only: ensure_polar_refs_on_disk
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
         use simple_builder,                 only: builder
         class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
@@ -165,8 +154,6 @@ contains
         endif
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
-        call set_bp_range3D(params, build, cline)
-        call ensure_polar_refs_on_disk(params, build, cline, 1, 'prob_align before prob_tab')
         ! more prep
         call eulprob_obj_glob%new(params, build, pinds)
         ! generating all corrs on all parts
@@ -212,8 +199,7 @@ contains
 
     subroutine exec_prob_align_neigh( self, cline )
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
-        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D, set_bp_range3D
-        use simple_matcher_refvol_utils,    only: ensure_polar_refs_on_disk
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
         use simple_builder,                 only: builder
         class(commander_prob_align_neigh), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
@@ -239,8 +225,6 @@ contains
         call build%spproj%write_segment_inside(params%oritype)
         ! Global object only needs sampled-set maps before reading partition sparse tables.
         ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
-        call set_bp_range3D(params, build, cline)
-        call ensure_polar_refs_on_disk(params, build, cline, 1, 'prob_align_neigh before prob_tab_neigh')
         call eulprob_obj_glob_neigh%new_neigh(params, build, pinds)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
@@ -303,7 +287,7 @@ contains
         call set_b_p_ptrs2D(params, build)
         call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, nptcls)
         call alloc_imgarr(nptcls, [params%box, params%box, 1], params%smpd, ptcl_imgs)
-        ! mirror cluster2D_exec reference setup: polar refs only for polar=yes and iter>1
+        ! mirror cluster2D_exec reference setup
         l_alloc_read_cavgs = l_distr_worker_glob .or. (params%which_iter==1)
         call cavger_new(params, build, alloccavgs=l_alloc_read_cavgs)
         if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
@@ -345,7 +329,6 @@ contains
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        if( params%l_polar ) THROW_HARD('polar=yes is no longer supported for 2D workflows; use cartesian prob_align2D')
         call set_b_p_ptrs2D(params, build)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
