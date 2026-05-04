@@ -496,8 +496,8 @@ contains
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
-        logical, optional,     intent(in)    :: l_postprocess
-        type(string) :: str_state, vol_name, stkname
+        logical,               intent(in)    :: l_postprocess
+        type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr
         integer      :: state, pop, ind_in_stk, nptcls, ldim(3)
         real         :: smpd
         write(logfhandle,'(A)') '>>>'
@@ -516,18 +516,26 @@ contains
             call cline_reconstruct3D%delete('mskdiam')
         endif
         call cline_reconstruct3D%set('oritype', 'ptcl3D')
-        if( present(l_postprocess) )then
-            if( l_postprocess )then
-                call cline_reconstruct3D%set('postprocess', 'yes')
-            else
-                call cline_reconstruct3D%set('postprocess', 'no')
-            endif
+        if( l_postprocess )then
+            call cline_reconstruct3D%set('postprocess', 'yes')
         else
             call cline_reconstruct3D%set('postprocess', 'no')
         endif
         call cline_reconstruct3D%delete('box_crop')
         call cline_reconstruct3D%delete('smpd_crop')
         call xrec3D%execute(cline_reconstruct3D)
+        if( .not. l_postprocess )then
+            do state = 1, params%nstates
+                vol_name  = refine3D_state_vol_fname(state)
+                vol_pproc = add2fbody(vol_name, MRC_EXT, PPROC_SUFFIX)
+                if( file_exists(vol_pproc) ) call del_file(vol_pproc)
+                vol_mirr = add2fbody(vol_pproc, MRC_EXT, MIRR_SUFFIX)
+                if( file_exists(vol_mirr) ) call del_file(vol_mirr)
+                call vol_name%kill
+                call vol_pproc%kill
+                call vol_mirr%kill
+            enddo
+        endif
         call spproj%read_segment('out', projfile)
         call spproj%read_segment('ptcl3D', projfile)
         do state = 1, params%nstates
@@ -562,14 +570,18 @@ contains
             lp_snapshot = abinitio_state_fsc_lowpass(state, params%box, params%smpd, lp)
             call write_abinitio_lowpass_snapshot(vol_final, lp_snapshot, vol_final_lp, params%smpd)
             vol_pproc = add2fbody(vol_name, MRC_EXT, PPROC_SUFFIX)
+            vol_final_pproc = add2fbody(vol_final, MRC_EXT, PPROC_SUFFIX)
             if( file_exists(vol_pproc) )then
-                vol_final_pproc = add2fbody(vol_final, MRC_EXT, PPROC_SUFFIX)
                 call simple_copy_file(vol_pproc, vol_final_pproc)
                 vol_mirr = add2fbody(vol_pproc, MRC_EXT, MIRR_SUFFIX)
                 if( file_exists(vol_mirr) )then
                     vol_final_mirr = add2fbody(vol_final_pproc, MRC_EXT, MIRR_SUFFIX)
                     call simple_copy_file(vol_mirr, vol_final_mirr)
                 endif
+            else
+                if( file_exists(vol_final_pproc) ) call del_file(vol_final_pproc)
+                vol_final_mirr = add2fbody(vol_final_pproc, MRC_EXT, MIRR_SUFFIX)
+                if( file_exists(vol_final_mirr) ) call del_file(vol_final_mirr)
             endif
         enddo
         call vol_final_lp%kill
