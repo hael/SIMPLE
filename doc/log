@@ -1,1 +1,0 @@
-pandoc ./code_overview/code_base_map.md -o ./code_overview/code_base_map.docx

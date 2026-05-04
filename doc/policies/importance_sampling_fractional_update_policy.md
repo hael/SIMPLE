@@ -1,381 +1,233 @@
 # Importance Sampling and Fractional Update Policy
 
-## Scope
+This document records durable workflow contracts for sampled particle updates,
+probabilistic candidate sampling, fractional class-average restoration, and
+trailing reconstruction in `abinitio2D`, `cluster2D`, `abinitio3D`, and
+`refine3D`. It is policy, not a line-by-line implementation map.
 
-This document defines the current policy for how SIMPLE couples fractional particle updates to importance-sampled 3D search in:
+## 1. Core Model
 
-- `abinitio3D`
-- `refine3D`
-- probabilistic pre-alignment
-- orientation bookkeeping in `simple_oris`
-- trailing reconstruction in `volassemble`
+SIMPLE has two sampling layers that must remain separate:
 
-This is a workflow and ownership document, not just an implementation note. It explains which layer decides the active particle subset, which layer samples candidates inside that subset, and which layer consumes the realized update fraction later in reconstruction.
+1. outer fractional-update sampling chooses which particles participate in the
+   current iteration
+2. inner importance sampling chooses which reference, orientation, or in-plane
+   candidates are explored for those participating particles
 
-## Core design rule
+The outer subset is recorded in the project through `sampled` and `updatecnt`.
+Downstream restoration and reconstruction consume that recorded state. They must
+not infer participation from the nominal command-line `update_frac` alone.
 
-The 3D workflow has two distinct sampling layers that must not be conflated:
+Probabilistic pre-alignment is a sample-once-and-reuse path: the pre-alignment
+commander chooses the outer subset, probability-table workers reuse it, and the
+matcher reuses it again for the hard particle update.
 
-- outer fractional-update sampling chooses which particles participate in the current iteration
-- inner importance sampling chooses which reference and in-plane candidates are explored for those participating particles
+## 2. Ownership
 
-In other words:
+`simple_commanders_abinitio2D.f90` owns `abinitio2D` orchestration: defaults,
+stage execution, final fill-in, and final class-average generation.
 
-- `update_frac` or `nsample*` decides the active particle subset
-- probabilistic tables and search strategies decide candidate sampling within that subset
+`simple_abinitio2D_controller.f90` owns the 2D stage policy: `NPTCLS2SAMPLE_2D`,
+`nsample` override handling, stage-local `update_frac`, search-mode transitions,
+and the rule that stage 1 may sample particles without fractionally restoring
+previous class averages.
 
-That split should be preserved in both code and documentation.
+`simple_commanders_abinitio.f90` and `simple_abinitio_controller.f90` own 3D
+stage scheduling: dynamic `update_frac`, `fillin`, `frac_best`, `balance`,
+`trail_rec`, and transitions between `shc_smpl`, `prob`, and `prob_neigh`.
 
-## Public policy
+`simple_matcher_smpl_and_lplims.f90` owns the shared outer subset-selection
+helpers for 2D and 3D. This is where full update, random sampling,
+update-count-biased sampling, class-balanced sampling, fill-in sampling, and
+subset reproduction are dispatched.
 
-The current 3D policy is:
+`simple_oris_sampling.f90` and `simple_oris_getters.f90` own the bookkeeping:
+`sampled`, `updatecnt`, exact subset reproduction, global realized update
+fraction, and class-local realized update fractions.
 
-1. choose an active particle subset for the iteration
-2. record that subset in `ptcl3D` through `sampled` and `updatecnt`
-3. if probabilistic pre-alignment is enabled, generate assignments only for that recorded subset
-4. run the main matcher or search pass on the same subset
-5. write partial reconstructions from those updated particles
-6. let `volassemble` assemble volumes and, if trailing reconstruction is enabled, weight old versus new volumes using the realized update fraction
+`simple_commanders_prob.f90` owns probabilistic pre-alignment orchestration:
+sampling the outer subset once, writing it to the project, running table
+generation, aggregating probability-table outputs, and writing the assignment
+artifact.
 
-The user-facing controls that shape this policy include:
+`simple_eul_prob_tab*.f90` owns inner candidate importance sampling. These
+modules may sample references, orientations, neighbors, or in-plane candidates
+inside the active particle subset, but they must not choose a new particle
+subset.
 
-- `update_frac`
-- `nsample`
-- `nsample_start`
-- `nsample_stop`
-- `fillin`
-- `balance`
-- `frac_best`
-- `trail_rec`
-- `ufrac_trec`
+`simple_strategy2D_matcher.f90` and `simple_strategy3D_matcher.f90` own
+particle-domain search on the active subset, assignment consumption, pose or
+class updates, sigma updates during search, and writing partition-local
+reconstruction or class-average inputs.
 
-## Core vocabulary
+The classaverager modules own 2D class-average restoration and assembly.
+`commander_volassemble` owns 3D volume assembly and trailing reconstruction.
+These layers consume sampled-update state; they do not own particle selection.
 
-The following terms should be used consistently:
+## 3. Bookkeeping Contracts
 
-- outer fractional-update subset: the particle set selected for the current iteration
-- current sampling round: the most recent subset marked through `sampled`
-- update history: the per-particle selection history tracked through `updatecnt`
-- probabilistic pre-alignment: the phase that computes assignment tables before the main matcher
-- realized update fraction: the fraction recovered from current `sampled` versus active updated particles, not merely the CLI target
+`sampled` marks the current sampling round. All particles with the latest
+`sampled` value belong to the current active subset.
 
-Avoid describing the whole workflow as one generic "importance sampling" mechanism. There are two different sampling contracts in play.
+`updatecnt` tracks cumulative update history. Count-biased and fill-in paths use
+it to prefer under-updated or never-updated active particles.
 
-## Ownership
+`sample4update_reprod` is the only correct way to reuse a previously selected
+probabilistic subset. A probability-table worker or downstream matcher must not
+silently resample when a probabilistic pre-step has already sampled the subset.
 
-### `simple_commanders_abinitio`
+`get_update_frac` returns the global realized update fraction for 3D trailing
+from the current `sampled` round, active particles, and particles with
+`updatecnt > 0`.
 
-`src/main/commanders/simple/simple_commanders_abinitio.f90` owns:
+`get_class_update_fracs` returns per-class realized update fractions for 2D
+class-average carry-over. It uses active particles, current class assignments,
+the latest `sampled` round, and `updatecnt > 0`.
 
-- initial ab initio sampling policy
-- conversion from `nsample` or `nsample*` inputs into `update_frac`
-- the initial class-balanced subset used to seed iterative ab initio
-- class-sampling-statistics generation through `CLASS_SAMPLING_FILE`
+The nominal `update_frac` is a target used by sampling. The realized fraction in
+`simple_oris` is the downstream restoration and trailing contract.
 
-It is the top-level owner of ab initio sampling intent.
+## 4. Abinitio2D and Cluster2D
 
-### `simple_abinitio_controller`
+`abinitio2D` uses a fixed run-local target sample size:
 
-`src/main/simple_abinitio_controller.f90` owns:
+- default: `NPTCLS2SAMPLE_2D = 200000`
+- override: `nsample=<integer>`
 
-- stage-specific `refine3D` command generation inside ab initio
-- dynamic `update_frac` scheduling across stages
-- transitions between `shc_smpl`, `prob`, and `prob_neigh`
-- stage-specific control of `frac_best`, `fillin`, and `trail_rec`
+The stage controller converts that target into:
 
-This layer couples search regime and fractional-update policy at the workflow level.
+```text
+update_frac_2D = min(1.0, real(min(nptcls_eff, nsample_target_2D)) / real(nptcls_eff))
+```
 
-### `simple_matcher_smpl_and_lplims`
+where `nptcls_eff` is the number of active particles with `state > 0`. If the
+target covers almost all active particles, the stage command omits
+`update_frac` and naturally becomes a full update.
 
-`src/main/strategies/search/simple_matcher_smpl_and_lplims.f90` owns:
-
-- per-iteration selection of the active particle subset during 3D refinement
-- dispatch between class-balanced sampling, update-count-biased sampling, fill-in sampling, or all-particle sampling
-
-This is the main execution helper for outer subset selection during refinement.
-
-### `simple_oris`
-
-`src/main/ori/simple_oris_sampling.f90` and `src/main/ori/simple_oris_getters.f90` own:
-
-- representation of the current sampling round through `sampled`
-- representation of update history through `updatecnt`
-- exact reproduction of a previous sampled subset
-- recovery of the realized update fraction
-
-This is the bookkeeping contract that all higher workflow layers depend on.
-
-### `simple_commanders_prob`
-
-`src/main/commanders/simple/simple_commanders_prob.f90` owns:
-
-- sampling the subset for probabilistic pre-alignment
-- persisting that subset before probability-table generation
-- ensuring partition-local probability-table work is performed only for the chosen subset
-
-This layer should sample once, then reuse.
-
-### `simple_eul_prob_tab` and `simple_eul_prob_tab_neigh`
-
-`src/main/simple_eul_prob_tab.f90` and `src/main/simple_eul_prob_tab_neigh.f90` own:
-
-- importance-style candidate sampling over references and in-plane angles
-- transformation of correlation or distance values into a candidate-selection distribution
-- hard assignment output for downstream consumption
-
-These modules do not decide the outer particle subset.
-
-### `simple_strategy3D_matcher`
-
-`src/main/strategies/search/simple_strategy3D_matcher.f90` owns:
-
-- matcher execution on the active particle subset
-- reuse of probabilistic assignments when present
-- writing partial reconstructions from the updated subset
-
-It is the main particle-domain execution engine after subset selection has already been decided.
-
-### `volassemble`
-
-`src/main/commanders/simple/simple_commanders_rec_distr.f90` owns:
-
-- volume assembly from partial reconstructions
-- trailing-reconstruction weighting
-- consumption of the realized update fraction through `get_update_frac` or explicit `ufrac_trec`
-
-It does not own outer subset selection and should not be described that way.
-
-## Fractional-update policy in `abinitio3D`
-
-### Initial policy
-
-At ab initio startup, `exec_abinitio3D` computes a base `update_frac` from one of four sources:
-
-- explicit `nsample`
-- explicit `update_frac`
-- dynamic lower and upper bounds through `nsample_start` and optional `nsample_stop`
-- default sample-count bounds
-
-The resulting value is capped at `UPDATE_FRAC_MAX = 0.9`.
-
-This cap is intentional. The ab initio workflow is designed to remain in fractional-update mode rather than silently drifting into full-update behavior.
-
-### Initial subset construction
-
-Before iterative refinement starts, ab initio may create a class-balanced subset through `sample4update_class`.
-
-That subset is not just a local temporary choice. It seeds the particle set that reconstruction and later search stages build on, and it initializes the `simple_oris` bookkeeping that later stages depend on.
-
-### Stage policy
-
-Inside `simple_abinitio_controller.f90`, the stage controller changes:
-
-- search mode
-- dynamic update fraction
-- greediness of class-balanced selection
-- whether fill-in is enabled
-- whether trailing reconstruction is enabled
-
-Current high-level stage policy is:
-
-- stages 1 to 4: `shc_smpl`
-- stages 5 to 6: `prob`
-- stages 7 to 8: `prob_neigh`
-
-This is an important architectural point: ab initio does not bolt probabilistic importance sampling onto a fixed outer update schedule. It co-evolves the search mode and the update policy stage by stage.
-
-## Outer subset-selection policy during 3D refinement
-
-### Normal update path
-
-`sample_ptcls4update3D` applies the following policy:
-
-- if `l_update_frac` is false, select all active particles
-- if `balance=yes`, use class-balanced sampling through `sample4update_class`
-- otherwise use update-count-aware sampling through `sample4update_cnt`
-
-This means the normal 3D path prefers either:
-
-- class-balance preservation
-- under-updated particles
-
-depending on the workflow settings.
-
-### Fill-in path
-
-When `fillin=yes`, refinement may switch to `sample4update_fillin`.
-
-This is a different policy from normal balanced or count-biased update. The goal is not to preserve the current exploration distribution, but to fill gaps in update coverage late in the workflow.
-
-That distinction should be preserved when reviewing or modifying the code.
-
-## `simple_oris` bookkeeping policy
-
-### `sampled`
-
-`sampled` identifies the current sampling round.
-
-Policy meaning:
-
-- all particles with the latest `sampled` marker belong to the current active subset
-- reproducibility of a subset across workflow stages should happen by reproducing the latest `sampled` round
-
-### `updatecnt`
-
-`updatecnt` tracks cumulative update history.
-
-Policy meaning:
-
-- particles with lower `updatecnt` are eligible for preferential selection in update-count-biased paths
-- fill-in logic uses update history rather than just the last sampled round
-- realized update fraction is interpreted relative to the updated active pool
-
-### Realized update fraction
-
-`simple_oris_getters.f90` computes `get_update_frac` from:
-
-- the latest `sampled` round
-- particles with `updatecnt > 0`
-- particles with active `state > 0`
-
-This is a crucial policy point:
-
-- the workflow target may be `update_frac = x`
-- the reconstruction contract later uses the realized fraction recovered from bookkeeping
-
-So the bookkeeping state is authoritative for downstream trailing-reconstruction behavior.
-
-## Probabilistic pre-alignment policy
-
-### Sample once, then reuse
-
-When `l_prob_align_mode` is enabled, `simple_commanders_prob.f90` samples the active particle subset before probability-table generation.
-
-The policy is:
-
-1. choose the active subset through the same outer-selection helpers used elsewhere
-2. persist that subset into the project
-3. run partition-local probability-table generation only for that subset
-4. aggregate tables and emit a single assignment map
-
-This policy must remain sample-once-and-reuse, not sample-again-later.
-
-### Probability-table generation is not a second outer sampler
-
-`exec_prob_tab` and `exec_prob_tab_neigh` reproduce the existing subset through `sample4update_reprod`.
-
-That is the correct design. These steps should not independently pick a new particle subset, because that would break the contract between:
-
-- pre-alignment
-- assignment
-- matcher execution
-
-### Matcher reuse
-
-When probabilistic mode is active, `refine3D_exec` also reproduces the same sampled subset rather than choosing a new one.
-
-This guarantees that:
-
-- the particles scored in the probability tables
-- the particles updated in the matcher
-- the particles contributing to partial reconstructions
-
-all refer to the same current sampling round.
-
-This is one of the most important invariants in the entire workflow.
-
-## Inner importance-sampling policy
-
-Within the already chosen active particle subset, `simple_eul_prob_tab*.f90` performs importance-style candidate selection.
-
-The current policy is:
-
-- compute candidate scores over references and in-plane rotations
-- transform those values into a positive candidate-selection space
-- use `angle_sampling` and `greedy_sampling` to choose likely candidates rather than relying only on strict top-1 selection
-- perform hard assignment after the candidate-search phase
-
-This layer is allowed to be probabilistic or greedy in candidate exploration, but it must remain conceptually downstream of outer subset selection.
-
-That distinction should be explicit in documentation:
-
-- outer subset selection is particle-level participation policy
-- inner importance sampling is per-particle candidate-exploration policy
-
-## Reconstruction and trailing-update policy
-
-### Partial reconstructions
-
-`simple_strategy3D_matcher.f90` writes partial reconstructions only for the particles in the current active subset.
-
-That means volume assembly is already downstream of outer subset choice before `volassemble` even begins.
-
-### `volassemble`
-
-When `trail_rec=yes`, `volassemble` mixes previous and current even and odd volumes using `update_frac_trail_rec`.
-
-Policy order:
-
-- use explicit `ufrac_trec` if provided
-- otherwise recover the realized update fraction from `ptcl3D` via `get_update_frac`
-
-The weighting then becomes:
-
-- previous contribution: `1 - update_frac_trail_rec`
-- current contribution: `update_frac_trail_rec`
-
-This is not a search policy. It is a reconstruction-consumption policy.
-
-### Implication
-
-Changes to sampling or bookkeeping semantics can change:
-
-- which particles are updated
-- how many particles are updated
-- how strongly the current reconstruction overrides the previous reconstruction
-
-So sampling-policy changes are also reconstruction-policy changes, even if `volassemble` itself is untouched.
-
-## Invariants to preserve
-
-- The outer particle subset must be chosen before probabilistic table generation.
-- `prob_tab` and matcher execution must reproduce the same sampled subset in probabilistic mode.
-- `sampled` must continue to represent the current sampling round.
-- `updatecnt` must continue to represent cumulative update history.
-- `get_update_frac` must continue to reflect realized rather than nominal update behavior.
-- `volassemble` must remain a consumer of update-fraction state, not the producer of particle-selection policy.
-- Documentation must distinguish outer subset selection from inner candidate importance sampling.
-
-## Recommended reading order
-
-For policy work:
-
-1. `src/main/commanders/simple/simple_commanders_abinitio.f90`
-2. `src/main/simple_abinitio_utils.f90`
-3. `src/main/simple_abinitio_controller.f90`
-4. `src/main/strategies/search/simple_matcher_smpl_and_lplims.f90`
-5. `src/main/ori/simple_oris_sampling.f90`
-6. `src/main/ori/simple_oris_getters.f90`
-7. `src/main/commanders/simple/simple_commanders_prob.f90`
-8. `src/main/simple_eul_prob_tab.f90`
-9. `src/main/simple_eul_prob_tab_neigh.f90`
-10. `src/main/strategies/search/simple_strategy3D_matcher.f90`
-11. `src/main/commanders/simple/simple_commanders_rec_distr.f90`
-
-## Guidance for future modifications
-
-Changes are consistent with current policy when they:
-
-- make the outer subset policy more explicit without duplicating it across layers
-- preserve sample-once-and-reuse behavior in probabilistic mode
-- improve observability of realized update fraction
-- separate candidate-sampling logic from particle-subset logic more clearly
-- keep trailing-reconstruction weighting tied to bookkeeping rather than ad hoc estimates
-
-Changes are inconsistent with current policy when they:
-
-- let probability-table generation silently resample particles
-- let matcher execution use a different subset than pre-alignment
-- repurpose `sampled` or `updatecnt` without updating all dependent workflow stages
-- describe `volassemble` as owning particle-selection policy
-- blur the distinction between outer fractional update and inner candidate importance sampling
+Current stage policy:
+
+- stage 1 uses the sampled-update machinery when needed, but fractional
+  class-average carry-over is disabled
+- while `startit == 1`, `sample_ptcls4update2D` keeps the initial subset sticky
+  by reproducing it after the first random draw
+- later non-probabilistic iterations use `sample4update_cnt`, which is
+  stochastic but biased toward particles with lower `updatecnt`
+- probabilistic stages use `prob_align2D` to sample once, then `prob_tab2D` and
+  `cluster2D_exec` reproduce the same subset
+- final fill-in is assignment-only for active particles with `updatecnt == 0`;
+  it uses existing class averages and does not restore new class-average sums
+
+Fractional 2D restoration is class-local. `cavger_init_online` reads or centers
+previous partial sums when fractional update is active, obtains per-class
+realized fractions through `get_class_update_fracs`, and weights previous
+even/odd class sums and CTF-squared sums independently for each class. This is
+the 2D analogue of respecting independently updated objects in 3D.
+
+Distributed cleanup must preserve class-average partial sums while fractional
+restoration still needs them as carry-over input. Assignment and distance
+artifacts are per-iteration handoffs and may be removed before the next
+iteration writes replacements.
+
+## 5. Abinitio3D and Refine3D
+
+The 3D controller derives the outer update policy from explicit `nsample`,
+explicit `update_frac`, dynamic `nsample_start`/`nsample_stop`, or default sample
+count bounds. The resulting update fraction is capped by `UPDATE_FRAC_MAX`.
+
+Current high-level ab initio stage policy:
+
+- early stages use `shc_smpl`
+- later stages use `prob`
+- final neighborhood stages use `prob_neigh`
+- final active stages may switch to `fillin`, except where the multi-state
+  policy disables it
+
+`sample_ptcls4update3D` applies the normal 3D subset policy:
+
+- if fractional update is off, select all active particles
+- if `balance=yes`, use class-balanced sampling
+- otherwise use update-count-biased sampling
+
+`sample_ptcls4fillin` is a separate late-stage coverage policy. Its purpose is
+to update particles with insufficient history, not to preserve the normal
+balanced or count-biased exploration distribution.
+
+The 3D matcher writes partial reconstructions from the active subset. Volume
+assembly then restores volumes, calculates FSCs, postprocesses references, and
+applies trailing reconstruction when requested. Trailing uses explicit
+`ufrac_trec` if provided; otherwise it consumes the realized fraction from
+`get_update_frac`.
+
+## 6. Probabilistic Pre-Alignment
+
+Probabilistic pre-alignment is not a second outer sampler.
+
+The workflow is:
+
+1. choose the outer subset through the normal 2D or 3D sampling helper
+2. write the sampled project state
+3. run probability-table generation only for that subset
+4. aggregate table outputs into one assignment artifact
+5. reproduce the same subset in the matcher
+6. perform the hard particle update
+
+`simple_eul_prob_tab.f90`, `simple_eul_prob_tab_neigh.f90`, and
+`simple_eul_prob_tab2D.f90` perform candidate-level importance sampling inside
+that subset. They may use score-derived candidate distributions,
+`angle_sampling`, `greedy_sampling`, or neighborhood sampling, but the selected
+particle set is already fixed before they run.
+
+## 7. Restoration and Assembly
+
+2D class-average restoration consumes class-local realized update fractions:
+
+- previous class contribution: `1 - rho(class)`
+- current class contribution: the new partial sums for that class
+
+Classes with no active updated particles keep a zero realized fraction. Classes
+with full sampled participation replace previous sums.
+
+3D volume assembly consumes the global realized update fraction for trailing:
+
+- previous volume contribution: `1 - update_frac_trail_rec`
+- current volume contribution: `update_frac_trail_rec`
+
+Neither class-average restoration nor volume assembly should make new particle
+sampling decisions. If a restoration or assembly change requires a different
+subset policy, that policy belongs in the commander/controller/sampling-helper
+layer and must be reflected in `sampled` and `updatecnt`.
+
+## 8. Invariants
+
+- Outer particle sampling happens before probabilistic table generation.
+- Probabilistic table workers and downstream matchers reproduce the same subset.
+- Candidate importance sampling never changes the particle subset.
+- `sampled` remains the current-round marker.
+- `updatecnt` remains cumulative update history.
+- Downstream restoration uses realized update state, not only nominal
+  `update_frac`.
+- Stage 1 of `abinitio2D` may be sampled but must not fractionally carry over
+  previous class-average sums.
+- 2D fractional class-average restoration remains class-local.
+- Final `abinitio2D` fill-in remains assignment-only unless the policy is
+  explicitly changed.
+- `volassemble` and the classaverager remain consumers of sampled-update state,
+  not producers of particle-selection policy.
+
+## 9. Review Checklist
+
+For sampling, probabilistic alignment, class-average restoration, or volume
+assembly changes, check:
+
+- Does the outer subset get selected exactly once for a probabilistic
+  pre-alignment iteration?
+- Do table workers and matchers reuse the recorded subset through
+  `sample4update_reprod`?
+- Is candidate-level importance sampling kept separate from particle-level
+  subset selection?
+- Are `sampled` and `updatecnt` updated consistently before downstream
+  restoration or trailing consumes them?
+- Does 2D restoration use class-local realized fractions?
+- Does 3D trailing consume the realized or explicit trailing fraction?
+- Are shared-memory and distributed paths preserving the same scientific
+  workflow and artifact contracts?
