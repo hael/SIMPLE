@@ -3,7 +3,7 @@
 module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
 use simple_builder,            only: builder
-use simple_eul_prob_tab,       only: eul_prob_tab, angle_sampling, calc_num2sample, calc_athres, eulprob_dist_switch
+use simple_eul_prob_tab,       only: eul_prob_tab, angle_sampling, calc_athres, eulprob_dist_switch
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
 use simple_eulspace_neigh_map, only: eulspace_neigh_map
@@ -70,6 +70,7 @@ contains
             integer, allocatable :: best_eval_locs(:,:)
             integer, allocatable :: fullref_to_sparse_ref(:)
             real,    allocatable :: evaluated_ref_dists(:,:)
+            real,    allocatable :: state_eval_dists(:,:)
         end type eval_ws
 
         type(eulspace_neigh_map) :: neigh_map
@@ -79,7 +80,7 @@ contains
         integer, allocatable     :: inds_sorted(:,:)
         real,    allocatable     :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:)
         integer :: i, ri, istate, ithr, max_refs_to_refine
-        integer :: iptcl, nsubs, npeak_target, n, si, iref_full
+        integer :: iptcl, nsubs, npeak_target, si, iref_full
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         call seed_rnd
         nsubs = size(self%b_ptr%subspace_inds)
@@ -93,16 +94,15 @@ contains
         allocate(dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob),&
         &dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
         &inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob))
-        ! determine max number of neighbors to refine per active state
-        max_refs_to_refine = 0
+        ! determine number of evaluated neighbors to shift-refine per active state
+        max_refs_to_refine = max(1, self%p_ptr%npeaks_inpl)
         do si = 1, self%nstates
             istate = self%ssinds(si)
-            call calc_num2sample(self%b_ptr%spproj_field, self%p_ptr%nspace, 'dist', n, self%p_ptr%prob_athres, state=istate)
-            max_refs_to_refine  = max(max_refs_to_refine, n)
             inpl_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
         enddo
         if( allocated(eval_work%best_eval_locs) ) deallocate(eval_work%best_eval_locs)
-        allocate(eval_work%best_eval_locs(max_refs_to_refine,nthr_glob), eval_work%evaluated_ref_ids(self%nrefs,nthr_glob), source=0)
+        allocate(eval_work%best_eval_locs(max(1,max_refs_to_refine),nthr_glob), &
+            &eval_work%evaluated_ref_ids(self%nrefs,nthr_glob), source=0)
         allocate(eval_work%fullref_to_sparse_ref(self%p_ptr%nstates*self%p_ptr%nspace),                                     source=0)
         do ri = 1, self%nrefs
             iref_full = (self%sinds(ri)-1)*self%p_ptr%nspace + self%jinds(ri)
@@ -110,6 +110,7 @@ contains
         enddo
         allocate(coarse_ws%neigh_proj_mask(self%p_ptr%nspace,self%p_ptr%nstates,nthr_glob), source=.false.)
         allocate(eval_work%evaluated_ref_dists(self%nrefs,nthr_glob),                   source=huge(1.0))
+        allocate(eval_work%state_eval_dists(self%nrefs,nthr_glob),                      source=huge(1.0))
         allocate(coarse_ws%best_subspace_dist(nsubs,self%p_ptr%nstates,nthr_glob),      source=huge(1.0))
         allocate(coarse_ws%best_subspace_dist_work(nsubs,self%p_ptr%nstates,nthr_glob), source=huge(1.0))
         allocate(coarse_ws%peak_subspace_inds(nsubs,self%p_ptr%nstates,nthr_glob),      source=0)
@@ -148,7 +149,8 @@ contains
         end do
         call neigh_map%kill
         deallocate(coarse_ws%peak_subspace_count, coarse_ws%pooled_sub_inds, coarse_ws%peak_subspace_inds,&
-        &coarse_ws%best_subspace_dist_work, coarse_ws%best_subspace_dist, eval_work%evaluated_ref_dists,&
+        &coarse_ws%best_subspace_dist_work, coarse_ws%best_subspace_dist, &
+        &eval_work%state_eval_dists, eval_work%evaluated_ref_dists,&
         &eval_work%evaluated_ref_ids, coarse_ws%neigh_proj_mask, eval_work%best_eval_locs, eval_work%fullref_to_sparse_ref,&
         &inds_sorted, dists_inpl_sorted, dists_inpl, inpl_athres)
 
@@ -333,29 +335,43 @@ contains
             integer, intent(in) :: i_loc, ithr_loc, iptcl_loc, neval_loc
             real,    intent(in) :: shift_seed_loc(3)
             logical, intent(in) :: l_with_shift
-            integer :: nrefs_to_refine_loc, j_loc, eval_slot_loc, ri_loc, istate_loc, iproj_loc, irot_loc
+            integer :: nrefs_to_refine_loc, nstate_eval_loc, j_loc, eval_slot_loc, ri_loc, istate_loc, iproj_loc, irot_loc
+            integer :: si_loc, state_eval_loc
             real    :: refined_shift_loc(3)
             if( .not. l_with_shift ) return
             eval_work%best_eval_locs(:,ithr_loc) = 0
-            if( neval_loc > 0 )then
-                nrefs_to_refine_loc = min(max_refs_to_refine, neval_loc)
-                eval_work%best_eval_locs(1:nrefs_to_refine_loc,ithr_loc) = minnloc(eval_work%evaluated_ref_dists(1:neval_loc,ithr_loc), nrefs_to_refine_loc)
-            else
-                nrefs_to_refine_loc = 0
-            endif
-            do j_loc = 1, nrefs_to_refine_loc
-                eval_slot_loc = eval_work%best_eval_locs(j_loc,ithr_loc)
-                if( eval_slot_loc < 1 ) cycle
-                ri_loc = eval_work%evaluated_ref_ids(eval_slot_loc,ithr_loc)
-                if( ri_loc < 1 ) cycle
-                istate_loc = self%sinds(ri_loc)
-                iproj_loc  = self%jinds(ri_loc)
-                call grad_shsrch_obj(ithr_loc)%set_indices((istate_loc-1)*self%p_ptr%nspace + iproj_loc, iptcl_loc)
-                irot_loc = self%loc_tab(ri_loc,i_loc)%inpl
-                refined_shift_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true., xy_in=shift_seed_loc(2:3))
-                if( irot_loc > 0 )then
-                    call record_sparse_eval(i_loc, ri_loc, eulprob_dist_switch(refined_shift_loc(1), self%p_ptr%cc_objfun), irot_loc, refined_shift_loc(2), refined_shift_loc(3), .true.)
-                endif
+            if( neval_loc <= 0 ) return
+            do si_loc = 1, self%nstates
+                state_eval_loc = self%ssinds(si_loc)
+                eval_work%state_eval_dists(1:neval_loc,ithr_loc) = huge(1.0)
+                nstate_eval_loc = 0
+                do j_loc = 1, neval_loc
+                    ri_loc = eval_work%evaluated_ref_ids(j_loc,ithr_loc)
+                    if( ri_loc < 1 ) cycle
+                    if( self%sinds(ri_loc) /= state_eval_loc ) cycle
+                    nstate_eval_loc = nstate_eval_loc + 1
+                    eval_work%state_eval_dists(j_loc,ithr_loc) = eval_work%evaluated_ref_dists(j_loc,ithr_loc)
+                enddo
+                nrefs_to_refine_loc = min(max_refs_to_refine, nstate_eval_loc)
+                if( nrefs_to_refine_loc < 1 ) cycle
+                eval_work%best_eval_locs(1:nrefs_to_refine_loc,ithr_loc) = &
+                    &minnloc(eval_work%state_eval_dists(1:neval_loc,ithr_loc), nrefs_to_refine_loc)
+                do j_loc = 1, nrefs_to_refine_loc
+                    eval_slot_loc = eval_work%best_eval_locs(j_loc,ithr_loc)
+                    if( eval_slot_loc < 1 ) cycle
+                    ri_loc = eval_work%evaluated_ref_ids(eval_slot_loc,ithr_loc)
+                    if( ri_loc < 1 ) cycle
+                    istate_loc = self%sinds(ri_loc)
+                    iproj_loc  = self%jinds(ri_loc)
+                    call grad_shsrch_obj(ithr_loc)%set_indices((istate_loc-1)*self%p_ptr%nspace + iproj_loc, iptcl_loc)
+                    irot_loc = self%loc_tab(ri_loc,i_loc)%inpl
+                    refined_shift_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true., xy_in=shift_seed_loc(2:3))
+                    if( irot_loc > 0 )then
+                        call record_sparse_eval(i_loc, ri_loc, &
+                            &eulprob_dist_switch(refined_shift_loc(1), self%p_ptr%cc_objfun), &
+                            &irot_loc, refined_shift_loc(2), refined_shift_loc(3), .true.)
+                    endif
+                enddo
             enddo
         end subroutine refine_best_neighbors
 
