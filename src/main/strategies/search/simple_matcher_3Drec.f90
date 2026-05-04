@@ -14,11 +14,6 @@ public :: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_
 private
 #include "simple_local_flags.inc"
 
-! Experimental Cartesian reconstruction mode. When enabled, particle Fourier
-! planes are inserted with weighted nearest-cell gridding instead of the
-! standard full KB splat in reconstructor%insert_plane_oversamp.
-logical, parameter :: RECON_USE_GRID_PLANE_NN = .false.
-
 contains
 
     !>  \brief  initializes all volumes for reconstruction
@@ -64,11 +59,7 @@ contains
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
         if( pw > TINY )then
-            if( RECON_USE_GRID_PLANE_NN )then
-                call build%eorecvols(s)%grid_plane_nn(se, o, fpl, eo, pw)
-            else
-                call build%eorecvols(s)%grid_plane(se, o, fpl, eo, pw)
-            endif
+            call build%eorecvols(s)%grid_plane(se, o, fpl, eo, pw)
         endif
     end subroutine grid_ptcl
 
