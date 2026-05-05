@@ -10,10 +10,6 @@ public :: reconstructor
 private
 #include "simple_local_flags.inc"
 
-! Default-off test gate for the alternate gridding kernel.  Keep this false
-! for production builds until benchmark and reconstruction equivalence pass.
-logical, parameter :: L_USE_EXPERIMENTAL_INSERT_PLANE_OVERSAMP = .true.
-
 type, extends(image) :: reconstructor
     private
     class(parameters),  pointer :: p_ptr => null()              !< pointer to parameters object
@@ -211,107 +207,11 @@ contains
 
     ! CONVOLUTION INTERPOLATION
 
-    !> insert Fourier plane into NATIVE (unpadded) expanded Fourier volume,
-    !> sampling the PADDED plane by STRIDING 
-    subroutine insert_plane_oversamp( self, se, o, fpl, pwght )
-        use simple_math,    only: ceil_div, floor_div
-        use simple_math_ft, only: fplane_get_cmplx, fplane_get_ctfsq
-        class(reconstructor), intent(inout) :: self
-        class(sym),           intent(inout) :: se
-        class(ori),           intent(inout) :: o
-        class(fplane_type),   intent(in)    :: fpl
-        real,                 intent(in)    :: pwght
-        type(ori) :: o_sym
-        complex   :: comp, cmplx_raw
-        real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim), loc(3), ctfval
-        real      :: ctfsq_raw
-        integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3, 2)
-        integer   :: fpllims(3, 2), hp, kp, pf
-        integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
-        real      :: pf2
-        if( pwght < TINY ) return
-        if( L_USE_EXPERIMENTAL_INSERT_PLANE_OVERSAMP )then
-            call insert_plane_oversamp_experimental(self, se, o, fpl, pwght)
-            return
-        endif
-        ! window size
-        iwinsz = ceiling(KBWINSZ - 0.5)
-        ! stride along h dimension for interpolation: all threads are at least
-        ! wdim pixels away from each other to avoid race conditions
-        stride = self%wdim ! this is striding for OpenMP, unrelated to the Fourier striding
-        ! setup rotation matrices
-        nsym = se%get_nsym()
-        rotmats(1,:,:) = o%get_mat()
-        if( nsym > 1 ) then
-            do isym = 2, nsym
-                call se%apply(o, isym, o_sym)
-                rotmats(isym,:,:) = o_sym%get_mat()
-            end do
-        endif
-        ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
-        fpllims_pd = fpl%frlims
-        pf         = OSMPL_PAD_FAC
-        pf2        = real(pf*pf)
-        fpllims    = fpllims_pd
-        fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
-        fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
-        fpllims(2,1) = ceil_div (fpllims_pd(2,1), pf)
-        fpllims(2,2) = floor_div(fpllims_pd(2,2), pf)
-        ! integer disk gate: bit-equivalent to nint(sqrt(h*h+k*k)) > nyq
-        nyq_disk = self%nyq * (self%nyq + 1)
-        ! KB interpolation / insertion
-        !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,comp,cmplx_raw,&
-        !$omp& ctfsq_raw,ctfval,w,win,loc,hp,kp) proc_bind(close)
-        do isym = 1, nsym
-            do l = 0, stride-1
-                !$omp do schedule(static)
-                do h = fpllims(1,1)+l, fpllims(1,2), stride
-                    h_sq = h*h
-                    if( h_sq > nyq_disk ) cycle
-                    k_max_h = int(sqrt(real(nyq_disk - h_sq)))
-                    k_lo    = max(fpllims(2,1), -k_max_h)
-                    k_hi    = min(fpllims(2,2),  k_max_h)
-                    hp = h * pf
-                    do k = k_lo, k_hi
-                        kp = k * pf
-                        ! Fourier component & CTF from PADDED plane
-                        cmplx_raw = fplane_get_cmplx(fpl, hp, kp)
-                        ctfsq_raw = fplane_get_ctfsq(fpl, hp, kp)
-                        if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
-                            ctfsq_raw <= TINY ) cycle
-                        ! The expanded reconstruction volume is indexed by native
-                        ! Fourier-grid cells. Keep the sample location, window, and
-                        ! KB weights in that same coordinate system; padded-coordinate
-                        ! weights narrow/shift the stencil relative to the cells.
-                        loc = matmul(real([h,k,0]), rotmats(isym,:,:))
-                        win(1,:) = nint(loc)
-                        win(2,:) = win(1,:) + iwinsz
-                        win(1,:) = win(1,:) - iwinsz
-                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
-                        if( win(2,1) < self%lims(1,1) ) cycle
-                        comp   = pwght * pf2 * cmplx_raw
-                        ! CTF values are calculated analytically, no FFTW/padding scaling to account for
-                        ctfval = pwght * ctfsq_raw
-                        call self%kbwin%apod_mat_3d_fast(loc, iwinsz, self%wdim, w)
-                        ! expanded matrices update (NATIVE volume)
-                        self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) = &
-                            self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + comp*w
-                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) = &
-                            self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
-                    end do
-                end do
-                !$omp end do
-            end do
-        end do
-        !$omp end parallel
-        call o_sym%kill
-    end subroutine insert_plane_oversamp
-
     !> Experimental variant of insert_plane_oversamp for benchmarking.
     !! It preserves the original h-strided OpenMP race-avoidance scheme, but
     !! scalarizes rotation, inlines fplane access, and updates the two expanded
     !! matrices in one explicit separable-KB stencil pass.
-    subroutine insert_plane_oversamp_experimental( self, se, o, fpl, pwght )
+    subroutine insert_plane_oversamp( self, se, o, fpl, pwght )
         use simple_math, only: ceil_div, floor_div
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
@@ -438,7 +338,7 @@ contains
             wz = wz * (1.0 / sum(wz))
         end subroutine kb_apod_vecs_3d_fast
 
-    end subroutine insert_plane_oversamp_experimental
+    end subroutine insert_plane_oversamp
 
     subroutine sampl_dens_correct( self )
         class(reconstructor), intent(inout) :: self

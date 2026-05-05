@@ -184,7 +184,6 @@ contains
         ! Interpolation variables
         kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         wdim   = kbwin%get_wdim()
-        allocate(kbw(wdim,wdim,nthr_glob),source=0.)
         ! Work images
         call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
         ! particle records
@@ -311,7 +310,7 @@ contains
         if( allocated(tmp_pad_imgs))then
             call forget_ft_maps
             call dealloc_imgarr(tmp_pad_imgs)
-            deallocate(cmats,interp_cmats,tvals,kbw,interp_rhos,precs,&
+            deallocate(cmats,interp_cmats,tvals,interp_rhos,precs,&
                 &phys_addrh_crop,phys_addrk_crop)
         endif
     end subroutine cavger_dealloc_online
@@ -325,20 +324,24 @@ contains
         type(fplane_type) :: fplanes(nthr_glob)
         complex :: fcomp
         real    :: loc(2), mat(2,2), tvalsq, croppd_scale, w
+        real    :: m11, m12, m21, m22, hrow(2)
+        real, allocatable :: wx(:,:), wy(:,:)
         integer :: win(2,2), flims_crop(3,2), phys(2)
         integer :: cyc_lims_cropR(2,2), cyc_lims_crop(3,2), sigma2_kfromto(2)
         integer :: h,k,hh,kk,hp,kp,l,m, icls, nyq_crop
-        integer :: iptcl, i, sh, iwinsz, wdim, ithr
+        integer :: iptcl, i, iwinsz, wdim, ithr, h_sq, nyq_disk
         logical :: l_conjg
         ! Interpolation parameters
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         wdim   = kbwin%get_wdim()
+        allocate(wx(wdim,nthr_glob), wy(wdim,nthr_glob))
         ! Memoization for full padded image (tmp_pad_imgs is allocated with ldim_pd)
         call memoize_ft_maps(ldim_pd(1:2), p_ptr%smpd)
         ! Dimensions & limits
         croppd_scale  = real(ldim_croppd(1)) / real(ldim_pd(1))
         flims_crop    = cavgs%even%flims
         nyq_crop      = cavgs%even%fit%get_lfny(1)
+        nyq_disk      = nyq_crop * (nyq_crop + 1)
         cyc_lims_crop = cavgs%even%fit%loop_lims(3)
         cyc_lims_cropR = transpose(cyc_lims_crop(1:2,:))
         sigma2_kfromto = [1, nyq_crop]
@@ -347,7 +350,8 @@ contains
             sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
         end if
         !$omp parallel default(shared) proc_bind(close) &
-        !$omp private(i,ithr,iptcl,win,mat,h,k,hh,kk,l,m,loc,sh,hp,kp,phys,w,tvalsq,l_conjg,fcomp)
+        !$omp private(i,ithr,iptcl,win,mat,h,k,hh,kk,l,m,loc,hp,kp,phys,w,tvalsq,l_conjg,fcomp,&
+        !$omp& h_sq,hrow,m11,m12,m21,m22)
         !$omp do schedule(static)
         do i = 1, nptcls
             iptcl = precs(i)%pind
@@ -372,24 +376,30 @@ contains
             endif
             ! Rotation matrix
             call rotmat2d( precs(i)%e3, mat )
+            m11 = mat(1,1); m12 = mat(1,2)
+            m21 = mat(2,1); m22 = mat(2,2)
             ! Kaiser-Bessel interpolation
             interp_cmats(:,:,i) = CMPLX_ZERO
             interp_rhos(:,:,i)  = 0.0
             ! loop over cropped original image limits
             do h = flims_crop(1,1), flims_crop(1,2)
+                h_sq = h*h
+                if( h_sq > nyq_disk ) cycle
                 hp = h * OSMPL_PAD_FAC
+                hrow(1) = real(h) * m11
+                hrow(2) = real(h) * m12
                 do k = flims_crop(2,1), flims_crop(2,2)
-                    sh = nint(hyp(real(h),real(k)))
-                    if( sh > nyq_crop ) cycle
+                    if( h_sq + k*k > nyq_disk ) cycle
                     kp = k * OSMPL_PAD_FAC
                     ! rotation on original lattice
-                    loc = matmul(real([h,k]), mat)
+                    loc(1) = hrow(1) + real(k) * m21
+                    loc(2) = hrow(2) + real(k) * m22
                     ! interpolation window limits on original lattice
                     win(1,:) = nint(loc)
                     win(2,:) = win(1,:) + iwinsz
                     win(1,:) = win(1,:) - iwinsz
                     ! kernel window
-                    call kbwin%apod_mat_2d_fast(loc, iwinsz, wdim, kbw(:,:,ithr))
+                    call kb_apod_vecs_2d_fast(loc, wx(:,ithr), wy(:,ithr))
                     ! Read from the generated Fourier plane.
                     ! gen_fplane4rec stores only k<=0, so use Friedel symmetry for kp>0.
                     if( kp <= 0 ) then
@@ -409,7 +419,7 @@ contains
                             kk      = cyci_1d(cyc_lims_cropR(:,2), kk)
                             phys(1) = phys_addrh_crop(hh,kk)
                             phys(2) = phys_addrk_crop(hh,kk)
-                            w       = kbw(l,m,ithr)
+                            w       = wx(l,ithr) * wy(m,ithr)
                             interp_cmats(phys(1),phys(2),i) = interp_cmats(phys(1),phys(2),i) + &
                                 w * merge(conjg(fcomp), fcomp, l_conjg)
                             interp_rhos(phys(1),phys(2),i)  = interp_rhos(phys(1),phys(2),i)  + &
@@ -441,6 +451,25 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
+        deallocate(wx, wy)
+    contains
+
+        pure subroutine kb_apod_vecs_2d_fast( loc, wx, wy )
+            real, intent(in)  :: loc(2)
+            real, intent(out) :: wx(wdim), wy(wdim)
+            integer :: i, win_lo(2)
+            real    :: base(2), ww(2)
+            win_lo = nint(loc) - iwinsz
+            base   = real(win_lo) - loc
+            do i = 1, wdim
+                ww    = kbwin%apod_fast(base + real(i-1))
+                wx(i) = ww(1)
+                wy(i) = ww(2)
+            end do
+            wx = wx * (1.0 / sum(wx))
+            wy = wy * (1.0 / sum(wy))
+        end subroutine kb_apod_vecs_2d_fast
+
     end subroutine cavger_update_sums
 
     !>  \brief  is for generating class averages offline

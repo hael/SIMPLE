@@ -119,7 +119,6 @@ type(builder),        pointer    :: b_ptr  => null()          !< active builder 
 class(parameters),    pointer    :: p_ptr => null()           !< active parameters instance
 complex,             allocatable :: cmats(:,:,:), interp_cmats(:,:,:)           !< Images interpolated values
 real,                allocatable :: tvals(:,:,:), interp_rhos(:,:,:)            !< CTF interpolated values
-real,                allocatable :: kbw(:,:,:)                !< Kaiser-Bessel window
 integer,             allocatable :: eo_pops(:,:)              !< Even/odd class populations
 integer,             allocatable :: phys_addrh_crop(:,:), phys_addrk_crop(:,:)  !< Fourier mapping memoization matrices
 integer                          :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
