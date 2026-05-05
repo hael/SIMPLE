@@ -231,7 +231,7 @@ contains
                     cfg%frac_best = 1.0
                 endif
                 if( istage > SYMSRCH_STAGE )then
-                    cfg%overlap  = 0.9
+                    cfg%overlap  = 0.9 ! early stopping
                     cfg%fracsrch = 90. ! early stopping
                 else
                     cfg%overlap  = 0.99
@@ -248,7 +248,7 @@ contains
                     cfg%frac_best = 0.85
                 endif
                 cfg%overlap       = 0.95 ! early stopping
-                cfg%fracsrch      = 90.
+                cfg%fracsrch      = 90.  ! doesn't affect later stages
                 cfg%snr_noise_reg = 6.0
             case default
                 THROW_HARD('Invalid istage index in set_refine3D_stage_controls')

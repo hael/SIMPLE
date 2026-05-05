@@ -261,22 +261,34 @@ contains
         integer                       :: state, ldim(3), ldim_pd(3), numlen_part
         integer(timer_int_kind)       :: t_automask3D, t_setup_nu_dmats, t_optimize_nu, t_nu_filter
         integer(timer_int_kind)       :: t_write_nu_outputs, t_tot
+        integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_gridcorr, t_upd_proj, t_cleanup
         real(timer_int_kind)          :: rt_read_eos, rt_sum_reduce, rt_sum_eos
         real(timer_int_kind)          :: rt_read_previous_halfmaps
         real(timer_int_kind)          :: rt_calc_fsc4sampl_dens_correct, rt_sampl_dens_correct_eos
         real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_insert_lowres, rt_trail_restored_halves
         real(timer_int_kind)          :: rt_automask3D, rt_setup_nu_dmats, rt_optimize_nu_cutoff_finds
         real(timer_int_kind)          :: rt_nu_filter_vols, rt_write_nonuniform_outputs, rt_tot
+        real(timer_int_kind)          :: rt_init_context, rt_trail_frac, rt_gridcorr, rt_upd_proj, rt_cleanup
         call initialize_bench_timers()
+        if( L_BENCH_GLOB ) t_init_context = tic()
         call initialize_context()
+        if( L_BENCH_GLOB ) rt_init_context = toc(t_init_context)
+        if( L_BENCH_GLOB ) t_trail_frac = tic()
         call determine_trailing_update_fraction()
+        if( L_BENCH_GLOB ) rt_trail_frac = toc(t_trail_frac)
+        if( L_BENCH_GLOB ) t_gridcorr = tic()
         call prepare_grid_correction()
+        if( L_BENCH_GLOB ) rt_gridcorr = toc(t_gridcorr)
         do state = 1, params%nstates
             call assemble_state()
         enddo
         call collect_restore_timings()
+        if( L_BENCH_GLOB ) t_upd_proj = tic()
         call update_project_resolution_metadata()
+        if( L_BENCH_GLOB ) rt_upd_proj = toc(t_upd_proj)
+        if( L_BENCH_GLOB ) t_cleanup = tic()
         call cleanup_context()
+        if( L_BENCH_GLOB ) rt_cleanup = toc(t_cleanup)
         call write_benchmark()
 
     contains
@@ -296,6 +308,11 @@ contains
             rt_optimize_nu_cutoff_finds    = 0.
             rt_nu_filter_vols              = 0.
             rt_write_nonuniform_outputs     = 0.
+            rt_init_context                = 0.
+            rt_trail_frac                  = 0.
+            rt_gridcorr                    = 0.
+            rt_upd_proj                    = 0.
+            rt_cleanup                     = 0.
             rt_tot                         = 0.
             if( L_BENCH_GLOB ) t_tot = tic()
         end subroutine initialize_bench_timers
@@ -554,7 +571,20 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble optimize_nu_cutoff_finds : ', rt_optimize_nu_cutoff_finds
             write(fnr,'(a,t52,f9.2)') 'volassemble nu_filter_vols          : ', rt_nu_filter_vols
             write(fnr,'(a,t52,f9.2)') 'volassemble write_nonuniform_outputs : ', rt_write_nonuniform_outputs
+            write(fnr,'(a,t52,f9.2)') 'volassemble init_context            : ', rt_init_context
+            write(fnr,'(a,t52,f9.2)') 'volassemble trail_frac_read         : ', rt_trail_frac
+            write(fnr,'(a,t52,f9.2)') 'volassemble gridcorr_prep           : ', rt_gridcorr
+            write(fnr,'(a,t52,f9.2)') 'volassemble update_proj_metadata    : ', rt_upd_proj
+            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup                 : ', rt_cleanup
             write(fnr,'(a,t52,f9.2)') 'volassemble total time              : ', rt_tot
+            write(fnr,'(a,t52,f9.2)') 'volassemble % accounted for         : ', &
+                &((rt_read_eos + rt_read_previous_halfmaps + rt_sum_reduce + rt_sum_eos +          &
+                &  rt_calc_fsc4sampl_dens_correct + rt_sampl_dens_correct_eos +                   &
+                &  rt_sampl_dens_correct_sum + rt_insert_lowres + rt_trail_restored_halves +      &
+                &  rt_automask3D + rt_setup_nu_dmats + rt_optimize_nu_cutoff_finds +              &
+                &  rt_nu_filter_vols + rt_write_nonuniform_outputs +                              &
+                &  rt_init_context + rt_trail_frac + rt_gridcorr + rt_upd_proj + rt_cleanup)      &
+                & / rt_tot) * 100.
             call fclose(fnr)
             call benchfname%kill
         end subroutine write_benchmark
