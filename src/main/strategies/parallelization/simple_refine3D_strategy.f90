@@ -2,14 +2,14 @@ module simple_refine3D_strategy
 use simple_core_module_api
 use simple_refine3D_fnames
 use simple_matcher_refvol_utils
-use simple_builder,                 only: builder
-use simple_parameters,              only: parameters
-use simple_cmdline,                 only: cmdline
-use simple_qsys_env,                only: qsys_env
-use simple_convergence,             only: convergence
-use simple_decay_funs,              only: inv_cos_decay, cos_decay
-use simple_cluster_seed,            only: gen_labelling
-use simple_euclid_sigma2,           only: sigma2_star_from_iter
+use simple_builder,       only: builder
+use simple_parameters,    only: parameters
+use simple_cmdline,       only: cmdline
+use simple_qsys_env,      only: qsys_env
+use simple_convergence,   only: convergence
+use simple_decay_funs,    only: inv_cos_decay, cos_decay
+use simple_cluster_seed,  only: gen_labelling
+use simple_euclid_sigma2, only: sigma2_star_from_iter
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -216,7 +216,7 @@ contains
         if( allocated(has_fsc)  ) deallocate(has_fsc)
     end subroutine refresh_resolution_fields_from_fsc
 
-    subroutine remove_cartesian_partial_rec_files( params )
+    subroutine remove_partial_rec_files( params )
         type(parameters), intent(in) :: params
         type(string) :: fname
         integer :: state, ipart, numlen_part
@@ -234,12 +234,7 @@ contains
             enddo
         enddo
         call fname%kill
-    end subroutine remove_cartesian_partial_rec_files
-
-    subroutine remove_partial_assembly_input_files( params )
-        type(parameters), intent(in) :: params
-        call remove_cartesian_partial_rec_files(params)
-    end subroutine remove_partial_assembly_input_files
+    end subroutine remove_partial_rec_files
 
     subroutine materialize_reprojection_model( params, cline, current_build, nthr )
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
@@ -484,7 +479,7 @@ contains
             ! Legacy handshake for rec-writing helpers that still inspect this key.
             ! The strategy owns the actual assembly dispatch decision.
             call cline%set('force_volassemble', 'yes')
-            call remove_partial_assembly_input_files(params)
+            call remove_partial_rec_files(params)
         endif
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
         if( L_BENCH_GLOB )then
@@ -874,7 +869,7 @@ contains
         call self%job_descr%set( 'startit',    int2str(params%startit))
         call cline%set(          'startit',    params%startit)
         if( trim(params%volrec).eq.'yes' )then
-            call remove_partial_assembly_input_files(params)
+            call remove_partial_rec_files(params)
         endif
         ! schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)

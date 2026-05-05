@@ -13,14 +13,10 @@ type, extends(commander_base) :: commander_volassemble
 end type commander_volassemble
 
 type :: restore_timings_t
-    real(timer_int_kind) :: read_eos                       = 0.
-    real(timer_int_kind) :: read_previous_halfmaps          = 0.
-    real(timer_int_kind) :: sum_reduce                     = 0.
+    real(timer_int_kind) :: reduce_partials                = 0.
     real(timer_int_kind) :: sum_eos                        = 0.
-    real(timer_int_kind) :: calc_fsc4sampl_dens_correct    = 0.
-    real(timer_int_kind) :: sampl_dens_correct_eos         = 0.
-    real(timer_int_kind) :: sampl_dens_correct_sum         = 0.
-    real(timer_int_kind) :: insert_lowres                  = 0.
+    real(timer_int_kind) :: restore_eos_and_write_fsc      = 0.
+    real(timer_int_kind) :: restore_merged_volume          = 0.
     real(timer_int_kind) :: trail_restored_halves          = 0.
 end type restore_timings_t
 
@@ -48,8 +44,7 @@ contains
         real, allocatable :: fsc(:)
         real    :: weight_prev
         integer :: find4eoavg
-        integer(timer_int_kind) :: t_read_eos, t_read_previous_halfmaps, t_sum_reduce, t_sum_eos, t_calc_fsc
-        integer(timer_int_kind) :: t_sampl_dens_correct, t_insert_lowres, t_trail
+        integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos, t_trail
         call reduce_partials()
         call set_state_filenames()
         call sum_eos_before_density_correction_if_needed()
@@ -75,17 +70,13 @@ contains
 
         subroutine reduce_partials()
             integer :: part
+            if( L_BENCH_GLOB ) t_reduce_partials = tic()
             call build%eorecvol%reset_all
             do part = 1, params%nparts
-                if( L_BENCH_GLOB ) t_read_eos = tic()
                 call eorecvol_read%read_eos(refine3D_partial_rec_fbody(state, part, numlen_part))
-                if( L_BENCH_GLOB )then
-                    timings%read_eos = timings%read_eos + toc(t_read_eos)
-                    t_sum_reduce = tic()
-                endif
                 call build%eorecvol%sum_reduce(eorecvol_read)
-                if( L_BENCH_GLOB ) timings%sum_reduce = timings%sum_reduce + toc(t_sum_reduce)
             enddo
+            if( L_BENCH_GLOB ) timings%reduce_partials = timings%reduce_partials + toc(t_reduce_partials)
         end subroutine reduce_partials
 
         subroutine set_state_filenames()
@@ -102,29 +93,19 @@ contains
         end subroutine sum_eos_before_density_correction_if_needed
 
         subroutine restore_eos_and_write_fsc()
+            if( L_BENCH_GLOB ) t_restore_eos = tic()
             if( params%l_trail_rec )then
-                if( L_BENCH_GLOB ) t_read_previous_halfmaps = tic()
                 call read_previous_halfmaps()
-                if( L_BENCH_GLOB )then
-                    timings%read_previous_halfmaps = timings%read_previous_halfmaps + toc(t_read_previous_halfmaps)
-                endif
                 if( allocated(fsc) ) deallocate(fsc)
-                if( L_BENCH_GLOB ) t_calc_fsc = tic()
                 call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
-                if( L_BENCH_GLOB )then
-                    timings%calc_fsc4sampl_dens_correct = timings%calc_fsc4sampl_dens_correct + toc(t_calc_fsc)
-                    t_sampl_dens_correct = tic()
-                endif
                 call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc)
             else
-                if( L_BENCH_GLOB ) t_sampl_dens_correct = tic()
                 call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
-            endif
-            if( L_BENCH_GLOB )then
-                timings%sampl_dens_correct_eos = timings%sampl_dens_correct_eos + toc(t_sampl_dens_correct)
             endif
             fsc_txt_file = resolve_fsc_txt_fname()
             call build%eorecvol%write_fsc2txt(fsc_txt_file)
+            if( L_BENCH_GLOB ) timings%restore_eos_and_write_fsc = &
+                timings%restore_eos_and_write_fsc + toc(t_restore_eos)
         end subroutine restore_eos_and_write_fsc
 
         subroutine read_previous_halfmaps()
@@ -161,22 +142,19 @@ contains
         end subroutine sum_eos_after_density_correction_if_needed
 
         subroutine restore_merged_volume()
+            if( L_BENCH_GLOB ) t_restore_merged = tic()
             call build%eorecvol%get_res(res05, res0143)
-            if( L_BENCH_GLOB ) t_sampl_dens_correct = tic()
             call build%eorecvol%sampl_dens_correct_sum(build%vol)
-            if( L_BENCH_GLOB )then
-                timings%sampl_dens_correct_sum = timings%sampl_dens_correct_sum + toc(t_sampl_dens_correct)
-            endif
             call build%vol%fft
             if( .not. params%l_lpset )then
-                if( L_BENCH_GLOB ) t_insert_lowres = tic()
                 call lowres_insert_into_halves()
-                if( L_BENCH_GLOB ) timings%insert_lowres = timings%insert_lowres + toc(t_insert_lowres)
             endif
             call build%vol%ifft
             call build%vol%mul(gridcorr_img)
             call build%vol%write(volname, del_if_exists=.true.)
             call wait_for_closure(volname)
+            if( L_BENCH_GLOB ) timings%restore_merged_volume = &
+                timings%restore_merged_volume + toc(t_restore_merged)
         end subroutine restore_merged_volume
 
         subroutine lowres_insert_into_halves()
@@ -259,15 +237,12 @@ contains
         real, allocatable             :: res0143s(:)
         real                          :: update_frac_trail_rec, res05
         integer                       :: state, ldim(3), ldim_pd(3), numlen_part
-        integer(timer_int_kind)       :: t_automask3D, t_setup_nu_dmats, t_optimize_nu, t_nu_filter
-        integer(timer_int_kind)       :: t_write_nu_outputs, t_tot
+        integer(timer_int_kind)       :: t_automask3D, t_nonuniform_filter, t_tot
         integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_gridcorr, t_upd_proj, t_cleanup
-        real(timer_int_kind)          :: rt_read_eos, rt_sum_reduce, rt_sum_eos
-        real(timer_int_kind)          :: rt_read_previous_halfmaps
-        real(timer_int_kind)          :: rt_calc_fsc4sampl_dens_correct, rt_sampl_dens_correct_eos
-        real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_insert_lowres, rt_trail_restored_halves
-        real(timer_int_kind)          :: rt_automask3D, rt_setup_nu_dmats, rt_optimize_nu_cutoff_finds
-        real(timer_int_kind)          :: rt_nu_filter_vols, rt_write_nonuniform_outputs, rt_tot
+        real(timer_int_kind)          :: rt_reduce_partials, rt_sum_eos
+        real(timer_int_kind)          :: rt_restore_eos_and_write_fsc, rt_restore_merged_volume
+        real(timer_int_kind)          :: rt_trail_restored_halves
+        real(timer_int_kind)          :: rt_automask3D, rt_nonuniform_filter, rt_tot
         real(timer_int_kind)          :: rt_init_context, rt_trail_frac, rt_gridcorr, rt_upd_proj, rt_cleanup
         call initialize_bench_timers()
         if( L_BENCH_GLOB ) t_init_context = tic()
@@ -294,26 +269,19 @@ contains
     contains
 
         subroutine initialize_bench_timers()
-            rt_read_eos                    = 0.
-            rt_read_previous_halfmaps       = 0.
-            rt_sum_reduce                  = 0.
-            rt_sum_eos                     = 0.
-            rt_calc_fsc4sampl_dens_correct = 0.
-            rt_sampl_dens_correct_eos      = 0.
-            rt_sampl_dens_correct_sum      = 0.
-            rt_insert_lowres               = 0.
-            rt_trail_restored_halves       = 0.
-            rt_automask3D                  = 0.
-            rt_setup_nu_dmats              = 0.
-            rt_optimize_nu_cutoff_finds    = 0.
-            rt_nu_filter_vols              = 0.
-            rt_write_nonuniform_outputs     = 0.
-            rt_init_context                = 0.
-            rt_trail_frac                  = 0.
-            rt_gridcorr                    = 0.
-            rt_upd_proj                    = 0.
-            rt_cleanup                     = 0.
-            rt_tot                         = 0.
+            rt_reduce_partials           = 0.
+            rt_sum_eos                   = 0.
+            rt_restore_eos_and_write_fsc = 0.
+            rt_restore_merged_volume     = 0.
+            rt_trail_restored_halves     = 0.
+            rt_automask3D                = 0.
+            rt_nonuniform_filter       = 0.
+            rt_init_context              = 0.
+            rt_trail_frac                = 0.
+            rt_gridcorr                  = 0.
+            rt_upd_proj                  = 0.
+            rt_cleanup                   = 0.
+            rt_tot                       = 0.
             if( L_BENCH_GLOB ) t_tot = tic()
         end subroutine initialize_bench_timers
 
@@ -380,21 +348,15 @@ contains
         end subroutine run_state_automask
 
         subroutine run_state_nonuniform_filter()
+            if( L_BENCH_GLOB ) t_nonuniform_filter = tic()
             call build_nonuniform_mask()
             call setup_nonuniform_filter()
-            if( L_BENCH_GLOB ) t_optimize_nu = tic()
             call optimize_nu_cutoff_finds()
-            if( L_BENCH_GLOB ) rt_optimize_nu_cutoff_finds = rt_optimize_nu_cutoff_finds + toc(t_optimize_nu)
-            if( L_BENCH_GLOB ) t_nu_filter = tic()
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
-            if( L_BENCH_GLOB ) rt_nu_filter_vols = rt_nu_filter_vols + toc(t_nu_filter)
             call log_nonuniform_filter_stats()
-            if( L_BENCH_GLOB ) t_write_nu_outputs = tic()
             call write_nonuniform_outputs()
-            if( L_BENCH_GLOB )then
-                rt_write_nonuniform_outputs = rt_write_nonuniform_outputs + toc(t_write_nu_outputs)
-            endif
             call cleanup_nonuniform_state()
+            if( L_BENCH_GLOB ) rt_nonuniform_filter = rt_nonuniform_filter + toc(t_nonuniform_filter)
         end subroutine run_state_nonuniform_filter
 
         subroutine build_nonuniform_mask()
@@ -432,14 +394,11 @@ contains
                 allocate(nu_aux_even(1), nu_aux_odd(1))
                 call nu_aux_even(1)%copy(build%vol)
                 call nu_aux_odd(1)%copy(build%vol2)
-                if( L_BENCH_GLOB ) t_setup_nu_dmats = tic()
                 call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [res0143s(state)], &
                     &nu_aux_even, nu_aux_odd)
             else
-                if( L_BENCH_GLOB ) t_setup_nu_dmats = tic()
                 call setup_nu_dmats(build%vol, build%vol2, l_mask, [real ::])
             endif
-            if( L_BENCH_GLOB ) rt_setup_nu_dmats = rt_setup_nu_dmats + toc(t_setup_nu_dmats)
         end subroutine setup_nonuniform_filter
 
         subroutine log_nonuniform_filter_stats()
@@ -486,15 +445,11 @@ contains
         end subroutine cleanup_nonuniform_state
 
         subroutine collect_restore_timings()
-            rt_read_eos                    = restore_timings%read_eos
-            rt_read_previous_halfmaps       = restore_timings%read_previous_halfmaps
-            rt_sum_reduce                  = restore_timings%sum_reduce
-            rt_sum_eos                     = restore_timings%sum_eos
-            rt_calc_fsc4sampl_dens_correct = restore_timings%calc_fsc4sampl_dens_correct
-            rt_sampl_dens_correct_eos      = restore_timings%sampl_dens_correct_eos
-            rt_sampl_dens_correct_sum      = restore_timings%sampl_dens_correct_sum
-            rt_insert_lowres               = restore_timings%insert_lowres
-            rt_trail_restored_halves       = restore_timings%trail_restored_halves
+            rt_reduce_partials           = restore_timings%reduce_partials
+            rt_sum_eos                   = restore_timings%sum_eos
+            rt_restore_eos_and_write_fsc = restore_timings%restore_eos_and_write_fsc
+            rt_restore_merged_volume     = restore_timings%restore_merged_volume
+            rt_trail_restored_halves     = restore_timings%trail_restored_halves
         end subroutine collect_restore_timings
 
         subroutine update_project_resolution_metadata()
@@ -556,21 +511,14 @@ contains
             write(fnr,'(a,i0)') 'volassemble kto                     : ', params%kfromto(2)
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'volassemble read_eos                : ', rt_read_eos
-            write(fnr,'(a,t52,f9.2)') 'volassemble read_previous_halfmaps  : ', rt_read_previous_halfmaps
-            write(fnr,'(a,t52,f9.2)') 'volassemble sum_reduce              : ', rt_sum_reduce
+            write(fnr,'(a,t52,f9.2)') 'volassemble reduce_partials         : ', rt_reduce_partials
             write(fnr,'(a,t52,f9.2)') 'volassemble sum_eos                 : ', rt_sum_eos
-            write(fnr,'(a,t52,f9.2)') 'volassemble calc_fsc4sampl_dens_correct : ', &
-                rt_calc_fsc4sampl_dens_correct
-            write(fnr,'(a,t52,f9.2)') 'volassemble sampl_dens_correct_eos  : ', rt_sampl_dens_correct_eos
-            write(fnr,'(a,t52,f9.2)') 'volassemble sampl_dens_correct_sum  : ', rt_sampl_dens_correct_sum
-            write(fnr,'(a,t52,f9.2)') 'volassemble insert_lowres           : ', rt_insert_lowres
+            write(fnr,'(a,t52,f9.2)') 'volassemble restore_eos_and_write_fsc : ', &
+                rt_restore_eos_and_write_fsc
+            write(fnr,'(a,t52,f9.2)') 'volassemble restore_merged_volume   : ', rt_restore_merged_volume
             write(fnr,'(a,t52,f9.2)') 'volassemble trail_restored_halves   : ', rt_trail_restored_halves
             write(fnr,'(a,t52,f9.2)') 'volassemble automask3D              : ', rt_automask3D
-            write(fnr,'(a,t52,f9.2)') 'volassemble setup_nu_dmats          : ', rt_setup_nu_dmats
-            write(fnr,'(a,t52,f9.2)') 'volassemble optimize_nu_cutoff_finds : ', rt_optimize_nu_cutoff_finds
-            write(fnr,'(a,t52,f9.2)') 'volassemble nu_filter_vols          : ', rt_nu_filter_vols
-            write(fnr,'(a,t52,f9.2)') 'volassemble write_nonuniform_outputs : ', rt_write_nonuniform_outputs
+            write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform_filter       : ', rt_nonuniform_filter
             write(fnr,'(a,t52,f9.2)') 'volassemble init_context            : ', rt_init_context
             write(fnr,'(a,t52,f9.2)') 'volassemble trail_frac_read         : ', rt_trail_frac
             write(fnr,'(a,t52,f9.2)') 'volassemble gridcorr_prep           : ', rt_gridcorr
@@ -578,11 +526,9 @@ contains
             write(fnr,'(a,t52,f9.2)') 'volassemble cleanup                 : ', rt_cleanup
             write(fnr,'(a,t52,f9.2)') 'volassemble total time              : ', rt_tot
             write(fnr,'(a,t52,f9.2)') 'volassemble % accounted for         : ', &
-                &((rt_read_eos + rt_read_previous_halfmaps + rt_sum_reduce + rt_sum_eos +          &
-                &  rt_calc_fsc4sampl_dens_correct + rt_sampl_dens_correct_eos +                   &
-                &  rt_sampl_dens_correct_sum + rt_insert_lowres + rt_trail_restored_halves +      &
-                &  rt_automask3D + rt_setup_nu_dmats + rt_optimize_nu_cutoff_finds +              &
-                &  rt_nu_filter_vols + rt_write_nonuniform_outputs +                              &
+                &((rt_reduce_partials + rt_sum_eos + rt_restore_eos_and_write_fsc +               &
+                &  rt_restore_merged_volume + rt_trail_restored_halves + rt_automask3D +          &
+                &  rt_nonuniform_filter +                                                         &
                 &  rt_init_context + rt_trail_frac + rt_gridcorr + rt_upd_proj + rt_cleanup)      &
                 & / rt_tot) * 100.
             call fclose(fnr)

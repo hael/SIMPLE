@@ -54,14 +54,12 @@ contains
         type(cmdline)               :: cline_rec3D
         type(commander_postprocess) :: xpostprocess
         type(parameters)            :: params
-        real,    parameter :: LP2SMPD_TARGET   = 1./3.
-        real,    parameter :: SMPD_TARGET_MIN  = 1.3
-        logical, parameter :: DEBUG            = .true.
-        integer, parameter :: MINBOX           = 256
-        integer, parameter :: NPDIRS4BAL       = 300
-        real         :: smpd_target, smpd_crop, scale, trslim
-        integer      :: box_crop, maxits_phase1, maxits_phase2, iter
-        logical      :: l_autoscale
+        real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
+        logical, parameter :: DEBUG  = .true.
+        integer, parameter :: MINBOX = 256
+        real    :: smpd_target, smpd_crop, scale, trslim
+        integer :: box_crop, iter
+        logical :: l_autoscale
         ! commanders
         type(commander_rec3D)    :: xrec3D
         type(commander_refine3D) :: xrefine3D
@@ -69,7 +67,7 @@ contains
         call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution
         call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
-        call cline%set('refine',  'prob_neigh') ! greedy multi-neighborhood 3D refinement 
+        call cline%set('refine',  'prob_neigh') ! probabilistioc neighborhood 3D refinement 
         call cline%set('ml_reg',         'yes') ! ML regularization is on
         call cline%set('automsk',        'yes') ! envelope masking for background flattening
         call cline%set('overlap',         0.99) ! convergence if overlap > 99%
@@ -79,23 +77,20 @@ contains
         call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
-        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('center')      ) call cline%set('center',        'no') ! 4 now, probably fine
-        if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est', 'global') ! 4 now, probably fine
-        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no') ! 4 now, to allow more rapid testing
-        if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',    'yes') ! no difference at this stage, so prefer 'yes'
-        if( .not. cline%defined('update_frac') ) call cline%set('update_frac',    0.1) ! 4 now, needs testing/different logic (nsample?)
-        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map with ml_reg='yes'
-        if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode',   'none')
-        ! works, should be considered if the defaults are not satisfactory
-        if( .not. cline%defined('maxits')      ) call cline%set('maxits',          20) ! ~2 passes over particles, sufficient ?
-        if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',       'no') ! we do not keep volumes for each iteration by deafult
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',            'yes')
+        if( .not. cline%defined('center')      ) call cline%set('center',            'no') ! 4 now, probably fine
+        if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est',     'global') ! 4 now, probably fine
+        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',        'no') ! 4 now, to allow more rapid testing
+        if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',        'yes') ! no difference at this stage, so prefer 'yes'
+        if( .not. cline%defined('update_frac') ) call cline%set('update_frac',        0.1) ! 4 now, needs testing/different logic (nsample?)
+        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',           'yes') ! better map with ml_reg='yes'
+        if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',              50) ! can we find a better logic here?
+        if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',           'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
-        call cline%set('maxits_glob', params%maxits) ! needed for correct lambda annealing
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         if( mod(params%maxits,2) /= 0) THROW_HARD('Maximum number of iterations (MAXITS) need to be divisible with 2')
-        maxits_phase1 = params%maxits / 2
-        maxits_phase2 = maxits_phase1
+        smpd_target = SMPD_TARGET_DEFAULT
         if( params%box <= MINBOX )then
             smpd_target = params%smpd
             smpd_crop   = params%smpd
@@ -103,7 +98,6 @@ contains
             scale       = 1.0
             l_autoscale = .false.
         else
-            smpd_target = max(SMPD_TARGET_MIN, params%res_target * LP2SMPD_TARGET)
             call autoscale(params%box, params%smpd, smpd_target, box_crop, smpd_crop, scale, minbox=MINBOX)
             l_autoscale = box_crop < params%box
         endif
@@ -132,35 +126,15 @@ contains
         call cline_rec3D%delete('update_frac')
         call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
         call xrec3D%execute(cline_rec3D)
-        ! 3D refinement, phase1
+        ! 3D refinement iterations
         call cline%set('vol1', refine3D_state_vol_fname(1))
-        call cline%set('prg',                'refine3D')
-        call cline%set('ufrac_trec', params%update_frac)
-        call cline%set('maxits',          maxits_phase1)
-        call cline%set('filt_mode',           'uniform')
-        call xrefine3D%execute(cline)
-        ! iteration number bookkeeping
-        iter = 0
-        if( cline%defined('endit') )then
-            iter = cline%get_iarg('endit')
-            call cline%delete('endit')
-        endif
-        iter = iter + 1
-        ! re-reconstruct from all particle images
-        call xrec3D%execute(cline_rec3D)
-        ! 3D refinement, phase2
-        call cline%set('vol1', refine3D_state_vol_fname(1))
-        call cline%set('maxits',   maxits_phase1)
-        call cline%set('filt_mode', params%filt_mode)
-        call cline%set('startit',           iter)
-        call cline%set('which_iter',        iter)
+        call cline%set('prg',                   'refine3D')
+        call cline%set('ufrac_trec',    params%update_frac)
+        call cline%set('maxits',             params%maxits)
         call xrefine3D%execute(cline)
         ! re-reconstruct from all particle images
-        call xrec3D%execute(cline_rec3D)
-        ! postprocess
-        call cline%set('prg', 'postprocess')
-        call cline%set('mkdir', 'yes')
-        call xpostprocess%execute(cline)        
+        call cline_rec3D%set('postprocess', 'yes')
+        call xrec3D%execute(cline_rec3D)       
     end subroutine exec_refine3D_auto
 
     !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.

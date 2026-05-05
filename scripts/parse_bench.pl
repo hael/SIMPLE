@@ -12,9 +12,9 @@ use File::Path qw(make_path);
 #   *** TIMINGS (s) ***
 #   *** RELATIVE TIMINGS (%) ***
 #
-# Any header ending in TIMINGS (s) is treated as a seconds section. When no
-# relative-timing section is present, percentages are derived from the parsed
-# total-time entry.
+# Any header ending in TIMINGS (s) is treated as a seconds section. Percentage
+# metrics in that section, such as "% accounted for", are kept in the percent
+# matrix. Missing percentages are derived from the parsed total-time entry.
 #
 # Usage:
 #   perl parse_bench.pl [glob] [outdir]
@@ -128,7 +128,9 @@ sub parse_bench_file {
         my ($metric, $value) = parse_metric_value($line);
         next unless defined $metric;
 
-        if ($section eq 'sec') {
+        if (is_percent_metric($metric)) {
+            $pct{$metric} = $value;
+        } elsif ($section eq 'sec') {
             $sec{$metric} = $value;
         } elsif ($section eq 'pct') {
             $pct{$metric} = $value;
@@ -137,8 +139,9 @@ sub parse_bench_file {
 
     close $fh;
 
-    if (!keys %pct) {
-        %pct = derive_percentages(\%sec);
+    my %derived_pct = derive_percentages(\%sec);
+    for my $metric (keys %derived_pct) {
+        $pct{$metric} = $derived_pct{$metric} unless exists $pct{$metric};
     }
 
     return (\%context, \%sec, \%pct);
@@ -155,6 +158,7 @@ sub derive_percentages {
 
     for my $metric (keys %{$sec_ref}) {
         next if $metric eq $total_metric;
+        next if is_percent_metric($metric);
         $pct{$metric} = ($sec_ref->{$metric} / $total) * 100.0;
     }
 
@@ -186,6 +190,11 @@ sub parse_metric_value {
 
     my ($metric, $value) = (normalize_key($1), $2 + 0);
     return ($metric, $value);
+}
+
+sub is_percent_metric {
+    my ($metric) = @_;
+    return lc($metric) =~ /%/;
 }
 
 sub normalize_header {

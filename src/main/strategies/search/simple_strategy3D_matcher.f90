@@ -137,9 +137,9 @@ contains
             !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,orientation) &
             !$omp schedule(static) proc_bind(close)
             do iptcl_batch = 1, batchsz
-                iptcl_map = batch_start + iptcl_batch - 1
-                iptcl     = pinds(iptcl_map)
-                ithr      = omp_get_thread_num() + 1
+                iptcl_map     = batch_start + iptcl_batch - 1
+                iptcl         = pinds(iptcl_map)
+                ithr          = omp_get_thread_num() + 1
                 cnt_all(ithr) = cnt_all(ithr) + 1
                 strategy3Dspecs(iptcl_batch)%iptcl     = iptcl
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
@@ -205,6 +205,9 @@ contains
                 write(fnr,'(a,t52,f9.2)') 'match3D project metadata I/O       : ', rt_projio
                 write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction     : ', rt_rec
                 write(fnr,'(a,t52,f9.2)') 'match3D total time                 : ', rt_tot
+                write(fnr,'(a,t52,f9.2)') 'match3D % accounted for            : ', &
+                    &((rt_startup + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + &
+                    &  rt_memoize_refs + rt_prep_orisrch + rt_align + rt_projio + rt_rec) / rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif
