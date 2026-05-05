@@ -10,6 +10,10 @@ public :: reconstructor
 private
 #include "simple_local_flags.inc"
 
+! Default-off test gate for the alternate gridding kernel.  Keep this false
+! for production builds until benchmark and reconstruction equivalence pass.
+logical, parameter :: L_USE_EXPERIMENTAL_INSERT_PLANE_OVERSAMP = .false.
+
 type, extends(image) :: reconstructor
     private
     class(parameters),  pointer :: p_ptr => null()              !< pointer to parameters object
@@ -226,6 +230,10 @@ contains
         integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
         real      :: pf2
         if( pwght < TINY ) return
+        if( L_USE_EXPERIMENTAL_INSERT_PLANE_OVERSAMP )then
+            call insert_plane_oversamp_experimental(self, se, o, fpl, pwght)
+            return
+        endif
         ! window size
         iwinsz = ceiling(KBWINSZ - 0.5)
         ! stride along h dimension for interpolation: all threads are at least
@@ -298,6 +306,138 @@ contains
         !$omp end parallel
         call o_sym%kill
     end subroutine insert_plane_oversamp
+
+    !> Experimental variant of insert_plane_oversamp for benchmarking.
+    !! It preserves the original h-strided OpenMP race-avoidance scheme, but
+    !! scalarizes rotation, inlines fplane access, and updates the two expanded
+    !! matrices in one explicit separable-KB stencil pass.
+    subroutine insert_plane_oversamp_experimental( self, se, o, fpl, pwght )
+        use simple_math, only: ceil_div, floor_div
+        class(reconstructor), intent(inout) :: self
+        class(sym),           intent(inout) :: se
+        class(ori),           intent(inout) :: o
+        class(fplane_type),   intent(in)    :: fpl
+        real,                 intent(in)    :: pwght
+        type(ori) :: o_sym
+        complex   :: comp, cmplx_raw
+        real      :: rotmats(se%get_nsym(),3,3), loc(3), hrow(3), ctfval
+        real      :: wx(self%wdim), wy(self%wdim), wz(self%wdim), ww, ctfsq_raw
+        real      :: r11, r12, r13, r21, r22, r23
+        integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3, 2)
+        integer   :: fpllims(3, 2), hp, kp, pf, ix, iy, iz, hx, ky, mz
+        integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
+        real      :: pf2
+        ! window size
+        iwinsz = ceiling(KBWINSZ - 0.5)
+        ! stride along h dimension for interpolation: all threads are at least
+        ! wdim pixels away from each other to avoid race conditions
+        stride = self%wdim
+        ! setup rotation matrices
+        nsym = se%get_nsym()
+        rotmats(1,:,:) = o%get_mat()
+        if( nsym > 1 ) then
+            do isym = 2, nsym
+                call se%apply(o, isym, o_sym)
+                rotmats(isym,:,:) = o_sym%get_mat()
+            end do
+        endif
+        ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
+        fpllims_pd = fpl%frlims
+        pf         = OSMPL_PAD_FAC
+        pf2        = real(pf*pf)
+        fpllims    = fpllims_pd
+        fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
+        fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
+        fpllims(2,1) = ceil_div (fpllims_pd(2,1), pf)
+        fpllims(2,2) = floor_div(fpllims_pd(2,2), pf)
+        ! integer disk gate: bit-equivalent to nint(sqrt(h*h+k*k)) > nyq
+        nyq_disk = self%nyq * (self%nyq + 1)
+        ! KB interpolation / insertion
+        !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,comp,cmplx_raw,&
+        !$omp& ctfsq_raw,ctfval,wx,wy,wz,ww,win,loc,hrow,hp,kp,r11,r12,r13,r21,r22,r23,&
+        !$omp& isym,ix,iy,iz,hx,ky,mz) proc_bind(close)
+        do isym = 1, nsym
+            r11 = rotmats(isym,1,1); r12 = rotmats(isym,1,2); r13 = rotmats(isym,1,3)
+            r21 = rotmats(isym,2,1); r22 = rotmats(isym,2,2); r23 = rotmats(isym,2,3)
+            do l = 0, stride-1
+                !$omp do schedule(static,1)
+                do h = fpllims(1,1)+l, fpllims(1,2), stride
+                    h_sq = h*h
+                    if( h_sq > nyq_disk ) cycle
+                    k_max_h = int(sqrt(real(nyq_disk - h_sq)))
+                    k_lo    = max(fpllims(2,1), -k_max_h)
+                    k_hi    = min(fpllims(2,2),  k_max_h)
+                    hp      = h * pf
+                    hrow(1) = real(h) * r11
+                    hrow(2) = real(h) * r12
+                    hrow(3) = real(h) * r13
+                    do k = k_lo, k_hi
+                        kp = k * pf
+                        ! gen_fplane4rec stores only k<=0; use Friedel symmetry for kp>0.
+                        if( kp <= 0 )then
+                            cmplx_raw = fpl%cmplx_plane(hp,kp)
+                            ctfsq_raw = fpl%ctfsq_plane(hp,kp)
+                        else
+                            cmplx_raw = conjg(fpl%cmplx_plane(-hp,-kp))
+                            ctfsq_raw = fpl%ctfsq_plane(-hp,-kp)
+                        endif
+                        if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
+                            ctfsq_raw <= TINY ) cycle
+                        ! The expanded reconstruction volume is indexed by native
+                        ! Fourier-grid cells. Keep sample location and KB weights in
+                        ! that same coordinate system.
+                        loc(1) = hrow(1) + real(k) * r21
+                        loc(2) = hrow(2) + real(k) * r22
+                        loc(3) = hrow(3) + real(k) * r23
+                        win(1,:) = nint(loc)
+                        win(2,:) = win(1,:) + iwinsz
+                        win(1,:) = win(1,:) - iwinsz
+                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
+                        if( win(2,1) < self%lims(1,1) ) cycle
+                        comp   = pwght * pf2 * cmplx_raw
+                        ! CTF values are calculated analytically, no FFTW/padding scaling to account for
+                        ctfval = pwght * ctfsq_raw
+                        call kb_apod_vecs_3d_fast(self%kbwin, loc, iwinsz, self%wdim, wx, wy, wz)
+                        do iz = 1, self%wdim
+                            mz = win(1,3) + iz - 1
+                            do iy = 1, self%wdim
+                                ky = win(1,2) + iy - 1
+                                do ix = 1, self%wdim
+                                    hx = win(1,1) + ix - 1
+                                    ww = wx(ix) * (wy(iy) * wz(iz))
+                                    self%cmat_exp(hx,ky,mz) = self%cmat_exp(hx,ky,mz) + comp * ww
+                                    self%rho_exp( hx,ky,mz) = self%rho_exp( hx,ky,mz) + ctfval * ww
+                                end do
+                            end do
+                        end do
+                    end do
+                end do
+                !$omp end do
+            end do
+        end do
+        !$omp end parallel
+        call o_sym%kill
+    end subroutine insert_plane_oversamp_experimental
+
+    pure subroutine kb_apod_vecs_3d_fast( kbwin, loc, iwinsz, wdim, wx, wy, wz )
+        type(kbinterpol), intent(in)  :: kbwin
+        real,             intent(in)  :: loc(3)
+        integer,          intent(in)  :: iwinsz, wdim
+        real,             intent(out) :: wx(wdim), wy(wdim), wz(wdim)
+        integer :: i, win_lo(3)
+        real    :: base(3), ww(3)
+        win_lo = nint(loc) - iwinsz
+        base   = real(win_lo) - loc
+        do i = 1, wdim
+            ww    = kbwin%apod_fast(base + real(i-1))
+            wx(i) = ww(1)
+            wy(i) = ww(2)
+            wz(i) = ww(3)
+        end do
+        wx = wx * (1.0 / sum(wx))
+        wy = wy * (1.0 / sum(wy))
+        wz = wz * (1.0 / sum(wz))
+    end subroutine kb_apod_vecs_3d_fast
 
     subroutine sampl_dens_correct( self )
         class(reconstructor), intent(inout) :: self
