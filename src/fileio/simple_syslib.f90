@@ -684,7 +684,7 @@ contains
 #if defined(_WIN32)
         cmd = 'cmd /c dir /b "'//trim(pattern)//'" > "'//tmpfile%to_char()//'"'
 #else
-        cmd = 'ls -1f '//trim(pattern)//' > '//tmpfile%to_char()
+        cmd = 'ls -1p '//trim(pattern)//' | grep -v / > '//tmpfile%to_char()
 #endif
         call exec_cmdline( cmd, suppress_errors=.true.)
         if( .not. file_exists(tmpfile) )then
