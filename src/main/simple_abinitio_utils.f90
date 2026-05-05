@@ -26,7 +26,7 @@ real,             parameter :: LPSTOP_INI3D          = 8.                   ! De
 integer,          parameter :: NSTAGES               = 8
 integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
 integer,          parameter :: NSTAGES_INI3D_MAX     = 7
-integer,          parameter :: MAXITS(8)             = [20,20,20,20,15,15,15,30]
+integer,          parameter :: MAXITS(8)             = [20,20,20,20,17,17,15,30]
 integer,          parameter :: MAXITS_GLOB           = SUM(MAXITS(1:7))     ! the last stage is omitted in this estimate since the sampling method changes
 integer,          parameter :: SYMSRCH_STAGE         = 3
 integer,          parameter :: TRAILREC_STAGE_SINGLE = 5                    ! first stage where trail_rec behavior changes
@@ -40,7 +40,7 @@ integer,          parameter :: MAXITS_BETWEEN        = 10                   ! De
 ! singleton variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis    = .false., l_symran        = .false.
-logical          :: l_update_frac_dyn = .false., l_ini3D              = .false.
+logical          :: l_update_frac_dyn = .false., l_ini3D         = .false.
 logical          :: l_lpauto          = .false., l_nsample_given = .false., l_nsample_stop_given = .false.
 logical          :: l_automsk         = .false.
 logical          :: l_nonuniform      = .false.
