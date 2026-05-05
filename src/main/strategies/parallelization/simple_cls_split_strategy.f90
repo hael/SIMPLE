@@ -480,7 +480,7 @@ contains
     subroutine split_one_parent_class(params, build, spproj, cls_id, l_phflip, l_pre_norm, l_fixed_nsubcls, nsplit, pinds, labels, raw_subavgs, den_subavgs)
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
         use simple_imgproc,          only: make_pcavecs
-        use simple_clustering_utils, only: cluster_dmat
+        use simple_clustering_utils, only: cluster_dmat, silhouette_score
         type(parameters),         intent(inout) :: params
         type(builder),            intent(inout) :: build
         type(sp_project),         intent(inout) :: spproj
@@ -557,13 +557,17 @@ contains
         if( l_fixed_nsubcls )then
             nsplit = params%ncls
             call cluster_dmat(dmat, 'kmed', nsplit, i_medoids, labels)
+            write(logfhandle,'(A,I8,A,I8,A,F10.5)') 'Cls split fixed ncls silhouette: class=', cls_id, &
+                ' selected=', nsplit, ' score=', silhouette_score(labels, dmat)
+            call flush(logfhandle)
         else
             nsplit_count = particle_count_nsplit(nptcls, params%nptcls_per_subcls, params%nsubcls_min, params%nsubcls_max)
-            nsplit       = max(params%nsubcls_min, min(params%nsubcls_max, nsplit_count))
-            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'Cls split auto ncls: class=', cls_id, &
-                ' size=', nptcls, ' count_suggest=', nsplit_count, ' selected=', nsplit
+            call select_kmedoids_by_silhouette(dmat, cls_id, params%nsubcls_min, params%nsubcls_max, &
+                                               nsplit, i_medoids, labels)
+            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto ncls: class=', cls_id, &
+                ' size=', nptcls, ' count_suggest=', nsplit_count, ' min=', params%nsubcls_min, &
+                ' max=', params%nsubcls_max, ' selected=', nsplit
             call flush(logfhandle)
-            call cluster_dmat(dmat, 'kmed', nsplit, i_medoids, labels)
         endif
         call cavg_den%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
         allocate(raw_subavgs(nsplit), den_subavgs(nsplit))
@@ -594,6 +598,69 @@ contains
         if( allocated(imgs_ppca)    ) call dealloc_imgarr(imgs_ppca)
         if( allocated(imgs)         ) call dealloc_imgarr(imgs)
     end subroutine split_one_parent_class
+
+    subroutine select_kmedoids_by_silhouette(dmat, cls_id, k_min_in, k_max_in, nsplit, i_medoids, labels)
+        use simple_clustering_utils, only: cluster_dmat, silhouette_score
+        real,                 intent(in)    :: dmat(:,:)
+        integer,              intent(in)    :: cls_id, k_min_in, k_max_in
+        integer,              intent(out)   :: nsplit
+        integer, allocatable, intent(inout) :: i_medoids(:), labels(:)
+        integer, allocatable :: trial_medoids(:), trial_labels(:), best_medoids(:), best_labels(:)
+        integer :: nptcls, k_min, k_max, k_trial, ntrial, best_k, icls
+        real    :: score, best_score
+        logical :: l_all_populated
+        nptcls = size(dmat, dim=1)
+        k_min  = max(2, min(k_min_in, max(2, nptcls - 1)))
+        k_max  = max(k_min, min(k_max_in, max(2, nptcls - 1)))
+        best_score = -huge(best_score)
+        best_k     = k_min
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'Cls split silhouette k search: class=', cls_id, &
+            ' size=', nptcls, ' k_min=', k_min, ' k_max=', k_max
+        call flush(logfhandle)
+        do k_trial = k_min, k_max
+            ntrial = k_trial
+            call cluster_dmat(dmat, 'kmed', ntrial, trial_medoids, trial_labels)
+            l_all_populated = .true.
+            do icls = 1, ntrial
+                if( count(trial_labels == icls) == 0 )then
+                    l_all_populated = .false.
+                    exit
+                endif
+            end do
+            if( l_all_populated )then
+                score = silhouette_score(trial_labels, dmat)
+            else
+                score = -huge(score)
+            endif
+            write(logfhandle,'(A,I8,A,I8,A,F10.5)') 'Cls split silhouette k trial: class=', cls_id, &
+                ' k=', k_trial, ' score=', score
+            call flush(logfhandle)
+            if( ieee_is_finite(score) .and. score > best_score + 1.e-6 )then
+                best_score = score
+                best_k     = ntrial
+                if( allocated(best_medoids) ) deallocate(best_medoids)
+                if( allocated(best_labels)  ) deallocate(best_labels)
+                call move_alloc(trial_medoids, best_medoids)
+                call move_alloc(trial_labels,  best_labels)
+            else
+                if( allocated(trial_medoids) ) deallocate(trial_medoids)
+                if( allocated(trial_labels)  ) deallocate(trial_labels)
+            endif
+        end do
+        if( .not. allocated(best_labels) )then
+            best_k = k_min
+            call cluster_dmat(dmat, 'kmed', best_k, best_medoids, best_labels)
+            best_score = silhouette_score(best_labels, dmat)
+        endif
+        if( allocated(i_medoids) ) deallocate(i_medoids)
+        if( allocated(labels)    ) deallocate(labels)
+        call move_alloc(best_medoids, i_medoids)
+        call move_alloc(best_labels,  labels)
+        nsplit = best_k
+        write(logfhandle,'(A,I8,A,I8,A,F10.5)') 'Cls split silhouette k selected: class=', cls_id, &
+            ' k=', nsplit, ' score=', best_score
+        call flush(logfhandle)
+    end subroutine select_kmedoids_by_silhouette
 
     subroutine make_split_embedding(params, cls_id, nptcls, npix, pcavecs, coords, eigvals)
         use simple_diffusion_maps, only: diffusion_map_embedder
