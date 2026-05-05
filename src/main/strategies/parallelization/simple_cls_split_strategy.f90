@@ -628,7 +628,7 @@ contains
                 endif
             end do
             if( l_all_populated )then
-                score = silhouette_score(trial_labels, dmat)
+                score = silhouette_score(trial_labels, dmat) / real(k_trial)
             else
                 score = -huge(score)
             endif
@@ -650,7 +650,7 @@ contains
         if( .not. allocated(best_labels) )then
             best_k = k_min
             call cluster_dmat(dmat, 'kmed', best_k, best_medoids, best_labels)
-            best_score = silhouette_score(best_labels, dmat)
+            best_score = silhouette_score(best_labels, dmat) / real(best_k)
         endif
         if( allocated(i_medoids) ) deallocate(i_medoids)
         if( allocated(labels)    ) deallocate(labels)
