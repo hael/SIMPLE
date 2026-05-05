@@ -12,7 +12,7 @@ private
 
 ! Default-off test gate for the alternate gridding kernel.  Keep this false
 ! for production builds until benchmark and reconstruction equivalence pass.
-logical, parameter :: L_USE_EXPERIMENTAL_INSERT_PLANE_OVERSAMP = .false.
+logical, parameter :: L_USE_EXPERIMENTAL_INSERT_PLANE_OVERSAMP = .true.
 
 type, extends(image) :: reconstructor
     private
@@ -397,7 +397,7 @@ contains
                         comp   = pwght * pf2 * cmplx_raw
                         ! CTF values are calculated analytically, no FFTW/padding scaling to account for
                         ctfval = pwght * ctfsq_raw
-                        call kb_apod_vecs_3d_fast(self%kbwin, loc, iwinsz, self%wdim, wx, wy, wz)
+                        call kb_apod_vecs_3d_fast(loc, wx, wy, wz)
                         do iz = 1, self%wdim
                             mz = win(1,3) + iz - 1
                             do iy = 1, self%wdim
@@ -417,27 +417,28 @@ contains
         end do
         !$omp end parallel
         call o_sym%kill
-    end subroutine insert_plane_oversamp_experimental
 
-    pure subroutine kb_apod_vecs_3d_fast( kbwin, loc, iwinsz, wdim, wx, wy, wz )
-        type(kbinterpol), intent(in)  :: kbwin
-        real,             intent(in)  :: loc(3)
-        integer,          intent(in)  :: iwinsz, wdim
-        real,             intent(out) :: wx(wdim), wy(wdim), wz(wdim)
-        integer :: i, win_lo(3)
-        real    :: base(3), ww(3)
-        win_lo = nint(loc) - iwinsz
-        base   = real(win_lo) - loc
-        do i = 1, wdim
-            ww    = kbwin%apod_fast(base + real(i-1))
-            wx(i) = ww(1)
-            wy(i) = ww(2)
-            wz(i) = ww(3)
-        end do
-        wx = wx * (1.0 / sum(wx))
-        wy = wy * (1.0 / sum(wy))
-        wz = wz * (1.0 / sum(wz))
-    end subroutine kb_apod_vecs_3d_fast
+    contains
+
+        subroutine kb_apod_vecs_3d_fast( loc, wx, wy, wz )
+            real, intent(in)  :: loc(3)
+            real, intent(out) :: wx(:), wy(:), wz(:)
+            integer :: i, win_lo(3)
+            real    :: base(3), ww(3)
+            win_lo = nint(loc) - iwinsz
+            base   = real(win_lo) - loc
+            do i = 1, self%wdim
+                ww    = self%kbwin%apod_fast(base + real(i-1))
+                wx(i) = ww(1)
+                wy(i) = ww(2)
+                wz(i) = ww(3)
+            end do
+            wx = wx * (1.0 / sum(wx))
+            wy = wy * (1.0 / sum(wy))
+            wz = wz * (1.0 / sum(wz))
+        end subroutine kb_apod_vecs_3d_fast
+
+    end subroutine insert_plane_oversamp_experimental
 
     subroutine sampl_dens_correct( self )
         class(reconstructor), intent(inout) :: self
