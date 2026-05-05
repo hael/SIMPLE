@@ -728,7 +728,7 @@ contains
         if( present(files_that_stay) )then
             n_stay = size(files_that_stay)
         endif
-        call simple_list_files('', file_list)
+        call simple_list_files('*', file_list)
         n_move = 0
         if( allocated(file_list) ) n_move = size(file_list)
         if( n_move > 0 ) call simple_mkdir(dir)
