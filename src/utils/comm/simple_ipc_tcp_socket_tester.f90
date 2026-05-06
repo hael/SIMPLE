@@ -43,6 +43,7 @@ contains
     call test_helpers_fd_is_healthy_invalid_fd()
     call test_helpers_accept_connection_invalid_fd()
 
+#if !defined(_WIN32)
     ! server module coverage
     call test_server_find_ips_and_port_range()
     call test_server_new_kill_lifecycle()
@@ -51,6 +52,7 @@ contains
     ! client module and integration coverage
     call test_client_server_roundtrip()
     call test_client_send_recv_without_server_fails()
+#endif
     write(*,'(A)') '**** IPC TCP socket tests done ****'
   end subroutine run_all_ipc_tcp_socket_tests
 

@@ -134,6 +134,10 @@ module simple_ipc_tcp_socket_server
     integer                       :: i, iport
     if( .not. c_associated(thread_args_ptr) ) return
     if( .not. c_associated(thread_funloc)   ) return
+#if defined(_WIN32)
+    write(logfhandle,'(A)') '>>> IPC_TCP_SOCKET start_listener: POSIX sockets stubbed on _WIN32; listener disabled'
+    return
+#endif
     call c_f_pointer(thread_args_ptr, args)
     ! Mutex is initialised by the owner of listener_args before calling start_listener.
     self%port = -1
@@ -234,9 +238,12 @@ module simple_ipc_tcp_socket_server
     character(len=1024)            :: fbuf
     character(len=64)              :: token
     logical                        :: first
+    self%server_ips = string('')
+#if defined(_WIN32)
+    return
+#endif
     cmd  = 'hostname -I' // c_null_char
     mode = 'r'           // c_null_char
-    self%server_ips = string('')
     pipe = c_popen(cmd, mode)
     if( .not. c_associated(pipe) ) return
     ret = c_fgets(buf(1), int(size(buf), c_int), pipe)

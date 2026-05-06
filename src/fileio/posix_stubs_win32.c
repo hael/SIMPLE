@@ -24,6 +24,9 @@ int fcntl(int fd, int cmd, ...) { errno = ENOSYS; return -1; }
 pid_t fork(void) { errno = ENOSYS; return -1; }
 int kill(pid_t pid, int sig) { errno = ENOSYS; return -1; }
 
+// poll (POSIX I/O multiplexing - not available in Windows UCRT)
+int poll(void *fds, unsigned long nfds, int timeout) { errno = ENOSYS; return -1; }
+
 // POSIX message queues
 int mq_timedreceive(int mqdes, char *msg_ptr, size_t msg_len, unsigned *msg_prio, const void *abs_timeout) { errno = ENOSYS; return -1; }
 int mq_timedsend(int mqdes, const char *msg_ptr, size_t msg_len, unsigned msg_prio, const void *abs_timeout) { errno = ENOSYS; return -1; }
