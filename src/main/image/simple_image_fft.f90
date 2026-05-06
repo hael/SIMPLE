@@ -300,51 +300,16 @@ contains
         self%ft    = .true.
     end subroutine norm_noise_fft
 
-    module subroutine calc_noise_stats( self, lmsk, stats )
-        class(image),      intent(inout) :: self
-        logical,           intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
-        type(noise_stats), intent(out)   :: stats
-        integer  :: i, j, n1, n2, npix
-        real(dp) :: xdp, sum_dp, sum_sq_dp, var_dp, rnpix
-        n1 = self%ldim(1)
-        n2 = self%ldim(2)
-        sum_dp    = 0.0_dp
-        sum_sq_dp = 0.0_dp
-        npix      = 0
-        do j = 1, n2
-            do i = 1, n1
-                if( .not. lmsk(i,j,1) )then
-                    xdp = real(self%rmat(i,j,1), dp)
-                    sum_dp    = sum_dp    + xdp
-                    sum_sq_dp = sum_sq_dp + xdp*xdp
-                    npix      = npix + 1
-                endif
-            enddo
-        enddo
-        stats%mean_dp   = 0.0_dp
-        stats%invstd_dp = 1.0_dp
-        stats%mean_sp   = 0.0_c_float
-        stats%invstd_sp = 1.0_c_float
-        stats%do_norm   = .false.
-        if( npix > 1 )then
-            rnpix = real(npix, dp)
-            stats%mean_dp = sum_dp / rnpix
-            var_dp = (sum_sq_dp - sum_dp*sum_dp/rnpix) / real(npix-1, dp)
-            if( var_dp > 0.0_dp ) stats%invstd_dp = 1.0_dp / sqrt(var_dp)
-            stats%mean_sp   = real(stats%mean_dp, c_float)
-            stats%invstd_sp = real(stats%invstd_dp, c_float)
-            stats%do_norm   = abs(real(stats%mean_dp, kind=kind(1.0))) > TINY .or. &
-                              stats%invstd_sp /= 1.0_c_float
-        endif
-    end subroutine calc_noise_stats
-
-    module subroutine norm_noise_taper_edge_pad_fft(self, stats, self_out)
-        class(image),      intent(inout) :: self
-        type(noise_stats), intent(in)    :: stats
-        class(image),      intent(inout) :: self_out
+    module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out)
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        class(image), intent(inout) :: self_out
         integer       :: n1, n2, n1o, n2o, h1o, h2o
-        integer       :: i, j, starts(3), x0, y0, xo, yo, winsz
-        real(c_float) :: scale_cmat
+        integer       :: i, j, npix, starts(3), x0, y0, xo, yo, winsz
+        ! Normalization stats in DP (scalars only)
+        real(dp)      :: mean_dp, var_dp, sum_dp, sum_sq_dp, rnpix, invstd_dp
+        real(c_float) :: mean_sp, invstd_sp, scale_cmat, x_sp
+        logical       :: do_norm
         ! --- taper vars (square, 2D, n3=1) ---
         integer       :: n, wtap, wavg, wbg, j1, j2, border_count
         real(dp)      :: bg_fill_dp, border_sum_dp, edge_mean_dp
@@ -364,7 +329,6 @@ contains
         n2o = self_out%ldim(2)
         h1o = n1o/2
         h2o = n2o/2
-        ! Intended route: derive noise stats from the untapered particle.
         ! ============================================================
         ! 1) TAPER EDGES (in-place on self) + compute edge_mean
         !    Edge-profile arrays are SP; only scalar accumulations are DP.
@@ -436,25 +400,57 @@ contains
         border_count  = 4*wbg*n - 4*wbg*wbg
         edge_mean_dp  = border_sum_dp / real(border_count, dp)
         ! ============================================================
-        ! 2) PAD + FFTSHIFT (fused) + apply normalization while copying
+        ! 2) NOISE NORMALIZATION (mask-based) on tapered self (DP scalars)
+        ! ============================================================
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
+        do i = 1, n1
+            do j = 1, n2
+                if (.not. lmsk(i,j,1)) then
+                    npix = npix + 1
+                    x_sp = self%rmat(i,j,1)
+                    sum_dp    = sum_dp    + real(x_sp, dp)
+                    sum_sq_dp = sum_sq_dp + real(x_sp, dp) * real(x_sp, dp)
+                end if
+            end do
+        end do
+        mean_dp   = 0.0_dp
+        var_dp    = 0.0_dp
+        invstd_dp = 1.0_dp
+        do_norm   = .false.
+        if (npix > 1) then
+            rnpix   = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp  = (sum_sq_dp - sum_dp * sum_dp / rnpix) / real(npix - 1, dp)
+            if (is_a_number(real(var_dp, kind=kind(1.0))) .and. var_dp > 0.0_dp) then
+                invstd_dp = 1.0_dp / sqrt(var_dp)
+                do_norm = (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_dp /= 1.0_dp)
+            end if
+        end if
+        ! Keep SP versions for the per-pixel fast path
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = real(invstd_dp, c_float)
+        ! ============================================================
+        ! 3) PAD + FFTSHIFT (fused) + apply normalization while copying
         !    Pad background is edge_mean transformed when normalization is used
         ! ============================================================
         starts = (self_out%ldim - self%ldim) / 2 + 1
-        if (stats%do_norm) then
-            bg_fill_dp = (edge_mean_dp - stats%mean_dp) * stats%invstd_dp
+        if (do_norm) then
+            bg_fill_dp = (edge_mean_dp - mean_dp) * invstd_dp
         else
             bg_fill_dp = edge_mean_dp
         end if
         self_out%ft   = .false.
         self_out%rmat = real(bg_fill_dp, c_float)
-        if (stats%do_norm) then
+        if (do_norm) then
             do j = 1, n2
                 y0 = starts(2) + j - 1
                 yo = modulo((y0 - 1) + h2o, n2o) + 1
                 do i = 1, n1
                     x0 = starts(1) + i - 1
                     xo = modulo((x0 - 1) + h1o, n1o) + 1
-                    self_out%rmat(xo, yo, 1) = (self%rmat(i,j,1) - stats%mean_sp) * stats%invstd_sp
+                    self_out%rmat(xo, yo, 1) = (self%rmat(i,j,1) - mean_sp) * invstd_sp
                 end do
             end do
         else
@@ -469,7 +465,7 @@ contains
             end do
         end if
         ! ============================================================
-        ! 3) FFT (FFTW r2c) + scale with reciprocal (OUTPUT size)
+        ! 4) FFT (FFTW r2c) + scale with reciprocal (OUTPUT size)
         ! ============================================================
         call fftwf_execute_dft_r2c(self_out%plan_fwd, self_out%rmat, self_out%cmat)
         scale_cmat    = 1.0_c_float / real(n1o*n2o, c_float)
@@ -653,18 +649,19 @@ contains
     end subroutine norm_noise_mask_pad_fft
 
     ! The big players in this subroutine are the normalization (17%) and the fft (70%)  
-    module subroutine norm_noise_fft_clip_shift( self, stats, self_out, shvec )
-        class(image),      intent(inout) :: self
-        type(noise_stats), intent(in)    :: stats
-        class(image),      intent(inout) :: self_out
-        real,              intent(in)    :: shvec(2)
+    module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image), intent(inout) :: self_out
+        real,         intent(in)    :: shvec(2)
         real,         parameter     :: SHTHRESH = 0.001
         ! FFT / phase
         complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
         real(dp)      :: sh(2)
         ! dimensions / indices
-        integer       :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo
-        ! normalization / output
+        integer       :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo, npix
+        ! normalization
+        real(dp)      :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
         real(c_float) :: mean_sp, invstd_sp, scale_cmat, ratio, rswap
         ! logical flag
         logical :: k_neg
@@ -672,12 +669,38 @@ contains
         n2 = self%ldim(2)
         h1 = n1/2
         h2 = n2/2
-        mean_sp   = stats%mean_sp
-        invstd_sp = stats%invstd_sp
+        ! ============================================================
+        ! NORM_NOISE (two-pass)
+        ! ============================================================
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
+        do j = 1, n2
+            do i = 1, n1
+                if (.not. lmsk(i,j,1)) then
+                    xdp = real(self%rmat(i,j,1), dp)
+                    sum_dp    = sum_dp    + xdp
+                    sum_sq_dp = sum_sq_dp + xdp*xdp
+                    npix      = npix + 1
+                end if
+            end do
+        end do
+        mean_dp = 0.0_dp
+        var_dp  = 0.0_dp
+        if (npix > 1) then
+            rnpix  = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp  = (sum_sq_dp - sum_dp*sum_dp/rnpix) / real(npix-1,dp)
+        end if
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = 1.0_c_float
+        if (var_dp > 0.0_dp) then
+            invstd_sp = real(1.0_dp/sqrt(var_dp), c_float)
+        end if
         ! ============================================================
         ! SHIFT TO PHASE ORIGIN (fftshift) + apply normalization fused
         ! ============================================================
-        if( stats%do_norm )then
+        if (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= 1.0_c_float) then
             do j = 1, h2
                 jj = h2 + j
                 do i = 1, h1
@@ -759,22 +782,23 @@ contains
         self_out%ft = .true.
     end subroutine norm_noise_fft_clip_shift
 
-    module subroutine norm_noise_fft_clip_shift_ctf_flip( self, stats, self_out, shvec, tfun, ctfparms )
+    module subroutine norm_noise_fft_clip_shift_ctf_flip( self, lmsk, self_out, shvec, tfun, ctfparms )
         use simple_ctf,      only: ctf
         use simple_math_ctf, only: ft_map_ctf_kernel
-        class(image),      intent(inout) :: self
-        type(noise_stats), intent(in)    :: stats
-        class(image),      intent(inout) :: self_out
-        real,              intent(in)    :: shvec(2)
-        class(ctf),        intent(inout) :: tfun     !< CTF object
-        type(ctfparams),   intent(in)    :: ctfparms !< CTF parameters
+        class(image),    intent(inout) :: self
+        logical,         intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image),    intent(inout) :: self_out
+        real,            intent(in)    :: shvec(2)
+        class(ctf),      intent(inout) :: tfun     !< CTF object
+        type(ctfparams), intent(in)    :: ctfparms !< CTF parameters
         real,            parameter     :: SHTHRESH = 0.001
         ! FFT / phase
         complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
         real(dp)        :: sh(2)
         ! dimensions / indices
-        integer         :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo
-        ! normalization / output
+        integer         :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo, npix
+        ! normalization
+        real(dp)        :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
         real(c_float)   :: mean_sp, invstd_sp, scale_cmat, ratio, rswap
         ! logical flag
         logical         :: k_neg
@@ -786,12 +810,38 @@ contains
         n2 = self%ldim(2)
         h1 = n1/2
         h2 = n2/2
-        mean_sp   = stats%mean_sp
-        invstd_sp = stats%invstd_sp
+        ! ============================================================
+        ! NORM_NOISE (two-pass)
+        ! ============================================================
+        sum_dp    = 0.0_dp
+        sum_sq_dp = 0.0_dp
+        npix      = 0
+        do j = 1, n2
+            do i = 1, n1
+                if (.not. lmsk(i,j,1)) then
+                    xdp = real(self%rmat(i,j,1), dp)
+                    sum_dp    = sum_dp    + xdp
+                    sum_sq_dp = sum_sq_dp + xdp*xdp
+                    npix      = npix + 1
+                end if
+            end do
+        end do
+        mean_dp = 0.0_dp
+        var_dp  = 0.0_dp
+        if (npix > 1) then
+            rnpix  = real(npix, dp)
+            mean_dp = sum_dp / rnpix
+            var_dp  = (sum_sq_dp - sum_dp*sum_dp/rnpix) / real(npix-1,dp)
+        end if
+        mean_sp   = real(mean_dp, c_float)
+        invstd_sp = 1.0_c_float
+        if (var_dp > 0.0_dp) then
+            invstd_sp = real(1.0_dp/sqrt(var_dp), c_float)
+        end if
         ! ============================================================
         ! SHIFT TO PHASE ORIGIN (fftshift) + apply normalization fused
         ! ============================================================
-        if( stats%do_norm )then
+        if (abs(real(mean_dp, kind=kind(1.0))) > TINY .or. invstd_sp /= 1.0_c_float) then
             do j = 1, h2
                 jj = h2 + j
                 do i = 1, h1

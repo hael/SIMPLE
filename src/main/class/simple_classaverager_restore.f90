@@ -317,10 +317,9 @@ contains
 
     !>  \brief  is for updating classes sums in distributed/non-distributed mode
     !           with provided images using interpolation in Fourier space
-    module subroutine cavger_update_sums( nptcls, ptcl_imgs, ptcl_noise_stats )
-        integer,           intent(in)    :: nptcls
-        class(image),      intent(inout) :: ptcl_imgs(nptcls)
-        type(noise_stats), intent(in)    :: ptcl_noise_stats(nptcls)
+    module subroutine cavger_update_sums( nptcls, ptcl_imgs )
+        integer,      intent(in)    :: nptcls
+        class(image), intent(inout) :: ptcl_imgs(nptcls)
         real, parameter :: KB2 = KBALPHA**2
         type(fplane_type) :: fplanes(nthr_glob)
         complex :: fcomp
@@ -359,7 +358,7 @@ contains
             if( iptcl == 0 ) cycle
             ithr = omp_get_thread_num() + 1
             ! prep image: noise normalization, edge tapering, padding, fftshift, FFT
-            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(ptcl_noise_stats(i), tmp_pad_imgs(ithr))
+            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft( b_ptr%lmsk, tmp_pad_imgs(ithr) )
             ! Get and cache CTF parameters
             precs(i)%ctfparams         = b_ptr%spproj%get_ctfparams(p_ptr%oritype, iptcl)
             precs(i)%ctfparams%ctfflag = ctfflag
@@ -479,7 +478,6 @@ contains
         logical,  intent(in) :: do_frac_update
         class(oris), pointer :: spproj_field
         type(string)         :: stk_fname
-        type(noise_stats)    :: ptcl_noise_stats(READBUFFSZ)
         integer :: pinds(READBUFFSZ)
         integer :: iptcl, i, ind_in_stk, nptcls_eff, batchind, ibatch_start, ibatch_end
         integer :: first_stkind, fromp, istk, nptcls_in_stk, last_stkind, ibatch, nbatches
@@ -518,13 +516,8 @@ contains
                 call cavger_transf_oridat( nptcls_eff, pinds(1:nptcls_eff) )
                 ! Read images
                 call discrete_read_imgbatch(p_ptr, b_ptr, nptcls_eff, pinds(1:nptcls_eff), [1,nptcls_eff])
-                !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-                do i = 1,nptcls_eff
-                    call b_ptr%imgbatch(i)%calc_noise_stats(b_ptr%lmsk, ptcl_noise_stats(i))
-                enddo
-                !$omp end parallel do
                 ! Interpolate images and update class sums
-                call cavger_update_sums(nptcls_eff, b_ptr%imgbatch(1:nptcls_eff), ptcl_noise_stats(1:nptcls_eff))
+                call cavger_update_sums(nptcls_eff, b_ptr%imgbatch(1:nptcls_eff))
             enddo   ! batch loop
         enddo       ! stack loop
         ! cleanup
@@ -938,7 +931,6 @@ contains
         type(ctfparams)       :: ctfparms
         type(ctf)             :: tfun
         type(string)          :: str
-        type(noise_stats)     :: stats
         real,     allocatable :: kbw(:,:)
         complex :: fcomp, fcompl
         real    :: mat(2,2), shift(2), loc(2), e3
@@ -1033,8 +1025,7 @@ contains
         call discrete_read_imgbatch(p_ptr, b_ptr, pop, pinds(:), [1,pop])
         write(logfhandle,'(A)') 'transform_ptcls: discrete_read_imgbatch done'
         call flush(logfhandle)
-        !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,h,k,hh,kk,loc,win,l,m,physh,physk,kbw,&
-        !$omp& fcomp,fcompl,l_conjg,stats) &
+        !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,h,k,hh,kk,loc,win,l,m,physh,physk,kbw,fcomp,fcompl,l_conjg) &
         !$omp default(shared) schedule(static) proc_bind(close)
         do i = 1,pop
             ithr  = omp_get_thread_num() + 1
@@ -1044,8 +1035,7 @@ contains
             call img(ithr)%zero_and_flag_ft
             call timg(ithr)%zero_and_flag_ft
             ! normalisation
-            call b_ptr%imgbatch(i)%calc_noise_stats(b_ptr%lmsk, stats)
-            call b_ptr%imgbatch(i)%norm_noise_taper_edge_pad_fft(stats, img(ithr))
+            call b_ptr%imgbatch(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk,img(ithr))
             if( l_imgs )then
                 call img(ithr)%ifft
                 call img(ithr)%clip(imgs_ori(i))

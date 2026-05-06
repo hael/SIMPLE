@@ -45,7 +45,6 @@ contains
         class(cmdline),            intent(inout) :: cline
         integer,     allocatable :: pinds(:)
         type(image), allocatable :: tmp_imgs(:), tmp_imgs_pad(:)
-        type(noise_stats), allocatable :: ptcl_noise_stats(:)
         type(string)             :: fname
         type(builder)            :: build
         type(parameters)         :: params
@@ -65,11 +64,9 @@ contains
         call read_reprojection_model(params, build, nptcls)
         call prep_sigmas_objfun(params, build, .false.)
         call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
-        allocate(ptcl_noise_stats(nptcls))
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Build polar particle images
-        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad, &
-            ptcl_noise_stats)
+        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         ! Filling prob table in eul_prob_tab
         call eulprob_obj_part%new(params, build, pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
@@ -97,7 +94,6 @@ contains
         class(cmdline),                  intent(inout) :: cline
         integer,     allocatable :: pinds(:)
         type(image), allocatable :: tmp_imgs(:), tmp_imgs_pad(:)
-        type(noise_stats), allocatable :: ptcl_noise_stats(:)
         type(string)             :: fname
         type(builder)            :: build
         type(parameters)         :: params
@@ -115,11 +111,9 @@ contains
         call read_reprojection_model(params, build, nptcls)
         call prep_sigmas_objfun(params, build, .false.)
         call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
-        allocate(ptcl_noise_stats(nptcls))
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Build polar particle images
-        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad, &
-            ptcl_noise_stats)
+        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         call eulprob_obj_part_neigh%new_neigh(params, build, pinds)
         call eulprob_obj_part_neigh%fill_tab
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
@@ -274,7 +268,6 @@ contains
         type(parameters)         :: params
         type(eul_prob_tab2D)     :: eulprob_obj_part
         real    :: frac_srch_space
-        type(noise_stats), allocatable :: ptcl_noise_stats(:)
         integer :: nptcls
         logical :: l_alloc_read_cavgs
         call cline%set('mkdir', 'no')
@@ -294,7 +287,6 @@ contains
         call set_b_p_ptrs2D(params, build)
         call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, nptcls)
         call alloc_imgarr(nptcls, [params%box, params%box, 1], params%smpd, ptcl_imgs)
-        allocate(ptcl_noise_stats(nptcls))
         ! mirror cluster2D_exec reference setup
         l_alloc_read_cavgs = l_distr_worker_glob .or. (params%which_iter==1)
         call cavger_new(params, build, alloccavgs=l_alloc_read_cavgs)
@@ -302,8 +294,7 @@ contains
         call cavger_read_all
         call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, nptcls, params%which_iter, .false.)
         ! build polar particle images
-        call build_batch_particles2D(params, build, nptcls, pinds, ptcl_imgs, &
-            ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats)
+        call build_batch_particles2D(params, build, nptcls, pinds, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         ! fill and write the 2D probability table
         call eulprob_obj_part%new(params, build, pinds)
         call eulprob_obj_part%fill_tab

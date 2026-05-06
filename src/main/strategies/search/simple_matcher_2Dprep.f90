@@ -21,12 +21,11 @@ contains
 
     !>  \ brief  prepares one particle image for alignment
     !          serial routine
-    subroutine prepimg4align( params, build, iptcl, img, stats, img_out, img_out_pd )
+    subroutine prepimg4align( params, build, iptcl, img, img_out, img_out_pd )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: iptcl
         class(image),      intent(inout) :: img
-        type(noise_stats), intent(in)    :: stats
         class(image),      intent(inout) :: img_out
         class(image),      intent(inout) :: img_out_pd
         type(ctf)       :: tfun
@@ -40,12 +39,12 @@ contains
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
                 ! fused noise normalization, FFT, clip & shift
-                call img%norm_noise_fft_clip_shift(stats, img_out, shvec)
+                call img%norm_noise_fft_clip_shift(build%lmsk, img_out, shvec)
             case(CTFFLAG_YES)
                 ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
                 tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
                 ! fused noise normalization, FFT, clip, shift & CTF flip
-                call img%norm_noise_fft_clip_shift_ctf_flip(stats, img_out, shvec, tfun, ctfparms)
+                call img%norm_noise_fft_clip_shift_ctf_flip(build%lmsk, img_out, shvec, tfun, ctfparms)
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
@@ -64,25 +63,23 @@ contains
         integer(timer_int_kind) :: t_prep1, t_prep2, t_prep
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        type(noise_stats) :: stats
         real            :: shvec(2), crop_factor
         t_prep1 = tic()
         t_prep   = t_prep1
         crop_factor = real(params%box_crop) / real(params%box)
         shvec(1)    = -build%spproj_field%get(iptcl, 'x') * crop_factor
         shvec(2)    = -build%spproj_field%get(iptcl, 'y') * crop_factor
-        call img%calc_noise_stats(build%lmsk, stats)
         ! Phase-flipping
         ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
                 ! fused noise normalization, FFT, clip & shift
-                call img%norm_noise_fft_clip_shift(stats, img_out, shvec)
+                call img%norm_noise_fft_clip_shift(build%lmsk, img_out, shvec)
             case(CTFFLAG_YES)
                 ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
                 tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
                 ! fused noise normalization, FFT, clip, shift & CTF flip
-                call img%norm_noise_fft_clip_shift_ctf_flip(stats, img_out, shvec, tfun, ctfparms)
+                call img%norm_noise_fft_clip_shift_ctf_flip(build%lmsk, img_out, shvec, tfun, ctfparms)
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
