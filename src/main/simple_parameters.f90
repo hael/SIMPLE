@@ -235,8 +235,7 @@ type :: parameters
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|mppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}
-    character(len=STDLEN)     :: mppca_recon='soft' !< mPPCA reconstruction mode(soft|hard){soft}
+    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -325,7 +324,6 @@ type :: parameters
     integer :: kpca_nystrom_npts=512 !< # of Nyström landmarks
     integer :: kpca_nystrom_local_nbrs=96 !< max extra local support neighbors for Nyström reconstruction
     integer :: k_nn=10              !< local nearest-neighbor count for graph-based diffusion splitting
-    integer :: mppca_k=4            !< # mixture components for mPPCA
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
@@ -771,7 +769,6 @@ contains
         call check_carg('pad',            self%pad)
         call check_carg('partition',      self%partition)
         call check_carg('pca_mode',       self%pca_mode)
-        call check_carg('mppca_recon',    self%mppca_recon)
         call check_carg('kpca_backend',   self%kpca_backend)
         call check_carg('kpca_ker',       self%kpca_ker)
         call check_carg('pcontrast',      self%pcontrast)
@@ -952,7 +949,6 @@ contains
         call check_iarg('kpca_nystrom_npts', self%kpca_nystrom_npts)
         call check_iarg('kpca_nystrom_local_nbrs', self%kpca_nystrom_local_nbrs)
         call check_iarg('k_nn',            self%k_nn)
-        call check_iarg('mppca_k',         self%mppca_k)
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
