@@ -10,7 +10,7 @@ use simple_parameters,      only: parameters
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_state_vol_fname
 implicit none
 
-public :: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs, calc_3Drec
+public :: init_rec, prep_imgs4rec, gen_fplanes4rec, update_rec, write_partial_recs, finalize_rec_objs, calc_3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -179,16 +179,54 @@ contains
             call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(ptcl_noise_stats(i), build%img_pad_heap(ithr))
             ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
             shift = build%spproj_field%get_2Dshift(iptcl)
-            if( params%l_ml_reg )then
-                call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
-                &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
-            else
-                call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
-                &shift, fplanes(i))
-            endif
+            call gen_fplane4rec_one(params, build, iptcl, build%img_pad_heap(ithr), &
+                kfromto, ctfparms(ithr), shift, fplanes(i))
         end do
         !$omp end parallel do
     end subroutine prep_imgs4rec
+
+    !> Generate reconstruction Fourier planes from already padded/FFTed particle images.
+    subroutine gen_fplanes4rec( params, build, nptcls, rec_imgs, pinds, fplanes )
+        use simple_image, only: image
+        class(parameters),          intent(in)    :: params
+        class(builder),             intent(inout) :: build
+        integer,                    intent(in)    :: nptcls
+        class(image),               intent(inout) :: rec_imgs(nptcls)
+        integer,                    intent(in)    :: pinds(nptcls)
+        type(fplane_type),          intent(inout) :: fplanes(nptcls)
+        type(ctfparams) :: ctfparms(nthr_glob)
+        real    :: shift(2)
+        integer :: iptcl, i, ithr, kfromto(2)
+        call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
+        kfromto = build%esig%get_kfromto()
+        !$omp parallel do default(shared) private(i,ithr,iptcl,shift) schedule(static) proc_bind(close)
+        do i = 1,nptcls
+            ithr   = omp_get_thread_num() + 1
+            iptcl  = pinds(i)
+            ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
+            shift = build%spproj_field%get_2Dshift(iptcl)
+            call gen_fplane4rec_one(params, build, iptcl, rec_imgs(i), &
+                kfromto, ctfparms(ithr), shift, fplanes(i))
+        end do
+        !$omp end parallel do
+    end subroutine gen_fplanes4rec
+
+    subroutine gen_fplane4rec_one( params, build, iptcl, rec_img, kfromto, ctfparms, shift, fplane )
+        use simple_image, only: image
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: iptcl, kfromto(2)
+        class(image),      intent(inout) :: rec_img
+        class(ctfparams),  intent(in)    :: ctfparms
+        real,              intent(in)    :: shift(2)
+        type(fplane_type), intent(inout) :: fplane
+        if( params%l_ml_reg )then
+            call rec_img%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms, shift, &
+                fplane, build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
+        else
+            call rec_img%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms, shift, fplane)
+        endif
+    end subroutine gen_fplane4rec_one
 
     !> volumetric 3d reconstruction
     subroutine update_rec( params, build, nptcls, pinds, fplanes )

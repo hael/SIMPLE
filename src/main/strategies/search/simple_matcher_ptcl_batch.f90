@@ -51,7 +51,7 @@ contains
     end subroutine alloc_ptcl_imgs
 
     subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, &
-        tmp_imgs_pad, ptcl_noise_stats, imgs4rec )
+        tmp_imgs_pad, ptcl_noise_stats, imgs4rec, imgs4rec_work )
         class(parameters),          intent(in)    :: params
         class(builder),             intent(inout) :: build
         integer,                    intent(in)    :: nptcls_here
@@ -59,27 +59,54 @@ contains
         class(image),               intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
         type(noise_stats),      intent(out)   :: ptcl_noise_stats(nptcls_here)
         class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
+        class(image), optional, intent(inout) :: imgs4rec_work(:)
         integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
-        logical :: l_backup_imgs
+        logical :: l_backup_imgs, l_prep_rec_imgs
         l_backup_imgs = present(imgs4rec)
+        l_prep_rec_imgs = l_backup_imgs .and. L_PREP_REC_IMGS_IN_BATCH_GLOB
+        if( l_prep_rec_imgs )then
+            if( .not. present(imgs4rec_work) )then
+                THROW_HARD('missing reconstruction image work array; build_batch_particles3D')
+            endif
+            if( size(imgs4rec_work) < params%nthr )then
+                THROW_HARD('undersized reconstruction image work array; build_batch_particles3D')
+            endif
+        endif
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
         call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
         call tmp_imgs(1)%memoize_mask_coords
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
         pdim_interp = build%pftc%get_pdim_interp()
         call tmp_imgs_pad(1)%memoize4polarize_oversamp(pdim_interp)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
-        do iptcl_batch = 1,nptcls_here
-            ithr  = omp_get_thread_num() + 1
-            iptcl = pinds_here(iptcl_batch)
-            call build%imgbatch(iptcl_batch)%calc_noise_stats(build%lmsk, ptcl_noise_stats(iptcl_batch))
-            if( l_backup_imgs ) call imgs4rec(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
-            call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), &
-                ptcl_noise_stats(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
-            call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
-            call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
-        end do
-        !$omp end parallel do
+        if( l_prep_rec_imgs )then
+            !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
+            do iptcl_batch = 1,nptcls_here
+                ithr  = omp_get_thread_num() + 1
+                iptcl = pinds_here(iptcl_batch)
+                call imgs4rec_work(ithr)%copy_fast(build%imgbatch(iptcl_batch))
+                call build%imgbatch(iptcl_batch)%calc_noise_stats(build%lmsk, ptcl_noise_stats(iptcl_batch))
+                call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), &
+                    ptcl_noise_stats(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
+                call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
+                call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
+                call imgs4rec_work(ithr)%norm_noise_taper_edge_pad_fft( &
+                    ptcl_noise_stats(iptcl_batch), imgs4rec(iptcl_batch))
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
+            do iptcl_batch = 1,nptcls_here
+                ithr  = omp_get_thread_num() + 1
+                iptcl = pinds_here(iptcl_batch)
+                if( l_backup_imgs ) call imgs4rec(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
+                call build%imgbatch(iptcl_batch)%calc_noise_stats(build%lmsk, ptcl_noise_stats(iptcl_batch))
+                call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), &
+                    ptcl_noise_stats(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
+                call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
+                call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
+            end do
+            !$omp end parallel do
+        endif
         call forget_ft_maps
         call build%pftc%create_polar_absctfmats(build%spproj, 'ptcl3D')
         call build%pftc%memoize_ptcls

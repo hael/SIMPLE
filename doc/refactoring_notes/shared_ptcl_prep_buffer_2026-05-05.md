@@ -1,7 +1,7 @@
 # Shared particle-prep buffer for `prepimg4align` / `prep_imgs4rec`
 
 Date: 2026-05-05
-Status: implementation note; Tier 0 default, Tier 1 stats-passing path is the default contract
+Status: implementation note; Tier 0 and Tier 1 default, Tier 2 available behind a logical switch
 Scope: `refine3D` and the shared 2D matcher/classaverager path
 
 ## Context
@@ -134,23 +134,30 @@ Expected wins:
 * applies to `refine3D`;
 * applies to the shared 2D matcher/classaverager path.
 
-### Tier 2 — Generate Reconstruction F-Planes After Search, Not During Batch Build
+### Tier 2 — Prepare Reconstruction Images In Batch, Generate F-Planes After Search
 
-Do not fuse reconstruction prep into `build_batch_particles3D` before the search. The
-search can update particle orientation, shift, state, weight, and sigma2. Reconstruction
-prep must consume the post-search metadata.
+Do not generate reconstruction f-planes in `build_batch_particles3D` before the search.
+The search can update particle orientation, shift, state, weight, and sigma2. F-plane
+generation must consume the post-search metadata.
 
-A safer experiment is to keep the restore step after the search, but reduce the amount of
-state carried into it:
+The Tier 2 experiment is guarded by `L_PREP_REC_IMGS_IN_BATCH_GLOB` in
+[`simple_defs.f90`](../../src/defs/simple_defs.f90). With the switch enabled:
 
-* keep `maybe_restore_batch` after the search;
-* keep `prep_imgs4rec` parallel;
-* keep `update_rec` serial;
-* pass precomputed normalization stats or already-normalized full-box copies into
-  `prep_imgs4rec`;
-* benchmark whether this removes enough repeated work to justify the extra interface.
+* `build_batch_particles3D` still computes the shared untapered noise stats;
+* a per-thread full-box scratch copy is normalized, tapered, padded, and FFTed during
+  batch preparation;
+* the batch carries padded Fourier reconstruction images instead of raw full-box copies;
+* `maybe_restore_batch` still runs after the search;
+* `gen_fplanes4rec` generates the actual reconstruction f-planes from current
+  post-search metadata;
+* `update_rec` remains serial.
 
-This preserves the current metadata timing and the current gridding parallelization.
+This preserves the current metadata timing and the current gridding parallelization while
+moving the image-only reconstruction prep out of the post-search restore section.
+
+With the switch disabled, the default path is unchanged: `build_batch_particles3D` keeps
+raw full-box copies, and `prep_imgs4rec` performs normalization, tapering, padding, FFT,
+and f-plane generation after the search.
 
 ### Tier 3 — Reduce the Per-Batch Real-Space Copy
 
@@ -197,8 +204,8 @@ Therefore:
    Tier 0 as default behavior.
 2. Benchmark the default **Tier 1** stats-passing route for 2D and representative
    `refine3D` runs.
-3. For 3D, keep reconstruction prep after search and keep gridding serial; experiment only
-   with sharing normalization stats or normalized full-box copies.
+3. For 3D, flip `L_PREP_REC_IMGS_IN_BATCH_GLOB` only for benchmark runs and compare the
+   split image-prep/post-search f-plane path against the default restore path.
 4. Keep `prep_imgs4rec` as a public entry point for `calc_3Drec` (the offline
    reconstruction path that does not run alignment) because that caller has no overlap to
    exploit.

@@ -8,7 +8,8 @@ use simple_builder,                 only: builder
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
-use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
+use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, gen_fplanes4rec, update_rec, &
+    write_partial_recs, finalize_rec_objs
 use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_refine3D_fnames,         only: refine3D_bench_fname
@@ -57,7 +58,8 @@ contains
         end type strategy3D_per_ptcl
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
-        type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_rec_imgs(:)
+        type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+        type(image),               allocatable :: ptcl_rec_imgs(:), ptcl_rec_img_work(:)
         type(noise_stats),         allocatable :: ptcl_noise_stats(:)
         type(fplane_type),         allocatable :: fpls(:)
         type(class_sample),        allocatable :: clssmp(:)
@@ -173,6 +175,7 @@ contains
         call b_ptr%vol%kill
         call orientation%kill
         if( allocated(ptcl_noise_stats) ) deallocate(ptcl_noise_stats)
+        if( allocated(ptcl_rec_img_work) ) call dealloc_imgarr(ptcl_rec_img_work)
         call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_rec_imgs)
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
@@ -194,6 +197,7 @@ contains
                 write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
                 write(fnr,'(a,a)')  'match3D refine mode                 : ', trim(ctrl%refine_mode)
                 write(fnr,'(a,l1)') 'match3D write partial outputs       : ', ctrl%do_write_partial_recs
+                write(fnr,'(a,l1)') 'match3D rec image prep in batch     : ', L_PREP_REC_IMGS_IN_BATCH_GLOB
                 write(fnr,'(a,i0)') 'match3D nspace                      : ', p_ptr%nspace
                 write(fnr,'(a,i0)') 'match3D nstates                     : ', p_ptr%nstates
                 write(fnr,'(a,i0)') 'match3D kfrom                       : ', p_ptr%kfromto(1)
@@ -284,7 +288,12 @@ contains
         subroutine maybe_init_reconstruction()
             if( .not. ctrl%do_write_partial_recs ) return
             call init_rec(params, build, batchsz_max, fpls)
-            call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+            if( L_PREP_REC_IMGS_IN_BATCH_GLOB )then
+                call alloc_imgarr(batchsz_max, [p_ptr%boxpd,p_ptr%boxpd,1], p_ptr%smpd, ptcl_rec_imgs)
+                call alloc_imgarr(p_ptr%nthr, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_img_work)
+            else
+                call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+            endif
         end subroutine maybe_init_reconstruction
 
         subroutine build_batch_particles_local()
@@ -292,9 +301,15 @@ contains
             need_rec_imgs = ctrl%do_write_partial_recs
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             if( need_rec_imgs )then
-                call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                    ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats(:batchsz), &
-                    imgs4rec=ptcl_rec_imgs(:batchsz))
+                if( L_PREP_REC_IMGS_IN_BATCH_GLOB )then
+                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                        ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats(:batchsz), &
+                        imgs4rec=ptcl_rec_imgs(:batchsz), imgs4rec_work=ptcl_rec_img_work)
+                else
+                    call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                        ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats(:batchsz), &
+                        imgs4rec=ptcl_rec_imgs(:batchsz))
+                endif
             else
                 call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
                     ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats(:batchsz))
@@ -358,8 +373,13 @@ contains
         subroutine maybe_restore_batch()
             if( .not. ctrl%do_write_partial_recs ) return
             if( ctrl%do_bench ) t_rec = tic()
-            call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
-                pinds(batch_start:batch_end), fpls(:batchsz), ptcl_noise_stats(:batchsz))
+            if( L_PREP_REC_IMGS_IN_BATCH_GLOB )then
+                call gen_fplanes4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
+                    pinds(batch_start:batch_end), fpls(:batchsz))
+            else
+                call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
+                    pinds(batch_start:batch_end), fpls(:batchsz), ptcl_noise_stats(:batchsz))
+            endif
             call update_rec(params, b_ptr, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
             if( ctrl%do_bench ) rt_rec_accum = rt_rec_accum + toc(t_rec)
         end subroutine maybe_restore_batch
