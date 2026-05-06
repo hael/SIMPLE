@@ -33,7 +33,7 @@ contains
     end subroutine new_greedy_smpl
 
     subroutine srch_greedy_smpl( self, os )
-        use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
+        use simple_eul_prob_tab_utils, only: angle_sampling, eulprob_dist_switch
         class(strategy2D_greedy_smpl), intent(inout) :: self
         class(oris),                   intent(inout) :: os
         integer :: refs_inds(self%s%nrefs), refs_inplinds(self%s%nrefs), inds(self%s%nrots)

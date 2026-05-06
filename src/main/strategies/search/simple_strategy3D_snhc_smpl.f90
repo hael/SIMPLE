@@ -36,7 +36,7 @@ contains
     end subroutine new_snhc_smpl
 
     subroutine srch_snhc_smpl( self, os, ithr )
-        use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
+        use simple_eul_prob_tab_utils, only: angle_sampling, eulprob_dist_switch
         class(strategy3D_snhc_smpl), intent(inout) :: self
         class(oris),                  intent(inout) :: os
         integer,                     intent(in)    :: ithr

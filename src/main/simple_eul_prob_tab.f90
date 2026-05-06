@@ -2,19 +2,14 @@
 module simple_eul_prob_tab
 use simple_pftc_srch_api
 use simple_builder,          only: builder
-use simple_eul_prob_tab_utils, only: build_pind_lookup, materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
+use simple_eul_prob_tab_utils, only: angle_sampling, angle_sampling_fast, build_pind_lookup, calc_athres, calc_num2sample,&
+    &eulprob_dist_switch, materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 implicit none
 
 public :: eul_prob_tab
-public :: calc_num2sample, calc_athres, eulprob_dist_switch, eulprob_corr_switch, angle_sampling
 private
 #include "simple_local_flags.inc"
-
-interface angle_sampling
-    module procedure angle_sampling_1
-    module procedure angle_sampling_2
-end interface
 
 type :: eul_prob_tab
     class(builder),    pointer  :: b_ptr => null()
@@ -451,7 +446,7 @@ contains
         ptcl_avail     = .true.
         do while( any(ptcl_avail) )
             ! sampling the ref distribution to choose next iref to assign
-            assigned_iref = angle_sampling(iref_dist, dists_sorted, inds_sorted, projs_athres, self%p_ptr%prob_athres)
+            assigned_iref = angle_sampling_fast(iref_dist, dists_sorted, inds_sorted, projs_athres, self%p_ptr%prob_athres)
             assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
@@ -730,97 +725,5 @@ contains
         self%b_ptr => null()
         self%p_ptr => null()
     end subroutine kill
-
-    ! PUBLIC UTILITITES
-
-    subroutine calc_num2sample( os, num_all, field_str, num_smpl, prob_athres, state)
-        class(oris),       intent(in)  :: os
-        integer,           intent(in)  :: num_all
-        character(len=*),  intent(in)  :: field_str
-        integer,           intent(out) :: num_smpl
-        real,              intent(in)  :: prob_athres
-        integer, optional, intent(in)  :: state
-        real :: athres
-        athres   = calc_athres(os, field_str, prob_athres, state=state)
-        num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
-    end subroutine calc_num2sample
-
-    function calc_athres( os, field_str, prob_athres, state ) result( athres )
-        class(oris),       intent(in) :: os
-        character(len=*),  intent(in) :: field_str
-        real,              intent(in) :: prob_athres
-        integer, optional, intent(in) :: state
-        real, allocatable :: vals(:)
-        real :: athres, dist_thres
-        vals = os%get_all_sampled(trim(field_str), state=state)
-        dist_thres = sum(vals) / real(size(vals))
-        athres     = prob_athres
-        if( dist_thres > TINY ) athres = min(athres, dist_thres)
-    end function calc_athres
-
-    ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
-    elemental function eulprob_dist_switch( corr, cc_objfun ) result(dist)
-        real,    intent(in) :: corr
-        integer, intent(in) :: cc_objfun
-        real :: dist
-        dist = corr
-        select case(cc_objfun)
-            case(OBJFUN_CC)
-                if( corr < 0. )then
-                    dist = 0.
-                else
-                    dist = corr
-                endif
-                dist = 1. - dist
-            case(OBJFUN_EUCLID)
-                if( corr < TINY )then
-                    dist = huge(dist)
-                else
-                    dist = - log(corr)
-                endif
-        end select
-    end function eulprob_dist_switch
-
-    ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
-    elemental function eulprob_corr_switch( dist, cc_objfun ) result(corr)
-        real,    intent(in) :: dist
-        integer, intent(in) :: cc_objfun
-        real :: corr
-        corr = dist
-        select case(cc_objfun)
-            case(OBJFUN_CC)
-                corr = 1 - dist
-            case(OBJFUN_EUCLID)
-                corr = exp(-dist)
-        end select
-    end function eulprob_corr_switch
-
-    function angle_sampling_1( pvec, athres_ub_in, prob_athres ) result( which )
-        real,    intent(in)  :: pvec(:)        !< probabilities
-        real,    intent(in)  :: athres_ub_in
-        real,    intent(in)  :: prob_athres
-        real,    allocatable :: pvec_sorted(:)
-        integer, allocatable :: sorted_inds(:)
-        integer :: which, n
-        n = size(pvec)
-        allocate(pvec_sorted(n),sorted_inds(n))
-        which = angle_sampling_2(pvec, pvec_sorted, sorted_inds, athres_ub_in, prob_athres)
-    end function angle_sampling_1
-
-    function angle_sampling_2( pvec, pvec_sorted, sorted_inds, athres_ub_in, prob_athres ) result( which )
-        real,    intent(in)    :: pvec(:)        !< probabilities
-        real,    intent(inout) :: pvec_sorted(:) !< sorted probabilities
-        integer, intent(inout) :: sorted_inds(:)
-        real,    intent(in)    :: athres_ub_in
-        real,    intent(in)    :: prob_athres
-        integer :: which, num_lb, num_ub, n
-        real    :: athres_ub, athres_lb
-        n         = size(pvec)
-        athres_ub = min(prob_athres, athres_ub_in)
-        athres_lb = min(athres_ub / 10., 1.) ! athres lower bound is 1/10 of athres upper bound, max at 1 degree
-        num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
-        num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
-        which     = greedy_sampling(pvec, pvec_sorted, sorted_inds, num_ub, num_lb)
-    end function angle_sampling_2
 
 end module simple_eul_prob_tab

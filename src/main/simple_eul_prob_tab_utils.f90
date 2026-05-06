@@ -1,11 +1,23 @@
 !@descr: shared utility routines for probabilistic alignment tables
 module simple_eul_prob_tab_utils
-use simple_math,      only: rotmat2d
-use simple_type_defs, only: ptcl_ref
+use simple_defs,      only: TINY
+use simple_math,      only: hpsort, rotmat2d
+use simple_oris,      only: oris
+use simple_rnd,       only: greedy_sampling, ran3
+use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID, ptcl_ref
 implicit none
 
-public :: build_pind_lookup, materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
+public :: angle_sampling, angle_sampling_fast, build_pind_lookup, calc_athres, calc_num2sample
+public :: eulprob_corr_switch, eulprob_dist_switch
+public :: materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 private
+
+interface angle_sampling
+    module procedure angle_sampling_1
+    module procedure angle_sampling_2
+end interface
+
+logical, parameter :: L_FAST_PROB_ASSIGN = .true.
 
 contains
 
@@ -78,5 +90,165 @@ contains
         read(funit, pos=addr) seed_has_sh
         addr = addr + sizeof(seed_has_sh)
     end subroutine read_seed_shift_table
+
+    subroutine calc_num2sample( os, num_all, field_str, num_smpl, prob_athres, state)
+        class(oris),       intent(in)  :: os
+        integer,           intent(in)  :: num_all
+        character(len=*),  intent(in)  :: field_str
+        integer,           intent(out) :: num_smpl
+        real,              intent(in)  :: prob_athres
+        integer, optional, intent(in)  :: state
+        real :: athres
+        athres   = calc_athres(os, field_str, prob_athres, state=state)
+        num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
+    end subroutine calc_num2sample
+
+    function calc_athres( os, field_str, prob_athres, state ) result( athres )
+        class(oris),       intent(in) :: os
+        character(len=*),  intent(in) :: field_str
+        real,              intent(in) :: prob_athres
+        integer, optional, intent(in) :: state
+        real, allocatable :: vals(:)
+        real :: athres, dist_thres
+        vals = os%get_all_sampled(trim(field_str), state=state)
+        dist_thres = sum(vals) / real(size(vals))
+        athres     = prob_athres
+        if( dist_thres > TINY ) athres = min(athres, dist_thres)
+    end function calc_athres
+
+    elemental function eulprob_dist_switch( corr, cc_objfun ) result(dist)
+        real,    intent(in) :: corr
+        integer, intent(in) :: cc_objfun
+        real :: dist
+        dist = corr
+        select case(cc_objfun)
+            case(OBJFUN_CC)
+                if( corr < 0. )then
+                    dist = 0.
+                else
+                    dist = corr
+                endif
+                dist = 1. - dist
+            case(OBJFUN_EUCLID)
+                if( corr < TINY )then
+                    dist = huge(dist)
+                else
+                    dist = - log(corr)
+                endif
+        end select
+    end function eulprob_dist_switch
+
+    elemental function eulprob_corr_switch( dist, cc_objfun ) result(corr)
+        real,    intent(in) :: dist
+        integer, intent(in) :: cc_objfun
+        real :: corr
+        corr = dist
+        select case(cc_objfun)
+            case(OBJFUN_CC)
+                corr = 1 - dist
+            case(OBJFUN_EUCLID)
+                corr = exp(-dist)
+        end select
+    end function eulprob_corr_switch
+
+    function angle_sampling_1( pvec, athres_ub_in, prob_athres ) result( which )
+        real,    intent(in)  :: pvec(:)        !< probabilities
+        real,    intent(in)  :: athres_ub_in
+        real,    intent(in)  :: prob_athres
+        real,    allocatable :: pvec_sorted(:)
+        integer, allocatable :: sorted_inds(:)
+        integer :: which, n
+        n = size(pvec)
+        allocate(pvec_sorted(n),sorted_inds(n))
+        which = angle_sampling_2(pvec, pvec_sorted, sorted_inds, athres_ub_in, prob_athres)
+    end function angle_sampling_1
+
+    function angle_sampling_2( pvec, pvec_sorted, sorted_inds, athres_ub_in, prob_athres ) result( which )
+        real,    intent(in)    :: pvec(:)        !< probabilities
+        real,    intent(inout) :: pvec_sorted(:) !< sorted probabilities
+        integer, intent(inout) :: sorted_inds(:)
+        real,    intent(in)    :: athres_ub_in
+        real,    intent(in)    :: prob_athres
+        integer :: which, num_lb, num_ub, n
+        real    :: athres_ub, athres_lb
+        n         = size(pvec)
+        athres_ub = min(prob_athres, athres_ub_in)
+        athres_lb = min(athres_ub / 10., 1.)
+        num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
+        num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
+        which     = greedy_sampling(pvec, pvec_sorted, sorted_inds, num_ub, num_lb)
+    end function angle_sampling_2
+
+    function angle_sampling_fast( pvec, pvec_work, work_inds, athres_ub_in, prob_athres ) result( which )
+        real,    intent(in)    :: pvec(:)      !< probabilities/distances, lower is better
+        real,    intent(inout) :: pvec_work(:) !< work buffer, size >= size(pvec)
+        integer, intent(inout) :: work_inds(:)
+        real,    intent(in)    :: athres_ub_in
+        real,    intent(in)    :: prob_athres
+        integer :: which, n, num_lb, num_ub, i, pick
+        real    :: athres_ub, athres_lb, sum_pvec, rnd
+        n         = size(pvec)
+        athres_ub = min(prob_athres, athres_ub_in)
+        athres_lb = min(athres_ub / 10., 1.)
+        num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
+        num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
+        if( .not. L_FAST_PROB_ASSIGN )then
+            which = angle_sampling_2(pvec, pvec_work, work_inds, athres_ub_in, prob_athres)
+            return
+        endif
+        pvec_work(1:num_ub) = pvec(1:num_ub)
+        work_inds(1:num_ub) = (/(i,i=1,num_ub)/)
+        do i = num_ub / 2, 1, -1
+            call maxheap_sift_down(i, num_ub)
+        enddo
+        do i = num_ub + 1, n
+            if( pvec(i) < pvec_work(1) )then
+                pvec_work(1) = pvec(i)
+                work_inds(1) = i
+                call maxheap_sift_down(1, num_ub)
+            endif
+        enddo
+        call hpsort(pvec_work(1:num_ub), work_inds(1:num_ub))
+        rnd      = ran3()
+        sum_pvec = sum(pvec_work(1:num_ub))
+        if( sum_pvec < TINY )then
+            pick  = min(num_ub, 1 + floor(real(num_ub) * rnd))
+            which = work_inds(pick)
+        else
+            pvec_work(1:num_ub) = pvec_work(1:num_ub) / sum_pvec
+            if( rnd > sum(pvec_work(1:num_lb)) )then
+                which = work_inds(1)
+            else
+                which = work_inds(num_ub)
+            endif
+        endif
+
+    contains
+
+        subroutine maxheap_sift_down( root_in, heap_size )
+            integer, intent(in) :: root_in, heap_size
+            integer :: root, child, swap_i, tmp_ind
+            real    :: tmp_val
+            root = root_in
+            do
+                child = 2 * root
+                if( child > heap_size ) exit
+                swap_i = root
+                if( pvec_work(swap_i) < pvec_work(child) ) swap_i = child
+                if( child + 1 <= heap_size )then
+                    if( pvec_work(swap_i) < pvec_work(child + 1) ) swap_i = child + 1
+                endif
+                if( swap_i == root ) exit
+                tmp_val            = pvec_work(root)
+                pvec_work(root)    = pvec_work(swap_i)
+                pvec_work(swap_i)  = tmp_val
+                tmp_ind            = work_inds(root)
+                work_inds(root)    = work_inds(swap_i)
+                work_inds(swap_i)  = tmp_ind
+                root = swap_i
+            enddo
+        end subroutine maxheap_sift_down
+
+    end function angle_sampling_fast
 
 end module simple_eul_prob_tab_utils

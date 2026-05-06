@@ -3,8 +3,9 @@
 module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
 use simple_builder,            only: builder
-use simple_eul_prob_tab,       only: eul_prob_tab, angle_sampling, calc_athres, eulprob_dist_switch
-use simple_eul_prob_tab_utils, only: materialize_seed_shift
+use simple_eul_prob_tab,       only: eul_prob_tab
+use simple_eul_prob_tab_utils, only: angle_sampling, angle_sampling_fast, calc_athres, eulprob_dist_switch,&
+    &materialize_seed_shift
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
 use simple_eulspace_neigh_map, only: eulspace_neigh_map
@@ -732,7 +733,8 @@ contains
             enddo
             do while( nleft > 0 )
                 if( nsel == 0 ) exit
-                assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel), frontier%inds_sorted(1:nsel), projs_athres, self%p_ptr%prob_athres)
+                assigned_idx = angle_sampling_fast(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
+                    &frontier%inds_sorted(1:nsel), projs_athres, self%p_ptr%prob_athres)
                 assigned_iref = frontier%sel_refs(assigned_idx)
                 assigned_ptcl = graph%ref_list(graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1)
                 frontier%ptcl_avail(assigned_ptcl) = .false.

@@ -4,8 +4,8 @@ use simple_pftc_srch_api
 use simple_builder,          only: builder
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_decay_funs,       only: extremal_decay2D
-use simple_eul_prob_tab,     only: eulprob_dist_switch, eulprob_corr_switch
-use simple_eul_prob_tab_utils, only: build_pind_lookup, materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
+use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, materialize_seed_shift,&
+    &read_seed_shift_table, write_seed_shift_table
 use simple_rnd,              only: greedy_sampling
 implicit none
 

@@ -53,7 +53,7 @@ contains
 
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob( params, spproj, nrots, neigh_frac )
-        use simple_eul_prob_tab, only: calc_athres
+        use simple_eul_prob_tab_utils, only: calc_athres
         class(parameters), intent(in)    :: params
         type(sp_project),  intent(inout) :: spproj
         integer,           intent(in)    :: nrots

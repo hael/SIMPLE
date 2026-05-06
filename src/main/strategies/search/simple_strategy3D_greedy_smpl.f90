@@ -34,7 +34,7 @@ contains
     end subroutine new_greedy_smpl
 
     subroutine srch_greedy_smpl( self, os, ithr )
-        use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
+        use simple_eul_prob_tab_utils, only: angle_sampling, eulprob_dist_switch
         class(strategy3D_greedy_smpl), intent(inout) :: self
         class(oris),                   intent(inout) :: os
         integer,                       intent(in)    :: ithr

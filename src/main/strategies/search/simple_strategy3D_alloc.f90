@@ -36,7 +36,7 @@ logical                :: srch_order_allocated = .false.
 contains
 
     subroutine prep_strategy3D( params, build )
-        use simple_eul_prob_tab, only: calc_athres
+        use simple_eul_prob_tab_utils, only: calc_athres
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer :: istate, iproj, ithr, cnt, nrefs, nrefs_sub
