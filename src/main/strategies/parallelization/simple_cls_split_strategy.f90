@@ -490,9 +490,9 @@ contains
         integer,     allocatable, intent(out)   :: pinds(:), labels(:)
         type(image), allocatable, intent(out)   :: raw_subavgs(:), den_subavgs(:)
         type(parameters) :: params_mask
-        type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:)
+        type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:), den_ptcls(:)
         type(image) :: cavg_raw, cavg_den
-        real, allocatable :: avg(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:)
+        real, allocatable :: avg(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:), den_pcavecs(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         integer, allocatable :: i_medoids(:)
         integer :: nptcls, npix, nsplit_count, j, k, class_ldim(3)
@@ -543,7 +543,13 @@ contains
             end do
         endif
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
-        call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, coords, eigvals)
+        call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, coords, eigvals, avg, den_pcavecs)
+        if( allocated(den_pcavecs) )then
+            den_ptcls = copy_imgarr(imgs_ppca)
+            do j = 1, nptcls
+                call den_ptcls(j)%unserialize(den_pcavecs(:,j))
+            end do
+        endif
         call sanitize_embedding_coords(trim(params%pca_mode), cls_id, coords)
         allocate(dmat(nptcls,nptcls), source=0.)
         do j = 1, nptcls - 1
@@ -577,7 +583,11 @@ contains
             do k = 1, size(labels)
                 if( labels(k) /= j ) cycle
                 call cavg_raw%add(imgs(k))
-                call cavg_den%add(imgs_ppca(k))
+                if( allocated(den_ptcls) )then
+                    call cavg_den%add(den_ptcls(k))
+                else
+                    call cavg_den%add(imgs_ppca(k))
+                endif
             end do
             call cavg_raw%div(real(max(count(labels == j), 1)))
             call cavg_den%div(real(max(count(labels == j), 1)))
@@ -589,12 +599,14 @@ contains
         if( allocated(coords)       ) deallocate(coords)
         if( allocated(eigvals)      ) deallocate(eigvals)
         if( allocated(dmat)         ) deallocate(dmat)
+        if( allocated(den_pcavecs)  ) deallocate(den_pcavecs)
         if( allocated(i_medoids)    ) deallocate(i_medoids)
         if( allocated(avg)          ) deallocate(avg)
         if( allocated(pcavecs)      ) deallocate(pcavecs)
         if( allocated(class_diams)  ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
         if( allocated(class_mask)   ) call dealloc_imgarr(class_mask)
+        if( allocated(den_ptcls)    ) call dealloc_imgarr(den_ptcls)
         if( allocated(imgs_ppca)    ) call dealloc_imgarr(imgs_ppca)
         if( allocated(imgs)         ) call dealloc_imgarr(imgs)
     end subroutine split_one_parent_class
@@ -662,20 +674,24 @@ contains
         call flush(logfhandle)
     end subroutine select_kmedoids_by_silhouette
 
-    subroutine make_split_embedding(params, cls_id, nptcls, npix, pcavecs, coords, eigvals)
+    subroutine make_split_embedding(params, cls_id, nptcls, npix, pcavecs, coords, eigvals, avg, recon_pcavecs)
         use simple_diffusion_maps, only: diffusion_map_embedder
         use simple_kpca_svd,       only: kpca_svd
+        use simple_mppca,          only: mppca
         use simple_ppca,           only: ppca
         type(parameters),  intent(inout) :: params
         integer,           intent(in)    :: cls_id, nptcls, npix
         real,              intent(in)    :: pcavecs(npix,nptcls)
+        real, optional,    intent(in)    :: avg(npix)
         real, allocatable, intent(out)   :: coords(:,:)
         real, allocatable, intent(out)   :: eigvals(:)
+        real, allocatable, optional, intent(out) :: recon_pcavecs(:,:)
         type(diffusion_map_embedder) :: diffmap
         type(kpca_svd) :: kpca_model
+        type(mppca)    :: mppca_model
         type(ppca)     :: ppca_model
-        real, allocatable :: feat(:)
-        integer :: neigs, neigs_scan, neigs_used, i
+        real, allocatable :: feat(:), recon(:), avg_use(:)
+        integer :: neigs, neigs_scan, neigs_used, i, ncomp
         logical :: l_auto_neigs
         l_auto_neigs = params%neigs <= 0
         if( l_auto_neigs )then
@@ -685,6 +701,8 @@ contains
         endif
         if( trim(params%pca_mode) .eq. 'diffusion_maps' )then
             neigs = min(max(neigs_scan, 0), max(nptcls-2, 1))
+        else if( trim(params%pca_mode) .eq. 'mppca' )then
+            neigs = min(max(neigs_scan, 2), max(nptcls-1, 1))
         else
             neigs = min(max(neigs_scan, 1), max(nptcls-1, 1))
         endif
@@ -704,6 +722,31 @@ contains
                 end do
                 eigvals = ppca_model%get_signal_eigvals()
                 call ppca_model%kill
+            case('mppca')
+                ncomp = params%mppca_k
+                if( ncomp <= 0 ) ncomp = particle_count_nsplit(nptcls, params%nptcls_per_subcls, params%nsubcls_min, params%nsubcls_max)
+                ncomp = min(max(2, ncomp), max(2, min(neigs, nptcls - 1)))
+                call mppca_model%new(nptcls, npix, neigs)
+                call mppca_model%set_params(ncomp, params%nthr, params%mppca_recon)
+                call mppca_model%master(pcavecs, 15)
+                allocate(coords(neigs,nptcls), source=0.)
+                if( present(recon_pcavecs) )then
+                    allocate(recon_pcavecs(npix,nptcls), recon(npix), avg_use(npix), source=0.)
+                    if( present(avg) ) avg_use = avg
+                endif
+                do i = 1, nptcls
+                    feat = mppca_model%get_feat(i)
+                    coords(:,i) = feat
+                    if( allocated(feat) ) deallocate(feat)
+                    if( present(recon_pcavecs) )then
+                        call mppca_model%generate(i, avg_use, recon)
+                        recon_pcavecs(:,i) = recon
+                    endif
+                end do
+                eigvals = mppca_model%get_eigvals()
+                call mppca_model%kill
+                if( allocated(recon)  ) deallocate(recon)
+                if( allocated(avg_use) ) deallocate(avg_use)
             case('kpca')
                 call kpca_model%new(nptcls, npix, neigs)
                 call kpca_model%set_params(params%nthr, params%kpca_ker, params%kpca_backend, params%kpca_nystrom_npts, &
@@ -718,7 +761,7 @@ contains
                 eigvals = kpca_model%get_eigvals()
                 call kpca_model%kill
             case DEFAULT
-                THROW_HARD('cls_split pca_mode must be ppca, kpca, or diffusion_maps')
+                THROW_HARD('cls_split pca_mode must be ppca, mppca, kpca, or diffusion_maps')
         end select
         if( l_auto_neigs .and. allocated(eigvals) )then
             neigs_used = select_neigs_icm(eigvals, trim(params%pca_mode), size(coords,1), cls_id)
@@ -863,6 +906,7 @@ contains
         integer,          intent(in) :: max_neigs
         nmin_rank = 1
         if( trim(mode) .eq. 'diffusion_maps' .and. max_neigs >= 2 ) nmin_rank = 2
+        if( trim(mode) .eq. 'mppca' .and. max_neigs >= 2 ) nmin_rank = 2
     end function cls_split_min_neigs
 
     integer function cls_split_initial_neigs_from_gap(spec, nmin_rank) result(nkeep)

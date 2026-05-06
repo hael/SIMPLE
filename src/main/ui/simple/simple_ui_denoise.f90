@@ -215,7 +215,7 @@ contains
         call cls_split%new(&
         &'cls_split',&
         &'Split classes with latent clustering',&
-        &'is a program for splitting 2D/3D particle classes into subclasses using PPCA, kPCA, or diffusion-map embeddings and k-medoids clustering',&
+        &'is a program for splitting 2D/3D particle classes into subclasses using PPCA, mPPCA, kPCA, or diffusion-map embeddings and k-medoids clustering',&
         &'all',&
         &.true.)
         call cls_split%add_input(UI_PARM, 'class', 'num', 'Optional class index to split', 'Optional 2D class index or 3D projection/class index to split; omit to process all classes', 'e.g. 5', .false., 0.0)
@@ -225,7 +225,9 @@ contains
         call cls_split%add_input(UI_PARM, 'nptcls_per_subcls', 'num', 'Target particles/subclass in auto mode (default 300)', 'Used only when ncls=0: auto mode chooses about one subclass per 300 particles, bounded by nsubcls_min and nsubcls_max', '# particles/subclass', .false., 300.0)
         call cls_split%add_input(UI_PARM, 'k_nn', 'num', 'Diffusion graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used only for pca_mode=diffusion_maps; larger values make the graph smoother, smaller values emphasize local structure', '# neighbors', .false., 10.0)
         call cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
-        call cls_split%add_input(UI_FILT, 'pca_mode', 'multi', 'Embedding method for class splitting', 'Embedding method for class splitting(ppca|kpca|diffusion_maps){diffusion_maps}', '(ppca|kpca|diffusion_maps){diffusion_maps}', .false., 'diffusion_maps')
+        call cls_split%add_input(UI_FILT, 'pca_mode', 'multi', 'Embedding method for class splitting', 'Embedding method for class splitting(ppca|mppca|kpca|diffusion_maps){diffusion_maps}', '(ppca|mppca|kpca|diffusion_maps){diffusion_maps}', .false., 'diffusion_maps')
+        call cls_split%add_input(UI_FILT, 'mppca_k', 'num', 'mPPCA mixture components (default 4; 0 => auto)', 'Used only for pca_mode=mppca: number of soft PPCA mixture components; 0 chooses a count from target subclass size', '# mPPCA comps', .false., 4.0)
+        call cls_split%add_input(UI_FILT, 'mppca_recon', 'multi', 'mPPCA reconstruction mode', 'mPPCA reconstruction mode(soft|hard){soft}', '(soft|hard){soft}', .false., 'soft')
         call cls_split%add_input(UI_FILT, 'neigs', 'num', 'Number of embedding dimensions (0 => method default)', 'Number of embedding dimensions (0 => method default)', '# eigenvecs', .false., 0.0)
         call cls_split%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call cls_split%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
