@@ -22,6 +22,7 @@ type :: eul_prob_tab2D
     type(ptcl_ref), allocatable :: assgn_map(:)      !< assignment map (nptcls)
     real,           allocatable :: seed_shifts(:,:)  !< per-particle seeded shift (2,nptcls)
     logical,        allocatable :: seed_has_sh(:)    !< per-particle seeded shift flag
+    integer                     :: seed_nrots = 0    !< rotation grid used for deferred seeded shifts
     integer,        allocatable :: pinds(:)          !< particle indices for processing
     logical,        allocatable :: class_exists(:)   !< class population filter
     integer                     :: nptcls            !< size of pinds array
@@ -113,6 +114,7 @@ contains
         real    :: inpl_corr, power, neigh_frac
         logical :: class_active(self%nclasses)
         call seed_rnd
+        self%seed_nrots = self%b_ptr%pftc%get_nrots()
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -372,7 +374,7 @@ contains
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_icls, assigned_ptcl)
             self%assgn_map(assigned_ptcl)%dist = dists_raw(assigned_icls, assigned_ptcl)
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
-                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%b_ptr%pftc)
+                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
         end do
         if( any(ptcl_avail) )then
             do i = 1, self%nptcls
@@ -400,7 +402,7 @@ contains
                 self%assgn_map(i) = self%loc_tab(assigned_icls, i)
                 self%assgn_map(i)%dist = dists_raw(assigned_icls, i)
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
-                    &self%seed_has_sh(i), self%p_ptr%l_doshift, self%b_ptr%pftc)
+                    &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
                 ptcl_avail(i)     = .false.
             end do
         endif
@@ -416,6 +418,7 @@ contains
         if( allocated(self%seed_has_sh)    ) deallocate(self%seed_has_sh)
         if( allocated(self%pinds)          ) deallocate(self%pinds)
         if( allocated(self%class_exists)   ) deallocate(self%class_exists)
+        self%seed_nrots = 0
         self%b_ptr => null()
         self%p_ptr => null()
     end subroutine kill
@@ -431,7 +434,7 @@ contains
         call fopen(funit, binfname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
         write(unit=funit, pos=1) file_header
         addr = sizeof(file_header) + 1
-        call write_seed_shift_table(funit, addr, self%seed_shifts, self%seed_has_sh)
+        call write_seed_shift_table(funit, addr, self%seed_nrots, self%seed_shifts, self%seed_has_sh)
         write(funit, pos=addr) self%loc_tab
         call fclose(funit)
     end subroutine write_tab
@@ -443,7 +446,7 @@ contains
         real,           allocatable :: seed_shifts_loc(:,:)
         logical,        allocatable :: seed_has_sh_loc(:)
         integer, allocatable :: pind2glob(:)
-        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nclasses_loc, i_loc, i_glob, pind, max_pind
+        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nclasses_loc, i_loc, i_glob, pind, max_pind, seed_nrots_loc
         if( file_exists(binfname) )then
             call fopen(funit, binfname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
             call fileiochk('simple_eul_prob_tab2D; read_tab_to_glob; file: '//binfname%to_char(), io_stat)
@@ -457,9 +460,11 @@ contains
         allocate(mat_loc(nclasses_loc, nptcls_loc))
         allocate(seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
         addr = sizeof(file_header) + 1
-        call read_seed_shift_table(funit, addr, seed_shifts_loc, seed_has_sh_loc)
+        call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
         read(unit=funit, pos=addr) mat_loc
         call fclose(funit)
+        if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
+        if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab2D%read_tab_to_glob')
         call build_pind_lookup(self%pinds, mat_loc(1,:)%pind, pind2glob, max_pind)
         if( max_pind < 1 )then
             deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)

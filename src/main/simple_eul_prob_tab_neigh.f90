@@ -99,6 +99,7 @@ contains
         self%bench_fill_select              = 0.
         self%bench_fill_neigh_eval          = 0.
         self%bench_fill_shift_refine        = 0.
+        self%seed_nrots = self%b_ptr%pftc%get_nrots()
         call seed_rnd
         nsubs = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
@@ -722,7 +723,7 @@ contains
                 nleft = nleft - 1
                 self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
                 call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
-                    &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%b_ptr%pftc)
+                    &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
                 do idx = graph%ptcl_offsets(assigned_ptcl), graph%ptcl_offsets(assigned_ptcl+1)-1
                     iref = graph%ptcl_refs(idx)
                     m    = graph%ref_counts(iref)
@@ -746,7 +747,7 @@ contains
                 if( fallback_ref == 0 ) fallback_ref = 1
                 self%assgn_map(i) = self%loc_tab(fallback_ref,i)
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
-                    &self%seed_has_sh(i), self%p_ptr%l_doshift, self%b_ptr%pftc)
+                    &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
             enddo
         end subroutine assign_remaining_particles_from_best_touched_ref
 

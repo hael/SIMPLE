@@ -24,6 +24,7 @@ type :: eul_prob_tab
     type(ptcl_ref), allocatable :: assgn_map(:)    !< assignment map                  (nptcls)
     real,           allocatable :: seed_shifts(:,:) !< per-particle seeded shift       (2,nptcls)
     logical,        allocatable :: seed_has_sh(:)   !< per-particle seeded shift flag  (nptcls)
+    integer                     :: seed_nrots = 0   !< rotation grid used for deferred seeded shifts
     integer,        allocatable :: pinds(:)        !< particle indices for processing
     integer,        allocatable :: ssinds(:)       !< non-empty state indices
     integer,        allocatable :: sinds(:)        !< non-empty state indices of each ref
@@ -170,6 +171,7 @@ contains
         self%bench_fill_select              = 0.
         self%bench_fill_neigh_eval          = 0.
         self%bench_fill_shift_refine        = 0.
+        self%seed_nrots = self%b_ptr%pftc%get_nrots()
         call seed_rnd
         projs_ns = 0
         do si = 1, self%nstates
@@ -438,7 +440,7 @@ contains
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
-                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%b_ptr%pftc)
+                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
             ! update the iref_dist and iref_dist_inds
             do iref = 1, self%nrefs
                 do while( iref_dist_inds(iref) < self%nptcls .and. .not.(ptcl_avail(stab_inds(iref_dist_inds(iref),iref))))
@@ -543,7 +545,7 @@ contains
         call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) file_header
         addr = sizeof(file_header) + 1
-        call write_seed_shift_table(funit, addr, self%seed_shifts, self%seed_has_sh)
+        call write_seed_shift_table(funit, addr, self%seed_nrots, self%seed_shifts, self%seed_has_sh)
         write(funit,pos=addr) self%loc_tab
         call fclose(funit)
     end subroutine write_tab
@@ -556,7 +558,7 @@ contains
         real,                allocatable   :: seed_shifts_loc(:,:)
         logical,             allocatable   :: seed_has_sh_loc(:)
         integer, allocatable :: pind2glob(:)
-        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob, pind, max_pind
+        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob, pind, max_pind, seed_nrots_loc
         if( file_exists(binfname) )then
             call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
             call fileiochk('simple_eul_prob_tab; read_tab_to_glob; file: '//binfname%to_char(), io_stat)
@@ -572,9 +574,11 @@ contains
         allocate(seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
         ! read partition information
         addr = sizeof(file_header) + 1
-        call read_seed_shift_table(funit, addr, seed_shifts_loc, seed_has_sh_loc)
+        call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
         read(unit=funit,pos=addr) mat_loc
         call fclose(funit)
+        if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
+        if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab%read_tab_to_glob')
         call build_pind_lookup(self%pinds, mat_loc(1,:)%pind, pind2glob, max_pind)
         if( max_pind < 1 )then
             deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)
@@ -700,6 +704,7 @@ contains
         if( allocated(self%jinds)        ) deallocate(self%jinds)
         if( allocated(self%state_exists) ) deallocate(self%state_exists)
         if( allocated(self%proj_exists)  ) deallocate(self%proj_exists)
+        self%seed_nrots = 0
         self%b_ptr => null()
         self%p_ptr => null()
     end subroutine kill
