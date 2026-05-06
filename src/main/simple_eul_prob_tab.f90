@@ -45,6 +45,11 @@ type :: eul_prob_tab
     real(timer_int_kind)        :: bench_fill_select              = 0.
     real(timer_int_kind)        :: bench_fill_neigh_eval          = 0.
     real(timer_int_kind)        :: bench_fill_shift_refine        = 0.
+    real(timer_int_kind)        :: bench_assign_normalize         = 0.
+    real(timer_int_kind)        :: bench_assign_sort              = 0.
+    real(timer_int_kind)        :: bench_assign_graph             = 0.
+    real(timer_int_kind)        :: bench_assign_loop              = 0.
+    real(timer_int_kind)        :: bench_assign_fallback          = 0.
     contains
     ! CONSTRUCTOR
     procedure :: new
@@ -415,9 +420,18 @@ contains
                     &stab_inds(self%nptcls, self%nrefs), inds_sorted(self%nrefs), iref_dist_inds(self%nrefs)
         real    :: sorted_tab(self%nptcls, self%nrefs), projs_athres,iref_dist(self%nrefs), dists_sorted(self%nrefs)
         logical :: ptcl_avail(self%nptcls)
+        integer(timer_int_kind) :: t_local
+        self%bench_assign_normalize = 0.
+        self%bench_assign_sort      = 0.
+        self%bench_assign_graph     = 0.
+        self%bench_assign_loop      = 0.
+        self%bench_assign_fallback  = 0.
         ! normalization
+        if( L_BENCH_GLOB ) t_local = tic()
         call self%ref_normalize
+        if( L_BENCH_GLOB ) self%bench_assign_normalize = toc(t_local)
         ! sorting each columns
+        if( L_BENCH_GLOB ) t_local = tic()
         sorted_tab = transpose(self%loc_tab(:,:)%dist)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
         do iref = 1, self%nrefs
@@ -425,11 +439,13 @@ contains
             call hpsort(sorted_tab(:,iref), stab_inds(:,iref))
         enddo
         !$omp end parallel do
+        if( L_BENCH_GLOB ) self%bench_assign_sort = toc(t_local)
         projs_athres = 0.
         do istate = 1, self%nstates
             projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', self%p_ptr%prob_athres, state=istate))
         enddo
         ! first row is the current best reference distribution
+        if( L_BENCH_GLOB ) t_local = tic()
         iref_dist_inds = 1
         iref_dist      = sorted_tab(1,:)
         ptcl_avail     = .true.
@@ -449,6 +465,7 @@ contains
                 enddo
             enddo
         enddo
+        if( L_BENCH_GLOB ) self%bench_assign_loop = toc(t_local)
     end subroutine ref_assign
 
     ! state normalization (same energy) of the state_tab
@@ -705,6 +722,11 @@ contains
         if( allocated(self%state_exists) ) deallocate(self%state_exists)
         if( allocated(self%proj_exists)  ) deallocate(self%proj_exists)
         self%seed_nrots = 0
+        self%bench_assign_normalize = 0.
+        self%bench_assign_sort      = 0.
+        self%bench_assign_graph     = 0.
+        self%bench_assign_loop      = 0.
+        self%bench_assign_fallback  = 0.
         self%b_ptr => null()
         self%p_ptr => null()
     end subroutine kill

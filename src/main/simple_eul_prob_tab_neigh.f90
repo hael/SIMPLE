@@ -616,13 +616,29 @@ contains
         integer   :: k, idx, nactive, total, m, start, maxref, nleft, assigned_idx, nsel, pos, last_ref
         real      :: projs_athres
         real      :: huge_val
+        integer(timer_int_kind) :: t_local
         huge_val = huge(1.0)
+        self%bench_assign_normalize = 0.
+        self%bench_assign_sort      = 0.
+        self%bench_assign_graph     = 0.
+        self%bench_assign_loop      = 0.
+        self%bench_assign_fallback  = 0.
         allocate(dists_inpl(self%b_ptr%pftc%get_nrots()), dists_inpl_sorted(self%b_ptr%pftc%get_nrots()), inds_sorted(self%b_ptr%pftc%get_nrots()))
+        if( L_BENCH_GLOB ) t_local = tic()
         call seed_empty_ptcls_from_prev_assign()
+        if( L_BENCH_GLOB ) self%bench_assign_fallback = toc(t_local)
+        if( L_BENCH_GLOB ) t_local = tic()
         call self%ref_normalize()
+        if( L_BENCH_GLOB ) self%bench_assign_normalize = toc(t_local)
+        if( L_BENCH_GLOB ) t_local = tic()
         call build_sparse_assignment_graph()
+        if( L_BENCH_GLOB ) self%bench_assign_graph = toc(t_local)
+        if( L_BENCH_GLOB ) t_local = tic()
         call assign_particles_globally()
+        if( L_BENCH_GLOB ) self%bench_assign_loop = toc(t_local)
+        if( L_BENCH_GLOB ) t_local = tic()
         call assign_remaining_particles_from_best_touched_ref()
+        if( L_BENCH_GLOB ) self%bench_assign_fallback = self%bench_assign_fallback + toc(t_local)
         deallocate(inds_sorted, dists_inpl_sorted, dists_inpl)
 
     contains

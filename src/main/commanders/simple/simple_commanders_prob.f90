@@ -20,6 +20,11 @@ type :: prob_bench_state
     real(timer_int_kind)    :: rt_assign    = 0.
     real(timer_int_kind)    :: rt_cleanup   = 0.
     real(timer_int_kind)    :: rt_tot       = 0.
+    real(timer_int_kind)    :: rt_assign_normalize = 0.
+    real(timer_int_kind)    :: rt_assign_sort      = 0.
+    real(timer_int_kind)    :: rt_assign_graph     = 0.
+    real(timer_int_kind)    :: rt_assign_loop      = 0.
+    real(timer_int_kind)    :: rt_assign_fallback  = 0.
     real(timer_int_kind)    :: rt_fill_shift_seed   = 0.
     real(timer_int_kind)    :: rt_fill_ref_sweep    = 0.
     real(timer_int_kind)    :: rt_fill_select       = 0.
@@ -113,6 +118,17 @@ contains
         bench%l_doshift = params%l_doshift
     end subroutine prob_bench_capture_context
 
+    subroutine prob_bench_capture_assign( bench, rt_normalize, rt_sort, rt_graph, rt_loop, rt_fallback )
+        type(prob_bench_state), intent(inout) :: bench
+        real(timer_int_kind),   intent(in)    :: rt_normalize, rt_sort, rt_graph, rt_loop, rt_fallback
+        if( .not. L_BENCH_GLOB ) return
+        bench%rt_assign_normalize = rt_normalize
+        bench%rt_assign_sort      = rt_sort
+        bench%rt_assign_graph     = rt_graph
+        bench%rt_assign_loop      = rt_loop
+        bench%rt_assign_fallback  = rt_fallback
+    end subroutine prob_bench_capture_assign
+
     subroutine write_prob_bench_report( params, bench, bench_kind, refine_mode, part_suffix )
         type(parameters),       intent(in) :: params
         type(prob_bench_state), intent(in) :: bench
@@ -183,6 +199,18 @@ contains
             write(fnr,'(a,t52,f9.2)') trim(bench_kind)//' table generation           : ', bench%rt_fill_tab
             write(fnr,'(a,t52,f9.2)') trim(bench_kind)//' table read/write           : ', bench%rt_tab_io
             write(fnr,'(a,t52,f9.2)') trim(bench_kind)//' assignment                 : ', bench%rt_assign
+            if( (bench%rt_assign_normalize + bench%rt_assign_sort + bench%rt_assign_graph + &
+                &bench%rt_assign_loop + bench%rt_assign_fallback) > 0. )then
+                write(fnr,'(a)') ''
+                write(fnr,'(a)') '*** ASSIGNMENT DETAILS (s) ***'
+                write(fnr,'(a,t52,f9.2)') trim(bench_kind)//' assign normalize           : ', bench%rt_assign_normalize
+                write(fnr,'(a,t52,f9.2)') trim(bench_kind)//' assign sort                : ', bench%rt_assign_sort
+                write(fnr,'(a,t52,f9.2)') trim(bench_kind)//' assign graph/setup         : ', bench%rt_assign_graph
+                write(fnr,'(a,t52,f9.2)') trim(bench_kind)//' assign loop                : ', bench%rt_assign_loop
+                write(fnr,'(a,t52,f9.2)') trim(bench_kind)//' assign fallback            : ', bench%rt_assign_fallback
+                write(fnr,'(a)') ''
+                write(fnr,'(a)') '*** TIMINGS (s), continued ***'
+            endif
         endif
         write(fnr,'(a,t52,f9.2)') trim(bench_kind)//' total time                 : ', bench%rt_tot
         call fclose(fnr)
@@ -397,6 +425,8 @@ contains
             enddo
             call prob_bench_next(bench, bench%rt_tab_io)
             call eulprob_obj_glob%ref_assign
+            call prob_bench_capture_assign(bench, eulprob_obj_glob%bench_assign_normalize, eulprob_obj_glob%bench_assign_sort,&
+                &eulprob_obj_glob%bench_assign_graph, eulprob_obj_glob%bench_assign_loop, eulprob_obj_glob%bench_assign_fallback)
         endif
         call prob_bench_next(bench, bench%rt_assign)
         ! write the iptcl->(iref,istate) assignment
@@ -467,6 +497,8 @@ contains
         call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
         call prob_bench_next(bench, bench%rt_tab_io)
         call eulprob_obj_glob_neigh%ref_assign
+        call prob_bench_capture_assign(bench, eulprob_obj_glob_neigh%bench_assign_normalize, eulprob_obj_glob_neigh%bench_assign_sort,&
+            &eulprob_obj_glob_neigh%bench_assign_graph, eulprob_obj_glob_neigh%bench_assign_loop, eulprob_obj_glob_neigh%bench_assign_fallback)
         call prob_bench_next(bench, bench%rt_assign)
         ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
@@ -562,10 +594,14 @@ contains
         type(qsys_env)             :: qenv
         type(chash)                :: job_descr
         integer :: nptcls, ipart
+        real(timer_int_kind) :: rt_tmp
+        type(prob_bench_state) :: bench
+        call prob_bench_start(bench)
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call set_b_p_ptrs2D(params, build)
+        call prob_bench_next(bench, bench%rt_init)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
@@ -577,10 +613,13 @@ contains
         ! In probabilistic mode the sampled subset is reused within the current iteration
         ! by prob_tab2D/cluster2D_exec, but it is redrawn on later iterations.
         call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
+        call prob_bench_next(bench, bench%rt_sample)
         ! write sampling to project
         call build%spproj%write_segment_inside(params%oritype)
         ! build the global prob table (nclasses x nptcls)
         call eulprob_obj_glob%new(params, build, pinds)
+        call prob_bench_capture_context(bench, params, nptcls, eulprob_obj_glob%nclasses, 0)
+        call prob_bench_next(bench, bench%rt_tab_init)
         ! generate partition-wise dist tables
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab2D')
@@ -591,22 +630,32 @@ contains
             call cline_prob_tab%gen_job_descr(job_descr)
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
+        call prob_bench_next(bench, bench%rt_fill_tab)
         ! merge all partition tables into global
         do ipart = 1, params%nparts
             fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
             call eulprob_obj_glob%read_tab_to_glob(fname)
         end do
+        call prob_bench_next(bench, bench%rt_tab_io)
         ! global probabilistic class assignment
         call eulprob_obj_glob%ref_assign
+        call prob_bench_capture_assign(bench, eulprob_obj_glob%bench_assign_normalize, eulprob_obj_glob%bench_assign_sort,&
+            &eulprob_obj_glob%bench_assign_graph, eulprob_obj_glob%bench_assign_loop, eulprob_obj_glob%bench_assign_fallback)
+        call prob_bench_next(bench, bench%rt_assign)
         ! write assignment to file
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
+        call prob_bench_next(bench, rt_tmp)
+        bench%rt_tab_io = bench%rt_tab_io + rt_tmp
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill
         call build%kill_general_tbox
+        call prob_bench_next(bench, bench%rt_cleanup)
+        call prob_bench_finish(bench)
+        call write_prob_bench_report(params, bench, 'prob_align2D', params%refine)
         call qsys_job_finished(params, string('simple_commanders_prob :: exec_prob_align2D'))
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN2D NORMAL STOP ****', print_simple=.false.)
