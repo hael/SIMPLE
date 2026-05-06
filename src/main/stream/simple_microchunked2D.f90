@@ -112,6 +112,7 @@
 !   simple_cluster2D_rejector
 !==============================================================================
 module simple_microchunked2D
+  use unix,                only: c_time, c_long
   use simple_defs,         only: logfhandle, STDLEN, CWD_GLOB
   use simple_error,        only: simple_exception
   use simple_image,        only: image
@@ -141,6 +142,7 @@ module simple_microchunked2D
   integer, parameter :: MICROCHUNK_P1_THRESHOLD               = 5000
   integer, parameter :: MICROCHUNK_P2_THRESHOLD               = 8000
   integer, parameter :: REFCHUNK_THRESHOLD                    = 10000
+  integer, parameter :: LAST_IMPORT_TIMEOUT                   = 15 * 60
   integer, parameter :: DEFAULT_NCLS                          = 100
   integer, parameter :: DEFAULT_WALLTIME                      = 29 * 60  ! 29 minutes in seconds
   real,    parameter :: DEFAULT_LPSTART                       = 15.0
@@ -204,6 +206,7 @@ module simple_microchunked2D
     integer                     :: box               = 0
     integer                     :: n_accepted_ptcls  = 0
     integer                     :: n_rejected_ptcls  = 0
+    integer                     :: last_import       = 0
     real                        :: mskdiam           = 0.0
   contains
     procedure :: new
@@ -910,6 +913,8 @@ contains
       projfiles = remove_duplicates(projfiles)
       call write_filetable(string('imported_projects.txt'), projfiles)
 
+      self%last_import = c_time(0_c_long)
+
       write(logfhandle,'(A,I6,A,I8,A)') &
         '>>> MICROCHUNK PASS 1 # ', chunk_id, ' GENERATED WITH ', chunk_nptcls, ' PARTICLES'
     end do
@@ -989,6 +994,8 @@ contains
       call self%append_microchunk_pass_2(new_chunk)
       deallocate(projfiles, consumed)
 
+      self%last_import = c_time(0_c_long)
+
       write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> MICROCHUNK PASS 2 # ', chunk_id, &
         ' GENERATED WITH ', chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
     end do
@@ -1056,6 +1063,8 @@ contains
     call chunk_project%kill()
     deallocate(projfiles)
 
+    self%last_import = c_time(0_c_long)
+
     write(logfhandle,'(A,I8,A,I8,A)') '>>> REFCHUNK GENERATED WITH ', &
       chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
     call timer_stop(t0, string('generate_refchunk'))
@@ -1066,13 +1075,22 @@ contains
   ! chunk rejection is complete (i.e. refs and box are available). Each match
   ! chunk reuses the pass-2 project file (copied into a new folder) and is
   ! configured for template-guided classification against the reference stack.
-  ! Marks the source pass-2 chunk as complete and writes a COMPLETE sentinel.
+  ! Marks each consumed pass-2 source chunk as complete and writes a COMPLETE
+  ! sentinel in the source folder.
+  !
+  ! Fallback path: after LAST_IMPORT_TIMEOUT since the most recent pass-1
+  ! import, if all pass-2 chunks are already complete/failed and the refchunk
+  ! is complete, any remaining rejection-complete pass-1 chunks are merged into
+  ! one final match microchunk so late arrivals are still processed.
   subroutine generate_microchunks_match( self )
     class(microchunked2D), intent(inout) :: self
+    type(string),       allocatable :: projfiles(:)
+    integer,            allocatable :: consumed(:)
+    type(sp_project)                :: chunk_project
     type(chunk2D)                   :: new_chunk
     type(string)                    :: chunk_folder
     integer(timer_int_kind)         :: t0
-    integer                         :: i, chunk_id
+    integer                         :: i, chunk_id, chunk_nptcls, chunk_nptcls_selected, n_consumed
 
     t0 = timer_start()
 
@@ -1084,7 +1102,7 @@ contains
 
     do i = 1, self%get_n_microchunks_pass_2()
       associate( src => self%microchunks_pass_2(i) )
-        if( src%failed )                 cycle
+        if( src%failed )                   cycle
         if( .not. src%rejection_complete ) cycle
         if( src%complete )                 cycle
         chunk_id                  = self%get_n_microchunks_match() + 1
@@ -1102,10 +1120,70 @@ contains
         src%complete = .true.
         call simple_touch(src%folder%to_char() // '/COMPLETE')
         call self%append_microchunk_match(new_chunk)
+        self%last_import = c_time(0_c_long)
         write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> MICROCHUNK MATCH # ', chunk_id, &
           ' GENERATED WITH ', src%nptcls_selected, '/', src%nptcls, ' PARTICLES'
       end associate
     end do
+
+    if( self%last_import > 0_c_long .and. c_time(0_c_long) - self%last_import > LAST_IMPORT_TIMEOUT .and. &
+        all(self%microchunks_pass_2(:)%complete .or. self%microchunks_pass_2(:)%failed) .and.             &
+        self%refchunk%complete .and. .not. self%refchunk%failed) then
+      allocate(projfiles(self%get_n_microchunks_pass_1()), consumed(self%get_n_microchunks_pass_1()))
+      chunk_nptcls          = 0
+      chunk_nptcls_selected = 0
+      n_consumed            = 0
+
+      ! Accumulate remaining rejection-complete pass-1 chunks 
+      do i = 1, self%get_n_microchunks_pass_1()
+        associate( src => self%microchunks_pass_1(i) )
+          if( src%rejection_complete .and. .not. src%complete .and. .not. src%failed ) then
+            n_consumed            = n_consumed            + 1
+            chunk_nptcls_selected = chunk_nptcls_selected + src%nptcls_selected
+            chunk_nptcls          = chunk_nptcls          + src%nptcls
+            projfiles(n_consumed) = src%projfile
+            consumed(n_consumed)  = i
+          end if
+        end associate
+      end do
+      if( n_consumed == 0 ) then
+        deallocate(projfiles, consumed)
+        return
+      end if
+      projfiles = projfiles(:n_consumed)
+      consumed  = consumed(:n_consumed)
+
+      ! Create the pass-2 chunk folder and populate chunk fields
+      chunk_id                  = self%get_n_microchunks_match() + 1
+      chunk_folder              = string(self%outdir_microchunks_match%to_char() // &
+                                           '/microchunk_match_' // int2str(chunk_id))
+      call simple_mkdir(chunk_folder)
+      new_chunk%id              = chunk_id
+      new_chunk%nptcls          = chunk_nptcls
+      new_chunk%nptcls_selected = chunk_nptcls_selected
+      new_chunk%folder          = simple_abspath(chunk_folder)
+      new_chunk%projfile        = string(new_chunk%folder%to_char() // &
+                                           '/microchunk_match_' // int2str(chunk_id) // METADATA_EXT)
+      call self%generate_microchunk_match_cline(new_chunk)
+
+      ! Merge source project files and clear stale 2D results
+      call merge_and_clear(projfiles, chunk_folder, chunk_project, new_chunk%cline)
+      call chunk_project%write(new_chunk%projfile)
+      call chunk_project%kill()
+
+      ! Mark source pass-1 chunks consumed only after pass-2 project is written
+      do i = 1, size(consumed)
+        self%microchunks_pass_1(consumed(i))%complete = .true.
+        call simple_touch(self%microchunks_pass_1(consumed(i))%folder%to_char() // '/COMPLETE')
+      end do
+
+      call self%append_microchunk_match(new_chunk)
+      deallocate(projfiles, consumed)
+
+      write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> FINAL MICROCHUNK MATCH # ', chunk_id, &
+        ' GENERATED WITH ', chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
+    end if
+
     call timer_stop(t0, string('generate_microchunks_match'))
   end subroutine generate_microchunks_match
 
