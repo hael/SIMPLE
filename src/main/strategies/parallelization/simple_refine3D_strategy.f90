@@ -283,7 +283,12 @@ contains
         character(len=*),             intent(in) :: execution_mode
         type(string) :: benchfname
         integer :: fnr
+        real(timer_int_kind) :: rt_accounted
         if( .not. L_BENCH_GLOB ) return
+        rt_accounted = 0.
+        if( bench%rt_tot > TINY )then
+            rt_accounted = 100. * (bench%rt_init + bench%rt_prob + bench%rt_sched + bench%rt_assemble) / bench%rt_tot
+        endif
         benchfname = refine3D_strategy_bench_fname(params%which_iter)
         call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
@@ -300,6 +305,7 @@ contains
         write(fnr,'(a,t52,f9.2)') 'refine3D matcher/scheduler          : ', bench%rt_sched
         write(fnr,'(a,t52,f9.2)') 'refine3D assembly/postprocess       : ', bench%rt_assemble
         write(fnr,'(a,t52,f9.2)') 'refine3D total time                 : ', bench%rt_tot
+        write(fnr,'(a,t52,f9.2)') 'refine3D % accounted for            : ', rt_accounted
         call fclose(fnr)
         call benchfname%kill
     end subroutine write_strategy_bench_report

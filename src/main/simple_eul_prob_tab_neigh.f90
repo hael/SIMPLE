@@ -82,9 +82,28 @@ contains
         integer :: i, ri, istate, ithr, max_refs_to_refine
         integer :: iptcl, nsubs, npeak_target, si, iref_full
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
+        integer(timer_int_kind) :: t_local
+        real(timer_int_kind) :: rt_shift_seed, rt_coarse_sweep, rt_select, rt_neigh_eval, rt_shift_refine
+        real(timer_int_kind) :: rt_shift_seed_loc, rt_coarse_sweep_loc, rt_select_loc, rt_neigh_eval_loc, rt_shift_refine_loc
+        integer :: n_neigh_eval, n_shift_refine
+        integer :: n_neigh_eval_loc, n_shift_refine_loc
+        self%bench_fill_projs_ns            = 0
+        self%bench_fill_ref_evals           = 0
+        self%bench_fill_nsubs               = 0
+        self%bench_fill_neigh_evals         = 0
+        self%bench_fill_shift_seed_trials   = 0
+        self%bench_fill_shift_refine_trials = 0
+        self%bench_fill_shift_seed          = 0.
+        self%bench_fill_ref_sweep           = 0.
+        self%bench_fill_select              = 0.
+        self%bench_fill_neigh_eval          = 0.
+        self%bench_fill_shift_refine        = 0.
         call seed_rnd
         nsubs = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
+        self%bench_fill_nsubs    = nsubs
+        self%bench_fill_projs_ns = npeak_target
+        self%bench_fill_ref_evals = self%nptcls * self%nstates * nsubs
         call neigh_map%new(self%b_ptr%subspace_full2sub_map, nsubs)
         if( self%eval_max_touched < 1 ) self%eval_max_touched = 1
         if( .not. allocated(self%eval_touched_refs)   ) allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
@@ -126,23 +145,63 @@ contains
                 call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
-            !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed) proc_bind(close) schedule(static)
+            self%bench_fill_shift_seed_trials = self%nptcls
+            rt_shift_seed  = 0.
+            rt_coarse_sweep= 0.
+            rt_select      = 0.
+            rt_neigh_eval  = 0.
+            rt_shift_refine= 0.
+            n_neigh_eval   = 0
+            n_shift_refine = 0
+            !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed,t_local,rt_shift_seed_loc,rt_coarse_sweep_loc,rt_select_loc,rt_neigh_eval_loc,rt_shift_refine_loc,n_neigh_eval_loc,n_shift_refine_loc)&
+            !$omp proc_bind(close) schedule(static)&
+            !$omp reduction(+:rt_shift_seed,rt_coarse_sweep,rt_select,rt_neigh_eval,rt_shift_refine,n_neigh_eval,n_shift_refine)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
-                call process_particle(i, iptcl, ithr, .true., shift_seed)
+                call process_particle(i, iptcl, ithr, .true., shift_seed, rt_shift_seed_loc, rt_coarse_sweep_loc,&
+                    &rt_select_loc, rt_neigh_eval_loc, rt_shift_refine_loc, n_neigh_eval_loc, n_shift_refine_loc)
+                rt_shift_seed   = rt_shift_seed   + rt_shift_seed_loc
+                rt_coarse_sweep = rt_coarse_sweep + rt_coarse_sweep_loc
+                rt_select       = rt_select       + rt_select_loc
+                rt_neigh_eval   = rt_neigh_eval   + rt_neigh_eval_loc
+                rt_shift_refine = rt_shift_refine + rt_shift_refine_loc
+                n_neigh_eval    = n_neigh_eval    + n_neigh_eval_loc
+                n_shift_refine  = n_shift_refine  + n_shift_refine_loc
             enddo
             !$omp end parallel do
+            self%bench_fill_shift_seed          = rt_shift_seed
+            self%bench_fill_ref_sweep           = rt_coarse_sweep
+            self%bench_fill_select              = rt_select
+            self%bench_fill_neigh_eval          = rt_neigh_eval
+            self%bench_fill_shift_refine        = rt_shift_refine
+            self%bench_fill_neigh_evals         = n_neigh_eval
+            self%bench_fill_shift_refine_trials = n_shift_refine
         else
             ! no shift search - evaluate pooled neighborhoods with zero shift only
-            !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed) proc_bind(close) schedule(static)
+            rt_coarse_sweep= 0.
+            rt_select      = 0.
+            rt_neigh_eval  = 0.
+            n_neigh_eval   = 0
+            !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed,t_local,rt_shift_seed_loc,rt_coarse_sweep_loc,rt_select_loc,rt_neigh_eval_loc,rt_shift_refine_loc,n_neigh_eval_loc,n_shift_refine_loc)&
+            !$omp proc_bind(close) schedule(static)&
+            !$omp reduction(+:rt_coarse_sweep,rt_select,rt_neigh_eval,n_neigh_eval)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 shift_seed = 0.
-                call process_particle(i, iptcl, ithr, .false., shift_seed)
+                call process_particle(i, iptcl, ithr, .false., shift_seed, rt_shift_seed_loc, rt_coarse_sweep_loc,&
+                    &rt_select_loc, rt_neigh_eval_loc, rt_shift_refine_loc, n_neigh_eval_loc, n_shift_refine_loc)
+                rt_coarse_sweep = rt_coarse_sweep + rt_coarse_sweep_loc
+                rt_select       = rt_select       + rt_select_loc
+                rt_neigh_eval   = rt_neigh_eval   + rt_neigh_eval_loc
+                n_neigh_eval    = n_neigh_eval    + n_neigh_eval_loc
             enddo
             !$omp end parallel do
+            self%bench_fill_ref_sweep   = rt_coarse_sweep
+            self%bench_fill_select      = rt_select
+            self%bench_fill_neigh_eval  = rt_neigh_eval
+            self%bench_fill_neigh_evals = n_neigh_eval
         endif
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
@@ -175,19 +234,40 @@ contains
             !$omp end parallel do
         end subroutine clear_sparse_eval_table
 
-        subroutine process_particle(i_loc, iptcl_loc, ithr_loc, l_with_shift, shift_seed_loc)
+        subroutine process_particle(i_loc, iptcl_loc, ithr_loc, l_with_shift, shift_seed_loc, rt_shift_seed_loc,&
+            &rt_coarse_sweep_loc, rt_select_loc, rt_neigh_eval_loc, rt_shift_refine_loc, n_neigh_eval_loc, n_shift_refine_loc)
             integer, intent(in)    :: i_loc, iptcl_loc, ithr_loc
             logical, intent(in)    :: l_with_shift
             real,    intent(inout) :: shift_seed_loc(3)
+            real(timer_int_kind), intent(out) :: rt_shift_seed_loc, rt_coarse_sweep_loc, rt_select_loc, rt_neigh_eval_loc, rt_shift_refine_loc
+            integer, intent(out) :: n_neigh_eval_loc, n_shift_refine_loc
             type(ori) :: o_prev_loc
             integer :: prev_state_loc, prev_proj_loc
             integer :: neval_loc
+            rt_shift_seed_loc   = 0.
+            rt_coarse_sweep_loc = 0.
+            rt_select_loc       = 0.
+            rt_neigh_eval_loc   = 0.
+            rt_shift_refine_loc = 0.
+            n_neigh_eval_loc    = 0
+            n_shift_refine_loc  = 0
             call get_particle_context(iptcl_loc, o_prev_loc, prev_state_loc, prev_proj_loc)
+            t_local = tic()
             call estimate_shift_seed(ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc, o_prev_loc, l_with_shift, shift_seed_loc)
+            if( l_with_shift ) rt_shift_seed_loc = toc(t_local)
+            t_local = tic()
             call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
+            rt_coarse_sweep_loc = toc(t_local)
+            t_local = tic()
             call build_pooled_neighborhood(ithr_loc, prev_proj_loc)
+            rt_select_loc = toc(t_local)
+            t_local = tic()
             call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval_loc)
-            call refine_best_neighbors(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval_loc, l_with_shift)
+            rt_neigh_eval_loc = toc(t_local)
+            n_neigh_eval_loc  = neval_loc
+            t_local = tic()
+            call refine_best_neighbors(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval_loc, l_with_shift, n_shift_refine_loc)
+            if( l_with_shift ) rt_shift_refine_loc = toc(t_local)
             call o_prev_loc%kill
         end subroutine process_particle
 
@@ -331,13 +411,15 @@ contains
             enddo
         end subroutine evaluate_neighborhood
 
-        subroutine refine_best_neighbors(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval_loc, l_with_shift)
+        subroutine refine_best_neighbors(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval_loc, l_with_shift, n_shift_refine_loc)
             integer, intent(in) :: i_loc, ithr_loc, iptcl_loc, neval_loc
             real,    intent(in) :: shift_seed_loc(3)
             logical, intent(in) :: l_with_shift
+            integer, intent(out) :: n_shift_refine_loc
             integer :: nrefs_to_refine_loc, nstate_eval_loc, j_loc, eval_slot_loc, ri_loc, istate_loc, iproj_loc, irot_loc
             integer :: si_loc, state_eval_loc
             real    :: refined_shift_loc(3)
+            n_shift_refine_loc = 0
             if( .not. l_with_shift ) return
             eval_work%best_eval_locs(:,ithr_loc) = 0
             if( neval_loc <= 0 ) return
@@ -354,6 +436,7 @@ contains
                 enddo
                 nrefs_to_refine_loc = min(max_refs_to_refine, nstate_eval_loc)
                 if( nrefs_to_refine_loc < 1 ) cycle
+                n_shift_refine_loc = n_shift_refine_loc + nrefs_to_refine_loc
                 eval_work%best_eval_locs(1:nrefs_to_refine_loc,ithr_loc) = &
                     &minnloc(eval_work%state_eval_dists(1:neval_loc,ithr_loc), nrefs_to_refine_loc)
                 do j_loc = 1, nrefs_to_refine_loc
