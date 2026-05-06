@@ -7,11 +7,12 @@ contains
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-    module subroutine new(self, params, nrefs, pfromto, kfromto)
+    module subroutine new(self, params, nrefs, pfromto, kfromto, nmany_refs)
         class(polarft_calc), target, intent(inout) :: self
         class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
+        integer,           optional, intent(in)    :: nmany_refs
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
         integer               :: irot, k, ithr, i
@@ -104,7 +105,6 @@ contains
                     &self%heap_vars(ithr)%kcorrs(self%nrots),&
                     &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_ref_tmp2_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%interpklim),&
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_r(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -122,7 +122,7 @@ contains
         self%with_ctf = .false.
         if( self%p_ptr%ctf .ne. 'no' ) self%with_ctf = .true.
         ! Eagerly initialize memoization buffers/plans at construction time.
-        call self%allocate_memo_workspace
+        call self%allocate_memo_workspace(nmany_refs=nmany_refs)
         call self%alloc_memo_ptcls
         call self%alloc_memo_refs
         ! flag existence
@@ -137,7 +137,6 @@ contains
                 deallocate(self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
-                    &self%heap_vars(ithr)%pft_ref_tmp2_8,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8,&
                     self%heap_vars(ithr)%w_weights,self%heap_vars(ithr)%sumsq_cache)
             end do

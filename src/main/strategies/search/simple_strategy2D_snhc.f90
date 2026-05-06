@@ -46,7 +46,7 @@ contains
             found_better = .false.
             do isample=1,self%s%nrefs
                 ! stochastic reference index
-                iref = s2D%srch_order(self%s%iptcl_batch, isample)
+                iref = s2D%srch_order(isample, self%s%iptcl_batch)
                 ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! neighbourhood size

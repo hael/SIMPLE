@@ -3,7 +3,8 @@ module simple_strategy2D_alloc
 use simple_pftc_srch_api
 implicit none
 
-public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob, prep_strategy2D_thread
+public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob
+public :: prep_strategy2D_thread, set_strategy2D_stoch_bound
 private
 #include "simple_local_flags.inc"
 
@@ -42,6 +43,14 @@ contains
         if( allocated(s2D%class_space_inplinds)) deallocate(s2D%class_space_inplinds)
     end subroutine clean_strategy2D
 
+    ! Stochastic bound used by snhc* strategies
+    subroutine set_strategy2D_stoch_bound( ncls, neigh_frac )
+        integer, intent(in)  :: ncls
+        real,    intent(in)  :: neigh_frac
+        s2D%snhc_nrefs_bound = min(ncls, nint(real(ncls)*(1.-neigh_frac)))
+        s2D%snhc_nrefs_bound = max(2, s2D%snhc_nrefs_bound)
+    end subroutine set_strategy2D_stoch_bound
+
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob( params, spproj, nrots, neigh_frac )
         use simple_eul_prob_tab, only: calc_athres
@@ -75,9 +84,8 @@ contains
             allocate(s2D%cls_pops(params%ncls), source=MINCLSPOPLIM+1)
         endif
         if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
-        ! snhc
-        s2D%snhc_nrefs_bound = min(params%ncls, nint(real(params%ncls)*(1.-neigh_frac)))
-        s2D%snhc_nrefs_bound = max(2, s2D%snhc_nrefs_bound)
+        ! snhc/snhc_smpl
+        call set_strategy2D_stoch_bound(params%ncls, neigh_frac)
         ! snhc_smpl
         s2D%snhc_smpl_ncls  = neighfrac2nsmpl(neigh_frac, params%ncls)
         s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, nrots)
@@ -94,8 +102,11 @@ contains
         if( (trim(params%stream2d)=='yes') )then
             s2D%power = EXTR_POWER
         else
-            if( (trim(params%refine)=='snhc_smpl') .and. (params%extr_iter>params%extr_lim) )then
-                s2D%power = POST_EXTR_POWER
+            if( (params%extr_iter>params%extr_lim) )then
+                if( (trim(params%refine)=='snhc_smpl') .or.&
+                    &(trim(params%refine)=='snhc_smpl_many') )then
+                    s2D%power = POST_EXTR_POWER
+                endif
             endif
         endif
         ! per-thread class-space arrays
@@ -125,7 +136,7 @@ contains
             l_alloc = size(s2D%do_inplsrch) /= nptcls
             if( l_alloc ) deallocate(s2D%do_inplsrch,s2D%srch_order)
         endif
-        if( l_alloc ) allocate(s2D%do_inplsrch(1:nptcls), s2D%srch_order(1:nptcls, params%ncls))
+        if( l_alloc ) allocate(s2D%do_inplsrch(1:nptcls), s2D%srch_order(params%ncls, 1:nptcls))
         ! in plane search
         s2D%do_inplsrch = params%l_doshift .and. which_iter>2
         ! stochastic search order
@@ -133,9 +144,9 @@ contains
         rt = ran_tabu(params%ncls)
         do i = 1,nptcls
             iptcl = pinds(i)
-            call rt%ne_ran_iarr(s2D%srch_order(i,:))
+            call rt%ne_ran_iarr(s2D%srch_order(:,i))
             prev_class = nint(spproj%os_ptcl2D%get(iptcl,'class'))
-            call put_last(prev_class, s2D%srch_order(i,:))
+            call put_last(prev_class, s2D%srch_order(:,i))
         enddo
         call rt%kill
         if( any(s2D%srch_order == 0) ) THROW_HARD('Invalid index in srch_order; simple_strategy2D_srch :: prep4strategy2D_srch')

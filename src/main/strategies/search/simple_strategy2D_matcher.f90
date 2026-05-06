@@ -2,26 +2,27 @@
 module simple_strategy2D_matcher
 use simple_pftc_srch_api
 use simple_classaverager
-use simple_binoris_io,              only: binwrite_oritab
-use simple_progress,                only: progressfile_update
-use simple_strategy2D_alloc,        only: clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob
-use simple_builder,                 only: builder
-use simple_qsys_funs,               only: qsys_job_finished
-use simple_strategy2D,              only: strategy2D, strategy2D_per_ptcl
-use simple_matcher_pftc_prep,       only: prep_pftc4align2D
-use simple_matcher_smpl_and_lplims, only: set_bp_range2d, sample_ptcls4fillin_all, sample_ptcls4update2D
-use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
-use simple_imgarr_utils,            only: alloc_imgarr
-use simple_strategy2D_greedy,       only: strategy2D_greedy
-use simple_strategy2D_greedy_smpl,  only: strategy2D_greedy_smpl
-use simple_strategy2D_inpl,         only: strategy2D_inpl
-use simple_strategy2D_inpl_smpl,    only: strategy2D_inpl_smpl
-use simple_strategy2D_snhc,         only: strategy2D_snhc
-use simple_strategy2D_snhc_smpl,    only: strategy2D_snhc_smpl
-use simple_strategy2D_prob,         only: strategy2D_prob
-use simple_strategy2D_srch,         only: strategy2D_spec
-use simple_strategy2D_tseries,      only: strategy2D_tseries
-use simple_eul_prob_tab2D,          only: eul_prob_tab2D
+use simple_binoris_io,               only: binwrite_oritab
+use simple_progress,                 only: progressfile_update
+use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob, s2D, set_strategy2D_stoch_bound
+use simple_builder,                  only: builder
+use simple_qsys_funs,                only: qsys_job_finished
+use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
+use simple_matcher_pftc_prep,        only: prep_pftc4align2D
+use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4fillin_all, sample_ptcls4update2D
+use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
+use simple_imgarr_utils,             only: alloc_imgarr
+use simple_strategy2D_greedy,        only: strategy2D_greedy
+use simple_strategy2D_greedy_smpl,   only: strategy2D_greedy_smpl
+use simple_strategy2D_inpl,          only: strategy2D_inpl
+use simple_strategy2D_inpl_smpl,     only: strategy2D_inpl_smpl
+use simple_strategy2D_snhc,          only: strategy2D_snhc
+use simple_strategy2D_snhc_smpl,     only: strategy2D_snhc_smpl
+use simple_strategy2D_snhc_smpl_many,only: strategy2D_snhc_smpl_many
+use simple_strategy2D_prob,          only: strategy2D_prob
+use simple_strategy2D_srch,          only: strategy2D_spec
+use simple_strategy2D_tseries,       only: strategy2D_tseries
+use simple_eul_prob_tab2D,           only: eul_prob_tab2D
 implicit none
 
 public :: cluster2D_exec
@@ -55,6 +56,8 @@ type :: cluster2D_ctrl
     logical :: l_restore_cavgs
     logical :: l_assignment_only
     logical :: do_bench
+  contains
+    procedure :: display
 end type cluster2D_ctrl
 
 contains
@@ -95,7 +98,7 @@ contains
         endif
         frac_srch_space = b_ptr%spproj_field%get_avg('frac')
         call sample_particles_for_update()
-        call compute_neigh_frac()
+        call compute_neigh_frac( neigh_frac )
         if( file_exists(p_ptr%frcs) ) call b_ptr%clsfrcs%read(p_ptr%frcs)
         call prepare_batches()
         call ensure_even_odd_partition()
@@ -112,6 +115,7 @@ contains
             rt_alloc_ptcl_imgs2D = toc(t_alloc_ptcl_imgs2D)
             t_prep_pftc_refs2D   = tic()
         endif
+        call set_strategy2D_stoch_bound(params%ncls, neigh_frac)
         call prepare_alignment_references(batchsz_max)
         if( ctrl%do_bench ) rt_prep_pftc_refs2D = toc(t_prep_pftc_refs2D)
         call prep_strategy2D_glob(p_ptr, b_ptr%spproj, b_ptr%pftc%get_nrots(), neigh_frac)
@@ -229,15 +233,16 @@ contains
             endif
         end subroutine sample_particles_for_update
 
-        subroutine compute_neigh_frac()
-            neigh_frac = 0.0
+        subroutine compute_neigh_frac(neighfrac)
+            real, intent(out) :: neighfrac
+            neighfrac = 0.0
             if( p_ptr%extr_iter > p_ptr%extr_lim )then
                 ! done
             else
                 if( ctrl%l_snhc )then
-                    neigh_frac = extremal_decay2D( p_ptr%extr_iter, p_ptr%extr_lim )
+                    neighfrac = extremal_decay2D( p_ptr%extr_iter, p_ptr%extr_lim )
                     if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') &
-                        '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.0*(1.0-neigh_frac)
+                        '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.0*(1.0-neighfrac)
                 endif
             endif
         end subroutine compute_neigh_frac
@@ -278,7 +283,12 @@ contains
 
         subroutine prepare_alignment_references(batchsz_max)
             integer, intent(in) :: batchsz_max
-            call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream)
+            if( str_has_substr(ctrl%refine_flag, '_many') )then
+                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream,&
+                                        &nmany_refs=s2D%snhc_nrefs_bound)
+            else
+                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream)
+            endif
         end subroutine prepare_alignment_references
 
         subroutine build_batch_particles_local()
@@ -300,13 +310,15 @@ contains
                 else
                     select case(trim(ctrl%refine_flag))
                     case('greedy')
-                        allocate(strategy2D_greedy       :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_greedy         :: strategy2Dsrch(iptcl_batch)%ptr)
                     case('greedy_smpl')
-                        allocate(strategy2D_greedy_smpl  :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_greedy_smpl    :: strategy2Dsrch(iptcl_batch)%ptr)
                     case('snhc_smpl')
-                        allocate(strategy2D_snhc_smpl    :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_snhc_smpl      :: strategy2Dsrch(iptcl_batch)%ptr)
+                    case('snhc_smpl_many')
+                        allocate(strategy2D_snhc_smpl_many :: strategy2Dsrch(iptcl_batch)%ptr)
                     case default
-                        allocate(strategy2D_snhc         :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_snhc           :: strategy2Dsrch(iptcl_batch)%ptr)
                     end select
                 endif
             else
@@ -334,9 +346,11 @@ contains
                 else
                     select case(trim(ctrl%refine_flag))
                     case('snhc_smpl')
-                        allocate(strategy2D_snhc_smpl    :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_snhc_smpl      :: strategy2Dsrch(iptcl_batch)%ptr)
+                    case('snhc_smpl_many')
+                        allocate(strategy2D_snhc_smpl_many :: strategy2Dsrch(iptcl_batch)%ptr)
                     case default
-                        allocate(strategy2D_snhc         :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_snhc           :: strategy2Dsrch(iptcl_batch)%ptr)
                     end select
                 endif
             endif
@@ -459,5 +473,24 @@ contains
         end subroutine maybe_write_bench
 
     end subroutine cluster2D_exec
+
+    subroutine display( self )
+        class(cluster2D_ctrl), intent(in) :: self
+        write(logfhandle,'(a)') '>>> CLUSTER2D CONTROL FLAGS:'
+        write(logfhandle,'(a,a)') 'refine_flag           : ', trim(self%refine_flag)
+        write(logfhandle,'(a,l1)') 'l_sample_updates     : ', self%l_sample_updates
+        write(logfhandle,'(a,l1)') 'l_frac_restore       : ', self%l_frac_restore
+        write(logfhandle,'(a,l1)') 'l_partial_sums       : ', self%l_partial_sums
+        write(logfhandle,'(a,l1)') 'l_ctf                : ', self%l_ctf
+        write(logfhandle,'(a,l1)') 'l_snhc               : ', self%l_snhc
+        write(logfhandle,'(a,l1)') 'l_stream             : ', self%l_stream
+        write(logfhandle,'(a,l1)') 'l_greedy             : ', self%l_greedy
+        write(logfhandle,'(a,l1)') 'l_np_cls_defined     : ', self%l_np_cls_defined
+        write(logfhandle,'(a,l1)') 'l_alloc_read_cavgs   : ', self%l_alloc_read_cavgs
+        write(logfhandle,'(a,l1)') 'l_prob_align         : ', self%l_prob_align
+        write(logfhandle,'(a,l1)') 'l_restore_cavgs      : ', self%l_restore_cavgs
+        write(logfhandle,'(a,l1)') 'l_assignment_only    : ', self%l_assignment_only
+        write(logfhandle,'(a,l1)') 'do_bench             : ', self%do_bench
+    end subroutine display
 
 end module simple_strategy2D_matcher

@@ -255,8 +255,9 @@ contains
                 &self%ft_ref2_odd( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs))
     end subroutine alloc_memo_refs
 
-    module subroutine allocate_memo_workspace(self)
-        class(polarft_calc), intent(inout) :: self
+    module subroutine allocate_memo_workspace(self, nmany_refs)
+        class(polarft_calc),           intent(inout) :: self
+        integer,             optional, intent(in)    :: nmany_refs
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer(kind=c_int) :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
         integer             :: ithr
@@ -306,12 +307,6 @@ contains
         ! Output real is in-place, but FFTW still wants the logical "n" length.
         ! We use the same in-place padding convention as your existing code (nrots+2),
         ! but for plan_many we pass onembed=n (FFTW uses stride/dist to walk outputs).
-        onembed(1) = int(self%nrots, c_int)
-        odist      = int(self%nrots+2, c_int)
-        self%plan_bwd1_many = fftwf_plan_many_dft_c2r( rank, n, howmany, &
-        &self%crmat1_many(1)%c, inembed, istride, idist, &
-        &self%crmat1_many(1)%r, onembed, ostride, odist, &
-        &ior(FFTW_MEASURE, FFTW_USE_WISDOM) )
         self%plan_bwd1_single = fftwf_plan_dft_c2r_1d( int(self%nrots, c_int), &
         &self%crvec1(1)%c, self%crvec1(1)%r, &
         &ior(FFTW_MEASURE, FFTW_USE_WISDOM) )
@@ -331,6 +326,31 @@ contains
         &self%crmat1_many(1)%r, inembed, istride, idist, &
         &self%crmat1_many(1)%c, onembed, ostride, odist, &
         &ior(FFTW_MEASURE, FFTW_USE_WISDOM) )
+        if( present(nmany_refs) )then
+            if( nmany_refs < 1 )then
+                THROW_HARD('Invalid nmany_refs: '//int2str(nmany_refs))
+            endif
+            ! R2C plan & memory for 1 particle to all refs evaluations
+            allocate(self%crmat_many(nthr_glob))
+            do ithr = 1,nthr_glob
+                ! Allocate complex storage for (pftsz+1) * nmany_refs transforms
+                self%crmat_many(ithr)%p = fftwf_alloc_complex(int((self%pftsz+1) * nmany_refs, c_size_t))
+                ! Complex view: (pftsz+1, nmany_refs)
+                call c_f_pointer(self%crmat_many(ithr)%p, self%crmat_many(ithr)%c, [self%pftsz+1, nmany_refs])
+                ! Real in-place view on same memory: (nrots+2, nmany_refs)
+                call c_f_pointer(self%crmat_many(ithr)%p, self%crmat_many(ithr)%r, [self%nrots+2, nmany_refs])
+            enddo
+            n(1)       = int(self%nrots, c_int)
+            howmany    = int(nmany_refs, c_int)
+            onembed(1) = n(1)
+            odist      = int(self%nrots+2, c_int)
+            idist      = int(self%pftsz+1, c_int)
+            inembed(1) = idist
+            self%plan_bwd_many_refs = fftwf_plan_many_dft_c2r( 1_c_int, n, howmany, &
+                                    &self%crmat_many(1)%c, inembed, 1_c_int, idist, &
+                                    &self%crmat_many(1)%r, onembed, 1_c_int, odist, &
+                                &ior(FFTW_MEASURE, FFTW_USE_WISDOM) )
+        endif
         ! Retain FFTW wisdom
         wsdm_ret = fftw_export_wisdom_to_filename(fft_wisdoms_fname)
         deallocate(fft_wisdoms_fname)
@@ -365,8 +385,14 @@ contains
             deallocate(self%drvec, self%cmat2_many, self%crmat1_many, self%crvec1)
             call fftwf_destroy_plan(self%plan_mem_r2c_many)
             call fftwf_destroy_plan(self%plan_fwd1_many)
-            call fftwf_destroy_plan(self%plan_bwd1_many)
             call fftwf_destroy_plan(self%plan_bwd1_single)
+        endif
+        if( allocated(self%crmat_many) )then
+            do ithr = 1,size(self%crmat_many)
+                call fftwf_free(self%crmat_many(ithr)%p)
+            enddo
+            deallocate(self%crmat_many)
+            call fftwf_destroy_plan(self%plan_bwd_many_refs)
         endif
     end subroutine kill_memo_workspace
 

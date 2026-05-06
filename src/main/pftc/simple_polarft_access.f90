@@ -162,4 +162,11 @@ contains
         allocate(pft(self%pftsz,self%kfromto(1):self%interpklim), source=CMPLX_ZERO)
     end function allocate_ptcl_pft
 
+    module pure subroutine get_precalc_objfun_vals(self, ind, ithr, vals)
+        class(polarft_calc),  intent(in)  :: self
+        integer,              intent(in)  :: ind, ithr
+        real,                 intent(out) :: vals(self%nrots)
+        vals(:) = self%crmat_many(ithr)%r(1:self%nrots, ind)
+    end subroutine get_precalc_objfun_vals
+
 end submodule simple_polarft_access

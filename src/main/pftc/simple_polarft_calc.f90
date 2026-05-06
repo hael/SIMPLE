@@ -37,7 +37,6 @@ type heap_vars
     real(dp),    pointer :: kcorrs(:)           => null()
     complex(dp), pointer :: pft_ref_8(:,:)      => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:)  => null()
-    complex(dp), pointer :: pft_ref_tmp2_8(:,:) => null()
     complex(dp), pointer :: shvec(:)            => null()
     complex(dp), pointer :: shmat_8(:,:)        => null()
     real(dp),    pointer :: pft_r1_8(:,:)       => null()
@@ -74,7 +73,9 @@ type :: polarft_calc
     complex(sp), allocatable :: pfts_ptcls(:,:,:)        !< 3D complex matrix of particle sections
     ! FFTW plans
     ! batched FFT plans for vectors of length nrots (nk transforms)
-    type(c_ptr) :: plan_fwd1_many, plan_bwd1_many, plan_bwd1_single, plan_mem_r2c_many
+    type(c_ptr) :: plan_fwd1_many, plan_bwd1_single, plan_mem_r2c_many
+    ! batched FFT plans for vectors of length nrots (nrefs transforms)
+    type(c_ptr) :: plan_bwd_many_refs
     ! Memoized terms
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)                      !< Fourier Transform of particle times CTF
     complex(kind=c_float_complex), allocatable :: ft_absptcl_ctf(:,:,:)                   !< Fourier Transform of (particle times CTF)**2
@@ -83,6 +84,8 @@ type :: polarft_calc
     complex(kind=c_float_complex), allocatable :: ft_ref2_even(:,:,:), ft_ref2_odd(:,:,:) !< Fourier Transform of even/odd references squared modulus
     ! buffer: (nrots,nk) holding cvec2 for all k
     type(fftw_cmat),               allocatable :: cmat2_many(:)  ! per thread
+    ! batched backward (c2r) plan: nrefs transforms of length nrots, in-place
+    type(fftw_crmat),              allocatable :: crmat_many(:) ! per thread
     ! batched backward (c2r) plan: nk transforms of length nrots, in-place
     type(fftw_crmat),              allocatable :: crmat1_many(:) ! per thread
     ! single backward (c2r) plan: one k-collapsed transform of length nrots
@@ -137,6 +140,7 @@ type :: polarft_calc
     procedure          :: is_with_ctf
     procedure          :: allocate_pft
     procedure          :: allocate_ptcl_pft
+    procedure          :: get_precalc_objfun_vals
     ! ===== CTF: simple_polarft_ctf.f90
     procedure          :: create_polar_absctfmats
     ! ===== GEOM: simple_polarft_geom.f90
@@ -171,6 +175,8 @@ type :: polarft_calc
     procedure          :: gen_sigma_contrib
     procedure          :: gen_objfun_vals_mirr_vals
     procedure, private :: gen_corrs_mirr_corrs, gen_euclids_mirr_euclids
+    procedure          :: gen_all_objfun_vals
+    procedure          :: gen_all_euclids
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: write_ptcl_pft_range
     procedure          :: write_ref_pfts
@@ -181,12 +187,13 @@ interface
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-   module subroutine new(self, params, nrefs, pfromto, kfromto)
+   module subroutine new(self, params, nrefs, pfromto, kfromto, nmany_refs)
         use simple_parameters, only: parameters
         class(polarft_calc), target, intent(inout) :: self
         class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
+        integer, optional,           intent(in)    :: nmany_refs
     end subroutine new
 
     module subroutine kill(self)
@@ -395,6 +402,12 @@ interface
         complex(sp), allocatable :: pft(:,:)
     end function allocate_ptcl_pft
 
+    module pure subroutine get_precalc_objfun_vals(self, ind, ithr, vals)
+        class(polarft_calc),  intent(in)  :: self
+        integer,              intent(in)  :: ind, ithr
+        real,                 intent(out) :: vals(self%nrots)
+    end subroutine get_precalc_objfun_vals
+
     ! ===== CTF =====
 
     module subroutine create_polar_absctfmats(self, spproj, oritype, pfromto)
@@ -495,8 +508,9 @@ interface
         class(polarft_calc), intent(inout) :: self
     end subroutine alloc_memo_refs
 
-    module subroutine allocate_memo_workspace(self)
+    module subroutine allocate_memo_workspace(self, nmany_refs)
         class(polarft_calc), intent(inout) :: self
+        integer,   optional, intent(in)    :: nmany_refs
     end subroutine allocate_memo_workspace
 
     module subroutine kill_memo_ptcls(self)
@@ -642,6 +656,20 @@ interface
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(out)   :: euclids(self%nrots), meuclids(self%nrots)
     end subroutine gen_euclids_mirr_euclids
+
+    module subroutine gen_all_objfun_vals( self, nr, irefs, iptcl )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: nr
+        integer,             intent(in)    :: irefs(nr)
+        integer,             intent(in)    :: iptcl
+    end subroutine gen_all_objfun_vals
+
+    module subroutine gen_all_euclids( self, nr, irefs, iptcl )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: nr
+        integer,                     intent(in)    :: irefs(nr)
+        integer,                     intent(in)    :: iptcl
+    end subroutine gen_all_euclids
 
     ! ===== I/O: simple_polarft_ops_io.f90
 

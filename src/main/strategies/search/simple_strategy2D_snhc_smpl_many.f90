@@ -1,5 +1,6 @@
 !@descr: 2D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
-module simple_strategy2D_snhc_smpl
+! This strategy is identical to strategy2D_snhc_smpl_many but with a different reference evaluation scheme
+module simple_strategy2D_snhc_smpl_many
 use simple_pftc_srch_api
 use simple_strategy2D_alloc, only: s2D
 use simple_strategy2D,       only: strategy2D
@@ -7,31 +8,31 @@ use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: builder
 implicit none
 
-public :: strategy2D_snhc_smpl
+public :: strategy2D_snhc_smpl_many
 private
 
 logical, parameter :: DEBUG   = .false.
 
-type, extends(strategy2D) :: strategy2D_snhc_smpl
+type, extends(strategy2D) :: strategy2D_snhc_smpl_many
     contains
-    procedure :: new  => new_snhc_smpl
-    procedure :: srch => srch_snhc_smpl
-    procedure :: kill => kill_snhc_smpl
-end type strategy2D_snhc_smpl
+    procedure :: new  => new_snhc_smpl_many
+    procedure :: srch => srch_snhc_smpl_many
+    procedure :: kill => kill_snhc_smpl_many
+end type strategy2D_snhc_smpl_many
 
 contains
 
-    subroutine new_snhc_smpl( self, params, spec, build )
-        class(strategy2D_snhc_smpl), intent(inout) :: self
+    subroutine new_snhc_smpl_many( self, params, spec, build )
+        class(strategy2D_snhc_smpl_many), intent(inout) :: self
         class(parameters),           intent(in)    :: params
         class(strategy2D_spec),      intent(inout) :: spec
         class(builder),              intent(in)    :: build
         call self%s%new(params, spec, build)
         self%spec = spec
-    end subroutine new_snhc_smpl
+    end subroutine new_snhc_smpl_many
 
-    subroutine srch_snhc_smpl( self, os )   
-        class(strategy2D_snhc_smpl), intent(inout) :: self
+    subroutine srch_snhc_smpl_many( self, os )   
+        class(strategy2D_snhc_smpl_many), intent(inout) :: self
         class(oris),                 intent(inout) :: os
         real    :: inpl_corrs(self%s%nrots)
         real    :: inpl_corr
@@ -43,6 +44,14 @@ contains
             call self%s%prep4srch(os)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
+            ! evaluate all references
+            if( self%s%l_sh_first ) then
+                ! TODO
+            else
+                call self%s%b_ptr%pftc%gen_all_euclids(s2D%snhc_nrefs_bound, &
+                    &s2D%srch_order(1:s2D%snhc_nrefs_bound, self%s%iptcl_batch),&
+                    &self%s%iptcl)
+            endif
             ! Class search
             nrefs_coarse_eval = 0
             do isample = 1,self%s%nrefs
@@ -57,7 +66,7 @@ contains
                 if( self%s%l_sh_first )then
                     call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                 else
-                    call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
+                    call self%s%b_ptr%pftc%get_precalc_objfun_vals(isample, self%s%ithr, inpl_corrs)
                 endif
                 call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
                                     &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
@@ -80,12 +89,11 @@ contains
         else
             call os%reject(self%s%iptcl)
         endif
-    end subroutine srch_snhc_smpl
+    end subroutine srch_snhc_smpl_many
 
-    subroutine kill_snhc_smpl( self )
-        class(strategy2D_snhc_smpl), intent(inout) :: self
+    subroutine kill_snhc_smpl_many( self )
+        class(strategy2D_snhc_smpl_many), intent(inout) :: self
         call self%s%kill
-    end subroutine kill_snhc_smpl
+    end subroutine kill_snhc_smpl_many
 
-end module simple_strategy2D_snhc_smpl
-    
+end module simple_strategy2D_snhc_smpl_many

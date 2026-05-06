@@ -983,4 +983,67 @@ contains
         mccs = real(self%heap_vars(ithr)%kcorrs / self%drvec(ithr)%r)
     end subroutine gen_corrs_mirr_corrs
 
+    ! the values are stored in self%crmat_many(ithr)%r( 1:nrots, iref )
+    module subroutine gen_all_objfun_vals( self, nr, irefs, iptcl )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: nr
+        integer,             intent(in)    :: irefs(nr)
+        integer,             intent(in)    :: iptcl
+         select case(self%p_ptr%cc_objfun)
+            case(OBJFUN_CC)
+                THROW_HARD('Not implemented yet')
+            case(OBJFUN_EUCLID)
+                call self%gen_all_euclids(nr, irefs, iptcl )
+        end select
+    end subroutine gen_all_objfun_vals
+
+    module subroutine gen_all_euclids( self, nr, irefs, iptcl )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: nr
+        integer,                     intent(in)    :: irefs(nr)
+        integer,                     intent(in)    :: iptcl
+        complex(sp) :: c
+        real(dp)    :: A, v
+        real(sp)    :: wk
+        integer     :: k, kk, i, j, ithr, ind, iref, p
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        ! self%crmat_many(ithr)%r(:,:) = ZERO
+        if( self%iseven(i) )then
+            do j = 1, nr
+                iref = irefs(j)
+                do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k) / self%sigma2_noise(k,iptcl)
+                    do p = 1, self%pftsz+1
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
+                        self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
+                    enddo
+                end do
+            enddo
+        else
+            do j = 1, nr
+                iref = irefs(j)
+                do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k) / self%sigma2_noise(k,iptcl)
+                    do p = 1, self%pftsz+1
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
+                        self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
+                    enddo
+                end do
+            enddo
+        endif
+        call fftwf_execute_dft_c2r(self%plan_bwd_many_refs, &
+                                    &self%crmat_many(ithr)%c, self%crmat_many(ithr)%r)
+        ! normalization & exponentiation
+        A = self%wsqsums_ptcls(i) * real(2*self%nrots, dp)
+        do j = 1, nr
+            do p = 1, self%nrots
+                v = 1.d0 + real(self%crmat_many(ithr)%r(p,j), dp) / A
+                self%crmat_many(ithr)%r(p,j) = real(exp(-v),sp)
+            enddo
+        enddo
+    end subroutine gen_all_euclids
+
 end submodule simple_polarft_corr

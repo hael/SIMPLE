@@ -47,7 +47,7 @@ contains
         class(parameters), intent(in)  :: params
         integer,           intent(out) :: nstages
         select case(trim(params%refine))
-            case('snhc','snhc_smpl','prob')
+            case('snhc','snhc_smpl','snhc_smpl_many','prob')
                 nstages = NSTAGES_CLS
             case DEFAULT
                 THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
@@ -213,9 +213,8 @@ contains
         type(cluster2D_stage_cfg), intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
         integer,                   intent(in)    :: istage
-        cfg%refine = trim(params%refine)
         if( istage < STOCH_SAMPL_STAGE )then
-            cfg%refine = 'snhc_smpl'
+            cfg%refine = trim(params%refine)
         else
             cfg%refine = 'prob'
         endif
