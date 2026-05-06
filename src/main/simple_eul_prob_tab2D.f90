@@ -19,6 +19,8 @@ type :: eul_prob_tab2D
     class(parameters), pointer  :: p_ptr => null()
     type(ptcl_ref), allocatable :: loc_tab(:,:)      !< 2D search table (nclasses, nptcls)
     type(ptcl_ref), allocatable :: assgn_map(:)      !< assignment map (nptcls)
+    real,           allocatable :: seed_shifts(:,:)  !< per-particle seeded shift (2,nptcls)
+    logical,        allocatable :: seed_has_sh(:)    !< per-particle seeded shift flag
     integer,        allocatable :: pinds(:)          !< particle indices for processing
     logical,        allocatable :: class_exists(:)   !< class population filter
     integer                     :: nptcls            !< size of pinds array
@@ -71,6 +73,8 @@ contains
         self%nhood_sz = min(self%nhood_sz, params%npeaks_inpl)
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%loc_tab(self%nclasses, self%nptcls), self%assgn_map(self%nptcls))
+        allocate(self%seed_shifts(2,self%nptcls), source=0.)
+        allocate(self%seed_has_sh(self%nptcls), source=.false.)
         !$omp parallel do default(shared) private(i,iptcl,icls) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             iptcl = self%pinds(i)
@@ -103,15 +107,11 @@ contains
         integer :: i, icls, iptcl, ithr, irot, irot0, icls_prev, iref_n, nactive, nhood_sz_loc, ninpl_smpl, order_ind
         integer :: active_cls(self%nclasses)
         integer :: loc(1), vec_nrots(self%b_ptr%pftc%get_nrots())
-        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2)
-        real    :: rotmats(2,2,self%b_ptr%pftc%get_nrots())
+        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3)
         real    :: inpl_corrs(self%b_ptr%pftc%get_nrots()), cls_dists(self%nclasses), cls_dists_work(self%nclasses)
         real    :: inpl_corr, power, neigh_frac
         logical :: class_active(self%nclasses)
         call seed_rnd
-        do irot = 1, self%b_ptr%pftc%get_nrots()
-            call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmats(:,:,irot))
-        enddo
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -142,7 +142,7 @@ contains
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls,icls_prev,inpl_corrs,loc,cls_dists,cls_dists_work,iref_n,cxy_prob,vec_nrots,order_ind,inpl_corr,rot_xy) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls,icls_prev,inpl_corrs,loc,cls_dists,cls_dists_work,iref_n,cxy_prob,vec_nrots,order_ind,inpl_corr) proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
@@ -162,22 +162,16 @@ contains
                         endif
                     endif
                 endif
+                self%seed_shifts(:,i) = cxy(2:3)
+                self%seed_has_sh(i)   = .true.
                 ! (2) search class references using that shared shift
                 cls_dists = huge(1.0)
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
                     call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, cxy(2:3), inpl_corrs)
                     call power_sampling(power, self%b_ptr%pftc%get_nrots(), inpl_corrs, vec_nrots, ninpl_smpl, irot, order_ind, inpl_corr)
-                    rot_xy = 0.
-                    if( irot > 0 )then
-                        rot_xy(1) = cxy(2) * rotmats(1,1,irot) + cxy(3) * rotmats(2,1,irot)
-                        rot_xy(2) = cxy(2) * rotmats(1,2,irot) + cxy(3) * rotmats(2,2,irot)
-                    endif
                     self%loc_tab(icls,i)%dist   = eulprob_dist_switch(inpl_corr, self%p_ptr%cc_objfun)
                     self%loc_tab(icls,i)%inpl   = irot
-                    self%loc_tab(icls,i)%x      = rot_xy(1)
-                    self%loc_tab(icls,i)%y      = rot_xy(2)
-                    self%loc_tab(icls,i)%has_sh = irot > 0
                     cls_dists(icls) = self%loc_tab(icls,i)%dist
                 end do
                 ! (3) refine shifts for a neighborhood of classes around the best one
@@ -376,6 +370,7 @@ contains
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_icls, assigned_ptcl)
             self%assgn_map(assigned_ptcl)%dist = dists_raw(assigned_icls, assigned_ptcl)
+            call materialize_seed_shift(assigned_ptcl)
         end do
         if( any(ptcl_avail) )then
             do i = 1, self%nptcls
@@ -402,9 +397,35 @@ contains
                 if( assigned_icls == 0 ) THROW_HARD('Failed particle assignment in eul_prob_tab2D%ref_assign_pow_smpl')
                 self%assgn_map(i) = self%loc_tab(assigned_icls, i)
                 self%assgn_map(i)%dist = dists_raw(assigned_icls, i)
+                call materialize_seed_shift(i)
                 ptcl_avail(i)     = .false.
             end do
         endif
+
+    contains
+
+        subroutine materialize_seed_shift(iptcl_tab)
+            integer, intent(in) :: iptcl_tab
+            real :: rotmat(2,2), rot_xy(2)
+            integer :: irot_assgn
+            if( .not. self%p_ptr%l_doshift ) return
+            if( self%assgn_map(iptcl_tab)%has_sh ) return
+            if( .not. allocated(self%seed_has_sh) ) return
+            if( .not. self%seed_has_sh(iptcl_tab) ) return
+            irot_assgn = self%assgn_map(iptcl_tab)%inpl
+            if( irot_assgn < 1 )then
+                self%assgn_map(iptcl_tab)%x      = 0.
+                self%assgn_map(iptcl_tab)%y      = 0.
+                self%assgn_map(iptcl_tab)%has_sh = .true.
+                return
+            endif
+            call rotmat2d(self%b_ptr%pftc%get_rot(irot_assgn), rotmat)
+            rot_xy(1) = self%seed_shifts(1,iptcl_tab) * rotmat(1,1) + self%seed_shifts(2,iptcl_tab) * rotmat(2,1)
+            rot_xy(2) = self%seed_shifts(1,iptcl_tab) * rotmat(1,2) + self%seed_shifts(2,iptcl_tab) * rotmat(2,2)
+            self%assgn_map(iptcl_tab)%x      = rot_xy(1)
+            self%assgn_map(iptcl_tab)%y      = rot_xy(2)
+            self%assgn_map(iptcl_tab)%has_sh = .true.
+        end subroutine materialize_seed_shift
     end subroutine ref_assign_pow_smpl
 
     ! DESTRUCTOR
@@ -413,6 +434,8 @@ contains
         class(eul_prob_tab2D), intent(inout) :: self
         if( allocated(self%loc_tab)        ) deallocate(self%loc_tab)
         if( allocated(self%assgn_map)      ) deallocate(self%assgn_map)
+        if( allocated(self%seed_shifts)    ) deallocate(self%seed_shifts)
+        if( allocated(self%seed_has_sh)    ) deallocate(self%seed_has_sh)
         if( allocated(self%pinds)          ) deallocate(self%pinds)
         if( allocated(self%class_exists)   ) deallocate(self%class_exists)
         self%b_ptr => null()
@@ -430,6 +453,10 @@ contains
         call fopen(funit, binfname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
         write(unit=funit, pos=1) file_header
         addr = sizeof(file_header) + 1
+        write(funit, pos=addr) self%seed_shifts
+        addr = addr + sizeof(self%seed_shifts)
+        write(funit, pos=addr) self%seed_has_sh
+        addr = addr + sizeof(self%seed_has_sh)
         write(funit, pos=addr) self%loc_tab
         call fclose(funit)
     end subroutine write_tab
@@ -438,6 +465,8 @@ contains
         class(eul_prob_tab2D), intent(inout) :: self
         class(string),         intent(in)    :: binfname
         type(ptcl_ref), allocatable :: mat_loc(:,:)
+        real,           allocatable :: seed_shifts_loc(:,:)
+        logical,        allocatable :: seed_has_sh_loc(:)
         integer, allocatable :: pind2glob(:)
         integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nclasses_loc, i_loc, i_glob, pind, max_pind
         if( file_exists(binfname) )then
@@ -451,12 +480,17 @@ contains
         nptcls_loc   = file_header(2)
         if( nclasses_loc .ne. self%nclasses ) THROW_HARD('nclasses mismatch in read_tab_to_glob!')
         allocate(mat_loc(nclasses_loc, nptcls_loc))
+        allocate(seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
         addr = sizeof(file_header) + 1
+        read(unit=funit, pos=addr) seed_shifts_loc
+        addr = addr + sizeof(seed_shifts_loc)
+        read(unit=funit, pos=addr) seed_has_sh_loc
+        addr = addr + sizeof(seed_has_sh_loc)
         read(unit=funit, pos=addr) mat_loc
         call fclose(funit)
         max_pind = max(maxval(self%pinds), maxval(mat_loc(1,:)%pind))
         if( max_pind < 1 )then
-            deallocate(mat_loc)
+            deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc)
             return
         endif
         allocate(pind2glob(max_pind), source=0)
@@ -469,10 +503,14 @@ contains
             pind = mat_loc(1,i_loc)%pind
             if( pind < 1 .or. pind > max_pind ) cycle
             i_glob = pind2glob(pind)
-            if( i_glob > 0 ) self%loc_tab(:,i_glob) = mat_loc(:,i_loc)
+            if( i_glob > 0 )then
+                self%loc_tab(:,i_glob)     = mat_loc(:,i_loc)
+                self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
+                self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
+            endif
         end do
         !$omp end parallel do
-        deallocate(mat_loc, pind2glob)
+        deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)
     end subroutine read_tab_to_glob
 
     subroutine write_assignment( self, binfname )

@@ -21,6 +21,8 @@ type :: eul_prob_tab
     type(ptcl_ref), allocatable :: loc_tab(:,:)    !< 2D search table (nspace*nstates, nptcls)
     type(ptcl_ref), allocatable :: state_tab(:,:)  !< 2D search table (nstates,        nptcls)
     type(ptcl_ref), allocatable :: assgn_map(:)    !< assignment map                  (nptcls)
+    real,           allocatable :: seed_shifts(:,:) !< per-particle seeded shift       (2,nptcls)
+    logical,        allocatable :: seed_has_sh(:)   !< per-particle seeded shift flag  (nptcls)
     integer,        allocatable :: pinds(:)        !< particle indices for processing
     integer,        allocatable :: ssinds(:)       !< non-empty state indices
     integer,        allocatable :: sinds(:)        !< non-empty state indices of each ref
@@ -107,6 +109,8 @@ contains
         enddo
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%loc_tab(self%nrefs,self%nptcls), self%assgn_map(self%nptcls),self%state_tab(self%nstates,self%nptcls))
+        allocate(self%seed_shifts(2,self%nptcls), source=0.)
+        allocate(self%seed_has_sh(self%nptcls), source=.false.)
         !$omp parallel do default(shared) private(i,iptcl,si,ri) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             iptcl = self%pinds(i)
@@ -148,10 +152,9 @@ contains
         integer, allocatable   :: locn(:,:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
-        integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, nrots, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
+        integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
                   &istate, iref_start
-        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres(self%p_ptr%nstates)
-        real    :: rotmats(2,2,self%b_ptr%pftc%get_nrots())
+        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), inpl_athres(self%p_ptr%nstates)
         real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         integer(timer_int_kind) :: t_local
         real(timer_int_kind) :: rt_shift_seed, rt_ref_sweep, rt_select, rt_shift_refine
@@ -167,10 +170,6 @@ contains
         self%bench_fill_neigh_eval          = 0.
         self%bench_fill_shift_refine        = 0.
         call seed_rnd
-        nrots = self%b_ptr%pftc%get_nrots()
-        do irot = 1, nrots
-            call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmats(:,:,irot))
-        enddo
         projs_ns = 0
         do si = 1, self%nstates
             istate = self%ssinds(si)
@@ -199,7 +198,7 @@ contains
             rt_select       = 0.
             rt_shift_refine = 0.
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob,rot_xy,t_local)&
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob,t_local)&
             !$omp proc_bind(close) schedule(static) reduction(+:rt_shift_seed,rt_ref_sweep,rt_select,rt_shift_refine)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
@@ -219,6 +218,8 @@ contains
                 else
                     cxy(2:3) = 0.
                 endif
+                self%seed_shifts(:,i) = cxy(2:3)
+                self%seed_has_sh(i)   = .true.
                 rt_shift_seed = rt_shift_seed + toc(t_local)
                 ! (2) search projection directions using those shifts for all references
                 t_local = tic()
@@ -228,15 +229,9 @@ contains
                     call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
                     dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
                     irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
-                    ! rotate the shift vector to the frame of reference
-                    rot_xy(1)                 = cxy(2) * rotmats(1,1,irot) + cxy(3) * rotmats(2,1,irot)
-                    rot_xy(2)                 = cxy(2) * rotmats(1,2,irot) + cxy(3) * rotmats(2,2,irot)
                     self%loc_tab(ri,i)%dist   = dists_inpl(irot,ithr)
                     dists_refs(  ri,ithr)     = dists_inpl(irot,ithr)
                     self%loc_tab(ri,i)%inpl   = irot
-                    self%loc_tab(ri,i)%x      = rot_xy(1)
-                    self%loc_tab(ri,i)%y      = rot_xy(2)
-                    self%loc_tab(ri,i)%has_sh = .true.
                 enddo
                 rt_ref_sweep = rt_ref_sweep + toc(t_local)
                 ! (3) see if we can refine the shifts by re-searching them for individual references in the 
@@ -441,6 +436,7 @@ contains
             assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
+            call materialize_seed_shift(assigned_ptcl)
             ! update the iref_dist and iref_dist_inds
             do iref = 1, self%nrefs
                 do while( iref_dist_inds(iref) < self%nptcls .and. .not.(ptcl_avail(stab_inds(iref_dist_inds(iref),iref))))
@@ -449,6 +445,31 @@ contains
                 enddo
             enddo
         enddo
+
+    contains
+
+        subroutine materialize_seed_shift(iptcl_tab)
+            integer, intent(in) :: iptcl_tab
+            real :: rotmat(2,2), rot_xy(2)
+            integer :: irot_assgn
+            if( .not. self%p_ptr%l_doshift ) return
+            if( self%assgn_map(iptcl_tab)%has_sh ) return
+            if( .not. allocated(self%seed_has_sh) ) return
+            if( .not. self%seed_has_sh(iptcl_tab) ) return
+            irot_assgn = self%assgn_map(iptcl_tab)%inpl
+            if( irot_assgn < 1 )then
+                self%assgn_map(iptcl_tab)%x      = 0.
+                self%assgn_map(iptcl_tab)%y      = 0.
+                self%assgn_map(iptcl_tab)%has_sh = .true.
+                return
+            endif
+            call rotmat2d(self%b_ptr%pftc%get_rot(irot_assgn), rotmat)
+            rot_xy(1) = self%seed_shifts(1,iptcl_tab) * rotmat(1,1) + self%seed_shifts(2,iptcl_tab) * rotmat(2,1)
+            rot_xy(2) = self%seed_shifts(1,iptcl_tab) * rotmat(1,2) + self%seed_shifts(2,iptcl_tab) * rotmat(2,2)
+            self%assgn_map(iptcl_tab)%x      = rot_xy(1)
+            self%assgn_map(iptcl_tab)%y      = rot_xy(2)
+            self%assgn_map(iptcl_tab)%has_sh = .true.
+        end subroutine materialize_seed_shift
     end subroutine ref_assign
 
     ! state normalization (same energy) of the state_tab
@@ -545,6 +566,10 @@ contains
         call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) file_header
         addr = sizeof(file_header) + 1
+        write(funit,pos=addr) self%seed_shifts
+        addr = addr + sizeof(self%seed_shifts)
+        write(funit,pos=addr) self%seed_has_sh
+        addr = addr + sizeof(self%seed_has_sh)
         write(funit,pos=addr) self%loc_tab
         call fclose(funit)
     end subroutine write_tab
@@ -554,6 +579,8 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         class(string),       intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: mat_loc(:,:)
+        real,                allocatable   :: seed_shifts_loc(:,:)
+        logical,             allocatable   :: seed_has_sh_loc(:)
         integer, allocatable :: pind2glob(:)
         integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob, pind, max_pind
         if( file_exists(binfname) )then
@@ -568,13 +595,18 @@ contains
         nptcls_loc = file_header(2)
         if( nrefs_loc .ne. self%nrefs ) THROW_HARD( 'nrefs should be the same as nrefs in this partition file!' )
         allocate(mat_loc(nrefs_loc, nptcls_loc))
+        allocate(seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
         ! read partition information
         addr = sizeof(file_header) + 1
+        read(unit=funit,pos=addr) seed_shifts_loc
+        addr = addr + sizeof(seed_shifts_loc)
+        read(unit=funit,pos=addr) seed_has_sh_loc
+        addr = addr + sizeof(seed_has_sh_loc)
         read(unit=funit,pos=addr) mat_loc
         call fclose(funit)
         max_pind = max(maxval(self%pinds), maxval(mat_loc(1,:)%pind))
         if( max_pind < 1 )then
-            deallocate(mat_loc)
+            deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc)
             return
         endif
         allocate(pind2glob(max_pind), source=0)
@@ -587,10 +619,14 @@ contains
             pind = mat_loc(1,i_loc)%pind
             if( pind < 1 .or. pind > max_pind ) cycle
             i_glob = pind2glob(pind)
-            if( i_glob > 0 ) self%loc_tab(:,i_glob) = mat_loc(:,i_loc)
+            if( i_glob > 0 )then
+                self%loc_tab(:,i_glob)    = mat_loc(:,i_loc)
+                self%seed_shifts(:,i_glob)= seed_shifts_loc(:,i_loc)
+                self%seed_has_sh(i_glob)  = seed_has_sh_loc(i_loc)
+            endif
         end do
         !$omp end parallel do
-        deallocate(mat_loc, pind2glob)
+        deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)
     end subroutine read_tab_to_glob
 
     subroutine write_state_tab( self, binfname )
@@ -700,6 +736,8 @@ contains
         if( allocated(self%loc_tab)      ) deallocate(self%loc_tab)
         if( allocated(self%state_tab)    ) deallocate(self%state_tab)
         if( allocated(self%assgn_map)    ) deallocate(self%assgn_map)
+        if( allocated(self%seed_shifts)  ) deallocate(self%seed_shifts)
+        if( allocated(self%seed_has_sh)  ) deallocate(self%seed_has_sh)
         if( allocated(self%pinds)        ) deallocate(self%pinds)
         if( allocated(self%ssinds)       ) deallocate(self%ssinds)
         if( allocated(self%sinds)        ) deallocate(self%sinds)

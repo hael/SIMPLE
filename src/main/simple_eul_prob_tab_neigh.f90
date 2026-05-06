@@ -79,10 +79,9 @@ contains
         type(eval_ws)            :: eval_work
         integer, allocatable     :: inds_sorted(:,:)
         real,    allocatable     :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:)
-        integer :: i, ri, istate, ithr, irot, max_refs_to_refine
+        integer :: i, ri, istate, ithr, max_refs_to_refine
         integer :: iptcl, nsubs, npeak_target, si, iref_full
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        real    :: rotmats(2,2,self%b_ptr%pftc%get_nrots())
         integer(timer_int_kind) :: t_local
         real(timer_int_kind) :: rt_shift_seed, rt_coarse_sweep, rt_select, rt_neigh_eval, rt_shift_refine
         real(timer_int_kind) :: rt_shift_seed_loc, rt_coarse_sweep_loc, rt_select_loc, rt_neigh_eval_loc, rt_shift_refine_loc
@@ -100,9 +99,6 @@ contains
         self%bench_fill_neigh_eval          = 0.
         self%bench_fill_shift_refine        = 0.
         call seed_rnd
-        do irot = 1, self%b_ptr%pftc%get_nrots()
-            call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmats(:,:,irot))
-        enddo
         nsubs = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
         self%bench_fill_nsubs    = nsubs
@@ -165,6 +161,8 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 call process_particle(i, iptcl, ithr, .true., shift_seed, rt_shift_seed_loc, rt_coarse_sweep_loc,&
                     &rt_select_loc, rt_neigh_eval_loc, rt_shift_refine_loc, n_neigh_eval_loc, n_shift_refine_loc)
+                self%seed_shifts(:,i) = shift_seed(2:3)
+                self%seed_has_sh(i)   = .true.
                 rt_shift_seed   = rt_shift_seed   + rt_shift_seed_loc
                 rt_coarse_sweep = rt_coarse_sweep + rt_coarse_sweep_loc
                 rt_select       = rt_select       + rt_select_loc
@@ -310,7 +308,6 @@ contains
             real,    intent(in) :: shift_seed_loc(3)
             logical, intent(in) :: l_with_shift
             integer :: si_loc, istate_loc, isub_loc, full_ref_subspace_loc, irot_loc, ri_loc, ipeak_loc, coarse_proj_loc
-            real    :: rotated_shift_loc(2)
             coarse_ws%best_subspace_dist(:,:,ithr_loc) = huge(1.0)
             coarse_ws%peak_subspace_count(:,ithr_loc)  = 0
             do si_loc = 1, self%nstates
@@ -331,9 +328,7 @@ contains
                     ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace_loc)
                     if( ri_loc > 0 )then
                         if( l_with_shift )then
-                            rotated_shift_loc(1) = shift_seed_loc(2) * rotmats(1,1,irot_loc) + shift_seed_loc(3) * rotmats(2,1,irot_loc)
-                            rotated_shift_loc(2) = shift_seed_loc(2) * rotmats(1,2,irot_loc) + shift_seed_loc(3) * rotmats(2,2,irot_loc)
-                            call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, rotated_shift_loc(1), rotated_shift_loc(2), .true.)
+                            call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
                         else
                             call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
                         endif
@@ -388,7 +383,6 @@ contains
             logical, intent(in) :: l_with_shift
             integer, intent(out) :: neval_loc
             integer :: ri_loc, istate_loc, iproj_loc, irot_loc, iref_loc
-            real    :: rotated_shift_loc(2)
             neval_loc = 0
             do ri_loc = 1, self%nrefs
                 istate_loc = self%sinds(ri_loc)
@@ -403,9 +397,7 @@ contains
                 dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
                 irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc), inpl_athres(istate_loc), self%p_ptr%prob_athres)
                 if( l_with_shift )then
-                    rotated_shift_loc(1) = shift_seed_loc(2) * rotmats(1,1,irot_loc) + shift_seed_loc(3) * rotmats(2,1,irot_loc)
-                    rotated_shift_loc(2) = shift_seed_loc(2) * rotmats(1,2,irot_loc) + shift_seed_loc(3) * rotmats(2,2,irot_loc)
-                    call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, rotated_shift_loc(1), rotated_shift_loc(2), .true.)
+                    call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
                 else
                     call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
                 endif
@@ -728,6 +720,7 @@ contains
                 frontier%ptcl_avail(assigned_ptcl) = .false.
                 nleft = nleft - 1
                 self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
+                call materialize_seed_shift(assigned_ptcl)
                 do idx = graph%ptcl_offsets(assigned_ptcl), graph%ptcl_offsets(assigned_ptcl+1)-1
                     iref = graph%ptcl_refs(idx)
                     m    = graph%ref_counts(iref)
@@ -750,8 +743,32 @@ contains
                 endif
                 if( fallback_ref == 0 ) fallback_ref = 1
                 self%assgn_map(i) = self%loc_tab(fallback_ref,i)
+                call materialize_seed_shift(i)
             enddo
         end subroutine assign_remaining_particles_from_best_touched_ref
+
+        subroutine materialize_seed_shift(iptcl_tab)
+            integer, intent(in) :: iptcl_tab
+            real :: rotmat(2,2), rot_xy(2)
+            integer :: irot_assgn
+            if( .not. self%p_ptr%l_doshift ) return
+            if( self%assgn_map(iptcl_tab)%has_sh ) return
+            if( .not. allocated(self%seed_has_sh) ) return
+            if( .not. self%seed_has_sh(iptcl_tab) ) return
+            irot_assgn = self%assgn_map(iptcl_tab)%inpl
+            if( irot_assgn < 1 )then
+                self%assgn_map(iptcl_tab)%x      = 0.
+                self%assgn_map(iptcl_tab)%y      = 0.
+                self%assgn_map(iptcl_tab)%has_sh = .true.
+                return
+            endif
+            call rotmat2d(self%b_ptr%pftc%get_rot(irot_assgn), rotmat)
+            rot_xy(1) = self%seed_shifts(1,iptcl_tab) * rotmat(1,1) + self%seed_shifts(2,iptcl_tab) * rotmat(2,1)
+            rot_xy(2) = self%seed_shifts(1,iptcl_tab) * rotmat(1,2) + self%seed_shifts(2,iptcl_tab) * rotmat(2,2)
+            self%assgn_map(iptcl_tab)%x      = rot_xy(1)
+            self%assgn_map(iptcl_tab)%y      = rot_xy(2)
+            self%assgn_map(iptcl_tab)%has_sh = .true.
+        end subroutine materialize_seed_shift
 
         integer function pick_best_evaluated_ref(iptcl_loc) result(ri_best)
             integer, intent(in) :: iptcl_loc
