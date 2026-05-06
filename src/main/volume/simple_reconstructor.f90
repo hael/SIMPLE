@@ -226,7 +226,7 @@ contains
         integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3, 2)
         integer   :: fpllims(3, 2), hp, kp, pf, ix, iy, iz, hx, ky, mz
         integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
-        real      :: pf2
+        real      :: pf2, eps_norm, inv_wdim
         ! window size
         iwinsz = ceiling(KBWINSZ - 0.5)
         ! stride along h dimension for interpolation: all threads are at least
@@ -242,14 +242,16 @@ contains
             end do
         endif
         ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
-        fpllims_pd = fpl%frlims
-        pf         = OSMPL_PAD_FAC
-        pf2        = real(pf*pf)
-        fpllims    = fpllims_pd
+        fpllims_pd   = fpl%frlims
+        pf           = OSMPL_PAD_FAC
+        pf2          = real(pf*pf)
+        fpllims      = fpllims_pd
         fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
         fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
         fpllims(2,1) = ceil_div (fpllims_pd(2,1), pf)
         fpllims(2,2) = floor_div(fpllims_pd(2,2), pf)
+        eps_norm     = epsilon(1.0)
+        inv_wdim     = 1.0 / real(self%wdim)
         ! integer disk gate: bit-equivalent to nint(sqrt(h*h+k*k)) > nyq
         nyq_disk = self%nyq * (self%nyq + 1)
         ! KB interpolation / insertion
@@ -324,7 +326,7 @@ contains
             real, intent(in)  :: loc(3)
             real, intent(out) :: wx(:), wy(:), wz(:)
             integer :: i, win_lo(3)
-            real    :: base(3), ww(3)
+            real    :: base(3), ww(3), sx, sy, sz
             win_lo = nint(loc) - iwinsz
             base   = real(win_lo) - loc
             do i = 1, self%wdim
@@ -333,9 +335,24 @@ contains
                 wy(i) = ww(2)
                 wz(i) = ww(3)
             end do
-            wx = wx * (1.0 / sum(wx))
-            wy = wy * (1.0 / sum(wy))
-            wz = wz * (1.0 / sum(wz))
+            sx = sum(wx)
+            sy = sum(wy)
+            sz = sum(wz)
+            if( abs(sx) > eps_norm )then
+                wx = wx * (1.0 / sx)
+            else
+                wx = inv_wdim
+            endif
+            if( abs(sy) > eps_norm )then
+                wy = wy * (1.0 / sy)
+            else
+                wy = inv_wdim
+            endif
+            if( abs(sz) > eps_norm )then
+                wz = wz * (1.0 / sz)
+            else
+                wz = inv_wdim
+            endif
         end subroutine kb_apod_vecs_3d_fast
 
     end subroutine insert_plane_oversamp

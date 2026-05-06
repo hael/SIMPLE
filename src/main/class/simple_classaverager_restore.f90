@@ -330,6 +330,7 @@ contains
         integer :: cyc_lims_cropR(2,2), cyc_lims_crop(3,2), sigma2_kfromto(2)
         integer :: h,k,hh,kk,hp,kp,l,m, icls, nyq_crop
         integer :: iptcl, i, iwinsz, wdim, ithr, h_sq, nyq_disk
+        real    :: eps_norm, inv_wdim
         logical :: l_conjg
         ! Interpolation parameters
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
@@ -345,6 +346,8 @@ contains
         cyc_lims_crop = cavgs%even%fit%loop_lims(3)
         cyc_lims_cropR = transpose(cyc_lims_crop(1:2,:))
         sigma2_kfromto = [1, nyq_crop]
+        eps_norm = epsilon(1.0)
+        inv_wdim = 1.0 / real(wdim)
         if( p_ptr%l_ml_reg ) then
             sigma2_kfromto(1) = lbound(b_ptr%esig%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
@@ -458,7 +461,7 @@ contains
             real, intent(in)  :: loc(2)
             real, intent(out) :: wx(wdim), wy(wdim)
             integer :: i, win_lo(2)
-            real    :: base(2), ww(2)
+            real    :: base(2), ww(2), sx, sy
             win_lo = nint(loc) - iwinsz
             base   = real(win_lo) - loc
             do i = 1, wdim
@@ -466,8 +469,18 @@ contains
                 wx(i) = ww(1)
                 wy(i) = ww(2)
             end do
-            wx = wx * (1.0 / sum(wx))
-            wy = wy * (1.0 / sum(wy))
+            sx = sum(wx)
+            sy = sum(wy)
+            if( abs(sx) > eps_norm )then
+                wx = wx * (1.0 / sx)
+            else
+                wx = inv_wdim
+            endif
+            if( abs(sy) > eps_norm )then
+                wy = wy * (1.0 / sy)
+            else
+                wy = inv_wdim
+            endif
         end subroutine kb_apod_vecs_2d_fast
 
     end subroutine cavger_update_sums
