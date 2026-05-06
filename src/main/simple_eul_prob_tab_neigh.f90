@@ -79,9 +79,10 @@ contains
         type(eval_ws)            :: eval_work
         integer, allocatable     :: inds_sorted(:,:)
         real,    allocatable     :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:)
-        integer :: i, ri, istate, ithr, max_refs_to_refine
+        integer :: i, ri, istate, ithr, irot, max_refs_to_refine
         integer :: iptcl, nsubs, npeak_target, si, iref_full
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
+        real    :: rotmats(2,2,self%b_ptr%pftc%get_nrots())
         integer(timer_int_kind) :: t_local
         real(timer_int_kind) :: rt_shift_seed, rt_coarse_sweep, rt_select, rt_neigh_eval, rt_shift_refine
         real(timer_int_kind) :: rt_shift_seed_loc, rt_coarse_sweep_loc, rt_select_loc, rt_neigh_eval_loc, rt_shift_refine_loc
@@ -99,6 +100,9 @@ contains
         self%bench_fill_neigh_eval          = 0.
         self%bench_fill_shift_refine        = 0.
         call seed_rnd
+        do irot = 1, self%b_ptr%pftc%get_nrots()
+            call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmats(:,:,irot))
+        enddo
         nsubs = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
         self%bench_fill_nsubs    = nsubs
@@ -306,7 +310,7 @@ contains
             real,    intent(in) :: shift_seed_loc(3)
             logical, intent(in) :: l_with_shift
             integer :: si_loc, istate_loc, isub_loc, full_ref_subspace_loc, irot_loc, ri_loc, ipeak_loc, coarse_proj_loc
-            real    :: rotmat_loc(2,2), rotated_shift_loc(2)
+            real    :: rotated_shift_loc(2)
             coarse_ws%best_subspace_dist(:,:,ithr_loc) = huge(1.0)
             coarse_ws%peak_subspace_count(:,ithr_loc)  = 0
             do si_loc = 1, self%nstates
@@ -327,8 +331,8 @@ contains
                     ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace_loc)
                     if( ri_loc > 0 )then
                         if( l_with_shift )then
-                            call rotmat2d(self%b_ptr%pftc%get_rot(irot_loc), rotmat_loc)
-                            rotated_shift_loc = matmul(shift_seed_loc(2:3), rotmat_loc)
+                            rotated_shift_loc(1) = shift_seed_loc(2) * rotmats(1,1,irot_loc) + shift_seed_loc(3) * rotmats(2,1,irot_loc)
+                            rotated_shift_loc(2) = shift_seed_loc(2) * rotmats(1,2,irot_loc) + shift_seed_loc(3) * rotmats(2,2,irot_loc)
                             call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, rotated_shift_loc(1), rotated_shift_loc(2), .true.)
                         else
                             call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
@@ -384,7 +388,7 @@ contains
             logical, intent(in) :: l_with_shift
             integer, intent(out) :: neval_loc
             integer :: ri_loc, istate_loc, iproj_loc, irot_loc, iref_loc
-            real    :: rotmat_loc(2,2), rotated_shift_loc(2)
+            real    :: rotated_shift_loc(2)
             neval_loc = 0
             do ri_loc = 1, self%nrefs
                 istate_loc = self%sinds(ri_loc)
@@ -399,8 +403,8 @@ contains
                 dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
                 irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc), inpl_athres(istate_loc), self%p_ptr%prob_athres)
                 if( l_with_shift )then
-                    call rotmat2d(self%b_ptr%pftc%get_rot(irot_loc), rotmat_loc)
-                    rotated_shift_loc = matmul(shift_seed_loc(2:3), rotmat_loc)
+                    rotated_shift_loc(1) = shift_seed_loc(2) * rotmats(1,1,irot_loc) + shift_seed_loc(3) * rotmats(2,1,irot_loc)
+                    rotated_shift_loc(2) = shift_seed_loc(2) * rotmats(1,2,irot_loc) + shift_seed_loc(3) * rotmats(2,2,irot_loc)
                     call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, rotated_shift_loc(1), rotated_shift_loc(2), .true.)
                 else
                     call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
