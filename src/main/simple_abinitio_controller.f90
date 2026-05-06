@@ -9,8 +9,6 @@ integer, parameter :: PROB_REFINE_STAGE          = 4     ! prob refinement stage
 integer, parameter :: PROB_NEIGH_REFINE_STAGE    = 7     ! prob_neigh refinement stages 7-8
 integer, parameter :: STOCH_SAMPL_STAGE          = 5     ! we switch from greedy to stochastic balanced class sampling
 integer, parameter :: LPAUTO_STAGE               = 5 + 1 ! we switch on automatic low-pass limit estimation after one prob stage
-integer, parameter :: REFINE3D_ROUTE_STD         = 1
-integer, parameter :: REFINE3D_ROUTE_CAVGS       = 2
 integer, parameter :: NSPACE_SUB                 = 126
 
 type :: refine3D_stage_cfg
@@ -23,15 +21,6 @@ end type refine3D_stage_cfg
 
 contains
 
-    integer function classify_refine3D_route( l_cavgs ) result(route)
-        logical, intent(in) :: l_cavgs
-        if( l_cavgs )then
-            route = REFINE3D_ROUTE_CAVGS
-        else
-            route = REFINE3D_ROUTE_STD
-        endif
-    end function classify_refine3D_route
-
     integer function active_refine3D_nstages() result(nstages)
         nstages = min(nstages_refine3D, size(NSPACE), size(MAXITS))
         if( allocated(lpinfo) ) nstages = min(nstages, size(lpinfo))
@@ -39,29 +28,24 @@ contains
 
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
-        integer :: route
-        route = classify_refine3D_route(l_cavgs)
-        call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs, route )
+        call build_refine3D_stage_cfg( cfg, params, istage )
         call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
     end procedure set_cline_refine3D
 
-    subroutine build_refine3D_stage_cfg( cfg, params, istage, l_cavgs, route )
+    subroutine build_refine3D_stage_cfg( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        logical,                  intent(in)    :: l_cavgs
-        integer,                  intent(in)    :: route
         call init_refine3D_iteration( cfg )
         call set_refine3D_update_policy( cfg, params, istage )
         call set_refine3D_symmetry_policy( cfg, params, istage )
-        call set_refine3D_mode_policy( cfg, params, istage, route )
+        call set_refine3D_mode_policy( cfg, params, istage )
         call set_refine3D_balance_policy( cfg )
-        call set_refine3D_gauref_policy( cfg, params, istage, route )
+        call set_refine3D_gauref_policy( cfg, params, istage )
         call set_refine3D_trailrec_policy( cfg, params, istage )
-        call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
-        call set_refine3D_automsk_policy( cfg, params, istage, route )
+        call set_refine3D_filtering_policy( cfg, params, istage )
+        call set_refine3D_automsk_policy( cfg, params, istage )
         call set_refine3D_stage_controls( cfg, params, istage )
-        call apply_refine3D_route_overrides( cfg, params, route )
     end subroutine build_refine3D_stage_cfg
 
     subroutine init_refine3D_iteration( cfg )
@@ -109,11 +93,10 @@ contains
         endif
     end subroutine set_refine3D_symmetry_policy
 
-    subroutine set_refine3D_mode_policy( cfg, params, istage, route )
+    subroutine set_refine3D_mode_policy( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        integer,                  intent(in)    :: route
         if( istage <  PROB_REFINE_STAGE )then
             cfg%refine = 'shc_smpl'
         else if( istage < PROB_NEIGH_REFINE_STAGE )then
@@ -131,15 +114,12 @@ contains
         cfg%balance = 'yes'
     end subroutine set_refine3D_balance_policy
 
-    subroutine set_refine3D_gauref_policy( cfg, params, istage, route )
+    subroutine set_refine3D_gauref_policy( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        integer,                  intent(in)    :: route
         cfg%gaufreq = -1.
-        if( route == REFINE3D_ROUTE_CAVGS )then
-            cfg%gaufreq = lpinfo(istage)%lp
-        else if( istage <= GAUREF_LAST_STAGE )then
+        if( istage <= GAUREF_LAST_STAGE )then
             cfg%gaufreq = lpinfo(istage)%lp
         endif
     end subroutine set_refine3D_gauref_policy
@@ -169,15 +149,13 @@ contains
         end select
     end subroutine set_refine3D_trailrec_policy
 
-    subroutine set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
+    subroutine set_refine3D_filtering_policy( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        logical,                  intent(in)    :: l_cavgs
         cfg%filt_mode  = 'none'
         cfg%lpstart    = 0.
         cfg%lpstop     = 0.
-        if( l_cavgs ) return ! no filtering for cavgs route
         if( istage >= LPAUTO_STAGE .and. (l_lpauto .or. l_nonuniform) )then
             cfg%filt_mode = trim(params%filt_mode)
             if( cfg%filt_mode.eq.'uniform' )then
@@ -191,15 +169,12 @@ contains
         endif
     end subroutine set_refine3D_filtering_policy
 
-    subroutine set_refine3D_automsk_policy( cfg, params, istage, route )
+    subroutine set_refine3D_automsk_policy( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        integer,                  intent(in)    :: route
         cfg%automsk = 'no'
-        if( route == REFINE3D_ROUTE_STD )then
-            if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
-        endif
+        if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
     end subroutine set_refine3D_automsk_policy
 
     subroutine set_refine3D_stage_controls( cfg, params, istage )
@@ -249,22 +224,6 @@ contains
                 THROW_HARD('Invalid istage index in set_refine3D_stage_controls')
         end select
     end subroutine set_refine3D_stage_controls
-
-    subroutine apply_refine3D_route_overrides( cfg, params, route )
-        type(refine3D_stage_cfg), intent(inout) :: cfg
-        class(parameters),        intent(in)    :: params
-        integer,                  intent(in)    :: route
-        select case(route)
-            case(REFINE3D_ROUTE_STD)
-                ! nothing to override for the standard route
-            case(REFINE3D_ROUTE_CAVGS)
-                cfg%ml_reg = 'no'
-        end select
-        select case(cfg%refine%to_char())
-            case('prob_neigh')
-                cfg%inspace_sub = NSPACE_SUB
-        end select
-    end subroutine apply_refine3D_route_overrides
 
     subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(in) :: cfg
