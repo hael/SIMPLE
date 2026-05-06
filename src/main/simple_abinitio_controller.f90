@@ -28,24 +28,26 @@ contains
 
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
-        call build_refine3D_stage_cfg( cfg, params, istage )
+        call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
         call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
     end procedure set_cline_refine3D
 
-    subroutine build_refine3D_stage_cfg( cfg, params, istage )
+    subroutine build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
         call init_refine3D_iteration( cfg )
         call set_refine3D_update_policy( cfg, params, istage )
         call set_refine3D_symmetry_policy( cfg, params, istage )
         call set_refine3D_mode_policy( cfg, params, istage )
         call set_refine3D_balance_policy( cfg )
-        call set_refine3D_gauref_policy( cfg, params, istage )
+        call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_trailrec_policy( cfg, params, istage )
-        call set_refine3D_filtering_policy( cfg, params, istage )
-        call set_refine3D_automsk_policy( cfg, params, istage )
+        call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_stage_controls( cfg, params, istage )
+        call apply_refine3D_search_overrides( cfg )
     end subroutine build_refine3D_stage_cfg
 
     subroutine init_refine3D_iteration( cfg )
@@ -114,12 +116,13 @@ contains
         cfg%balance = 'yes'
     end subroutine set_refine3D_balance_policy
 
-    subroutine set_refine3D_gauref_policy( cfg, params, istage )
+    subroutine set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
         cfg%gaufreq = -1.
-        if( istage <= GAUREF_LAST_STAGE )then
+        if( l_cavgs .or. istage <= GAUREF_LAST_STAGE )then
             cfg%gaufreq = lpinfo(istage)%lp
         endif
     end subroutine set_refine3D_gauref_policy
@@ -149,13 +152,15 @@ contains
         end select
     end subroutine set_refine3D_trailrec_policy
 
-    subroutine set_refine3D_filtering_policy( cfg, params, istage )
+    subroutine set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
         cfg%filt_mode  = 'none'
         cfg%lpstart    = 0.
         cfg%lpstop     = 0.
+        if( l_cavgs ) return
         if( istage >= LPAUTO_STAGE .and. (l_lpauto .or. l_nonuniform) )then
             cfg%filt_mode = trim(params%filt_mode)
             if( cfg%filt_mode.eq.'uniform' )then
@@ -169,11 +174,13 @@ contains
         endif
     end subroutine set_refine3D_filtering_policy
 
-    subroutine set_refine3D_automsk_policy( cfg, params, istage )
+    subroutine set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
         cfg%automsk = 'no'
+        if( l_cavgs ) return
         if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
     end subroutine set_refine3D_automsk_policy
 
@@ -224,6 +231,14 @@ contains
                 THROW_HARD('Invalid istage index in set_refine3D_stage_controls')
         end select
     end subroutine set_refine3D_stage_controls
+
+    subroutine apply_refine3D_search_overrides( cfg )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        select case(cfg%refine%to_char())
+            case('prob_neigh')
+                cfg%inspace_sub = NSPACE_SUB
+        end select
+    end subroutine apply_refine3D_search_overrides
 
     subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(in) :: cfg
