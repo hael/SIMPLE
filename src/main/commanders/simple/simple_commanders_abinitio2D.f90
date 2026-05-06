@@ -22,6 +22,7 @@ contains
 
     subroutine exec_abinitio2D( self, cline )
         use simple_classaverager
+        use simple_timer, only: timer_int_kind, tic, toc
         class(commander_abinitio2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
@@ -34,7 +35,21 @@ contains
         type(sp_project)           :: spproj
         class(oris),       pointer :: spproj_field
         integer :: maxits, istage, last_iter, nptcls_eff, nstages, nsample_target_2D
+        integer :: fillin_iter_report
+        integer(timer_int_kind) :: t_tot, t_phase
+        real(timer_int_kind)    :: rt_setup, rt_calc_pspec, rt_cluster2D, rt_fillin, rt_final_cavgs, rt_tot
         logical :: l_shmem
+        if( L_BENCH_GLOB )then
+            rt_setup       = 0.
+            rt_calc_pspec  = 0.
+            rt_cluster2D   = 0.
+            rt_fillin      = 0.
+            rt_final_cavgs = 0.
+            rt_tot         = 0.
+            t_tot          = tic()
+            t_phase        = t_tot
+        endif
+        fillin_iter_report = 0
         call cline%set('oritype',   'ptcl2D')
         call cline%set('sigma_est', 'global')
         if( .not. cline%defined('autoscale')     ) call cline%set('autoscale',     'yes')
@@ -70,6 +85,7 @@ contains
         call set_lplims(nstages)        ! set resolutions limits
         call prep_command_lines(cline)  ! prepare class command lines
         call set_sampling               ! sampling
+        if( L_BENCH_GLOB ) rt_setup = toc(t_phase)
         ! summary
         do istage = 1,nstages
             write(logfhandle,'(A,I2,A,L1,F6.1,2I8,F7.3,2L2)')'>>> STAGE ', istage,' LPSET LP MAXCLSPOP NPTCLS UFRAC ST FR: ',&
@@ -96,7 +112,12 @@ contains
             ! classify
             call execute_cluster2D
         enddo
+        if( L_BENCH_GLOB ) t_phase = tic()
         call execute_fillin_assignment_pass()
+        if( L_BENCH_GLOB )then
+            rt_fillin = toc(t_phase)
+            if( fillin_iter_report > 0 ) call write_abinitio_benchmark(fillin_iter_report, 'fillin', nstages)
+        endif
         ! transfer 2D shifts to 3D field
         call spproj%read_segment(params%oritype,params%projfile)
         call spproj%read_segment('ptcl3D',params%projfile)
@@ -106,7 +127,12 @@ contains
         if( trim(params%stats).eq.'yes' ) call output_stats('final')
         ! final class generation & ranking
         last_iter = cline_cluster2D%get_iarg('endit')
+        if( L_BENCH_GLOB ) t_phase = tic()
         call gen_final_cavgs(last_iter)
+        if( L_BENCH_GLOB )then
+            rt_final_cavgs = toc(t_phase)
+            call write_abinitio_benchmark(last_iter + 1, 'final_cavgs', nstages)
+        endif
         ! cleanup
         call del_file('start2Drefs'//params%ext%to_char())
         call del_file('start2Drefs_even'//params%ext%to_char())
@@ -274,13 +300,24 @@ contains
         end subroutine prep_command_lines
 
         subroutine execute_cluster2D
+            if( L_BENCH_GLOB )then
+                rt_calc_pspec = 0.
+                rt_cluster2D  = 0.
+            endif
             call del_file(CLUSTER2D_FINISHED)
             ! Initial sigma2
             if( istage == 1 )then
+                if( L_BENCH_GLOB ) t_phase = tic()
                 call xcalc_pspec%execute(cline_calc_pspec)
+                if( L_BENCH_GLOB ) rt_calc_pspec = toc(t_phase)
             endif
             ! clustering
+            if( L_BENCH_GLOB ) t_phase = tic()
             call xcluster2D%execute(cline_cluster2D)
+            if( L_BENCH_GLOB )then
+                rt_cluster2D = toc(t_phase)
+                call write_abinitio_benchmark(cline_cluster2D%get_iarg('endit'), 'stage', istage)
+            endif
         end subroutine execute_cluster2D
 
         subroutine execute_fillin_assignment_pass()
@@ -290,6 +327,7 @@ contains
             write(logfhandle,'(A,I8)') '>>> ABINITIO2D FILLIN: UNASSIGNED ACTIVE PARTICLES BEFORE FILLIN =', n_unassigned
             if( n_unassigned == 0 ) return
             fillin_iter = cline_cluster2D%get_iarg('endit') + 1
+            fillin_iter_report = fillin_iter
             write(logfhandle,'(A,I8)') '>>> ABINITIO2D FILLIN: ASSIGNING REMAINING PARTICLES =', n_unassigned
             cline_fillin = cline_cluster2D
             call cline_fillin%set('fillin',        'yes')
@@ -364,6 +402,42 @@ contains
             call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
             call xrank_cavgs%execute( cline_rank_cavgs )
         end subroutine gen_final_cavgs
+
+        subroutine write_abinitio_benchmark( iter, phase, stage )
+            integer,          intent(in) :: iter, stage
+            character(len=*), intent(in) :: phase
+            type(string) :: benchfname
+            integer :: fnr
+            if( .not. L_BENCH_GLOB ) return
+            rt_tot = toc(t_tot)
+            benchfname = string('ABINITIO2D_BENCH_ITER')//int2str_pad(iter,3)//'.txt'
+            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+            write(fnr,'(a,a)')  'abinitio2D phase                   : ', trim(phase)
+            write(fnr,'(a,a)')  'abinitio2D execution mode          : ', merge('shared-memory', 'distributed  ', l_shmem)
+            write(fnr,'(a,a)')  'abinitio2D refine mode             : ', trim(params%refine)
+            write(fnr,'(a,i0)') 'abinitio2D stage                   : ', stage
+            write(fnr,'(a,i0)') 'abinitio2D nstages                 : ', nstages
+            write(fnr,'(a,i0)') 'abinitio2D nclasses                : ', params%ncls
+            write(fnr,'(a,i0)') 'abinitio2D sampled target          : ', nsample_target_2D
+            write(fnr,'(a,i0)') 'abinitio2D effective particles     : ', nptcls_eff
+            if( stage >= 1 .and. stage <= size(stage_parms) )then
+                write(fnr,'(a,f9.3)') 'abinitio2D stage update fraction   : ', stage_parms(stage)%update_frac
+                write(fnr,'(a,f9.2)') 'abinitio2D stage low-pass          : ', stage_parms(stage)%lp
+            endif
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,t52,f9.2)') 'abinitio2D setup/preparation        : ', rt_setup
+            write(fnr,'(a,t52,f9.2)') 'abinitio2D calc_pspec               : ', rt_calc_pspec
+            write(fnr,'(a,t52,f9.2)') 'abinitio2D cluster2D stage          : ', rt_cluster2D
+            write(fnr,'(a,t52,f9.2)') 'abinitio2D fillin assignment        : ', rt_fillin
+            write(fnr,'(a,t52,f9.2)') 'abinitio2D final class assembly     : ', rt_final_cavgs
+            write(fnr,'(a,t52,f9.2)') 'abinitio2D total time               : ', rt_tot
+            write(fnr,'(a,t52,f9.2)') 'abinitio2D % accounted for          : ', &
+                &((rt_setup + rt_calc_pspec + rt_cluster2D + rt_fillin + rt_final_cavgs) / rt_tot) * 100.
+            call fclose(fnr)
+            call benchfname%kill
+        end subroutine write_abinitio_benchmark
 
     end subroutine exec_abinitio2D
 

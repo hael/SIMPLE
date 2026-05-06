@@ -24,9 +24,8 @@ contains
         logical,                    intent(in)    :: l_stream
         class(image), pointer :: cavgs_m(:), cavgs_e(:), cavgs_o(:)
         type(image), allocatable :: match_imgs(:)
-        complex,     allocatable :: pft(:,:)
         real         :: xyz(3)
-        integer      :: icls, pop, pop_even, pop_odd, centype, ithr
+        integer      :: icls, pop, pop_even, pop_odd, centype, ithr, pdim_srch(3)
         logical      :: do_center, has_been_searched, input_center
         has_been_searched = .not.build%spproj%is_virgin_field(params%oritype)
         input_center      = trim(params%center) .eq. 'yes'
@@ -35,7 +34,8 @@ contains
         ! objective functions & sigma
         call prep_sigmas_objfun(params, build, l_stream)
         ! prepare the polarizer images
-        call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(build%pftc%get_pdim_srch())
+        pdim_srch = build%pftc%get_pdim_srch()
+        call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pdim_srch)
         allocate(match_imgs(params%ncls))
         cavgs_m => cavgs_merged
         cavgs_e => cavgs_even
@@ -47,7 +47,7 @@ contains
         centype = get_centype(params%center_type)
         ! PREPARATION OF REFERENCES IN pftc
         ! read references and transform into polar coordinates
-        !$omp parallel do default(shared) private(icls,ithr,pop,pop_even,pop_odd,do_center,xyz,pft)&
+        !$omp parallel do default(shared) private(icls,ithr,pop,pop_even,pop_odd,do_center,xyz)&
         !$omp schedule(static) proc_bind(close)
         do icls=1,params%ncls
             pop      = 1
@@ -71,36 +71,33 @@ contains
                     xyz = 0.0
                 endif
                 ! Prepare the references
-                ! allocte pft
-                pft = build%pftc%allocate_pft()
                 if( params%l_lpset )then
                     ! merged class average in both even and odd positions
                     call match_imgs(icls)%copy_fast(cavgs_m(icls))
                     call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
-                    call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft)
-                    call build%pftc%set_ref_pft(icls, pft, iseven=.true.)
+                    call build%pftc%polarize_ref_pft(ptcl_match_imgs_pad(ithr), icls, iseven=.true.,&
+                        &pdim=pdim_srch, oversamp=.true.)
                     call build%pftc%cp_even2odd_ref(icls)
                 else
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! even & odd
                         call match_imgs(icls)%copy_fast(cavgs_e(icls))
                         call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
-                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft)
-                        call build%pftc%set_ref_pft(icls, pft, iseven=.true.)
+                        call build%pftc%polarize_ref_pft(ptcl_match_imgs_pad(ithr), icls, iseven=.true.,&
+                            &pdim=pdim_srch, oversamp=.true.)
                         call match_imgs(icls)%copy_fast(cavgs_o(icls))
                         call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
-                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft)
-                        call build%pftc%set_ref_pft(icls, pft, iseven=.false.)
+                        call build%pftc%polarize_ref_pft(ptcl_match_imgs_pad(ithr), icls, iseven=.false.,&
+                            &pdim=pdim_srch, oversamp=.true.)
                     else
                         ! merged class average in both even and odd positions
                         call match_imgs(icls)%copy_fast(cavgs_m(icls))
                         call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
-                        call ptcl_match_imgs_pad(ithr)%polarize_oversamp(pft)
-                        call build%pftc%set_ref_pft(icls, pft, iseven=.true.)
+                        call build%pftc%polarize_ref_pft(ptcl_match_imgs_pad(ithr), icls, iseven=.true.,&
+                            &pdim=pdim_srch, oversamp=.true.)
                         call build%pftc%cp_even2odd_ref(icls)
                     endif
                 endif
-                deallocate(pft)
                 call match_imgs(icls)%kill
             endif
         end do

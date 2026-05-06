@@ -87,15 +87,32 @@ contains
     end subroutine make_cavgs_exec_cavgassemble
 
     subroutine exec_cavgassemble( self, cline )
+        use simple_timer, only: timer_int_kind, tic, toc
         class(commander_cavgassemble), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)   :: params
         type(builder)      :: build
         type(starproject)  :: starproj
+        type(string)       :: benchfname
         real, allocatable  :: states(:)
-        integer            :: iterstr_start, iterstr_end, iter, io_stat
+        integer            :: iterstr_start, iterstr_end, iter, io_stat, fnr
+        integer(timer_int_kind) :: t_tot, t_phase
+        real(timer_int_kind)    :: rt_init, rt_reduce_partials, rt_classdoc, rt_write_cavgs
+        real(timer_int_kind)    :: rt_export_star, rt_project_update, rt_cleanup, rt_tot
+        if( L_BENCH_GLOB )then
+            rt_init           = 0.
+            rt_reduce_partials= 0.
+            rt_classdoc       = 0.
+            rt_write_cavgs    = 0.
+            rt_export_star    = 0.
+            rt_project_update = 0.
+            rt_cleanup        = 0.
+            t_tot             = tic()
+            t_phase           = tic()
+        endif
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
+        if( L_BENCH_GLOB ) rt_init = toc(t_phase)
         if( cline%defined('which_iter') )then
             params%refs      = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//params%ext%to_char()
             params%refs_even = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//'_even'//params%ext%to_char()
@@ -105,23 +122,37 @@ contains
             params%refs_even = 'start2Drefs_even'//params%ext%to_char()
             params%refs_odd  = 'start2Drefs_odd'//params%ext%to_char()
         endif
+        if( L_BENCH_GLOB ) t_phase = tic()
         call cavger_new(params, build)
         call cavger_assemble_sums_from_parts
+        if( L_BENCH_GLOB ) rt_reduce_partials = toc(t_phase)
+        if( L_BENCH_GLOB ) t_phase = tic()
         call cavger_gen2Dclassdoc
+        if( L_BENCH_GLOB ) rt_classdoc = toc(t_phase)
         call terminate_stream(params, 'SIMPLE_CAVGASSEMBLE HARD STOP')
+        if( L_BENCH_GLOB ) t_phase = tic()
         call cavger_write_all(params%refs, params%refs_even, params%refs_odd)
         call cavger_kill
+        if( L_BENCH_GLOB ) rt_write_cavgs = toc(t_phase)
         ! get iteration from which_iter else from refs filename and write cavgs starfile
         if( cline%defined('which_iter') ) then
+            if( L_BENCH_GLOB ) t_phase = tic()
             call starproj%export_cls2D(build%spproj, params%which_iter)
+            if( L_BENCH_GLOB ) rt_export_star = toc(t_phase)
+            iter = params%which_iter
         else if( cline%defined('refs') .and. params%refs%substr_ind(CAVGS_ITER_FBODY) > 0 ) then
             iterstr_start = params%refs%substr_ind(CAVGS_ITER_FBODY) + 10
             iterstr_end   = params%refs%substr_ind(params%ext) - 1
             iter = str2int(params%refs%to_char([iterstr_start,iterstr_end]), io_stat)
+            if( L_BENCH_GLOB ) t_phase = tic()
             call starproj%export_cls2D(build%spproj, iter)
+            if( L_BENCH_GLOB ) rt_export_star = toc(t_phase)
+        else
+            iter = max(1, params%which_iter)
         end if
         ! updates project
         ! cls2D and state congruent cls3D
+        if( L_BENCH_GLOB ) t_phase = tic()
         call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
         states = build%spproj%os_cls2D%get_all('state')
         call build%spproj%os_cls3D%set_all('state',states)
@@ -130,11 +161,41 @@ contains
         call build%spproj%add_cavgs2os_out(params%refs, build%spproj%get_smpd(), imgkind='cavg')
         ! multiple fields updated, do a full write
         call build%spproj%write(params%projfile)
+        if( L_BENCH_GLOB ) rt_project_update = toc(t_phase)
         ! end gracefully
+        if( L_BENCH_GLOB ) t_phase = tic()
         call starproj%kill
         call build%spproj%kill
         call build%kill_general_tbox
         call build%kill_strategy2D_tbox
+        if( L_BENCH_GLOB )then
+            rt_cleanup = toc(t_phase)
+            rt_tot     = toc(t_tot)
+            benchfname = string('CAVGASSEMBLE_BENCH_ITER')//int2str_pad(iter,3)//'.txt'
+            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+            write(fnr,'(a,a)')  'cavgassemble assembly mode          : class'
+            write(fnr,'(a,a)')  'cavgassemble refs                   : ', params%refs%to_char()
+            write(fnr,'(a,i0)') 'cavgassemble nclasses               : ', params%ncls
+            write(fnr,'(a,i0)') 'cavgassemble nparts                 : ', params%nparts
+            write(fnr,'(a,i0)') 'cavgassemble kfrom                  : ', params%kfromto(1)
+            write(fnr,'(a,i0)') 'cavgassemble kto                    : ', params%kfromto(2)
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,t52,f9.2)') 'cavgassemble setup/init             : ', rt_init
+            write(fnr,'(a,t52,f9.2)') 'cavgassemble reduce partial sums    : ', rt_reduce_partials
+            write(fnr,'(a,t52,f9.2)') 'cavgassemble class document         : ', rt_classdoc
+            write(fnr,'(a,t52,f9.2)') 'cavgassemble write class averages   : ', rt_write_cavgs
+            write(fnr,'(a,t52,f9.2)') 'cavgassemble export cls2D star      : ', rt_export_star
+            write(fnr,'(a,t52,f9.2)') 'cavgassemble project update         : ', rt_project_update
+            write(fnr,'(a,t52,f9.2)') 'cavgassemble cleanup                : ', rt_cleanup
+            write(fnr,'(a,t52,f9.2)') 'cavgassemble total time             : ', rt_tot
+            write(fnr,'(a,t52,f9.2)') 'cavgassemble % accounted for        : ', &
+                &((rt_init + rt_reduce_partials + rt_classdoc + rt_write_cavgs + &
+                &  rt_export_star + rt_project_update + rt_cleanup) / rt_tot) * 100.
+            call fclose(fnr)
+            call benchfname%kill
+        endif
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
         call simple_touch('CAVGASSEMBLE_FINISHED')

@@ -34,11 +34,10 @@ type(image),   allocatable :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_
 class(builder),    pointer :: b_ptr => null()
 class(parameters), pointer :: p_ptr => null()
 real(timer_int_kind)       :: rt_startup, rt_alloc_ptcl_imgs2D, rt_prep_pftc_refs2D
-real(timer_int_kind)       :: rt_prep_strategy2D_batch
-real(timer_int_kind)       :: rt_build_batch_particles2D, rt_align, rt_cavg, rt_projio, rt_tot
+real(timer_int_kind)       :: rt_build_batch_particles2D, rt_align, rt_cavg, rt_tot
+real(timer_int_kind)       :: rt_cavg_interp_splat
 integer(timer_int_kind)    :: t, t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
-integer(timer_int_kind)    :: t_prep_strategy2D_batch
-integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_projio, t_tot
+integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_tot
 type(string)               :: benchfname
 
 type :: cluster2D_ctrl
@@ -105,7 +104,6 @@ contains
         if( ctrl%do_bench )then
             rt_startup                 = toc(t_startup)
             rt_build_batch_particles2D = 0.0
-            rt_prep_strategy2D_batch   = 0.0
             t_alloc_ptcl_imgs2D        = tic()
         endif
         call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
@@ -126,14 +124,13 @@ contains
         allocate(strategy2Dsrch(batchsz_max))
         rt_align = 0.0
         rt_cavg  = 0.0
+        rt_cavg_interp_splat = 0.0
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles_local()
-            if( ctrl%do_bench ) t_prep_strategy2D_batch = tic()
             call prep_strategy2D_batch( p_ptr, b_ptr%spproj, which_iter, batchsz, pinds(batch_start:batch_end) )
-            if( ctrl%do_bench ) rt_prep_strategy2D_batch = rt_prep_strategy2D_batch + toc(t_prep_strategy2D_batch)
             if( ctrl%do_bench ) t_align = tic()
             !$omp parallel do private(iptcl,iptcl_batch,iptcl_map,updatecnt,orientation,strategy2Dspec)&
             !$omp default(shared) schedule(static) proc_bind(close)
@@ -346,9 +343,12 @@ contains
         end subroutine allocate_strategy_for_particle
 
         subroutine restore_class_averages_for_batch()
+            integer(timer_int_kind) :: t_update
             if( ctrl%l_assignment_only ) return
             call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end), updated_only=.true.)
+            if( ctrl%do_bench ) t_update = tic()
             call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz))
+            if( ctrl%do_bench ) rt_cavg_interp_splat = rt_cavg_interp_splat + toc(t_update)
         end subroutine restore_class_averages_for_batch
 
         subroutine cleanup_search_state(strategy2Dsrch, pinds, batches, eulprob_obj_part, batchsz_max, orientation)
@@ -373,11 +373,9 @@ contains
             if( p_ptr%top < p_ptr%fromp )then
                 THROW_HARD('invalid output write range in cluster2D_exec: TOP < FROMP')
             endif
-            if( ctrl%do_bench ) t_projio = tic()
             call binwrite_oritab(p_ptr%outfile, b_ptr%spproj, b_ptr%spproj_field, &
                 [p_ptr%fromp,p_ptr%top], isegment=PTCL2D_SEG)
             p_ptr%oritab = p_ptr%outfile
-            if( ctrl%do_bench ) rt_projio = toc(t_projio)
         end subroutine write_orientations
 
         subroutine finalize_restoration_and_convergence(states, cline, conv, which_iter, converged)
@@ -432,31 +430,31 @@ contains
             if( .not. ctrl%do_bench ) return
             if( p_ptr%part /= 1 ) return
             rt_tot = toc(t_tot)
-            benchfname = 'CLUSTER2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
+            benchfname = string('CLUSTER2D_BENCH_ITER')//int2str_pad(which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
-            write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'match2D startup_overhead     : ', rt_startup
-            write(fnr,'(a,t52,f9.2)') 'match2D prep_batch_particles : ', rt_alloc_ptcl_imgs2D
-            write(fnr,'(a,t52,f9.2)') 'match2D prep_pftc_refs       : ', rt_prep_pftc_refs2D
-            write(fnr,'(a,t52,f9.2)') 'match2D build_batch_particles: ', rt_build_batch_particles2D
-            write(fnr,'(a,t52,f9.2)') 'match2D prep_strategy2D_batch: ', rt_prep_strategy2D_batch
-            write(fnr,'(a,t52,f9.2)') 'match2D stochastic alignment : ', rt_align
-            write(fnr,'(a,t52,f9.2)') 'match2D class averaging      : ', rt_cavg
-            write(fnr,'(a,t52,f9.2)') 'match2D project file I/O     : ', rt_projio
-            write(fnr,'(a,t52,f9.2)') 'match2D total time           : ', rt_tot
+            write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+            write(fnr,'(a,a)')  'match2D refine mode                 : ', trim(ctrl%refine_flag)
+            write(fnr,'(a,l1)') 'match2D probabilistic alignment     : ', ctrl%l_prob_align
+            write(fnr,'(a,l1)') 'match2D sample updates              : ', ctrl%l_sample_updates
+            write(fnr,'(a,l1)') 'match2D restore class averages      : ', ctrl%l_restore_cavgs
+            write(fnr,'(a,l1)') 'match2D assignment only             : ', ctrl%l_assignment_only
+            write(fnr,'(a,l1)') 'match2D sparse f-plane fill         : ', L_FPLANE_SPLAT_SAMPLES_GLOB
+            write(fnr,'(a,i0)') 'match2D nclasses                    : ', p_ptr%ncls
+            write(fnr,'(a,i0)') 'match2D kfrom                       : ', p_ptr%kfromto(1)
+            write(fnr,'(a,i0)') 'match2D kto                         : ', p_ptr%kfromto(2)
             write(fnr,'(a)') ''
-            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,t52,f9.2)') 'match2D startup_overhead     : ', (rt_startup/rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'match2D prep_batch_particles : ', (rt_alloc_ptcl_imgs2D/rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'match2D prep_pftc_refs       : ', (rt_prep_pftc_refs2D/rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'match2D build_batch_particles: ', (rt_build_batch_particles2D/rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'match2D prep_strategy2D_batch: ', (rt_prep_strategy2D_batch/rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'match2D stochastic alignment : ', (rt_align/rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'match2D class averaging      : ', (rt_cavg/rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'match2D project file I/O     : ', (rt_projio/rt_tot) * 100.
-            write(fnr,'(a,t52,f9.2)') 'match2D % accounted for      : ', &
-                ((rt_startup+rt_alloc_ptcl_imgs2D+rt_prep_pftc_refs2D+rt_build_batch_particles2D+ &
-                  rt_prep_strategy2D_batch+rt_align+rt_cavg+rt_projio)/rt_tot) * 100.
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,t52,f9.2)') 'match2D startup/setup               : ', rt_startup
+            write(fnr,'(a,t52,f9.2)') 'match2D particle allocation         : ', rt_alloc_ptcl_imgs2D
+            write(fnr,'(a,t52,f9.2)') 'match2D reference preparation       : ', rt_prep_pftc_refs2D
+            write(fnr,'(a,t52,f9.2)') 'match2D particle preparation        : ', rt_build_batch_particles2D
+            write(fnr,'(a,t52,f9.2)') 'match2D alignment search            : ', rt_align
+            write(fnr,'(a,t52,f9.2)') 'match2D class averaging             : ', rt_cavg
+            write(fnr,'(a,t52,f9.2)') 'match2D cavg FFT/CTF/interpolation  : ', rt_cavg_interp_splat
+            write(fnr,'(a,t52,f9.2)') 'match2D total time                  : ', rt_tot
+            write(fnr,'(a,t52,f9.2)') 'match2D % accounted for             : ', &
+                ((rt_startup + rt_alloc_ptcl_imgs2D + rt_prep_pftc_refs2D + rt_build_batch_particles2D + &
+                  rt_align + rt_cavg) / rt_tot) * 100.
 
             call fclose(fnr)
         end subroutine maybe_write_bench

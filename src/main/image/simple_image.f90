@@ -20,11 +20,14 @@ real,    allocatable :: mem_msk_cs(:), mem_msk_cs2(:)
 
 ! polarization memoization
 real,    allocatable :: mem_polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
-integer, allocatable :: mem_polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
-integer, allocatable :: mem_polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
+integer, allocatable :: mem_polph_mat(:,:,:)      !< physical h addresses for the image to polar transformer
+integer, allocatable :: mem_polk_mat(:,:,:)       !< physical k addresses for the image to polar transformer
+logical, allocatable :: mem_polconjg_mat(:,:,:)   !< conjugation flags for the image to polar transformer
 integer              :: mem_polwdim      = 0      !< dimension of K-B window
 integer              :: mem_polwlen      = 0      !< dimension squared of K-B window
 integer              :: mem_poldim(3)    = 0      !< Polar-FT matrix dimensions
+integer              :: mem_polldim(3)   = 0      !< image dimensions used for memoized polarization
+integer              :: mem_polmode      = 0      !< polarization memoization mode
 
 type :: image
     private
@@ -2045,7 +2048,7 @@ interface
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr )
+    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr, splat_samples_only )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: kfromto(2)
         real,              intent(in)    :: smpd_crop
@@ -2053,6 +2056,7 @@ interface
         real,              intent(in)    :: shift(2)
         type(fplane_type), intent(out)   :: fplane
         real, optional,    intent(in)    :: sig2arr(kfromto(1):kfromto(2))
+        logical, optional, intent(in)    :: splat_samples_only
     end subroutine gen_fplane4rec
 
     module subroutine calc_ice_frac( self, tfun, ctfparms, score )

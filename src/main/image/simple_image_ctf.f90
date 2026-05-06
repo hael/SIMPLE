@@ -127,7 +127,8 @@ contains
         end do
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr )
+    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr, splat_samples_only )
+        use simple_math,          only: ceil_div, floor_div
         use simple_math_ft,       only: upsample_sigma2
         use simple_euclid_sigma2, only: euclid_sigma2
         class(image),      intent(inout) :: self
@@ -137,22 +138,26 @@ contains
         real,              intent(in)    :: shift(2)
         type(fplane_type), intent(out)   :: fplane
         real, optional,    intent(in)    :: sig2arr(kfromto(1):kfromto(2))
+        logical, optional, intent(in)    :: splat_samples_only
         type(ctf)                :: tfun
         type(ctfvars)            :: ctfvals
         real, allocatable        :: sigma2_noise(:) !< Noise power spectrum for ML regularization
         complex(c_float_complex) :: c, w1, w2, ph0, ph_h, ph_k
         real(dp)                 :: pshift(2)
-        logical :: l_ml_reg
+        logical :: l_ml_reg, l_splat_samples_only
         type(ftiter) :: fiterator
         ! CTF kernel scalars (precomputed)
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
         integer :: physh, physk, h, k, shell, hmin, hmax, kmin, kmax,  sigma_nyq
         integer :: box_croppd, box_crop
+        integer :: hloop_min, hloop_max, kloop_min, sample_stride
         logical :: l_ctf, l_flip
         ! Shell LUT: shell = nint(sqrt(r2)) via lookup table
         integer, allocatable :: shell_lut(:)
         integer :: max_r2, r2, abs_hmax, abs_kmax
         l_ml_reg = present(sig2arr)
+        l_splat_samples_only = .false.
+        if( present(splat_samples_only) ) l_splat_samples_only = splat_samples_only
         ! shift is with respect to the original image dimension
         fplane%shconst = self%get_shconst()
         ! -----------------------
@@ -206,12 +211,6 @@ contains
         ! Shift phase recurrence
         ! -----------------------
         pshift = real(-shift * fplane%shconst(1:2), dp)
-        w1     = cmplx( real(cos(pshift(1)), c_float), real(sin(pshift(1)), c_float), kind=c_float_complex )
-        w2     = cmplx( real(cos(pshift(2)), c_float), real(sin(pshift(2)), c_float), kind=c_float_complex )
-        ph0    = cmplx( real(cos(real(fplane%frlims(1,1),dp)*pshift(1)), c_float), &
-                        real(sin(real(fplane%frlims(1,1),dp)*pshift(1)), c_float), kind=c_float_complex )
-        ph_k   = cmplx( real(cos(real(fplane%frlims(2,1),dp)*pshift(2)), c_float), &
-                        real(sin(real(fplane%frlims(2,1),dp)*pshift(2)), c_float), kind=c_float_complex )
         ! -----------------------
         ! Precompute shell LUT to avoid sqrt in inner loops
         ! r2 = h*h + k*k, shell = nint(sqrt(r2))
@@ -220,6 +219,24 @@ contains
         hmax = fplane%frlims(1,2)
         kmin = fplane%frlims(2,1)
         kmax = fplane%frlims(2,2)
+        sample_stride = 1
+        hloop_min = hmin
+        hloop_max = hmax
+        kloop_min = kmin
+        if( l_splat_samples_only )then
+            sample_stride = OSMPL_PAD_FAC
+            hloop_min = sample_stride * ceil_div( hmin, sample_stride )
+            hloop_max = sample_stride * floor_div( hmax, sample_stride )
+            kloop_min = sample_stride * ceil_div( kmin, sample_stride )
+        endif
+        w1   = cmplx( real(cos(real(sample_stride,dp)*pshift(1)), c_float), &
+                      real(sin(real(sample_stride,dp)*pshift(1)), c_float), kind=c_float_complex )
+        w2   = cmplx( real(cos(real(sample_stride,dp)*pshift(2)), c_float), &
+                      real(sin(real(sample_stride,dp)*pshift(2)), c_float), kind=c_float_complex )
+        ph0  = cmplx( real(cos(real(hloop_min,dp)*pshift(1)), c_float), &
+                      real(sin(real(hloop_min,dp)*pshift(1)), c_float), kind=c_float_complex )
+        ph_k = cmplx( real(cos(real(kloop_min,dp)*pshift(2)), c_float), &
+                      real(sin(real(kloop_min,dp)*pshift(2)), c_float), kind=c_float_complex )
         abs_hmax = max(abs(hmin), abs(hmax))
         abs_kmax = max(abs(kmin), abs(kmax))
         max_r2   = abs_hmax*abs_hmax + abs_kmax*abs_kmax
@@ -230,9 +247,9 @@ contains
         ! ============================================================
         ! Fill k in [kmin .. 0] explicitly (ONLY STORED REGION)
         ! ============================================================
-        do k = kmin, 0
+        do k = kloop_min, 0, sample_stride
             ph_h = ph0
-            do h = hmin, hmax
+            do h = hloop_min, hloop_max, sample_stride
                 r2    = h*h + k*k
                 shell = shell_lut(r2)
                 if (shell > fplane%nyq) then

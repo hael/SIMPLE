@@ -212,6 +212,53 @@ contains
         call self%memoize_sqsum_ptcl(iptcl)
     end subroutine set_ptcl_pft
 
+    module subroutine polarize_ref_pft(self, img, iref, iseven, pdim, oversamp)
+        class(polarft_calc), intent(inout) :: self
+        class(image),        intent(in)    :: img
+        integer,             intent(in)    :: iref, pdim(3)
+        logical,             intent(in)    :: iseven, oversamp
+        call assert_polarize_pdim(self, pdim, 'polarize_ref_pft')
+        if( iref < 1 .or. iref > self%nrefs ) THROW_HARD('iref out of range; polarize_ref_pft')
+        if( iseven )then
+            if( oversamp )then
+                call img%polarize_oversamp(self%pfts_refs_even(:,pdim(2):pdim(3),iref))
+            else
+                call img%polarize(self%pfts_refs_even(:,pdim(2):pdim(3),iref))
+            endif
+        else
+            if( oversamp )then
+                call img%polarize_oversamp(self%pfts_refs_odd(:,pdim(2):pdim(3),iref))
+            else
+                call img%polarize(self%pfts_refs_odd(:,pdim(2):pdim(3),iref))
+            endif
+        endif
+    end subroutine polarize_ref_pft
+
+    module subroutine polarize_ptcl_pft(self, img, iptcl, pdim, oversamp)
+        class(polarft_calc), intent(inout) :: self
+        class(image),        intent(in)    :: img
+        integer,             intent(in)    :: iptcl, pdim(3)
+        logical,             intent(in)    :: oversamp
+        call assert_polarize_pdim(self, pdim, 'polarize_ptcl_pft')
+        if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) ) THROW_HARD('iptcl out of range; polarize_ptcl_pft')
+        if( self%pinds(iptcl) < 1 .or. self%pinds(iptcl) > self%nptcls ) THROW_HARD('particle not indexed; polarize_ptcl_pft')
+        if( oversamp )then
+            call img%polarize_oversamp(self%pfts_ptcls(:,pdim(2):pdim(3),self%pinds(iptcl)))
+        else
+            call img%polarize(self%pfts_ptcls(:,pdim(2):pdim(3),self%pinds(iptcl)))
+        endif
+        call self%memoize_sqsum_ptcl(iptcl)
+    end subroutine polarize_ptcl_pft
+
+    subroutine assert_polarize_pdim(self, pdim, caller)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: pdim(3)
+        character(len=*),    intent(in) :: caller
+        if( pdim(1) /= self%pftsz ) THROW_HARD('pft size mismatch; '//caller)
+        if( pdim(2) /= self%kfromto(1) ) THROW_HARD('k lower bound mismatch; '//caller)
+        if( pdim(3) < self%kfromto(1) .or. pdim(3) > self%interpklim ) THROW_HARD('k upper bound mismatch; '//caller)
+    end subroutine assert_polarize_pdim
+
     module pure subroutine set_ref_fcomp(self, iref, irot, k, comp, iseven)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, irot, k

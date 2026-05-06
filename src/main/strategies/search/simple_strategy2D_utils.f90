@@ -680,12 +680,11 @@ contains
         class(image),      intent(inout) :: imgs(:), img_ref
         integer,     parameter           :: MAXITS_SH = 60
         real,        allocatable         :: inpl_corrs(:)
-        complex,     allocatable         :: pft(:,:)
         type(image), allocatable         :: imgs_mirr(:)
         type(pftc_shsrch_grad)           :: grad_shsrch_obj(nthr_glob)
         type(builder)                    :: build
         type(inpl_struct), allocatable   :: algninfo(:), algninfo_mirr(:)
-        integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, n
+        integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, n, pdim_srch(3)
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
         logical :: didft
         n        = size(imgs)
@@ -710,7 +709,8 @@ contains
         !$omp end parallel do
         ! initialize pftc, polarizer
         call build%pftc%new(params, 1, [1,2*n], kfromto) ! 2*n because of mirroring
-        call img_ref%memoize4polarize(build%pftc%get_pdim_srch())
+        pdim_srch = build%pftc%get_pdim_srch()
+        call img_ref%memoize4polarize(pdim_srch)
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs
@@ -725,27 +725,20 @@ contains
             call img_ref%fft
             didft = .true.
         endif
-        pft = build%pftc%allocate_pft()
-        call img_ref%polarize(pft)
-        call build%pftc%set_ref_pft(1, pft, iseven=.true.)
-        deallocate(pft)
+        call build%pftc%polarize_ref_pft(img_ref, 1, iseven=.true., pdim=pdim_srch, oversamp=.false.)
         if( didft ) call img_ref%ifft
         ! set the particle transforms
-        !$omp parallel do default(shared) private(i,pft) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, 2 * n
-            pft = build%pftc%allocate_pft()
             if( i <= n )then
                 call imgs(i)%fft()
-                call imgs(i)%polarize(pft)
-                call build%pftc%set_ptcl_pft(i, pft)
+                call build%pftc%polarize_ptcl_pft(imgs(i), i, pdim=pdim_srch, oversamp=.false.)
                 call imgs(i)%ifft
             else
                 call imgs_mirr(i-n)%fft()
-                call imgs_mirr(i-n)%polarize(pft)
-                call build%pftc%set_ptcl_pft(i, pft)
+                call build%pftc%polarize_ptcl_pft(imgs_mirr(i-n), i, pdim=pdim_srch, oversamp=.false.)
                 call imgs_mirr(i-n)%ifft()
             endif
-            deallocate(pft)
         end do
         !$omp end parallel do
         call build%pftc%memoize_refs
@@ -800,12 +793,11 @@ contains
         integer,      parameter         :: MAXITS_SH = 60
         real,         parameter         :: FRC_CRIT = 0.5
         real,         allocatable       :: inpl_corrs(:), frc(:)
-        complex,      allocatable       :: pft(:,:)
         type(image),  allocatable       :: imgs_targ_mirr(:)
         type(pftc_shsrch_grad)          :: grad_shsrch_obj(nthr_glob)
         type(builder)                   :: build
         type(inpl_struct), allocatable  :: algninfo(:,:), algninfo_mirr(:,:)
-        integer :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, nrefs, ntargets
+        integer :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, nrefs, ntargets, pdim_srch(3)
         real    :: smpd, lims(2,2), lims_init(2,2), cxy(3), rotmat(2,2)
         logical :: l_rot_shvec
         nrefs      = size(imgs_ref)
@@ -818,7 +810,8 @@ contains
         ! initialize mirrores images, pftc, polarizer
         call alloc_imgarr(ntargets, ldim, smpd, imgs_targ_mirr)
         call build%pftc%new(params, nrefs, [1,2*ntargets], kfromto) ! 2*ntargets because of mirroring
-        call imgs_ref(1)%memoize4polarize(build%pftc%get_pdim_srch())
+        pdim_srch = build%pftc%get_pdim_srch()
+        call imgs_ref(1)%memoize4polarize(pdim_srch)
         ! in-plane search object objects for parallel execution
         lims(:,1)      = -trs
         lims(:,2)      =  trs
@@ -828,35 +821,28 @@ contains
             call grad_shsrch_obj(ithr)%new(build, lims, lims_init=lims_init, shbarrier='yes',&
             &maxits=MAXITS_SH, opt_angle=.true.)
         end do
-        !$omp parallel default(shared)  private(i,m,pft)  proc_bind(close)
+        !$omp parallel default(shared)  private(i,m)  proc_bind(close)
         ! set the reference transforms
         !$omp do schedule(static)
         do i = 1, nrefs
-            pft = build%pftc%allocate_pft()
             call imgs_ref(i)%fft()
-            call imgs_ref(i)%polarize(pft)
-            call build%pftc%set_ref_pft(i, pft, iseven=.true.)
+            call build%pftc%polarize_ref_pft(imgs_ref(i), i, iseven=.true., pdim=pdim_srch, oversamp=.false.)
             call imgs_ref(i)%ifft
-            deallocate(pft)
         end do
         !$omp end do nowait
         ! set the particle transforms
         !$omp do schedule(static)
         do i = 1,ntargets
-            pft = build%pftc%allocate_pft()
             ! target
             call imgs_targ(i)%fft()
-            call imgs_targ(i)%polarize(pft)
-            call build%pftc%set_ptcl_pft(i, pft)
+            call build%pftc%polarize_ptcl_pft(imgs_targ(i), i, pdim=pdim_srch, oversamp=.false.)
             call imgs_targ(i)%ifft
             ! target mirror
             m = ntargets+i
             call imgs_targ_mirr(i)%copy(imgs_targ(i))
             call imgs_targ_mirr(i)%mirror('x')
             call imgs_targ_mirr(i)%fft()
-            call imgs_targ_mirr(i)%polarize(pft)
-            call build%pftc%set_ptcl_pft(m, pft)
-            deallocate(pft)
+            call build%pftc%polarize_ptcl_pft(imgs_targ_mirr(i), m, pdim=pdim_srch, oversamp=.false.)
         end do
         !$omp end do
         !$omp end parallel

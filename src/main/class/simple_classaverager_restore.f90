@@ -369,10 +369,12 @@ contains
             if( p_ptr%l_ml_reg ) then
                 call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
                     precs(i)%ctfparams, precs(i)%shift, fplanes(ithr), &
-                    b_ptr%esig%sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl) )
+                    b_ptr%esig%sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl), &
+                    splat_samples_only=L_FPLANE_SPLAT_SAMPLES_GLOB )
             else
                 call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
-                    precs(i)%ctfparams, precs(i)%shift, fplanes(ithr) )
+                    precs(i)%ctfparams, precs(i)%shift, fplanes(ithr), &
+                    splat_samples_only=L_FPLANE_SPLAT_SAMPLES_GLOB )
             endif
             ! Rotation matrix
             call rotmat2d( precs(i)%e3, mat )

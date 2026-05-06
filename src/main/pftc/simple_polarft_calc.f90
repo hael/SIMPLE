@@ -103,6 +103,8 @@ type :: polarft_calc
     procedure          :: reallocate_ptcls
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
+    procedure          :: polarize_ref_pft
+    procedure          :: polarize_ptcl_pft
     procedure          :: set_ref_fcomp
     procedure          :: set_ptcl_fcomp
     procedure          :: cp_even2odd_ref
@@ -209,6 +211,20 @@ interface
         integer,             intent(in)    :: iptcl
         complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine set_ptcl_pft
+
+    module subroutine polarize_ref_pft(self, img, iref, iseven, pdim, oversamp)
+        class(polarft_calc), intent(inout) :: self
+        class(image),        intent(in)    :: img
+        integer,             intent(in)    :: iref, pdim(3)
+        logical,             intent(in)    :: iseven, oversamp
+    end subroutine polarize_ref_pft
+
+    module subroutine polarize_ptcl_pft(self, img, iptcl, pdim, oversamp)
+        class(polarft_calc), intent(inout) :: self
+        class(image),        intent(in)    :: img
+        integer,             intent(in)    :: iptcl, pdim(3)
+        logical,             intent(in)    :: oversamp
+    end subroutine polarize_ptcl_pft
 
     module pure subroutine set_ref_fcomp(self, iref, irot, k, comp, iseven)
         class(polarft_calc), intent(inout) :: self

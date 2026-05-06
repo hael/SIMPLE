@@ -289,6 +289,7 @@ contains
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
         write(fnr,'(a,a)')  'refine3D execution mode             : ', trim(execution_mode)
         write(fnr,'(a,a)')  'refine3D refine mode                : ', trim(params%refine)
+        write(fnr,'(a,l1)') 'refine3D sparse f-plane fill        : ', L_FPLANE_SPLAT_SAMPLES_GLOB
         write(fnr,'(a,i0)') 'refine3D nspace                     : ', params%nspace
         write(fnr,'(a,i0)') 'refine3D nstates                    : ', params%nstates
         write(fnr,'(a,i0)') 'refine3D kfrom                      : ', params%kfromto(1)
