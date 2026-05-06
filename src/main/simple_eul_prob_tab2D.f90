@@ -5,6 +5,7 @@ use simple_builder,          only: builder
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_decay_funs,       only: extremal_decay2D
 use simple_eul_prob_tab,     only: eulprob_dist_switch, eulprob_corr_switch
+use simple_eul_prob_tab_utils, only: build_pind_lookup, materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 use simple_rnd,              only: greedy_sampling
 implicit none
 
@@ -370,7 +371,8 @@ contains
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_icls, assigned_ptcl)
             self%assgn_map(assigned_ptcl)%dist = dists_raw(assigned_icls, assigned_ptcl)
-            call materialize_seed_shift(assigned_ptcl)
+            call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
+                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%b_ptr%pftc)
         end do
         if( any(ptcl_avail) )then
             do i = 1, self%nptcls
@@ -397,35 +399,11 @@ contains
                 if( assigned_icls == 0 ) THROW_HARD('Failed particle assignment in eul_prob_tab2D%ref_assign_pow_smpl')
                 self%assgn_map(i) = self%loc_tab(assigned_icls, i)
                 self%assgn_map(i)%dist = dists_raw(assigned_icls, i)
-                call materialize_seed_shift(i)
+                call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
+                    &self%seed_has_sh(i), self%p_ptr%l_doshift, self%b_ptr%pftc)
                 ptcl_avail(i)     = .false.
             end do
         endif
-
-    contains
-
-        subroutine materialize_seed_shift(iptcl_tab)
-            integer, intent(in) :: iptcl_tab
-            real :: rotmat(2,2), rot_xy(2)
-            integer :: irot_assgn
-            if( .not. self%p_ptr%l_doshift ) return
-            if( self%assgn_map(iptcl_tab)%has_sh ) return
-            if( .not. allocated(self%seed_has_sh) ) return
-            if( .not. self%seed_has_sh(iptcl_tab) ) return
-            irot_assgn = self%assgn_map(iptcl_tab)%inpl
-            if( irot_assgn < 1 )then
-                self%assgn_map(iptcl_tab)%x      = 0.
-                self%assgn_map(iptcl_tab)%y      = 0.
-                self%assgn_map(iptcl_tab)%has_sh = .true.
-                return
-            endif
-            call rotmat2d(self%b_ptr%pftc%get_rot(irot_assgn), rotmat)
-            rot_xy(1) = self%seed_shifts(1,iptcl_tab) * rotmat(1,1) + self%seed_shifts(2,iptcl_tab) * rotmat(2,1)
-            rot_xy(2) = self%seed_shifts(1,iptcl_tab) * rotmat(1,2) + self%seed_shifts(2,iptcl_tab) * rotmat(2,2)
-            self%assgn_map(iptcl_tab)%x      = rot_xy(1)
-            self%assgn_map(iptcl_tab)%y      = rot_xy(2)
-            self%assgn_map(iptcl_tab)%has_sh = .true.
-        end subroutine materialize_seed_shift
     end subroutine ref_assign_pow_smpl
 
     ! DESTRUCTOR
@@ -453,10 +431,7 @@ contains
         call fopen(funit, binfname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
         write(unit=funit, pos=1) file_header
         addr = sizeof(file_header) + 1
-        write(funit, pos=addr) self%seed_shifts
-        addr = addr + sizeof(self%seed_shifts)
-        write(funit, pos=addr) self%seed_has_sh
-        addr = addr + sizeof(self%seed_has_sh)
+        call write_seed_shift_table(funit, addr, self%seed_shifts, self%seed_has_sh)
         write(funit, pos=addr) self%loc_tab
         call fclose(funit)
     end subroutine write_tab
@@ -482,22 +457,14 @@ contains
         allocate(mat_loc(nclasses_loc, nptcls_loc))
         allocate(seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
         addr = sizeof(file_header) + 1
-        read(unit=funit, pos=addr) seed_shifts_loc
-        addr = addr + sizeof(seed_shifts_loc)
-        read(unit=funit, pos=addr) seed_has_sh_loc
-        addr = addr + sizeof(seed_has_sh_loc)
+        call read_seed_shift_table(funit, addr, seed_shifts_loc, seed_has_sh_loc)
         read(unit=funit, pos=addr) mat_loc
         call fclose(funit)
-        max_pind = max(maxval(self%pinds), maxval(mat_loc(1,:)%pind))
+        call build_pind_lookup(self%pinds, mat_loc(1,:)%pind, pind2glob, max_pind)
         if( max_pind < 1 )then
-            deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc)
+            deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)
             return
         endif
-        allocate(pind2glob(max_pind), source=0)
-        do i_glob = 1, self%nptcls
-            pind = self%pinds(i_glob)
-            if( pind > 0 .and. pind <= max_pind ) pind2glob(pind) = i_glob
-        enddo
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
         do i_loc = 1, nptcls_loc
             pind = mat_loc(1,i_loc)%pind
@@ -541,16 +508,11 @@ contains
         allocate(assgn_glob(nptcls_glob))
         read(unit=funit, pos=headsz + 1) assgn_glob
         call fclose(funit)
-        max_pind = max(maxval(self%pinds), maxval(assgn_glob(:)%pind))
+        call build_pind_lookup(assgn_glob(:)%pind, self%pinds, pind2glob, max_pind)
         if( max_pind < 1 )then
-            deallocate(assgn_glob)
+            deallocate(assgn_glob, pind2glob)
             return
         endif
-        allocate(pind2glob(max_pind), source=0)
-        do i_glob = 1, nptcls_glob
-            pind = assgn_glob(i_glob)%pind
-            if( pind > 0 .and. pind <= max_pind ) pind2glob(pind) = i_glob
-        enddo
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
         do i_loc = 1, self%nptcls
             pind = self%pinds(i_loc)

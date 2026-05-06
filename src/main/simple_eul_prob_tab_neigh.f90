@@ -4,6 +4,7 @@ module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab, angle_sampling, calc_athres, eulprob_dist_switch
+use simple_eul_prob_tab_utils, only: materialize_seed_shift
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
 use simple_eulspace_neigh_map, only: eulspace_neigh_map
@@ -720,7 +721,8 @@ contains
                 frontier%ptcl_avail(assigned_ptcl) = .false.
                 nleft = nleft - 1
                 self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
-                call materialize_seed_shift(assigned_ptcl)
+                call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
+                    &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%b_ptr%pftc)
                 do idx = graph%ptcl_offsets(assigned_ptcl), graph%ptcl_offsets(assigned_ptcl+1)-1
                     iref = graph%ptcl_refs(idx)
                     m    = graph%ref_counts(iref)
@@ -743,32 +745,10 @@ contains
                 endif
                 if( fallback_ref == 0 ) fallback_ref = 1
                 self%assgn_map(i) = self%loc_tab(fallback_ref,i)
-                call materialize_seed_shift(i)
+                call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
+                    &self%seed_has_sh(i), self%p_ptr%l_doshift, self%b_ptr%pftc)
             enddo
         end subroutine assign_remaining_particles_from_best_touched_ref
-
-        subroutine materialize_seed_shift(iptcl_tab)
-            integer, intent(in) :: iptcl_tab
-            real :: rotmat(2,2), rot_xy(2)
-            integer :: irot_assgn
-            if( .not. self%p_ptr%l_doshift ) return
-            if( self%assgn_map(iptcl_tab)%has_sh ) return
-            if( .not. allocated(self%seed_has_sh) ) return
-            if( .not. self%seed_has_sh(iptcl_tab) ) return
-            irot_assgn = self%assgn_map(iptcl_tab)%inpl
-            if( irot_assgn < 1 )then
-                self%assgn_map(iptcl_tab)%x      = 0.
-                self%assgn_map(iptcl_tab)%y      = 0.
-                self%assgn_map(iptcl_tab)%has_sh = .true.
-                return
-            endif
-            call rotmat2d(self%b_ptr%pftc%get_rot(irot_assgn), rotmat)
-            rot_xy(1) = self%seed_shifts(1,iptcl_tab) * rotmat(1,1) + self%seed_shifts(2,iptcl_tab) * rotmat(2,1)
-            rot_xy(2) = self%seed_shifts(1,iptcl_tab) * rotmat(1,2) + self%seed_shifts(2,iptcl_tab) * rotmat(2,2)
-            self%assgn_map(iptcl_tab)%x      = rot_xy(1)
-            self%assgn_map(iptcl_tab)%y      = rot_xy(2)
-            self%assgn_map(iptcl_tab)%has_sh = .true.
-        end subroutine materialize_seed_shift
 
         integer function pick_best_evaluated_ref(iptcl_loc) result(ri_best)
             integer, intent(in) :: iptcl_loc
