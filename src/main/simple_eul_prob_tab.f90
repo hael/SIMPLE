@@ -148,9 +148,10 @@ contains
         integer, allocatable   :: locn(:,:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
-        integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
+        integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, nrots, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
                   &istate, iref_start
-        real    :: rotmat(2,2), lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres(self%p_ptr%nstates)
+        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), rot_xy(2), inpl_athres(self%p_ptr%nstates)
+        real    :: rotmats(2,2,self%b_ptr%pftc%get_nrots())
         real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         integer(timer_int_kind) :: t_local
         real(timer_int_kind) :: rt_shift_seed, rt_ref_sweep, rt_select, rt_shift_refine
@@ -166,6 +167,10 @@ contains
         self%bench_fill_neigh_eval          = 0.
         self%bench_fill_shift_refine        = 0.
         call seed_rnd
+        nrots = self%b_ptr%pftc%get_nrots()
+        do irot = 1, nrots
+            call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmats(:,:,irot))
+        enddo
         projs_ns = 0
         do si = 1, self%nstates
             istate = self%ssinds(si)
@@ -194,7 +199,7 @@ contains
             rt_select       = 0.
             rt_shift_refine = 0.
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob,rot_xy,rotmat,t_local)&
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob,rot_xy,t_local)&
             !$omp proc_bind(close) schedule(static) reduction(+:rt_shift_seed,rt_ref_sweep,rt_select,rt_shift_refine)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
@@ -224,8 +229,8 @@ contains
                     dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
                     irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
                     ! rotate the shift vector to the frame of reference
-                    call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
-                    rot_xy                    = matmul(cxy(2:3), rotmat)
+                    rot_xy(1)                 = cxy(2) * rotmats(1,1,irot) + cxy(3) * rotmats(2,1,irot)
+                    rot_xy(2)                 = cxy(2) * rotmats(1,2,irot) + cxy(3) * rotmats(2,2,irot)
                     self%loc_tab(ri,i)%dist   = dists_inpl(irot,ithr)
                     dists_refs(  ri,ithr)     = dists_inpl(irot,ithr)
                     self%loc_tab(ri,i)%inpl   = irot
@@ -549,7 +554,8 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         class(string),       intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: mat_loc(:,:)
-        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob
+        integer, allocatable :: pind2glob(:)
+        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob, pind, max_pind
         if( file_exists(binfname) )then
             call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
             call fileiochk('simple_eul_prob_tab; read_tab_to_glob; file: '//binfname%to_char(), io_stat)
@@ -566,17 +572,25 @@ contains
         addr = sizeof(file_header) + 1
         read(unit=funit,pos=addr) mat_loc
         call fclose(funit)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        max_pind = max(maxval(self%pinds), maxval(mat_loc(1,:)%pind))
+        if( max_pind < 1 )then
+            deallocate(mat_loc)
+            return
+        endif
+        allocate(pind2glob(max_pind), source=0)
         do i_glob = 1, self%nptcls
-            do i_loc = 1, nptcls_loc
-                if( mat_loc(1,i_loc)%pind == self%loc_tab(1,i_glob)%pind )then
-                    self%loc_tab(:,i_glob) = mat_loc(:,i_loc)
-                    exit
-                endif
-            end do
+            pind = self%pinds(i_glob)
+            if( pind > 0 .and. pind <= max_pind ) pind2glob(pind) = i_glob
+        enddo
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
+        do i_loc = 1, nptcls_loc
+            pind = mat_loc(1,i_loc)%pind
+            if( pind < 1 .or. pind > max_pind ) cycle
+            i_glob = pind2glob(pind)
+            if( i_glob > 0 ) self%loc_tab(:,i_glob) = mat_loc(:,i_loc)
         end do
         !$omp end parallel do
-        deallocate(mat_loc)
+        deallocate(mat_loc, pind2glob)
     end subroutine read_tab_to_glob
 
     subroutine write_state_tab( self, binfname )
@@ -594,7 +608,8 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         class(string),       intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: state_tab_glob(:,:)
-        integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
+        integer, allocatable :: pind2glob(:)
+        integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob, pind, max_pind
         headsz = sizeof(nptcls_glob)
         if( .not. file_exists(binfname) )then
             THROW_HARD('file '//binfname%to_char()//' does not exists!')
@@ -606,17 +621,25 @@ contains
         allocate(state_tab_glob(self%nstates,nptcls_glob))
         read(unit=funit,pos=headsz + 1) state_tab_glob
         call fclose(funit)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        max_pind = max(maxval(self%pinds), maxval(state_tab_glob(1,:)%pind))
+        if( max_pind < 1 )then
+            deallocate(state_tab_glob)
+            return
+        endif
+        allocate(pind2glob(max_pind), source=0)
+        do i_glob = 1, nptcls_glob
+            pind = state_tab_glob(1,i_glob)%pind
+            if( pind > 0 .and. pind <= max_pind ) pind2glob(pind) = i_glob
+        enddo
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
         do i_loc = 1, self%nptcls
-            do i_glob = 1, nptcls_glob
-                if( self%state_tab(1,i_loc)%pind == state_tab_glob(1,i_glob)%pind )then
-                    self%state_tab(:,i_loc) = state_tab_glob(:,i_glob)
-                    exit
-                endif
-            end do
+            pind = self%pinds(i_loc)
+            if( pind < 1 .or. pind > max_pind ) cycle
+            i_glob = pind2glob(pind)
+            if( i_glob > 0 ) self%state_tab(:,i_loc) = state_tab_glob(:,i_glob)
         end do
         !$omp end parallel do
-        deallocate(state_tab_glob)
+        deallocate(state_tab_glob, pind2glob)
     end subroutine read_state_tab
 
     ! write a global assignment map to binary file
@@ -636,7 +659,8 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         class(string),       intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: assgn_glob(:)
-        integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
+        integer, allocatable :: pind2glob(:)
+        integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob, pind, max_pind
         headsz = sizeof(nptcls_glob)
         if( .not. file_exists(binfname) )then
             THROW_HARD('file '//binfname%to_char()//' does not exists!')
@@ -648,16 +672,25 @@ contains
         allocate(assgn_glob(nptcls_glob))
         read(unit=funit,pos=headsz + 1) assgn_glob
         call fclose(funit)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        max_pind = max(maxval(self%pinds), maxval(assgn_glob(:)%pind))
+        if( max_pind < 1 )then
+            deallocate(assgn_glob)
+            return
+        endif
+        allocate(pind2glob(max_pind), source=0)
+        do i_glob = 1, nptcls_glob
+            pind = assgn_glob(i_glob)%pind
+            if( pind > 0 .and. pind <= max_pind ) pind2glob(pind) = i_glob
+        enddo
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
         do i_loc = 1, self%nptcls
-            do i_glob = 1, nptcls_glob
-                if( self%assgn_map(i_loc)%pind == assgn_glob(i_glob)%pind )then
-                    self%assgn_map(i_loc) = assgn_glob(i_glob)
-                    exit
-                endif
-            end do
+            pind = self%pinds(i_loc)
+            if( pind < 1 .or. pind > max_pind ) cycle
+            i_glob = pind2glob(pind)
+            if( i_glob > 0 ) self%assgn_map(i_loc) = assgn_glob(i_glob)
         end do
         !$omp end parallel do
+        deallocate(assgn_glob, pind2glob)
     end subroutine read_assignment
 
     ! DESTRUCTOR
