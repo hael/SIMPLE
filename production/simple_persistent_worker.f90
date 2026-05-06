@@ -40,15 +40,15 @@ program simple_persistent_worker
                                      c_pthread_mutex_unlock,                   &
                                      c_null_ptr, c_funloc, c_usleep,           &
                                      c_getpid, c_pid_t
-    use iso_fortran_env,       only: output_unit
-    use simple_jiffys,         only: simple_print_git_version, simple_print_timer
-    use simple_ipc_tcp_socket, only: ipc_tcp_socket
+    use iso_fortran_env,                            only: output_unit
+    use simple_jiffys,                              only: simple_print_git_version, simple_print_timer
+    use simple_ipc_tcp_socket_client,               only: ipc_tcp_socket_client
     use simple_persistent_worker_server,            only: TCP_BUFSZ
     use simple_persistent_worker_message_heartbeat, only: qsys_persistent_worker_message_heartbeat
     use simple_persistent_worker_message_task,      only: qsys_persistent_worker_message_task
     use simple_persistent_worker_message_status,    only: qsys_persistent_worker_message_status
     use simple_persistent_worker_message_terminate, only: qsys_persistent_worker_message_terminate
-    use simple_persistent_worker_message_types,     only: WORKER_TERMINATE_MSG, WORKER_STATUS_MSG, WORKER_TASK_MSG
+    use simple_persistent_worker_message_types,     only: WORKER_TERMINATE_MSG, WORKER_STATUS_MSG, WORKER_NEW_TASK_MSG
     implicit none
 #include "simple_local_flags.inc"
 
@@ -90,7 +90,7 @@ program simple_persistent_worker
     integer                :: worker_id = 0                      !< this worker's ID
 
     ! IPC + message objects
-    type(ipc_tcp_socket)                :: ipc_socket
+    type(ipc_tcp_socket_client)                    :: ipc_socket_client
     type(qsys_persistent_worker_message_heartbeat) :: heartbeat_msg
     type(qsys_persistent_worker_message_task)      :: task_msg
 
@@ -178,7 +178,7 @@ program simple_persistent_worker
     ! ------------------------------------------------------------------
     ! Connect to the server
     ! ------------------------------------------------------------------
-    call ipc_socket%init_client(server_list, port)
+    call ipc_socket_client%new(server_list, port)
 
     ! ------------------------------------------------------------------
     ! Heartbeat loop: send status, receive and dispatch server replies
@@ -193,9 +193,7 @@ program simple_persistent_worker
         heartbeat_msg%nthr_used      = get_nthr_used()
         
         call heartbeat_msg%serialise(buffer)
-        call ipc_socket%send_recv_msg(buffer, HEARTBEAT_TIMEOUT_MS, &
-                                      HEARTBEAT_MAX_RETRY, found,   &
-                                      reply_buffer, reply_len)
+        call ipc_socket_client%send_recv_msg(buffer, reply_buffer, found, reply_len)
         if( .not. found ) then
             write(*,'(A)') 'Worker: failed to reach server — exiting heartbeat loop'
             exit
@@ -208,13 +206,14 @@ program simple_persistent_worker
                 case(WORKER_TERMINATE_MSG)
                     ! Server requested shutdown; joins are handled centrally in cleanup.
                     write(*,*) 'Worker: received TERMINATE - exiting heartbeat loop'
+                    call ipc_socket_client%kill()
                     l_terminate = .true.
 
                 case(WORKER_STATUS_MSG)
                     ! Informational status reply: nothing to act on
                     write(*,*) 'Worker: received STATUS message'
 
-                case(WORKER_TASK_MSG)
+                case(WORKER_NEW_TASK_MSG)
                     ! Server dispatched a task — validate then execute
                     task_msg = transfer(reply_buffer, task_msg)
                     cmdlen   = len_trim(task_msg%script_path)
@@ -240,12 +239,14 @@ program simple_persistent_worker
         end if
 
         ! Brief pause before next heartbeat
-       ! call sleep(1)
-        rc = c_usleep(POLL_TIME_US) ! sleep to avoid busy-polling if server is slow to reply or if we received a STATUS message
+        call sleep(1)
+       ! rc = c_usleep(POLL_TIME_US) ! sleep to avoid busy-polling if server is slow to reply or if we received a STATUS message
         if( rc /= 0 ) then
             write(*,*) 'Worker: c_usleep failed in heartbeat loop, rc=', rc
         end if
     end do
+
+    write(*,*) 'Worker: exiting heartbeat loop, beginning cleanup'
 
     ! ------------------------------------------------------------------
     ! Cleanup

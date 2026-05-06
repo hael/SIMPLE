@@ -19,7 +19,7 @@
 !==============================================================================
 module simple_persistent_worker_message_tester
   use simple_test_utils, only: assert_true, assert_int
-  use simple_persistent_worker_message_types,     only: WORKER_TERMINATE_MSG, WORKER_HEARTBEAT_MSG, WORKER_TASK_MSG, WORKER_STATUS_MSG
+  use simple_persistent_worker_message_types,     only: WORKER_TERMINATE_MSG, WORKER_HEARTBEAT_MSG, WORKER_TASK_MSG, WORKER_STATUS_MSG, WORKER_NEW_TASK_MSG
   use simple_persistent_worker_message_base,      only: qsys_persistent_worker_message_base
   use simple_persistent_worker_message_heartbeat, only: qsys_persistent_worker_message_heartbeat
   use simple_persistent_worker_message_task,      only: qsys_persistent_worker_message_task
@@ -49,7 +49,8 @@ contains
     call assert_int(1, WORKER_TERMINATE_MSG, 'WORKER_TERMINATE_MSG == 1')
     call assert_int(2, WORKER_HEARTBEAT_MSG, 'WORKER_HEARTBEAT_MSG == 2')
     call assert_int(3, WORKER_TASK_MSG,      'WORKER_TASK_MSG == 3')
-    call assert_int(4, WORKER_STATUS_MSG,    'WORKER_STATUS_MSG == 4')
+    call assert_int(4, WORKER_NEW_TASK_MSG,  'WORKER_NEW_TASK_MSG == 4')
+    call assert_int(5, WORKER_STATUS_MSG,    'WORKER_STATUS_MSG == 5')
   end subroutine test_message_type_enum_values
 
   subroutine test_base_message_new_kill_and_serialise()

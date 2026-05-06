@@ -53,6 +53,7 @@ module simple_persistent_worker_message_heartbeat
         integer :: heartbeat_time = 0  !< UNIX timestamp at time of transmission
         integer :: nthr_used      = 0  !< threads currently executing tasks
         integer :: nthr_total     = 0  !< total thread capacity of this worker
+        integer :: fd             = 0  !< file descriptor of the worker's connected socket, used by the server to identify the sender and route replies
         character(len=256) :: worker_uid = ''  !< unique worker identifier: <hostname>_<PID>
     contains
         procedure :: new       => new_qsys_persistent_worker_message_heartbeat       !< constructor
@@ -80,6 +81,7 @@ contains
         self%heartbeat_time = 0
         self%nthr_used      = 0
         self%nthr_total     = 0
+        self%fd             = 0
         self%worker_uid     = ''
     end subroutine kill_qsys_persistent_worker_message_heartbeat
 

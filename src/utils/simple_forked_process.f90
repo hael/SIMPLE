@@ -164,7 +164,7 @@ contains
   subroutine kill( self )
     class(forked_process), intent(inout) :: self
     integer(kind=c_int)                  :: rc
-    if( self%pid < 0 ) return
+    if( self%pid <= 0 ) return
     rc = c_kill(self%pid, SIGKILL)
     if( rc /= 0 ) THROW_HARD('Failed to send SIGKILL to forked child')
   end subroutine kill

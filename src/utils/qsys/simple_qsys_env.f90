@@ -228,7 +228,7 @@ contains
                 persistent_worker%nthr_per_worker = nthr_workers
                 persistent_worker%n_workers       = n_workers
                 allocate(persistent_worker%server)
-                call persistent_worker%server%new(persistent_worker%nthr_per_worker)
+                call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker)
                 call self%start_persistent_workers()
             end if
         else
