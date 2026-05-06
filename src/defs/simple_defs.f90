@@ -55,7 +55,6 @@ integer                       :: part_glob                     !< global part in
 character(len=:), allocatable :: cmdline_glob                  !< global command line string
 integer,          parameter   :: NTHR_SHMEM_MAX     = 20       !< maximum number of shared-memory threads used by master process
 logical,          parameter   :: L_BENCH_GLOB       = .true.   !< global benchmarking flag
-logical,          parameter   :: L_FPLANE_SPLAT_SAMPLES_GLOB = .true. !< benchmark sparse fplane fill for splat paths
 logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arrays for jobs where we know nparts
 logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estimate memory usage for parts
 logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not

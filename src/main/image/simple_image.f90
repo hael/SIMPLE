@@ -110,6 +110,7 @@ contains
     procedure          :: img2ft
     procedure          :: ft2img
     procedure          :: pad_fft
+    procedure          :: calc_noise_stats
     procedure          :: norm_noise_fft
     procedure          :: norm_noise_taper_edge_pad_fft
     procedure          :: norm_noise_mask_pad_fft
@@ -823,10 +824,16 @@ interface
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
     end subroutine norm_noise_fft
 
-    module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out)
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
-        class(image), intent(inout) :: self_out
+    module subroutine calc_noise_stats( self, lmsk, stats )
+        class(image),      intent(inout) :: self
+        logical,           intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        type(noise_stats), intent(out)   :: stats
+    end subroutine calc_noise_stats
+
+    module subroutine norm_noise_taper_edge_pad_fft(self, stats, self_out)
+        class(image),      intent(inout) :: self
+        type(noise_stats), intent(in)    :: stats
+        class(image),      intent(inout) :: self_out
     end subroutine norm_noise_taper_edge_pad_fft
 
     module subroutine norm_noise_mask_pad_fft(self, lmsk, mskrad, self_out)
@@ -836,20 +843,20 @@ interface
         class(image), intent(inout) :: self_out
     end subroutine norm_noise_mask_pad_fft
 
-    module subroutine norm_noise_fft_clip_shift_ctf_flip( self, lmsk, self_out, shvec, tfun, ctfparms )
-        class(image),    intent(inout) :: self
-        logical,         intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
-        class(image),    intent(inout) :: self_out
-        real,            intent(in)    :: shvec(2)
-        class(ctf),      intent(inout) :: tfun     !< CTF object
-        type(ctfparams), intent(in)    :: ctfparms !< CTF parameters
+    module subroutine norm_noise_fft_clip_shift_ctf_flip( self, stats, self_out, shvec, tfun, ctfparms )
+        class(image),      intent(inout) :: self
+        type(noise_stats), intent(in)    :: stats
+        class(image),      intent(inout) :: self_out
+        real,              intent(in)    :: shvec(2)
+        class(ctf),        intent(inout) :: tfun     !< CTF object
+        type(ctfparams),   intent(in)    :: ctfparms !< CTF parameters
     end subroutine norm_noise_fft_clip_shift_ctf_flip
 
-    module subroutine norm_noise_fft_clip_shift( self, lmsk, self_out, shvec )
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
-        class(image), intent(inout) :: self_out
-        real,         intent(in)    :: shvec(2)
+    module subroutine norm_noise_fft_clip_shift( self, stats, self_out, shvec )
+        class(image),      intent(inout) :: self
+        type(noise_stats), intent(in)    :: stats
+        class(image),      intent(inout) :: self_out
+        real,              intent(in)    :: shvec(2)
     end subroutine norm_noise_fft_clip_shift
 
     module subroutine norm_noise_mask_fft_powspec( self, lmsk, mskrad, spec )
@@ -2048,7 +2055,7 @@ interface
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr, splat_samples_only )
+    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: kfromto(2)
         real,              intent(in)    :: smpd_crop
@@ -2056,7 +2063,6 @@ interface
         real,              intent(in)    :: shift(2)
         type(fplane_type), intent(out)   :: fplane
         real, optional,    intent(in)    :: sig2arr(kfromto(1):kfromto(2))
-        logical, optional, intent(in)    :: splat_samples_only
     end subroutine gen_fplane4rec
 
     module subroutine calc_ice_frac( self, tfun, ctfparms, score )

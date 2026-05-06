@@ -58,6 +58,7 @@ contains
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
         type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_rec_imgs(:)
+        type(noise_stats),         allocatable :: ptcl_noise_stats(:)
         type(fplane_type),         allocatable :: fpls(:)
         type(class_sample),        allocatable :: clssmp(:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
@@ -171,6 +172,7 @@ contains
         call clean_strategy3D
         call b_ptr%vol%kill
         call orientation%kill
+        if( allocated(ptcl_noise_stats) ) deallocate(ptcl_noise_stats)
         call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_rec_imgs)
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
@@ -271,6 +273,8 @@ contains
             if( ctrl%do_bench ) rt_prep_refs = toc(t_prep_refs)
             if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
             call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+            if( allocated(ptcl_noise_stats) ) deallocate(ptcl_noise_stats)
+            allocate(ptcl_noise_stats(batchsz_max))
             if( ctrl%do_bench ) rt_alloc_ptcl_imgs = toc(t_alloc_ptcl_imgs)
             call build%vol%kill
             call build%vol_odd%kill
@@ -289,10 +293,11 @@ contains
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             if( need_rec_imgs )then
                 call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                    ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(:batchsz))
+                    ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats(:batchsz), &
+                    imgs4rec=ptcl_rec_imgs(:batchsz))
             else
                 call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                    ptcl_match_imgs, ptcl_match_imgs_pad)
+                    ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats(:batchsz))
             endif
             if( ctrl%do_bench ) rt_build_batch_ptcls = rt_build_batch_ptcls + toc(t_build_batch_ptcls)
         end subroutine build_batch_particles_local
@@ -354,7 +359,7 @@ contains
             if( .not. ctrl%do_write_partial_recs ) return
             if( ctrl%do_bench ) t_rec = tic()
             call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
-                pinds(batch_start:batch_end), fpls(:batchsz))
+                pinds(batch_start:batch_end), fpls(:batchsz), ptcl_noise_stats(:batchsz))
             call update_rec(params, b_ptr, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
             if( ctrl%do_bench ) rt_rec_accum = rt_rec_accum + toc(t_rec)
         end subroutine maybe_restore_batch

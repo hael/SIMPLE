@@ -30,7 +30,8 @@ public :: ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
 private
 #include "simple_local_flags.inc"
 
-type(image),   allocatable :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+type(image),        allocatable :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+type(noise_stats),  allocatable :: ptcl_noise_stats(:)
 class(builder),    pointer :: b_ptr => null()
 class(parameters), pointer :: p_ptr => null()
 real(timer_int_kind)       :: rt_startup, rt_alloc_ptcl_imgs2D, rt_prep_pftc_refs2D
@@ -108,6 +109,8 @@ contains
         endif
         call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
         call alloc_imgarr(batchsz_max, [p_ptr%box, p_ptr%box, 1], p_ptr%smpd, ptcl_imgs)
+        if( allocated(ptcl_noise_stats) ) deallocate(ptcl_noise_stats)
+        allocate(ptcl_noise_stats(batchsz_max))
         if( ctrl%do_bench )then
             rt_alloc_ptcl_imgs2D = toc(t_alloc_ptcl_imgs2D)
             t_prep_pftc_refs2D   = tic()
@@ -284,7 +287,7 @@ contains
         subroutine build_batch_particles_local()
             if( ctrl%do_bench ) t_build_batch_particles2D = tic()
             call build_batch_particles2D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+                ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats(1:batchsz))
             if( ctrl%do_bench ) rt_build_batch_particles2D = rt_build_batch_particles2D + toc(t_build_batch_particles2D)
         end subroutine build_batch_particles_local
 
@@ -347,7 +350,7 @@ contains
             if( ctrl%l_assignment_only ) return
             call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end), updated_only=.true.)
             if( ctrl%do_bench ) t_update = tic()
-            call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz))
+            call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz), ptcl_noise_stats(1:batchsz))
             if( ctrl%do_bench ) rt_cavg_interp_splat = rt_cavg_interp_splat + toc(t_update)
         end subroutine restore_class_averages_for_batch
 
@@ -363,6 +366,7 @@ contains
             do i = 1, batchsz_max
                 nullify(strategy2Dsrch(i)%ptr)
             end do
+            if( allocated(ptcl_noise_stats) ) deallocate(ptcl_noise_stats)
             call clean_batch_particles2D(b_ptr, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
             deallocate(strategy2Dsrch, pinds, batches)
             if( ctrl%l_prob_align ) call eulprob_obj_part%kill
@@ -438,7 +442,6 @@ contains
             write(fnr,'(a,l1)') 'match2D sample updates              : ', ctrl%l_sample_updates
             write(fnr,'(a,l1)') 'match2D restore class averages      : ', ctrl%l_restore_cavgs
             write(fnr,'(a,l1)') 'match2D assignment only             : ', ctrl%l_assignment_only
-            write(fnr,'(a,l1)') 'match2D sparse f-plane fill         : ', L_FPLANE_SPLAT_SAMPLES_GLOB
             write(fnr,'(a,i0)') 'match2D nclasses                    : ', p_ptr%ncls
             write(fnr,'(a,i0)') 'match2D kfrom                       : ', p_ptr%kfromto(1)
             write(fnr,'(a,i0)') 'match2D kto                         : ', p_ptr%kfromto(2)

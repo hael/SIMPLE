@@ -21,6 +21,7 @@ contains
         class(complex_ppca),      intent(inout) :: model
         integer(kind=8), optional,intent(out)   :: nlines
         type(image), allocatable :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+        type(noise_stats), allocatable :: ptcl_noise_stats(:)
         integer, allocatable :: pinds(:), batches(:,:)
         integer :: batchsz_max, nbatches, batch_start, batch_end, batchsz
         integer :: kfromto(2), nk, ibatch
@@ -35,6 +36,7 @@ contains
         call model%stream_reset()
         call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
         call alloc_imgarr(batchsz_max, [params%box, params%box, 1], params%smpd, ptcl_imgs)
+        allocate(ptcl_noise_stats(batchsz_max))
         nlines_here = 0_8
         nbatches = size(batches,1)
         do ibatch = 1,nbatches
@@ -42,7 +44,7 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles2D(params, build, batchsz, pinds(batch_start:batch_end), &
-                &ptcl_imgs(1:batchsz), ptcl_match_imgs, ptcl_match_imgs_pad)
+                &ptcl_imgs(1:batchsz), ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats(1:batchsz))
             call update_model_from_batch_lines(build%pftc, pinds(batch_start:batch_end), model, nlines_here)
         enddo
         call model%stream_finalize()
@@ -58,6 +60,7 @@ contains
         class(string),            intent(in)    :: fname
         integer(kind=8), optional,intent(out)   :: nlines
         type(image), allocatable :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+        type(noise_stats), allocatable :: ptcl_noise_stats(:)
         integer, allocatable :: pinds(:), batches(:,:)
         integer :: batchsz_max, nbatches, batch_start, batch_end, batchsz
         integer :: ibatch
@@ -65,6 +68,7 @@ contains
         call get_stream_batch_layout(params, build, pinds, batches, batchsz_max)
         call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
         call alloc_imgarr(batchsz_max, [params%box, params%box, 1], params%smpd, ptcl_imgs)
+        allocate(ptcl_noise_stats(batchsz_max))
         nlines_here = 0_8
         nbatches = size(batches,1)
         do ibatch = 1,nbatches
@@ -72,7 +76,7 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles2D(params, build, batchsz, pinds(batch_start:batch_end), &
-                &ptcl_imgs(1:batchsz), ptcl_match_imgs, ptcl_match_imgs_pad)
+                &ptcl_imgs(1:batchsz), ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_noise_stats(1:batchsz))
             call denoise_batch_lines(build%pftc, pinds(batch_start:batch_end), model, nlines_here)
             call build%pftc%write_ptcl_pft_range(fname, size(pinds), batch_start, batch_end)
         enddo

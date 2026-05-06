@@ -1,5 +1,7 @@
 !@descr: type and enumerator definitions
 module simple_type_defs
+use, intrinsic :: iso_c_binding, only: c_float
+use simple_defs,   only: dp
 use simple_string, only: string
 implicit none
 
@@ -83,6 +85,14 @@ type stats_struct
     real :: maxv = 0.
     real :: minv = 0.
 end type stats_struct
+
+type noise_stats
+    real(dp)      :: mean_dp   = 0.0_dp
+    real(dp)      :: invstd_dp = 1.0_dp
+    real(c_float) :: mean_sp   = 0.0_c_float
+    real(c_float) :: invstd_sp = 1.0_c_float
+    logical       :: do_norm   = .false.
+end type noise_stats
 
 type fplane_type
     complex, allocatable :: cmplx_plane(:,:) !< On output image pre-multiplied by CTF

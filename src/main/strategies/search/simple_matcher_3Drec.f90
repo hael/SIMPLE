@@ -72,7 +72,9 @@ contains
         integer,           intent(in)    :: nptcls
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable   :: fpls(:)
+        type(noise_stats), allocatable   :: ptcl_noise_stats(:)
         integer :: batchlims(2), ibatch, batchsz
+        integer :: i
         logical :: DEBUG = .false.
         integer(timer_int_kind) :: t, t0
         real(timer_int_kind)    :: t_init, t_read, t_prep, t_grid, t_tot
@@ -82,6 +84,7 @@ contains
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         ! Prep batch image objects
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        allocate(ptcl_noise_stats(MAXIMGBATCHSZ))
         if( DEBUG ) t_init = toc(t)
         ! gridding batch loop
         if( DEBUG ) then
@@ -98,8 +101,13 @@ contains
             if( DEBUG ) t_read = t_read + toc(t)
             ! preprocess images into padded objects
             if( DEBUG ) t = tic()
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+            do i = 1,batchsz
+                call build%imgbatch(i)%calc_noise_stats(build%lmsk, ptcl_noise_stats(i))
+            enddo
+            !$omp end parallel do
             call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz),&
-                                &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+                                &pinds(batchlims(1):batchlims(2)), fpls(:batchsz), ptcl_noise_stats(:batchsz))
             if( DEBUG ) t_prep = t_prep + toc(t)
             ! insert padded slices into lattice
             if( DEBUG ) t = tic()
@@ -109,6 +117,7 @@ contains
         ! Write partial reconstructions and clean up reconstruction objects
         call write_partial_recs(params, build, cline, fpls)
         call finalize_rec_objs(params, build)
+        deallocate(ptcl_noise_stats)
         if( DEBUG .and. (params%part==1) )then
             t_tot = toc(t0)
             print *,'Init          : ', t_init
@@ -147,14 +156,15 @@ contains
     end subroutine init_rec
 
     !> Preprocess particle images for online volumetric 3d reconstruction
-    subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes )
+    subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes, ptcl_noise_stats )
         use simple_image, only: image
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: nptcls
-        class(image),      intent(inout) :: ptcl_imgs(nptcls)
-        integer,           intent(in)    :: pinds(nptcls)
+        class(parameters),          intent(in)    :: params
+        class(builder),             intent(inout) :: build
+        integer,                    intent(in)    :: nptcls
+        class(image),               intent(inout) :: ptcl_imgs(nptcls)
+        integer,                    intent(in)    :: pinds(nptcls)
         type(fplane_type), intent(inout) :: fplanes(nptcls)
+        type(noise_stats), intent(in)    :: ptcl_noise_stats(nptcls)
         type(ctfparams) :: ctfparms(nthr_glob)
         real      :: shift(2)
         integer   :: iptcl, i, ithr, kfromto(2)
@@ -166,16 +176,15 @@ contains
         do i = 1,nptcls
             ithr   = omp_get_thread_num() + 1
             iptcl  = pinds(i)
-            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(ptcl_noise_stats(i), build%img_pad_heap(ithr))
             ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
             shift = build%spproj_field%get_2Dshift(iptcl)
             if( params%l_ml_reg )then
                 call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
-                &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl),&
-                &splat_samples_only=L_FPLANE_SPLAT_SAMPLES_GLOB)
+                &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
             else
                 call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
-                &shift, fplanes(i), splat_samples_only=L_FPLANE_SPLAT_SAMPLES_GLOB)
+                &shift, fplanes(i))
             endif
         end do
         !$omp end parallel do
