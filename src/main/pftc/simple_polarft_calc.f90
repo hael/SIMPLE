@@ -175,7 +175,9 @@ type :: polarft_calc
     procedure          :: gen_objfun_vals_mirr_vals
     procedure, private :: gen_corrs_mirr_corrs, gen_euclids_mirr_euclids
     procedure          :: gen_many_objfun_vals
+    procedure          :: gen_many_prob_objfun_vals
     procedure          :: gen_many_euclids
+    procedure          :: gen_many_prob_euclids
     procedure          :: gen_many_euclids_gpu
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: write_ptcl_pft_range
@@ -665,6 +667,18 @@ interface
         real(sp),            intent(in)    :: shift(2)
     end subroutine gen_many_objfun_vals
 
+    module subroutine gen_many_prob_objfun_vals( self, nr, irefs, iptcl, shift, athres_ub, prob_athres, dists, irots )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: nr
+        integer,             intent(in)    :: irefs(nr)
+        integer,             intent(in)    :: iptcl
+        real(sp),            intent(in)    :: shift(2)
+        real(sp),            intent(in)    :: athres_ub(nr)
+        real(sp),            intent(in)    :: prob_athres
+        real(sp),            intent(out)   :: dists(nr)
+        integer,             intent(out)   :: irots(nr)
+    end subroutine gen_many_prob_objfun_vals
+
     module subroutine gen_many_euclids( self, nr, irefs, iptcl, shift )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: nr
@@ -672,6 +686,18 @@ interface
         integer,                     intent(in)    :: iptcl
         real(sp),                    intent(in)    :: shift(2)
     end subroutine gen_many_euclids
+
+    module subroutine gen_many_prob_euclids( self, nr, irefs, iptcl, shift, athres_ub, prob_athres, dists, irots )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: nr
+        integer,                     intent(in)    :: irefs(nr)
+        integer,                     intent(in)    :: iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(in)    :: athres_ub(nr)
+        real(sp),                    intent(in)    :: prob_athres
+        real(sp),                    intent(out)   :: dists(nr)
+        integer,                     intent(out)   :: irots(nr)
+    end subroutine gen_many_prob_euclids
 
     module subroutine gen_many_euclids_gpu( self, iptcl )
         class(polarft_calc), intent(inout) :: self

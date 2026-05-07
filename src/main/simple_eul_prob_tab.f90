@@ -153,7 +153,8 @@ contains
     subroutine fill_tab( self )
         class(eul_prob_tab), intent(inout) :: self
         integer, allocatable   :: locn(:,:)
-        integer, allocatable   :: many_refs(:)
+        integer, allocatable   :: many_refs(:), many_irots(:,:)
+        real,    allocatable   :: many_athres(:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
         integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
@@ -178,7 +179,7 @@ contains
         l_many_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
         call seed_rnd
         if( l_many_objfun )then
-            allocate(many_refs(self%nrefs))
+            allocate(many_refs(self%nrefs), many_irots(self%nrefs,nthr_glob), many_athres(self%nrefs))
             do ri = 1,self%nrefs
                 many_refs(ri) = (self%sinds(ri)-1)*self%p_ptr%nspace + self%jinds(ri)
             enddo
@@ -190,6 +191,11 @@ contains
             projs_ns            = max(projs_ns, n)
             inpl_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
         enddo
+        if( l_many_objfun )then
+            do ri = 1,self%nrefs
+                many_athres(ri) = inpl_athres(self%sinds(ri))
+            enddo
+        endif
         if( allocated(locn) ) deallocate(locn)
         allocate(locn(projs_ns,nthr_glob), source=0)
         self%bench_fill_projs_ns  = projs_ns
@@ -237,17 +243,10 @@ contains
                 ! (2) search projection directions using those shifts for all references
                 t_local = tic()
                 if( l_many_objfun )then
-                    call self%b_ptr%pftc%gen_many_objfun_vals(self%nrefs, many_refs, iptcl, cxy(2:3))
-                    do ri = 1, self%nrefs
-                        istate = self%sinds(ri)
-                        call self%b_ptr%pftc%get_precalc_objfun_vals(ri, ithr, dists_inpl(:,ithr))
-                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
-                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr),&
-                            &inpl_athres(istate), self%p_ptr%prob_athres)
-                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
-                        dists_refs(ri,ithr)     = dists_inpl(irot,ithr)
-                        self%loc_tab(ri,i)%inpl = irot
-                    enddo
+                    call self%b_ptr%pftc%gen_many_prob_objfun_vals(self%nrefs, many_refs, iptcl, cxy(2:3),&
+                        &many_athres, self%p_ptr%prob_athres, dists_refs(:,ithr), many_irots(:,ithr))
+                    self%loc_tab(:,i)%dist = dists_refs(:,ithr)
+                    self%loc_tab(:,i)%inpl = many_irots(:,ithr)
                 else
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
@@ -300,16 +299,10 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 t_local = tic()
                 if( l_many_objfun )then
-                    call self%b_ptr%pftc%gen_many_objfun_vals(self%nrefs, many_refs, iptcl, [0.,0.])
-                    do ri = 1, self%nrefs
-                        istate = self%sinds(ri)
-                        call self%b_ptr%pftc%get_precalc_objfun_vals(ri, ithr, dists_inpl(:,ithr))
-                        dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
-                        irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr),&
-                            &inpl_athres(istate), self%p_ptr%prob_athres)
-                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
-                        self%loc_tab(ri,i)%inpl = irot
-                    enddo
+                    call self%b_ptr%pftc%gen_many_prob_objfun_vals(self%nrefs, many_refs, iptcl, [0.,0.],&
+                        &many_athres, self%p_ptr%prob_athres, dists_refs(:,ithr), many_irots(:,ithr))
+                    self%loc_tab(:,i)%dist = dists_refs(:,ithr)
+                    self%loc_tab(:,i)%inpl = many_irots(:,ithr)
                 else
                     do ri = 1, self%nrefs
                         istate = self%sinds(ri)
@@ -332,6 +325,8 @@ contains
         end do
         call o_prev%kill
         if( allocated(many_refs) ) deallocate(many_refs)
+        if( allocated(many_irots) ) deallocate(many_irots)
+        if( allocated(many_athres) ) deallocate(many_athres)
     end subroutine fill_tab
 
     subroutine fill_tab_state_only( self )
