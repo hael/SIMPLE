@@ -1,5 +1,6 @@
 !@descr: polarft class submodule for objective function evaluations
 submodule (simple_polarft_calc) simple_polarft_corr
+use simple_eul_prob_tab_utils, only: sample_bounded_dist, sample_power_dist
 #include "simple_local_flags.inc"
 implicit none
 
@@ -111,6 +112,20 @@ contains
         end select
     end subroutine gen_objfun_vals
 
+    module subroutine gen_best_objfun_val( self, iref, iptcl, shift, dist, irot )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        real(sp),            intent(in)    :: shift(2)
+        real(sp),            intent(out)   :: dist
+        integer,             intent(out)   :: irot
+        select case(self%p_ptr%cc_objfun)
+            case(OBJFUN_CC)
+                THROW_HARD('gen_best_objfun_val not implemented for OBJFUN_CC')
+            case(OBJFUN_EUCLID)
+                call self%gen_best_euclid_val(iref, iptcl, shift, dist, irot)
+        end select
+    end subroutine gen_best_objfun_val
+
     module subroutine gen_prob_objfun_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
@@ -127,6 +142,24 @@ contains
                 call self%gen_prob_euclid_val(iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
         end select
     end subroutine gen_prob_objfun_val
+
+    module subroutine gen_prob_power_objfun_val( self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl, nsample
+        real(sp),            intent(in)    :: shift(2)
+        real(sp),            intent(in)    :: power
+        real(sp),            intent(out)   :: dist, corr
+        integer,             intent(out)   :: irot
+        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
+        integer,             intent(inout) :: sorted_inds(self%nrots)
+        select case(self%p_ptr%cc_objfun)
+            case(OBJFUN_CC)
+                THROW_HARD('gen_prob_power_objfun_val not implemented for OBJFUN_CC')
+            case(OBJFUN_EUCLID)
+                call self%gen_prob_power_euclid_val(iref, iptcl, shift, power, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
+        end select
+    end subroutine gen_prob_power_objfun_val
 
     module subroutine gen_corrs( self, iref, iptcl, shift, cc )
         class(polarft_calc), target, intent(inout) :: self
@@ -296,21 +329,17 @@ contains
         end do
     end subroutine gen_euclids
 
-    module subroutine gen_prob_euclid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
+    subroutine gen_euclid_crvec( self, iref, iptcl, shift, norm, ithr )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(in)    :: athres_ub, prob_athres
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
-        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
-        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        real(dp),                    intent(out)   :: norm
+        integer,                     intent(out)   :: ithr
         complex(sp), pointer :: shmat(:,:)
         complex(sp) :: c
-        real(dp)    :: norm
         real(dp)    :: wk
         real(sp)    :: shift_mag_sq
-        integer     :: k, i, ithr, kk, k0, p
+        integer     :: k, i, kk, k0, p
         ithr         = omp_get_thread_num() + 1
         i            = self%pinds(iptcl)
         k0           = self%kfromto(1)
@@ -378,95 +407,90 @@ contains
             endif
         endif
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        call sample_prob_euclid(norm, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
+    end subroutine gen_euclid_crvec
+
+    real(sp) function euclid_dist_from_crvec( self, ithr, irot, norm ) result(dist)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: ithr, irot
+        real(dp),            intent(in) :: norm
+        real(dp) :: v
+        v = 1.d0 + real(self%crvec1(ithr)%r(irot), dp) / norm
+        if( v > -log(real(TINY,dp)) )then
+            dist = huge(dist)
+        else
+            dist = real(v,sp)
+        endif
+    end function euclid_dist_from_crvec
+
+    module subroutine gen_best_euclid_val( self, iref, iptcl, shift, dist, irot )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        real(dp) :: norm
+        real(sp) :: dist_tmp
+        integer  :: ithr, p
+        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
+        irot = 1
+        dist = euclid_dist_from_crvec(self, ithr, 1, norm)
+        do p = 2,self%nrots
+            dist_tmp = euclid_dist_from_crvec(self, ithr, p, norm)
+            if( dist_tmp < dist )then
+                irot = p
+                dist = dist_tmp
+            endif
+        enddo
+    end subroutine gen_best_euclid_val
+
+    module subroutine gen_prob_euclid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(in)    :: athres_ub, prob_athres
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        real(dp)    :: norm
+        integer     :: ithr
+        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
+        call sample_bounded_dist(self%nrots, euclid_dist_at_rot, athres_ub, prob_athres, dist, irot,&
+            &pvec_sorted, sorted_inds)
 
     contains
 
-        real(sp) function euclid_dist_at_rot(p_loc, norm_loc) result(dist_loc)
+        real function euclid_dist_at_rot(p_loc) result(dist_loc)
             integer,  intent(in) :: p_loc
-            real(dp), intent(in) :: norm_loc
-            real(dp) :: v
-            v = 1.d0 + real(self%crvec1(ithr)%r(p_loc), dp) / norm_loc
-            if( v > -log(real(TINY,dp)) )then
-                dist_loc = huge(dist_loc)
-            else
-                dist_loc = real(v,sp)
-            endif
+            dist_loc = euclid_dist_from_crvec(self, ithr, p_loc, norm)
         end function euclid_dist_at_rot
 
-        subroutine sample_prob_euclid(norm_loc, athres_ub_in, prob_athres_loc, dist_loc, irot_loc, pvec_sorted_loc, sorted_inds_loc)
-            real(dp), intent(in)    :: norm_loc
-            real(sp), intent(in)    :: athres_ub_in, prob_athres_loc
-            real(sp), intent(out)   :: dist_loc
-            integer,  intent(out)   :: irot_loc
-            real(sp), intent(inout) :: pvec_sorted_loc(:)
-            integer,  intent(inout) :: sorted_inds_loc(:)
-            integer :: n, num_lb, num_ub, p_loc, pick
-            real(sp) :: athres_ub_loc, athres_lb_loc, sum_pvec, rnd, dist_tmp
-            n              = self%nrots
-            athres_ub_loc  = min(prob_athres_loc, athres_ub_in)
-            athres_lb_loc  = min(athres_ub_loc / 10., 1.)
-            num_ub         = min(n,max(1,int(athres_ub_loc * real(n) / 180.)))
-            num_lb         = 1 + floor(athres_lb_loc / athres_ub_loc * num_ub)
-            do p_loc = 1, num_ub
-                pvec_sorted_loc(p_loc) = euclid_dist_at_rot(p_loc, norm_loc)
-                sorted_inds_loc(p_loc) = p_loc
-            enddo
-            do p_loc = num_ub / 2, 1, -1
-                call maxheap_sift_down(pvec_sorted_loc, sorted_inds_loc, p_loc, num_ub)
-            enddo
-            do p_loc = num_ub + 1, n
-                dist_tmp = euclid_dist_at_rot(p_loc, norm_loc)
-                if( dist_tmp < pvec_sorted_loc(1) )then
-                    pvec_sorted_loc(1) = dist_tmp
-                    sorted_inds_loc(1) = p_loc
-                    call maxheap_sift_down(pvec_sorted_loc, sorted_inds_loc, 1, num_ub)
-                endif
-            enddo
-            call hpsort(pvec_sorted_loc(1:num_ub), sorted_inds_loc(1:num_ub))
-            rnd      = ran3()
-            sum_pvec = sum(pvec_sorted_loc(1:num_ub))
-            if( sum_pvec < TINY )then
-                pick     = min(num_ub, 1 + floor(real(num_ub) * rnd))
-                irot_loc = sorted_inds_loc(pick)
-            else
-                pvec_sorted_loc(1:num_ub) = pvec_sorted_loc(1:num_ub) / sum_pvec
-                if( rnd > sum(pvec_sorted_loc(1:num_lb)) )then
-                    irot_loc = sorted_inds_loc(1)
-                else
-                    irot_loc = sorted_inds_loc(num_ub)
-                endif
-            endif
-            dist_loc = euclid_dist_at_rot(irot_loc, norm_loc)
-        end subroutine sample_prob_euclid
-
-        subroutine maxheap_sift_down(pvec_sorted_loc, sorted_inds_loc, root_in, heap_size)
-            real(sp), intent(inout) :: pvec_sorted_loc(:)
-            integer,  intent(inout) :: sorted_inds_loc(:)
-            integer,  intent(in)    :: root_in, heap_size
-            integer :: root, child, swap_i, tmp_ind
-            real(sp) :: tmp_val
-            root = root_in
-            do
-                child = 2 * root
-                if( child > heap_size ) exit
-                swap_i = root
-                if( pvec_sorted_loc(swap_i) < pvec_sorted_loc(child) ) swap_i = child
-                if( child + 1 <= heap_size )then
-                    if( pvec_sorted_loc(swap_i) < pvec_sorted_loc(child + 1) ) swap_i = child + 1
-                endif
-                if( swap_i == root ) exit
-                tmp_val                  = pvec_sorted_loc(root)
-                pvec_sorted_loc(root)    = pvec_sorted_loc(swap_i)
-                pvec_sorted_loc(swap_i)  = tmp_val
-                tmp_ind                  = sorted_inds_loc(root)
-                sorted_inds_loc(root)    = sorted_inds_loc(swap_i)
-                sorted_inds_loc(swap_i)  = tmp_ind
-                root = swap_i
-            enddo
-        end subroutine maxheap_sift_down
-
     end subroutine gen_prob_euclid_val
+
+    module subroutine gen_prob_power_euclid_val( self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, nsample
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(in)    :: power
+        real(sp),                    intent(out)   :: dist, corr
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        real(dp) :: norm
+        integer  :: ithr
+        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
+        call sample_power_dist(self%nrots, euclid_dist_at_rot, power, nsample, dist, corr, irot,&
+            &pvec_sorted, sorted_inds)
+
+    contains
+
+        real function euclid_dist_at_rot(p_loc) result(dist_loc)
+            integer, intent(in) :: p_loc
+            dist_loc = euclid_dist_from_crvec(self, ithr, p_loc, norm)
+        end function euclid_dist_at_rot
+
+    end subroutine gen_prob_power_euclid_val
 
     module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
         class(polarft_calc), target, intent(inout) :: self

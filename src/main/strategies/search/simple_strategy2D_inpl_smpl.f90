@@ -5,6 +5,7 @@ use simple_strategy2D_alloc, only: s2D
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: builder
+use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
 
 public :: strategy2D_inpl_smpl
@@ -34,17 +35,22 @@ contains
         class(strategy2D_inpl_smpl), intent(inout) :: self
         class(oris),                 intent(inout) :: os
         real    :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots), offsets(2,self%s%nrots), cxy(3)
+        real    :: inpl_dist
         integer :: sorted_inds(self%s%nrots), isample, inpl_ind, order_ind
+        logical :: l_prob_objfun
         if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
             call self%s%prep4srch(os)
+            l_prob_objfun = (self%s%p_ptr%cc_objfun == OBJFUN_EUCLID)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! In-plane sampling
-            if( self%s%l_sh_first )then
-                call self%s%b_ptr%pftc%gen_objfun_vals(self%s%best_class, self%s%iptcl, self%s%xy_first, inpl_corrs)
-            else
-                call self%s%b_ptr%pftc%gen_objfun_vals(self%s%best_class, self%s%iptcl, [0.,0.],         inpl_corrs)
+            if( .not. (l_prob_objfun .and. .not. s2D%do_inplsrch(self%s%iptcl_batch)) )then
+                if( self%s%l_sh_first )then
+                    call self%s%b_ptr%pftc%gen_objfun_vals(self%s%best_class, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                else
+                    call self%s%b_ptr%pftc%gen_objfun_vals(self%s%best_class, self%s%iptcl, [0.,0.],         inpl_corrs)
+                endif
             endif
             ! Shift search
             if( s2D%do_inplsrch(self%s%iptcl_batch) )then
@@ -80,8 +86,20 @@ contains
                 self%s%best_shvec = offsets(:,self%s%best_rot)
             else
                 ! In-plane selection
-                call power_sampling( s2D%power, self%s%nrots, inpl_corrs, sorted_inds, s2D%snhc_smpl_ninpl,&
-                                    &self%s%best_rot, order_ind, self%s%best_corr )
+                if( l_prob_objfun )then
+                    if( self%s%l_sh_first )then
+                        call self%s%b_ptr%pftc%gen_prob_power_objfun_val(self%s%best_class, self%s%iptcl,&
+                            &self%s%xy_first, s2D%power, s2D%snhc_smpl_ninpl, inpl_dist, self%s%best_corr,&
+                            &self%s%best_rot, inpl_corrs, sorted_inds)
+                    else
+                        call self%s%b_ptr%pftc%gen_prob_power_objfun_val(self%s%best_class, self%s%iptcl,&
+                            &[0.,0.], s2D%power, s2D%snhc_smpl_ninpl, inpl_dist, self%s%best_corr,&
+                            &self%s%best_rot, inpl_corrs, sorted_inds)
+                    endif
+                else
+                    call power_sampling( s2D%power, self%s%nrots, inpl_corrs, sorted_inds, s2D%snhc_smpl_ninpl,&
+                                        &self%s%best_rot, order_ind, self%s%best_corr )
+                endif
                 self%s%best_shvec = 0.
             endif
             self%s%nrefs_eval = self%s%nrefs

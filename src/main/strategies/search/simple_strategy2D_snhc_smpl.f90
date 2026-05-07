@@ -5,6 +5,7 @@ use simple_strategy2D_alloc, only: s2D
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: builder
+use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
 
 public :: strategy2D_snhc_smpl
@@ -34,13 +35,15 @@ contains
         class(strategy2D_snhc_smpl), intent(inout) :: self
         class(oris),                 intent(inout) :: os
         real    :: inpl_corrs(self%s%nrots)
-        real    :: inpl_corr
+        real    :: inpl_corr, inpl_dist
         integer :: sorted_cls_inds(self%s%nrefs), vec_nrots(self%s%nrots)
         integer :: iref, isample, inpl_ind, order_ind, class_rank
         integer :: nrefs_coarse_eval
+        logical :: l_prob_objfun
         if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
             call self%s%prep4srch(os)
+            l_prob_objfun = (self%s%p_ptr%cc_objfun == OBJFUN_EUCLID)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! Class search
@@ -54,13 +57,23 @@ contains
                 if(nrefs_coarse_eval > s2D%snhc_nrefs_bound) exit
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! In-plane sampling
-                if( self%s%l_sh_first )then
-                    call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                if( l_prob_objfun )then
+                    if( self%s%l_sh_first )then
+                        call self%s%b_ptr%pftc%gen_prob_power_objfun_val(iref, self%s%iptcl, self%s%xy_first,&
+                            &s2D%power, s2D%snhc_smpl_ninpl, inpl_dist, inpl_corr, inpl_ind, inpl_corrs, vec_nrots)
+                    else
+                        call self%s%b_ptr%pftc%gen_prob_power_objfun_val(iref, self%s%iptcl, [0.,0.],&
+                            &s2D%power, s2D%snhc_smpl_ninpl, inpl_dist, inpl_corr, inpl_ind, inpl_corrs, vec_nrots)
+                    endif
                 else
-                    call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
+                    if( self%s%l_sh_first )then
+                        call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    else
+                        call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
+                    endif
+                    call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
+                                        &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
                 endif
-                call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
-                                    &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
                 call self%s%store_solution(iref, inpl_ind, inpl_corr)
             end do
             ! Performs shift search for top scoring subset
@@ -88,4 +101,3 @@ contains
     end subroutine kill_snhc_smpl
 
 end module simple_strategy2D_snhc_smpl
-    

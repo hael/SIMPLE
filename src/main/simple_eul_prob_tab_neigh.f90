@@ -8,6 +8,7 @@ use simple_eul_prob_tab_utils, only: angle_sampling, build_pind_lookup, calc_ath
     &materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
+use simple_type_defs,          only: OBJFUN_EUCLID
 implicit none
 
 public :: eul_prob_tab_neigh
@@ -91,6 +92,7 @@ contains
         real(timer_int_kind) :: rt_shift_seed_loc, rt_coarse_sweep_loc, rt_select_loc, rt_neigh_eval_loc, rt_shift_refine_loc
         integer :: n_neigh_eval, n_shift_refine
         integer :: n_neigh_eval_loc, n_shift_refine_loc
+        logical :: l_prob_objfun
         self%bench_fill_projs_ns            = 0
         self%bench_fill_ref_evals           = 0
         self%bench_fill_nsubs               = 0
@@ -103,6 +105,7 @@ contains
         self%bench_fill_neigh_eval          = 0.
         self%bench_fill_shift_refine        = 0.
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
+        l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
         call seed_rnd
         nsubs = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
@@ -339,6 +342,7 @@ contains
             real,    intent(in) :: shift_seed_loc(3)
             logical, intent(in) :: l_with_shift
             integer :: si_loc, istate_loc, isub_loc, full_ref_subspace_loc, irot_loc, ri_loc, coarse_proj_loc
+            real    :: dist_loc
             coarse_ws%peak_subspace_dists(:,:,ithr_loc) = huge(1.0)
             coarse_ws%peak_subspace_inds(:,:,ithr_loc)  = 0
             coarse_ws%peak_subspace_count(:,ithr_loc)  = 0
@@ -349,21 +353,30 @@ contains
                     coarse_proj_loc = self%b_ptr%subspace_inds(isub_loc)
                     if( .not. self%proj_exists(coarse_proj_loc, istate_loc) ) cycle
                     full_ref_subspace_loc = (istate_loc-1)*self%p_ptr%nspace + coarse_proj_loc
-                    if( l_with_shift )then
-                        call self%b_ptr%pftc%gen_objfun_vals(full_ref_subspace_loc, iptcl_loc, shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
+                    if( l_prob_objfun )then
+                        if( l_with_shift )then
+                            call self%b_ptr%pftc%gen_best_objfun_val(full_ref_subspace_loc, iptcl_loc,&
+                                &shift_seed_loc(2:3), dist_loc, irot_loc)
+                        else
+                            call self%b_ptr%pftc%gen_best_objfun_val(full_ref_subspace_loc, iptcl_loc,&
+                                &[0.,0.], dist_loc, irot_loc)
+                        endif
                     else
-                        call self%b_ptr%pftc%gen_objfun_vals(full_ref_subspace_loc, iptcl_loc, [0.,0.], dists_inpl(:,ithr_loc))
+                        if( l_with_shift )then
+                            call self%b_ptr%pftc%gen_objfun_vals(full_ref_subspace_loc, iptcl_loc,&
+                                &shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
+                        else
+                            call self%b_ptr%pftc%gen_objfun_vals(full_ref_subspace_loc, iptcl_loc,&
+                                &[0.,0.], dists_inpl(:,ithr_loc))
+                        endif
+                        dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
+                        irot_loc = minloc(dists_inpl(:,ithr_loc), dim=1)
+                        dist_loc = dists_inpl(irot_loc,ithr_loc)
                     endif
-                    dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
-                    irot_loc = minloc(dists_inpl(:,ithr_loc), dim=1)
-                    call consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dists_inpl(irot_loc,ithr_loc))
+                    call consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dist_loc)
                     ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace_loc)
                     if( ri_loc > 0 )then
-                        if( l_with_shift )then
-                            call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
-                        else
-                            call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
-                        endif
+                        call record_sparse_eval(i_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
                     endif
                 enddo
             enddo
@@ -436,6 +449,7 @@ contains
             integer, intent(out) :: neval_loc
             integer :: jsub_loc, kref_loc, nrefs_sub_loc, offset_loc
             integer :: si_loc, ri_loc, istate_loc, iproj_loc, irot_loc, iref_loc, isub_loc
+            real    :: dist_loc
             neval_loc = 0
             do si_loc = 1,self%nstates
                 istate_loc = self%ssinds(si_loc)
@@ -449,18 +463,32 @@ contains
                         if( ri_loc < 1 ) cycle
                         iproj_loc = self%jinds(ri_loc)
                         iref_loc  = (istate_loc-1)*self%p_ptr%nspace + iproj_loc
-                        if( l_with_shift )then
-                            call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc, shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
+                        if( l_prob_objfun )then
+                            if( l_with_shift )then
+                                call self%b_ptr%pftc%gen_prob_objfun_val(iref_loc, iptcl_loc, shift_seed_loc(2:3),&
+                                    &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist_loc, irot_loc,&
+                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+                            else
+                                call self%b_ptr%pftc%gen_prob_objfun_val(iref_loc, iptcl_loc, [0.,0.],&
+                                    &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist_loc, irot_loc,&
+                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+                            endif
                         else
-                            call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc, [0.,0.], dists_inpl(:,ithr_loc))
+                            if( l_with_shift )then
+                                call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc,&
+                                    &shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
+                            else
+                                call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc, [0.,0.], dists_inpl(:,ithr_loc))
+                            endif
+                            dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
+                            irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc),&
+                                &inpl_athres(istate_loc), self%p_ptr%prob_athres)
+                            dist_loc = dists_inpl(irot_loc,ithr_loc)
                         endif
-                        dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
-                        irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc),&
-                            &inpl_athres(istate_loc), self%p_ptr%prob_athres)
-                        call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
+                        call record_sparse_eval(i_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
                         neval_loc = neval_loc + 1
                         eval_work%evaluated_ref_ids(neval_loc,ithr_loc)  = ri_loc
-                        eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dists_inpl(irot_loc,ithr_loc)
+                        eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dist_loc
                     enddo
                 enddo
             enddo
@@ -777,8 +805,10 @@ contains
         integer   :: k, idx, nactive, total, m, start, maxref, nleft, assigned_idx, nsel, pos, last_ref
         real      :: projs_athres
         real      :: huge_val
+        logical   :: l_prob_objfun
         integer(timer_int_kind) :: t_local
         huge_val = huge(1.0)
+        l_prob_objfun = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
         self%bench_assign_normalize = 0.
         self%bench_assign_sort      = 0.
         self%bench_assign_graph     = 0.
@@ -964,7 +994,7 @@ contains
             type(ori) :: o_prev_loc
             integer :: istate_loc, iproj_loc, irot_loc, fallback_state, fallback_proj, fallback_ref_full
             integer :: ri_loc, fallback_ref_loc
-            real    :: inpl_athres_state, sh_seed(2)
+            real    :: inpl_athres_state, sh_seed(2), dist_loc
             if( pick_best_evaluated_ref(iptcl_loc) > 0 ) return
             call self%b_ptr%spproj_field%get_ori(self%pinds(iptcl_loc), o_prev_loc)
             istate_loc = o_prev_loc%get_state()
@@ -993,17 +1023,33 @@ contains
                 fallback_ref_full = (fallback_state-1)*self%p_ptr%nspace + fallback_proj
                 sh_seed = 0.
                 if( self%p_ptr%l_doshift ) sh_seed = o_prev_loc%get_2Dshift()
-                call self%b_ptr%pftc%gen_objfun_vals(fallback_ref_full, self%pinds(iptcl_loc), sh_seed, dists_inpl)
-                dists_inpl = eulprob_dist_switch(dists_inpl, self%p_ptr%cc_objfun)
-                irot_loc = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
-                if( self%p_ptr%l_prob_inpl )then
-                    inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=fallback_state)
-                    irot_loc = angle_sampling(dists_inpl, dists_inpl_sorted, inds_sorted, inpl_athres_state, self%p_ptr%prob_athres)
+                if( l_prob_objfun )then
+                    if( self%p_ptr%l_prob_inpl )then
+                        inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
+                            &self%p_ptr%prob_athres, state=fallback_state)
+                        call self%b_ptr%pftc%gen_prob_objfun_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
+                            &inpl_athres_state, self%p_ptr%prob_athres, dist_loc, irot_loc, dists_inpl_sorted, inds_sorted)
+                    else
+                        call self%b_ptr%pftc%gen_best_objfun_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
+                            &dist_loc, irot_loc)
+                    endif
                 else
-                    irot_loc = minloc(dists_inpl, dim=1)
+                    call self%b_ptr%pftc%gen_objfun_vals(fallback_ref_full, self%pinds(iptcl_loc), sh_seed, dists_inpl)
+                    dists_inpl = eulprob_dist_switch(dists_inpl, self%p_ptr%cc_objfun)
+                    irot_loc = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
+                    if( self%p_ptr%l_prob_inpl )then
+                        inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
+                            &self%p_ptr%prob_athres, state=fallback_state)
+                        irot_loc = angle_sampling(dists_inpl, dists_inpl_sorted, inds_sorted,&
+                            &inpl_athres_state, self%p_ptr%prob_athres)
+                    else
+                        irot_loc = minloc(dists_inpl, dim=1)
+                    endif
+                    if( irot_loc < 1 .or. irot_loc > self%b_ptr%pftc%get_nrots() ) irot_loc = 1
+                    dist_loc = dists_inpl(irot_loc)
                 endif
                 if( irot_loc < 1 .or. irot_loc > self%b_ptr%pftc%get_nrots() ) irot_loc = 1
-                self%loc_tab(fallback_ref_loc,iptcl_loc)%dist   = dists_inpl(irot_loc)
+                self%loc_tab(fallback_ref_loc,iptcl_loc)%dist   = dist_loc
                 self%loc_tab(fallback_ref_loc,iptcl_loc)%inpl   = irot_loc
                 self%loc_tab(fallback_ref_loc,iptcl_loc)%x      = sh_seed(1)
                 self%loc_tab(fallback_ref_loc,iptcl_loc)%y      = sh_seed(2)

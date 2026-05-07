@@ -9,6 +9,7 @@ use simple_parameters,       only: parameters
 use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
+use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
 
 public :: strategy3D_snhc_smpl
@@ -41,14 +42,16 @@ contains
         class(oris),                  intent(inout) :: os
         integer,                     intent(in)    :: ithr
         real    :: sorted_corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
-        real    :: cxy(3), inpl_corr, neigh_frac, power
+        real    :: cxy(3), inpl_corr, inpl_dist, neigh_frac, power
         integer :: vec_nrots(self%s%nrots), sorted_inds(self%s%nrefs)
         integer :: iref, isample, nrefs_bound, inpl_ind, order_ind, smpl_nrefs, smpl_ninpl
+        logical :: l_prob_objfun
         if( os%get_state(self%s%iptcl) > 0 )then
             ! thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
+            l_prob_objfun = (self%s%p_ptr%cc_objfun == OBJFUN_EUCLID)
             ! # of references to evaluate (extremal optimization)
             neigh_frac  = extremal_decay( self%s%p_ptr%extr_iter, self%s%p_ptr%extr_lim )
             nrefs_bound = max(2,min(self%s%nrefs, nint(real(self%s%nrefs)*(1.-neigh_frac))))
@@ -71,9 +74,14 @@ contains
                 ! empty space
                 if( .not.s3D%state_exists(s3D%proj_space_state(iref)) )cycle
                 ! In-plane sampling
-                call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.], inpl_corrs)
-                call power_sampling( power, self%s%nrots, inpl_corrs, vec_nrots,&
-                                    &smpl_ninpl, inpl_ind, order_ind, inpl_corr )
+                if( l_prob_objfun )then
+                    call self%s%b_ptr%pftc%gen_prob_power_objfun_val(iref, self%s%iptcl, [0.,0.], power,&
+                        &smpl_ninpl, inpl_dist, inpl_corr, inpl_ind, inpl_corrs, vec_nrots)
+                else
+                    call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.], inpl_corrs)
+                    call power_sampling( power, self%s%nrots, inpl_corrs, vec_nrots,&
+                                        &smpl_ninpl, inpl_ind, order_ind, inpl_corr )
+                endif
                 call self%s%store_solution(iref, inpl_ind, inpl_corr)
             enddo
             ! Performs shift search for top scoring subset

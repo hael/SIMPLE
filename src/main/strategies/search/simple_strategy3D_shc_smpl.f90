@@ -7,6 +7,7 @@ use simple_parameters,       only: parameters
 use simple_oris,             only: oris
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
+use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
 
 public :: strategy3D_shc_smpl
@@ -40,11 +41,14 @@ contains
         integer,                    intent(in)    :: ithr
         integer :: iref, isample, loc(1), inds(self%s%nrots)
         real    :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots)
+        real    :: dist, corr
+        logical :: l_prob_objfun
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
+            l_prob_objfun = (self%s%p_ptr%cc_objfun == OBJFUN_EUCLID)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! initialize
@@ -54,15 +58,30 @@ contains
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr)  ! set the stochastic reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
-                    if( self%s%p_ptr%l_doshift )then
-                        call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                    if( l_prob_objfun )then
+                        if( self%s%p_ptr%l_doshift )then
+                            call self%s%b_ptr%pftc%gen_prob_objfun_val(iref, self%s%iptcl, self%s%xy_first,&
+                                &s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres,&
+                                &dist, loc(1), sorted_corrs, inds)
+                        else
+                            call self%s%b_ptr%pftc%gen_prob_objfun_val(iref, self%s%iptcl, [0.,0.],&
+                                &s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres,&
+                                &dist, loc(1), sorted_corrs, inds)
+                        endif
+                        corr = exp(-dist)
                     else
-                        call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
+                        if( self%s%p_ptr%l_doshift )then
+                            call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
+                        else
+                            call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)
+                        endif
+                        loc = angle_sampling(eulprob_dist_switch(inpl_corrs, self%s%p_ptr%cc_objfun), sorted_corrs, inds,&
+                            &s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres)
+                        corr = inpl_corrs(loc(1))
                     endif
-                    loc = angle_sampling(eulprob_dist_switch(inpl_corrs, self%s%p_ptr%cc_objfun), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres)
-                    call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+                    call self%s%store_solution(iref, loc(1), corr)
                     ! update nbetter to keep track of how many improving solutions we have identified
-                    if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+                    if( corr > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
                     ! keep track of how many references we are evaluating
                     self%s%nrefs_eval = self%s%nrefs_eval + 1
                 end if

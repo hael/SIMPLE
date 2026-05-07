@@ -7,6 +7,7 @@ use simple_decay_funs,       only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, materialize_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table
 use simple_rnd,              only: greedy_sampling
+use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
 
 public :: eul_prob_tab2D
@@ -116,10 +117,12 @@ contains
         integer :: loc(1), vec_nrots(self%b_ptr%pftc%get_nrots())
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3)
         real    :: inpl_corrs(self%b_ptr%pftc%get_nrots()), cls_dists(self%nclasses), cls_dists_work(self%nclasses)
-        real    :: inpl_corr, power, neigh_frac
+        real    :: inpl_corr, inpl_dist, power, neigh_frac
         logical :: class_active(self%nclasses)
+        logical :: l_prob_objfun
         call seed_rnd
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
+        l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -150,7 +153,9 @@ contains
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls,icls_prev,inpl_corrs,loc,cls_dists,cls_dists_work,iref_n,cxy_prob,vec_nrots,order_ind,inpl_corr) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls,icls_prev,inpl_corrs,loc,&
+            !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,vec_nrots,order_ind,inpl_corr,inpl_dist)&
+            !$omp proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
@@ -176,9 +181,16 @@ contains
                 cls_dists = huge(1.0)
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, cxy(2:3), inpl_corrs)
-                    call power_sampling(power, self%b_ptr%pftc%get_nrots(), inpl_corrs, vec_nrots, ninpl_smpl, irot, order_ind, inpl_corr)
-                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(inpl_corr, self%p_ptr%cc_objfun)
+                    if( l_prob_objfun )then
+                        call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, cxy(2:3), power, ninpl_smpl,&
+                            &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        self%loc_tab(icls,i)%dist = inpl_dist
+                    else
+                        call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, cxy(2:3), inpl_corrs)
+                        call power_sampling(power, self%b_ptr%pftc%get_nrots(), inpl_corrs, vec_nrots, ninpl_smpl,&
+                            &irot, order_ind, inpl_corr)
+                        self%loc_tab(icls,i)%dist = eulprob_dist_switch(inpl_corr, self%p_ptr%cc_objfun)
+                    endif
                     self%loc_tab(icls,i)%inpl   = irot
                     cls_dists(icls) = self%loc_tab(icls,i)%dist
                 end do
@@ -204,15 +216,23 @@ contains
             !$omp end parallel do
         else
             ! shift-free path: evaluate classes/in-planes at zero shift
-            !$omp parallel do default(shared) private(i,iptcl,ithr,icls,iref_n,inpl_corrs,vec_nrots,irot,order_ind,inpl_corr) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(i,iptcl,ithr,icls,iref_n,inpl_corrs,vec_nrots,irot,order_ind,&
+            !$omp& inpl_corr,inpl_dist) proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], inpl_corrs)
-                    call power_sampling(power, self%b_ptr%pftc%get_nrots(), inpl_corrs, vec_nrots, ninpl_smpl, irot, order_ind, inpl_corr)
-                    self%loc_tab(icls,i)%dist   = eulprob_dist_switch(inpl_corr, self%p_ptr%cc_objfun)
+                    if( l_prob_objfun )then
+                        call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, [0.,0.], power, ninpl_smpl,&
+                            &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        self%loc_tab(icls,i)%dist = inpl_dist
+                    else
+                        call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], inpl_corrs)
+                        call power_sampling(power, self%b_ptr%pftc%get_nrots(), inpl_corrs, vec_nrots, ninpl_smpl,&
+                            &irot, order_ind, inpl_corr)
+                        self%loc_tab(icls,i)%dist = eulprob_dist_switch(inpl_corr, self%p_ptr%cc_objfun)
+                    endif
                     self%loc_tab(icls,i)%inpl   = irot
                     self%loc_tab(icls,i)%x      = 0.
                     self%loc_tab(icls,i)%y      = 0.
