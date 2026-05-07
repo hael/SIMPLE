@@ -235,7 +235,7 @@ type :: parameters
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}
+    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diffusion_maps){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -324,6 +324,7 @@ type :: parameters
     integer :: kpca_nystrom_npts=512 !< # of Nyström landmarks
     integer :: kpca_nystrom_local_nbrs=96 !< max extra local support neighbors for Nyström reconstruction
     integer :: k_nn=10              !< local nearest-neighbor count for graph-based diffusion splitting
+    integer :: steerable_nmodes=4   !< angular Fourier modes for cls_split steerable diffusion maps
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
@@ -949,6 +950,7 @@ contains
         call check_iarg('kpca_nystrom_npts', self%kpca_nystrom_npts)
         call check_iarg('kpca_nystrom_local_nbrs', self%kpca_nystrom_local_nbrs)
         call check_iarg('k_nn',            self%k_nn)
+        call check_iarg('steerable_nmodes', self%steerable_nmodes)
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)

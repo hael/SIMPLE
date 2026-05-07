@@ -443,6 +443,7 @@ contains
         call cmd_dict%push('smpd',          'sampling distance, same as EMANs apix(in A)')
         call cmd_dict%push('snr',           'signal-to-noise ratio')
         call cmd_dict%push('speckind',      'power spectrum kind(real|power|sqrt|log|phase){sqrt}')
+        call cmd_dict%push('steerable_nmodes', '# angular Fourier modes for cls_split steerable diffusion maps{4}')
         call cmd_dict%push('startit',       'start iterating from here')
         call cmd_dict%push('starfile',      'STAR-formatted project file')
         call cmd_dict%push('state',         'state to extract')
