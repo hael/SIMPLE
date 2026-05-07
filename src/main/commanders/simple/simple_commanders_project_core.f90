@@ -106,7 +106,11 @@ contains
             ! change to project directory
             call simple_chdir(params%dir)
         else
-            THROW_HARD('neither projname nor dir defined on comman line; exec_new_project')
+            if( associated(params%ptr2prg) )then
+                call params%ptr2prg%print_cmdline()
+                stop
+            endif
+            THROW_HARD('neither projname nor dir defined on command line; exec_new_project')
         endif
         ! update project info
         call spproj%update_projinfo( cline )
