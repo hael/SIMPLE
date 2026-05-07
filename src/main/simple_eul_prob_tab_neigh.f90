@@ -4,8 +4,8 @@ module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: angle_sampling, angle_sampling_fast, calc_athres, eulprob_dist_switch,&
-    &materialize_seed_shift
+use simple_eul_prob_tab_utils, only: angle_sampling, angle_sampling_fast, build_pind_lookup, calc_athres, eulprob_dist_switch,&
+    &materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
 use simple_eulspace_neigh_map, only: eulspace_neigh_map
@@ -25,7 +25,9 @@ contains
     procedure :: ref_normalize => ref_normalize_neigh
     procedure :: ref_assign    => ref_assign_neigh
     procedure :: kill          => kill_neigh
+    procedure :: write_tab     => write_tab_neigh
     procedure :: read_tabs_to_glob
+    procedure, private :: read_sparse_tab_to_glob
 end type eul_prob_tab_neigh
 
 contains
@@ -484,60 +486,136 @@ contains
 
     end subroutine fill_tab_neigh
 
+    subroutine write_tab_neigh( self, binfname )
+        class(eul_prob_tab_neigh), intent(in) :: self
+        class(string),             intent(in) :: binfname
+        type(ptcl_ref), allocatable :: sparse_tab(:)
+        integer,        allocatable :: sparse_refs(:), sparse_counts(:)
+        integer :: funit, addr, io_stat, file_header(3), i, k, ri, nnz, pos
+        nnz = 0
+        allocate(sparse_counts(self%nptcls), source=0)
+        do i = 1,self%nptcls
+            do k = 1,self%eval_touched_counts(i)
+                ri = self%eval_touched_refs(k,i)
+                if( ri < 1 .or. ri > self%nrefs ) cycle
+                if( self%loc_tab(ri,i)%inpl <= 0 ) cycle
+                sparse_counts(i) = sparse_counts(i) + 1
+                nnz = nnz + 1
+            enddo
+        enddo
+        if( nnz < 1 ) THROW_HARD('eul_prob_tab_neigh%write_tab_neigh; empty sparse table')
+        allocate(sparse_refs(nnz), sparse_tab(nnz))
+        pos = 0
+        do i = 1,self%nptcls
+            do k = 1,self%eval_touched_counts(i)
+                ri = self%eval_touched_refs(k,i)
+                if( ri < 1 .or. ri > self%nrefs ) cycle
+                if( self%loc_tab(ri,i)%inpl <= 0 ) cycle
+                pos = pos + 1
+                sparse_refs(pos) = ri
+                sparse_tab(pos)  = self%loc_tab(ri,i)
+            enddo
+        enddo
+        file_header(1) = self%nrefs
+        file_header(2) = self%nptcls
+        file_header(3) = nnz
+        call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        write(unit=funit,pos=1) file_header
+        addr = sizeof(file_header) + 1
+        write(funit, pos=addr) self%pinds
+        addr = addr + sizeof(self%pinds)
+        call write_seed_shift_table(funit, addr, self%seed_nrots, self%seed_shifts, self%seed_has_sh)
+        write(funit, pos=addr) sparse_counts
+        addr = addr + sizeof(sparse_counts)
+        write(funit, pos=addr) sparse_refs
+        addr = addr + sizeof(sparse_refs)
+        write(funit, pos=addr) sparse_tab
+        call fclose(funit)
+        deallocate(sparse_tab, sparse_refs, sparse_counts)
+    end subroutine write_tab_neigh
+
+    subroutine read_sparse_tab_to_glob( self, binfname )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(string),             intent(in)    :: binfname
+        type(ptcl_ref), allocatable :: sparse_tab(:)
+        real,           allocatable :: seed_shifts_loc(:,:)
+        logical,        allocatable :: seed_has_sh_loc(:)
+        integer,        allocatable :: pinds_loc(:), sparse_counts(:), sparse_refs(:), pind2glob(:)
+        integer :: funit, addr, io_stat, file_header(3), nrefs_loc, nptcls_loc, nnz
+        integer :: i_loc, i_glob, k, pos, ri, pind, max_pind, seed_nrots_loc
+        if( file_exists(binfname) )then
+            call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
+            call fileiochk('simple_eul_prob_tab_neigh; read_sparse_tab_to_glob; file: '//binfname%to_char(), io_stat)
+        else
+            THROW_HARD( 'sparse corr/rot files of partitions should be ready! ' )
+        endif
+        read(unit=funit,pos=1) file_header
+        nrefs_loc  = file_header(1)
+        nptcls_loc = file_header(2)
+        nnz        = file_header(3)
+        if( nrefs_loc .ne. self%nrefs ) THROW_HARD('nrefs mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
+        if( nnz < 1 ) THROW_HARD('empty sparse table in eul_prob_tab_neigh%read_sparse_tab_to_glob')
+        allocate(pinds_loc(nptcls_loc), seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
+        allocate(sparse_counts(nptcls_loc), sparse_refs(nnz), sparse_tab(nnz))
+        addr = sizeof(file_header) + 1
+        read(funit, pos=addr) pinds_loc
+        addr = addr + sizeof(pinds_loc)
+        call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
+        read(funit, pos=addr) sparse_counts
+        addr = addr + sizeof(sparse_counts)
+        read(funit, pos=addr) sparse_refs
+        addr = addr + sizeof(sparse_refs)
+        read(funit, pos=addr) sparse_tab
+        call fclose(funit)
+        if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
+        if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
+        call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
+        if( max_pind < 1 )then
+            deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, sparse_counts, sparse_refs, sparse_tab, pind2glob)
+            return
+        endif
+        pos = 0
+        do i_loc = 1,nptcls_loc
+            pind = pinds_loc(i_loc)
+            i_glob = 0
+            if( pind >= 1 .and. pind <= max_pind ) i_glob = pind2glob(pind)
+            if( i_glob > 0 )then
+                self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
+                self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
+            endif
+            do k = 1,sparse_counts(i_loc)
+                pos = pos + 1
+                if( i_glob < 1 ) cycle
+                ri = sparse_refs(pos)
+                if( ri < 1 .or. ri > self%nrefs ) cycle
+                self%loc_tab(ri,i_glob) = sparse_tab(pos)
+                if( allocated(self%eval_touched_counts) .and. allocated(self%eval_touched_refs) )then
+                    if( self%eval_touched_counts(i_glob) >= size(self%eval_touched_refs,1) )&
+                        &THROW_HARD('eval_touched overflow in eul_prob_tab_neigh%read_sparse_tab_to_glob')
+                    self%eval_touched_counts(i_glob) = self%eval_touched_counts(i_glob) + 1
+                    self%eval_touched_refs(self%eval_touched_counts(i_glob),i_glob) = ri
+                endif
+            enddo
+        enddo
+        if( pos /= nnz ) THROW_HARD('sparse table count mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
+        deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, sparse_counts, sparse_refs, sparse_tab, pind2glob)
+    end subroutine read_sparse_tab_to_glob
+
     subroutine read_tabs_to_glob( self, fbody, nparts, numlen )
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(string),             intent(in)    :: fbody
         integer,                   intent(in)    :: nparts, numlen
         type(string) :: fname
-        integer, allocatable :: touched_counts(:)
-        integer :: ipart, i, ri, max_touched_loaded, cap
+        integer :: ipart
+        if( .not. allocated(self%eval_touched_counts) ) allocate(self%eval_touched_counts(self%nptcls), source=0)
+        if( .not. allocated(self%eval_touched_refs)   ) allocate(self%eval_touched_refs(self%nrefs,self%nptcls), source=0)
+        if( allocated(self%eval_touched_counts) ) self%eval_touched_counts = 0
+        if( allocated(self%eval_touched_refs)   ) self%eval_touched_refs   = 0
         do ipart = 1, nparts
             fname = fbody//int2str_pad(ipart,numlen)//'.dat'
-            call self%read_tab_to_glob(fname)
+            call self%read_sparse_tab_to_glob(fname)
         enddo
-        ! Rebuild sparse bookkeeping from loaded loc_tab so assignment works after write/read cycles.
-        allocate(touched_counts(self%nptcls), source=0)
-        !$omp parallel do default(shared) private(i,ri) proc_bind(close) schedule(static)
-        do i = 1, self%nptcls
-            do ri = 1, self%nrefs
-                if( self%loc_tab(ri,i)%inpl > 0 )then
-                    touched_counts(i) = touched_counts(i) + 1
-                endif
-            enddo
-        enddo
-        !$omp end parallel do
-        max_touched_loaded = max(1, maxval(touched_counts))
-        if( .not. allocated(self%eval_touched_refs) )then
-            allocate(self%eval_touched_refs(max_touched_loaded,self%nptcls), source=0)
-        else
-            cap = size(self%eval_touched_refs,1)
-            if( cap < max_touched_loaded .or. size(self%eval_touched_refs,2) /= self%nptcls )then
-                deallocate(self%eval_touched_refs)
-                allocate(self%eval_touched_refs(max_touched_loaded,self%nptcls), source=0)
-            else
-                self%eval_touched_refs = 0
-            endif
-        endif
-        if( .not. allocated(self%eval_touched_counts) )then
-            allocate(self%eval_touched_counts(self%nptcls), source=0)
-        else if( size(self%eval_touched_counts) /= self%nptcls )then
-            deallocate(self%eval_touched_counts)
-            allocate(self%eval_touched_counts(self%nptcls), source=0)
-        else
-            self%eval_touched_counts = 0
-        endif
         self%eval_max_touched = size(self%eval_touched_refs,1)
-        !$omp parallel do default(shared) private(i,ri) proc_bind(close) schedule(static)
-        do i = 1, self%nptcls
-            do ri = 1, self%nrefs
-                if( self%loc_tab(ri,i)%inpl > 0 )then
-                    self%eval_touched_counts(i) = self%eval_touched_counts(i) + 1
-                    self%eval_touched_refs(self%eval_touched_counts(i),i) = ri
-                endif
-            enddo
-        enddo
-        !$omp end parallel do
-        deallocate(touched_counts)
     end subroutine read_tabs_to_glob
 
     subroutine ref_normalize_neigh( self )
