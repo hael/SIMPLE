@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_timer
 use simple_builder,         only: builder
 use simple_cmdline,         only: cmdline
-use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
+use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch, killimgbatch
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_state_vol_fname
@@ -238,6 +238,7 @@ contains
         call dealloc_imgarr(build%img_pad_heap)
         call forget_ft_maps
         call killrecvols(params, build)
+        call killimgbatch(build)
     end subroutine finalize_rec_objs
 
 end module simple_matcher_3Drec

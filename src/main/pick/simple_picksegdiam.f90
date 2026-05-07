@@ -51,14 +51,20 @@ contains
         scale = smpd / SMPD_SHRINK1
         call read_mic_subtr_backgr_shrink(micname, smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty)
         if(present(empty)) empty = l_empty
-        if( l_empty ) return
+        if( l_empty )then
+            call dealloc_objs
+            return
+        endif
         ldim_raw = mic_raw%get_ldim()
         ldim     = mic_shrink%get_ldim()
         ! Prep segmentation
         call flag_amorphous_carbon(mic_shrink, picking_mask)
         nmasked = count(.not.picking_mask)
         write(logfhandle,'(a,f5.1)')  '>>> % AMORPHOUS CARBON IDENTIFIED: ', 100. * (real(nmasked) / real(product(ldim)))
-        if( real(nmasked) > 0.98 * real(product(ldim)) ) return
+        if( real(nmasked) > 0.98 * real(product(ldim)) )then
+            call dealloc_objs
+            return
+        endif
         call cascade_filter_biomol( mic_shrink, mic_den )
         if( present(denfname) )then
             call mic_den%write(denfname)
@@ -100,13 +106,20 @@ contains
         endif
         if( present(binfname) ) call mic_bin%write(binfname)
         ! destruct
-        call mic_shrink%kill
-        call mic_den%kill
-        call mic_bin%kill_bimg
-        call img_cc%kill_bimg
-        if( allocated(cc_imat)      ) deallocate(cc_imat)
-        if( allocated(cc_imat_copy) ) deallocate(cc_imat_copy)
+        call dealloc_objs
         write(logfhandle,'(a)')  ''
+        contains
+
+            subroutine dealloc_objs
+                if( allocated(cc_imat)      ) deallocate(cc_imat)
+                if( allocated(cc_imat_copy) ) deallocate(cc_imat_copy)
+                call mic_shrink%kill
+                call mic_den%kill
+                call mic_bin%kill_bimg
+                call img_cc%kill_bimg
+                call mic_raw%kill
+            end subroutine dealloc_objs
+
     end subroutine pick_1
 
     subroutine pick_2( self, ldim_raw, smpd_raw, binmicname, diam_fromto )

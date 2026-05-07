@@ -209,6 +209,7 @@ contains
         end if 
         self%recs_per_line = 0
         self%ndatalines = 0
+        call self%fname%kill
     end subroutine kill
 
 end module simple_nrtxtfile

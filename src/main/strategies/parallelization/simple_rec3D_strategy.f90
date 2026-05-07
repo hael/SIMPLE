@@ -196,6 +196,8 @@ contains
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
         call build%esig%kill
+        call build%kill_strategy3D_tbox
+        call build%kill_general_tbox
         call qsys_job_finished(params, string('simple_rec3D_strategy :: exec_rec3D'))
     end subroutine inmem_cleanup
 
@@ -312,6 +314,8 @@ contains
         class(cmdline),              intent(inout) :: cline
         call qsys_cleanup(params)
         call build%spproj_field%kill
+        call build%kill_strategy3D_tbox
+        call build%kill_general_tbox
         call self%qenv%kill
         call self%job_descr%kill
     end subroutine distr_cleanup

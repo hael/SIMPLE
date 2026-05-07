@@ -72,6 +72,8 @@ contains
         call calc_3Drec( params, build, cline, nptcls2update, pinds )
         ! cleanup
         call build%esig%kill
+        call build%kill_strategy3D_tbox
+        call build%kill_general_tbox
         call qsys_job_finished(params, string('simple_commanders_rec :: exec_rec3D'))
     end subroutine exec_rec3D_distr_worker
 
@@ -90,6 +92,7 @@ contains
         call cline%set('prg',   'rec3D')
         call xrec3D%execute(cline)
         call build%spproj_field%kill
+        call build%kill_general_tbox
         call simple_end('**** SIMPLE_RANDOM_REC NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_random_rec
 

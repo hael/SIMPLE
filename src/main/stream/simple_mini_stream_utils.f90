@@ -229,6 +229,7 @@ contains
                 call spproj%os_mic%set(orimap(imic), 'thumb_den', simple_abspath(fname_thumb_den))
             endif
         end do
+        call picker%kill
         ! write output to disk
         call spproj%write_segment_inside('mic')
         if( allocated(orimap) ) deallocate(orimap)

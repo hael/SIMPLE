@@ -733,6 +733,10 @@ contains
         endif
         ! write
         call build%vol2%write(params%outvol)
+        ! cleanup
+        call build%kill_general_tbox
+        call syme%kill
+        call symaxis%kill
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRIZE_MAP NORMAL STOP ****')
     end subroutine exec_symmetrize_map

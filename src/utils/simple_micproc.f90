@@ -293,7 +293,11 @@ contains
                 do bin = 1,K
                     bin_mask(bin) = count(kmeans_labels==bin) > 0
                 enddo
-                if( count(bin_mask) == 1 ) return ! clustering fail, do nothing
+                if( count(bin_mask) == 1 )then
+                     ! clustering failed, do nothing
+                    call tmpimg%kill
+                    return
+                endif
                 ! histograms for all clusters
                 do i = 1,K
                     call khists(i)%zero
