@@ -2,13 +2,22 @@ submodule(simple_abinitio_utils) simple_abinitio_controller
 implicit none
 #include "simple_local_flags.inc"
 
+! real,    parameter :: UPDATE_FRAC_MIN            = 0.1   ! 10% of the particles updated each iteration
+! integer, parameter :: NSPACE(8)                  = [500,1000,1000,1000,2500,2500,5000,5000]
+! integer, parameter :: SHC_REFINE_STAGE           = 1     ! shc-style refinement stages 1-3
+! integer, parameter :: PROB_REFINE_STAGE          = 4     ! prob refinement stages 4-6
+! integer, parameter :: PROB_NEIGH_REFINE_STAGE    = 7     ! prob_neigh refinement stages 7-8
+! integer, parameter :: STOCH_SAMPL_STAGE          = 5     ! we switch from greedy to stochastic balanced class sampling
+! integer, parameter :: LPAUTO_STAGE               = 5 + 1 ! we switch on automatic low-pass limit estimation after one prob stage
+! integer, parameter :: NSPACE_SUB                 = 126
+
 real,    parameter :: UPDATE_FRAC_MIN            = 0.1   ! 10% of the particles updated each iteration
 integer, parameter :: NSPACE(8)                  = [500,1000,1000,1000,2500,2500,5000,5000]
-integer, parameter :: SHC_REFINE_STAGE           = 1     ! shc-style refinement stages 1-3
-integer, parameter :: PROB_REFINE_STAGE          = 4     ! prob refinement stages 4-6
-integer, parameter :: PROB_NEIGH_REFINE_STAGE    = 7     ! prob_neigh refinement stages 7-8
-integer, parameter :: STOCH_SAMPL_STAGE          = 5     ! we switch from greedy to stochastic balanced class sampling
-integer, parameter :: LPAUTO_STAGE               = 5 + 1 ! we switch on automatic low-pass limit estimation after one prob stage
+integer, parameter :: SHC_REFINE_STAGE           = 1     ! shc-style refinement  stages 1-2
+integer, parameter :: PROB_REFINE_STAGE          = 3     ! prob refinement       stages 3-4
+integer, parameter :: PROB_NEIGH_REFINE_STAGE    = 5     ! prob_neigh refinement stages 5-8
+integer, parameter :: STOCH_SAMPL_STAGE          = PROB_NEIGH_REFINE_STAGE     ! we switch from greedy to stochastic balanced class sampling
+integer, parameter :: LPAUTO_STAGE               = PROB_NEIGH_REFINE_STAGE + 1 ! we switch on automatic low-pass limit estimation after one prob stage
 integer, parameter :: NSPACE_SUB                 = 126
 
 type :: refine3D_stage_cfg
