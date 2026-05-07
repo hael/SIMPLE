@@ -3,11 +3,11 @@ module simple_eul_prob_tab_utils
 use simple_defs,      only: TINY
 use simple_math,      only: hpsort, rotmat2d
 use simple_oris,      only: oris
-use simple_rnd,       only: greedy_sampling, ran3
+use simple_rnd,       only: ran3
 use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID, ptcl_ref
 implicit none
 
-public :: angle_sampling, angle_sampling_fast, build_pind_lookup, calc_athres, calc_num2sample
+public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 private
@@ -16,8 +16,6 @@ interface angle_sampling
     module procedure angle_sampling_1
     module procedure angle_sampling_2
 end interface
-
-logical, parameter :: L_FAST_PROB_ASSIGN = .true.
 
 contains
 
@@ -164,25 +162,9 @@ contains
     end function angle_sampling_1
 
     function angle_sampling_2( pvec, pvec_sorted, sorted_inds, athres_ub_in, prob_athres ) result( which )
-        real,    intent(in)    :: pvec(:)        !< probabilities
-        real,    intent(inout) :: pvec_sorted(:) !< sorted probabilities
+        real,    intent(in)    :: pvec(:)        !< probabilities/distances, lower is better
+        real,    intent(inout) :: pvec_sorted(:) !< work buffer, size >= size(pvec)
         integer, intent(inout) :: sorted_inds(:)
-        real,    intent(in)    :: athres_ub_in
-        real,    intent(in)    :: prob_athres
-        integer :: which, num_lb, num_ub, n
-        real    :: athres_ub, athres_lb
-        n         = size(pvec)
-        athres_ub = min(prob_athres, athres_ub_in)
-        athres_lb = min(athres_ub / 10., 1.)
-        num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
-        num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
-        which     = greedy_sampling(pvec, pvec_sorted, sorted_inds, num_ub, num_lb)
-    end function angle_sampling_2
-
-    function angle_sampling_fast( pvec, pvec_work, work_inds, athres_ub_in, prob_athres ) result( which )
-        real,    intent(in)    :: pvec(:)      !< probabilities/distances, lower is better
-        real,    intent(inout) :: pvec_work(:) !< work buffer, size >= size(pvec)
-        integer, intent(inout) :: work_inds(:)
         real,    intent(in)    :: athres_ub_in
         real,    intent(in)    :: prob_athres
         integer :: which, n, num_lb, num_ub, i, pick
@@ -192,34 +174,30 @@ contains
         athres_lb = min(athres_ub / 10., 1.)
         num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
         num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
-        if( .not. L_FAST_PROB_ASSIGN )then
-            which = angle_sampling_2(pvec, pvec_work, work_inds, athres_ub_in, prob_athres)
-            return
-        endif
-        pvec_work(1:num_ub) = pvec(1:num_ub)
-        work_inds(1:num_ub) = (/(i,i=1,num_ub)/)
+        pvec_sorted(1:num_ub) = pvec(1:num_ub)
+        sorted_inds(1:num_ub) = (/(i,i=1,num_ub)/)
         do i = num_ub / 2, 1, -1
             call maxheap_sift_down(i, num_ub)
         enddo
         do i = num_ub + 1, n
-            if( pvec(i) < pvec_work(1) )then
-                pvec_work(1) = pvec(i)
-                work_inds(1) = i
+            if( pvec(i) < pvec_sorted(1) )then
+                pvec_sorted(1) = pvec(i)
+                sorted_inds(1) = i
                 call maxheap_sift_down(1, num_ub)
             endif
         enddo
-        call hpsort(pvec_work(1:num_ub), work_inds(1:num_ub))
+        call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
         rnd      = ran3()
-        sum_pvec = sum(pvec_work(1:num_ub))
+        sum_pvec = sum(pvec_sorted(1:num_ub))
         if( sum_pvec < TINY )then
             pick  = min(num_ub, 1 + floor(real(num_ub) * rnd))
-            which = work_inds(pick)
+            which = sorted_inds(pick)
         else
-            pvec_work(1:num_ub) = pvec_work(1:num_ub) / sum_pvec
-            if( rnd > sum(pvec_work(1:num_lb)) )then
-                which = work_inds(1)
+            pvec_sorted(1:num_ub) = pvec_sorted(1:num_ub) / sum_pvec
+            if( rnd > sum(pvec_sorted(1:num_lb)) )then
+                which = sorted_inds(1)
             else
-                which = work_inds(num_ub)
+                which = sorted_inds(num_ub)
             endif
         endif
 
@@ -234,21 +212,21 @@ contains
                 child = 2 * root
                 if( child > heap_size ) exit
                 swap_i = root
-                if( pvec_work(swap_i) < pvec_work(child) ) swap_i = child
+                if( pvec_sorted(swap_i) < pvec_sorted(child) ) swap_i = child
                 if( child + 1 <= heap_size )then
-                    if( pvec_work(swap_i) < pvec_work(child + 1) ) swap_i = child + 1
+                    if( pvec_sorted(swap_i) < pvec_sorted(child + 1) ) swap_i = child + 1
                 endif
                 if( swap_i == root ) exit
-                tmp_val            = pvec_work(root)
-                pvec_work(root)    = pvec_work(swap_i)
-                pvec_work(swap_i)  = tmp_val
-                tmp_ind            = work_inds(root)
-                work_inds(root)    = work_inds(swap_i)
-                work_inds(swap_i)  = tmp_ind
+                tmp_val              = pvec_sorted(root)
+                pvec_sorted(root)    = pvec_sorted(swap_i)
+                pvec_sorted(swap_i)  = tmp_val
+                tmp_ind              = sorted_inds(root)
+                sorted_inds(root)    = sorted_inds(swap_i)
+                sorted_inds(swap_i)  = tmp_ind
                 root = swap_i
             enddo
         end subroutine maxheap_sift_down
 
-    end function angle_sampling_fast
+    end function angle_sampling_2
 
 end module simple_eul_prob_tab_utils

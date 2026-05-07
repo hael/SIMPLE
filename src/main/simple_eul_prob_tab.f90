@@ -2,7 +2,7 @@
 module simple_eul_prob_tab
 use simple_pftc_srch_api
 use simple_builder,          only: builder
-use simple_eul_prob_tab_utils, only: angle_sampling, angle_sampling_fast, build_pind_lookup, calc_athres, calc_num2sample,&
+use simple_eul_prob_tab_utils, only: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample,&
     &eulprob_dist_switch, materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 implicit none
@@ -446,7 +446,7 @@ contains
         ptcl_avail     = .true.
         do while( any(ptcl_avail) )
             ! sampling the ref distribution to choose next iref to assign
-            assigned_iref = angle_sampling_fast(iref_dist, dists_sorted, inds_sorted, projs_athres, self%p_ptr%prob_athres)
+            assigned_iref = angle_sampling(iref_dist, dists_sorted, inds_sorted, projs_athres, self%p_ptr%prob_athres)
             assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)

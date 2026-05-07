@@ -4,11 +4,10 @@ module simple_eul_prob_tab_neigh
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: angle_sampling, angle_sampling_fast, build_pind_lookup, calc_athres, eulprob_dist_switch,&
+use simple_eul_prob_tab_utils, only: angle_sampling, build_pind_lookup, calc_athres, eulprob_dist_switch,&
     &materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
-use simple_eulspace_neigh_map, only: eulspace_neigh_map
 implicit none
 
 public :: eul_prob_tab_neigh
@@ -61,30 +60,31 @@ contains
         ! 5) optionally refine the best evaluated refs with shift search
 
         type :: coarse_search_ws
-            real,    allocatable :: best_subspace_dist(:,:,:)
-            real,    allocatable :: best_subspace_dist_work(:,:,:)
+            real,    allocatable :: peak_subspace_dists(:,:,:)
             integer, allocatable :: peak_subspace_inds(:,:,:)
             integer, allocatable :: peak_subspace_count(:,:)
             integer, allocatable :: pooled_sub_inds(:,:,:)
-            logical, allocatable :: neigh_proj_mask(:,:,:)
+            integer, allocatable :: pooled_sub_count(:,:)
         end type coarse_search_ws
 
         type :: eval_ws
             integer, allocatable :: evaluated_ref_ids(:,:)
             integer, allocatable :: best_eval_locs(:,:)
             integer, allocatable :: fullref_to_sparse_ref(:)
+            integer, allocatable :: sub_ref_counts(:,:)
+            integer, allocatable :: sub_ref_offsets(:,:)
+            integer, allocatable :: sub_ref_list(:)
             real,    allocatable :: evaluated_ref_dists(:,:)
             real,    allocatable :: state_eval_dists(:,:)
         end type eval_ws
 
-        type(eulspace_neigh_map) :: neigh_map
         type(pftc_shsrch_grad)   :: grad_shsrch_obj(nthr_glob)
         type(coarse_search_ws)   :: coarse_ws
         type(eval_ws)            :: eval_work
         integer, allocatable     :: inds_sorted(:,:)
         real,    allocatable     :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:)
         integer :: i, ri, istate, ithr, max_refs_to_refine
-        integer :: iptcl, nsubs, npeak_target, si, iref_full
+        integer :: iptcl, nsubs, npeak_target, si, iref_full, isub
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         integer(timer_int_kind) :: t_local
         real(timer_int_kind) :: rt_shift_seed, rt_coarse_sweep, rt_select, rt_neigh_eval, rt_shift_refine
@@ -109,10 +109,11 @@ contains
         self%bench_fill_nsubs    = nsubs
         self%bench_fill_projs_ns = npeak_target
         self%bench_fill_ref_evals = self%nptcls * self%nstates * nsubs
-        call neigh_map%new(self%b_ptr%subspace_full2sub_map, nsubs)
         if( self%eval_max_touched < 1 ) self%eval_max_touched = 1
-        if( .not. allocated(self%eval_touched_refs)   ) allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
-        if( .not. allocated(self%eval_touched_counts) ) allocate(self%eval_touched_counts(self%nptcls),                     source=0)
+        if( .not. allocated(self%eval_touched_refs) )&
+            &allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
+        if( .not. allocated(self%eval_touched_counts) )&
+            &allocate(self%eval_touched_counts(self%nptcls), source=0)
         call clear_sparse_eval_table()
         allocate(inpl_athres(self%p_ptr%nstates), source=self%p_ptr%prob_athres)
         allocate(dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob),&
@@ -127,18 +128,42 @@ contains
         if( allocated(eval_work%best_eval_locs) ) deallocate(eval_work%best_eval_locs)
         allocate(eval_work%best_eval_locs(max(1,max_refs_to_refine),nthr_glob), &
             &eval_work%evaluated_ref_ids(self%nrefs,nthr_glob), source=0)
-        allocate(eval_work%fullref_to_sparse_ref(self%p_ptr%nstates*self%p_ptr%nspace),                                     source=0)
+        allocate(eval_work%fullref_to_sparse_ref(self%p_ptr%nstates*self%p_ptr%nspace), source=0)
         do ri = 1, self%nrefs
             iref_full = (self%sinds(ri)-1)*self%p_ptr%nspace + self%jinds(ri)
-            if( iref_full >= 1 .and. iref_full <= size(eval_work%fullref_to_sparse_ref) ) eval_work%fullref_to_sparse_ref(iref_full) = ri
+            if( iref_full >= 1 .and. iref_full <= size(eval_work%fullref_to_sparse_ref) )&
+                &eval_work%fullref_to_sparse_ref(iref_full) = ri
         enddo
-        allocate(coarse_ws%neigh_proj_mask(self%p_ptr%nspace,self%p_ptr%nstates,nthr_glob), source=.false.)
+        allocate(eval_work%sub_ref_counts(nsubs,self%p_ptr%nstates), eval_work%sub_ref_offsets(nsubs,self%p_ptr%nstates),&
+            &eval_work%sub_ref_list(self%nrefs), source=0)
+        do ri = 1,self%nrefs
+            istate = self%sinds(ri)
+            isub   = self%b_ptr%subspace_full2sub_map(self%jinds(ri))
+            if( isub < 1 .or. isub > nsubs ) cycle
+            eval_work%sub_ref_counts(isub,istate) = eval_work%sub_ref_counts(isub,istate) + 1
+        enddo
+        i = 1
+        do istate = 1,self%p_ptr%nstates
+            do isub = 1,nsubs
+                eval_work%sub_ref_offsets(isub,istate) = i
+                i = i + eval_work%sub_ref_counts(isub,istate)
+            enddo
+        enddo
+        eval_work%sub_ref_counts = 0
+        do ri = 1,self%nrefs
+            istate = self%sinds(ri)
+            isub   = self%b_ptr%subspace_full2sub_map(self%jinds(ri))
+            if( isub < 1 .or. isub > nsubs ) cycle
+            i = eval_work%sub_ref_offsets(isub,istate) + eval_work%sub_ref_counts(isub,istate)
+            eval_work%sub_ref_list(i) = ri
+            eval_work%sub_ref_counts(isub,istate) = eval_work%sub_ref_counts(isub,istate) + 1
+        enddo
         allocate(eval_work%evaluated_ref_dists(self%nrefs,nthr_glob),                   source=huge(1.0))
         allocate(eval_work%state_eval_dists(self%nrefs,nthr_glob),                      source=huge(1.0))
-        allocate(coarse_ws%best_subspace_dist(nsubs,self%p_ptr%nstates,nthr_glob),      source=huge(1.0))
-        allocate(coarse_ws%best_subspace_dist_work(nsubs,self%p_ptr%nstates,nthr_glob), source=huge(1.0))
-        allocate(coarse_ws%peak_subspace_inds(nsubs,self%p_ptr%nstates,nthr_glob),      source=0)
+        allocate(coarse_ws%peak_subspace_dists(npeak_target,self%p_ptr%nstates,nthr_glob), source=huge(1.0))
+        allocate(coarse_ws%peak_subspace_inds(npeak_target,self%p_ptr%nstates,nthr_glob),  source=0)
         allocate(coarse_ws%pooled_sub_inds(npeak_target,self%p_ptr%nstates,nthr_glob),  source=0)
+        allocate(coarse_ws%pooled_sub_count(self%p_ptr%nstates,nthr_glob),              source=0)
         allocate(coarse_ws%peak_subspace_count(self%p_ptr%nstates,nthr_glob),           source=0)
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
@@ -213,11 +238,12 @@ contains
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
-        call neigh_map%kill
-        deallocate(coarse_ws%peak_subspace_count, coarse_ws%pooled_sub_inds, coarse_ws%peak_subspace_inds,&
-        &coarse_ws%best_subspace_dist_work, coarse_ws%best_subspace_dist, &
+        deallocate(coarse_ws%peak_subspace_count, coarse_ws%pooled_sub_count, coarse_ws%pooled_sub_inds,&
+        &coarse_ws%peak_subspace_inds,&
+        &coarse_ws%peak_subspace_dists, &
         &eval_work%state_eval_dists, eval_work%evaluated_ref_dists,&
-        &eval_work%evaluated_ref_ids, coarse_ws%neigh_proj_mask, eval_work%best_eval_locs, eval_work%fullref_to_sparse_ref,&
+        &eval_work%evaluated_ref_ids, eval_work%sub_ref_counts, eval_work%sub_ref_offsets, eval_work%sub_ref_list,&
+        &eval_work%best_eval_locs, eval_work%fullref_to_sparse_ref,&
         &inds_sorted, dists_inpl_sorted, dists_inpl, inpl_athres)
 
     contains
@@ -312,8 +338,9 @@ contains
             integer, intent(in) :: i_loc, ithr_loc, iptcl_loc
             real,    intent(in) :: shift_seed_loc(3)
             logical, intent(in) :: l_with_shift
-            integer :: si_loc, istate_loc, isub_loc, full_ref_subspace_loc, irot_loc, ri_loc, ipeak_loc, coarse_proj_loc
-            coarse_ws%best_subspace_dist(:,:,ithr_loc) = huge(1.0)
+            integer :: si_loc, istate_loc, isub_loc, full_ref_subspace_loc, irot_loc, ri_loc, coarse_proj_loc
+            coarse_ws%peak_subspace_dists(:,:,ithr_loc) = huge(1.0)
+            coarse_ws%peak_subspace_inds(:,:,ithr_loc)  = 0
             coarse_ws%peak_subspace_count(:,ithr_loc)  = 0
             do si_loc = 1, self%nstates
                 istate_loc = self%ssinds(si_loc)
@@ -329,7 +356,7 @@ contains
                     endif
                     dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
                     irot_loc = minloc(dists_inpl(:,ithr_loc), dim=1)
-                    coarse_ws%best_subspace_dist(isub_loc,istate_loc,ithr_loc) = dists_inpl(irot_loc,ithr_loc)
+                    call consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dists_inpl(irot_loc,ithr_loc))
                     ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace_loc)
                     if( ri_loc > 0 )then
                         if( l_with_shift )then
@@ -339,30 +366,49 @@ contains
                         endif
                     endif
                 enddo
-                coarse_ws%best_subspace_dist_work(:,istate_loc,ithr_loc) = coarse_ws%best_subspace_dist(:,istate_loc,ithr_loc)
-                do ipeak_loc = 1, npeak_target
-                    coarse_ws%peak_subspace_inds(ipeak_loc,istate_loc,ithr_loc) = minloc(coarse_ws%best_subspace_dist_work(:,istate_loc,ithr_loc), dim=1)
-                    isub_loc = coarse_ws%peak_subspace_inds(ipeak_loc,istate_loc,ithr_loc)
-                    if( coarse_ws%best_subspace_dist_work(isub_loc,istate_loc,ithr_loc) >= huge(1.0) )then
-                        coarse_ws%peak_subspace_inds(ipeak_loc,istate_loc,ithr_loc) = 0
-                        exit
-                    endif
-                    coarse_ws%best_subspace_dist_work(isub_loc,istate_loc,ithr_loc) = huge(1.0)
-                    coarse_ws%peak_subspace_count(istate_loc,ithr_loc) = coarse_ws%peak_subspace_count(istate_loc,ithr_loc) + 1
-                enddo
             enddo
         end subroutine find_peak_subspaces
+
+        subroutine consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dist_loc)
+            integer, intent(in) :: isub_loc, istate_loc, ithr_loc
+            real,    intent(in) :: dist_loc
+            integer :: nfound_loc, insert_loc, k_loc
+            nfound_loc = coarse_ws%peak_subspace_count(istate_loc,ithr_loc)
+            if( nfound_loc >= npeak_target )then
+                if( dist_loc >= coarse_ws%peak_subspace_dists(npeak_target,istate_loc,ithr_loc) ) return
+                insert_loc = npeak_target
+            else
+                nfound_loc = nfound_loc + 1
+                coarse_ws%peak_subspace_count(istate_loc,ithr_loc) = nfound_loc
+                insert_loc = nfound_loc
+            endif
+            do k_loc = 1, nfound_loc
+                if( dist_loc < coarse_ws%peak_subspace_dists(k_loc,istate_loc,ithr_loc) )then
+                    insert_loc = k_loc
+                    exit
+                endif
+            enddo
+            do k_loc = nfound_loc, insert_loc + 1, -1
+                coarse_ws%peak_subspace_dists(k_loc,istate_loc,ithr_loc) =&
+                    &coarse_ws%peak_subspace_dists(k_loc-1,istate_loc,ithr_loc)
+                coarse_ws%peak_subspace_inds(k_loc,istate_loc,ithr_loc) =&
+                    &coarse_ws%peak_subspace_inds(k_loc-1,istate_loc,ithr_loc)
+            enddo
+            coarse_ws%peak_subspace_dists(insert_loc,istate_loc,ithr_loc) = dist_loc
+            coarse_ws%peak_subspace_inds(insert_loc,istate_loc,ithr_loc)  = isub_loc
+        end subroutine consider_peak_subspace
 
         subroutine build_pooled_neighborhood(ithr_loc, prev_proj_loc)
             integer, intent(in) :: ithr_loc, prev_proj_loc
             integer :: si_loc, istate_loc, npeak_found_loc, isub_loc, coarse_proj_loc, iproj_loc
-            coarse_ws%neigh_proj_mask(:,:,ithr_loc) = .false.
+            coarse_ws%pooled_sub_count(:,ithr_loc) = 0
             do si_loc = 1, self%nstates
                 istate_loc = self%ssinds(si_loc)
                 npeak_found_loc = coarse_ws%peak_subspace_count(istate_loc,ithr_loc)
                 if( npeak_found_loc > 0 )then
-                    coarse_ws%pooled_sub_inds(1:npeak_found_loc,istate_loc,ithr_loc) = coarse_ws%peak_subspace_inds(1:npeak_found_loc,istate_loc,ithr_loc)
-                    call neigh_map%get_neighbors_mask_pooled(coarse_ws%pooled_sub_inds(1:npeak_found_loc,istate_loc,ithr_loc), coarse_ws%neigh_proj_mask(:,istate_loc,ithr_loc))
+                    coarse_ws%pooled_sub_inds(1:npeak_found_loc,istate_loc,ithr_loc) =&
+                        &coarse_ws%peak_subspace_inds(1:npeak_found_loc,istate_loc,ithr_loc)
+                    coarse_ws%pooled_sub_count(istate_loc,ithr_loc) = npeak_found_loc
                 else
                     coarse_proj_loc = max(1, min(self%p_ptr%nspace, prev_proj_loc))
                     if( .not. self%proj_exists(coarse_proj_loc,istate_loc) )then
@@ -377,7 +423,8 @@ contains
                     if( coarse_proj_loc < 1 ) cycle
                     isub_loc = self%b_ptr%subspace_full2sub_map(coarse_proj_loc)
                     if( isub_loc < 1 .or. isub_loc > nsubs ) isub_loc = 1
-                    call neigh_map%get_neighbors_mask(isub_loc, coarse_ws%neigh_proj_mask(:,istate_loc,ithr_loc))
+                    coarse_ws%pooled_sub_inds(1,istate_loc,ithr_loc) = isub_loc
+                    coarse_ws%pooled_sub_count(istate_loc,ithr_loc) = 1
                 endif
             enddo
         end subroutine build_pooled_neighborhood
@@ -387,28 +434,35 @@ contains
             real,    intent(in) :: shift_seed_loc(3)
             logical, intent(in) :: l_with_shift
             integer, intent(out) :: neval_loc
-            integer :: ri_loc, istate_loc, iproj_loc, irot_loc, iref_loc
+            integer :: jsub_loc, kref_loc, nrefs_sub_loc, offset_loc
+            integer :: si_loc, ri_loc, istate_loc, iproj_loc, irot_loc, iref_loc, isub_loc
             neval_loc = 0
-            do ri_loc = 1, self%nrefs
-                istate_loc = self%sinds(ri_loc)
-                iproj_loc  = self%jinds(ri_loc)
-                if( .not. coarse_ws%neigh_proj_mask(iproj_loc,istate_loc,ithr_loc) ) cycle
-                iref_loc = (istate_loc-1)*self%p_ptr%nspace + iproj_loc
-                if( l_with_shift )then
-                    call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc, shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
-                else
-                    call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc, [0.,0.], dists_inpl(:,ithr_loc))
-                endif
-                dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
-                irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc), inpl_athres(istate_loc), self%p_ptr%prob_athres)
-                if( l_with_shift )then
-                    call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
-                else
-                    call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
-                endif
-                neval_loc = neval_loc + 1
-                eval_work%evaluated_ref_ids(neval_loc,ithr_loc)  = ri_loc
-                eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dists_inpl(irot_loc,ithr_loc)
+            do si_loc = 1,self%nstates
+                istate_loc = self%ssinds(si_loc)
+                do jsub_loc = 1,coarse_ws%pooled_sub_count(istate_loc,ithr_loc)
+                    isub_loc = coarse_ws%pooled_sub_inds(jsub_loc,istate_loc,ithr_loc)
+                    if( isub_loc < 1 .or. isub_loc > nsubs ) cycle
+                    offset_loc    = eval_work%sub_ref_offsets(isub_loc,istate_loc)
+                    nrefs_sub_loc = eval_work%sub_ref_counts(isub_loc,istate_loc)
+                    do kref_loc = 1,nrefs_sub_loc
+                        ri_loc = eval_work%sub_ref_list(offset_loc + kref_loc - 1)
+                        if( ri_loc < 1 ) cycle
+                        iproj_loc = self%jinds(ri_loc)
+                        iref_loc  = (istate_loc-1)*self%p_ptr%nspace + iproj_loc
+                        if( l_with_shift )then
+                            call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc, shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
+                        else
+                            call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc, [0.,0.], dists_inpl(:,ithr_loc))
+                        endif
+                        dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
+                        irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc),&
+                            &inpl_athres(istate_loc), self%p_ptr%prob_athres)
+                        call record_sparse_eval(i_loc, ri_loc, dists_inpl(irot_loc,ithr_loc), irot_loc, 0., 0., .false.)
+                        neval_loc = neval_loc + 1
+                        eval_work%evaluated_ref_ids(neval_loc,ithr_loc)  = ri_loc
+                        eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dists_inpl(irot_loc,ithr_loc)
+                    enddo
+                enddo
             enddo
         end subroutine evaluate_neighborhood
 
@@ -567,6 +621,8 @@ contains
         addr = addr + sizeof(sparse_refs)
         read(funit, pos=addr) sparse_tab
         call fclose(funit)
+        if( any(sparse_counts < 0) .or. sum(sparse_counts) /= nnz )&
+            &THROW_HARD('sparse table count mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
         if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
         if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
         call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
@@ -621,46 +677,72 @@ contains
     subroutine ref_normalize_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
-        integer :: i, iref, neval
+        integer :: i, iref, k
+        logical :: any_eval
         ! normalize only over evaluated refs (inpl > 0)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all,iref,neval)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref,sum_dist_all)
         do i = 1, self%nptcls
-            sum_dist_all = sum(self%loc_tab(:,i)%dist, mask=(self%loc_tab(:,i)%inpl > 0))
+            sum_dist_all = 0.
+            do k = 1,self%eval_touched_counts(i)
+                iref = self%eval_touched_refs(k,i)
+                if( iref < 1 .or. iref > self%nrefs ) cycle
+                if( self%loc_tab(iref,i)%inpl > 0 ) sum_dist_all = sum_dist_all + self%loc_tab(iref,i)%dist
+            enddo
             if( sum_dist_all < TINY )then
-                ! dense-style behavior: collapse to zero; tie handling randomizes later.
-                neval = count(self%loc_tab(:,i)%inpl > 0)
-                if( neval > 0 )then
-                    do iref = 1, self%nrefs
-                        if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = 0.
-                    enddo
-                endif
+                do k = 1,self%eval_touched_counts(i)
+                    iref = self%eval_touched_refs(k,i)
+                    if( iref < 1 .or. iref > self%nrefs ) cycle
+                    if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = 0.
+                enddo
             else
-                ! divide only evaluated refs
-                do iref = 1, self%nrefs
-                    if( self%loc_tab(iref,i)%inpl > 0 )&
-                    &self%loc_tab(iref,i)%dist = self%loc_tab(iref,i)%dist / sum_dist_all
+                do k = 1,self%eval_touched_counts(i)
+                    iref = self%eval_touched_refs(k,i)
+                    if( iref < 1 .or. iref > self%nrefs ) cycle
+                    if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = self%loc_tab(iref,i)%dist / sum_dist_all
                 enddo
             endif
         enddo
         !$omp end parallel do
-        if( .not. any(self%loc_tab(:,:)%inpl > 0) ) return
-        ! min/max normalization over evaluated refs only
-        min_dist = minval(self%loc_tab(:,:)%dist, mask=(self%loc_tab(:,:)%inpl > 0))
-        max_dist = maxval(self%loc_tab(:,:)%dist, mask=(self%loc_tab(:,:)%inpl > 0))
+        min_dist = huge(1.0)
+        max_dist = -huge(1.0)
+        any_eval = .false.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref)&
+        !$omp reduction(min:min_dist) reduction(max:max_dist) reduction(.or.:any_eval)
+        do i = 1,self%nptcls
+            do k = 1,self%eval_touched_counts(i)
+                iref = self%eval_touched_refs(k,i)
+                if( iref < 1 .or. iref > self%nrefs ) cycle
+                if( self%loc_tab(iref,i)%inpl <= 0 ) cycle
+                min_dist = min(min_dist, self%loc_tab(iref,i)%dist)
+                max_dist = max(max_dist, self%loc_tab(iref,i)%dist)
+                any_eval = .true.
+            enddo
+        enddo
+        !$omp end parallel do
+        if( .not. any_eval ) return
         if( (max_dist - min_dist) < TINY )then
             THROW_WARN('WARNING: numerical unstability in eul_prob_tab_neigh normalize')
             ! dense-style stochastic tie break over evaluated entries only.
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
-            do iref = 1, self%nrefs
-                do i = 1, self%nptcls
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref)
+            do i = 1,self%nptcls
+                do k = 1,self%eval_touched_counts(i)
+                    iref = self%eval_touched_refs(k,i)
+                    if( iref < 1 .or. iref > self%nrefs ) cycle
                     if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = ran3()
                 enddo
             enddo
             !$omp end parallel do
         else
-            where( self%loc_tab(:,:)%inpl > 0 )
-                self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - min_dist) / (max_dist - min_dist)
-            endwhere
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref)
+            do i = 1,self%nptcls
+                do k = 1,self%eval_touched_counts(i)
+                    iref = self%eval_touched_refs(k,i)
+                    if( iref < 1 .or. iref > self%nrefs ) cycle
+                    if( self%loc_tab(iref,i)%inpl > 0 )&
+                    &self%loc_tab(iref,i)%dist = (self%loc_tab(iref,i)%dist - min_dist) / (max_dist - min_dist)
+                enddo
+            enddo
+            !$omp end parallel do
         endif
     end subroutine ref_normalize_neigh
 
@@ -811,7 +893,7 @@ contains
             enddo
             do while( nleft > 0 )
                 if( nsel == 0 ) exit
-                assigned_idx = angle_sampling_fast(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
+                assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
                     &frontier%inds_sorted(1:nsel), projs_athres, self%p_ptr%prob_athres)
                 assigned_iref = frontier%sel_refs(assigned_idx)
                 assigned_ptcl = graph%ref_list(graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1)
