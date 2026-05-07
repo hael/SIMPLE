@@ -176,6 +176,7 @@ type :: polarft_calc
     procedure, private :: gen_corrs_mirr_corrs, gen_euclids_mirr_euclids
     procedure          :: gen_many_objfun_vals
     procedure          :: gen_many_euclids
+    procedure          :: gen_many_euclids_gpu
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: write_ptcl_pft_range
     procedure          :: write_ref_pfts
@@ -671,6 +672,11 @@ interface
         integer,                     intent(in)    :: iptcl
         real(sp),                    intent(in)    :: shift(2)
     end subroutine gen_many_euclids
+
+    module subroutine gen_many_euclids_gpu( self, iptcl )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+    end subroutine gen_many_euclids_gpu
 
     ! ===== I/O: simple_polarft_ops_io.f90
 

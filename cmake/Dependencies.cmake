@@ -38,18 +38,31 @@ if(USE_OPENMP)
             "Compiler is not GNU and FindOpenMP failed."
         )
     endif()
-    # Openmp device offloading - EXPERIMENTAL
-    if( USE_OPENMP )
-        if( USE_OPENMP_OFFLOAD )
-            if(APPLE)
-                set(USE_OPENMP_OFFLOAD OFF)
+    # OpenMP device offloading & some CUDA support
+    if( USE_OPENMP_OFFLOAD )
+        if(APPLE)
+            set(USE_OPENMP_OFFLOAD OFF)
+            message(WARNING
+                "OpenMP offload requested but not supported on Apple platforms.\n"
+                "Falling back to standard OpenMP."
+            )
+        else()
+            find_package(CUDAToolkit)
+            if(NOT CUDAToolkit_Fortran_FOUND)
+                list(APPEND SIMPLE_LIBRARIES
+                    CUDA::cudart
+                    CUDA::cufft)
             else()
-                string(APPEND CMAKE_Fortran_FLAGS " -foffload=nvptx-none")
+                message(FATAL_ERROR
+                    "The CUDAToolkit library was not found.\n"
+                )
             endif()
+            string(APPEND CMAKE_Fortran_FLAGS " -foffload=nvptx-none")
+            add_compile_definitions(USE_OPENMP_OFFLOAD)
         endif()
-    else()
-        set(USE_OPENMP_OFFLOAD OFF)
     endif()
+else()
+    set(USE_OPENMP_OFFLOAD OFF)
 endif()
 
 # ------------------------------------------------------------------------------

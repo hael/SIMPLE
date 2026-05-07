@@ -1111,4 +1111,79 @@ contains
         enddo
     end subroutine gen_many_euclids
 
+    ! Benchmark for comparison of euclid calculation between
+    ! openmp offload gpu and cpu host
+    module subroutine gen_many_euclids_gpu( self, iptcl )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        complex(sp), allocatable :: pft_ptcl(:,:)
+        real(sp),    allocatable :: ref_vals(:,:), absctf(:,:)
+        complex(sp) :: crefctf, cdiff
+        real        :: ftvals(self%nrots), w(self%kfromto(1):self%kfromto(2))
+        real        :: sqsumptcl, acc, acc_c
+        integer(dp) :: t
+        integer     :: i, k, rot, rot_c, ir, jr, ref
+#ifdef USE_OPENMP_OFFLOAD
+        ! particle index
+        i = self%pinds(iptcl)
+        ! particle variance and shell weights
+        sqsumptcl = 0.0
+        do k = self%kfromto(1),self%kfromto(2)
+            w(k)      = real(k) / self%sigma2_noise(k,iptcl)
+            sqsumptcl = sqsumptcl + w(k) * sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i))))
+        enddo
+        ! convenience allocation
+        allocate(ref_vals(self%nrots,self%nrefs),source=0.0)
+        allocate(pft_ptcl(self%kfromto(1):self%kfromto(2), 1:self%pftsz),&
+            &absctf(self%kfromto(1):self%kfromto(2), 1:self%pftsz))
+        ! tranposed particle and corresponding CTF prior to device upload
+        pft_ptcl(self%kfromto(1):self%kfromto(2), 1:self%pftsz) = transpose(self%pfts_ptcls(:,self%kfromto(1):self%kfromto(2),i))
+        absctf(self%kfromto(1):self%kfromto(2),   1:self%pftsz) = transpose(self%ctfmats(:,self%kfromto(1):self%kfromto(2),i))
+        t = tic()
+        !$omp target teams distribute&
+        !$omp& map(to:self%kfromto,self%pftsz,self%nrots,self%nrefs,sqsumptcl,w)&
+        !$omp& map(to:self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),:),pft_ptcl,absctf)&
+        !$omp& map(tofrom:ref_vals)&
+        !$omp& num_teams(self%nrefs)
+        do ref = 1,self%nrefs               ! reference
+            !$omp parallel do collapse(2) schedule(static)&
+            !$omp& private(ir,jr,rot,rot_c,acc,acc_c,k,crefctf,cdiff)
+            do ir = 1,self%pftsz            ! reference rotation
+                do jr = 1,self%pftsz        ! particle rotation
+                    rot   = modulo(jr - ir, self%nrots) + 1
+                    rot_c = merge(rot + self%pftsz, rot - self%pftsz, rot <= self%pftsz)
+                    acc   = 0.
+                    acc_c = 0.
+                    do k = self%kfromto(1), self%kfromto(2)
+                        crefctf = self%pfts_refs_even(ir, k, ref) * absctf(k, jr)
+                        cdiff   = crefctf - pft_ptcl(k, jr)
+                        acc     = acc   + w(k) * real(cdiff * conjg(cdiff))
+                        cdiff   = conjg(crefctf) - pft_ptcl(k, jr)
+                        acc_c   = acc_c + w(k) * real(cdiff * conjg(cdiff))
+                    end do
+                    !$omp atomic
+                    ref_vals(rot,   ref) = ref_vals(rot,  ref)  + acc
+                    !$omp atomic
+                    ref_vals(rot_c, ref) = ref_vals(rot_c, ref) + acc_c
+                enddo
+            enddo
+            !$omp parallel do private(rot)
+            do rot = 1, self%nrots
+                ref_vals(rot, ref) = exp(-ref_vals(rot, ref) / real(sqsumptcl))
+            enddo
+        enddo
+        !$omp end target teams distribute
+        print *,'GPU: ',toc(t)
+        t = tic()
+        do ref = self%nrefs, 1, -1
+            call self%gen_euclids(ref, iptcl, [0.,0.], ftvals)
+        end do
+        print *,'CPU: ',toc(t)
+        print *,ref_vals(1:10,1)
+        print *,ftvals(1:10)
+        print *,ref_vals(self%nrots-10:,1)
+        print *,ftvals(self%nrots-10:)
+#endif
+    end subroutine gen_many_euclids_gpu
+
 end submodule simple_polarft_corr
