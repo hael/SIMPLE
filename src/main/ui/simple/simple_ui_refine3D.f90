@@ -125,7 +125,6 @@ contains
         call reconstruct3D%add_input(UI_SRCH, frac)
         ! filter controls
         call reconstruct3D%add_input(UI_FILT, envfsc)
-        call reconstruct3D%add_input(UI_FILT, wiener)
         call reconstruct3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
         &'Postprocess reconstructed volumes using the generated FSC curves', '(yes|no){yes}', .false., 'yes')
         ! mask controls
@@ -184,7 +183,6 @@ contains
         call refine3D%add_input(UI_FILT, envfsc, gui_submenu="filter")
         call refine3D%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., gui_submenu="filter")
-        call refine3D%add_input(UI_FILT, wiener, gui_submenu="filter")
         call refine3D%add_input(UI_FILT, ml_reg, gui_submenu="filter")
         call refine3D%add_input(UI_FILT, combine_eo, gui_submenu="filter")
         ! mask controls

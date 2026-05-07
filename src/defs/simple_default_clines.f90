@@ -27,7 +27,6 @@ contains
         if( .not. cline%defined('cenlp')        ) call cline%set('cenlp',        lpcen)
         if( .not. cline%defined('maxits')       ) call cline%set('maxits',          30)
         if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',    'yes')
-        if( .not. cline%defined('wiener')       ) call cline%set('wiener',      'full')
         if( .not. cline%defined('cls_init')     ) call cline%set('cls_init',    'ptcl')
         if( .not. cline%defined('center_type')  ) call cline%set('center_type', 'mass')
         if( .not. cline%defined('refine')       ) call cline%set('refine',   'snhc_smpl')

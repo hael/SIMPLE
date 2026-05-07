@@ -292,7 +292,6 @@ contains
             call cline_calc_pspec%set('prg',      'calc_pspec')
             ! cluster2D
             call cline_cluster2D%set('prg',       'cluster2D')
-            call cline_cluster2D%set('wiener',    'full')
             call cline_cluster2D%set('ptclw',     'no')
             call cline_cluster2D%set('cenlp',     params%cenlp)
             call cline_cluster2D%set('chunk',     'no')

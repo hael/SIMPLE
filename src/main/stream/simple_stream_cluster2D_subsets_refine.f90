@@ -60,7 +60,6 @@ contains
         integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, n_non_junk, ic, id, nc, icls, box4frc, iter, subproc_fhandle, ios
         logical          :: all_chunks_submitted
         call cline%set('oritype',      'ptcl2D')
-        call cline%set('wiener',       'full')
         call cline%set('autoscale',    'yes')
         call cline%set('remove_chunks','no')
         call cline%set('objfun',       'euclid')

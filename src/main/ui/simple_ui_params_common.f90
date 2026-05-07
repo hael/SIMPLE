@@ -160,7 +160,6 @@ type(ui_param) :: vol_dim
 type(ui_param) :: walltime
 type(ui_param) :: wcrit
 type(ui_param) :: width
-type(ui_param) :: wiener
 type(ui_param) :: winsz
 
 contains
@@ -776,10 +775,6 @@ subroutine set_ui_params
     call width%set_param(          'width',           'num',    'Falloff of inner mask', &
                                    'Number of cosine edge pixels of inner mask in pixels', &
                                    '# pixels cosine edge{10}', .false., 10.)
-
-    call wiener%set_param(         'wiener',          'multi',  'Wiener restoration', &
-                                   'Wiener restoration, full or partial (full|partial){full}', &
-                                   '(full|partial){full}', .false., 'full')
 end subroutine set_ui_params
 
 end module simple_ui_params_common

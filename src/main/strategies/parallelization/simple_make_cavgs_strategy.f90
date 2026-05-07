@@ -183,7 +183,6 @@ contains
 
     subroutine apply_distr_entry_defaults(cline)
         class(cmdline), intent(inout) :: cline
-        call cline%set('wiener', 'full')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ml_reg') ) call cline%set('ml_reg','no')
     end subroutine apply_distr_entry_defaults

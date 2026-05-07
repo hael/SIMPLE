@@ -262,7 +262,6 @@ type :: parameters
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: tag=''               !< just a tag
     character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|uniformno){sum}
-    character(len=STDLEN)     :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
     integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
@@ -844,7 +843,6 @@ contains
         call check_carg('verbose_exit_fname', self%verbose_exit_fname)   
         call check_carg('volrec',         self%volrec)
         call check_carg('wcrit',          self%wcrit)
-        call check_carg('wiener',         self%wiener)
         call check_carg('write_imgarr',   self%write_imgarr)
         call check_carg('zero',           self%zero)
         ! File args
@@ -1615,7 +1613,6 @@ contains
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
-        ! set wiener mode
         if( self%l_corrw )then
             select case(trim(self%wcrit))
                 case('softmax')

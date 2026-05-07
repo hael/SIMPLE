@@ -484,7 +484,6 @@ contains
         call cmd_dict%push('wcrit',         'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}')
         call cmd_dict%push('which_iter',    'iteration nr')
         call cmd_dict%push('width',         'falloff of inner mask or filter(in pixels){10}')
-        call cmd_dict%push('wiener',        'Wiener restoration mode(yes|no){no}')
         call cmd_dict%push('winsz',         'half-width of window for real-space filter(in pixels)')
         call cmd_dict%push('wtype',         'type of orientation weights (factorial|flat){factorial}')
         call cmd_dict%push('xcoord',        'x coordinate{0}')
