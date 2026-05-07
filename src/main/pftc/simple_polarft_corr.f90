@@ -1012,14 +1012,19 @@ contains
         complex(sp), pointer :: shmat(:,:)
         complex(sp) :: c
         real(dp)    :: A, v
-        real(sp)    :: wk, shift_mag_sq
-        integer     :: k, kk, k0, i, j, ithr, ind, iref, p
+        real(dp)    :: wk
+        real(sp)    :: shift_mag_sq
+        integer     :: k, kk, k0, i, j, ithr, iref, p
         logical     :: even
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
         even  = self%iseven(i)
         k0    = self%kfromto(1)
         shmat => self%heap_vars(ithr)%shmat
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%heap_vars(ithr)%w_weights(kk) = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+        enddo
         ! zero output
         self%crmat_many(ithr)%r(:,:) = ZERO
         ! Main branch: shift?
@@ -1049,9 +1054,9 @@ contains
                 ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*)
                 if( even )then
                     do k = self%kfromto(1), self%kfromto(2)
-                        wk = real(k) / self%sigma2_noise(k,iptcl)
                         kk = k - k0 + 1
-                        do p = 1, self%pftsz+1
+                        wk = self%heap_vars(ithr)%w_weights(kk)
+                        do p = 1, self%pftsz
                             c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
                             c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
                             self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
@@ -1059,9 +1064,9 @@ contains
                     end do
                 else
                     do k = self%kfromto(1), self%kfromto(2)
-                        wk = real(k) / self%sigma2_noise(k,iptcl)
                         kk = k - k0 + 1
-                        do p = 1, self%pftsz+1
+                        wk = self%heap_vars(ithr)%w_weights(kk)
+                        do p = 1, self%pftsz
                             c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
                             c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
                             self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
@@ -1076,8 +1081,9 @@ contains
                 do j = 1, nr
                     iref = irefs(j)
                     do k = self%kfromto(1), self%kfromto(2)
-                        wk = real(k) / self%sigma2_noise(k,iptcl)
-                        do p = 1, self%pftsz+1
+                        kk = k - k0 + 1
+                        wk = self%heap_vars(ithr)%w_weights(kk)
+                        do p = 1, self%pftsz
                             c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
                             c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
                             self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
@@ -1088,8 +1094,9 @@ contains
                 do j = 1, nr
                     iref = irefs(j)
                     do k = self%kfromto(1), self%kfromto(2)
-                        wk = real(k) / self%sigma2_noise(k,iptcl)
-                        do p = 1, self%pftsz+1
+                        kk = k - k0 + 1
+                        wk = self%heap_vars(ithr)%w_weights(kk)
+                        do p = 1, self%pftsz
                             c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
                             c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
                             self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
