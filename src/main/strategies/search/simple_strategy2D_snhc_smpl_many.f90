@@ -48,10 +48,11 @@ contains
             if( self%s%l_sh_first ) then
                 ! TODO
             else
-                call self%s%b_ptr%pftc%gen_all_euclids(s2D%snhc_nrefs_bound, &
-                    &s2D%srch_order(1:s2D%snhc_nrefs_bound, self%s%iptcl_batch),&
-                    &self%s%iptcl)
+                self%s%xy_first = 0.
             endif
+            call self%s%b_ptr%pftc%gen_many_euclids(s2D%snhc_nrefs_bound, &
+                &s2D%srch_order(1:s2D%snhc_nrefs_bound, self%s%iptcl_batch),&
+                &self%s%iptcl, self%s%xy_first)
             ! Class search
             nrefs_coarse_eval = 0
             do isample = 1,self%s%nrefs

@@ -362,7 +362,6 @@ contains
     module subroutine kill_memo_ptcls(self)
         class(polarft_calc), intent(inout) :: self
         if( allocated(self%ft_ptcl_ctf) )    deallocate(self%ft_ptcl_ctf,self%ft_ctf2)
-        if( allocated(self%ft_absptcl_ctf) ) deallocate(self%ft_absptcl_ctf)
     end subroutine kill_memo_ptcls
 
     module subroutine kill_memo_refs(self)

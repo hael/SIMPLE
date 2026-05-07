@@ -78,7 +78,6 @@ type :: polarft_calc
     type(c_ptr) :: plan_bwd_many_refs
     ! Memoized terms
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)                      !< Fourier Transform of particle times CTF
-    complex(kind=c_float_complex), allocatable :: ft_absptcl_ctf(:,:,:)                   !< Fourier Transform of (particle times CTF)**2
     complex(kind=c_float_complex), allocatable :: ft_ctf2(:,:,:)                          !< Fourier Transform of CTF squared modulus
     complex(kind=c_float_complex), allocatable :: ft_ref_even(:,:,:),  ft_ref_odd(:,:,:)  !< Fourier Transform of even/odd references
     complex(kind=c_float_complex), allocatable :: ft_ref2_even(:,:,:), ft_ref2_odd(:,:,:) !< Fourier Transform of even/odd references squared modulus
@@ -175,8 +174,8 @@ type :: polarft_calc
     procedure          :: gen_sigma_contrib
     procedure          :: gen_objfun_vals_mirr_vals
     procedure, private :: gen_corrs_mirr_corrs, gen_euclids_mirr_euclids
-    procedure          :: gen_all_objfun_vals
-    procedure          :: gen_all_euclids
+    procedure          :: gen_many_objfun_vals
+    procedure          :: gen_many_euclids
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: write_ptcl_pft_range
     procedure          :: write_ref_pfts
@@ -657,19 +656,21 @@ interface
         real(sp),                    intent(out)   :: euclids(self%nrots), meuclids(self%nrots)
     end subroutine gen_euclids_mirr_euclids
 
-    module subroutine gen_all_objfun_vals( self, nr, irefs, iptcl )
+    module subroutine gen_many_objfun_vals( self, nr, irefs, iptcl, shift )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: nr
         integer,             intent(in)    :: irefs(nr)
         integer,             intent(in)    :: iptcl
-    end subroutine gen_all_objfun_vals
+        real(sp),            intent(in)    :: shift(2)
+    end subroutine gen_many_objfun_vals
 
-    module subroutine gen_all_euclids( self, nr, irefs, iptcl )
+    module subroutine gen_many_euclids( self, nr, irefs, iptcl, shift )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: nr
         integer,                     intent(in)    :: irefs(nr)
         integer,                     intent(in)    :: iptcl
-    end subroutine gen_all_euclids
+        real(sp),                    intent(in)    :: shift(2)
+    end subroutine gen_many_euclids
 
     ! ===== I/O: simple_polarft_ops_io.f90
 

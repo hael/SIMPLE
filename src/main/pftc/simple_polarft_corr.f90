@@ -247,7 +247,7 @@ contains
                 end do
             endif
         else
-            ! The reference is not shifted, memoized FT(S.REF) can be used
+            ! The reference is not shifted, memoized FT(REF) can be used
             ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(REF)*)
             self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
             if (even) then
@@ -983,57 +983,122 @@ contains
         mccs = real(self%heap_vars(ithr)%kcorrs / self%drvec(ithr)%r)
     end subroutine gen_corrs_mirr_corrs
 
-    ! the values are stored in self%crmat_many(ithr)%r( 1:nrots, iref )
-    module subroutine gen_all_objfun_vals( self, nr, irefs, iptcl )
+    ! the values are stored in self%crmat_many(ithr)%r( 1:nrots, ind )
+    ! ind is not the natural reference index (iref) and is left to the user
+    ! to access correctly with get_precalc_objfun_vals( ind, ithr, vals),
+    ! the vector irefs maps ind to iref.
+    ! ithr book-keeping is also left to the user
+    ! TODO: add logical mask to handle empty classes
+    module subroutine gen_many_objfun_vals( self, nr, irefs, iptcl, shift )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: nr
         integer,             intent(in)    :: irefs(nr)
         integer,             intent(in)    :: iptcl
+        real(sp),            intent(in)    :: shift(2)
          select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 THROW_HARD('Not implemented yet')
             case(OBJFUN_EUCLID)
-                call self%gen_all_euclids(nr, irefs, iptcl )
+                call self%gen_many_euclids(nr, irefs, iptcl, shift)
         end select
-    end subroutine gen_all_objfun_vals
+    end subroutine gen_many_objfun_vals
 
-    module subroutine gen_all_euclids( self, nr, irefs, iptcl )
+    module subroutine gen_many_euclids( self, nr, irefs, iptcl, shift )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: nr
         integer,                     intent(in)    :: irefs(nr)
         integer,                     intent(in)    :: iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        complex(sp), pointer :: shmat(:,:)
         complex(sp) :: c
         real(dp)    :: A, v
-        real(sp)    :: wk
-        integer     :: k, kk, i, j, ithr, ind, iref, p
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
+        real(sp)    :: wk, shift_mag_sq
+        integer     :: k, kk, k0, i, j, ithr, ind, iref, p
+        logical     :: even
+        ithr  = omp_get_thread_num() + 1
+        i     = self%pinds(iptcl)
+        even  = self%iseven(i)
+        k0    = self%kfromto(1)
+        shmat => self%heap_vars(ithr)%shmat
+        ! zero output
         self%crmat_many(ithr)%r(:,:) = ZERO
-        if( self%iseven(i) )then
+        ! Main branch: shift?
+        shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
+        if ( shift_mag_sq > SHERRSQ ) then
+            ! Obtain shift matrix to apply all references
+            call self%gen_shmat4aln(ithr, shift, shmat)
+            ! Reference loop
             do j = 1, nr
                 iref = irefs(j)
-                do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k) / self%sigma2_noise(k,iptcl)
-                    do p = 1, self%pftsz+1
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
-                        self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
-                    enddo
-                end do
+                ! S.REF
+                if (even) then
+                    do k = self%kfromto(1), self%kfromto(2)
+                        kk = k - k0 + 1
+                        self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       shmat(:,k) * self%pfts_refs_even(:,k,iref)
+                        self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(shmat(:,k) * self%pfts_refs_even(:,k,iref))
+                    end do
+                else
+                    do k = self%kfromto(1), self%kfromto(2)
+                        kk = k - k0 + 1
+                        self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       shmat(:,k) * self%pfts_refs_odd(:,k,iref)
+                        self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(shmat(:,k) * self%pfts_refs_odd(:,k,iref))
+                    end do
+                endif
+                ! FT(S.REF)
+                call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+                ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*)
+                if( even )then
+                    do k = self%kfromto(1), self%kfromto(2)
+                        wk = real(k) / self%sigma2_noise(k,iptcl)
+                        kk = k - k0 + 1
+                        do p = 1, self%pftsz+1
+                            c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
+                            c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
+                            self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
+                        enddo
+                    end do
+                else
+                    do k = self%kfromto(1), self%kfromto(2)
+                        wk = real(k) / self%sigma2_noise(k,iptcl)
+                        kk = k - k0 + 1
+                        do p = 1, self%pftsz+1
+                            c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
+                            c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
+                            self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
+                        enddo
+                    end do
+                endif
             enddo
         else
-            do j = 1, nr
-                iref = irefs(j)
-                do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k) / self%sigma2_noise(k,iptcl)
-                    do p = 1, self%pftsz+1
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
-                        self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
-                    enddo
-                end do
-            enddo
+            ! No shift: use memoize FT(REF)
+            ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(REF)*)
+            if( even )then
+                do j = 1, nr
+                    iref = irefs(j)
+                    do k = self%kfromto(1), self%kfromto(2)
+                        wk = real(k) / self%sigma2_noise(k,iptcl)
+                        do p = 1, self%pftsz+1
+                            c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
+                            c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
+                            self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
+                        enddo
+                    end do
+                enddo
+            else
+                do j = 1, nr
+                    iref = irefs(j)
+                    do k = self%kfromto(1), self%kfromto(2)
+                        wk = real(k) / self%sigma2_noise(k,iptcl)
+                        do p = 1, self%pftsz+1
+                            c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
+                            c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
+                            self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
+                        enddo
+                    end do
+                enddo
+            endif
         endif
+        ! iFFT for all references: IFFT(sum_k w_k*(FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*))
         call fftwf_execute_dft_c2r(self%plan_bwd_many_refs, &
                                     &self%crmat_many(ithr)%c, self%crmat_many(ithr)%r)
         ! normalization & exponentiation
@@ -1044,6 +1109,6 @@ contains
                 self%crmat_many(ithr)%r(p,j) = real(exp(-v),sp)
             enddo
         enddo
-    end subroutine gen_all_euclids
+    end subroutine gen_many_euclids
 
 end submodule simple_polarft_corr
