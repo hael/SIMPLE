@@ -246,7 +246,7 @@ contains
         endif
         call prob_bench_next(bench, bench%rt_sample)
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call read_reprojection_model(params, build, nptcls, nmany_refs=params%nspace*params%nstates)
+        call read_reprojection_model(params, build, nptcls)
         call prob_bench_next(bench, bench%rt_refprep)
         call prep_sigmas_objfun(params, build, .false.)
         call prob_bench_next(bench, bench%rt_sigmas)

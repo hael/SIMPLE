@@ -111,6 +111,23 @@ contains
         end select
     end subroutine gen_objfun_vals
 
+    module subroutine gen_prob_objfun_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        real(sp),            intent(in)    :: shift(2)
+        real(sp),            intent(in)    :: athres_ub, prob_athres
+        real(sp),            intent(out)   :: dist
+        integer,             intent(out)   :: irot
+        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
+        integer,             intent(inout) :: sorted_inds(self%nrots)
+        select case(self%p_ptr%cc_objfun)
+            case(OBJFUN_CC)
+                THROW_HARD('gen_prob_objfun_val not implemented for OBJFUN_CC')
+            case(OBJFUN_EUCLID)
+                call self%gen_prob_euclid_val(iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
+        end select
+    end subroutine gen_prob_objfun_val
+
     module subroutine gen_corrs( self, iref, iptcl, shift, cc )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -278,6 +295,178 @@ contains
             euclids(p) = exp(-1.d0 - self%crvec1(ithr)%r(p) / A)
         end do
     end subroutine gen_euclids
+
+    module subroutine gen_prob_euclid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(in)    :: athres_ub, prob_athres
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        complex(sp), pointer :: shmat(:,:)
+        complex(sp) :: c
+        real(dp)    :: norm
+        real(dp)    :: wk
+        real(sp)    :: shift_mag_sq
+        integer     :: k, i, ithr, kk, k0, p
+        ithr         = omp_get_thread_num() + 1
+        i            = self%pinds(iptcl)
+        k0           = self%kfromto(1)
+        norm         = self%wsqsums_ptcls(i) * real(2*self%nrots, dp)
+        shmat        => self%heap_vars(ithr)%shmat
+        shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
+        if( shift_mag_sq > SHERRSQ )then
+            call self%gen_shmat4aln(ithr, shift, shmat)
+            if( self%iseven(i) )then
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       shmat(:,k) * self%pfts_refs_even(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(shmat(:,k) * self%pfts_refs_even(:,k,iref))
+                enddo
+            else
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       shmat(:,k) * self%pfts_refs_odd(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(shmat(:,k) * self%pfts_refs_odd(:,k,iref))
+                enddo
+            endif
+            call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+            if( self%iseven(i) )then
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                    do p = 1,self%pftsz
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk))
+                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    enddo
+                enddo
+            else
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                    do p = 1,self%pftsz
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk))
+                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    enddo
+                enddo
+            endif
+        else
+            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+            if( self%iseven(i) )then
+                do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                    do p = 1,self%pftsz
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
+                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    enddo
+                enddo
+            else
+                do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                    do p = 1,self%pftsz
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
+                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    enddo
+                enddo
+            endif
+        endif
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        call sample_prob_euclid(norm, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
+
+    contains
+
+        real(sp) function euclid_dist_at_rot(p_loc, norm_loc) result(dist_loc)
+            integer,  intent(in) :: p_loc
+            real(dp), intent(in) :: norm_loc
+            real(dp) :: v
+            v = 1.d0 + real(self%crvec1(ithr)%r(p_loc), dp) / norm_loc
+            if( v > -log(real(TINY,dp)) )then
+                dist_loc = huge(dist_loc)
+            else
+                dist_loc = real(v,sp)
+            endif
+        end function euclid_dist_at_rot
+
+        subroutine sample_prob_euclid(norm_loc, athres_ub_in, prob_athres_loc, dist_loc, irot_loc, pvec_sorted_loc, sorted_inds_loc)
+            real(dp), intent(in)    :: norm_loc
+            real(sp), intent(in)    :: athres_ub_in, prob_athres_loc
+            real(sp), intent(out)   :: dist_loc
+            integer,  intent(out)   :: irot_loc
+            real(sp), intent(inout) :: pvec_sorted_loc(:)
+            integer,  intent(inout) :: sorted_inds_loc(:)
+            integer :: n, num_lb, num_ub, p_loc, pick
+            real(sp) :: athres_ub_loc, athres_lb_loc, sum_pvec, rnd, dist_tmp
+            n              = self%nrots
+            athres_ub_loc  = min(prob_athres_loc, athres_ub_in)
+            athres_lb_loc  = min(athres_ub_loc / 10., 1.)
+            num_ub         = min(n,max(1,int(athres_ub_loc * real(n) / 180.)))
+            num_lb         = 1 + floor(athres_lb_loc / athres_ub_loc * num_ub)
+            do p_loc = 1, num_ub
+                pvec_sorted_loc(p_loc) = euclid_dist_at_rot(p_loc, norm_loc)
+                sorted_inds_loc(p_loc) = p_loc
+            enddo
+            do p_loc = num_ub / 2, 1, -1
+                call maxheap_sift_down(pvec_sorted_loc, sorted_inds_loc, p_loc, num_ub)
+            enddo
+            do p_loc = num_ub + 1, n
+                dist_tmp = euclid_dist_at_rot(p_loc, norm_loc)
+                if( dist_tmp < pvec_sorted_loc(1) )then
+                    pvec_sorted_loc(1) = dist_tmp
+                    sorted_inds_loc(1) = p_loc
+                    call maxheap_sift_down(pvec_sorted_loc, sorted_inds_loc, 1, num_ub)
+                endif
+            enddo
+            call hpsort(pvec_sorted_loc(1:num_ub), sorted_inds_loc(1:num_ub))
+            rnd      = ran3()
+            sum_pvec = sum(pvec_sorted_loc(1:num_ub))
+            if( sum_pvec < TINY )then
+                pick     = min(num_ub, 1 + floor(real(num_ub) * rnd))
+                irot_loc = sorted_inds_loc(pick)
+            else
+                pvec_sorted_loc(1:num_ub) = pvec_sorted_loc(1:num_ub) / sum_pvec
+                if( rnd > sum(pvec_sorted_loc(1:num_lb)) )then
+                    irot_loc = sorted_inds_loc(1)
+                else
+                    irot_loc = sorted_inds_loc(num_ub)
+                endif
+            endif
+            dist_loc = euclid_dist_at_rot(irot_loc, norm_loc)
+        end subroutine sample_prob_euclid
+
+        subroutine maxheap_sift_down(pvec_sorted_loc, sorted_inds_loc, root_in, heap_size)
+            real(sp), intent(inout) :: pvec_sorted_loc(:)
+            integer,  intent(inout) :: sorted_inds_loc(:)
+            integer,  intent(in)    :: root_in, heap_size
+            integer :: root, child, swap_i, tmp_ind
+            real(sp) :: tmp_val
+            root = root_in
+            do
+                child = 2 * root
+                if( child > heap_size ) exit
+                swap_i = root
+                if( pvec_sorted_loc(swap_i) < pvec_sorted_loc(child) ) swap_i = child
+                if( child + 1 <= heap_size )then
+                    if( pvec_sorted_loc(swap_i) < pvec_sorted_loc(child + 1) ) swap_i = child + 1
+                endif
+                if( swap_i == root ) exit
+                tmp_val                  = pvec_sorted_loc(root)
+                pvec_sorted_loc(root)    = pvec_sorted_loc(swap_i)
+                pvec_sorted_loc(swap_i)  = tmp_val
+                tmp_ind                  = sorted_inds_loc(root)
+                sorted_inds_loc(root)    = sorted_inds_loc(swap_i)
+                sorted_inds_loc(swap_i)  = tmp_ind
+                root = swap_i
+            enddo
+        end subroutine maxheap_sift_down
+
+    end subroutine gen_prob_euclid_val
 
     module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
         class(polarft_calc), target, intent(inout) :: self
@@ -1003,24 +1192,6 @@ contains
         end select
     end subroutine gen_many_objfun_vals
 
-    module subroutine gen_many_prob_objfun_vals( self, nr, irefs, iptcl, shift, athres_ub, prob_athres, dists, irots )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: nr
-        integer,             intent(in)    :: irefs(nr)
-        integer,             intent(in)    :: iptcl
-        real(sp),            intent(in)    :: shift(2)
-        real(sp),            intent(in)    :: athres_ub(nr)
-        real(sp),            intent(in)    :: prob_athres
-        real(sp),            intent(out)   :: dists(nr)
-        integer,             intent(out)   :: irots(nr)
-        select case(self%p_ptr%cc_objfun)
-            case(OBJFUN_CC)
-                THROW_HARD('Not implemented yet')
-            case(OBJFUN_EUCLID)
-                call self%gen_many_prob_euclids(nr, irefs, iptcl, shift, athres_ub, prob_athres, dists, irots)
-        end select
-    end subroutine gen_many_prob_objfun_vals
-
     module subroutine gen_many_euclids( self, nr, irefs, iptcl, shift )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: nr
@@ -1030,19 +1201,14 @@ contains
         complex(sp), pointer :: shmat(:,:)
         complex(sp) :: c
         real(dp)    :: A, v
-        real(dp)    :: wk
-        real(sp)    :: shift_mag_sq
-        integer     :: k, kk, k0, i, j, ithr, iref, p
+        real(sp)    :: wk, shift_mag_sq
+        integer     :: k, kk, k0, i, j, ithr, ind, iref, p
         logical     :: even
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
         even  = self%iseven(i)
         k0    = self%kfromto(1)
         shmat => self%heap_vars(ithr)%shmat
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%heap_vars(ithr)%w_weights(kk) = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
-        enddo
         ! zero output
         self%crmat_many(ithr)%r(:,:) = ZERO
         ! Main branch: shift?
@@ -1072,9 +1238,9 @@ contains
                 ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*)
                 if( even )then
                     do k = self%kfromto(1), self%kfromto(2)
+                        wk = real(k) / self%sigma2_noise(k,iptcl)
                         kk = k - k0 + 1
-                        wk = self%heap_vars(ithr)%w_weights(kk)
-                        do p = 1, self%pftsz
+                        do p = 1, self%pftsz+1
                             c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
                             c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
                             self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
@@ -1082,9 +1248,9 @@ contains
                     end do
                 else
                     do k = self%kfromto(1), self%kfromto(2)
+                        wk = real(k) / self%sigma2_noise(k,iptcl)
                         kk = k - k0 + 1
-                        wk = self%heap_vars(ithr)%w_weights(kk)
-                        do p = 1, self%pftsz
+                        do p = 1, self%pftsz+1
                             c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
                             c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
                             self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
@@ -1099,9 +1265,8 @@ contains
                 do j = 1, nr
                     iref = irefs(j)
                     do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        wk = self%heap_vars(ithr)%w_weights(kk)
-                        do p = 1, self%pftsz
+                        wk = real(k) / self%sigma2_noise(k,iptcl)
+                        do p = 1, self%pftsz+1
                             c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
                             c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
                             self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
@@ -1112,9 +1277,8 @@ contains
                 do j = 1, nr
                     iref = irefs(j)
                     do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        wk = self%heap_vars(ithr)%w_weights(kk)
-                        do p = 1, self%pftsz
+                        wk = real(k) / self%sigma2_noise(k,iptcl)
+                        do p = 1, self%pftsz+1
                             c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
                             c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
                             self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
@@ -1135,198 +1299,6 @@ contains
             enddo
         enddo
     end subroutine gen_many_euclids
-
-    module subroutine gen_many_prob_euclids( self, nr, irefs, iptcl, shift, athres_ub, prob_athres, dists, irots )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: nr
-        integer,                     intent(in)    :: irefs(nr)
-        integer,                     intent(in)    :: iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(in)    :: athres_ub(nr)
-        real(sp),                    intent(in)    :: prob_athres
-        real(sp),                    intent(out)   :: dists(nr)
-        integer,                     intent(out)   :: irots(nr)
-        complex(sp), pointer :: shmat(:,:)
-        complex(sp) :: c
-        real(dp)    :: A
-        real(dp)    :: wk
-        real(sp)    :: shift_mag_sq
-        integer     :: k, kk, k0, i, j, ithr, iref, p
-        logical     :: even
-        ithr  = omp_get_thread_num() + 1
-        i     = self%pinds(iptcl)
-        even  = self%iseven(i)
-        k0    = self%kfromto(1)
-        shmat => self%heap_vars(ithr)%shmat
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%heap_vars(ithr)%w_weights(kk) = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
-        enddo
-        self%crmat_many(ithr)%r(:,:) = ZERO
-        shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
-        if ( shift_mag_sq > SHERRSQ ) then
-            call self%gen_shmat4aln(ithr, shift, shmat)
-            do j = 1, nr
-                iref = irefs(j)
-                if (even) then
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       shmat(:,k) * self%pfts_refs_even(:,k,iref)
-                        self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(shmat(:,k) * self%pfts_refs_even(:,k,iref))
-                    end do
-                else
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       shmat(:,k) * self%pfts_refs_odd(:,k,iref)
-                        self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(shmat(:,k) * self%pfts_refs_odd(:,k,iref))
-                    end do
-                endif
-                call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-                if( even )then
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        wk = self%heap_vars(ithr)%w_weights(kk)
-                        do p = 1, self%pftsz
-                            c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
-                            c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
-                            self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
-                        enddo
-                    end do
-                else
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        wk = self%heap_vars(ithr)%w_weights(kk)
-                        do p = 1, self%pftsz
-                            c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
-                            c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
-                            self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
-                        enddo
-                    end do
-                endif
-            enddo
-        else
-            if( even )then
-                do j = 1, nr
-                    iref = irefs(j)
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        wk = self%heap_vars(ithr)%w_weights(kk)
-                        do p = 1, self%pftsz
-                            c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
-                            c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
-                            self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
-                        enddo
-                    end do
-                enddo
-            else
-                do j = 1, nr
-                    iref = irefs(j)
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        wk = self%heap_vars(ithr)%w_weights(kk)
-                        do p = 1, self%pftsz
-                            c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
-                            c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
-                            self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
-                        enddo
-                    end do
-                enddo
-            endif
-        endif
-        call fftwf_execute_dft_c2r(self%plan_bwd_many_refs, &
-                                    &self%crmat_many(ithr)%c, self%crmat_many(ithr)%r)
-        A = self%wsqsums_ptcls(i) * real(2*self%nrots, dp)
-        do j = 1, nr
-            call sample_prob_euclid_ref(j, A, athres_ub(j), prob_athres, dists(j), irots(j))
-        enddo
-
-    contains
-
-        subroutine sample_prob_euclid_ref(j_loc, norm_loc, athres_ub_in, prob_athres_loc, dist_loc, irot_loc)
-            integer,  intent(in)  :: j_loc
-            real(dp), intent(in)  :: norm_loc
-            real(sp), intent(in)  :: athres_ub_in, prob_athres_loc
-            real(sp), intent(out) :: dist_loc
-            integer,  intent(out) :: irot_loc
-            integer :: n, num_lb, num_ub, p_loc, pick, sorted_inds(self%nrots)
-            real(sp) :: pvec_sorted(self%nrots)
-            real(sp) :: athres_ub_loc, athres_lb_loc, sum_pvec, rnd, dist_tmp
-            n              = self%nrots
-            athres_ub_loc  = min(prob_athres_loc, athres_ub_in)
-            athres_lb_loc  = min(athres_ub_loc / 10., 1.)
-            num_ub         = min(n,max(1,int(athres_ub_loc * real(n) / 180.)))
-            num_lb         = 1 + floor(athres_lb_loc / athres_ub_loc * num_ub)
-            do p_loc = 1, num_ub
-                pvec_sorted(p_loc) = euclid_dist_at_rot(p_loc, j_loc, norm_loc)
-                sorted_inds(p_loc) = p_loc
-            enddo
-            do p_loc = num_ub / 2, 1, -1
-                call maxheap_sift_down(pvec_sorted, sorted_inds, p_loc, num_ub)
-            enddo
-            do p_loc = num_ub + 1, n
-                dist_tmp = euclid_dist_at_rot(p_loc, j_loc, norm_loc)
-                if( dist_tmp < pvec_sorted(1) )then
-                    pvec_sorted(1) = dist_tmp
-                    sorted_inds(1) = p_loc
-                    call maxheap_sift_down(pvec_sorted, sorted_inds, 1, num_ub)
-                endif
-            enddo
-            call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
-            rnd      = ran3()
-            sum_pvec = sum(pvec_sorted(1:num_ub))
-            if( sum_pvec < TINY )then
-                pick     = min(num_ub, 1 + floor(real(num_ub) * rnd))
-                irot_loc = sorted_inds(pick)
-            else
-                pvec_sorted(1:num_ub) = pvec_sorted(1:num_ub) / sum_pvec
-                if( rnd > sum(pvec_sorted(1:num_lb)) )then
-                    irot_loc = sorted_inds(1)
-                else
-                    irot_loc = sorted_inds(num_ub)
-                endif
-            endif
-            dist_loc = euclid_dist_at_rot(irot_loc, j_loc, norm_loc)
-        end subroutine sample_prob_euclid_ref
-
-        real(sp) function euclid_dist_at_rot(p_loc, j_loc, norm_loc) result(dist_loc)
-            integer,  intent(in) :: p_loc, j_loc
-            real(dp), intent(in) :: norm_loc
-            real(dp) :: v
-            v = 1.d0 + real(self%crmat_many(ithr)%r(p_loc,j_loc), dp) / norm_loc
-            if( v > -log(real(TINY,dp)) )then
-                dist_loc = huge(dist_loc)
-            else
-                dist_loc = real(v,sp)
-            endif
-        end function euclid_dist_at_rot
-
-        subroutine maxheap_sift_down( pvec_sorted_loc, sorted_inds_loc, root_in, heap_size )
-            real(sp), intent(inout) :: pvec_sorted_loc(:)
-            integer,  intent(inout) :: sorted_inds_loc(:)
-            integer, intent(in) :: root_in, heap_size
-            integer :: root, child, swap_i, tmp_ind
-            real(sp) :: tmp_val
-            root = root_in
-            do
-                child = 2 * root
-                if( child > heap_size ) exit
-                swap_i = root
-                if( pvec_sorted_loc(swap_i) < pvec_sorted_loc(child) ) swap_i = child
-                if( child + 1 <= heap_size )then
-                    if( pvec_sorted_loc(swap_i) < pvec_sorted_loc(child + 1) ) swap_i = child + 1
-                endif
-                if( swap_i == root ) exit
-                tmp_val                    = pvec_sorted_loc(root)
-                pvec_sorted_loc(root)      = pvec_sorted_loc(swap_i)
-                pvec_sorted_loc(swap_i)    = tmp_val
-                tmp_ind                    = sorted_inds_loc(root)
-                sorted_inds_loc(root)      = sorted_inds_loc(swap_i)
-                sorted_inds_loc(swap_i)    = tmp_ind
-                root = swap_i
-            enddo
-        end subroutine maxheap_sift_down
-
-    end subroutine gen_many_prob_euclids
 
     ! Benchmark for comparison of euclid calculation between
     ! openmp offload gpu and cpu host
