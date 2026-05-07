@@ -97,10 +97,11 @@ contains
         if( associated(build%spproj_field) ) call build%spproj_field%set_all2single('lp', params%lp)
     end subroutine adopt_reprojection_model_range
 
-    subroutine read_reprojection_model( params, build, batchsz )
+    subroutine read_reprojection_model( params, build, batchsz, nmany_refs )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: batchsz
+        integer, optional, intent(in)    :: nmany_refs
         integer :: nrefs
         type(string) :: refs_even, refs_odd
         call adopt_reprojection_model_range(params, build)
@@ -110,7 +111,7 @@ contains
             call build%pgrpsyms%build_refspiral(build%eulspace)
         endif
         nrefs = params%nspace * params%nstates
-        call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+        call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto, nmany_refs=nmany_refs)
         refs_even = refine3D_reproj_model_fname('even')
         refs_odd  = refine3D_reproj_model_fname('odd')
         call build%pftc%read_ref_pfts(refs_even, .true.)

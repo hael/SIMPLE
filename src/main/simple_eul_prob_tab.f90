@@ -5,6 +5,7 @@ use simple_builder,          only: builder
 use simple_eul_prob_tab_utils, only: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample,&
     &eulprob_dist_switch, materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
+use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
 
 public :: eul_prob_tab
@@ -152,6 +153,7 @@ contains
     subroutine fill_tab( self )
         class(eul_prob_tab), intent(inout) :: self
         integer, allocatable   :: locn(:,:)
+        integer, allocatable   :: many_refs(:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
         integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
@@ -160,6 +162,7 @@ contains
         real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         integer(timer_int_kind) :: t_local
         real(timer_int_kind) :: rt_shift_seed, rt_ref_sweep, rt_select, rt_shift_refine
+        logical :: l_many_objfun
         self%bench_fill_projs_ns            = 0
         self%bench_fill_ref_evals           = 0
         self%bench_fill_nsubs               = 0
@@ -172,7 +175,14 @@ contains
         self%bench_fill_neigh_eval          = 0.
         self%bench_fill_shift_refine        = 0.
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
+        l_many_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
         call seed_rnd
+        if( l_many_objfun )then
+            allocate(many_refs(self%nrefs))
+            do ri = 1,self%nrefs
+                many_refs(ri) = (self%sinds(ri)-1)*self%p_ptr%nspace + self%jinds(ri)
+            enddo
+        endif
         projs_ns = 0
         do si = 1, self%nstates
             istate = self%ssinds(si)
@@ -226,16 +236,31 @@ contains
                 rt_shift_seed = rt_shift_seed + toc(t_local)
                 ! (2) search projection directions using those shifts for all references
                 t_local = tic()
-                do ri = 1, self%nrefs
-                    istate = self%sinds(ri)
-                    iproj  = self%jinds(ri)
-                    call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
-                    dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
-                    irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
-                    self%loc_tab(ri,i)%dist   = dists_inpl(irot,ithr)
-                    dists_refs(  ri,ithr)     = dists_inpl(irot,ithr)
-                    self%loc_tab(ri,i)%inpl   = irot
-                enddo
+                if( l_many_objfun )then
+                    call self%b_ptr%pftc%gen_many_objfun_vals(self%nrefs, many_refs, iptcl, cxy(2:3))
+                    do ri = 1, self%nrefs
+                        istate = self%sinds(ri)
+                        call self%b_ptr%pftc%get_precalc_objfun_vals(ri, ithr, dists_inpl(:,ithr))
+                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
+                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr),&
+                            &inpl_athres(istate), self%p_ptr%prob_athres)
+                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
+                        dists_refs(ri,ithr)     = dists_inpl(irot,ithr)
+                        self%loc_tab(ri,i)%inpl = irot
+                    enddo
+                else
+                    do ri = 1, self%nrefs
+                        istate = self%sinds(ri)
+                        iproj  = self%jinds(ri)
+                        call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
+                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
+                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr),&
+                            &inpl_athres(istate), self%p_ptr%prob_athres)
+                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
+                        dists_refs(ri,ithr)     = dists_inpl(irot,ithr)
+                        self%loc_tab(ri,i)%inpl = irot
+                    enddo
+                endif
                 rt_ref_sweep = rt_ref_sweep + toc(t_local)
                 ! (3) see if we can refine the shifts by re-searching them for individual references in the 
                 !     identified probabilistic neighborhood
@@ -274,15 +299,29 @@ contains
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 t_local = tic()
-                do ri = 1, self%nrefs
-                    istate = self%sinds(ri)
-                    iproj  = self%jinds(ri)
-                    call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
-                    dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
-                    irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres(istate), self%p_ptr%prob_athres)
-                    self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
-                    self%loc_tab(ri,i)%inpl = irot
-                enddo
+                if( l_many_objfun )then
+                    call self%b_ptr%pftc%gen_many_objfun_vals(self%nrefs, many_refs, iptcl, [0.,0.])
+                    do ri = 1, self%nrefs
+                        istate = self%sinds(ri)
+                        call self%b_ptr%pftc%get_precalc_objfun_vals(ri, ithr, dists_inpl(:,ithr))
+                        dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
+                        irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr),&
+                            &inpl_athres(istate), self%p_ptr%prob_athres)
+                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
+                        self%loc_tab(ri,i)%inpl = irot
+                    enddo
+                else
+                    do ri = 1, self%nrefs
+                        istate = self%sinds(ri)
+                        iproj  = self%jinds(ri)
+                        call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
+                        dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
+                        irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr),&
+                            &inpl_athres(istate), self%p_ptr%prob_athres)
+                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
+                        self%loc_tab(ri,i)%inpl = irot
+                    enddo
+                endif
                 rt_ref_sweep = rt_ref_sweep + toc(t_local)
             enddo
             !$omp end parallel do
@@ -292,6 +331,7 @@ contains
             call grad_shsrch_obj(ithr)%kill
         end do
         call o_prev%kill
+        if( allocated(many_refs) ) deallocate(many_refs)
     end subroutine fill_tab
 
     subroutine fill_tab_state_only( self )
