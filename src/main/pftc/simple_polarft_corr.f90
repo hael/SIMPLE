@@ -1008,11 +1008,7 @@ contains
         integer     :: k, kk, i, j, ithr, ind, iref, p
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
-        ! KNOWN BUG (unrelated to 3D refine path): this accumulation workspace is reused
-        ! across calls and must be zeroed per call (at least columns 1:nr). Without that,
-        ! stale values leak between particles/references and can yield non-deterministic
-        ! objective values in refine=snhc_smpl_many.
-        ! self%crmat_many(ithr)%r(:,:) = ZERO
+        self%crmat_many(ithr)%r(:,:) = ZERO
         if( self%iseven(i) )then
             do j = 1, nr
                 iref = irefs(j)
