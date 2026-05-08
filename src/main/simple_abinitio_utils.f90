@@ -319,6 +319,7 @@ contains
         type(commander_symmetrize_map) :: xsymmap
         type(cmdline)                  :: cline_symrec
         type(string) :: vol_iter, vol_sym, stage, vol_stage, vol_lp_stage
+        integer :: state
         real :: lp_snapshot
         real :: lpsym
         if( l_symran )then
@@ -326,23 +327,36 @@ contains
             call spproj%write_segment_inside('ptcl3D', projfile)
         endif
         if( l_srch4symaxis )then
-            ! Volume from previous stage
-            vol_iter = refine3D_state_vol_fname(1)
-            ! symmetry determination & map symmetrization
-            if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to map symmetrization does not exist')
-            call cline_symmap%set('vol1', vol_iter)
-            call cline_symmap%set('smpd', lpinfo(istage)%smpd_crop)
-            call cline_symmap%set('box',  lpinfo(istage)%box_crop)
-            vol_sym = 'symmetrized_map'//MRC_EXT
-            call cline_symmap%set('outvol', vol_sym)
             lpsym = max(LPSYMSRCH_LB,lpinfo(SYMSRCH_STAGE)%lp)
-            call cline_symmap%set('lp', lpsym)
             write(logfhandle,'(A,F5.1)') '>>> DID SET MAP SYMMETRIZATION LOW-PASS LIMIT (IN A) TO: ', lpsym
             write(logfhandle,'(A)') '>>>'
-            write(logfhandle,'(A)') '>>> MAP SYMMETRIZATION'
+            if( params%nstates > 1 )then
+                write(logfhandle,'(A)') '>>> STATE-WISE MAP SYMMETRIZATION'
+            else
+                write(logfhandle,'(A)') '>>> MAP SYMMETRIZATION'
+            endif
             write(logfhandle,'(A)') '>>>'
-            call xsymmap%execute(cline_symmap)
-            call del_file('SYMAXIS_SEARCH_FINISHED')
+            call cline_symmap%set('smpd', lpinfo(istage)%smpd_crop)
+            call cline_symmap%set('box',  lpinfo(istage)%box_crop)
+            call cline_symmap%set('lp', lpsym)
+            do state = 1,params%nstates
+                vol_iter = refine3D_state_vol_fname(state)
+                if( .not. file_exists(vol_iter) )then
+                    THROW_HARD('input volume to map symmetrization does not exist for state '//int2str(state))
+                endif
+                call cline_symmap%set('vol1', vol_iter)
+                if( params%nstates > 1 )then
+                    vol_sym = 'symmetrized_map_state'//int2str_pad(state,2)//MRC_EXT
+                    call cline_symmap%set('state', state)
+                    write(logfhandle,'(A,I0)') '>>> MAP SYMMETRIZATION STATE ', state
+                else
+                    vol_sym = 'symmetrized_map'//MRC_EXT
+                    call cline_symmap%delete('state')
+                endif
+                call cline_symmap%set('outvol', vol_sym)
+                call xsymmap%execute(cline_symmap)
+                call del_file('SYMAXIS_SEARCH_FINISHED')
+            enddo
             if( present(xrec3D) )then
                 ! symmetric reconstruction
                 cline_symrec = cline_refine3D
@@ -355,20 +369,29 @@ contains
                 call cline_symrec%set('which_iter', cline_refine3D%get_iarg('endit'))
                 call strip_refine3D_planning_keys(cline_symrec)
                 call xrec3D%execute(cline_symrec)
-                vol_sym = refine3D_state_vol_fname(1)
-                call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
+                do state = 1,params%nstates
+                    vol_sym = refine3D_state_vol_fname(state)
+                    if( params%nstates > 1 )then
+                        call simple_copy_file(vol_sym, string('symmetric_map_state')//int2str_pad(state,2)//MRC_EXT)
+                    else
+                        call simple_copy_file(vol_sym, string('symmetric_map')//MRC_EXT)
+                    endif
+                enddo
                 call cline_symrec%kill
             endif
             stage        = '_stage'//int2str_pad(istage,2)
-            vol_stage    = add2fbody(refine3D_state_vol_fname(1), string(MRC_EXT), stage)
-            vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
-            lp_snapshot  = abinitio_state_fsc_lowpass(1, lpinfo(istage)%box_crop, &
-                &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
-            call write_abinitio_lowpass_snapshot(vol_sym, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
-            call inject_refine3D_volume(params, 1, vol_sym)
+            do state = 1,params%nstates
+                vol_sym      = refine3D_state_vol_fname(state)
+                vol_stage    = add2fbody(vol_sym, string(MRC_EXT), stage)
+                vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
+                lp_snapshot  = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
+                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+                call write_abinitio_lowpass_snapshot(vol_sym, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
+                call inject_refine3D_volume(params, state, vol_sym)
+                call vol_stage%kill
+                call vol_lp_stage%kill
+            enddo
         endif
-        call vol_stage%kill
-        call vol_lp_stage%kill
     end subroutine symmetrize
 
     ! Performs reconstruction at selected stage boundaries.

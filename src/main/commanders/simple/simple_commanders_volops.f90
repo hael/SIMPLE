@@ -666,12 +666,14 @@ contains
         type(ori)          :: symaxis
         type(sym)          :: syme
         real               :: shvec(3), scale, smpd
-        integer            :: ldim(3), box
+        integer            :: ldim(3), box, state
         integer, parameter :: MAXBOX = 128
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        state = 0
+        if( cline%defined('state') ) state = params%state
         if( .not. cline%defined('outvol') ) params%outvol = string('symmetrized_map')//params%ext
         call build%vol%read(params%vols(1))
         ! possible downscaling of input vol
@@ -722,7 +724,11 @@ contains
                 box   = build%spproj%get_box()
                 shvec = -[params%xsh,params%ysh,params%zsh] * real(box) / real(params%box_crop)
                 ! rotate the orientations & transfer the 3d shifts to 2d
-                call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
+                if( state > 0 )then
+                    call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec, state=state)
+                else
+                    call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
+                endif
                 if( cline%defined('nspace') )then
                     ! making sure the projection directions assignment
                     ! refers to the input reference space

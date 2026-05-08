@@ -171,6 +171,13 @@ policy cutoff for saved `_stageNN_lp.mrc` diagnostic volumes.
 Saved stage `_lp` volumes must be filtered to the current state FSC resolution
 when an FSC exists. The planned stage LP is only a fallback.
 
+When an ab initio route starts in multi-state mode and transitions from
+`pgrp_start` to a target point-group symmetry, the symmetry-axis search at the
+symmetry-search stage is state-local. Each active state must determine its own
+axis from its own current map, apply that transform only to orientations assigned
+to that state, and only then proceed to the following point-group refinement
+stage.
+
 ## 9. Probabilistic Refinement
 
 The current workflow is probabilistic pre-alignment followed by hard particle
