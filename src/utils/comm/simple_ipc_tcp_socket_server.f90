@@ -226,8 +226,9 @@ module simple_ipc_tcp_socket_server
     ips = self%server_ips
   end function get_server_ips
 
-  !> Run 'hostname -I', collect all non-loopback tokens, and store them as a
-  !> comma-separated list in self%server_ips.
+  !> Run platform-specific IP discovery command (hostname -I on Linux),
+  !> collect all non-loopback tokens, and store them as a comma-separated list.
+  !> On macOS/FreeBSD, skipped since socket binds to INADDR_ANY on all interfaces.
   subroutine find_server_ips( self )
     class(ipc_tcp_socket_server), intent(inout) :: self
     character(kind=c_char, len=16) :: cmd, mode
@@ -239,8 +240,9 @@ module simple_ipc_tcp_socket_server
     character(len=64)              :: token
     logical                        :: first
     self%server_ips = string('')
-#if defined(_WIN32)
-    return
+#if defined(_WIN32) || defined(__FreeBSD__)
+    return  ! On Windows and MacOS, skip IP discovery since the server socket binds to INADDR_ANY on all interfaces.
+     ! On Windows, POSIX sockets are not supported at all, so the listener is disabled and server_ips is unused.
 #endif
     cmd  = 'hostname -I' // c_null_char
     mode = 'r'           // c_null_char
