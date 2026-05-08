@@ -21,7 +21,6 @@ public :: refine3D_resolution_txt_fbody
 public :: refine3D_iter_refs_fname
 public :: refine3D_iter_vol_fname
 public :: refine3D_partial_rec_fbody
-public :: refine3D_partial_rec_batch_fbody, refine3D_partial_rec_batch_glob
 public :: refine3D_partial_rec_glob
 public :: refine3D_partial_rec_fname
 public :: refine3D_partial_rho_fname
@@ -149,25 +148,6 @@ contains
         integer, intent(in) :: state, part, numlen
         fname = refine3D_state_vol_fbody(state)//'_part'//part_tag(part, numlen)
     end function refine3D_partial_rec_fbody
-
-    type(string) function refine3D_partial_rec_batch_fbody( state, part, batch, numlen ) result(fname)
-        integer, intent(in) :: state, part, batch, numlen
-        fname = refine3D_partial_rec_fbody(state, part, numlen)//'_batch'//int2str_pad(batch, 6)
-    end function refine3D_partial_rec_batch_fbody
-
-    function refine3D_partial_rec_batch_glob( state, part, numlen, path ) result(pattern)
-        integer,          intent(in)           :: state, part, numlen
-        character(len=*), intent(in), optional :: path
-        character(len=:), allocatable :: pattern
-        type(string) :: fbody
-        fbody = refine3D_partial_rec_fbody(state, part, numlen)
-        if( present(path) )then
-            pattern = trim(path)//fbody%to_char()//'_batch*'
-        else
-            pattern = fbody%to_char()//'_batch*'
-        endif
-        call fbody%kill
-    end function refine3D_partial_rec_batch_glob
 
     function refine3D_partial_rec_glob( path ) result(pattern)
         character(len=*), intent(in), optional :: path

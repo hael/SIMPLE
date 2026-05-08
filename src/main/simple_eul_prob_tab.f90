@@ -1,5 +1,6 @@
 !@descr: the core probability table routines used for probabilistic 3D search
 module simple_eul_prob_tab
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_pftc_srch_api
 use simple_builder,          only: builder
 use simple_eul_prob_tab_utils, only: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample,&
@@ -49,6 +50,7 @@ type :: eul_prob_tab
     contains
     ! CONSTRUCTOR
     procedure :: new
+    procedure :: new_assignment
     ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
     procedure :: fill_tab
     procedure :: fill_tab_state_only
@@ -148,6 +150,32 @@ contains
         end do
         !$omp end parallel do
     end subroutine new
+
+    subroutine new_assignment( self, params, build, pinds )
+        class(eul_prob_tab),       intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        integer :: i, iptcl
+        real    :: x
+        call self%kill
+        self%p_ptr  => params
+        self%b_ptr  => build
+        self%nptcls = size(pinds)
+        allocate(self%pinds(self%nptcls), source=pinds)
+        allocate(self%assgn_map(self%nptcls))
+        do i = 1,self%nptcls
+            iptcl = self%pinds(i)
+            self%assgn_map(i)%pind   = iptcl
+            self%assgn_map(i)%istate = 0
+            self%assgn_map(i)%iproj  = 0
+            self%assgn_map(i)%inpl   = 0
+            self%assgn_map(i)%dist   = huge(x)
+            self%assgn_map(i)%x      = 0.
+            self%assgn_map(i)%y      = 0.
+            self%assgn_map(i)%has_sh = .false.
+        enddo
+    end subroutine new_assignment
 
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
     subroutine fill_tab( self )
@@ -387,13 +415,64 @@ contains
         call o_prev%kill
     end subroutine fill_tab_state_only
 
-    ! reference normalization (same energy) of the loc_tab
-    ! [0,1] normalization
+    ! reference normalization for assignment scoring.
+    ! The raw loc_tab distances must not be overwritten: they are written to
+    ! ASSIGNMENT.dat and later converted back to the reported/objective score.
+    subroutine ref_score_tab( self, score_tab )
+        class(eul_prob_tab), intent(in) :: self
+        real,              intent(out) :: score_tab(self%nptcls,self%nrefs)
+        real    :: min_dist, max_dist, dist_val, spread, invalid_dist
+        integer :: i, iref, nvalid, nflat, nbad
+        invalid_dist = 0.1 * huge(invalid_dist)
+        nflat = 0
+        nbad  = 0
+        score_tab = 1.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(i,iref,min_dist,max_dist,dist_val,spread,nvalid) reduction(+:nflat,nbad)
+        do i = 1, self%nptcls
+            min_dist = huge(min_dist)
+            max_dist = -huge(max_dist)
+            nvalid   = 0
+            do iref = 1,self%nrefs
+                dist_val = self%loc_tab(iref,i)%dist
+                if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist )then
+                    min_dist = min(min_dist, dist_val)
+                    max_dist = max(max_dist, dist_val)
+                    nvalid   = nvalid + 1
+                endif
+            enddo
+            if( nvalid == 0 )then
+                nbad = nbad + 1
+                cycle
+            endif
+            spread = max_dist - min_dist
+            if( spread <= 0. )then
+                nflat = nflat + 1
+                do iref = 1,self%nrefs
+                    dist_val = self%loc_tab(iref,i)%dist
+                    if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist ) score_tab(i,iref) = 0.5
+                enddo
+            else
+                do iref = 1,self%nrefs
+                    dist_val = self%loc_tab(iref,i)%dist
+                    if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist ) score_tab(i,iref) = (dist_val - min_dist) / spread
+                enddo
+            endif
+        enddo
+        !$omp end parallel do
+        if( nbad == self%nptcls ) THROW_HARD('all probability-table reference distances are invalid')
+        if( nflat == self%nptcls ) THROW_HARD('all probability-table reference distances are flat')
+        if( nbad > 0 ) write(logfhandle,*) 'WARNING: particles with invalid probability-table distances: ', nbad
+        if( nflat > 0 ) write(logfhandle,*) 'WARNING: particles with flat probability-table reference distances: ', nflat
+    end subroutine ref_score_tab
+
+    ! Legacy in-place normalization retained for subclasses that override this
+    ! binding. Plain prob assignment uses ref_score_tab instead, preserving raw
+    ! distances for ASSIGNMENT.dat and downstream score reporting.
     subroutine ref_normalize( self )
         class(eul_prob_tab), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
         integer :: i, iref
-        ! normalize so prob of each ptcl is between [0,1] for all projs
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
         do i = 1, self%nptcls
             sum_dist_all = sum(self%loc_tab(:,i)%dist)
@@ -404,15 +483,12 @@ contains
             endif
         enddo
         !$omp end parallel do
-        ! min/max normalization to obtain values between 0 and 1
         !$omp parallel workshare proc_bind(close)
         min_dist = minval(self%loc_tab(:,:)%dist)
         max_dist = maxval(self%loc_tab(:,:)%dist)
         !$omp end parallel workshare
-        ! special case of numerical unstability of dist values
         if( (max_dist - min_dist) < TINY )then
             THROW_WARN('WARNING: numerical unstability in eul_prob_tab')
-            ! randomize dist so the assignment is stochastic
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
             do iref = 1, self%nrefs
                 do i = 1, self%nptcls
@@ -440,11 +516,10 @@ contains
         self%bench_assign_fallback  = 0.
         ! normalization
         if( L_BENCH_GLOB ) t_local = tic()
-        call self%ref_normalize
+        call ref_score_tab(self, sorted_tab)
         if( L_BENCH_GLOB ) self%bench_assign_normalize = toc(t_local)
         ! sorting each columns
         if( L_BENCH_GLOB ) t_local = tic()
-        sorted_tab = transpose(self%loc_tab(:,:)%dist)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
         do iref = 1, self%nrefs
             stab_inds(:,iref) = (/(i,i=1,self%nptcls)/)

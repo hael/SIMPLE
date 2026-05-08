@@ -279,10 +279,10 @@ contains
             call prob_bench_next(bench, bench%rt_fill_tab)
             call eulprob_obj_part%write_tab(fname)
         endif
-        call prob_bench_next(bench, bench%rt_tab_io)
         call eulprob_obj_part%kill
-        call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
+        call prob_bench_next(bench, bench%rt_tab_io)
         call build%pftc%kill
+        call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
         call build%kill_general_tbox
         call prob_bench_next(bench, bench%rt_cleanup)
         call prob_bench_finish(bench)
@@ -347,10 +347,10 @@ contains
         call prob_bench_next(bench, bench%rt_fill_tab)
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part_neigh%write_tab(fname)
-        call prob_bench_next(bench, bench%rt_tab_io)
         call eulprob_obj_part_neigh%kill
-        call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
+        call prob_bench_next(bench, bench%rt_tab_io)
         call build%pftc%kill
+        call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
         call build%kill_general_tbox
         call prob_bench_next(bench, bench%rt_cleanup)
         call prob_bench_finish(bench)
@@ -432,10 +432,10 @@ contains
         ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
+        call eulprob_obj_glob%kill
         call prob_bench_next(bench, rt_tmp)
         bench%rt_tab_io = bench%rt_tab_io + rt_tmp
         ! cleanup
-        call eulprob_obj_glob%kill
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill
@@ -503,10 +503,10 @@ contains
         ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob_neigh%write_assignment(fname)
+        call eulprob_obj_glob_neigh%kill
         call prob_bench_next(bench, rt_tmp)
         bench%rt_tab_io = bench%rt_tab_io + rt_tmp
         ! cleanup
-        call eulprob_obj_glob_neigh%kill
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill

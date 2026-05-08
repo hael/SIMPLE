@@ -1,6 +1,6 @@
 module simple_commanders_rec_distr
 use simple_commanders_api
-use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_partial_rec_batch_glob, refine3D_resolution_txt_fbody, &
+use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolution_txt_fbody, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fname, refine3D_volassemble_bench_fname
 implicit none
 private
@@ -41,7 +41,6 @@ contains
         real,                   intent(out)   :: res05, res0143
         type(restore_timings_t), intent(inout) :: timings
         type(string) :: volname_prev, volname_prev_even, volname_prev_odd, fsc_txt_file
-        type(string), allocatable :: batch_partials(:)
         real, allocatable :: fsc(:)
         real    :: weight_prev
         integer :: find4eoavg
@@ -70,23 +69,13 @@ contains
     contains
 
         subroutine reduce_partials()
-            integer :: part, ibatch
-            type(string) :: fbody
+            integer :: part
             if( L_BENCH_GLOB ) t_reduce_partials = tic()
             call build%eorecvol%reset_all
             do part = 1, params%nparts
                 call eorecvol_read%read_eos(refine3D_partial_rec_fbody(state, part, numlen_part))
                 call build%eorecvol%sum_reduce(eorecvol_read)
-                call simple_list_files(refine3D_partial_rec_batch_glob(state, part, numlen_part)//'_even'//MRC_EXT, batch_partials)
-                do ibatch = 1,size(batch_partials)
-                    fbody = batch_partials(ibatch)
-                    call fbody%substr_replace('_even'//MRC_EXT, '', one=.true., back=.true.)
-                    call eorecvol_read%read_eos(fbody)
-                    call build%eorecvol%sum_reduce(eorecvol_read)
-                enddo
             enddo
-            if( allocated(batch_partials) ) deallocate(batch_partials)
-            call fbody%kill
             if( L_BENCH_GLOB ) timings%reduce_partials = timings%reduce_partials + toc(t_reduce_partials)
         end subroutine reduce_partials
 
