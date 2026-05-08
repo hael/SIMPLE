@@ -600,7 +600,7 @@ contains
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
         normal_ptcls = copy_imgarr(imgs_ppca)
         call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, steer_aff, steer_theta)
-        if( trim(params%pca_mode) == 'steerable_diffusion_maps' )then
+        if( trim(params%pca_mode) == 'steerable_diff_map' )then
             call steerable_transport_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, den_ptcls)
             call steerable_coeffproj_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, coeff_ptcls)
             if( .not. allocated(coeff_ptcls) )then
@@ -778,7 +778,7 @@ contains
             case('diffusion_maps')
                 call diffmap%set_params(neigs, min(max(2, params%k_nn), max(2, nptcls-1)))
                 call diffmap%embed(pcavecs, coords, eigvals)
-            case('steerable_diffusion_maps')
+            case('steerable_diff_map')
                 call steerable_diffmap%set_params(neigs, min(max(2, params%k_nn), max(2, nptcls-1)), params%steerable_nmodes)
                 if( present(steer_aff) .and. present(steer_theta) )then
                     call steerable_diffmap%embed(params, imgs_ppca, coords, eigvals, steer_aff, steer_theta)

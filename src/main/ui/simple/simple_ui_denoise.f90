@@ -117,15 +117,20 @@ contains
         ! <empty>
         ! filter controls
         call ppca_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .true., 160.0)
-        call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca){ppca}', .false., 'ppca')
+        call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, or steerable diffusion maps', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca|steerable_diff_map){ppca}', .false., 'ppca')
+        call ppca_denoise%add_input(UI_FILT, 'steerable_denoise_mode', 'multi', 'Steerable denoise mode', 'Steerable denoise mode(coeffproj|transport){coeffproj}', '(coeffproj|transport){coeffproj}', .false., 'coeffproj')
+        call ppca_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Steerable graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used for pca_mode=steerable_diff_map', '# neighbors', .false., 10.0)
+        call ppca_denoise%add_input(UI_FILT, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used for pca_mode=steerable_diff_map', '# modes', .false., 4.0)
         call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call ppca_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
         call ppca_denoise%add_input(UI_FILT, 'ppca_kpca_resid_alpha', 'num', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'hybrid alpha', .false., 0.5)
         call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
         call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (default 96; try 96, 128)', 'Nyström max local support neighbors (default 96; try 96, 128)', '# max local nbrs', .false., 96.0)
+        call ppca_denoise%add_input(UI_FILT, hp)
+        call ppca_denoise%add_input(UI_FILT, lp)
         ! mask controls
-        ! <empty>
+        call ppca_denoise%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call ppca_denoise%add_input(UI_COMP, nthr)
         ! add to ui_hash
@@ -224,9 +229,9 @@ contains
         call cls_split%add_input(UI_PARM, 'nsubcls_max', 'num', 'Maximum subclasses per parent class in auto mode (default 10)', 'Used only when ncls=0: upper bound for the automatically selected number of subclasses per parent class', '# max subclasses', .false., 10.0)
         call cls_split%add_input(UI_PARM, 'nptcls_per_subcls', 'num', 'Target particles/subclass in auto mode (default 300)', 'Used only when ncls=0: auto mode chooses about one subclass per 300 particles, bounded by nsubcls_min and nsubcls_max', '# particles/subclass', .false., 300.0)
         call cls_split%add_input(UI_PARM, 'k_nn', 'num', 'Diffusion graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used only for diffusion-map modes; larger values make the graph smoother, smaller values emphasize local structure', '# neighbors', .false., 10.0)
-        call cls_split%add_input(UI_PARM, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used only for pca_mode=steerable_diffusion_maps', '# modes', .false., 4.0)
+        call cls_split%add_input(UI_PARM, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used only for pca_mode=steerable_diff_map', '# modes', .false., 4.0)
         call cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
-        call cls_split%add_input(UI_FILT, 'pca_mode', 'multi', 'Embedding method for class splitting', 'Embedding method for class splitting(ppca|kpca|diffusion_maps|steerable_diffusion_maps){diffusion_maps}', '(ppca|kpca|diffusion_maps|steerable_diffusion_maps){diffusion_maps}', .false., 'diffusion_maps')
+        call cls_split%add_input(UI_FILT, 'pca_mode', 'multi', 'Embedding method for class splitting', 'Embedding method for class splitting(ppca|kpca|diffusion_maps|steerable_diff_map){diffusion_maps}', '(ppca|kpca|diffusion_maps|steerable_diff_map){diffusion_maps}', .false., 'diffusion_maps')
         call cls_split%add_input(UI_FILT, 'neigs', 'num', 'Number of embedding dimensions (0 => method default)', 'Number of embedding dimensions (0 => method default)', '# eigenvecs', .false., 0.0)
         call cls_split%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call cls_split%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')

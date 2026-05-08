@@ -364,21 +364,26 @@ contains
         use simple_ppca,        only: ppca
         use simple_pca_svd,     only: pca_svd
         use simple_kpca_svd,    only: kpca_svd, suggest_kpca_nystrom_neigs
+        use simple_diffusion_maps, only: steerable_diffusion_map_embedder, steerable_transport_denoise, steerable_coeffproj_denoise
+        use simple_imgarr_utils,   only: copy_imgarr, dealloc_imgarr
         class(commander_ppca_denoise), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         integer,           parameter   :: MAXPCAITS = 15
         class(pca),        pointer     :: pca_ptr         => null()
         type(ppca),        pointer     :: ppca_ptr_typed  => null()
         type(kpca_svd),    pointer     :: kpca_ptr        => null()
-        type(image),       allocatable :: imgs(:)
+        type(steerable_diffusion_map_embedder) :: steerable_diffmap
+        type(image),       allocatable :: imgs(:), imgs_steer(:), den_ptcls(:)
         real,              allocatable :: avg(:), pcavecs(:, :), tmpvec(:), zavg(:), corrvec(:)
+        real,              allocatable :: coords(:,:), eigvals(:), steer_aff(:,:), steer_theta(:,:)
         type(simple_nice_comm)         :: nice_comm
         type(parameters)               :: params
         type(builder)                  :: build
         integer(int64)                 :: t0, t1
         real(real64)                   :: trate
-        integer                        :: npix, iptcl, j, neigs
-        logical                        :: l_transp_pca, l_profile_pca, l_hybrid_resid
+        integer                        :: npix, iptcl, j, neigs, directed_edges
+        real                           :: sdev_noise, mskrad
+        logical                        :: l_transp_pca, l_profile_pca, l_hybrid_resid, l_steerable
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//STK_EXT)
         ! doesn't work if projfile given - may need to mod in future
@@ -386,7 +391,8 @@ contains
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
         l_hybrid_resid = trim(params%pca_mode) .eq. 'ppca_kpca_resid'
-        l_profile_pca = trim(params%pca_mode) .eq. 'kpca' .or. trim(params%pca_mode) .eq. 'ppca' .or. l_hybrid_resid
+        l_steerable    = trim(params%pca_mode) .eq. 'steerable_diff_map'
+        l_profile_pca = trim(params%pca_mode) .eq. 'kpca' .or. trim(params%pca_mode) .eq. 'ppca' .or. l_hybrid_resid .or. l_steerable
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)
         call nice_comm%cycle()
@@ -402,11 +408,92 @@ contains
                 write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
             else if( l_hybrid_resid )then
                 write(logfhandle,'(A,F8.3,A,I8)') 'PPCA+kPCA residual denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
+            else if( l_steerable )then
+                write(logfhandle,'(A,F8.3,A,I8)') 'Steerable diffusion denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
             else
                 write(logfhandle,'(A,F8.3,A,I8)') 'PPCA denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
             endif
         endif
         l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
+        if( l_steerable )then
+            if( l_transp_pca ) THROW_HARD('steerable_diff_map denoise supports transp_pca=no only')
+            imgs_steer = copy_imgarr(imgs)
+            call imgs_steer(1)%memoize_mask_coords()
+            mskrad = params%msk
+            if( params%mskdiam > 0. .and. params%smpd > TINY )then
+                mskrad = min(real(params%box) / 2. - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam / params%smpd)
+            endif
+            mskrad = max(1., min(mskrad, real(params%box) / 2. - COSMSKHALFWIDTH - 1.))
+            call system_clock(t0)
+            do iptcl = 1, params%nptcls
+                if( allocated(build%lmsk) )then
+                    call imgs_steer(iptcl)%norm_noise(build%lmsk, sdev_noise)
+                else
+                    call imgs_steer(iptcl)%norm()
+                endif
+                call imgs_steer(iptcl)%mask2D_softavg(mskrad)
+            end do
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A,F8.2,A,A)') 'Steerable diffusion denoise preprocess: ', &
+                real(t1-t0)/real(trate), ' s; mskrad_px=', mskrad, ' mode=', trim(params%steerable_denoise_mode)
+            call flush(logfhandle)
+            call system_clock(t0)
+            call make_pcavecs(imgs_steer, npix, avg, pcavecs, transp=.false.)
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A,I8)') 'Steerable diffusion denoise make_pcavecs: ', &
+                real(t1-t0)/real(trate), ' s; npix=', npix
+            call flush(logfhandle)
+            neigs = params%neigs
+            if( neigs > 0 ) neigs = min(max(neigs, 1), max(params%nptcls-1, 1))
+            call steerable_diffmap%set_params(neigs, min(max(2, params%k_nn), max(2, params%nptcls-1)), params%steerable_nmodes)
+            call system_clock(t0)
+            call steerable_diffmap%embed(params, imgs_steer, coords, eigvals, steer_aff, steer_theta)
+            call system_clock(t1)
+            directed_edges = 0
+            if( allocated(steer_aff) ) directed_edges = count(steer_aff > DTINY)
+            write(logfhandle,'(A,F8.3,A,I8,A,I8,A,I8)') 'Steerable diffusion denoise graph/embed: ', &
+                real(t1-t0)/real(trate), ' s; dims=', size(coords,1), ' directed_edges=', directed_edges, &
+                ' k_nn=', params%k_nn
+            call flush(logfhandle)
+            select case(trim(params%steerable_denoise_mode))
+                case('coeffproj')
+                    call steerable_coeffproj_denoise(params, imgs_steer, avg, steer_aff, steer_theta, den_ptcls)
+                    if( .not. allocated(den_ptcls) )then
+                        write(logfhandle,'(A)') 'Steerable coefficient denoising fallback: using transported-neighbor denoising'
+                        call flush(logfhandle)
+                        call steerable_transport_denoise(params, imgs_steer, avg, steer_aff, steer_theta, den_ptcls)
+                    endif
+                case('transport')
+                    call steerable_transport_denoise(params, imgs_steer, avg, steer_aff, steer_theta, den_ptcls)
+                case DEFAULT
+                    THROW_HARD('steerable_denoise_mode must be coeffproj or transport')
+            end select
+            if( .not. allocated(den_ptcls) )then
+                write(logfhandle,'(A)') 'Steerable diffusion denoising fallback: writing preprocessed particles'
+                call flush(logfhandle)
+                den_ptcls = copy_imgarr(imgs_steer)
+            endif
+            call system_clock(t0)
+            do iptcl = 1, params%nptcls
+                call den_ptcls(iptcl)%write(params%outstk, iptcl)
+            end do
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A)') 'Steerable diffusion denoise write stack: ', real(t1-t0)/real(trate), ' s'
+            call flush(logfhandle)
+            if( allocated(coords)      ) deallocate(coords)
+            if( allocated(eigvals)     ) deallocate(eigvals)
+            if( allocated(steer_aff)   ) deallocate(steer_aff)
+            if( allocated(steer_theta) ) deallocate(steer_theta)
+            if( allocated(avg)         ) deallocate(avg)
+            if( allocated(pcavecs)     ) deallocate(pcavecs)
+            if( allocated(den_ptcls)   ) call dealloc_imgarr(den_ptcls)
+            if( allocated(imgs_steer)  ) call dealloc_imgarr(imgs_steer)
+            if( allocated(imgs)        ) call dealloc_imgarr(imgs)
+            call build%kill_general_tbox
+            call nice_comm%terminate()
+            call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
+            return
+        endif
         call system_clock(t0)
         call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
         call system_clock(t1)

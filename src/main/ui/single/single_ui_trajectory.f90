@@ -148,15 +148,20 @@ contains
         ! <empty>
         ! filter controls
         call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .false., 160.0)
-        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca){ppca}', .false., 'ppca')
+        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, or steerable diffusion maps', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca|steerable_diff_map){ppca}', .false., 'ppca')
+        call trajectory_denoise%add_input(UI_FILT, 'steerable_denoise_mode', 'multi', 'Steerable denoise mode', 'Steerable denoise mode(coeffproj|transport){coeffproj}', '(coeffproj|transport){coeffproj}', .false., 'coeffproj')
+        call trajectory_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Steerable graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used for pca_mode=steerable_diff_map', '# neighbors', .false., 10.0)
+        call trajectory_denoise%add_input(UI_FILT, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used for pca_mode=steerable_diff_map', '# modes', .false., 4.0)
         call trajectory_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
         call trajectory_denoise%add_input(UI_FILT, 'ppca_kpca_resid_alpha', 'num', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'hybrid alpha', .false., 0.5)
         call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
         call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (default 96; try 96, 128)', 'Nyström max local support neighbors (default 96; try 96, 128)', '# max local nbrs', .false., 96.0)
+        call trajectory_denoise%add_input(UI_FILT, hp)
+        call trajectory_denoise%add_input(UI_FILT, lp)
         ! mask controls
-        ! <empty>
+        call trajectory_denoise%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call trajectory_denoise%add_input(UI_COMP, nthr)
         ! add to ui_hash
