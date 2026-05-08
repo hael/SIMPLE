@@ -18,6 +18,8 @@ public :: create_refine3D_strategy
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: PROB_STATE_MIN_POP = 5
+
 !> Minimal strategy interface - only divergent operations
 type, abstract :: refine3D_strategy
 contains
@@ -235,6 +237,48 @@ contains
         enddo
         call fname%kill
     end subroutine remove_partial_rec_files
+
+    subroutine activate_ptcl3D_states_from_selection( build, params, activated )
+        type(builder),    intent(inout) :: build
+        type(parameters), intent(in)    :: params
+        logical,          intent(out)   :: activated
+        integer :: iptcl, nptcls2D, nptcls3D, nactive
+        activated = .false.
+        if( trim(params%oritype) /= 'ptcl3D' ) return
+        if( build%spproj_field%count_state_gt_zero() > 0 ) return
+        nptcls3D = build%spproj_field%get_noris()
+        nptcls2D = build%spproj%os_ptcl2D%get_noris()
+        nactive  = 0
+        if( nptcls2D == nptcls3D .and. nptcls2D > 0 .and. build%spproj%os_ptcl2D%isthere('state') )then
+            do iptcl = 1,nptcls3D
+                if( build%spproj%os_ptcl2D%get_state(iptcl) > 0 )then
+                    call build%spproj_field%set_state(iptcl, 1)
+                    nactive = nactive + 1
+                else
+                    call build%spproj_field%set_state(iptcl, 0)
+                endif
+            end do
+        endif
+        if( nactive == 0 )then
+            call build%spproj_field%set_all2single('state', 1.0)
+        endif
+        activated = .true.
+    end subroutine activate_ptcl3D_states_from_selection
+
+    subroutine assert_prob_multistate_populations( build, params )
+        type(builder),    intent(inout) :: build
+        type(parameters), intent(in)    :: params
+        integer :: state, pop
+        if( params%nstates <= 1 ) return
+        if( .not. params%l_prob_align_mode ) return
+        do state = 1,params%nstates
+            pop = build%spproj_field%get_pop(state, 'state')
+            if( pop <= PROB_STATE_MIN_POP )then
+                write(logfhandle,*) 'state, population, required minimum: ', state, pop, PROB_STATE_MIN_POP + 1
+                THROW_HARD('refine3D refine=prob multi-state startup has an insufficient state population')
+            endif
+        end do
+    end subroutine assert_prob_multistate_populations
 
     subroutine materialize_reprojection_model( params, cline, current_build, nthr )
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
@@ -605,6 +649,7 @@ contains
         real    :: smpd
         integer :: state, box, nfiles, i
         logical :: err, fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
+        logical :: l_supervised_state_bootstrap
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
@@ -668,13 +713,6 @@ contains
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype)
         endif
-        ! STATE LABEL INIT
-        if( self%l_multistates )then
-            if( build%spproj_field%get_n('state') /= params%nstates )then
-                call gen_labelling(build%spproj_field, params%nstates, 'squared_uniform')
-                call build%spproj%write_segment_inside(params%oritype)
-            endif
-        endif
         ! CONTINUE / STARTUP
         self%have_oris = .true.
         if( params%continue .eq. 'yes' )then
@@ -726,6 +764,19 @@ contains
                 endif
             endif
         else
+            ! STATE LABEL INIT
+            if( self%l_multistates )then
+                call activate_ptcl3D_states_from_selection(build, params, l_supervised_state_bootstrap)
+                if( build%spproj_field%get_n('state') /= params%nstates )then
+                    if( l_supervised_state_bootstrap )then
+                        call gen_labelling(build%spproj_field, params%nstates, 'uniform')
+                    else
+                        call gen_labelling(build%spproj_field, params%nstates, 'squared_uniform')
+                    endif
+                endif
+                call assert_prob_multistate_populations(build, params)
+                call build%spproj%write_segment_inside(params%oritype)
+            endif
             ! generate initial noise power estimates
             if( .not.file_exists(sigma2_star_from_iter(params%startit)) )then
                 call build%spproj_field%set_all2single('w', 1.0)
@@ -741,6 +792,10 @@ contains
             if( .not. self%have_oris )then
                 call build%spproj_field%rnd_oris
                 self%have_oris = .true.
+                call build%spproj%write_segment_inside(params%oritype)
+            endif
+            if( .not. build%spproj_field%isthere('proj') )then
+                call build%spproj_field%set_projs(build%eulspace)
                 call build%spproj%write_segment_inside(params%oritype)
             endif
             if( .not. vol_defined )then
