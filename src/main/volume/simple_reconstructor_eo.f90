@@ -43,6 +43,7 @@ type :: reconstructor_eo
     procedure          :: apply_weight
     procedure          :: set_sh_lim
     ! GETTERS
+    procedure          :: is_initialized
     procedure          :: get_kbwin
     procedure          :: get_res
     ! I/O
@@ -115,6 +116,11 @@ contains
     end subroutine new
 
     ! SETTERS
+
+    logical function is_initialized( self )
+        class(reconstructor_eo), intent(in) :: self
+        is_initialized = self%exists
+    end function is_initialized
 
     !>  \brief  resets all
     subroutine reset_all( self )

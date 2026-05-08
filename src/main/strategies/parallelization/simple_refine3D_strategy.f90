@@ -221,6 +221,7 @@ contains
     subroutine remove_partial_rec_files( params )
         type(parameters), intent(in) :: params
         type(string) :: fname
+        type(string), allocatable :: batch_files(:)
         integer :: state, ipart, numlen_part
         numlen_part = max(1, params%numlen)
         do state = 1,max(1, params%nstates)
@@ -233,6 +234,12 @@ contains
                 if( file_exists(fname) ) call del_file(fname)
                 fname = refine3D_partial_rho_fname(state, ipart, numlen_part, 'odd')
                 if( file_exists(fname) ) call del_file(fname)
+                call simple_list_files(refine3D_partial_rec_batch_glob(state, ipart, numlen_part), batch_files)
+                call del_files(batch_files)
+                if( allocated(batch_files) ) deallocate(batch_files)
+                call simple_list_files('rho_'//refine3D_partial_rec_batch_glob(state, ipart, numlen_part), batch_files)
+                call del_files(batch_files)
+                if( allocated(batch_files) ) deallocate(batch_files)
             enddo
         enddo
         call fname%kill

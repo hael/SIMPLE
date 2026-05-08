@@ -234,7 +234,7 @@ contains
         type(prob_bench_state) :: bench
         call prob_bench_start(bench)
         call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         call prob_bench_next(bench, bench%rt_init)
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
@@ -380,7 +380,7 @@ contains
         call prob_bench_start(bench)
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call prob_bench_next(bench, bench%rt_init)
         if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
