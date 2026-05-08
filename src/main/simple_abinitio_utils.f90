@@ -233,6 +233,15 @@ contains
         type(class_frcs) :: clsfrcs
         real             :: lpfinal
         integer          :: filtsz
+        if( trim(params%force_lp_range).eq.'yes' )then
+            if( .not.(present(lpstart) .and. present(lpstop)) )then
+                THROW_HARD('force_lp_range=yes requires both lpstart and lpstop')
+            endif
+            if( allocated(lpinfo) ) deallocate(lpinfo)
+            allocate(lpinfo(NSTAGES))
+            call lpstages_fast(params%box, NSTAGES, params%smpd, lpstart, lpstop, lpinfo)
+            return
+        endif
         ! retrieve FRC info
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
         ! work out low-pass limits and downscaling parameters

@@ -38,9 +38,10 @@ contains
         class(commander_abinitio3D_nano), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(commander_abinitio3D) :: xabinitio3D
-        call cline%set('prg', 'abinitio3D')
-        call cline%set('objfun',      'cc')
-        call cline%set('pgrp',        'c1')
+        call cline%set('prg',     'abinitio3D')
+        ! call cline%set('objfun',          'cc')
+        call cline%set('pgrp',            'c1')
+        call cline%set('force_lp_range', 'yes')
         if( .not. cline%defined('nsample') ) call cline%set('nsample', 5000)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',     5.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',        5.)
