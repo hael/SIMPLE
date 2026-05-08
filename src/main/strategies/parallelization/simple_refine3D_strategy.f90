@@ -291,7 +291,7 @@ contains
         endif
     end subroutine seed_multistate_startup_labels
 
-    subroutine assert_prob_multistate_populations( build, params )
+    subroutine assert_multistate_populations( build, params )
         type(builder),    intent(inout) :: build
         type(parameters), intent(in)    :: params
         integer :: state, pop
@@ -304,7 +304,7 @@ contains
                 THROW_HARD('refine3D refine=prob multi-state startup has an insufficient state population')
             endif
         end do
-    end subroutine assert_prob_multistate_populations
+    end subroutine assert_multistate_populations
 
     subroutine materialize_reprojection_model( params, cline, current_build, nthr )
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
@@ -792,7 +792,7 @@ contains
             ! STATE LABEL INIT
             if( self%l_multistates )then
                 call seed_multistate_startup_labels(build, params, cline)
-                call assert_prob_multistate_populations(build, params)
+                call assert_multistate_populations(build, params)
                 call build%spproj%write_segment_inside(params%oritype)
             endif
             ! generate initial noise power estimates
