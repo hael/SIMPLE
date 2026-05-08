@@ -245,12 +245,10 @@ contains
         call fname%kill
     end subroutine remove_partial_rec_files
 
-    subroutine activate_ptcl3D_states_from_selection( build, params, activated )
+    subroutine activate_ptcl3D_states_from_selection( build, params )
         type(builder),    intent(inout) :: build
         type(parameters), intent(in)    :: params
-        logical,          intent(out)   :: activated
         integer :: iptcl, nptcls2D, nptcls3D, nactive
-        activated = .false.
         if( trim(params%oritype) /= 'ptcl3D' ) return
         if( build%spproj_field%count_state_gt_zero() > 0 ) return
         nptcls3D = build%spproj_field%get_noris()
@@ -269,8 +267,36 @@ contains
         if( nactive == 0 )then
             call build%spproj_field%set_all2single('state', 1.0)
         endif
-        activated = .true.
     end subroutine activate_ptcl3D_states_from_selection
+
+    subroutine seed_multistate_startup_labels( build, params, cline )
+        type(builder),    intent(inout) :: build
+        type(parameters), intent(in)    :: params
+        type(cmdline),    intent(in)    :: cline
+        logical :: l_any_vols, l_complete_vols
+        integer :: n_state_bins
+        if( params%nstates <= 1 ) return
+        l_any_vols      = any_volume_source_defined(cline, params%nstates)
+        l_complete_vols = complete_volume_source_defined(cline, params%nstates)
+        if( l_any_vols .and. .not.l_complete_vols )then
+            THROW_HARD('multi-state refine3D requires either all vol1..volN inputs or none')
+        endif
+        n_state_bins = build%spproj_field%get_n('state')
+        if( n_state_bins == params%nstates ) return
+        if( n_state_bins > 1 )then
+            write(logfhandle,*) 'nstates requested, state bins found: ', params%nstates, n_state_bins
+            THROW_HARD('multi-state refine3D found inconsistent existing state assignments')
+        endif
+        call activate_ptcl3D_states_from_selection(build, params)
+        if( l_complete_vols )then
+            call gen_labelling(build%spproj_field, params%nstates, 'uniform')
+        else
+            if( .not.build%spproj_field%isthere('corr') )then
+                THROW_HARD('multi-state refine3D without vol1..volN requires previous objective function values')
+            endif
+            call gen_labelling(build%spproj_field, params%nstates, 'squared_uniform')
+        endif
+    end subroutine seed_multistate_startup_labels
 
     subroutine assert_prob_multistate_populations( build, params )
         type(builder),    intent(inout) :: build
@@ -656,7 +682,6 @@ contains
         real    :: smpd
         integer :: state, box, nfiles, i
         logical :: err, fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
-        logical :: l_supervised_state_bootstrap
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
@@ -773,14 +798,7 @@ contains
         else
             ! STATE LABEL INIT
             if( self%l_multistates )then
-                call activate_ptcl3D_states_from_selection(build, params, l_supervised_state_bootstrap)
-                if( build%spproj_field%get_n('state') /= params%nstates )then
-                    if( l_supervised_state_bootstrap )then
-                        call gen_labelling(build%spproj_field, params%nstates, 'uniform')
-                    else
-                        call gen_labelling(build%spproj_field, params%nstates, 'squared_uniform')
-                    endif
-                endif
+                call seed_multistate_startup_labels(build, params, cline)
                 call assert_prob_multistate_populations(build, params)
                 call build%spproj%write_segment_inside(params%oritype)
             endif
