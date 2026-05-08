@@ -98,6 +98,23 @@ Reference preparation projects only the active high-pass/low-pass shell range
 used for matching in that iteration. Do not silently project to the crop's
 interpolation limit unless the matching policy explicitly asks for that range.
 
+### Particle Image I/O Contract
+
+The 3D matcher must preserve a single particle-stack read per batch. When
+Cartesian partial reconstruction is active, batch construction should retain the
+already-read raw particle images for reconstruction preparation, and the
+matcher should consume those in-memory images after assignment within the same
+batch.
+
+Do not move partial reconstruction into a separate full particle pass that
+re-reads image stacks merely to reduce peak memory. That regresses the
+distributed performance contract and must be treated as an explicit policy
+change if it is ever chosen. The accepted online reconstruction tradeoff is
+temporary co-residence of the matcher reprojection model, per-state
+reconstruction objects, and per-batch raw image copies; large volume objects,
+probability tables, and assignment matrices should still be released as soon as
+their downstream artifacts have been materialized.
+
 ## 5. Volume Assembly
 
 Volume assembly reduces partition-local Cartesian reconstruction updates,
@@ -171,6 +188,8 @@ ownership, workflow, and artifact contracts actually change.
 - Do not move assembled-volume postprocessing into `refine3D_strategy`.
 - Do not merge probabilistic particle-update logic with volume postprocessing.
 - Do not introduce a second ambiguous source of matching references.
+- Preserve the single image-stack read per matcher batch; reconstruction must
+  reuse the already-read batch images in online refine3D paths.
 - Treat assignment maps, partition-local partials, state volumes, even/odd
   volumes, FSC files, and automasks as explicit workflow contracts, not
   incidental files.

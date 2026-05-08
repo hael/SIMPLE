@@ -197,6 +197,14 @@ sampling decisions. If a restoration or assembly change requires a different
 subset policy, that policy belongs in the commander/controller/sampling-helper
 layer and must be reflected in `sampled` and `updatecnt`.
 
+Online matcher restoration/reconstruction paths must read active particle
+images from disk once per batch and reuse those batch images for both matching
+and restoration/reconstruction. Do not introduce a trailing full reconstruction
+or class-average restoration pass that re-reads image stacks as a memory
+optimization unless the single-read performance contract is explicitly changed.
+Probabilistic table-generation programs and explicit offline assembly commands
+are separate workflow stages and may perform their own reads.
+
 ## 8. Invariants
 
 - Outer particle sampling happens before probabilistic table generation.
@@ -213,6 +221,8 @@ layer and must be reflected in `sampled` and `updatecnt`.
   explicitly changed.
 - `volassemble` and the classaverager remain consumers of sampled-update state,
   not producers of particle-selection policy.
+- Online matcher restoration/reconstruction reuses the particle images already
+  read for the current batch.
 
 ## 9. Review Checklist
 
@@ -229,5 +239,6 @@ assembly changes, check:
   restoration or trailing consumes them?
 - Does 2D restoration use class-local realized fractions?
 - Does 3D trailing consume the realized or explicit trailing fraction?
+- Does the online matcher path preserve one image-stack read per particle batch?
 - Are shared-memory and distributed paths preserving the same scientific
   workflow and artifact contracts?

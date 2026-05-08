@@ -75,6 +75,16 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 - writing orientation updates
 - writing distributed partial class-average sums when running as a worker
 
+The 2D matcher must preserve a single particle-stack read per batch in the
+online alignment/restoration path. Batch construction should keep the
+already-read raw particle images for class-average restoration, and restoration
+should consume those in-memory images after assignment in the same batch.
+
+Do not split online class-average restoration into a second full particle pass
+that re-reads image stacks to lower peak memory. Offline or terminal
+class-average assembly commands may have their own explicit reads, but that is
+separate from the matcher worker's online single-read contract.
+
 `simple_commanders_mkcavgs.f90` and the classaverager modules own:
 
 - explicit class-average assembly from partial sums
@@ -141,6 +151,8 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Does probabilistic 2D sample once and then reproduce the same subset?
 - Do shared-memory and distributed paths use the same scientific workflow?
 - Are class-average assembly/restoration responsibilities explicit?
+- Does online class-average restoration reuse the matcher batch images instead
+  of introducing a second particle-stack read?
 - Are stale distributed handoffs removed without deleting fractional class-average carry-over inputs?
 - Are `startit`, `which_iter`, `extr_iter`, and `endit` semantics preserved?
 - Does fill-in remain assignment-only unless the policy is explicitly changed?
@@ -154,4 +166,6 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Do not make distributed-only class-average assembly semantics diverge from shared-memory scientific behavior.
 - Do not treat final fill-in as a normal class-average restoration stage.
 - Do not reuse stale assignment files as valid current-iteration inputs.
+- Do not re-read particle stacks in the online matcher/restoration path when the
+  raw batch images are already available.
 - Do not delete class-average partial sums at the start of a fractional-update iteration; workers need them as previous-sum carry-over.
