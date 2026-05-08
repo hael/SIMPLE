@@ -64,8 +64,8 @@ contains
         type(commander_rec3D)    :: xrec3D
         type(commander_refine3D) :: xrefine3D
         ! hard defaults
-        call cline%set('balance',         'no') ! balanced particle sampling based on available 3D solution
-        call cline%set('greedy_sampling', 'no') ! stochastic within-class selection without consideration to objective function value
+        call cline%set('balance',         'no') ! no balancing based on 2D clustering
+        call cline%set('greedy_sampling', 'no') ! only active when balance is 'yes'`
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
         call cline%set('refine',  'prob_neigh') ! probabilistioc neighborhood 3D refinement 
         call cline%set('ml_reg',         'yes') ! ML regularization is on
@@ -73,7 +73,7 @@ contains
         call cline%set('overlap',         0.99) ! convergence if overlap > 99%
         call cline%set('nstates',            1) ! only single-state refinement is supported
         call cline%set('objfun',      'euclid') ! the objective function is noise-normalized Euclidean distance
-        call cline%set('envfsc',         'yes') ! we use the envelope mask when calculating an FSC plot
+        call cline%set('envfsc',         'yes') ! we use the envelope mask when calculating the FSC
         call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
@@ -148,6 +148,14 @@ contains
         type(builder)    :: build
         logical          :: converged
         integer          :: niters
+        ! sanity check: multiple input volumes require nstates > 1
+        if( cline%defined('vol2') )then
+            if( .not. cline%defined('nstates') )then
+                THROW_HARD('Multiple volumes (vol1, vol2, ...) provided on command line but NSTATES is not set; set NSTATES to the number of states')
+            else if( cline%get_iarg('nstates') <= 1 )then
+                THROW_HARD('Multiple volumes (vol1, vol2, ...) provided on command line but NSTATES <= 1; set NSTATES to the number of states')
+            endif
+        endif
         ! local defaults (kept consistent with previous distributed master)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
