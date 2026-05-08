@@ -256,6 +256,7 @@ contains
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
+        character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
         logical :: converged
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         601 format(A,1X,F12.3)
@@ -318,8 +319,9 @@ contains
             call os%stats('res', res_state, mask=state_mask)
             res_state_avg(istate) = res_state%avg
             if( params%nstates > 1 )then
-                write(logfhandle,'(A,1X,I3,1X,A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)') &
-                    '>>> RESOLUTION @ FSC=0.143 STATE', istate, 'AVG/SDEV/MIN/MAX:', &
+                write(res_state_label,'(A,I3,A)') '>>>     state ', istate, ':'
+                write(logfhandle,604) &
+                    res_state_label, &
                     res_state%avg, res_state%sdev, res_state%minv, res_state%maxv
             endif
         end do
