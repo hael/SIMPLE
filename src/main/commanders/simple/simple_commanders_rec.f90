@@ -65,6 +65,7 @@ contains
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('oritype')     ) call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('nstates')     ) call cline%set('nstates',          1)
+        call warn_for_forced_bootstrap_overrides(cline)
         call cline%set('sigma_est', 'global')
         if( .not. cline%defined('which_iter')  ) call cline%set('which_iter',       1)
         if( .not. cline%defined('postprocess') ) call cline%set('postprocess',  'yes')
@@ -136,7 +137,7 @@ contains
             type(sp_project) :: spproj
             type(string)     :: volname, fscname
             integer          :: state, pop
-            character(len=8) :: imgkind
+            character(len=16) :: imgkind
             call spproj%read_segment('out', params%projfile)
             call spproj%read_segment(params%oritype, params%projfile)
             select case(trim(params%oritype))
@@ -159,12 +160,14 @@ contains
                     cycle
                 endif
                 fscname = refine3D_fsc_fname(state)
+                ! params%box_crop/smpd_crop are the reconstruction sampling
+                ! resolved by params%new. calc_final_rec intentionally omits
+                ! crop keys for original-sampling bootstrap reconstructions.
                 call spproj%add_vol2os_out(volname, params%smpd_crop, state, trim(imgkind), pop=pop)
                 if( file_exists(fscname) ) call spproj%add_fsc2os_out(fscname, state, params%box_crop)
                 call volname%kill
                 call fscname%kill
             enddo
-            if( file_exists(sigma_star) ) call spproj%add_sigma22os_out(sigma_star)
             call spproj%write_segment_inside('out', params%projfile)
             call spproj%kill
         end subroutine register_bootstrap_rec_outputs
@@ -201,6 +204,9 @@ contains
                 call vol_noise%spectrum('power', pspec, norm=.true.)
                 nspec = min(size(pspec), filtsz)
                 if( nspec > 0 )then
+                    ! state_weights=Ne+No and state_scales=Ne*No/(Ne+No),
+                    ! so the numerator is Ne*No*pspec_diff. The final divide
+                    ! by total_weight keeps the state average population-aware.
                     sigma2(1:nspec) = sigma2(1:nspec) + state_weights(state) * state_scales(state) * pspec(1:nspec)
                     last_shell      = max(last_shell, nspec)
                     nstates_used    = nstates_used + 1
@@ -292,20 +298,29 @@ contains
             real, allocatable :: logsigma(:), smoothed(:)
             real    :: floor_val, pos_min
             integer :: i, pass, n, anchor
+            logical :: any_pos
             n = size(sigma2)
             if( n == 0 )return
             pos_min = huge(pos_min)
+            any_pos = .false.
             do i = 1, n
-                if( sigma2(i) > TINY ) pos_min = min(pos_min, sigma2(i))
+                if( sigma2(i) > TINY )then
+                    pos_min = min(pos_min, sigma2(i))
+                    any_pos = .true.
+                endif
             enddo
-            if( pos_min == huge(pos_min) ) THROW_HARD('Unable to estimate positive sigma2 values from even/odd half-map difference')
+            if( .not. any_pos ) THROW_HARD('Unable to estimate positive sigma2 values from even/odd half-map difference')
             floor_val = max(pos_min * 1.e-3, TINY)
             do i = 1, n
                 if( sigma2(i) <= floor_val ) sigma2(i) = floor_val
             enddo
             if( last_shell > 0 .and. last_shell < n ) sigma2(last_shell+1:n) = sigma2(last_shell)
             anchor = min(n, 6)
-            if( anchor > 1 ) sigma2(1:anchor-1) = max(sigma2(1:anchor-1), sigma2(anchor))
+            if( anchor > 1 )then
+                do i = 1, anchor - 1
+                    if( sigma2(i) <= floor_val ) sigma2(i) = max(sigma2(i), sigma2(anchor))
+                enddo
+            endif
             allocate(logsigma(n), smoothed(n))
             logsigma = log(max(sigma2, floor_val))
             do pass = 1, 2
@@ -318,6 +333,20 @@ contains
             sigma2 = exp(logsigma)
             deallocate(logsigma, smoothed)
         end subroutine condition_bootstrap_sigma2
+
+        subroutine warn_for_forced_bootstrap_overrides( cline_in )
+            class(cmdline), intent(inout) :: cline_in
+            type(string) :: val
+            if( cline_in%defined('sigma_est') )then
+                val = cline_in%get_carg('sigma_est')
+                if( val%to_char().ne.'global' )then
+                    THROW_WARN('bootstrap_rec3D enforces sigma_est=global; ignoring input sigma_est='//val%to_char())
+                endif
+                call val%kill
+            endif
+            if( cline_in%defined('objfun') ) THROW_WARN('bootstrap_rec3D controls objfun internally; ignoring input objfun')
+            if( cline_in%defined('ml_reg') ) THROW_WARN('bootstrap_rec3D controls ml_reg internally; ignoring input ml_reg')
+        end subroutine warn_for_forced_bootstrap_overrides
     end subroutine exec_bootstrap_rec3D
 
     subroutine exec_rec3D_distr_worker( self, cline )

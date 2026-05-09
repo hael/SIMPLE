@@ -9,7 +9,6 @@ use simple_qsys_env,      only: qsys_env
 use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
-use simple_euclid_sigma2, only: sigma2_star_from_iter
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -52,7 +51,6 @@ type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     type(cmdline)     :: cline_calc_group_sigmas
     type(convergence) :: conv
     logical :: l_sigma
-    logical :: l_initial_sigma_from_star
 contains
     procedure :: initialize         => inmem_initialize
     procedure :: execute_iteration  => inmem_execute_iteration
@@ -73,7 +71,6 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     logical        :: have_oris
     logical        :: l_multistates
     logical        :: l_combine_eo
-    logical        :: l_initial_sigma_from_star
     ! Prototypes / persistent command lines
     type(cmdline) :: cline_rec3D
     type(cmdline) :: cline_calc_pspec_distr
@@ -180,45 +177,6 @@ contains
             call remove_ref_section_files
         endif
     end subroutine invalidate_fresh_start_refs_from_volumes
-
-    logical function ensure_initial_sigma_star( build, startit ) result( l_ready )
-        type(builder), intent(inout) :: build
-        integer,       intent(in)    :: startit
-        type(string) :: sigma_dest, sigma_src, imgkind
-        integer :: i, ind, cnt
-        l_ready = .false.
-        sigma_dest = sigma2_star_from_iter(startit)
-        if( file_exists(sigma_dest) )then
-            l_ready = .true.
-        else
-            ind = 0
-            cnt = 0
-            do i = 1, build%spproj%os_out%get_noris()
-                if( build%spproj%os_out%isthere(i, 'imgkind') )then
-                    call build%spproj%os_out%getter(i, 'imgkind', imgkind)
-                    if( imgkind%to_char().eq.'sigma2' )then
-                        ind = i
-                        cnt = cnt + 1
-                    endif
-                endif
-            enddo
-            if( cnt > 1 ) THROW_HARD('multiple os_out entries with imgkind=sigma2, aborting...; ensure_initial_sigma_star')
-            if( cnt == 1 )then
-                call build%spproj%os_out%getter(ind, 'sigma2', sigma_src)
-                if( file_exists(sigma_src) )then
-                    call simple_copy_file(sigma_src, sigma_dest)
-                    l_ready = file_exists(sigma_dest)
-                    if( l_ready ) write(logfhandle,'(A,1X,A,1X,A)') &
-                        &'>>> MATERIALIZED INITIAL SIGMA STAR:', sigma_dest%to_char(), 'from project os_out'
-                else
-                    THROW_WARN('sigma2 os_out artifact not found: '//sigma_src%to_char())
-                endif
-            endif
-        endif
-        call sigma_dest%kill
-        call sigma_src%kill
-        call imgkind%kill
-    end function ensure_initial_sigma_star
 
     subroutine refresh_resolution_fields_from_fsc( params, build )
         type(parameters), intent(in)    :: params
@@ -437,7 +395,6 @@ contains
         logical                               :: l_proj_dirty
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
-        self%l_initial_sigma_from_star = .false.
         ! startit
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
@@ -470,24 +427,19 @@ contains
         self%cline_calc_group_sigmas = cline
         call self%cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
         if( self%l_sigma )then
-            self%l_initial_sigma_from_star = ensure_initial_sigma_star(build, startit)
-            if( self%l_initial_sigma_from_star )then
-                ! assume sigmas2 already available and all corresponding flags have been set
-            else
-                ! Ensure e/o partitioning prior to calc_pspec
-                if( build%spproj_field%get_nevenodd() == 0 )then
-                    call build%spproj_field%partition_eo
-                    call build%spproj%write_segment_inside(params%oritype)
-                endif
-                if( startit == 1 )then
-                    ! make sure we have weights for the initial noise power estimation
-                    call build%spproj_field%set_all2single('w', 1.0)
-                    call build%spproj%write_segment_inside(params%oritype)
-                endif
-                cline_calc_pspec   = cline
-                call cline_calc_pspec%set('prg', 'calc_pspec')
-                call xcalc_pspec%execute( cline_calc_pspec )
+            ! Ensure e/o partitioning prior to calc_pspec
+            if( build%spproj_field%get_nevenodd() == 0 )then
+                call build%spproj_field%partition_eo
+                call build%spproj%write_segment_inside(params%oritype)
             endif
+            if( startit == 1 )then
+                ! make sure we have weights for the initial noise power estimation
+                call build%spproj_field%set_all2single('w', 1.0)
+                call build%spproj%write_segment_inside(params%oritype)
+            endif
+            cline_calc_pspec   = cline
+            call cline_calc_pspec%set('prg', 'calc_pspec')
+            call xcalc_pspec%execute( cline_calc_pspec )
         endif
         ! Keep run-time counters consistent with the new high-level loop
         params%startit    = startit
@@ -555,10 +507,8 @@ contains
         call materialize_reprojection_model(params, cline, current_build=build)
         ! Per-iteration sigma update (euclid)
         if( self%l_sigma )then
-            if( .not.(self%l_initial_sigma_from_star .and. params%which_iter == params%startit) )then
-                call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
-                call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
-            endif
+            call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
+            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
@@ -644,13 +594,11 @@ contains
     end subroutine inmem_finalize_iteration
 
     subroutine inmem_finalize_run(self, params, build, cline)
-        use simple_commanders_euclid, only: commander_calc_group_sigmas
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(in)    :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(string) :: fsc_file, vol, vol_iter, sigma_star
+        type(string) :: fsc_file, vol, vol_iter
         integer      :: state
         ! report last iteration
         call cline%delete( 'startit' )
@@ -683,21 +631,10 @@ contains
             end do
             call build%spproj%write_segment_inside('out')
         endif
-        if( self%l_sigma )then
-            ! so final sigma2 can be used for a subsequent refine3D run
-            call self%cline_calc_group_sigmas%set('which_iter',params%which_iter+1)
-            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
-            sigma_star = sigma2_star_from_iter(params%which_iter+1)
-            if( file_exists(sigma_star) )then
-                call build%spproj%add_sigma22os_out(sigma_star)
-                call build%spproj%write_segment_inside('out')
-            endif
-        endif
         call simple_touch(JOB_FINISHED_FBODY)
         call fsc_file%kill
         call vol%kill
         call vol_iter%kill
-        call sigma_star%kill
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params)
@@ -730,7 +667,6 @@ contains
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
         self%l_multistates = cline%defined('nstates')
-        self%l_initial_sigma_from_star = .false.
         ! init project
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
@@ -848,12 +784,9 @@ contains
                 call build%spproj%write_segment_inside(params%oritype)
             endif
             ! generate initial noise power estimates
-            self%l_initial_sigma_from_star = ensure_initial_sigma_star(build, params%startit)
-            if( .not.self%l_initial_sigma_from_star )then
-                call build%spproj_field%set_all2single('w', 1.0)
-                call build%spproj%write_segment_inside(params%oritype)
-                call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
-            endif
+            call build%spproj_field%set_all2single('w', 1.0)
+            call build%spproj%write_segment_inside(params%oritype)
+            call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .true.
             do state = 1,params%nstates
@@ -960,10 +893,8 @@ contains
         call materialize_reprojection_model(params, cline, nthr=self%nthr_master)
         ! per-iteration group sigmas (euclid)
         if( trim(params%objfun).eq.'euclid' )then
-            if( .not.(self%l_initial_sigma_from_star .and. iter == params%startit) )then
-                call self%cline_calc_group_sigmas%set('which_iter', iter)
-                call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
-            endif
+            call self%cline_calc_group_sigmas%set('which_iter', iter)
+            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
         endif
         ! ensure spproj is current
         if( self%have_oris .or. iter > params%startit )then
@@ -1140,28 +1071,16 @@ contains
     end subroutine distr_finalize_iteration
 
     subroutine distr_finalize_run(self, params, build, cline)
-        use simple_commanders_euclid, only: commander_calc_group_sigmas
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(in)    :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(string) :: sigma_star
-        ! assemble sigma2 for next run
-        if( trim(params%objfun).eq.'euclid' )then
-            call self%cline_calc_group_sigmas%set('which_iter', params%which_iter + 1)
-            call self%cline_calc_group_sigmas%set('nthr',       self%nthr_master)
-            call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
-            sigma_star = sigma2_star_from_iter(params%which_iter + 1)
-            if( file_exists(sigma_star) ) call build%spproj%add_sigma22os_out(sigma_star)
-        endif
         if(trim(params%oritype).eq.'cls3D') call build%spproj%map2ptcls
         ! safest to write the whole thing here as multiple fields updated
         call build%spproj%write
         ! report last iteration on exit
         call cline%delete( 'startit' )
         call cline%set('endit', real(params%which_iter))
-        call sigma_star%kill
     end subroutine distr_finalize_run
 
     subroutine distr_cleanup(self, params)

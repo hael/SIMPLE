@@ -192,10 +192,16 @@ stage.
 The terminal original-sampling ab initio reconstruction must inherit the
 scientific reconstruction policy from the last `refine3D` stage. If the final
 stage used `objfun=euclid` and `ml_reg=yes`, the terminal reconstruction must
-use the corresponding grouped sigma estimates, preferably the final
-`refine3D` iteration plus one, which is written for downstream reuse. This
-terminal reconstruction is still a fresh reconstruction from selected particles:
-it must not apply fractional-update sampling or trailing-average blending.
+use compatible grouped sigma estimates when they are already local to the
+workflow, otherwise it should bootstrap sigmas locally before producing the
+regularized map. This terminal reconstruction is still a fresh reconstruction
+from selected particles: it must not apply fractional-update sampling or
+trailing-average blending, and it also must not inherit staged search,
+filtering, or mask-generation controls
+such as `refine`, `lp`, `filt_mode`, `automsk`, `envfsc`, or `gauref`; those
+belong to the staged refinement schedule, not to the terminal original-sampling
+reconstruction. Build the terminal reconstruction command line from a small
+whitelist instead of copying the staged `refine3D` command and deleting keys.
 
 For single-state continuation into `refine3D_auto`, an existing project
 `os_out` state-1 `vol` entry is a valid initializer when the referenced file is
@@ -203,6 +209,11 @@ present. Explicit `vol1` on the command line takes precedence. `refine3D_auto`
 should reconstruct an initializer only when neither source is available; it
 should not re-read all particle images merely to recreate the map already
 registered by the preceding ab initio workflow.
+
+For 3D refinement workflows, grouped sigma files are run-local noise-model
+state. They may be written and consumed inside a running reconstruction
+workflow, but they are not registered as `os_out` project handoff artifacts for
+a later `refine3D` execution.
 
 ## 9. Probabilistic Refinement
 

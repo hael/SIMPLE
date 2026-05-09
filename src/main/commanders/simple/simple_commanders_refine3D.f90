@@ -104,9 +104,15 @@ contains
             if( spproj%isthere_in_osout('vol', 1) )then
                 call spproj%get_vol('vol', 1, init_vol, init_smpd, init_box)
                 if( file_exists(init_vol) )then
-                    l_have_init_vol = .true.
-                    write(logfhandle,'(A,1X,A)') '>>> REFINE3D_AUTO USING PROJECT VOLUME:', init_vol%to_char()
-                    write(logfhandle,'(A,I0,A,F8.4)') '>>> PROJECT VOLUME BOX/SMPD: ', init_box, '/', init_smpd
+                    if( project_init_vol_compatible() )then
+                        l_have_init_vol = .true.
+                        write(logfhandle,'(A,1X,A)') '>>> REFINE3D_AUTO USING PROJECT VOLUME:', init_vol%to_char()
+                        write(logfhandle,'(A,I0,A,F8.4)') '>>> PROJECT VOLUME BOX/SMPD: ', init_box, '/', init_smpd
+                    else
+                        write(logfhandle,'(A,1X,A)') '>>> REFINE3D_AUTO PROJECT VOLUME SAMPLING MISMATCH, RECONSTRUCTING:', init_vol%to_char()
+                        write(logfhandle,'(A,I0,A,F8.4)') '>>> PROJECT VOLUME BOX/SMPD: ', init_box, '/', init_smpd
+                        write(logfhandle,'(A,I0,A,F8.4)') '>>> CURRENT RUN BOX/SMPD:    ', params%box, '/', params%smpd
+                    endif
                 else
                     write(logfhandle,'(A,1X,A)') '>>> REFINE3D_AUTO PROJECT VOLUME MISSING, RECONSTRUCTING:', init_vol%to_char()
                 endif
@@ -163,6 +169,13 @@ contains
         call cline_rec3D%set('postprocess', 'yes')
         call xrec3D%execute(cline_rec3D)       
         call init_vol%kill
+
+    contains
+
+        logical function project_init_vol_compatible() result( l_compatible )
+            l_compatible = init_box == params%box .and. init_smpd > TINY .and. &
+                &abs(init_smpd - params%smpd) <= 1.e-6
+        end function project_init_vol_compatible
     end subroutine exec_refine3D_auto
 
     !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.

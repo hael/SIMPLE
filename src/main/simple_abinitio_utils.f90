@@ -544,56 +544,16 @@ contains
         call spproj%get_stkname_and_ind('ptcl3D', 1, stkname, ind_in_stk)
         call find_ldim_nptcls(stkname, ldim, nptcls)
         smpd = params%smpd
-        cline_reconstruct3D = cline_refine3D
-        call cline_reconstruct3D%set('prg',   'reconstruct3D')
-        call cline_reconstruct3D%set('mkdir', 'no')
-        call cline_reconstruct3D%set('box',  ldim(1))
-        call cline_reconstruct3D%set('smpd', smpd)
-        call cline_reconstruct3D%set('projfile', projfile)
-        call cline_reconstruct3D%set('pgrp', params%pgrp)
-        call cline_reconstruct3D%set('nstates', params%nstates)
-        if( params%mskdiam > 0. )then
-            call cline_reconstruct3D%set('mskdiam', params%mskdiam)
-        else
-            call cline_reconstruct3D%delete('mskdiam')
-        endif
-        call cline_reconstruct3D%set('oritype', 'ptcl3D')
-        call cline_reconstruct3D%set('trail_rec', 'no')
-        if( l_postprocess )then
-            call cline_reconstruct3D%set('postprocess', 'yes')
-        else
-            call cline_reconstruct3D%set('postprocess', 'no')
-        endif
-        if( cline_reconstruct3D%defined('ml_reg') )then
-            if( cline_reconstruct3D%get_carg('ml_reg').ne.'yes' ) call cline_reconstruct3D%set('objfun','cc')
-        else
-            call cline_reconstruct3D%set('ml_reg','no')
-            call cline_reconstruct3D%set('objfun','cc')
-        endif
-        call strip_final_rec_stage_keys(cline_reconstruct3D)
+        call build_clean_reconstruct3D_cline(cline_reconstruct3D)
         sigma_iter = final_rec_sigma_iter()
         l_bootstrap_sigmas = final_rec_needs_bootstrap_sigmas(sigma_iter)
         if( sigma_iter > 0 .and. .not. l_bootstrap_sigmas )then
             call cline_reconstruct3D%set('which_iter', sigma_iter)
             write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION SIGMA ITERATION: ', sigma_iter
         endif
-        do state = 1,params%nstates
-            call cline_reconstruct3D%delete('vol'//int2str(state))
-        enddo
-        call cline_reconstruct3D%delete('box_crop')
-        call cline_reconstruct3D%delete('smpd_crop')
-        call cline_reconstruct3D%delete('endit')
-        call cline_reconstruct3D%delete('update_frac')
-        call cline_reconstruct3D%delete('fillin')
-        call cline_reconstruct3D%delete('ufrac_trec')
-        call cline_reconstruct3D%delete('vol_even')
-        call cline_reconstruct3D%delete('vol_odd')
-        call cline_reconstruct3D%delete('refs')
-        call cline_reconstruct3D%delete('refs_even')
-        call cline_reconstruct3D%delete('refs_odd')
         if( l_bootstrap_sigmas )then
             bootstrap_sigma_iter = final_rec_bootstrap_sigma_iter(sigma_iter)
-            call cline_reconstruct3D%set('prg', 'bootstrap_rec3D')
+            call build_clean_bootstrap_rec3D_cline(cline_reconstruct3D)
             call cline_reconstruct3D%set('which_iter', bootstrap_sigma_iter)
             write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION BOOTSTRAP SIGMA ITERATION: ', bootstrap_sigma_iter
             call xbootstrap_rec3D%execute(cline_reconstruct3D)
@@ -623,13 +583,6 @@ contains
             call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop)
             call spproj%add_fsc2os_out(refine3D_fsc_fname(state), state, ldim(1))
         enddo
-        sigma_star = ''
-        if( l_bootstrap_sigmas )then
-            sigma_star = sigma2_star_from_iter(bootstrap_sigma_iter)
-        else if( sigma_iter > 0 )then
-            sigma_star = sigma2_star_from_iter(sigma_iter)
-        endif
-        if( sigma_star%to_char() /= '' .and. file_exists(sigma_star) ) call spproj%add_sigma22os_out(sigma_star)
         call spproj%write_segment_inside('out', projfile)
         call stkname%kill
         call sigma_star%kill
@@ -683,7 +636,8 @@ contains
                 reg_smpd = params%smpd_crop
                 if( cline_refine3D%defined('box_crop')  ) reg_box  = cline_refine3D%get_iarg('box_crop')
                 if( cline_refine3D%defined('smpd_crop') ) reg_smpd = cline_refine3D%get_rarg('smpd_crop')
-                if( reg_box > 0 .and. (reg_box /= ldim(1) .or. abs(reg_smpd - smpd) > 1.e-6) )then
+                if( reg_box > 0 .and. reg_smpd > TINY .and. &
+                    &(reg_box /= ldim(1) .or. abs(reg_smpd - smpd) > 1.e-6) )then
                     l_bootstrap = .true.
                     write(logfhandle,'(A,I0,A,I0)') &
                         &'>>> FINAL RECONSTRUCTION: registration/final boxes differ; bootstrapping sigmas: ', &
@@ -695,6 +649,9 @@ contains
                 integer, intent(in) :: sigma_iter
                 iter = 1
                 if( sigma_iter > 0 )then
+                    ! Write bootstrap sigmas to the next index so an existing
+                    ! compatible star is never overwritten. In the common
+                    ! refine3D-finalized case this advances endit+1 to endit+2.
                     iter = sigma_iter + 1
                 else if( cline_refine3D%defined('endit') )then
                     iter = cline_refine3D%get_iarg('endit') + 2
@@ -704,21 +661,59 @@ contains
                 iter = max(1, iter)
             end function final_rec_bootstrap_sigma_iter
 
-            subroutine strip_final_rec_stage_keys( child_cline )
+            subroutine build_clean_reconstruct3D_cline( child_cline )
                 class(cmdline), intent(inout) :: child_cline
-                type(string) :: filt_mode
-                call child_cline%delete('lp')
-                call child_cline%delete('lpstart')
-                call child_cline%delete('lpstop')
-                if( child_cline%defined('filt_mode') )then
-                    filt_mode = child_cline%get_carg('filt_mode')
-                    select case(trim(filt_mode%to_char()))
-                        case('uniform','fsc')
-                            call child_cline%delete('filt_mode')
-                    end select
-                    call filt_mode%kill
+                call set_clean_final_rec_common(child_cline, 'reconstruct3D')
+                call child_cline%set('box',       ldim(1))
+                call child_cline%set('smpd',      smpd)
+                call child_cline%set('nstates',   params%nstates)
+                call child_cline%set('oritype',   'ptcl3D')
+                call child_cline%set('trail_rec', 'no')
+                call child_cline%set('sigma_est', params%sigma_est)
+                call child_cline%set('combine_eo', 'no')
+                if( l_postprocess )then
+                    call child_cline%set('postprocess', 'yes')
+                else
+                    call child_cline%set('postprocess', 'no')
                 endif
-            end subroutine strip_final_rec_stage_keys
+                if( final_stage_uses_ml_reg() )then
+                    call child_cline%set('objfun', 'euclid')
+                    call child_cline%set('ml_reg', 'yes')
+                else
+                    call child_cline%set('objfun', 'cc')
+                    call child_cline%set('ml_reg', 'no')
+                endif
+            end subroutine build_clean_reconstruct3D_cline
+
+            subroutine build_clean_bootstrap_rec3D_cline( child_cline )
+                class(cmdline), intent(inout) :: child_cline
+                call set_clean_final_rec_common(child_cline, 'bootstrap_rec3D')
+                if( params%nstates > 1 ) call child_cline%set('nstates', params%nstates)
+            end subroutine build_clean_bootstrap_rec3D_cline
+
+            subroutine set_clean_final_rec_common( child_cline, prg )
+                class(cmdline), intent(inout) :: child_cline
+                character(len=*), intent(in)  :: prg
+                call child_cline%kill
+                call child_cline%set('prg',      prg)
+                call child_cline%set('mkdir',    'no')
+                call child_cline%set('projfile', projfile)
+                call child_cline%set('pgrp',     params%pgrp)
+                call child_cline%set('nthr',     params%nthr)
+                if( params%mskdiam > 0. ) call child_cline%set('mskdiam', params%mskdiam)
+                if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
+            end subroutine set_clean_final_rec_common
+
+            logical function final_stage_uses_ml_reg() result( l_ml_reg )
+                l_ml_reg = .false.
+                if( .not. cline_refine3D%defined('ml_reg') ) return
+                if( cline_refine3D%get_carg('ml_reg').ne.'yes' ) return
+                if( cline_refine3D%defined('objfun') )then
+                    l_ml_reg = cline_refine3D%get_carg('objfun').eq.'euclid'
+                else
+                    l_ml_reg = .true.
+                endif
+            end function final_stage_uses_ml_reg
 
     end subroutine calc_final_rec
 
