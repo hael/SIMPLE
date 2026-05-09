@@ -214,9 +214,10 @@ contains
         class(parameters),         intent(in)    :: params
         integer,                   intent(in)    :: istage
         if( istage < STOCH_SAMPL_STAGE )then
-            cfg%refine = trim(params%refine)
+            cfg%refine = 'snhc_smpl'
         else
-            cfg%refine = 'prob'
+            ! cfg%refine = 'prob' ! 4 now
+            cfg%refine = 'snhc_smpl' 
         endif
     end subroutine set_cluster2D_stage_search_policy
 
