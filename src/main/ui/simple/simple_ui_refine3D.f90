@@ -6,6 +6,7 @@ implicit none
 type(ui_program), target :: automask
 type(ui_program), target :: postprocess
 type(ui_program), target :: reconstruct3D
+type(ui_program), target :: bootstrap_rec3D
 type(ui_program), target :: refine3D
 type(ui_program), target :: refine3D_auto
 
@@ -16,6 +17,7 @@ contains
         call new_automask(prgtab)
         call new_postprocess(prgtab)
         call new_reconstruct3D(prgtab)
+        call new_bootstrap_rec3D(prgtab)
         call new_refine3D(prgtab)
         call new_refine3D_auto(prgtab)
     end subroutine construct_refine3D_programs
@@ -26,6 +28,7 @@ contains
         write(logfhandle,'(A)') automask%name%to_char()
         write(logfhandle,'(A)') postprocess%name%to_char()
         write(logfhandle,'(A)') reconstruct3D%name%to_char()
+        write(logfhandle,'(A)') bootstrap_rec3D%name%to_char()
         write(logfhandle,'(A)') refine3D%name%to_char()
         write(logfhandle,'(A)') refine3D_auto%name%to_char()
         write(logfhandle,'(A)') ''
@@ -135,6 +138,44 @@ contains
         ! add to ui_hash
         call add_ui_program('reconstruct3D', reconstruct3D, prgtab)
     end subroutine new_reconstruct3D
+
+    subroutine new_bootstrap_rec3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call bootstrap_rec3D%new(&
+        &'bootstrap_rec3D',&                                             ! name
+        &'bootstrap ML-regularized 3D reconstruction',&                  ! descr_short
+        &'generates an unregularized even/odd reconstruction, estimates weighted global sigma2 curves from the half-map difference,&
+        & and reruns reconstruct3D with Euclidean ML regularization',&
+        &'simple_exec',&                                                 ! executable
+        &.true.)                                                         ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call bootstrap_rec3D%add_input(UI_PARM, 'which_iter', 'num', 'Sigma iteration index',&
+        &'Iteration index used for the generated sigma2_groups file{1}', 'iteration{1}', .false., 1.0)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call bootstrap_rec3D%add_input(UI_SRCH, pgrp)
+        call bootstrap_rec3D%add_input(UI_SRCH, frac)
+        call bootstrap_rec3D%add_input(UI_SRCH, nstates)
+        call bootstrap_rec3D%add_input(UI_SRCH, sigma_est)
+        ! filter controls
+        call bootstrap_rec3D%add_input(UI_FILT, envfsc)
+        call bootstrap_rec3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
+        &'Postprocess ML-regularized reconstructed volumes using the generated FSC curves', '(yes|no){yes}', .false., 'yes')
+        call bootstrap_rec3D%add_input(UI_FILT, ml_reg)
+        call bootstrap_rec3D%add_input(UI_FILT, objfun)
+        ! mask controls
+        call bootstrap_rec3D%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call bootstrap_rec3D%add_input(UI_COMP, nparts, required_override=.false.)
+        call bootstrap_rec3D%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('bootstrap_rec3D', bootstrap_rec3D, prgtab)
+    end subroutine new_bootstrap_rec3D
 
     subroutine new_refine3D( prgtab )
         class(ui_hash), intent(inout) :: prgtab

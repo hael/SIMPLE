@@ -2,8 +2,6 @@
 module simple_commanders_refine3D
 use simple_commanders_api
 use simple_pftc_srch_api
-use simple_commanders_euclid
-use simple_commanders_volops, only: commander_postprocess
 use simple_refine3D_fnames,   only: refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
@@ -52,14 +50,15 @@ contains
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D
-        type(commander_postprocess) :: xpostprocess
         type(parameters)            :: params
+        type(sp_project)            :: spproj
+        type(string)                :: init_vol
         real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
         logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
-        real    :: smpd_target, smpd_crop, scale, trslim
-        integer :: box_crop, iter
-        logical :: l_autoscale
+        real    :: smpd_target, smpd_crop, scale, trslim, init_smpd
+        integer :: box_crop, init_box
+        logical :: l_autoscale, l_have_init_vol
         ! commanders
         type(commander_rec3D)    :: xrec3D
         type(commander_refine3D) :: xrefine3D
@@ -90,6 +89,30 @@ contains
         call params%new(cline)
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         if( mod(params%maxits,2) /= 0) THROW_HARD('Maximum number of iterations (MAXITS) need to be divisible with 2')
+        l_have_init_vol = .false.
+        init_box        = 0
+        init_smpd       = 0.
+        if( cline%defined('vol1') )then
+            init_vol = cline%get_carg('vol1')
+            if( .not. file_exists(init_vol) )then
+                THROW_HARD('File: '//init_vol%to_char()//' does not exist! refine3D_auto')
+            endif
+            l_have_init_vol = .true.
+            write(logfhandle,'(A,1X,A)') '>>> REFINE3D_AUTO USING INPUT VOLUME:', init_vol%to_char()
+        else
+            call spproj%read_segment('out', params%projfile)
+            if( spproj%isthere_in_osout('vol', 1) )then
+                call spproj%get_vol('vol', 1, init_vol, init_smpd, init_box)
+                if( file_exists(init_vol) )then
+                    l_have_init_vol = .true.
+                    write(logfhandle,'(A,1X,A)') '>>> REFINE3D_AUTO USING PROJECT VOLUME:', init_vol%to_char()
+                    write(logfhandle,'(A,I0,A,F8.4)') '>>> PROJECT VOLUME BOX/SMPD: ', init_box, '/', init_smpd
+                else
+                    write(logfhandle,'(A,1X,A)') '>>> REFINE3D_AUTO PROJECT VOLUME MISSING, RECONSTRUCTING:', init_vol%to_char()
+                endif
+            endif
+            call spproj%kill
+        endif
         smpd_target = SMPD_TARGET_DEFAULT
         if( params%box <= MINBOX )then
             smpd_target = params%smpd
@@ -125,9 +148,13 @@ contains
         call cline_rec3D%delete('sigma_est')
         call cline_rec3D%delete('update_frac')
         call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
-        call xrec3D%execute(cline_rec3D)
+        if( l_have_init_vol )then
+            call cline%set('vol1', init_vol)
+        else
+            call xrec3D%execute(cline_rec3D)
+            call cline%set('vol1', refine3D_state_vol_fname(1))
+        endif
         ! 3D refinement iterations
-        call cline%set('vol1', refine3D_state_vol_fname(1))
         call cline%set('prg',                   'refine3D')
         call cline%set('ufrac_trec',    params%update_frac)
         call cline%set('maxits',             params%maxits)
@@ -135,6 +162,7 @@ contains
         ! re-reconstruct from all particle images
         call cline_rec3D%set('postprocess', 'yes')
         call xrec3D%execute(cline_rec3D)       
+        call init_vol%kill
     end subroutine exec_refine3D_auto
 
     !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.

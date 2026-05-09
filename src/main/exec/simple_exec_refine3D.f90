@@ -5,7 +5,7 @@ use simple_string,               only: string
 use simple_exec_helpers,         only: restarted_exec
 use simple_commanders_mask,      only: commander_automask
 use simple_commanders_volops,    only: commander_postprocess
-use simple_commanders_rec,       only: commander_rec3D
+use simple_commanders_rec,       only: commander_bootstrap_rec3D, commander_rec3D
 use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D_auto
 implicit none
 
@@ -15,6 +15,7 @@ private
 type(commander_automask)      :: xautomask
 type(commander_postprocess)   :: xpostprocess
 type(commander_rec3D)         :: xrec3D
+type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
 type(commander_refine3D_auto) :: xrefine3D_auto
 type(commander_refine3D)      :: xrefine3D
 
@@ -35,6 +36,8 @@ contains
                 call xpostprocess%execute(cline)
             case( 'reconstruct3D' )
                 call xrec3D%execute(cline)
+            case( 'bootstrap_rec3D' )
+                call xbootstrap_rec3D%execute(cline)
             case( 'refine3D' )
                 if( cline%defined('nrestarts') )then
                 call restarted_exec(cline, string('refine3D'), string('simple_exec'))

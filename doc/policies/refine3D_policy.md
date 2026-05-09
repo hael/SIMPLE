@@ -126,6 +126,17 @@ projected matcher references.
 Standalone or terminal `reconstruct3D` calls follow the same assembly rule:
 assemble volumes only.
 
+`bootstrap_rec3D` is the supported fast route for generating an
+ML-regularized reconstruction when orientations exist but grouped sigma files
+do not. It first runs the normal `reconstruct3D` commander without
+regularization to produce even/odd half maps, estimates a global sigma2 table
+from the half-map difference scaled by the effective even/odd reconstruction
+weights, writes the standard `sigma2_groups*.star` artifact, and then reruns
+the normal `reconstruct3D` commander with `objfun=euclid` and `ml_reg=yes`.
+This is a bootstrap reconstruction workflow, not an online refinement matcher
+path, so its two reconstruction passes are an explicit part of the algorithm
+rather than a change to the single-read matcher batch contract.
+
 The shared helper `restore_state_from_parts` owns the restoration
 sequence. Changes to ML ordering, sampling-density correction, FSC-prior
 handling, trailing reconstruction, low-resolution even/odd insertion, or
@@ -177,6 +188,21 @@ symmetry-search stage is state-local. Each active state must determine its own
 axis from its own current map, apply that transform only to orientations assigned
 to that state, and only then proceed to the following point-group refinement
 stage.
+
+The terminal original-sampling ab initio reconstruction must inherit the
+scientific reconstruction policy from the last `refine3D` stage. If the final
+stage used `objfun=euclid` and `ml_reg=yes`, the terminal reconstruction must
+use the corresponding grouped sigma estimates, preferably the final
+`refine3D` iteration plus one, which is written for downstream reuse. This
+terminal reconstruction is still a fresh reconstruction from selected particles:
+it must not apply fractional-update sampling or trailing-average blending.
+
+For single-state continuation into `refine3D_auto`, an existing project
+`os_out` state-1 `vol` entry is a valid initializer when the referenced file is
+present. Explicit `vol1` on the command line takes precedence. `refine3D_auto`
+should reconstruct an initializer only when neither source is available; it
+should not re-read all particle images merely to recreate the map already
+registered by the preceding ab initio workflow.
 
 ## 9. Probabilistic Refinement
 

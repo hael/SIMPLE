@@ -5,6 +5,7 @@ use simple_commanders_volops, only: commander_symmetrize_map
 use simple_cluster_seed,      only: gen_labelling
 use simple_class_frcs,        only: class_frcs
 use simple_decay_funs,        only: calc_update_frac_dyn
+use simple_euclid_sigma2,     only: sigma2_star_from_iter
 use simple_matcher_refvol_utils, only: remove_ref_section_files
 use simple_parameters,        only: parameters
 use simple_refine3D_fnames,   only: refine3D_fsc_fname, refine3D_startvol_fbody, &
@@ -529,8 +530,8 @@ contains
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
         logical,               intent(in)    :: l_postprocess
-        type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr
-        integer      :: state, pop, ind_in_stk, nptcls, ldim(3)
+        type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, sigma_star
+        integer      :: state, pop, ind_in_stk, nptcls, ldim(3), sigma_iter
         real         :: smpd
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
@@ -540,21 +541,51 @@ contains
         call spproj%get_stkname_and_ind('ptcl3D', 1, stkname, ind_in_stk)
         call find_ldim_nptcls(stkname, ldim, nptcls)
         smpd = params%smpd
+        cline_reconstruct3D = cline_refine3D
+        call cline_reconstruct3D%set('prg',   'reconstruct3D')
+        call cline_reconstruct3D%set('mkdir', 'no')
         call cline_reconstruct3D%set('box',  ldim(1))
         call cline_reconstruct3D%set('smpd', smpd)
+        call cline_reconstruct3D%set('projfile', projfile)
+        call cline_reconstruct3D%set('pgrp', params%pgrp)
+        call cline_reconstruct3D%set('nstates', params%nstates)
         if( params%mskdiam > 0. )then
             call cline_reconstruct3D%set('mskdiam', params%mskdiam)
         else
             call cline_reconstruct3D%delete('mskdiam')
         endif
         call cline_reconstruct3D%set('oritype', 'ptcl3D')
+        call cline_reconstruct3D%set('trail_rec', 'no')
         if( l_postprocess )then
             call cline_reconstruct3D%set('postprocess', 'yes')
         else
             call cline_reconstruct3D%set('postprocess', 'no')
         endif
+        if( cline_reconstruct3D%defined('ml_reg') )then
+            if( cline_reconstruct3D%get_carg('ml_reg').ne.'yes' ) call cline_reconstruct3D%set('objfun','cc')
+        else
+            call cline_reconstruct3D%set('ml_reg','no')
+            call cline_reconstruct3D%set('objfun','cc')
+        endif
+        sigma_iter = final_rec_sigma_iter()
+        if( sigma_iter > 0 )then
+            call cline_reconstruct3D%set('which_iter', sigma_iter)
+            write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION SIGMA ITERATION: ', sigma_iter
+        endif
+        do state = 1,params%nstates
+            call cline_reconstruct3D%delete('vol'//int2str(state))
+        enddo
         call cline_reconstruct3D%delete('box_crop')
         call cline_reconstruct3D%delete('smpd_crop')
+        call cline_reconstruct3D%delete('endit')
+        call cline_reconstruct3D%delete('update_frac')
+        call cline_reconstruct3D%delete('fillin')
+        call cline_reconstruct3D%delete('ufrac_trec')
+        call cline_reconstruct3D%delete('vol_even')
+        call cline_reconstruct3D%delete('vol_odd')
+        call cline_reconstruct3D%delete('refs')
+        call cline_reconstruct3D%delete('refs_even')
+        call cline_reconstruct3D%delete('refs_odd')
         call xrec3D%execute(cline_reconstruct3D)
         if( .not. l_postprocess )then
             do state = 1, params%nstates
@@ -581,6 +612,36 @@ contains
         enddo
         call spproj%write_segment_inside('out', projfile)
         call stkname%kill
+        call sigma_star%kill
+
+        contains
+
+            integer function final_rec_sigma_iter() result(iter)
+                integer :: candidates(4), i
+                iter = 0
+                if( .not. cline_reconstruct3D%defined('objfun') ) return
+                if( .not. cline_reconstruct3D%defined('ml_reg') ) return
+                if( cline_reconstruct3D%get_carg('objfun').ne.'euclid' ) return
+                if( cline_reconstruct3D%get_carg('ml_reg').ne.'yes' ) return
+                candidates = 0
+                if( cline_refine3D%defined('endit') )then
+                    candidates(1) = cline_refine3D%get_iarg('endit') + 1
+                    candidates(3) = cline_refine3D%get_iarg('endit')
+                endif
+                if( cline_refine3D%defined('which_iter') )then
+                    candidates(2) = cline_refine3D%get_iarg('which_iter') + 1
+                    candidates(4) = cline_refine3D%get_iarg('which_iter')
+                endif
+                do i = 1,size(candidates)
+                    if( candidates(i) <= 0 )cycle
+                    sigma_star = sigma2_star_from_iter(candidates(i))
+                    if( file_exists(sigma_star) )then
+                        iter = candidates(i)
+                        return
+                    endif
+                enddo
+            end function final_rec_sigma_iter
+
     end subroutine calc_final_rec
 
     subroutine write_final_rec_outputs( params, spproj, lp )
