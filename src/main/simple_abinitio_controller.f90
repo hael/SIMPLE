@@ -253,7 +253,6 @@ contains
             call cline_refine3D%set('update_frac',        update_frac)
             call cline_refine3D%delete('fillin')
         endif
-        call cline_refine3D%set('smpd_crop',              lpinfo(istage)%smpd_crop)
         call cline_refine3D%set('box_crop',               lpinfo(istage)%box_crop)
         call cline_refine3D%set('startit',                cfg%iter)
         call cline_refine3D%set('which_iter',             cfg%iter)
