@@ -161,13 +161,9 @@ contains
         call bootstrap_rec3D%add_input(UI_SRCH, pgrp)
         call bootstrap_rec3D%add_input(UI_SRCH, frac)
         call bootstrap_rec3D%add_input(UI_SRCH, nstates)
-        call bootstrap_rec3D%add_input(UI_SRCH, sigma_est)
         ! filter controls
-        call bootstrap_rec3D%add_input(UI_FILT, envfsc)
         call bootstrap_rec3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
         &'Postprocess ML-regularized reconstructed volumes using the generated FSC curves', '(yes|no){yes}', .false., 'yes')
-        call bootstrap_rec3D%add_input(UI_FILT, ml_reg)
-        call bootstrap_rec3D%add_input(UI_FILT, objfun)
         ! mask controls
         call bootstrap_rec3D%add_input(UI_MASK, mskdiam)
         ! computer controls

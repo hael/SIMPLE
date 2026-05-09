@@ -65,18 +65,14 @@ contains
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('oritype')     ) call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('nstates')     ) call cline%set('nstates',          1)
-        if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est', 'global')
+        call cline%set('sigma_est', 'global')
         if( .not. cline%defined('which_iter')  ) call cline%set('which_iter',       1)
         if( .not. cline%defined('postprocess') ) call cline%set('postprocess',  'yes')
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no')
-        if( cline%defined('objfun') )then
-            if( cline%get_carg('objfun').ne.'euclid' ) THROW_HARD('bootstrap_rec3D requires objfun=euclid for the final reconstruction')
-        endif
-        if( cline%defined('ml_reg') )then
-            if( cline%get_carg('ml_reg').ne.'yes' ) THROW_HARD('bootstrap_rec3D requires ml_reg=yes for the final reconstruction')
-        endif
+        call cline%delete('envfsc')
+        call cline%delete('objfun')
+        call cline%delete('ml_reg')
         call params%new(cline)
-        if( .not. params%l_sigma_glob ) THROW_HARD('bootstrap_rec3D currently supports sigma_est=global only')
         which_iter = max(1, params%which_iter)
         call cline%set('which_iter', which_iter)
         call cline%set('mkdir', 'no') ! child reconstruct3D calls must not create nested run directories
