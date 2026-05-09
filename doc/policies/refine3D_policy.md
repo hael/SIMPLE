@@ -136,6 +136,11 @@ the normal `reconstruct3D` commander with `objfun=euclid` and `ml_reg=yes`.
 This is a bootstrap reconstruction workflow, not an online refinement matcher
 path, so its two reconstruction passes are an explicit part of the algorithm
 rather than a change to the single-read matcher batch contract.
+When `bootstrap_rec3D` is launched as a terminal/original-sampling
+reconstruction from a staged workflow, the caller must pass the intended final
+`box`/`smpd` and effective reconstruction crop explicitly. It must not let
+staged `box_crop`/`smpd_crop` or temporary project metadata define the
+terminal FSC grid.
 
 The shared helper `restore_state_from_parts` owns the restoration
 sequence. Changes to ML ordering, sampling-density correction, FSC-prior

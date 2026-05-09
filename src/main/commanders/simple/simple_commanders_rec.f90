@@ -160,9 +160,9 @@ contains
                     cycle
                 endif
                 fscname = refine3D_fsc_fname(state)
-                ! params%box_crop/smpd_crop are the reconstruction sampling
-                ! resolved by params%new. calc_final_rec intentionally omits
-                ! crop keys for original-sampling bootstrap reconstructions.
+                ! params%box_crop/smpd_crop are the effective reconstruction
+                ! sampling resolved by params%new or explicitly pinned by
+                ! callers that must avoid staged downsampling leakage.
                 call spproj%add_vol2os_out(volname, params%smpd_crop, state, trim(imgkind), pop=pop)
                 if( file_exists(fscname) ) call spproj%add_fsc2os_out(fscname, state, params%box_crop)
                 call volname%kill

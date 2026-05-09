@@ -544,6 +544,7 @@ contains
         call spproj%get_stkname_and_ind('ptcl3D', 1, stkname, ind_in_stk)
         call find_ldim_nptcls(stkname, ldim, nptcls)
         smpd = params%smpd
+        write(logfhandle,'(A,I0,A,F8.4)') '>>> FINAL RECONSTRUCTION SAMPLING: box=', ldim(1), ' smpd=', smpd
         call build_clean_reconstruct3D_cline(cline_reconstruct3D)
         sigma_iter = final_rec_sigma_iter()
         l_bootstrap_sigmas = final_rec_needs_bootstrap_sigmas(sigma_iter)
@@ -688,6 +689,19 @@ contains
             subroutine build_clean_bootstrap_rec3D_cline( child_cline )
                 class(cmdline), intent(inout) :: child_cline
                 call set_clean_final_rec_common(child_cline, 'bootstrap_rec3D')
+                ! Terminal bootstrap reconstruction must be performed on the
+                ! native/original FSC grid. Make the effective crop identical
+                ! to the native box so bootstrap_rec3D cannot inherit a staged
+                ! search crop from the temporary project or prior refine3D cline.
+                call child_cline%set('box',       ldim(1))
+                call child_cline%set('smpd',      smpd)
+                call child_cline%set('box_crop',  ldim(1))
+                call child_cline%set('smpd_crop', smpd)
+                if( l_postprocess )then
+                    call child_cline%set('postprocess', 'yes')
+                else
+                    call child_cline%set('postprocess', 'no')
+                endif
                 if( params%nstates > 1 ) call child_cline%set('nstates', params%nstates)
             end subroutine build_clean_bootstrap_rec3D_cline
 
