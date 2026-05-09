@@ -164,6 +164,7 @@ contains
                 call volname%kill
                 call fscname%kill
             enddo
+            if( file_exists(sigma_star) ) call spproj%add_sigma22os_out(sigma_star)
             call spproj%write_segment_inside('out', params%projfile)
             call spproj%kill
         end subroutine register_bootstrap_rec_outputs

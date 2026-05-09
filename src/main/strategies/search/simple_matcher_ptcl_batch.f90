@@ -2,6 +2,7 @@
 module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
+use simple_euclid_sigma2,   only: sigma2_star_from_iter
 use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
 use simple_matcher_2Dprep,  only: prepimg4align
 implicit none
@@ -19,10 +20,12 @@ contains
         class(builder),    intent(inout) :: build
         logical,           intent(in)    :: l_stream
         type(string)      :: fname
+        logical           :: l_group_only_init
         if( params%cc_objfun == OBJFUN_EUCLID )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call build%esig%new(params, build%pftc, fname, params%box)
-            if( l_stream )then
+            l_group_only_init = (.not. file_exists(fname)) .and. file_exists(sigma2_star_from_iter(params%which_iter))
+            if( l_stream .or. l_group_only_init )then
                 call build%esig%read_groups(build%spproj_field)
                 call build%esig%allocate_ptcls
             else

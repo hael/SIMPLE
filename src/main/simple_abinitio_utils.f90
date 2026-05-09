@@ -1,6 +1,7 @@
 !@descr: utilities for ab initio 3D reconstruction used by commanders_abinitio
 module simple_abinitio_utils
 use simple_commanders_api
+use simple_commanders_rec, only: commander_bootstrap_rec3D
 use simple_commanders_volops, only: commander_symmetrize_map
 use simple_cluster_seed,      only: gen_labelling
 use simple_class_frcs,        only: class_frcs
@@ -531,8 +532,10 @@ contains
         class(commander_base), intent(inout) :: xrec3D
         logical,               intent(in)    :: l_postprocess
         type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, sigma_star
-        integer      :: state, pop, ind_in_stk, nptcls, ldim(3), sigma_iter
+        type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
+        integer      :: state, pop, ind_in_stk, nptcls, ldim(3), sigma_iter, bootstrap_sigma_iter
         real         :: smpd
+        logical      :: l_bootstrap_sigmas
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'
@@ -567,8 +570,10 @@ contains
             call cline_reconstruct3D%set('ml_reg','no')
             call cline_reconstruct3D%set('objfun','cc')
         endif
+        call strip_final_rec_stage_keys(cline_reconstruct3D)
         sigma_iter = final_rec_sigma_iter()
-        if( sigma_iter > 0 )then
+        l_bootstrap_sigmas = final_rec_needs_bootstrap_sigmas(sigma_iter)
+        if( sigma_iter > 0 .and. .not. l_bootstrap_sigmas )then
             call cline_reconstruct3D%set('which_iter', sigma_iter)
             write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION SIGMA ITERATION: ', sigma_iter
         endif
@@ -586,7 +591,15 @@ contains
         call cline_reconstruct3D%delete('refs')
         call cline_reconstruct3D%delete('refs_even')
         call cline_reconstruct3D%delete('refs_odd')
-        call xrec3D%execute(cline_reconstruct3D)
+        if( l_bootstrap_sigmas )then
+            bootstrap_sigma_iter = final_rec_bootstrap_sigma_iter(sigma_iter)
+            call cline_reconstruct3D%set('prg', 'bootstrap_rec3D')
+            call cline_reconstruct3D%set('which_iter', bootstrap_sigma_iter)
+            write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION BOOTSTRAP SIGMA ITERATION: ', bootstrap_sigma_iter
+            call xbootstrap_rec3D%execute(cline_reconstruct3D)
+        else
+            call xrec3D%execute(cline_reconstruct3D)
+        endif
         if( .not. l_postprocess )then
             do state = 1, params%nstates
                 vol_name  = refine3D_state_vol_fname(state)
@@ -610,6 +623,13 @@ contains
             call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop)
             call spproj%add_fsc2os_out(refine3D_fsc_fname(state), state, ldim(1))
         enddo
+        sigma_star = ''
+        if( l_bootstrap_sigmas )then
+            sigma_star = sigma2_star_from_iter(bootstrap_sigma_iter)
+        else if( sigma_iter > 0 )then
+            sigma_star = sigma2_star_from_iter(sigma_iter)
+        endif
+        if( sigma_star%to_char() /= '' .and. file_exists(sigma_star) ) call spproj%add_sigma22os_out(sigma_star)
         call spproj%write_segment_inside('out', projfile)
         call stkname%kill
         call sigma_star%kill
@@ -641,6 +661,64 @@ contains
                     endif
                 enddo
             end function final_rec_sigma_iter
+
+            logical function final_rec_needs_bootstrap_sigmas( sigma_iter ) result( l_bootstrap )
+                integer, intent(in) :: sigma_iter
+                integer :: reg_box
+                real    :: reg_smpd
+                logical :: l_ml_reg
+                l_bootstrap = .false.
+                l_ml_reg = cline_reconstruct3D%defined('objfun') .and. cline_reconstruct3D%defined('ml_reg')
+                if( l_ml_reg )then
+                    l_ml_reg = cline_reconstruct3D%get_carg('objfun').eq.'euclid' .and. &
+                        &cline_reconstruct3D%get_carg('ml_reg').eq.'yes'
+                endif
+                if( .not. l_ml_reg ) return
+                if( sigma_iter <= 0 )then
+                    l_bootstrap = .true.
+                    write(logfhandle,'(A)') '>>> FINAL RECONSTRUCTION: no compatible sigma file found; bootstrapping sigmas'
+                    return
+                endif
+                reg_box  = params%box_crop
+                reg_smpd = params%smpd_crop
+                if( cline_refine3D%defined('box_crop')  ) reg_box  = cline_refine3D%get_iarg('box_crop')
+                if( cline_refine3D%defined('smpd_crop') ) reg_smpd = cline_refine3D%get_rarg('smpd_crop')
+                if( reg_box > 0 .and. (reg_box /= ldim(1) .or. abs(reg_smpd - smpd) > 1.e-6) )then
+                    l_bootstrap = .true.
+                    write(logfhandle,'(A,I0,A,I0)') &
+                        &'>>> FINAL RECONSTRUCTION: registration/final boxes differ; bootstrapping sigmas: ', &
+                        &reg_box, ' -> ', ldim(1)
+                endif
+            end function final_rec_needs_bootstrap_sigmas
+
+            integer function final_rec_bootstrap_sigma_iter( sigma_iter ) result( iter )
+                integer, intent(in) :: sigma_iter
+                iter = 1
+                if( sigma_iter > 0 )then
+                    iter = sigma_iter + 1
+                else if( cline_refine3D%defined('endit') )then
+                    iter = cline_refine3D%get_iarg('endit') + 2
+                else if( cline_refine3D%defined('which_iter') )then
+                    iter = cline_refine3D%get_iarg('which_iter') + 2
+                endif
+                iter = max(1, iter)
+            end function final_rec_bootstrap_sigma_iter
+
+            subroutine strip_final_rec_stage_keys( child_cline )
+                class(cmdline), intent(inout) :: child_cline
+                type(string) :: filt_mode
+                call child_cline%delete('lp')
+                call child_cline%delete('lpstart')
+                call child_cline%delete('lpstop')
+                if( child_cline%defined('filt_mode') )then
+                    filt_mode = child_cline%get_carg('filt_mode')
+                    select case(trim(filt_mode%to_char()))
+                        case('uniform','fsc')
+                            call child_cline%delete('filt_mode')
+                    end select
+                    call filt_mode%kill
+                endif
+            end subroutine strip_final_rec_stage_keys
 
     end subroutine calc_final_rec
 
