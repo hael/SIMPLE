@@ -155,6 +155,9 @@ contains
         ! parameter input/output
         call bootstrap_rec3D%add_input(UI_PARM, 'which_iter', 'num', 'Sigma iteration index',&
         &'Iteration index used for the generated sigma2_groups file{1}', 'iteration{1}', .false., 1.0)
+        call bootstrap_rec3D%add_input(UI_PARM, 'outfile', 'file', 'Resolution output prefix',&
+        &'Optional FSC/resolution text output prefix; state tags are appended', 'prefix.txt{RESOLUTION_FINAL.txt}',&
+        &.false., 'RESOLUTION_FINAL.txt')
         ! alternative inputs
         ! <empty>
         ! search controls

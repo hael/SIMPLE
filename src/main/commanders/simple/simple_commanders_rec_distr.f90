@@ -127,12 +127,26 @@ contains
 
         function resolve_fsc_txt_fname() result( fname )
             type(string) :: fname
-            if( cline%defined('which_iter') )then
+            if( cline%defined('outfile') )then
+                fname = resolution_outfile_fbody()
+            else if( cline%defined('which_iter') )then
                 fname = refine3D_resolution_txt_fbody(state, params%which_iter)
             else
                 fname = refine3D_resolution_txt_fbody(state)
             endif
         end function resolve_fsc_txt_fname
+
+        function resolution_outfile_fbody() result( fname )
+            type(string) :: fname, ext
+            fname = params%outfile
+            ext   = fname2ext(fname)
+            select case(ext%to_char())
+                case('txt','simple')
+                    fname = get_fbody(fname, ext)
+            end select
+            fname = fname//'_STATE'//int2str_pad(state,2)
+            call ext%kill
+        end function resolution_outfile_fbody
 
         subroutine sum_eos_after_density_correction_if_needed()
             if( .not. params%l_ml_reg ) return
