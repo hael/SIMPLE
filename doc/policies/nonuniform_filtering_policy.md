@@ -86,7 +86,7 @@ In nonuniform mode, matcher reference loading tries `_nu_filt` even/odd referenc
 The default nonuniform filter is still the unary voxelwise selector described above.
 For testing, the implementation can optionally apply an ordered-label smoothing refinement to the candidate-label map before writing `_nu_filt` volumes.
 
-The smoothing stage is intended to reduce abrupt local jumps in the selected filter-bank label. It initializes from the ordinary voxelwise argmin, then runs a small number of checkerboard ICM-style passes over the label map using the library 6-connected 3D pixel neighborhood (`neigh_4_3D`). The neighborhood penalty is evaluated on a candidate-coordinate axis rather than on raw label indices:
+The smoothing stage is intended to reduce abrupt local jumps in the selected filter-bank label. It initializes from the ordinary voxelwise argmin, then runs a small number of ICM-style passes over the label map using the fully connected 26-neighbor 3D voxel neighborhood. Updates use an 8-color parity schedule so voxels updated within the same pass are not neighbors under the full 3x3x3 neighborhood. The neighborhood penalty is evaluated on a candidate-coordinate axis rather than on raw label indices:
 
 - base low-pass candidates use coordinates `1..n_base`
 - auxiliary candidates are projected onto that same axis from their required effective resolutions

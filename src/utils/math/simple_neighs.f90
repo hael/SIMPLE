@@ -11,6 +11,7 @@ interface neigh_8
 end interface neigh_8
 
 interface neigh_8_3D
+    module procedure neigh_8_3D_0
     module procedure neigh_8_3D_1
     module procedure neigh_8_3D_2
 end interface neigh_8_3D
@@ -255,6 +256,34 @@ contains
             nsz = 9
         endif
     end subroutine neigh_8_3
+
+    ! Returns the 26-neighborhood coordinates of the voxel position px.
+    ! The value of the voxel itself is NOT saved.
+    subroutine neigh_8_3D_0( ldim, px, neigh_8, nsz )
+        integer, intent(in)    :: ldim(3), px(3)
+        integer, intent(inout) :: neigh_8(3,26)
+        integer, intent(out)   :: nsz
+        integer :: di, dj, dk, ni, nj, nk
+        neigh_8 = 0
+        nsz = 0
+        do dk = -1, 1
+            nk = px(3) + dk
+            if( nk < 1 .or. nk > ldim(3) ) cycle
+            do dj = -1, 1
+                nj = px(2) + dj
+                if( nj < 1 .or. nj > ldim(2) ) cycle
+                do di = -1, 1
+                    if( di == 0 .and. dj == 0 .and. dk == 0 ) cycle
+                    ni = px(1) + di
+                    if( ni < 1 .or. ni > ldim(1) ) cycle
+                    nsz = nsz + 1
+                    neigh_8(1,nsz) = ni
+                    neigh_8(2,nsz) = nj
+                    neigh_8(3,nsz) = nk
+                end do
+            end do
+        end do
+    end subroutine neigh_8_3D_0
 
     ! Returns 8-neighborhoods (in 3D they are 27) of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh

@@ -21,7 +21,7 @@ use simple_core_module_api
 use simple_image, only: image
 use simple_butterworth
 use simple_tent_smooth, only: tent_smooth_3d
-use simple_neighs,      only: neigh_4_3D
+use simple_neighs,      only: neigh_8_3D
 implicit none
 #include "simple_local_flags.inc"
 
@@ -40,8 +40,10 @@ real,             parameter   :: WINSZ_TENT_ANGSTROM      = 8.
 integer,          parameter   :: DISCONT_STEP_THRESH      = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS   = 3
 integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL = 1
-real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC = 1.0
-real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC = 0.5
+integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH   = 26
+integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS  = 8
+real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC = 2.0
+real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS  = 1.e-6
 logical,          parameter   :: L_NU_LABEL_SMOOTH_DEFAULT = .false.
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN     = 'nu_filter_cache_even'
@@ -452,7 +454,8 @@ contains
     subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
         integer, intent(inout) :: candmap(:,:,:)
         integer, intent(in)    :: n_candidates
-        integer :: iter, color, i, j, k, icand, cur_icand, best_icand, n_4(3,6), nsz, nchanged
+        integer :: iter, color, i, j, k, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        integer :: nchanged
         integer :: n_base, n_aux
         real    :: beta, e, best_e, site_energy
         if( n_candidates < 2 ) return
@@ -465,6 +468,8 @@ contains
         write(logfhandle,'(A,F10.4,A,I0,A,I0,A,I0,A,I0)') '>>> NU ordered-label smoothing: beta=', beta, &
             &', max iterations=', NU_LABEL_SMOOTH_MAXITS, ', candidates=', n_candidates, &
             &', auxiliary=', n_aux, ', step tolerance=', NU_LABEL_SMOOTH_STEP_TOL
+        write(logfhandle,'(A,I0,A,I0)') '>>> NU ordered-label smoothing neighborhood: ', &
+            &NU_LABEL_SMOOTH_NNEIGH, '-connected, color passes=', NU_LABEL_SMOOTH_NCOLORS
         write(logfhandle,'(A,F6.3)') '>>> NU ordered-label smoothing quadratic jump fraction: ', &
             &NU_LABEL_SMOOTH_QUAD_FRAC
         call log_nu_candidate_coords
@@ -476,24 +481,24 @@ contains
         write(logfhandle,'(A,F12.5)') '>>> NU ordered-label smoothing initial mean site energy: ', site_energy
         do iter = 1, NU_LABEL_SMOOTH_MAXITS
             nchanged = 0
-            do color = 0, 1
+            do color = 0, NU_LABEL_SMOOTH_NCOLORS - 1
                 !$omp parallel do collapse(3) schedule(static) default(shared) &
-                !$omp private(i,j,k,icand,cur_icand,best_icand,n_4,nsz,e,best_e) &
+                !$omp private(i,j,k,icand,cur_icand,best_icand,n_full,nsz,e,best_e) &
                 !$omp reduction(+:nchanged) proc_bind(close)
                 do k = 1, ldim(3)
                     do j = 1, ldim(2)
                         do i = 1, ldim(1)
                             if( .not.nu_lmask(i,j,k) ) cycle
-                            if( mod(i + j + k, 2) /= color ) cycle
-                            call neigh_4_3D(ldim, [i,j,k], n_4, nsz)
+                            if( nu_label_smooth_color(i,j,k) /= color ) cycle
+                            call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
                             cur_icand  = candmap(i,j,k)
                             best_icand = cur_icand
                             best_e     = dmats(i,j,k,cur_icand) + beta * &
-                                &nu_label_smooth_neighborhood_cost(cur_icand, candmap, n_4, nsz)
+                                &nu_label_smooth_neighborhood_cost(cur_icand, candmap, n_full, nsz)
                             do icand = 1, n_candidates
                                 if( icand == cur_icand ) cycle
                                 e = dmats(i,j,k,icand) + beta * &
-                                    &nu_label_smooth_neighborhood_cost(icand, candmap, n_4, nsz)
+                                    &nu_label_smooth_neighborhood_cost(icand, candmap, n_full, nsz)
                                 if( nu_label_smooth_is_better(e, best_e) )then
                                     best_e     = e
                                     best_icand = icand
@@ -548,15 +553,15 @@ contains
             &NU_LABEL_SMOOTH_BETA_FRAC * estimate_nu_label_smooth_beta / real(nvox)
     end function estimate_nu_label_smooth_beta
 
-    real function nu_label_smooth_neighborhood_cost( icand, candmap, n_4, nsz )
-        integer, intent(in) :: icand, candmap(:,:,:), n_4(3,6), nsz
+    real function nu_label_smooth_neighborhood_cost( icand, candmap, neigh, nsz )
+        integer, intent(in) :: icand, candmap(:,:,:), neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
         integer :: ineigh, ni, nj, nk, degree
         nu_label_smooth_neighborhood_cost = 0.
         degree = 0
         do ineigh = 1, nsz
-            ni = n_4(1,ineigh)
-            nj = n_4(2,ineigh)
-            nk = n_4(3,ineigh)
+            ni = neigh(1,ineigh)
+            nj = neigh(2,ineigh)
+            nk = neigh(3,ineigh)
             if( .not.nu_lmask(ni,nj,nk) ) cycle
             degree = degree + 1
             nu_label_smooth_neighborhood_cost = nu_label_smooth_neighborhood_cost + &
@@ -577,6 +582,11 @@ contains
         endif
     end function nu_label_smooth_pair_cost
 
+    integer function nu_label_smooth_color( i, j, k )
+        integer, intent(in) :: i, j, k
+        nu_label_smooth_color = mod(i,2) + 2 * mod(j,2) + 4 * mod(k,2)
+    end function nu_label_smooth_color
+
     logical function nu_label_smooth_is_better( e, best_e )
         real, intent(in) :: e, best_e
         real :: tol
@@ -587,20 +597,20 @@ contains
     real function calc_nu_label_smooth_site_energy( candmap, beta )
         integer, intent(in) :: candmap(:,:,:)
         real,    intent(in) :: beta
-        integer :: i, j, k, n_4(3,6), nsz, nvox
+        integer :: i, j, k, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, nvox
         real :: energy_sum
         calc_nu_label_smooth_site_energy = 0.
         energy_sum = 0.
         nvox = 0
         !$omp parallel do collapse(3) schedule(static) default(shared) &
-        !$omp private(i,j,k,n_4,nsz) reduction(+:energy_sum,nvox) proc_bind(close)
+        !$omp private(i,j,k,n_full,nsz) reduction(+:energy_sum,nvox) proc_bind(close)
         do k = 1, ldim(3)
             do j = 1, ldim(2)
                 do i = 1, ldim(1)
                     if( .not.nu_lmask(i,j,k) ) cycle
-                    call neigh_4_3D(ldim, [i,j,k], n_4, nsz)
+                    call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
                     energy_sum = energy_sum + dmats(i,j,k,candmap(i,j,k)) + beta * &
-                        &nu_label_smooth_neighborhood_cost(candmap(i,j,k), candmap, n_4, nsz)
+                        &nu_label_smooth_neighborhood_cost(candmap(i,j,k), candmap, n_full, nsz)
                     nvox = nvox + 1
                 end do
             end do
