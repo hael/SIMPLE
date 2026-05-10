@@ -7,6 +7,8 @@ private
 public :: commander_volassemble
 #include "simple_local_flags.inc"
 
+logical, parameter :: L_VOLASSEMBLE_NU_POTTS_PRIOR = .true.
+
 type, extends(commander_base) :: commander_volassemble
   contains
     procedure :: execute => exec_volassemble
@@ -375,7 +377,7 @@ contains
             if( L_BENCH_GLOB ) t_nonuniform_filter = tic()
             call build_nonuniform_mask()
             call setup_nonuniform_filter()
-            call optimize_nu_cutoff_finds()
+            call optimize_nu_cutoff_finds(l_potts_prior=L_VOLASSEMBLE_NU_POTTS_PRIOR)
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call log_nonuniform_filter_stats()
             call write_nonuniform_outputs()

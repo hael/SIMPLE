@@ -81,10 +81,10 @@ This design is scientifically reasonable and easy to debug, but it pays a large 
 
 In nonuniform mode, matcher reference loading tries `_nu_filt` even/odd references first, falls back to the regular even/odd references before filtered products exist, and avoids applying the ordinary low-pass filter on top of the nonuniform reference path.
 
-## Optional ordered-label smoothing regularization
+## Ordered-label smoothing regularization
 
-The default nonuniform filter is still the unary voxelwise selector described above.
-For testing, the implementation can optionally apply an ordered-label smoothing refinement to the candidate-label map before writing `_nu_filt` volumes.
+The standalone nonuniform filter API still defaults to the unary voxelwise selector described above.
+The iterative `refine3D`/`volassemble` nonuniform workflow enables ordered-label smoothing by default before writing `_nu_filt` volumes.
 
 The smoothing stage is intended to reduce abrupt local jumps in the selected filter-bank label. It initializes from the ordinary voxelwise argmin, then runs a small number of ICM-style passes over the label map using the fully connected 26-neighbor 3D voxel neighborhood. Updates use an 8-color parity schedule so voxels updated within the same pass are not neighbors under the full 3x3x3 neighborhood. The neighborhood penalty is evaluated on a candidate-coordinate axis rather than on raw label indices:
 
@@ -101,7 +101,7 @@ Diagnostics log the estimated smoothing beta, candidate and auxiliary counts, ju
 
 ### Activating ordered-label smoothing
 
-For standalone testing, `nu_filt3D` exposes the smoothing stage through a typed command-line parameter:
+For standalone testing, `nu_filt3D` keeps the smoothing stage optional through a typed command-line parameter:
 
 ```bash
 simple_exec prg=nu_filt3D vol1=odd.mrc vol2=even.mrc smpd=1.0 potts_prior=yes
@@ -109,25 +109,19 @@ simple_exec prg=nu_filt3D vol1=odd.mrc vol2=even.mrc smpd=1.0 potts_prior=yes
 
 The public `potts_prior` name is retained for familiarity and for compatibility with the current `optimize_nu_cutoff_finds(l_potts_prior=...)` keyword, but the implementation is the ordered-label smoothing prior described above.
 
-For iterative `refine3D` testing, enable the ordered-label smoothing stage in one of two code-level ways:
+For iterative `refine3D`, the Cartesian `volassemble` path explicitly calls:
 
-1. Prefer the local call-site override in `src/main/commanders/simple/simple_commanders_rec_distr.f90`:
+```fortran
+call optimize_nu_cutoff_finds(l_potts_prior=L_VOLASSEMBLE_NU_POTTS_PRIOR)
+```
 
-   ```fortran
-   call optimize_nu_cutoff_finds(l_potts_prior=.true.)
-   ```
+This makes ordered-label smoothing part of the default reconstruction-owned nonuniform filtering workflow while preserving the standalone `nu_filt3D` opt-in behavior.
 
-   The keyword name is retained for source compatibility. This activates ordered-label smoothing only for the Cartesian `volassemble` path used by iterative 3D refinement.
+### High-resolution bank extension
 
-2. For broader developer testing, temporarily set the module default in `src/utils/filter/simple_nu_filter.f90`:
+The optional high-resolution extension path can add finer low-pass candidates after the initial candidate map has been selected. It first identifies voxels currently assigned to the finest base-bank label, evaluates the next high-resolution candidate only within that local extension mask, and then updates only those eligible voxels.
 
-   ```fortran
-   logical, parameter :: L_NU_LABEL_SMOOTH_DEFAULT = .true.
-   ```
-
-   This affects every caller that does not pass an explicit `l_potts_prior` argument.
-
-Keep the default off until the regularization strength, convergence behavior, and reference-map continuity metrics have been evaluated on representative datasets.
+When requested, the extension step applies the same ordered-label prior to this constrained two-label decision. The old finest label and proposed new high-resolution label are the only labels that can change inside the extension mask, but neighborhood costs are evaluated against the surrounding frozen label field. This lets the extension avoid creating large discontinuities at the boundary of the finest-resolution region while preserving the local nature of the refinement.
 
 ## Strengths of the current design
 
