@@ -330,6 +330,7 @@ contains
                 call build%vol_odd%apply_filter(cur_fil)
             endif
         endif
+
     end subroutine read_mask_filter_refvols
 
     subroutine pick_lp_est_state( params, build, state )
@@ -422,6 +423,7 @@ contains
             call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
                 & do_center, xyz, map_shift=l_map_shift)
             call read_mask_filter_refvols(params, build, s)
+            call blend_lowres_eo_for_registration()
             call build%vol_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
                 & params%smpd_crop, wthreads=.true.)
             if( do_center )then
@@ -447,6 +449,28 @@ contains
             call build%vol_odd_pad%kill
             call build%vol_odd_pad%kill_expanded
         end do
+    contains
+
+        subroutine blend_lowres_eo_for_registration()
+            type(image) :: vol_avg_blend
+            integer     :: find4eoavg
+            if( params%l_lpset ) return
+            if( .not. build%vol%is_ft()     ) THROW_HARD('even reference must be FTed; blend_lowres_eo_for_registration')
+            if( .not. build%vol_odd%is_ft() ) THROW_HARD('odd reference must be FTed; blend_lowres_eo_for_registration')
+            find4eoavg = max(K4EOAVGLB, calc_fourier_index(FREQ4EOAVG3D, params%box_crop, params%smpd_crop))
+            if( any(build%fsc(s,:) > 0.) )then
+                find4eoavg = min(find4eoavg, get_find_at_crit(build%fsc(s,:), FSC4EOAVG3D))
+            endif
+            ! read_mask_filter_refvols leaves both references in Fourier space.
+            ! Build the average in Fourier space to avoid extra volume FFTs.
+            call vol_avg_blend%copy(build%vol)
+            call vol_avg_blend%add(build%vol_odd)
+            call vol_avg_blend%mul(0.5)
+            call build%vol%insert_lowres(vol_avg_blend, find4eoavg)
+            call build%vol_odd%insert_lowres(vol_avg_blend, find4eoavg)
+            call vol_avg_blend%kill
+        end subroutine blend_lowres_eo_for_registration
+
     end subroutine read_mask_filter_reproject_refvols
 
 end module simple_matcher_refvol_utils

@@ -89,6 +89,7 @@ type :: parameters
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='yes'
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
+    character(len=3)          :: potts_prior='no'     !< ordered-label/Potts prior for nonuniform filter(yes|no){no}
     character(len=3)          :: postprocess='yes'    !< postprocess reconstruction output(yes|no){yes}
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_corrs='no'     !< exporting corrs during the refinement(yes|no){no}
@@ -540,6 +541,7 @@ type :: parameters
     logical :: l_noise_reg       = .false.
     logical :: l_neigh           = .false.
     logical :: l_phaseplate      = .false.
+    logical :: l_potts_prior     = .false.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
     logical :: l_sigma_glob      = .false.
@@ -789,6 +791,7 @@ contains
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
         call check_carg('plot_key',       self%plot_key)
+        call check_carg('potts_prior',    self%potts_prior)
         call check_carg('postprocess',    self%postprocess)
         call check_carg('pre_norm',       self%pre_norm)
         call check_carg('prg',            self%prg)
@@ -1639,6 +1642,7 @@ contains
         endif
         ! set graphene flag
         self%l_graphene = self%graphene_filt .ne. 'no'
+        self%l_potts_prior = trim(self%potts_prior).eq.'yes'
         ! mskfile is no longer accepted from CLI; masks are internal and state-specific
         if( cline%defined('mskfile') ) THROW_HARD('mskfile is no longer supported on command line; masks are internal and per-state')
         ! scaling stuff

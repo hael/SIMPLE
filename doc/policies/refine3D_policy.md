@@ -157,9 +157,11 @@ blocks in the emitted files.
 ## 6. Gold-Standard, `lp`-Set, and Trailing
 
 Gold-standard refinement keeps even and odd volumes independent. If
-low-resolution even/odd docking is needed, assembly inserts the merged
-low-resolution region into the half volumes before they are written. Trailing
-reconstruction blends even with previous even and odd with previous odd.
+low-resolution even/odd docking is needed for 3D registration, it is applied
+only after reference read/mask/filter and immediately before reprojection-model
+generation. Assembly writes clean restored half-volumes without low-resolution
+insertion. Trailing reconstruction blends even with previous even and odd with
+previous odd before automasking and derived reference filtering.
 
 In `lp`-set mode, the matcher consumes a merged reference generated from the
 current merged volume. Assembly must not do low-resolution even/odd docking
@@ -167,7 +169,8 @@ insertion. If trailing is active, assembly first trails even and odd against
 their corresponding previous half volumes and merges the trailed half volumes.
 
 FSCs and FSC-derived stage diagnostics are calculated from dense Cartesian
-half-volumes, not from sparse or intermediate representations.
+half-volumes, not from sparse, intermediate, or low-resolution-blended
+registration-reference representations.
 
 ## 7. Reference Grid and Stage Transitions
 

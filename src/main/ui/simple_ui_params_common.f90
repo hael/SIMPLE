@@ -114,6 +114,7 @@ type(ui_param) :: phaseplate
 type(ui_param) :: pick_roi
 type(ui_param) :: picker
 type(ui_param) :: pickrefs
+type(ui_param) :: potts_prior
 type(ui_param) :: projfile
 type(ui_param) :: projfile_merged
 type(ui_param) :: projfile_ref
@@ -557,6 +558,10 @@ subroutine set_ui_params
     call outvol%set_param(         'outvol',          'file',   'Output volume name', &
                                    'Output volume name', &
                                    'e.g. outvol.mrc', .false., '')
+
+    call potts_prior%set_param(    'potts_prior',     'binary', 'Ordered-label prior for nonuniform filtering', &
+                                   'Apply ordered-label/Potts smoothing to the nonuniform filter candidate map(yes|no){no}', &
+                                   '(yes|no){no}', .false., 'no')
 
     call particle_density%set_param('particle_density','multi', 'Particle density in micrographs', &
                                     'Particle density in micrographs(low|optimal|high){optimal}', &

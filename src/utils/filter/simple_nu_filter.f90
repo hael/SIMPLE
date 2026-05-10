@@ -38,10 +38,11 @@ real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
 real,             parameter   :: WINSZ_TENT_ANGSTROM      = 8.
 integer,          parameter   :: DISCONT_STEP_THRESH      = 1
-integer,          parameter   :: NU_POTTS_MAXITS          = 3
-integer,          parameter   :: NU_POTTS_STEP_TOL        = 1
-real,             parameter   :: NU_POTTS_BETA_FRAC       = 1.0
-logical,          parameter   :: L_NU_POTTS_PRIOR_DEFAULT = .false.
+integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS   = 3
+integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL = 1
+real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC = 1.0
+real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS  = 1.e-6
+logical,          parameter   :: L_NU_LABEL_SMOOTH_DEFAULT = .false.
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN     = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD      = 'nu_filter_cache_odd'
 real,             allocatable :: dmats(:,:,:,:)
@@ -126,7 +127,7 @@ contains
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
         if( allocated(dmats)              ) deallocate(dmats)
         if( allocated(bwfilters)          ) deallocate(bwfilters)
-        if( allocated(candidate_coords)    ) deallocate(candidate_coords)
+        if( allocated(candidate_coords)   ) deallocate(candidate_coords)
         if( allocated(filtmap)            ) deallocate(filtmap)
         if( allocated(srcmap)             ) deallocate(srcmap)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
@@ -362,9 +363,11 @@ contains
     end function lowpass_limit_to_candidate_coord
 
     subroutine optimize_nu_cutoff_finds( l_potts_prior )
+        ! l_potts_prior is kept as the public keyword for source compatibility.
+        ! Internally this is an ordered-label smoothness prior, not a strict Potts prior.
         logical, optional, intent(in) :: l_potts_prior
         integer, allocatable :: candmap(:,:,:)
-        logical :: l_use_potts
+        logical :: l_use_label_smooth
         integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates
         real    :: best_dmat
         if( .not.allocated(dmats) ) THROW_HARD('dmats not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -404,9 +407,9 @@ contains
             end do
         end do
         !$omp end parallel do
-        l_use_potts = L_NU_POTTS_PRIOR_DEFAULT
-        if( present(l_potts_prior) ) l_use_potts = l_potts_prior
-        if( l_use_potts ) call refine_nu_candidate_map_potts_icm(candmap, n_candidates)
+        l_use_label_smooth = L_NU_LABEL_SMOOTH_DEFAULT
+        if( present(l_potts_prior) ) l_use_label_smooth = l_potts_prior
+        if( l_use_label_smooth ) call refine_nu_candidate_map_ordered_labels(candmap, n_candidates)
         call candidate_map_to_filt_and_src(candmap, n_base)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         allocate(dmat_finest_cached(nx,ny,nz), source=dmats(:,:,:,n_base))
@@ -445,57 +448,75 @@ contains
         !$omp end parallel do
     end subroutine candidate_map_to_filt_and_src
 
-    subroutine refine_nu_candidate_map_potts_icm( candmap, n_candidates )
+    subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
         integer, intent(inout) :: candmap(:,:,:)
         integer, intent(in)    :: n_candidates
-        integer, allocatable :: cand_prev(:,:,:)
-        integer :: iter, i, j, k, icand, best_icand, n_4(3,6), nsz, nchanged
-        real    :: beta, e, best_e
+        integer :: iter, color, i, j, k, icand, cur_icand, best_icand, n_4(3,6), nsz, nchanged
+        integer :: n_base, n_aux
+        real    :: beta, e, best_e, site_energy
         if( n_candidates < 2 ) return
-        if( .not. allocated(candidate_coords) ) THROW_HARD('candidate_coords not allocated; refine_nu_candidate_map_potts_icm')
-        if( size(candidate_coords) /= n_candidates ) THROW_HARD('candidate_coords size mismatch; refine_nu_candidate_map_potts_icm')
-        beta = estimate_nu_potts_beta(n_candidates)
-        if( beta <= TINY ) return
-        allocate(cand_prev(ldim(1),ldim(2),ldim(3)), source=candmap)
-        write(logfhandle,'(A,F10.4,A,I0,A)') '>>> NU Potts/ICM label regularization: beta=', beta, &
-            &', iterations=', NU_POTTS_MAXITS, ', neighborhood=6'
-        do iter = 1, NU_POTTS_MAXITS
-            cand_prev = candmap
-            nchanged  = 0
-            !$omp parallel do collapse(3) schedule(static) default(shared) &
-            !$omp private(i,j,k,icand,best_icand,n_4,nsz,e,best_e) reduction(+:nchanged) proc_bind(close)
-            do k = 1, ldim(3)
-                do j = 1, ldim(2)
-                    do i = 1, ldim(1)
-                        if( .not.nu_lmask(i,j,k) ) cycle
-                        call neigh_4_3D(ldim, [i,j,k], n_4, nsz)
-                        best_icand = cand_prev(i,j,k)
-                        best_e     = huge(best_e)
-                        do icand = 1, n_candidates
-                            e = dmats(i,j,k,icand) + beta * &
-                                &nu_potts_neighborhood_cost(icand, cand_prev, n_4, nsz)
-                            if( e < best_e )then
-                                best_e     = e
-                                best_icand = icand
+        if( .not. allocated(candidate_coords) ) THROW_HARD('candidate_coords not allocated; refine_nu_candidate_map_ordered_labels')
+        if( size(candidate_coords) /= n_candidates ) &
+            &THROW_HARD('candidate_coords size mismatch; refine_nu_candidate_map_ordered_labels')
+        n_base = size(cutoff_finds)
+        n_aux  = max(0, n_candidates - n_base)
+        beta = estimate_nu_label_smooth_beta(n_candidates)
+        write(logfhandle,'(A,F10.4,A,I0,A,I0,A,I0,A,I0)') '>>> NU ordered-label smoothing: beta=', beta, &
+            &', max iterations=', NU_LABEL_SMOOTH_MAXITS, ', candidates=', n_candidates, &
+            &', auxiliary=', n_aux, ', step tolerance=', NU_LABEL_SMOOTH_STEP_TOL
+        call log_nu_candidate_coords
+        if( beta <= TINY )then
+            write(logfhandle,'(A)') '>>> NU ordered-label smoothing skipped: beta <= TINY'
+            return
+        endif
+        site_energy = calc_nu_label_smooth_site_energy(candmap, beta)
+        write(logfhandle,'(A,F12.5)') '>>> NU ordered-label smoothing initial mean site energy: ', site_energy
+        do iter = 1, NU_LABEL_SMOOTH_MAXITS
+            nchanged = 0
+            do color = 0, 1
+                !$omp parallel do collapse(3) schedule(static) default(shared) &
+                !$omp private(i,j,k,icand,cur_icand,best_icand,n_4,nsz,e,best_e) &
+                !$omp reduction(+:nchanged) proc_bind(close)
+                do k = 1, ldim(3)
+                    do j = 1, ldim(2)
+                        do i = 1, ldim(1)
+                            if( .not.nu_lmask(i,j,k) ) cycle
+                            if( mod(i + j + k, 2) /= color ) cycle
+                            call neigh_4_3D(ldim, [i,j,k], n_4, nsz)
+                            cur_icand  = candmap(i,j,k)
+                            best_icand = cur_icand
+                            best_e     = dmats(i,j,k,cur_icand) + beta * &
+                                &nu_label_smooth_neighborhood_cost(cur_icand, candmap, n_4, nsz)
+                            do icand = 1, n_candidates
+                                if( icand == cur_icand ) cycle
+                                e = dmats(i,j,k,icand) + beta * &
+                                    &nu_label_smooth_neighborhood_cost(icand, candmap, n_4, nsz)
+                                if( nu_label_smooth_is_better(e, best_e) )then
+                                    best_e     = e
+                                    best_icand = icand
+                                endif
+                            end do
+                            if( best_icand /= cur_icand )then
+                                nchanged = nchanged + 1
+                                candmap(i,j,k) = best_icand
                             endif
                         end do
-                        if( best_icand /= cand_prev(i,j,k) ) nchanged = nchanged + 1
-                        candmap(i,j,k) = best_icand
                     end do
                 end do
+                !$omp end parallel do
             end do
-            !$omp end parallel do
-            write(logfhandle,'(A,I0,A,I0)') '>>> NU Potts/ICM iteration ', iter, ' changed voxels: ', nchanged
+            site_energy = calc_nu_label_smooth_site_energy(candmap, beta)
+            write(logfhandle,'(A,I0,A,I0,A,F12.5)') '>>> NU ordered-label smoothing iteration ', iter, &
+                &' changed voxels: ', nchanged, ', mean site energy: ', site_energy
             if( nchanged == 0 ) exit
         end do
-        deallocate(cand_prev)
-    end subroutine refine_nu_candidate_map_potts_icm
+    end subroutine refine_nu_candidate_map_ordered_labels
 
-    real function estimate_nu_potts_beta( n_candidates )
+    real function estimate_nu_label_smooth_beta( n_candidates )
         integer, intent(in) :: n_candidates
         integer :: i, j, k, icand, nvox
         real    :: best_e, second_e, cur_e
-        estimate_nu_potts_beta = 0.
+        estimate_nu_label_smooth_beta = 0.
         nvox = 0
         if( n_candidates < 2 ) return
         do k = 1, ldim(3)
@@ -514,39 +535,86 @@ contains
                         endif
                     end do
                     if( second_e < huge(second_e) )then
-                        estimate_nu_potts_beta = estimate_nu_potts_beta + max(0., second_e - best_e)
+                        estimate_nu_label_smooth_beta = estimate_nu_label_smooth_beta + max(0., second_e - best_e)
                         nvox = nvox + 1
                     endif
                 end do
             end do
         end do
-        if( nvox > 0 ) estimate_nu_potts_beta = NU_POTTS_BETA_FRAC * estimate_nu_potts_beta / real(nvox)
-    end function estimate_nu_potts_beta
+        if( nvox > 0 ) estimate_nu_label_smooth_beta = &
+            &NU_LABEL_SMOOTH_BETA_FRAC * estimate_nu_label_smooth_beta / real(nvox)
+    end function estimate_nu_label_smooth_beta
 
-    real function nu_potts_neighborhood_cost( icand, cand_prev, n_4, nsz )
-        integer, intent(in) :: icand, cand_prev(:,:,:), n_4(3,6), nsz
-        integer :: ineigh, ni, nj, nk
-        nu_potts_neighborhood_cost = 0.
+    real function nu_label_smooth_neighborhood_cost( icand, candmap, n_4, nsz )
+        integer, intent(in) :: icand, candmap(:,:,:), n_4(3,6), nsz
+        integer :: ineigh, ni, nj, nk, degree
+        nu_label_smooth_neighborhood_cost = 0.
+        degree = 0
         do ineigh = 1, nsz
             ni = n_4(1,ineigh)
             nj = n_4(2,ineigh)
             nk = n_4(3,ineigh)
             if( .not.nu_lmask(ni,nj,nk) ) cycle
-            nu_potts_neighborhood_cost = nu_potts_neighborhood_cost + &
-                &nu_potts_pair_cost(icand, cand_prev(ni,nj,nk))
+            degree = degree + 1
+            nu_label_smooth_neighborhood_cost = nu_label_smooth_neighborhood_cost + &
+                &nu_label_smooth_pair_cost(icand, candmap(ni,nj,nk))
         end do
-    end function nu_potts_neighborhood_cost
+        if( degree > 0 ) nu_label_smooth_neighborhood_cost = nu_label_smooth_neighborhood_cost / real(degree)
+    end function nu_label_smooth_neighborhood_cost
 
-    real function nu_potts_pair_cost( icand, jcand )
+    real function nu_label_smooth_pair_cost( icand, jcand )
         integer, intent(in) :: icand, jcand
         real :: step_jump
         if( icand == jcand )then
-            nu_potts_pair_cost = 0.
+            nu_label_smooth_pair_cost = 0.
         else
-            step_jump = max(0., abs(candidate_coords(icand) - candidate_coords(jcand)) - real(NU_POTTS_STEP_TOL))
-            nu_potts_pair_cost = step_jump
+            step_jump = max(0., abs(candidate_coords(icand) - candidate_coords(jcand)) - &
+                &real(NU_LABEL_SMOOTH_STEP_TOL))
+            nu_label_smooth_pair_cost = step_jump
         endif
-    end function nu_potts_pair_cost
+    end function nu_label_smooth_pair_cost
+
+    logical function nu_label_smooth_is_better( e, best_e )
+        real, intent(in) :: e, best_e
+        real :: tol
+        tol = NU_LABEL_SMOOTH_TIE_EPS * max(1., abs(best_e))
+        nu_label_smooth_is_better = e < best_e - tol
+    end function nu_label_smooth_is_better
+
+    real function calc_nu_label_smooth_site_energy( candmap, beta )
+        integer, intent(in) :: candmap(:,:,:)
+        real,    intent(in) :: beta
+        integer :: i, j, k, n_4(3,6), nsz, nvox
+        real :: energy_sum
+        calc_nu_label_smooth_site_energy = 0.
+        energy_sum = 0.
+        nvox = 0
+        !$omp parallel do collapse(3) schedule(static) default(shared) &
+        !$omp private(i,j,k,n_4,nsz) reduction(+:energy_sum,nvox) proc_bind(close)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.nu_lmask(i,j,k) ) cycle
+                    call neigh_4_3D(ldim, [i,j,k], n_4, nsz)
+                    energy_sum = energy_sum + dmats(i,j,k,candmap(i,j,k)) + beta * &
+                        &nu_label_smooth_neighborhood_cost(candmap(i,j,k), candmap, n_4, nsz)
+                    nvox = nvox + 1
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        if( nvox > 0 ) calc_nu_label_smooth_site_energy = energy_sum / real(nvox)
+    end function calc_nu_label_smooth_site_energy
+
+    subroutine log_nu_candidate_coords
+        integer :: icand
+        if( .not.allocated(candidate_coords) ) return
+        write(logfhandle,'(A)', advance='no') '>>> NU ordered-label smoothing candidate coordinates:'
+        do icand = 1, size(candidate_coords)
+            write(logfhandle,'(1X,F6.2)', advance='no') candidate_coords(icand)
+        end do
+        write(logfhandle,*)
+    end subroutine log_nu_candidate_coords
 
     subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit )
         class(image), intent(in) :: vol_even, vol_odd
@@ -769,11 +837,11 @@ contains
         real,    intent(out) :: percentages(:)
         logical, intent(in)  :: mask(:,:,:)
         integer :: icut, nselected
-        if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_histogram')
-        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before calc_filtmap_lowpass_histogram')
-        if( size(counts) /= size(cutoff_finds) ) THROW_HARD('counts size mismatch in calc_filtmap_lowpass_histogram')
+        if( .not.allocated(filtmap)                 ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_histogram')
+        if( .not.allocated(cutoff_finds)            ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before calc_filtmap_lowpass_histogram')
+        if( size(counts) /= size(cutoff_finds)      ) THROW_HARD('counts size mismatch in calc_filtmap_lowpass_histogram')
         if( size(percentages) /= size(cutoff_finds) ) THROW_HARD('percentages size mismatch in calc_filtmap_lowpass_histogram')
-        if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in calc_filtmap_lowpass_histogram')
+        if( any(shape(mask) /= shape(filtmap))      ) THROW_HARD('mask shape mismatch in calc_filtmap_lowpass_histogram')
         if( allocated(srcmap) ) then
             nselected = count(mask .and. srcmap == 1)
         else

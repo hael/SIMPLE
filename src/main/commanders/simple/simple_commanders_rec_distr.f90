@@ -24,9 +24,12 @@ contains
 
     !> Reduce one state's Cartesian partial reconstructions and restore dense
     !> even, odd, and merged volumes. On return build%vol/build%vol2 contain the
-    !> restored half-volumes needed by automask and nonuniform filtering.
+    !> restored half-volumes needed by automask, while vol_nu_base_even/odd and
+    !> optional vol_nu_aux_even/odd contain the nonuniform-filter inputs before
+    !> even/odd low-resolution insertion.
     subroutine restore_state_from_parts( params, build, cline, eorecvol_read, state, numlen_part, &
-        &update_frac_trail_rec, gridcorr_img, vol_prev_even, vol_prev_odd, vol_e, vol_merged, &
+        &update_frac_trail_rec, gridcorr_img, vol_prev_even, vol_prev_odd, vol_merged, &
+        &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
         &volname, eonames, res05, res0143, timings )
         use simple_reconstructor_eo, only: reconstructor_eo
         type(parameters),       intent(in)    :: params
@@ -36,11 +39,14 @@ contains
         integer,                intent(in)    :: state, numlen_part
         real,                   intent(in)    :: update_frac_trail_rec
         type(image),            intent(inout) :: gridcorr_img
-        type(image),            intent(inout) :: vol_prev_even, vol_prev_odd, vol_e, vol_merged
+        type(image),            intent(inout) :: vol_prev_even, vol_prev_odd, vol_merged
+        type(image),            intent(inout) :: vol_nu_base_even, vol_nu_base_odd
+        type(image),            intent(inout) :: vol_nu_aux_even, vol_nu_aux_odd
         type(string),           intent(inout) :: volname, eonames(2)
         real,                   intent(out)   :: res05, res0143
         type(restore_timings_t), intent(inout) :: timings
-        type(string) :: volname_prev, volname_prev_even, volname_prev_odd, fsc_txt_file
+        type(string) :: volname_prev, volname_prev_even, volname_prev_odd
+        type(string) :: fsc_txt_file
         real, allocatable :: fsc(:)
         real    :: weight_prev
         integer :: find4eoavg
@@ -50,19 +56,14 @@ contains
         call sum_eos_before_density_correction_if_needed()
         call restore_eos_and_write_fsc()
         call sum_eos_after_density_correction_if_needed()
+        call capture_nonuniform_source_halves()
         call restore_merged_volume()
         ! Keep restored half-volumes current in build%vol/build%vol2 for
-        ! automasking, nonuniform filtering, and optional trailing. In lp-set
-        ! mode the halves are only on disk after density correction. Otherwise
-        ! lowres_insert_into_halves leaves the odd half in build%vol2 and keeps
-        ! a copy of the even half in vol_e while build%vol still holds the
-        ! merged volume.
-        if( params%l_lpset )then
-            call build%vol%read(eonames(1))
-            call build%vol2%read(eonames(2))
-        else
-            call build%vol%copy(vol_e)
-        endif
+        ! automasking and optional trailing. Low-resolution even/odd blending is
+        ! a registration-reference trick and is applied only during
+        ! reprojection-model preparation, never to these on-disk halfmaps.
+        call build%vol%read(eonames(1))
+        call build%vol2%read(eonames(2))
         call trail_restored_halves_if_needed()
         call cleanup_restore_state()
 
@@ -155,14 +156,28 @@ contains
             if( L_BENCH_GLOB ) timings%sum_eos = timings%sum_eos + toc(t_sum_eos)
         end subroutine sum_eos_after_density_correction_if_needed
 
+        subroutine capture_nonuniform_source_halves()
+            if( trim(params%filt_mode).ne.'nonuniform' ) return
+            if( params%l_ml_reg )then
+                call vol_nu_base_even%read(add2fbody(eonames(1), MRC_EXT, '_unfil'))
+                call vol_nu_base_odd%read( add2fbody(eonames(2), MRC_EXT, '_unfil'))
+                call vol_nu_aux_even%read(eonames(1))
+                call vol_nu_aux_odd%read( eonames(2))
+                call vol_nu_aux_even%mul(gridcorr_img)
+                call vol_nu_aux_odd%mul( gridcorr_img)
+            else
+                call vol_nu_base_even%read(eonames(1))
+                call vol_nu_base_odd%read( eonames(2))
+            endif
+            call vol_nu_base_even%mul(gridcorr_img)
+            call vol_nu_base_odd%mul( gridcorr_img)
+        end subroutine capture_nonuniform_source_halves
+
         subroutine restore_merged_volume()
             if( L_BENCH_GLOB ) t_restore_merged = tic()
             call build%eorecvol%get_res(res05, res0143)
             call build%eorecvol%sampl_dens_correct_sum(build%vol)
             call build%vol%fft
-            if( .not. params%l_lpset )then
-                call lowres_insert_into_halves()
-            endif
             call build%vol%ifft
             call build%vol%mul(gridcorr_img)
             call build%vol%write(volname, del_if_exists=.true.)
@@ -170,24 +185,6 @@ contains
             if( L_BENCH_GLOB ) timings%restore_merged_volume = &
                 timings%restore_merged_volume + toc(t_restore_merged)
         end subroutine restore_merged_volume
-
-        subroutine lowres_insert_into_halves()
-            call build%vol2%zero_and_unflag_ft
-            call build%vol2%read(eonames(1))
-            call build%vol2%fft()
-            call build%vol2%insert_lowres(build%vol, find4eoavg)
-            call build%vol2%ifft()
-            call build%vol2%mul(gridcorr_img)
-            call build%vol2%write(eonames(1), del_if_exists=.true.)
-            call vol_e%copy(build%vol2)
-            call build%vol2%zero_and_unflag_ft
-            call build%vol2%read(eonames(2))
-            call build%vol2%fft()
-            call build%vol2%insert_lowres(build%vol, find4eoavg)
-            call build%vol2%ifft()
-            call build%vol2%mul(gridcorr_img)
-            call build%vol2%write(eonames(2), del_if_exists=.true.)
-        end subroutine lowres_insert_into_halves
 
         subroutine trail_restored_halves_if_needed()
             if( .not. params%l_trail_rec ) return
@@ -200,6 +197,18 @@ contains
             call build%vol2%mul(update_frac_trail_rec)
             call build%vol%add(vol_prev_even)
             call build%vol2%add(vol_prev_odd)
+            if( trim(params%filt_mode).eq.'nonuniform' )then
+                call vol_nu_base_even%mul(update_frac_trail_rec)
+                call vol_nu_base_odd%mul(update_frac_trail_rec)
+                call vol_nu_base_even%add(vol_prev_even)
+                call vol_nu_base_odd%add(vol_prev_odd)
+                if( params%l_ml_reg )then
+                    call vol_nu_aux_even%mul(update_frac_trail_rec)
+                    call vol_nu_aux_odd%mul(update_frac_trail_rec)
+                    call vol_nu_aux_even%add(vol_prev_even)
+                    call vol_nu_aux_odd%add(vol_prev_odd)
+                endif
+            endif
             call build%vol%write(eonames(1))
             call build%vol2%write(eonames(2))
             if( params%l_lpset )then
@@ -238,7 +247,7 @@ contains
         type(reconstructor_eo)        :: eorecvol_read
         type(image)                   :: vol_prev_even, vol_prev_odd, gridcorr_img, vol_merged
         type(image)                   :: vol_even_nu, vol_odd_nu, vol_msk
-        type(image)                   :: vol_e, vol_nu_base_even, vol_nu_base_odd
+        type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
         type(image_msk)               :: mskvol
         type(image_bin)               :: state_mask_bin
@@ -329,7 +338,8 @@ contains
 
         subroutine assemble_state()
             call restore_state_from_parts(params, build, cline, eorecvol_read, state, numlen_part, &
-                &update_frac_trail_rec, gridcorr_img, vol_prev_even, vol_prev_odd, vol_e, vol_merged, &
+                &update_frac_trail_rec, gridcorr_img, vol_prev_even, vol_prev_odd, vol_merged, &
+                &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                 &volname, eonames, res05, res0143s(state), restore_timings)
             params%vols(state)      = volname
             params%vols_even(state) = eonames(1)
@@ -401,17 +411,13 @@ contains
             if( allocated(nu_aux_even) ) deallocate(nu_aux_even)
             if( allocated(nu_aux_odd) )  deallocate(nu_aux_odd)
             if( params%l_ml_reg )then
-                call vol_nu_base_even%new(ldim, params%smpd_crop)
-                call vol_nu_base_odd%new( ldim, params%smpd_crop)
-                call vol_nu_base_even%read(add2fbody(eonames(1), MRC_EXT, '_unfil'))
-                call vol_nu_base_odd%read( add2fbody(eonames(2), MRC_EXT, '_unfil'))
                 allocate(nu_aux_even(1), nu_aux_odd(1))
-                call nu_aux_even(1)%copy(build%vol)
-                call nu_aux_odd(1)%copy(build%vol2)
+                call nu_aux_even(1)%copy(vol_nu_aux_even)
+                call nu_aux_odd(1)%copy(vol_nu_aux_odd)
                 call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [res0143s(state)], &
                     &nu_aux_even, nu_aux_odd)
             else
-                call setup_nu_dmats(build%vol, build%vol2, l_mask, [real ::])
+                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [real ::])
             endif
         end subroutine setup_nonuniform_filter
 
@@ -445,6 +451,8 @@ contains
             call vol_odd_nu%kill
             call vol_nu_base_even%kill
             call vol_nu_base_odd%kill
+            call vol_nu_aux_even%kill
+            call vol_nu_aux_odd%kill
             if( allocated(nu_aux_even) )then
                 call nu_aux_even(1)%kill
                 deallocate(nu_aux_even)
@@ -492,6 +500,8 @@ contains
             call vol_merged%kill
             call vol_nu_base_even%kill
             call vol_nu_base_odd%kill
+            call vol_nu_aux_even%kill
+            call vol_nu_aux_odd%kill
             if( allocated(nu_aux_even) )then
                 call nu_aux_even(1)%kill
                 deallocate(nu_aux_even)
@@ -505,7 +515,6 @@ contains
             call cleanup_nu_filter()
             call state_mask_bin%kill_bimg
             call mskvol%kill_bimg
-            call vol_e%kill
             call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
             call simple_touch('VOLASSEMBLE_FINISHED')
         end subroutine cleanup_context
