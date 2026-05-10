@@ -662,7 +662,7 @@ contains
                 ! volassemble appends _STATENN and writes the extension-less
                 ! resolution document next to rec_final_stateNN.mrc.
                 call child_cline%set('outfile', 'RESOLUTION_FINAL.txt')
-                if( params%pgrp.ne.'c1' ) call child_cline%set('pgrp', params%pgrp)
+                call child_cline%set('pgrp',    params%pgrp)
                 if( params%nthr    > 1  ) call child_cline%set('nthr',    params%nthr)
                 if( params%mskdiam > 0. ) call child_cline%set('mskdiam', params%mskdiam)
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
