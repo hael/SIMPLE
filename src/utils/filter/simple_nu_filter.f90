@@ -38,9 +38,10 @@ real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
 real,             parameter   :: WINSZ_TENT_ANGSTROM      = 8.
 integer,          parameter   :: DISCONT_STEP_THRESH      = 1
-integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS   = 5
+integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS   = 3
 integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL = 1
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC = 1.0
+real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC = 0.5
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS  = 1.e-6
 logical,          parameter   :: L_NU_LABEL_SMOOTH_DEFAULT = .false.
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN     = 'nu_filter_cache_even'
@@ -464,6 +465,8 @@ contains
         write(logfhandle,'(A,F10.4,A,I0,A,I0,A,I0,A,I0)') '>>> NU ordered-label smoothing: beta=', beta, &
             &', max iterations=', NU_LABEL_SMOOTH_MAXITS, ', candidates=', n_candidates, &
             &', auxiliary=', n_aux, ', step tolerance=', NU_LABEL_SMOOTH_STEP_TOL
+        write(logfhandle,'(A,F6.3)') '>>> NU ordered-label smoothing quadratic jump fraction: ', &
+            &NU_LABEL_SMOOTH_QUAD_FRAC
         call log_nu_candidate_coords
         if( beta <= TINY )then
             write(logfhandle,'(A)') '>>> NU ordered-label smoothing skipped: beta <= TINY'
@@ -570,7 +573,7 @@ contains
         else
             step_jump = max(0., abs(candidate_coords(icand) - candidate_coords(jcand)) - &
                 &real(NU_LABEL_SMOOTH_STEP_TOL))
-            nu_label_smooth_pair_cost = step_jump
+            nu_label_smooth_pair_cost = step_jump + NU_LABEL_SMOOTH_QUAD_FRAC * step_jump * step_jump
         endif
     end function nu_label_smooth_pair_cost
 

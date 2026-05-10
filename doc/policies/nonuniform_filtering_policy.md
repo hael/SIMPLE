@@ -91,13 +91,13 @@ The smoothing stage is intended to reduce abrupt local jumps in the selected fil
 - base low-pass candidates use coordinates `1..n_base`
 - auxiliary candidates are projected onto that same axis from their required effective resolutions
 - one-step differences are tolerated by the current penalty setting
-- jumps larger than one filter-bank step are penalized
+- jumps larger than one filter-bank step are penalized with a convex hinge to discourage larger jumps more strongly
 - neighbor penalties are normalized by the number of in-mask neighbors, so boundary and thin-mask voxels do not receive systematically weaker or stronger regularization
 - ties preserve the current label within a small tolerance instead of drifting to the lowest candidate index
 
 Auxiliary candidate resolutions are mandatory whenever auxiliary candidate volumes are supplied. In the current `volassemble` ML-regularized path, the auxiliary candidate is the ML-regularized even/odd pair and its coordinate is derived from the state FSC(0.143) resolution, `res0143s(state)`.
 
-Diagnostics log the estimated smoothing beta, candidate and auxiliary counts, candidate coordinates, changed voxels per iteration, and mean site energy.
+Diagnostics log the estimated smoothing beta, candidate and auxiliary counts, jump-penalty settings, candidate coordinates, changed voxels per iteration, and mean site energy.
 
 ### Activating ordered-label smoothing
 
