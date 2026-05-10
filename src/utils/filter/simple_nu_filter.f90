@@ -38,7 +38,7 @@ real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
 real,             parameter   :: WINSZ_TENT_ANGSTROM      = 8.
 integer,          parameter   :: DISCONT_STEP_THRESH      = 1
-integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS   = 3
+integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS   = 5
 integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL = 1
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS  = 1.e-6
@@ -917,24 +917,30 @@ contains
         integer :: i, j, k, di, dj, dk, ni, nj, nk
         integer :: lp_i, lp_j, lp_diff, max_diff, n_neighbors, n_discontinuous_neighbors
         integer :: n_total_neighbor_pairs, n_discontinuous_pairs, n_voxels_with_discontinuity, nx, ny, nz, ii, thresh, n_analyzed
-        integer, allocatable :: discontinuity_counts(:)
+        integer :: n_identical_pairs, n_tolerated_pairs, max_step_diff
+        integer, allocatable :: stepdiff_counts(:)
         real :: pct, pct_vox, pct_pairs
         if( .not.allocated(filtmap)            ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before analyze_filtmap_neighbor_continuity')
         if( .not.allocated(cutoff_finds)       ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before analyze_filtmap_neighbor_continuity')
         if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in analyze_filtmap_neighbor_continuity')
-        ! Use threshold of 1 by default (neighbors differ by more than 1 step)
+        ! One low-pass step is tolerated by the ordered-label prior, so only
+        ! neighbor pairs beyond this threshold are counted as discontinuities.
         thresh = DISCONT_STEP_THRESH
         nx = ldim(1)
         ny = ldim(2)
         nz = ldim(3)
-        allocate(discontinuity_counts(8), source=0)
+        max_step_diff = max(1, size(cutoff_finds) - 1)
+        allocate(stepdiff_counts(max_step_diff), source=0)
         n_voxels_with_discontinuity = 0
         n_total_neighbor_pairs      = 0
         n_discontinuous_pairs       = 0
+        n_identical_pairs           = 0
+        n_tolerated_pairs           = 0
         ! Iterate through all voxels
         !$omp parallel do collapse(3) schedule(static) default(shared) &
         !$omp private(i,j,k,di,dj,dk,ni,nj,nk,lp_i,lp_j,lp_diff,n_neighbors,n_discontinuous_neighbors,max_diff) &
-        !$omp reduction(+:n_total_neighbor_pairs, n_discontinuous_pairs, n_voxels_with_discontinuity, discontinuity_counts)
+        !$omp reduction(+:n_total_neighbor_pairs, n_discontinuous_pairs, n_voxels_with_discontinuity, &
+        !$omp n_identical_pairs, n_tolerated_pairs, stepdiff_counts)
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
@@ -967,13 +973,18 @@ contains
                                 lp_diff = abs(lp_i - lp_j)
                                 n_neighbors = n_neighbors + 1
                                 n_total_neighbor_pairs = n_total_neighbor_pairs + 1
+                                if( lp_diff == 0 )then
+                                    n_identical_pairs = n_identical_pairs + 1
+                                else if( lp_diff <= thresh )then
+                                    n_tolerated_pairs = n_tolerated_pairs + 1
+                                endif
                                 if( lp_diff > thresh ) then
                                     n_discontinuous_neighbors = n_discontinuous_neighbors + 1
                                     n_discontinuous_pairs     = n_discontinuous_pairs + 1
                                 end if
                                 max_diff = max(max_diff, lp_diff)
-                                if( lp_diff >= 1 .and. lp_diff <= 8 ) then
-                                    discontinuity_counts(lp_diff) = discontinuity_counts(lp_diff) + 1
+                                if( lp_diff >= 1 .and. lp_diff <= max_step_diff ) then
+                                    stepdiff_counts(lp_diff) = stepdiff_counts(lp_diff) + 1
                                 end if
                             end do
                         end do
@@ -989,7 +1000,8 @@ contains
         ! Print diagnostics
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') '>>> NONUNIFORM FILTER NEIGHBOR CONTINUITY ANALYSIS'
-        write(logfhandle,'(A,I0,A)') '>>> Threshold: neighbors differing by > ', thresh, ' step(s) in LP ordering'
+        write(logfhandle,'(A,I0,A)') '>>> Tolerated LP-step difference: <= ', thresh, ' step(s)'
+        write(logfhandle,'(A,I0,A)') '>>> Discontinuous LP-step difference: > ', thresh, ' step(s)'
         write(logfhandle,'(A)') ''
         ! Count total masked voxels
         if( allocated(srcmap) ) then
@@ -1009,17 +1021,29 @@ contains
         if( n_total_neighbor_pairs > 0 ) then
             pct_pairs = 100. * real(n_discontinuous_pairs) / real(n_total_neighbor_pairs)
             write(logfhandle,'(A,I14)') 'Total neighbor pairs examined:            ', n_total_neighbor_pairs
-            write(logfhandle,'(A,I0,A,I14)') 'Neighbor pairs with discontinuity (>', thresh, ' step): ', n_discontinuous_pairs
+            write(logfhandle,'(A,I14)') 'Neighbor pairs with identical LP step:     ', n_identical_pairs
+            write(logfhandle,'(A,I0,A,I14)') 'Neighbor pairs with tolerated LP diff (<=', thresh, ' step): ', n_tolerated_pairs
+            write(logfhandle,'(A,I0,A,I14)') 'Neighbor pairs with discontinuity (>', thresh, ' step):  ', n_discontinuous_pairs
             write(logfhandle,'(A,F8.2,A)') 'Percentage of discontinuous pairs:        ', pct_pairs, '%'
         end if
         write(logfhandle,'(A)') ''
-        ! Print distribution of all pair step-differences
-        write(logfhandle,'(A)') '>>> DISCONTINUITY MAGNITUDE DISTRIBUTION (all LP step differences)'
-        do ii = 1, 8
-            if( discontinuity_counts(ii) > 0 ) then
-                pct = 100. * real(discontinuity_counts(ii)) / real(n_total_neighbor_pairs)
-                write(logfhandle,'(A,I1,A,I14,A,F7.3,A)') &
-                    'LP step diff = ', ii, ': ', discontinuity_counts(ii), ' pairs (', pct, '%)'
+        ! Print distribution of all pair step-differences without implying that
+        ! tolerated one-step differences are discontinuities.
+        write(logfhandle,'(A)') '>>> LP STEP-DIFFERENCE DISTRIBUTION'
+        if( n_total_neighbor_pairs > 0 )then
+            pct = 100. * real(n_identical_pairs) / real(n_total_neighbor_pairs)
+            write(logfhandle,'(A,I14,A,F7.3,A)') 'LP step diff = 0: ', n_identical_pairs, ' pairs (', pct, '%), identical'
+        endif
+        do ii = 1, max_step_diff
+            if( stepdiff_counts(ii) > 0 ) then
+                pct = 100. * real(stepdiff_counts(ii)) / real(n_total_neighbor_pairs)
+                if( ii <= thresh )then
+                    write(logfhandle,'(A,I1,A,I14,A,F7.3,A)') &
+                        'LP step diff = ', ii, ': ', stepdiff_counts(ii), ' pairs (', pct, '%), tolerated'
+                else
+                    write(logfhandle,'(A,I1,A,I14,A,F7.3,A)') &
+                        'LP step diff = ', ii, ': ', stepdiff_counts(ii), ' pairs (', pct, '%), discontinuous'
+                endif
             end if
         end do
         write(logfhandle,'(A)') ''
@@ -1028,17 +1052,15 @@ contains
             if( pct_pairs <= 5. ) then
                 write(logfhandle,'(A)') '>>> Low discontinuity rate — local resolution map is spatially smooth'
             else if( pct_pairs <= 10. ) then
-                write(logfhandle,'(A)') '>>> Moderate discontinuity rate — tent regularization may benefit from widening'
+                write(logfhandle,'(A)') '>>> Moderate discontinuity rate — label smoothing may benefit from additional convergence'
             else
-                write(logfhandle,'(A)') '>>> High discontinuity rate — tent regularization kernel likely too narrow'
-                write(logfhandle,'(A,I0,A,F6.2,A)') '    Current tent regularization radius = ', winsz_tent, &
-                    &' px (', WINSZ_TENT_ANGSTROM, ' A); consider increasing to reduce spatial noise in LP map'
+                write(logfhandle,'(A)') '>>> High discontinuity rate — inspect mask support, objective maps, and label-prior convergence'
             end if
         else
             write(logfhandle,'(A)') '>>> No neighbor pairs found in mask — continuity analysis is inconclusive'
         end if
         write(logfhandle,'(A)') ''
-        deallocate(discontinuity_counts)
+        deallocate(stepdiff_counts)
     end subroutine analyze_filtmap_neighbor_continuity
 
 end module simple_nu_filter
