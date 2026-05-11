@@ -21,6 +21,7 @@ use simple_edges_sqwins, only: sqwin_1d
 implicit none
 
 public :: kbinterpol, kb_windim
+public :: apod_device
 private
 
 type :: kbinterpol
@@ -43,6 +44,10 @@ end type kbinterpol
 interface kbinterpol
    module procedure constructor
 end interface kbinterpol
+
+#ifdef USE_OPENMP_OFFLOAD
+!$omp declare target(apod_device, bessi0)
+#endif
 
 contains
 
@@ -379,6 +384,25 @@ contains
             y = y / (((xsq+Q2)*xsq+Q1)*xsq + Q0)
         end if
     end function sinhc
+
+    ! PUBLIC FUNCTIONS
+
+    !>  \brief  is the Kaiser-Bessel apodization function
+    !>  It must be kept identical to apod! Because it uses a non polymorphic
+    !>  input it is compatible with OpenMP offload.
+    !>  It is assumed the kbinterpol object has been constructed prior to call.
+    pure real elemental function apod_device( self, x )
+        type(kbinterpol), intent(in) :: self
+        real,             intent(in) :: x
+        real :: r, arg
+        if( abs(x) > self%Whalf )then
+            r = 0.
+            return ! for insignificant values return as soon as possible
+        endif
+        arg = self%twooW * x
+        arg = 1. - arg * arg
+        apod_device = self%oneoW * bessi0(self%beta * sqrt(arg))
+    end function apod_device
 
     ! Public utility to get the windows pixel size without instantiating the object
     pure integer function kb_windim( winsz )
