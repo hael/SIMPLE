@@ -129,6 +129,7 @@ contains
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream2d',  'yes') ! the only place this flag should be turned on
         call cline_cluster2D_pool%set('nparts',    params%nparts)
+        if( cline%defined('worker_server') ) call cline_cluster2D_pool%set('worker_server', cline%get_carg('worker_server'))
         call cline_cluster2D_pool%delete('autoscale')
         ! when the 2D analysis is started from raw particles
         if( l_no_chunks ) l_update_sigmas = .false.

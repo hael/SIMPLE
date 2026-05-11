@@ -705,7 +705,7 @@ contains
                     qsys_cmd = self%myqsys%submit_cmd()//' '//script_name%to_char()//' '//SUPPRESS_MSG//'&'
                 class is(qsys_persistent_worker)
                     ! Worker backend: enqueue and move to next partition without blocking.
-                    call self%dispatch_task_to_persistent_worker(script_name, self%nthr_worker)
+                    call self%dispatch_task_to_persistent_worker(simple_abspath(script_name), self%nthr_worker)
                     cycle
                 class DEFAULT
                     qsys_cmd = self%myqsys%submit_cmd()//' '//script_name%to_char()

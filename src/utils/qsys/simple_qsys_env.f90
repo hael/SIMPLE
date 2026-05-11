@@ -46,6 +46,7 @@ type :: qsys_env
     procedure :: exec_simple_prg_in_queue_async
     procedure :: exec_simple_prgs_in_queue_async
     procedure :: start_persistent_workers
+    procedure :: get_persistent_worker_server_address
     procedure :: get_exec_bin
     procedure :: get_qsys
     procedure :: get_navail_computing_units
@@ -222,14 +223,18 @@ contains
                 if( .not. persistent_worker%server%is_running()      ) THROW_HARD('cannot reuse existing worker server that is not running;')
                 if( persistent_worker%launch_backend /= qsnam        ) THROW_HARD('cannot reuse existing worker server with different backend; kill the server or use a persistent qsys name')
                 if( nthr_workers > persistent_worker%nthr_per_worker ) THROW_HARD('cannot reuse existing worker server with lower nthr_per_worker than requested;')
-                if( n_workers > persistent_worker%n_workers          ) THROW_HARD('cannot reuse existing worker server with lower n_workers than requested;')
+            !    if( n_workers > persistent_worker%n_workers          ) THROW_HARD('cannot reuse existing worker server with lower n_workers than requested;')
             else
                 persistent_worker%launch_backend  = qsnam
                 persistent_worker%nthr_per_worker = nthr_workers
                 persistent_worker%n_workers       = n_workers
                 allocate(persistent_worker%server)
-                call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker)
-                call self%start_persistent_workers()
+                if( params%worker_server%strlen() > 0 ) then
+                    call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker, client_only=params%worker_server)
+                else
+                    call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker)
+                    call self%start_persistent_workers()
+                end if
             end if
         else
             ! Standard path: a single backend handles both script generation and dispatch.
@@ -444,6 +449,33 @@ contains
         end do
         call cline%kill
     end subroutine start_persistent_workers
+
+    !> Return persistent worker server address as "host:port".
+    !! Empty string is returned when no persistent worker server is allocated,
+    !! not running, or has no usable host/port information yet.
+    function get_persistent_worker_server_address( self ) result( server_address )
+        class(qsys_env), intent(in) :: self
+        type(string)                :: server_address
+        type(string)                :: host_ips
+        character(len=STDLEN)       :: host_ips_char, first_host
+        integer                     :: comma_pos, port
+        server_address = string('')
+        if( .not. associated(persistent_worker%server) )  return
+        if( .not. persistent_worker%server%is_running() ) return
+        port = persistent_worker%server%get_port()
+        if( port <= 0 ) return
+        host_ips = persistent_worker%server%get_host_ips()
+        if( .not. host_ips%is_allocated() ) return
+        host_ips_char = trim(host_ips%to_char())
+        comma_pos     = index(host_ips_char, ',')
+        if( comma_pos > 1 ) then
+            first_host = adjustl(host_ips_char(1:comma_pos-1))
+        else
+            first_host = adjustl(host_ips_char)
+        end if
+        if( len_trim(first_host) > 0 ) server_address = string(trim(first_host)//':'//int2str(port))
+        call host_ips%kill()
+    end function get_persistent_worker_server_address
 
     !> Get fully resolved executable path used for generated scripts.
     function get_exec_bin( self ) result( exec_bin )

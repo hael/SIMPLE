@@ -83,6 +83,7 @@ contains
         self%vols(MAXS)=''
         self%vols_even(MAXS)=''
         self%vols_odd(MAXS)=''
+        self%worker_server=''     !< address and port of worker server for job submission
         self%xmldir=''
         self%xmlloc=''
     end subroutine init_dynamic_defaults

@@ -205,6 +205,7 @@ contains
         call reg%add_char('verbose_exit_fname', self%verbose_exit_fname)
         call reg%add_char('volrec', self%volrec)
         call reg%add_char('wcrit', self%wcrit)
+        call reg%add_char('worker_server', self%worker_server)
         call reg%add_char('write_imgarr', self%write_imgarr)
         call reg%add_char('zero', self%zero)
         call reg%add_char('ciffile', self%ciffile)

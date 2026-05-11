@@ -240,6 +240,7 @@ type :: parameters
     type(string)              :: vols(MAXS)
     type(string)              :: vols_even(MAXS)
     type(string)              :: vols_odd(MAXS)
+    type(string)              :: worker_server        !< address and port of worker server for job submission
     type(string)              :: xmldir
     type(string)              :: xmlloc
     ! other character variables in ascending alphabetical order

@@ -96,7 +96,7 @@ module simple_persistent_worker_server
         integer                               :: job_count     = 0        !< monotonic counter for unique job_id assignment
         type(string)                          :: host_ips                 !< comma-separated local IP addresses
         type(ipc_tcp_socket_server)           :: ipc_socket_server        !< underlying TCP socket and listener thread
-         type(ipc_tcp_socket_client)          :: ipc_socket_client
+        type(ipc_tcp_socket_client)           :: ipc_socket_client
         type(listener_args),          pointer :: listener_args => null()  !< C-struct forwarded to the listener pthread
         type(persistent_worker_data), pointer :: worker_data   => null()  !< shared state (workers + queues); mutex-protected
     contains
@@ -113,11 +113,14 @@ contains
     !> Initialise the server: allocate shared state, initialise the mutex,
     !> bind a TCP socket, and spawn the listener pthread.  No-op if already running.
     !> \param[in] nthr_workers  number of worker thread slots to support (must be > 0)
-    subroutine new( self, n_workers, nthr_workers )
+    subroutine new( self, n_workers, nthr_workers, client_only )
         class(persistent_worker_server), intent(inout) :: self
         integer,                            intent(in) :: n_workers
         integer,                            intent(in) :: nthr_workers
+        type(string), optional,             intent(in) :: client_only
         integer(kind=c_int)                            :: rc
+        character(len=STDLEN)                          :: addr_char, host_part, port_part
+        integer                                        :: sep, ios
         if( n_workers < 1 ) then
             write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER new: n_workers must be > 0; got ', n_workers
             return
@@ -147,11 +150,35 @@ contains
         self%n_workers              = n_workers
         self%nthr_workers           = nthr_workers
         self%listener_args%data_ptr = c_loc(self%worker_data)
-        call self%ipc_socket_server%new(c_funloc(worker_listener_thread), c_loc(self%listener_args))
-        write(logfhandle,'(A)') '>>> PERSISTENT_WORKER: SERVER STARTED'
-        self%port     = self%ipc_socket_server%get_port()
-        self%host_ips = self%ipc_socket_server%get_server_ips()
-        call self%ipc_socket_client%new(self%ipc_socket_server%get_server_ips(), self%ipc_socket_server%get_port())
+        if( present(client_only) ) then
+            ! client_only is expected as "hostlist:port" from qsys_env%get_persistent_worker_server_address.
+            addr_char = trim(client_only%to_char())
+            sep       = index(addr_char, ':', back=.true.)
+            if( sep <= 1 .or. sep >= len_trim(addr_char) ) then
+                write(logfhandle,'(A,A)') '>>> PERSISTENT_WORKER_SERVER new: invalid client_only address: ', trim(addr_char)
+                self%port     = 0
+                self%host_ips = ''
+            else
+                host_part = adjustl(addr_char(:sep-1))
+                port_part = adjustl(addr_char(sep+1:len_trim(addr_char)))
+                read(port_part, *, iostat=ios) self%port
+                if( ios /= 0 .or. self%port <= 0 ) then
+                    write(logfhandle,'(A,A)') '>>> PERSISTENT_WORKER_SERVER new: invalid client_only port in address: ', trim(addr_char)
+                    self%port     = 0
+                    self%host_ips = ''
+                else
+                    self%host_ips = trim(host_part)
+                    write(logfhandle,'(A,A,A,I0)') '>>> PERSISTENT_WORKER_SERVER new: client-only mode using server ', &
+                        trim(host_part), ':', self%port
+                end if
+            end if
+        else
+            call self%ipc_socket_server%new(c_funloc(worker_listener_thread), c_loc(self%listener_args))
+            write(logfhandle,'(A)') '>>> PERSISTENT_WORKER: SERVER STARTED'
+            self%port     = self%ipc_socket_server%get_port()
+            self%host_ips = self%ipc_socket_server%get_server_ips()
+        end if
+        call self%ipc_socket_client%new(self%host_ips, self%port)
         write(logfhandle,'(A)') '>>> PERSISTENT_WORKER: DISPATCH CLIENT CONNECTED'
     end subroutine new
 

@@ -123,6 +123,7 @@ contains
         type(json_core)                            :: json
         type(json_value),              pointer     :: json_response_ptr => null()
         type(gui_assembler)                        :: assembler
+        type(qsys_env)                             :: qsys
         ! gui metadata
         type(gui_metadata_stream_update)             :: meta_update
         type(gui_metadata_stream_preprocess)         :: meta_preprocess
@@ -173,6 +174,10 @@ contains
         ! init mutexes
         if( c_pthread_mutex_init(meta_mutex,      c_null_ptr) /= 0 ) THROW_HARD('failed to initialise metadata mutex' )
         if( c_pthread_mutex_init(terminate_mutex, c_null_ptr) /= 0 ) THROW_HARD('failed to initialise terminate mutex')
+        ! start persistent worker server if requested by params
+        params%qsys_name = '' ! force qsys_env to read from env vars so we can control with params
+        params%ncunits   = 4  ! set to 4 for now to ensure enough threads for stream processes and metadata listener; can be overridden by env var or compenv
+        call qsys%new(params, 1, qsys_nthr=32)
         ! init update metadata
         call meta_update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
         ! init metadata 
@@ -407,6 +412,7 @@ contains
         ! join listener
         if( c_pthread_join(meta_listener_thread, ptr) /= 0) THROW_WARN('failed to join metadata listener thread' )
         ! cleanup
+        call qsys%kill()
         call post%kill()
         call assembler%kill()
         ! kill message queue
@@ -809,15 +815,18 @@ contains
         end subroutine init_metadata_reference_picking
 
         subroutine init_cline_particle_sieving()
+            type(string) :: server_address
+            server_address = qsys%get_persistent_worker_server_address()
             call cline_particle_sieving%set('prg',                         'sieve_cavgs')
             call cline_particle_sieving%set('projfile',   SIEVING_JOB_NAME//METADATA_EXT)
             call cline_particle_sieving%set('outdir',                   SIEVING_JOB_NAME)
             call cline_particle_sieving%set('dir_target',               REFPICK_JOB_NAME)
             call cline_particle_sieving%set('optics_dir',                OPTICS_JOB_NAME)
-            call cline_particle_sieving%set('nthr',                                   16)
+            call cline_particle_sieving%set('nthr',                                    4)
             call cline_particle_sieving%set('mkdir',                               'yes')
-            call cline_particle_sieving%set('nparts',                                  1)
+            call cline_particle_sieving%set('nparts',                                  4)
             call cline_particle_sieving%set('nchunks',                                 8)
+            if( server_address%strlen() > 0 ) call cline_particle_sieving%set('worker_server', server_address)
         end subroutine init_cline_particle_sieving
 
         subroutine init_metadata_particle_sieving()
@@ -827,6 +836,8 @@ contains
         end subroutine init_metadata_particle_sieving
 
         subroutine init_cline_pool2D()
+            type(string) :: server_address
+            server_address = qsys%get_persistent_worker_server_address()
             call cline_pool2D%set('prg',                       'abinitio2D_stream')
             call cline_pool2D%set('projfile',       CLASS2D_JOB_NAME//METADATA_EXT)
             call cline_pool2D%set('outdir',                       CLASS2D_JOB_NAME)
@@ -837,6 +848,7 @@ contains
             call cline_pool2D%set('mkdir',                                   'yes')
             call cline_pool2D%set('nparts',                                      5)
             call cline_pool2D%set('ncls',                                      200)
+            if( server_address%strlen() > 0 ) call cline_pool2D%set('worker_server', server_address)
         end subroutine init_cline_pool2D
 
         subroutine init_metadata_pool2D()

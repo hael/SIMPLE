@@ -203,6 +203,7 @@ module simple_microchunked2D
     integer                     :: match_jpeg_ytiles = 0
     integer                     :: nparallel         = 1
     integer                     :: nthr              = 1
+    integer                     :: nparts            = 1
     integer                     :: box               = 0
     integer                     :: n_accepted_ptcls  = 0
     integer                     :: n_rejected_ptcls  = 0
@@ -269,6 +270,7 @@ contains
     self%nparallel                 = params%nchunks
     self%mskdiam                   = params%mskdiam
     self%nthr                      = params%nthr
+    self%nparts                    = params%nparts
     self%outdir_microchunks_pass_1 = string(cwd%to_char() // '/microchunks_pass_1')
     self%outdir_microchunks_pass_2 = string(cwd%to_char() // '/microchunks_pass_2')
     self%outdir_microchunks_match  = string(cwd%to_char() // '/microchunks_match')
@@ -1198,6 +1200,8 @@ contains
   subroutine generate_microchunk_pass_1_cline( self, new_chunk )
     class(microchunked2D), intent(inout) :: self
     type(chunk2D),         intent(inout) :: new_chunk
+    type(string)                         :: server_address
+    server_address = self%qenv%get_persistent_worker_server_address()
     associate( cline => new_chunk%cline )
       call cline%set('prg',      'abinitio2D')
       call cline%set('projfile', new_chunk%projfile)
@@ -1209,7 +1213,10 @@ contains
       call cline%set('lpstart',  DEFAULT_LPSTART)
       call cline%set('lpstop',   DEFAULT_MICRO_P1_LP)
       call cline%set('walltime', DEFAULT_WALLTIME)
+      if( self%nparts > 1 ) call cline%set('nparts', self%nparts)
+      if( server_address%strlen() > 0 ) call cline%set('worker_server', server_address)
     end associate
+    call server_address%kill()
   end subroutine generate_microchunk_pass_1_cline
 
   ! Populates the abinitio2D command line for a pass-2 microchunk with:
@@ -1219,6 +1226,8 @@ contains
   subroutine generate_microchunk_pass_2_cline( self, new_chunk )
     class(microchunked2D), intent(inout) :: self
     type(chunk2D),         intent(inout) :: new_chunk
+    type(string)                         :: server_address
+    server_address = self%qenv%get_persistent_worker_server_address()
     associate( cline => new_chunk%cline )
       call cline%set('prg',      'abinitio2D')
       call cline%set('projfile', new_chunk%projfile)
@@ -1230,7 +1239,10 @@ contains
       call cline%set('lpstart',  DEFAULT_LPSTART)
       call cline%set('lpstop',   DEFAULT_MICRO_P2_LP)
       call cline%set('walltime', DEFAULT_WALLTIME)
+      if( self%nparts > 1             ) call cline%set('nparts', self%nparts)
+      if( server_address%strlen() > 0 ) call cline%set('worker_server', server_address)
     end associate
+    call server_address%kill()
   end subroutine generate_microchunk_pass_2_cline
 
   ! Populates the abinitio2D command line for a match microchunk with:
@@ -1244,6 +1256,8 @@ contains
   subroutine generate_microchunk_match_cline( self, new_chunk )
     class(microchunked2D), intent(inout) :: self
     type(chunk2D),         intent(inout) :: new_chunk
+    type(string)                         :: server_address
+    server_address = self%qenv%get_persistent_worker_server_address()
     associate( cline => new_chunk%cline )
       call cline%set('prg',            'abinitio2D')
       call cline%set('projfile',       new_chunk%projfile)
@@ -1260,7 +1274,10 @@ contains
       call cline%set('nits_per_stage', 3)
       call cline%set('walltime',       DEFAULT_WALLTIME)
       call cline%set('refine',         'prob')
+      if( self%nparts > 1             ) call cline%set('nparts', self%nparts)
+      if( server_address%strlen() > 0 ) call cline%set('worker_server', server_address)
     end associate
+    call server_address%kill()
   end subroutine generate_microchunk_match_cline
 
   ! Populates the abinitio2D command line for the reference chunk with:
@@ -1270,6 +1287,8 @@ contains
   subroutine generate_refchunk_cline( self, new_chunk )
     class(microchunked2D), intent(inout) :: self
     type(chunk2D),         intent(inout) :: new_chunk
+    type(string)                         :: server_address
+    server_address = self%qenv%get_persistent_worker_server_address()
     associate( cline => new_chunk%cline )
       call cline%set('prg',      'abinitio2D')
       call cline%set('projfile', new_chunk%projfile)
@@ -1282,7 +1301,10 @@ contains
       call cline%set('lpstop',   DEFAULT_REF_LP)
       call cline%set('walltime', DEFAULT_WALLTIME)
       call cline%set('refine',   'prob')
+      if( self%nparts > 1             ) call cline%set('nparts', self%nparts)
+      if( server_address%strlen() > 0 ) call cline%set('worker_server', server_address)
     end associate
+    call server_address%kill()
   end subroutine generate_refchunk_cline
 
   ! --------------------------------------------------------------------------
