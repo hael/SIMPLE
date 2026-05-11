@@ -15,6 +15,7 @@ implicit none
 private
 public :: diffusion_map_embedder
 public :: steerable_diffusion_map_embedder
+public :: diffusion_map_generate
 public :: steerable_transport_denoise
 public :: steerable_coeffproj_denoise
 
@@ -76,7 +77,7 @@ contains
         !$omp do schedule(dynamic)
         do i = 1, nptcls - 1
             do j = i + 1, nptcls
-                d2(i,j) = sum(pcavecs(:,i)-pcavecs(:,j))**2
+                d2(i,j) = sum((pcavecs(:,i)-pcavecs(:,j))**2)
                 d2(j,i) = d2(i,j)
             end do
         end do
@@ -224,6 +225,30 @@ contains
         call hpsort(work)
         kth = work(k_used)
     end subroutine kth_distance_for_point
+
+    subroutine kth_distance_for_query(d2row, k_used, kth)
+        real,    intent(in)  :: d2row(:)
+        integer, intent(in)  :: k_used
+        real,    intent(out) :: kth
+        real :: work(size(d2row))
+        work = d2row
+        call hpsort(work)
+        kth = work(min(max(1, k_used), size(work)))
+    end subroutine kth_distance_for_query
+
+    integer function nearest_index(row) result(ind)
+        real, intent(in) :: row(:)
+        real :: best
+        integer :: i
+        ind  = 1
+        best = huge(best)
+        do i = 1, size(row)
+            if( row(i) < best )then
+                best = row(i)
+                ind = i
+            endif
+        end do
+    end function nearest_index
 
     subroutine steerable_set_params(self, ndiff, k_nn, nmodes)
         class(steerable_diffusion_map_embedder), intent(inout) :: self
@@ -375,6 +400,110 @@ contains
         call flush(logfhandle)
         deallocate(d2, aff, kth_d2, deg, norm_aff, theta, cand_coords, cand_eigvals, out_eigvals)
     end subroutine steerable_embed
+
+    subroutine diffusion_map_generate(params, imgs, coords, avg, query_coords, gen_ptcls)
+        type(parameters),         intent(in)  :: params
+        class(image),             intent(in)  :: imgs(:)
+        real,                     intent(in)  :: coords(:,:), avg(:), query_coords(:,:)
+        type(image), allocatable, intent(out) :: gen_ptcls(:)
+        type(image) :: avg_img, acc_img, tmp_img
+        real, allocatable :: d2_train(:,:), train_kth_d2(:), d2_query(:,:), query_kth_d2(:)
+        real :: tau, w, wsum, mean_wsum, denom
+        integer :: nptcls, ndim, nquery, i, j, k_used, ldim(3), nedges, nearest_i
+        nptcls = size(imgs)
+        if( nptcls < 2 ) return
+        if( size(coords,2) /= nptcls .or. size(coords,1) < 1 )then
+            write(logfhandle,'(A)') 'Diffusion map generation skipped: reason=coordinate shape mismatch'
+            call flush(logfhandle)
+            return
+        endif
+        if( size(query_coords,1) /= size(coords,1) .or. size(query_coords,2) < 1 )then
+            write(logfhandle,'(A)') 'Diffusion map generation skipped: reason=query coordinate shape mismatch'
+            call flush(logfhandle)
+            return
+        endif
+        ldim = imgs(1)%get_ldim()
+        if( size(avg) /= product(ldim) )then
+            write(logfhandle,'(A,I8,A,I8)') 'Diffusion map generation skipped: avg_size=', size(avg), &
+                ' expected=', product(ldim)
+            call flush(logfhandle)
+            return
+        endif
+        ndim   = size(coords,1)
+        nquery = size(query_coords,2)
+        k_used = min(max(2, params%k_nn), nptcls)
+        allocate(d2_train(nptcls,nptcls), train_kth_d2(nptcls), d2_query(nquery,nptcls), query_kth_d2(nquery), source=0.)
+        !$omp parallel do default(shared) private(i,j) schedule(dynamic)
+        do i = 1, nptcls - 1
+            do j = i + 1, nptcls
+                d2_train(i,j) = sum((coords(1:ndim,i) - coords(1:ndim,j))**2)
+                d2_train(j,i) = d2_train(i,j)
+            end do
+        end do
+        !$omp end parallel do
+        !$omp parallel do default(shared) private(i) schedule(static)
+        do i = 1, nptcls
+            call kth_distance_for_point(d2_train(i,:), i, min(k_used, nptcls - 1), train_kth_d2(i))
+        end do
+        !$omp end parallel do
+        tau = median(train_kth_d2)
+        if( tau < DTINY ) tau = max(sum(train_kth_d2) / real(max(size(train_kth_d2),1)), 1.e-6)
+        !$omp parallel do default(shared) private(i,j) schedule(dynamic)
+        do i = 1, nquery
+            do j = 1, nptcls
+                d2_query(i,j) = sum((query_coords(1:ndim,i) - coords(1:ndim,j))**2)
+            end do
+        end do
+        !$omp end parallel do
+        !$omp parallel do default(shared) private(i) schedule(static)
+        do i = 1, nquery
+            call kth_distance_for_query(d2_query(i,:), k_used, query_kth_d2(i))
+        end do
+        !$omp end parallel do
+        allocate(gen_ptcls(nquery))
+        call avg_img%new(ldim, imgs(1)%get_smpd())
+        call acc_img%new(ldim, imgs(1)%get_smpd())
+        call tmp_img%new(ldim, imgs(1)%get_smpd())
+        call avg_img%unserialize(avg)
+        mean_wsum = 0.
+        nedges    = 0
+        do i = 1, nquery
+            call acc_img%zero_and_unflag_ft
+            wsum = 0.
+            do j = 1, nptcls
+                if( d2_query(i,j) > query_kth_d2(i) ) cycle
+                w = exp(-d2_query(i,j) / tau)
+                if( w <= DTINY ) cycle
+                if( .not. ieee_is_finite(w) ) cycle
+                call tmp_img%copy(imgs(j))
+                call tmp_img%subtr(avg_img)
+                call acc_img%add(tmp_img, w)
+                wsum = wsum + w
+                nedges = nedges + 1
+            end do
+            if( wsum <= DTINY )then
+                nearest_i = nearest_index(d2_query(i,:))
+                call acc_img%copy(imgs(nearest_i))
+                call acc_img%subtr(avg_img)
+                wsum = 1.
+            else
+                denom = max(wsum, real(DTINY))
+                call acc_img%div(denom)
+            endif
+            call gen_ptcls(i)%copy(avg_img)
+            call gen_ptcls(i)%add(acc_img)
+            mean_wsum = mean_wsum + wsum
+        end do
+        mean_wsum = mean_wsum / real(nquery)
+        write(logfhandle,'(A,I8,A,I8,A,F8.3,A,I8,A,ES10.3)') &
+            'Diffusion map generation: nquery=', nquery, ' directed_edges=', nedges, &
+            ' mean_wsum=', mean_wsum, ' k_nn=', k_used, ' tau=', tau
+        call flush(logfhandle)
+        deallocate(d2_train, train_kth_d2, d2_query, query_kth_d2)
+        call avg_img%kill
+        call acc_img%kill
+        call tmp_img%kill
+    end subroutine diffusion_map_generate
 
     subroutine prepare_steerable_pft_params(params, ldim, smpd, params_pft)
         type(parameters), intent(in)  :: params

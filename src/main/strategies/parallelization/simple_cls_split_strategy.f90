@@ -531,7 +531,7 @@ contains
     subroutine split_one_parent_class(params, build, spproj, cls_id, l_phflip, l_pre_norm, l_fixed_nsubcls, &
                                       nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
                                       normal_ptcls, den_ptcls, coeff_ptcls)
-        use simple_diffusion_maps,   only: steerable_transport_denoise, steerable_coeffproj_denoise
+        use simple_diffusion_maps,   only: diffusion_map_generate, steerable_transport_denoise, steerable_coeffproj_denoise
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
         use simple_imgproc,          only: make_pcavecs
         use simple_clustering_utils, only: cluster_dmat, silhouette_score
@@ -545,12 +545,13 @@ contains
         type(image), allocatable, intent(out)   :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
         type(image), allocatable, intent(out)   :: normal_ptcls(:), den_ptcls(:), coeff_ptcls(:)
         type(parameters) :: params_mask
-        type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:)
+        type(image), allocatable :: imgs(:), imgs_ppca(:), imgs_cond(:), class_mask(:)
         type(image) :: cavg_raw, cavg_den, cavg_coeff
-        real, allocatable :: avg(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:), steer_aff(:,:), steer_theta(:,:)
+        real, allocatable :: avg(:), avg_cond(:), pcavecs(:,:), pcavecs_cond(:,:)
+        real, allocatable :: coords(:,:), eigvals(:), dmat(:,:), steer_aff(:,:), steer_theta(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         integer, allocatable :: i_medoids(:)
-        integer :: nptcls, npix, nsplit_count, j, k, class_ldim(3)
+        integer :: nptcls, npix, npix_cond, nsplit_count, j, k, class_ldim(3)
         real    :: class_moldiam, class_mskdiam, class_mskrad, dval, sdev_noise
         nsplit = 0
         if( allocated(pinds) ) deallocate(pinds)
@@ -568,7 +569,9 @@ contains
             return
         endif
         imgs_ppca = copy_imgarr(imgs)
+        imgs_cond = copy_imgarr(imgs)
         call imgs_ppca(1)%memoize_mask_coords()
+        call imgs_cond(1)%memoize_mask_coords()
         allocate(class_mask(1))
         call class_mask(1)%copy(cavg_raw)
         params_mask%ngrow   = params%ngrow
@@ -590,19 +593,25 @@ contains
         call flush(logfhandle)
         do j = 1, nptcls
             call imgs_ppca(j)%norm_noise(build%lmsk, sdev_noise)
+            call imgs_cond(j)%norm_noise(build%lmsk, sdev_noise)
             call imgs_ppca(j)%mask2D_softavg(class_mskrad)
         end do
         if( l_pre_norm )then
             do j = 1, nptcls
                 call imgs_ppca(j)%norm
+                call imgs_cond(j)%norm
             end do
         endif
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
+        call make_pcavecs(imgs_cond, npix_cond, avg_cond, pcavecs_cond, transp=.false.)
+        if( allocated(pcavecs_cond) ) deallocate(pcavecs_cond)
         normal_ptcls = copy_imgarr(imgs_ppca)
         call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, steer_aff, steer_theta)
-        if( trim(params%pca_mode) == 'steerable_diff_map' )then
-            call steerable_transport_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, den_ptcls)
-            call steerable_coeffproj_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, coeff_ptcls)
+        if( trim(params%pca_mode) == 'diffusion_maps' )then
+            call diffusion_map_generate(params, imgs_cond, coords, avg_cond, coords, den_ptcls)
+        else if( trim(params%pca_mode) == 'steerable_diff_map' )then
+            call steerable_transport_denoise(params, imgs_cond, avg_cond, steer_aff, steer_theta, den_ptcls)
+            call steerable_coeffproj_denoise(params, imgs_cond, avg_cond, steer_aff, steer_theta, coeff_ptcls)
             if( .not. allocated(coeff_ptcls) )then
                 write(logfhandle,'(A,I8,A)') 'Cls split steerable coefficient denoising fallback: class=', cls_id, &
                     ' using transported/normal particles'
@@ -610,7 +619,7 @@ contains
                 if( allocated(den_ptcls) )then
                     coeff_ptcls = copy_imgarr(den_ptcls)
                 else
-                    coeff_ptcls = copy_imgarr(imgs_ppca)
+                    coeff_ptcls = copy_imgarr(imgs_cond)
                 endif
             endif
         endif
@@ -653,7 +662,7 @@ contains
                 if( allocated(den_ptcls) )then
                     call cavg_den%add(den_ptcls(k))
                 else
-                    call cavg_den%add(imgs_ppca(k))
+                    call cavg_den%add(imgs_cond(k))
                 endif
                 if( allocated(coeff_ptcls) ) call cavg_coeff%add(coeff_ptcls(k))
             end do
@@ -674,10 +683,13 @@ contains
         if( allocated(steer_theta)  ) deallocate(steer_theta)
         if( allocated(i_medoids)    ) deallocate(i_medoids)
         if( allocated(avg)          ) deallocate(avg)
+        if( allocated(avg_cond)     ) deallocate(avg_cond)
         if( allocated(pcavecs)      ) deallocate(pcavecs)
+        if( allocated(pcavecs_cond) ) deallocate(pcavecs_cond)
         if( allocated(class_diams)  ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
         if( allocated(class_mask)   ) call dealloc_imgarr(class_mask)
+        if( allocated(imgs_cond)    ) call dealloc_imgarr(imgs_cond)
         if( allocated(imgs_ppca)    ) call dealloc_imgarr(imgs_ppca)
         if( allocated(imgs)         ) call dealloc_imgarr(imgs)
     end subroutine split_one_parent_class
