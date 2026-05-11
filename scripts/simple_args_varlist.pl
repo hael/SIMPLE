@@ -44,7 +44,7 @@ close $fh  or die "Could not close file $Gitversionfile: $!";
 
 print "SIMPLE SOURCE DIR:", $source_dir, "\n";
 
-open(PARAMS, "<".$source_dir."/src/main/simple_params.f90") or die "Cannot open simple_params.f90\n simple_args_varlist.pl must be called from <simple source directory>/src/main ";
+open(PARAMS, "<".$source_dir."/src/main/params/simple_parameters.f90") or die "Cannot open simple_parameters.f90\n simple_args_varlist.pl must be called from the SIMPLE source tree";
 @lines = <PARAMS>;
 close(PARAMS);
 # extract the relevant lines

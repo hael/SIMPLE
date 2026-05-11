@@ -15,8 +15,8 @@ add_custom_command(
             "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl"
     DEPENDS
         "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl"
-        "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_parameters.f90"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/main"
+        "${CMAKE_CURRENT_SOURCE_DIR}/main/params/simple_parameters.f90"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/main/params"
     COMMENT "Generating simple_args.f90 and simple_varlist.txt"
     VERBATIM
 )
