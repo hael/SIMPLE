@@ -55,9 +55,6 @@ contains
         call abinitio3D%add_input(UI_SRCH, pgrp_start, gui_submenu="model")
         call abinitio3D%add_input(UI_SRCH, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         call abinitio3D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.false.)
-        call abinitio3D%add_input(UI_SRCH, 'nsample_start', 'num', 'Dynamic particle sampling lower bound', 'Dynamic particle sampling lower bound', 'min # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call abinitio3D%add_input(UI_SRCH, 'nsample_stop',  'num', 'Dynamic particle sampling upper bound', 'Dynamic particle sampling upper bound', 'max # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call abinitio3D%add_input(UI_SRCH, update_frac, gui_submenu="search", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, nstates, gui_submenu="search", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}', '(single|independent|docked){single}', .false., 'single')
         ! filter controls

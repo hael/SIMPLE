@@ -2,7 +2,6 @@ submodule(simple_abinitio_utils) simple_abinitio_controller
 implicit none
 #include "simple_local_flags.inc"
 
-real,    parameter :: UPDATE_FRAC_MIN            = 0.1   ! 10% of the particles updated each iteration
 integer, parameter :: NSPACE(8)                  = [500,1000,1000,1000,2500,2500,5000,5000]
 integer, parameter :: SHC_REFINE_STAGE           = 1     ! shc-style refinement  stages 1-2
 integer, parameter :: PROB_REFINE_STAGE          = 3     ! prob refinement       stages 3-5
@@ -14,7 +13,7 @@ integer, parameter :: NSPACE_SUB                 = 126
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
     type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk
-    integer :: iter, inspace, inspace_sub, imaxits, nsample_dyn
+    integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
 end type refine3D_stage_cfg
@@ -67,18 +66,10 @@ contains
         if( istage == active_refine3D_nstages() )then
             cfg%fillin = 'yes'
             if( params%nstates > 1 ) cfg%fillin = 'no'
-            if( l_nsample_stop_given )then
-                cfg%update_frac_dyn = real(nsample_minmax(2)) / real(nptcls_eff)
-            else if( l_nsample_given )then
-                cfg%update_frac_dyn = update_frac
-            else
-                cfg%nsample_dyn     = nint(UPDATE_FRAC_MIN * real(nptcls_eff) / real(params%nstates))
-                cfg%nsample_dyn     = max(NSAMPLE_MINMAX_DEFAULT(1), min(NSAMPLE_MINMAX_DEFAULT(2), cfg%nsample_dyn))
-                cfg%update_frac_dyn = real(cfg%nsample_dyn * params%nstates) / real(nptcls_eff)
-            endif
+            cfg%update_frac_dyn = update_frac
         else
             cfg%fillin = 'no'
-            cfg%update_frac_dyn = calc_update_frac_dyn(nptcls_eff, params%nstates, nsample_minmax, cfg%iter, maxits_dyn)
+            cfg%update_frac_dyn = update_frac
         endif
         cfg%update_frac_dyn = min(UPDATE_FRAC_MAX, cfg%update_frac_dyn)
     end subroutine set_refine3D_update_policy
@@ -246,7 +237,7 @@ contains
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         call cline_refine3D%set('prg',                     'refine3D')
-        if( l_update_frac_dyn .or. istage == active_refine3D_nstages() )then
+        if( istage == active_refine3D_nstages() )then
             call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
             call cline_refine3D%set('fillin',             cfg%fillin)
         else

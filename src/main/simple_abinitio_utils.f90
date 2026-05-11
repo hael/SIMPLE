@@ -5,7 +5,6 @@ use simple_commanders_rec, only: commander_bootstrap_rec3D
 use simple_commanders_volops, only: commander_symmetrize_map
 use simple_cluster_seed,      only: gen_labelling
 use simple_class_frcs,        only: class_frcs
-use simple_decay_funs,        only: calc_update_frac_dyn
 use simple_euclid_sigma2,     only: sigma2_star_from_iter
 use simple_matcher_refvol_utils, only: remove_ref_section_files
 use simple_parameters,        only: parameters
@@ -38,18 +37,19 @@ integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! st
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
 integer,          parameter :: GAUREF_LAST_STAGE     = 2                    ! When to stop gaussian filtering in early stages
 integer,          parameter :: MAXITS_BETWEEN        = 10                   ! Development
+integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000           ! default # particles sampled per state
 
 ! singleton variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis    = .false., l_symran        = .false.
-logical          :: l_update_frac_dyn = .false., l_ini3D         = .false.
-logical          :: l_lpauto          = .false., l_nsample_given = .false., l_nsample_stop_given = .false.
+logical          :: l_ini3D           = .false.
+logical          :: l_lpauto          = .false.
 logical          :: l_automsk         = .false.
 logical          :: l_nonuniform      = .false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
-real             :: update_frac  = 1.0, update_frac_dyn  = 1.0
-integer          :: nstates_glob = 1, nptcls_eff = 0, nsample_minmax(2), maxits_dyn=0
+real             :: update_frac  = 1.0
+integer          :: nstates_glob = 1, nptcls_eff = 0
 integer          :: nstages_refine3D = NSTAGES
 
 ! In submodule: simple_abinitio_controller.f90

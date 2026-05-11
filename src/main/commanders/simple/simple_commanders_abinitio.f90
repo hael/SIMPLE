@@ -2,13 +2,12 @@
 module simple_commanders_abinitio
 use simple_commanders_api
 use simple_abinitio_utils
-use simple_procimgstk,          only: shift_imgfile
+use simple_procimgstk,           only: shift_imgfile
 use simple_commanders_reproject, only: commander_reproject
-use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D
-use simple_commanders_rec,      only: commander_rec3D, commander_rec3D
-use simple_cluster_seed,        only: gen_labelling
-use simple_decay_funs,          only: calc_update_frac_dyn, calc_update_frac
-use simple_refine3D_fnames,     only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
+use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D
+use simple_commanders_rec,       only: commander_rec3D, commander_rec3D
+use simple_cluster_seed,         only: gen_labelling
+use simple_refine3D_fnames,      only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname
 implicit none
 
@@ -543,35 +542,10 @@ contains
         if( spproj%is_virgin_field('ptcl2D') )then
             THROW_HARD('Prior 2D clustering required for abinitio workflow')
         else
-            l_update_frac_dyn    = .false.
-            l_nsample_given      = .false.
-            l_nsample_stop_given = .false.
-            update_frac          = 1.0
-            nptcls_eff           = spproj%count_state_gt_zero()
-            if( cline%defined('nsample') )then
-                update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
-                l_nsample_given = .true.
-            else if( cline%defined('update_frac') )then
-                update_frac = params%update_frac
-                l_nsample_given = .true.
-            else if( cline%defined('nsample_start') )then
-                if( params%nsample_start > nptcls_eff ) THROW_HARD('nsample_start > effective # ptcls, decrease!')
-                nsample_minmax(1) = params%nsample_start
-                if( cline%defined('nsample_stop') )then
-                    nsample_minmax(2)    = min(nptcls_eff,params%nsample_stop)
-                    l_nsample_stop_given = .true.
-                else
-                    nsample_minmax(2) = nptcls_eff
-                endif
-                update_frac       = calc_update_frac_dyn(nptcls_eff, params%nstates, nsample_minmax, 1, MAXITS_GLOB)
-                l_update_frac_dyn = .true.
-            else
-                if( cline%defined('nsample_max') )then
-                    update_frac = calc_update_frac(nptcls_eff, params%nstates, [NSAMPLE_MINMAX_DEFAULT(1),params%nsample_max])
-                else
-                    update_frac = calc_update_frac(nptcls_eff, params%nstates, NSAMPLE_MINMAX_DEFAULT)
-                endif
-            endif
+            update_frac = 1.0
+            nptcls_eff  = spproj%count_state_gt_zero()
+            if( .not. cline%defined('nsample') ) params%nsample = NSAMPLE_ABINITIO3D_DEFAULT
+            update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
             update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on
             ! generate a data structure for class sampling on disk
             rstates = spproj%os_cls2D%get_all('state')
@@ -674,10 +648,6 @@ contains
             call calc_rec(params, params%projfile, xrec3D, start_stage)
         endif
         ! Frequency marching
-        maxits_dyn = 0
-        if( start_stage < NSTAGES )then
-            maxits_dyn = sum(MAXITS(start_stage:NSTAGES - 1)) ! the last stage is omitted in this estimate since the sampling method changes
-        endif
         ! nice
         nice_comm%stat_root%stage = "starting workflow"
         call nice_comm%cycle()
