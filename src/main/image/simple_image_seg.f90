@@ -260,7 +260,13 @@ contains
         real     :: r2, e, cjs2
         integer  :: minlen,  i, j, ir, jr, n1, n2, n3, h1, h2
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
-        if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
+        if( self%ldim(1) /= mem_msk_box  )then
+            if( OMP_IN_PARALLEL() )then
+                THROW_HARD('incongruent mask memoization')
+            else
+                call memoize_mask_coords(self)
+            endif
+        endif
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)
@@ -302,7 +308,13 @@ contains
         integer  :: minlen, npix, i, j, np
         integer  :: n1, n2
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
-        if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
+        if( self%ldim(1) /= mem_msk_box  )then
+            if( OMP_IN_PARALLEL() )then
+                THROW_HARD('incongruent mask memoization')
+            else
+                call memoize_mask_coords(self)
+            endif
+        endif
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)
@@ -348,7 +360,13 @@ contains
         integer :: i, j, ir, jr, h1, h2, n1, n2, n3
         real :: r2, e, cjs2
         if( self%ldim(3) > 1 )             THROW_HARD('not for 3D')
-        if( self%ldim(1) /= mem_msk_box  ) THROW_HARD('incongruent mask memoization')
+        if( self%ldim(1) /= mem_msk_box  )then
+            if( OMP_IN_PARALLEL() )then
+                THROW_HARD('incongruent mask memoization')
+            else
+                call memoize_mask_coords(self)
+            endif
+        endif
         ! dims
         n1 = self%ldim(1)
         n2 = self%ldim(2)
