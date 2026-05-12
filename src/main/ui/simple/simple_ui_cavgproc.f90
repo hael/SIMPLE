@@ -4,6 +4,7 @@ use simple_ui_modules
 implicit none
 
 type(ui_program), target :: cluster_cavgs
+type(ui_program), target :: cluster_cavgs_quality
 type(ui_program), target :: cluster_cavgs_selection
 type(ui_program), target :: cluster_stack
 type(ui_program), target :: match_cavgs
@@ -15,6 +16,7 @@ contains
     subroutine construct_cavgproc_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_cluster_cavgs(prgtab)
+        call new_cluster_cavgs_quality(prgtab)
         call new_cluster_cavgs_selection(prgtab)
         call new_cluster_stack(prgtab)
         call new_match_cavgs(prgtab)
@@ -26,6 +28,7 @@ contains
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('CLASS AVERAGE PROCESSING:', C_UNDERLINED)
         write(logfhandle,'(A)') cluster_cavgs%name%to_char()
+        write(logfhandle,'(A)') cluster_cavgs_quality%name%to_char()
         write(logfhandle,'(A)') cluster_cavgs_selection%name%to_char()
         write(logfhandle,'(A)') cluster_stack%name%to_char()
         write(logfhandle,'(A)') match_cavgs%name%to_char()
@@ -63,6 +66,34 @@ contains
         ! add to ui_hash
         call add_ui_program('cluster_cavgs', cluster_cavgs, prgtab)
     end subroutine new_cluster_cavgs
+
+    subroutine new_cluster_cavgs_quality( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call cluster_cavgs_quality%new(&
+        &'cluster_cavgs_quality',&                                               ! name
+        &'Quality-vector clustering of class averages',&                         ! descr_short
+        &'is a program for automatic class-average selection using normalized quality feature vectors',& ! descr_long
+        &'simple_exec',&                                                         ! executable
+        &.true.)                                                                 ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call cluster_cavgs_quality%add_input(UI_PARM, prune)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call cluster_cavgs_quality%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call cluster_cavgs_quality%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('cluster_cavgs_quality', cluster_cavgs_quality, prgtab)
+    end subroutine new_cluster_cavgs_quality
 
     subroutine new_cluster_cavgs_selection( prgtab )    
         class(ui_hash), intent(inout) :: prgtab

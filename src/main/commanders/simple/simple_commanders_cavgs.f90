@@ -1,6 +1,8 @@
 !@descr: analysis of class averages
 module simple_commanders_cavgs
 use simple_commanders_api
+use simple_cavg_quality, only: CAVG_QUALITY_NFEATS, cavg_quality_result, &
+    cavg_quality_feature_name, evaluate_cavg_quality
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
 implicit none
@@ -15,6 +17,11 @@ type, extends(commander_base) :: commander_cluster_cavgs
     contains
         procedure :: execute      => exec_cluster_cavgs
 end type commander_cluster_cavgs
+
+type, extends(commander_base) :: commander_cluster_cavgs_quality
+    contains
+        procedure :: execute      => exec_cluster_cavgs_quality
+end type commander_cluster_cavgs_quality
 
 type, extends(commander_base) :: commander_cluster_cavgs_selection
     contains
@@ -295,6 +302,100 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
     end subroutine exec_cluster_cavgs
+
+    subroutine exec_cluster_cavgs_quality( self, cline )
+        class(commander_cluster_cavgs_quality), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        type(parameters)          :: params
+        type(sp_project)          :: spproj
+        type(image), allocatable  :: cavg_imgs(:)
+        type(cavg_quality_result) :: quality
+        type(string)              :: stkname
+        integer                   :: ncls, nsel, nrej
+        real                      :: smpd
+        call cline%set('oritype', 'cls2D')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        ncls = spproj%os_cls2D%get_noris()
+        if( ncls == 0 ) THROW_HARD('cluster_cavgs_quality: project has no cls2D entries')
+        call spproj%get_cavgs_stk(stkname, ncls, smpd)
+        cavg_imgs = read_cavgs_into_imgarr(spproj)
+        if( size(cavg_imgs) /= ncls ) THROW_HARD('cluster_cavgs_quality: # cavgs /= # cls2D entries')
+        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
+        nsel = count(quality%states > 0)
+        nrej = ncls - nsel
+        write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
+        write(logfhandle,'(A,F8.3,A,F8.3,A,L1)') '>>> CAVG QUALITY THRESHOLD / SEPARATION : ', &
+            quality%threshold, ' / ', quality%separation, ' USED=', quality%used_threshold
+        call write_quality_table(string('cavgs_quality_features.txt'))
+        call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
+        call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
+        call spproj%map_cavgs_selection(quality%states)
+        call annotate_project()
+        if( trim(params%prune) == 'yes' ) call spproj%prune_particles
+        call spproj%write(params%projfile)
+        call spproj%kill()
+        call dealloc_imgarr(cavg_imgs)
+        call simple_end('**** SIMPLE_CLUSTER_CAVGS_QUALITY NORMAL STOP ****', &
+            verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
+
+    contains
+
+        subroutine annotate_project()
+            integer :: icls
+            do icls = 1, ncls
+                call spproj%os_cls2D%set(icls, 'quality',         quality%scores(icls))
+                call spproj%os_cls2D%set(icls, 'quality_cluster', quality%labels(icls))
+                call spproj%os_cls2D%set(icls, 'accept',          quality%states(icls))
+                if( spproj%os_cls3D%get_noris() == ncls )then
+                    call spproj%os_cls3D%set(icls, 'quality',         quality%scores(icls))
+                    call spproj%os_cls3D%set(icls, 'quality_cluster', quality%labels(icls))
+                    call spproj%os_cls3D%set(icls, 'accept',          quality%states(icls))
+                endif
+            enddo
+        end subroutine annotate_project
+
+        subroutine write_quality_stack( fname, selected )
+            type(string), intent(in) :: fname
+            logical,      intent(in) :: selected
+            integer :: icls, istk
+            if( file_exists(fname) ) call del_file(fname)
+            istk = 0
+            do icls = 1, ncls
+                if( selected .eqv. (quality%states(icls) > 0) )then
+                    istk = istk + 1
+                    call cavg_imgs(icls)%write(fname, istk)
+                endif
+            enddo
+            write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
+        end subroutine write_quality_stack
+
+        subroutine write_quality_table( fname )
+            type(string), intent(in) :: fname
+            integer :: funit, icls, ifeat
+            open(newunit=funit, file=fname%to_char(), status='replace', action='write')
+            write(funit,'(A)', advance='no') 'class,state,hard_reject,quality_cluster,quality_score'
+            do ifeat = 1, CAVG_QUALITY_NFEATS
+                write(funit,'(A)', advance='no') ',raw_'//trim(cavg_quality_feature_name(ifeat))// &
+                    ',z_'//trim(cavg_quality_feature_name(ifeat))
+            enddo
+            write(funit,*)
+            do icls = 1, ncls
+                write(funit,'(I0,A,I0,A,L1,A,I0,A,ES14.6)', advance='no') icls, ',', quality%states(icls), ',', &
+                    quality%hard_reject(icls), ',', quality%labels(icls), ',', quality%scores(icls)
+                do ifeat = 1, CAVG_QUALITY_NFEATS
+                    write(funit,'(A,ES14.6,A,ES14.6)', advance='no') ',', quality%raw(icls,ifeat), &
+                        ',', quality%features(icls,ifeat)
+                enddo
+                write(funit,*)
+            enddo
+            close(funit)
+            write(logfhandle,'(A,A)') '>>> WROTE ', fname%to_char()
+        end subroutine write_quality_table
+
+    end subroutine exec_cluster_cavgs_quality
 
     ! to create medoid representatives of good/bad selection in cls2D field for fast matching later
     subroutine exec_cluster_cavgs_selection( self, cline )

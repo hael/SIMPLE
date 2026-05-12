@@ -1,8 +1,8 @@
 !@descr: execution of cavgs processing commanders
 module simple_exec_cavgproc
 use simple_cmdline,           only: cmdline
-use simple_commanders_cavgs,  only: commander_cluster_cavgs, commander_cluster_cavgs_selection,&
-commander_select_clusters, commander_match_cavgs
+use simple_commanders_cavgs,  only: commander_cluster_cavgs, commander_cluster_cavgs_quality, &
+commander_cluster_cavgs_selection, commander_select_clusters, commander_match_cavgs
 use simple_commanders_stkops, only: commander_cluster_stack, commander_match_stacks
 implicit none
 
@@ -10,6 +10,7 @@ public :: exec_cavgproc_commander
 private
 
 type(commander_cluster_cavgs)           :: xcluster_cavgs
+type(commander_cluster_cavgs_quality)   :: xcluster_cavgs_quality
 type(commander_cluster_cavgs_selection) :: xcluster_cavgs_selection
 type(commander_cluster_stack)           :: xcluster_stack
 type(commander_match_cavgs)             :: xmatch_cavgs
@@ -29,6 +30,8 @@ contains
         select case(trim(which))
             case( 'cluster_cavgs' )
                 call xcluster_cavgs%execute(cline)
+            case( 'cluster_cavgs_quality' )
+                call xcluster_cavgs_quality%execute(cline)
             case( 'cluster_cavgs_selection' )
                 call xcluster_cavgs_selection%execute(cline)
             case( 'cluster_stack' )
