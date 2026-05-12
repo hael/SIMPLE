@@ -80,6 +80,7 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
+        call cluster_cavgs_quality%add_input(UI_PARM, quality_mode)
         call cluster_cavgs_quality%add_input(UI_PARM, prune)
         ! alternative inputs
         ! <empty>

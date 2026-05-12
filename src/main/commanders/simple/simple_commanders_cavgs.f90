@@ -2,7 +2,7 @@
 module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality, only: CAVG_QUALITY_NFEATS, cavg_quality_result, &
-    cavg_quality_feature_name, evaluate_cavg_quality
+    cavg_quality_feature_name, evaluate_cavg_quality, write_cavg_quality_reference_analysis
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
 implicit none
@@ -311,31 +311,53 @@ contains
         type(image), allocatable  :: cavg_imgs(:)
         type(cavg_quality_result) :: quality
         type(string)              :: stkname
+        integer, allocatable      :: reference_states(:)
         integer                   :: ncls, nsel, nrej
         real                      :: smpd
+        logical                   :: l_analyze
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
         call params%new(cline)
+        select case(trim(params%quality_mode))
+            case('apply')
+                l_analyze = .false.
+            case('analyze')
+                l_analyze = .true.
+            case DEFAULT
+                THROW_HARD('cluster_cavgs_quality: quality_mode must be apply or analyze')
+        end select
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
         if( ncls == 0 ) THROW_HARD('cluster_cavgs_quality: project has no cls2D entries')
         call spproj%get_cavgs_stk(stkname, ncls, smpd)
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('cluster_cavgs_quality: # cavgs /= # cls2D entries')
+        reference_states = spproj%os_cls2D%get_all_asint('state')
         call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
         write(logfhandle,'(A,F8.3,A,F8.3,A,L1)') '>>> CAVG QUALITY THRESHOLD / SEPARATION : ', &
             quality%threshold, ' / ', quality%separation, ' USED=', quality%used_threshold
-        call write_quality_table(string('cavgs_quality_features.txt'))
+        if( l_analyze )then
+            write(logfhandle,'(A,I6,A,I6)') '>>> MANUAL REFERENCE SELECTED / REJECTED : ', &
+                count(reference_states > 0), ' / ', count(reference_states <= 0)
+            call write_quality_table(string('cavgs_quality_features.txt'), reference_states)
+            call write_cavg_quality_reference_analysis(quality, reference_states, 'cavgs_quality_reference')
+        else
+            call write_quality_table(string('cavgs_quality_features.txt'))
+        endif
         call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
         call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
-        call spproj%map_cavgs_selection(quality%states)
-        call annotate_project()
-        if( trim(params%prune) == 'yes' ) call spproj%prune_particles
-        call spproj%write(params%projfile)
+        if( l_analyze )then
+            write(logfhandle,'(A)') '>>> QUALITY ANALYSIS MODE: project selection left unchanged'
+        else
+            call spproj%map_cavgs_selection(quality%states)
+            call annotate_project()
+            if( trim(params%prune) == 'yes' ) call spproj%prune_particles
+            call spproj%write(params%projfile)
+        endif
         call spproj%kill()
         call dealloc_imgarr(cavg_imgs)
         call simple_end('**** SIMPLE_CLUSTER_CAVGS_QUALITY NORMAL STOP ****', &
@@ -372,11 +394,18 @@ contains
             write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
         end subroutine write_quality_stack
 
-        subroutine write_quality_table( fname )
+        subroutine write_quality_table( fname, manual_states )
             type(string), intent(in) :: fname
+            integer, optional, intent(in) :: manual_states(:)
             integer :: funit, icls, ifeat
+            logical :: l_ref
+            l_ref = present(manual_states)
+            if( l_ref )then
+                if( size(manual_states) /= ncls ) THROW_HARD('write_quality_table: manual state size mismatch')
+            endif
             open(newunit=funit, file=fname%to_char(), status='replace', action='write')
             write(funit,'(A)', advance='no') 'class,state,hard_reject,quality_cluster,quality_score'
+            if( l_ref ) write(funit,'(A)', advance='no') ',manual_state,auto_matches_manual'
             do ifeat = 1, CAVG_QUALITY_NFEATS
                 write(funit,'(A)', advance='no') ',raw_'//trim(cavg_quality_feature_name(ifeat))// &
                     ',z_'//trim(cavg_quality_feature_name(ifeat))
@@ -385,6 +414,10 @@ contains
             do icls = 1, ncls
                 write(funit,'(I0,A,I0,A,L1,A,I0,A,ES14.6)', advance='no') icls, ',', quality%states(icls), ',', &
                     quality%hard_reject(icls), ',', quality%labels(icls), ',', quality%scores(icls)
+                if( l_ref )then
+                    write(funit,'(A,I0,A,I0)', advance='no') ',', manual_states(icls), ',', &
+                        merge(1, 0, (manual_states(icls) > 0) .eqv. (quality%states(icls) > 0))
+                endif
                 do ifeat = 1, CAVG_QUALITY_NFEATS
                     write(funit,'(A,ES14.6,A,ES14.6)', advance='no') ',', quality%raw(icls,ifeat), &
                         ',', quality%features(icls,ifeat)

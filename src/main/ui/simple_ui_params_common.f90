@@ -122,6 +122,7 @@ type(ui_param) :: projfile_target
 type(ui_param) :: projname
 type(ui_param) :: prune
 type(ui_param) :: pspecsz
+type(ui_param) :: quality_mode
 type(ui_param) :: qsys_name
 type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
@@ -626,6 +627,10 @@ subroutine set_ui_params
     call pspecsz%set_param(        'pspecsz',         'num',    'Size of power spectrum', &
                                    'Size of power spectrum in pixels{512}', &
                                    'give # pixels{512}', .false., 512.)
+
+    call quality_mode%set_param(   'quality_mode',    'multi',  'Class-average quality mode', &
+                                   'Whether to apply automated selection or analyze it against the current manual selection(apply|analyze){apply}', &
+                                   'Class-average quality mode(apply|analyze){apply}', .false., 'apply')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
                                    'Queue system kind(local|slurm|pbs|lsf)', &
