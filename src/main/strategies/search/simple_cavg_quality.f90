@@ -43,10 +43,10 @@ integer, parameter :: I_CC_SINGLE       = 8
 
 character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(len=32) :: &
     'log_pop', 'neg_log_res', 'mask_inside', 'centered', &
-    'log_locvar_fg', 'neg_log_locvar_bg', 'spectrum_dynrange', 'single_component']
+    'log_locvar_fg', 'log_locvar_bg', 'spectrum_dynrange', 'single_component']
 
 real, parameter :: FEATURE_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    0.15, 0.15, 0.18, 0.10, 0.14, 0.08, 0.14, 0.06 ]
+    0.30, 0.30, 0.00, 0.00, 0.12, 0.08, 0.20, 0.00 ]
 
 type :: cavg_quality_result
     real,    allocatable :: raw(:,:)
@@ -129,7 +129,7 @@ contains
             raw(i, I_MASK_INSIDE)   = -outside_frac
             raw(i, I_CENTERED)      = -centroid_norm
             raw(i, I_LOCVAR_FG)     = log(max(locvar_fg, LOG_EPS))
-            raw(i, I_LOCVAR_BG)     = -log(max(locvar_bg, LOG_EPS))
+            raw(i, I_LOCVAR_BG)     = log(max(locvar_bg, LOG_EPS))
             raw(i, I_SPEC_DYNRANGE) = spec_dynrange
             raw(i, I_CC_SINGLE)     = -abs(real(nccs_valid - 1))
             hard_reject(i) = pop(i) <= 0 .or. no_component .or. &

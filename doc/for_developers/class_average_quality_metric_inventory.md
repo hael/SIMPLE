@@ -36,7 +36,7 @@ This module already implements an eight-feature class-average quality vector:
 | `mask_inside` | largest Otsu foreground component outside mask disc | larger is better after sign flip |
 | `centered` | foreground component centroid offset normalized by mask radius | larger is better after sign flip |
 | `log_locvar_fg` | masked foreground local variance | larger is usually better |
-| `neg_log_locvar_bg` | masked background local variance | larger is better after sign flip |
+| `log_locvar_bg` | masked background local variance | larger is usually better |
 | `spectrum_dynrange` | square-root spectrum at high-pass and low-pass indices | larger is usually better |
 | `single_component` | connected-component count penalty | closer to one component is better |
 
