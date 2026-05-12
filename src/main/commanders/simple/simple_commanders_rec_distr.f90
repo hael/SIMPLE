@@ -51,7 +51,7 @@ contains
         type(string) :: fsc_txt_file
         real, allocatable :: fsc(:)
         real    :: weight_prev
-        integer :: find4eoavg
+        integer :: find4eoavg, ldim(3)
         integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos, t_trail
         call reduce_partials()
         call set_state_filenames()
@@ -160,7 +160,12 @@ contains
 
         subroutine capture_nonuniform_source_halves()
             if( trim(params%filt_mode).ne.'nonuniform' ) return
+            ldim = [params%box_crop, params%box_crop, params%box_crop]
+            call vol_nu_base_even%new(ldim, params%smpd_crop)
+            call vol_nu_base_odd%new( ldim, params%smpd_crop)
             if( params%l_ml_reg )then
+                call vol_nu_aux_even%new(ldim, params%smpd_crop)
+                call vol_nu_aux_odd%new( ldim, params%smpd_crop)
                 call vol_nu_base_even%read(add2fbody(eonames(1), MRC_EXT, '_unfil'))
                 call vol_nu_base_odd%read( add2fbody(eonames(2), MRC_EXT, '_unfil'))
                 call vol_nu_aux_even%read(eonames(1))
@@ -388,6 +393,7 @@ contains
         subroutine build_nonuniform_mask()
             real :: mskrad_px
             if( allocated(l_mask) ) deallocate(l_mask)
+            if( allocated(imat) ) deallocate(imat)
             select case( pp_plan%nu_mask_source )
                 case( NU_MASK_SOURCE_FRESH_AUTOMASK )
                     call mskvol%set_imat
@@ -410,8 +416,7 @@ contains
         end subroutine build_nonuniform_mask
 
         subroutine setup_nonuniform_filter()
-            if( allocated(nu_aux_even) ) deallocate(nu_aux_even)
-            if( allocated(nu_aux_odd) )  deallocate(nu_aux_odd)
+            call cleanup_nu_aux_images()
             if( params%l_ml_reg )then
                 allocate(nu_aux_even(1), nu_aux_odd(1))
                 call nu_aux_even(1)%copy(vol_nu_aux_even)
@@ -455,18 +460,27 @@ contains
             call vol_nu_base_odd%kill
             call vol_nu_aux_even%kill
             call vol_nu_aux_odd%kill
-            if( allocated(nu_aux_even) )then
-                call nu_aux_even(1)%kill
-                deallocate(nu_aux_even)
-            endif
-            if( allocated(nu_aux_odd) )then
-                call nu_aux_odd(1)%kill
-                deallocate(nu_aux_odd)
-            endif
+            call cleanup_nu_aux_images()
             call vol_msk%kill
             if( allocated(l_mask) ) deallocate(l_mask)
             call cleanup_nu_filter()
         end subroutine cleanup_nonuniform_state
+
+        subroutine cleanup_nu_aux_images()
+            integer :: i
+            if( allocated(nu_aux_even) )then
+                do i = 1, size(nu_aux_even)
+                    call nu_aux_even(i)%kill
+                enddo
+                deallocate(nu_aux_even)
+            endif
+            if( allocated(nu_aux_odd) )then
+                do i = 1, size(nu_aux_odd)
+                    call nu_aux_odd(i)%kill
+                enddo
+                deallocate(nu_aux_odd)
+            endif
+        end subroutine cleanup_nu_aux_images
 
         subroutine collect_restore_timings()
             rt_reduce_partials           = restore_timings%reduce_partials
@@ -504,19 +518,20 @@ contains
             call vol_nu_base_odd%kill
             call vol_nu_aux_even%kill
             call vol_nu_aux_odd%kill
-            if( allocated(nu_aux_even) )then
-                call nu_aux_even(1)%kill
-                deallocate(nu_aux_even)
-            endif
-            if( allocated(nu_aux_odd) )then
-                call nu_aux_odd(1)%kill
-                deallocate(nu_aux_odd)
-            endif
+            call vol_even_nu%kill
+            call vol_odd_nu%kill
+            call vol_msk%kill
+            call cleanup_nu_aux_images()
             if( allocated(l_mask) ) deallocate(l_mask)
             if( allocated(imat) ) deallocate(imat)
+            if( allocated(res0143s) ) deallocate(res0143s)
             call cleanup_nu_filter()
             call state_mask_bin%kill_bimg
             call mskvol%kill_bimg
+            call pp_plan%mskfile_state%kill
+            call volname%kill
+            call eonames(1)%kill
+            call eonames(2)%kill
             call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
             call simple_touch('VOLASSEMBLE_FINISHED')
         end subroutine cleanup_context
