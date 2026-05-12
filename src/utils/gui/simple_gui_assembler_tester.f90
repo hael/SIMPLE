@@ -209,16 +209,13 @@ contains
   !---------------- optics assignment assembly ----------------
 
   ! Assemble a stream optics-assignment JSON payload from synthetic metadata and
-  ! verify its structure is stable via an FNV-1a hash of the serialised output.
-  ! Assemble a stream optics-assignment JSON payload from synthetic metadata and
-  ! verify its structure is stable via an FNV-1a hash of the serialised output.
-  ! NOTE: hash recalibration needed — optics groups are now included in the hash
-  ! (previously they were added after hash computation and omitted from it).
+  ! verify the section is non-empty. An exact hash comparison is not possible
+  ! because the section now embeds a live Unix timestamp (last_import_time).
   subroutine test_optics_assignment()
     type(gui_assembler)                              :: assembler
     type(gui_metadata_stream_optics_assignment)      :: meta_optics_assignment
     type(gui_metadata_optics_group),     allocatable :: meta_optics_groups(:)
-    type(string)                                     :: json_str, json_hash
+    type(string)                                     :: json_str
     real,                                allocatable :: xshifts(:), yshifts(:)
     integer                                          :: i
     write(*,'(A)') 'test_optics_assignment'
@@ -228,7 +225,7 @@ contains
       yshifts(i) = i
     enddo
     call meta_optics_assignment%new(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE)
-    call meta_optics_assignment%set(stage=string('test stage'), micrographs_assigned=100, optics_groups_assigned=5, last_micrograph_imported=1234)
+    call meta_optics_assignment%set(stage=string('test stage'), micrographs_assigned=100, optics_groups_assigned=5, micrographs_imported=200)
     allocate(meta_optics_groups(5))
     do i=1, size(meta_optics_groups)
       call meta_optics_groups(i)%new(GUI_METADATA_OPTICS_GROUP_TYPE)
@@ -239,8 +236,6 @@ contains
     call assembler%assemble_stream_optics_assignment(meta_optics_assignment, meta_optics_groups)
     json_str = assembler%to_string()
     call assert_true(json_str%strlen() > 0, 'json length greater than 0')
-    json_hash = json_str%to_fnv1a_hash64()
-    call assert_char(json_hash%to_char(), 'BDBE34825830B633', 'assembler json hash matches')
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
     deallocate(xshifts, yshifts)

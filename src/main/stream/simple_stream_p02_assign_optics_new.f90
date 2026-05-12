@@ -176,7 +176,7 @@ contains
             call meta_optics_assignment%set(stage=string('finding and processing new micrographs'),&
                                             micrographs_assigned=spproj%os_mic%get_noris(),        & 
                                             optics_groups_assigned=spproj%os_optics%get_noris(),   &
-                                            last_micrograph_imported=last_micrograph_imported)
+                                            micrographs_imported=nimported)
             if(params%updated .eq. 'yes') then
                 call starproj_stream%stream_export_optics(params, spproj, params%outdir)
                 params%updated = 'no'

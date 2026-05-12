@@ -634,19 +634,21 @@ contains
   subroutine test_set_get_stream_optics_assignment()
     type(gui_metadata_stream_optics_assignment)      :: meta
     type(string)                                     :: stage
-    integer                                          :: micrographs_assigned, optics_groups_assigned, last_micrograph_imported
+    integer                                          :: micrographs_imported, micrographs_assigned, optics_groups_assigned, last_import_time
     write(*,'(A)') 'test_set_get_stream_optics_assignment'
     call meta%new(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE, 'type is set correctly')
-    call meta%set(stage=string('test stage'), micrographs_assigned=100, optics_groups_assigned=50, last_micrograph_imported=1234)
+    call meta%set(stage=string('test stage'), micrographs_assigned=100, optics_groups_assigned=50, micrographs_imported=200)
     call assert_true(meta%assigned(), 'metadata object is set')
-    call assert_true(meta%get(stage=stage, micrographs_assigned=micrographs_assigned, &
-                     optics_groups_assigned=optics_groups_assigned, last_micrograph_imported=last_micrograph_imported), 'metadata retrieved')
+    call assert_true(meta%get(stage=stage, micrographs_assigned=micrographs_assigned,  &
+                     optics_groups_assigned=optics_groups_assigned,                     &
+                     last_import_time=last_import_time, micrographs_imported=micrographs_imported), 'metadata retrieved')
     call assert_char(stage%to_char(), 'test stage', 'stage set/get correctly')
+    call assert_int(micrographs_imported,     200,  'micrographs_imported set/get correctly')
     call assert_int(micrographs_assigned,     100,  'micrographs_assigned set/get correctly')
     call assert_int(optics_groups_assigned,   50,   'optics_groups_assigned set/get correctly')
-    call assert_int(last_micrograph_imported, 1234, 'last_micrograph_imported set/get correctly')
+    call assert_true(last_import_time > 0,          'last_import_time is set')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_set_get_stream_optics_assignment
@@ -659,7 +661,7 @@ contains
     call meta%new(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE, 'type is set correctly')
-    call meta%set(stage=string('test stage'), micrographs_assigned=100, optics_groups_assigned=50, last_micrograph_imported=1234)
+    call meta%set(stage=string('test stage'), micrographs_assigned=100, optics_groups_assigned=50, micrographs_imported=200)
     call assert_true(meta%assigned(), 'metadata object is set')
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
@@ -676,21 +678,24 @@ contains
     type(json_core)                             :: json
     type(json_value),             pointer       :: json_ptr
     type(string)                                :: json_str, json_hash
+    logical                                     :: found
     write(*,'(A)') 'test_jsonise_stream_optics_assignment'
     call json%initialize(no_whitespace=.true., compact_reals=.true.)
     call meta%new(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE, 'type is set correctly')
-    call meta%set(stage=string('test stage'), micrographs_assigned=100, optics_groups_assigned=50, last_micrograph_imported=1234)
+    call meta%set(stage=string('test stage'), micrographs_assigned=100, optics_groups_assigned=50, micrographs_imported=200)
     call assert_true(meta%assigned(), 'metadata object is set')
     json_ptr => meta%jsonise()
+    call assert_true(associated(json_ptr), 'json pointer is associated')
+    call json%update(json_ptr, 'last_import_time', 0, found)
     call json%print_to_string(json_ptr, buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
-    call assert_int(len(buffer), 109, 'buffer correct size')
+    call assert_int(len(buffer), 125, 'buffer correct size')
     json_str = buffer
-    call assert_int(json_str%strlen(), 109, 'string correct size')
+    call assert_int(json_str%strlen(), 125, 'string correct size')
     json_hash = json_str%to_fnv1a_hash64()
-    call assert_char(json_hash%to_char(), '6C8E8AF0F9ACC713', 'correct checksum')
+    call assert_char(json_hash%to_char(), 'C10B5AF72320C017', 'correct checksum')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     call json%destroy(json_ptr)

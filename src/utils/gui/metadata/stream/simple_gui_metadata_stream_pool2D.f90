@@ -88,7 +88,7 @@ contains
   ! Set the user-input flag. May be called independently of set().
   subroutine set_user_input( self, user_input )
     class(gui_metadata_stream_pool2D), intent(inout) :: self
-    logical,                                     intent(in)    :: user_input
+    logical,                           intent(in)    :: user_input
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned = .true.
     self%user_input = user_input
@@ -96,7 +96,7 @@ contains
 
   subroutine set_initial_ref_selection( self, idx )
     class(gui_metadata_stream_pool2D), intent(inout) :: self
-    integer,                                     intent(in)    :: idx
+    integer,                           intent(in)    :: idx
     if( .not.self%l_initialized )                THROW_HARD('gui metadata object is uninitialised')
     if( self%n_initial_ref_selection >= size(self%initial_ref_selection) ) THROW_HARD('idx is out of range')
     self%l_assigned = .true.

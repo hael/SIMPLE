@@ -5,9 +5,9 @@
 ! PURPOSE:
 !   Extends gui_metadata_base with fields specific to the optics-group
 !   assignment stage of the cryo-EM streaming pipeline.  Tracks the number
-!   of micrographs assigned to optics groups, the number of distinct optics
-!   groups created, and the Unix timestamp of the most recently imported
-!   micrograph (supplied by the caller).
+!   of micrographs imported/assigned to optics groups, the number of distinct
+!   optics groups created, and the Unix timestamp of the most recently
+!   imported micrograph (supplied by the caller).
 !
 ! TYPES:
 !   gui_metadata_stream_optics_assignment — extends gui_metadata_base
@@ -20,6 +20,7 @@
 !   simple_gui_metadata_base
 !==============================================================================
 module simple_gui_metadata_stream_optics_assignment
+  use unix,                     only: c_long, c_time
   use json_kinds
   use json_module,              only: json_core, json_value
   use simple_string,            only: string
@@ -36,9 +37,10 @@ module simple_gui_metadata_stream_optics_assignment
   type, extends(gui_metadata_base) :: gui_metadata_stream_optics_assignment
     private
     character(len=STDLEN) :: stage                    = 'unknown'
+    integer               :: micrographs_imported     = 0  ! total micrographs received from import
     integer               :: micrographs_assigned     = 0  ! micrographs successfully placed in an optics group
     integer               :: optics_groups_assigned   = 0  ! number of distinct optics groups created
-    integer               :: last_micrograph_imported = 0  ! Unix timestamp of most recent import (caller-supplied)
+    integer               :: last_import_time         = 0  ! Unix timestamp of most recent import (caller-supplied)
   contains
     procedure :: set
     procedure :: get
@@ -48,32 +50,36 @@ module simple_gui_metadata_stream_optics_assignment
 contains
 
   ! Assign all fields from caller-supplied values.
-  subroutine set( self, stage, micrographs_assigned, optics_groups_assigned, last_micrograph_imported )
+  subroutine set( self, stage, micrographs_assigned, optics_groups_assigned, micrographs_imported )
     class(gui_metadata_stream_optics_assignment), intent(inout) :: self
     type(string),                                 intent(in)    :: stage
     integer,                                      intent(in)    :: micrographs_assigned, optics_groups_assigned
-    integer,                                      intent(in)    :: last_micrograph_imported
+    integer,                                     intent(in)    :: micrographs_imported
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned               = .true.
     self%stage                    = stage%to_char()
+    if( micrographs_imported /= self%micrographs_imported ) &
+      self%last_import_time = int(c_time(0_c_long))
+    self%micrographs_imported     = micrographs_imported
     self%micrographs_assigned     = micrographs_assigned
     self%optics_groups_assigned   = optics_groups_assigned
-    self%last_micrograph_imported = last_micrograph_imported
   end subroutine set
 
   ! Retrieve all fields. Returns .true. if the object has been assigned.
-  function get( self, stage, micrographs_assigned, optics_groups_assigned, last_micrograph_imported ) result( l_assigned )
+  function get( self, stage, micrographs_assigned, optics_groups_assigned, last_import_time, micrographs_imported ) result( l_assigned )
     class(gui_metadata_stream_optics_assignment), intent(inout) :: self
     type(string),                                 intent(out)   :: stage
     integer,                                      intent(out)   :: micrographs_assigned, optics_groups_assigned
-    integer,                                      intent(out)   :: last_micrograph_imported
+    integer,                                      intent(out)   :: last_import_time
+    integer,                                      intent(out)   :: micrographs_imported
     logical                                                     :: l_assigned
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned               = self%l_assigned
     stage                    = trim(self%stage)
     micrographs_assigned     = self%micrographs_assigned
     optics_groups_assigned   = self%optics_groups_assigned
-    last_micrograph_imported = self%last_micrograph_imported
+    last_import_time         = self%last_import_time
+    micrographs_imported     = self%micrographs_imported
   end function get
 
   ! Serialise all fields to a JSON object. Returns a null pointer when
@@ -86,9 +92,10 @@ contains
     if( self%l_assigned ) then
       call json%create_object(json_ptr, '')
       call json%add(json_ptr, 'stage',                    trim(self%stage)               )
+      call json%add(json_ptr, 'micrographs_imported',     self%micrographs_imported      )
       call json%add(json_ptr, 'micrographs_assigned',     self%micrographs_assigned      )
       call json%add(json_ptr, 'optics_groups_assigned',   self%optics_groups_assigned    )
-      call json%add(json_ptr, 'last_micrograph_imported', self%last_micrograph_imported  )
+      call json%add(json_ptr, 'last_import_time',         self%last_import_time          )
     else
       nullify(json_ptr)
     end if
