@@ -50,6 +50,9 @@ The current worktree also has a commander hook in `src/main/commanders/simple/si
   - annotates `cls2D` fields `quality`, `quality_cluster`, and `accept`
   - supports `quality_recall_margin`, a score margin subtracted from the
     automated threshold to bias the selection toward retaining good classes
+  - keeps `spectrum_dynrange` in the feature table for diagnostics, but does
+    not currently give it positive score weight because high values can reflect
+    ring or ice artifacts rather than good class-average signal
 
 This is already very close to a reusable scalar metric pipeline. The remaining inventory below lists additional existing routines that can either support this module or expand it.
 

@@ -46,8 +46,10 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
     'log_pop', 'neg_log_res', 'mask_inside', 'centered', &
     'log_locvar_fg', 'log_locvar_bg', 'spectrum_dynrange', 'single_component']
 
+! spectrum_dynrange is retained as a diagnostic feature but not scored by default:
+! high spectral dynamic range can also indicate ring/ice artifacts rather than good signal.
 real, parameter :: FEATURE_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    0.30, 0.30, 0.00, 0.00, 0.12, 0.08, 0.20, 0.00 ]
+    0.37, 0.37, 0.00, 0.00, 0.16, 0.10, 0.00, 0.00 ]
 
 type :: cavg_quality_result
     real,    allocatable :: raw(:,:)
