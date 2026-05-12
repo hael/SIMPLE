@@ -43,7 +43,7 @@ module simple_gui_metadata_stream_picking
     integer               :: particles_extracted      = 0  ! total particles picked across accepted mics
     integer               :: particles_per_mic        = 0  ! average particles per imported micrograph
     integer               :: last_micrograph_imported = 0  ! Unix timestamp of most recent import event
-    integer               :: box_size = 0
+    integer               :: box_size                 = 0  ! particle box size in pixels
   contains
     procedure :: set
     procedure :: get

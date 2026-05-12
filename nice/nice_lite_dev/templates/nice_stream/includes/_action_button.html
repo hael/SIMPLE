@@ -1,15 +1,30 @@
 {% comment %}
-  _action_button.html — bouncing accent action button in a centred GET form.
+  _action_button.html — reusable action button form.
 
   Parameters:
     label      — button text
-    action_url — named URL for the form action (passed through {% url %} by the caller)
+    action_url — resolved URL for the form action
     jobid      — job primary key, passed as hidden selected_job_id field
+    method     — optional HTTP method (default: GET)
+    target     — optional form target (default: _parent)
+    button_type  — optional button type (default: submit)
+    button_class — optional button classes
+    form_class   — optional form classes
+    wrapper_class — optional wrapper classes
+    onclick    — optional onclick handler for the button
+    include_final_selection_fields — optional boolean; when true includes
+                                     final_selection hidden fields used by
+                                     pickrefs selection workflow.
 {% endcomment %}
-<div class="flex justify-center pb-3">
-    <form method="GET" action="{{ action_url }}" target="_parent">
+<div class="{{ wrapper_class|default:'flex justify-center pb-3' }}">
+    <form class="{{ form_class|default:'' }}" method="{{ method|default:'GET' }}" action="{{ action_url }}"{% if target|default:'_parent' %} target="{{ target|default:'_parent' }}"{% endif %}>
         {% csrf_token %}
         <input name="selected_job_id" value="{{ jobid }}" type="hidden">
-        <button class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-streamring/15 text-streamaccent hover:bg-streamring/30 transition-colors animate-bounce cursor-pointer" type="submit">{{ label }}</button>
+        {% if include_final_selection_fields %}
+            <input type="hidden" id="final_selection" name="final_selection" value="">
+            <input type="hidden" id="final_selection_source" name="final_selection_source" value="">
+            <input type="hidden" id="final_selection_boxsize" name="final_selection_boxsize" value="">
+        {% endif %}
+        <button class="{{ button_class|default:'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-streamring/15 text-streamaccent hover:bg-streamring/30 transition-colors animate-bounce cursor-pointer' }}"{% if onclick %} onclick="{{ onclick }}"{% endif %} type="{{ button_type|default:'submit' }}">{{ label }}</button>
     </form>
 </div>

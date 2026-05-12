@@ -12,50 +12,52 @@
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='initial picking' %}
-    <div class="w-full flex flex-row p-[10px]">
-        <div class="flex flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline">
-            {% if "micrographs_imported" in jobstats and "micrographs_accepted" in jobstats and "micrographs_rejected" in jobstats and jobstats.micrographs_imported > 0 %}
-                <div class="flex flex-col w-full">
-                    <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px]">micrographs</div>
-                    <div class="flex gap-2 p-[10px] pb-[6px]">
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_accepted label='accepted' %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_imported label='imported' variant='neutral' %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_rejected label='rejected' variant='rejected' %}
-                    </div>
+    <div class="w-full flex flex-row p-[10px] max-h-[320px]">
+        <div class="flex flex-col h-full gap-2.5">
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                    <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">micrographs</p>
                 </div>
-            {% endif %}
-            <div class="flex flex-col divide-y divide-streamline mx-[10px] mt-[5px]">
-                {% if "particles_extracted" in jobstats %}
-                    <div class="flex items-baseline justify-between py-1.5">
-                        <span class="text-[11px] text-streamlabel">particles extracted</span>
-                        <span class="text-[11px] font-medium text-streamtext font-mono">{{ jobstats.particles_extracted|intcomma }}</span>
-                    </div>
-                {% endif %}
-                {% if "particles_per_mic" in jobstats and jobstats.particles_per_mic > 0 %}
-                    <div class="flex items-baseline justify-between py-1.5">
-                        <span class="text-[11px] text-streamlabel">avg particles / mic</span>
-                        <span class="text-[11px] font-medium text-streamtext font-mono">{{ jobstats.particles_per_mic|intcomma }}</span>
-                    </div>
-                {% endif %}
+                <!-- Count tiles -->
+                <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+                    {% if jobstats.micrographs_accepted == jobstats.micrographs_imported %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_accepted label="micrographs picked" sublabel=jobstats.micrographs_imported sublabel_sep="/" %}
+                    {% else %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_accepted label="micrographs picked" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="action" %}
+                    {% endif %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_rejected label="micrographs rejected" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="rejected" %}
+                </div>
+            </div>
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                    <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">particles</p>
+                </div>
+                <!-- Count tiles -->
+                <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+                    {% if jobstats.micrographs_accepted == jobstats.micrographs_imported %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_extracted label="particles extracted" sublabel=jobstats.particles_per_mic sublabel_unit="/mic" %}
+                    {% else %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_extracted label="particles extracted" sublabel=jobstats.particles_per_mic sublabel_unit="/mic" variant="action" %}
+                    {% endif %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.box_size label="box size" count_unit="px" %}
+                </div>
             </div>
         </div>
-        <div class="flex ml-[10px] flex-1 flex-col bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline overflow-hidden">
-            {% include 'nice_stream/includes/_zoom_log_errors_pre_body.html' %}
+        <div class="flex ml-[10px] flex-1 flex-col bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
+            {% include 'nice_stream/includes/_zoom_log_errors_parts_body.html' %}
         </div>
         {% include 'nice_stream/includes/_zoom_help_panel.html' %}
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
-        <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline">
-            <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px] mb-2">latest micrographs</div> 
+        <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+            <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">latest micrographs</p>
+            </div>
             {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
                 <div class="flex flex-col flex-1 overflow-y-auto">
                     <div class="flex flex-row items-center m-auto">
-                        <div class="h-[24px] w-[24px] text-streamlabel hover:text-streamtext cursor-pointer" onclick="scrlLeft(this, event)">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                                <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
-                            </svg>
-                        </div>
-                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[512] overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden relative">
+                        {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
+                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[512] mx-2 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden relative">
                             {% for micrograph in jobstats.latest_micrographs %}
                                 <div class="miccontainer snap-center slider_micrograph rounded" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
                                     <canvas class="boxes-overlay absolute hover:animate-pulse z-1" height="512" width="512"></canvas>
@@ -66,7 +68,7 @@
                             {% endfor %}
                         </div>
                         <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent z-2" onclick="hideMenu()">
-                            <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-streambar m-[5px] border-streamline border p-[2px] rounded">
+                            <div name="selectmenubox" class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
                                 <div class="flex flex-col">
                                     <div class="text-[10px] text-streamlabel">contrast</div>
                                     <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
@@ -81,11 +83,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="h-[24px] w-[24px] text-streamlabel hover:text-streamtext cursor-pointer" onclick="scrlRight(this, event)">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                                <path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clip-rule="evenodd" />
-                            </svg>
-                        </div>
+                        {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
                     </div>    
                 </div> 
             {% else %}

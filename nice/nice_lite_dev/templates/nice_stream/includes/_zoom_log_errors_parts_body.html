@@ -1,25 +1,77 @@
-<div class="flex items-center justify-between px-2">
-    <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">log</div>
+<div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+    <div class="flex-1 text-[10px] font-medium text-streamlabel uppercase tracking-widest">log</div>
     <div class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-streamring animate-pulse"></span>
+        <span class="w-1.5 h-1.5 rounded-full bg-streamaction animate-pulse"></span>
         <span class="text-[10px] text-streamlabel">running</span>
     </div>
 </div>
-<div class="logtext h-[200px] overflow-auto mx-[2px] mt-2 p-3 bg-streambg border border-streamdivider rounded-lg">
+<div class="logtext js-expandable-panel flex-1 overflow-auto mx-2 my-2 p-3 bg-streambg border border-streamdivider rounded-lg cursor-zoom-in" title="click to expand">
     {% for logpart in log %}
         {% if "text" in logpart %}
             <pre class="text-[10px] text-streamsubtle">{{ logpart.text }}</pre>
         {% elif "image" in logpart %}
-            <img src="{% url 'nice_lite:image' logpart.image %}"/>
+            <img src="{% url 'nice_lite:image' logpart.image %}" loading="lazy"/>
         {% endif %}
     {% endfor %}
 </div>
-<div class="flex items-center gap-2 mt-2 px-2">
-    <svg class="w-3.5 h-3.5 text-streamerror flex-shrink-0" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-        <circle cx="7" cy="7" r="5.5"/><line x1="7" y1="5" x2="7" y2="7.5"/><circle cx="7" cy="9.5" r="0.5" fill="currentColor"/>
-    </svg>
-    <span class="text-[11px] text-streamsubtle">errors</span>
-</div>
-<div class="h-[75px] overflow-auto mx-[2px] mt-1 p-3 bg-streamerrorsurface border border-streamerrorline rounded-lg">
-    <pre class="text-[10px] text-streamerror">{{error}}</pre>
-</div>
+<script>
+    (function () {
+        var panels = document.querySelectorAll('.js-expandable-panel');
+
+        function expandPanel(panel) {
+            panel.dataset.expanded = '1';
+            panel.dataset.originalStyle = panel.getAttribute('style') || '';
+            panel.style.position = 'fixed';
+            panel.style.inset = '0';
+            panel.style.width = '100vw';
+            panel.style.height = '100vh';
+            panel.style.maxHeight = 'none';
+            panel.style.margin = '0';
+            panel.style.borderRadius = '0';
+            panel.style.zIndex = '9999';
+            panel.classList.add('cursor-zoom-out');
+            panel.classList.remove('cursor-zoom-in');
+            panel.title = 'click to collapse';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function collapsePanel(panel) {
+            panel.dataset.expanded = '0';
+            panel.setAttribute('style', panel.dataset.originalStyle || '');
+            panel.classList.remove('cursor-zoom-out');
+            panel.classList.add('cursor-zoom-in');
+            panel.title = 'click to expand';
+            document.body.style.overflow = '';
+        }
+
+        panels.forEach(function (panel) {
+            if (panel.dataset.expandBound === '1') return;
+            panel.dataset.expandBound = '1';
+            panel.dataset.expanded = '0';
+
+            panel.addEventListener('click', function () {
+                if (panel.dataset.expanded === '1') {
+                    collapsePanel(panel);
+                } else {
+                    panels.forEach(function (otherPanel) {
+                        if (otherPanel !== panel && otherPanel.dataset.expanded === '1') {
+                            collapsePanel(otherPanel);
+                        }
+                    });
+                    expandPanel(panel);
+                }
+            });
+        });
+    })();
+</script>
+{% if error %}
+    <div class="flex items-center gap-2 mt-2 px-2">
+        <svg class="w-3.5 h-3.5 text-streamerror flex-shrink-0" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <circle cx="7" cy="7" r="5.5"/><line x1="7" y1="5" x2="7" y2="7.5"/><circle cx="7" cy="9.5" r="0.5" fill="currentColor"/>
+        </svg>
+        <span class="text-[11px] text-streamsubtle">errors</span>
+    </div>
+    <div class="js-expandable-panel h-[75px] overflow-auto mx-2 mb-2 mt-1 p-3 bg-streamerrorsurface border border-streamerrorline rounded-lg cursor-zoom-in" title="click to expand">
+        <pre class="text-[10px] text-streamerror">{{error}}</pre>
+    </div>
+{% endif %}

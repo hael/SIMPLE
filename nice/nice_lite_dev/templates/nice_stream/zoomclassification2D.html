@@ -12,87 +12,53 @@
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='2D classification' %}
-    <div class="w-full flex flex-row p-[10px]">
-        <div class="flex flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline">
-            <div class="flex flex-row">
-                {% if "particles_imported" in jobstats and "particles_accepted" in jobstats and "particles_rejected" in jobstats and jobstats.particles_imported > 0 %}
-                    <div class="flex flex-col w-full">
-                        <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px]">particles</div>
-                        <div class="flex gap-2 p-[10px] pb-[6px]">
-                            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label='accepted' %}
-                            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_imported label='imported' variant='neutral' %}
-                            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_rejected label='rejected' variant='rejected' %}
-                        </div>
-                    </div>
-                {% endif %}
-            </div>
-            <div class="flex flex-col divide-y divide-streamline mx-[10px] mt-[5px]">
-                {% if "selected_boxsize" in jobstats and jobstats.selected_boxsize > 0 %}
-                    <div class="flex items-baseline justify-between py-1.5">
-                        <span class="text-[11px] text-streamlabel">box size</span>
-                        <span class="text-[11px] font-medium text-streamtext font-mono">{{ jobstats.selected_boxsize }} px</span>
-                    </div>
-                {% endif %}
-                {% if "iteration" in jobstats and jobstats.iteration > 0 %}
-                    <div class="flex items-baseline justify-between py-1.5">
-                        <span class="text-[11px] text-streamlabel">iteration</span>
-                        <span class="text-[11px] font-medium text-streamtext font-mono">{{ jobstats.iteration }}</span>
-                    </div>
-                {% endif %}
-                {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
-                    <div class="flex items-baseline justify-between py-1.5">
-                        <span class="text-[11px] text-streamlabel">clusters</span>
-                        <span id="clustercount" class="text-[11px] font-medium text-streamtext font-mono"></span>
-                    </div>
-                    <div class="flex items-baseline justify-between py-1.5">
-                        <span class="text-[11px] text-streamlabel">particles</span>
-                        <span id="particlecount" class="text-[11px] font-medium text-streamtext font-mono"></span>
-                    </div>
-                {% endif %}
-            </div>
-            {% if status == "running" %}
-                {% if jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
-                    <div>
-                        <form class="flex flex-col" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' %}>
-                            {% csrf_token %}
-                            <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
-                            <div class="text-[10px] text-streamlabel ml-[10px] mt-2">mask diameter</div>
-                            <div class="flex flex-row items-center justify-center">
-                                <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onmouseup="updateMskdiamSubmit(this)" ontouchend="updateMskdiamSubmit(this)"></input>
-                                <input type="hidden" id="selected_mskdiam" name="mskdiam" value=""/> 
-                                <div id="current_mskdiam" class="w-[20px] pl-[5px] text-[10px]"></div>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="flex flex-row flex-1 justify-center items-center">
-                        <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:snapshot_stream_classification_2D' %}>
-                            {% csrf_token %}
-                            <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
-                            <input type="hidden" id="snapshot_iteration" name="snapshot_iteration" value="{{ jobstats.iteration }}"/>
-                            <input type="hidden" id="snapshot_selection" name="snapshot_selection" value=""/>
-                            <button class="userbutton animate-bounce !text-[14px]" type="button" onclick="selectCls(this)">create snapshot particle set</button>
-                        </form>
-                    </div>
-                {% endif %}
-            {% elif status == "finished" %}
-                <div class="flex flex-row flex-1 justify-center items-center">
-                    <form class="flex flex-col items-center" method="POST" action={% url 'nice_lite:select_stream_classification_2D' %}>
-                        {% csrf_token %}
-                        <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
-                        <input type="hidden" id="final_deselection"     name="final_deselection"     value=""/>
-                        <input type="hidden" id="final_selection_ptcls" name="final_selection_ptcls" value=""/>
-                        <button class="userbutton animate-bounce !text-[14px]" type="button" onclick="selectClsFinal(this)">create final particle set</button>
-                    </form>
+    <div class="w-full flex flex-row p-[10px] max-h-[320px]">
+        <div class="flex flex-col h-full gap-2.5">
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                    <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">particles</p>
                 </div>
-            {% endif %}
+                <!-- Count tiles -->
+                <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+                    {% if "latest_cls2D" in jobstats or "final_cls2D" in jobstats %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" %}
+                    {% else %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%} 
+                    {% endif %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_rejected label='particles rejected' variant='rejected' %}
+                    {% if "box_size" in jobstats and jobstats.box_size > 0 %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.box_size label="box size" count_unit="px" %}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                    <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">2D classes</p>
+                </div>
+                <!-- Count tiles -->
+                <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+                    {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.latest_cls2D|length label="classes" %}
+                    {% endif %}
+                    {% if "iteration" in jobstats and jobstats.iteration > 0 %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.iteration label="iteration" %}
+                    {% endif %}
+                    {% if "mskdiam" in jobstats and jobstats.mskdiam > 0 %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.mskdiam label="mask diameter" count_unit="Å" %}
+                    {% endif %}
+                    {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.final_cls2D|length label="resolution" %}
+                    {% endif %}
+                </div>
+            </div>
         </div>
-        <div class="flex ml-[10px] flex-1 flex-col bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline overflow-hidden">
+        <div class="flex ml-[10px] flex-1 flex-col bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
             {% include 'nice_stream/includes/_zoom_log_errors_parts_body.html' %}
         </div>
         {% include 'nice_stream/includes/_zoom_help_panel.html' %}
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
-        <div class="relative flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline">
+        <div class="relative flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
             <div id="loadinggauze" class="absolute text-[12px] flex h-[99%] w-[99%] bg-streambar items-center justify-center transition-opacity duration-300 delay-300 ease-in-out">loading ...</div>
             {% if status == "running" %}
                 {% if "stage" in jobstats and jobstats.stage == "updating mask diameter" %}
@@ -100,14 +66,16 @@
                         updating mask diameter ...
                 </div>
                 {% elif jobstats.user_input is True and "latest_cls2D" in jobstats and "iteration" in jobstats and jobstats.iteration > 0 %}  
-                    <span class="text-[10px] text-streamlabel pl-[10px] mb-2">latest classes</span>
+                    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                        <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">latest classes</p>
+                    </div>
                     <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
                         <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
                             <div id="accepted_cls2D_slider" class="flex flex-wrap">
                                 {% for cls2D in jobstats.latest_cls2D %}
                                     <div class="flex flex-col snap-center cls2dcontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ template.pop }}&#013;resolution: {{ template.res | floatformat:1 }}Å"> 
                                         <div class="flex justify-between mb-1.5">
-                                            <span class="text-[10px] font-medium text-streamtext">{{ cls2D.pop|intcomma }}</span>
+                                            <span class="text-[10px] text-streamlabel">{{ cls2D.pop|intcomma }} ptcls</span>
                                             <span class="text-[10px] text-streamlabel">{{ cls2D.res|floatformat:1 }}Å</span>
                                         </div>
                                         <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
@@ -124,7 +92,7 @@
                                 {% endfor %}
                             </div>
                             <div name="selectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-streambar m-[5px] border-streamline border rounded">
+                                <div name="selectmenubox" class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
                                     <div class="flex flex-col">
                                         <div class="text-[10px] text-streamlabel">contrast</div>
                                         <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
@@ -148,14 +116,16 @@
                 {% endif %}
             {% else %}
                 {% if "latest_cls2D" in jobstats %}                
-                    <span class="text-[10px] text-streamlabel pl-[10px] mb-2">final classes</span>
+                    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                        <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">final classes</p>
+                    </div>
                     <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
                         <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
                             <div id="accepted_cls2D_slider" class="flex flex-wrap">
                                 {% for cls2D in jobstats.latest_cls2D %}
                                     <div class="flex flex-col snap-center cls2dcontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
                                         <div class="flex justify-between mb-1.5">
-                                            <span class="text-[10px] font-medium text-streamtext">{{ cls2D.pop|intcomma }}</span>
+                                            <span class="text-[10px] text-streamlabel">{{ cls2D.pop|intcomma }} ptcls</span>
                                             <span class="text-[10px] text-streamlabel">{{ cls2D.res|floatformat:1 }}Å</span>
                                         </div>
                                         <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
@@ -171,7 +141,7 @@
                                 {% endfor %}
                             </div>
                             <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                                <div name="selectmenubox" class="text-[10px] absolute flex flex-col bg-streambar m-[5px] border-streamline border rounded">
+                                <div name="selectmenubox" class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
                                     <div class="flex flex-col">
                                         <div class="text-[10px] text-streamlabel">contrast</div>
                                         <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
@@ -194,6 +164,49 @@
                     </div>
                 {% endif %}
             {% endif %}
+            <div class="flex items-center justify-end mt-3 p-2 border-t border-streamline">
+                {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+                    <div class="flex flex-1 flex-row gap-2">
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-[11px] text-streamlabel px-2">selected clusters</span>
+                            <span id="clustercount" class="text-[11px] font-medium text-streamtext font-mono"></span>
+                        </div>
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-[11px] text-streamlabel px-2">selected particles</span>
+                            <span id="particlecount" class="text-[11px] font-medium text-streamtext font-mono"></span>
+                        </div>
+                    </div>
+                {% endif %}
+                {% if status == "running" %}
+                    {% if jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+                        <form class="flex flex-2 flex-row justify-center" method="POST" action={% url 'nice_lite:update_classification_2D_mskdiam' %}>
+                            {% csrf_token %}
+                            <input name="selected_job_id" value="{{ jobid }}" type="hidden"></input>
+                            <div class="text-[11px] text-streamlabel m-2">update mask diameter</div>
+                            <div class="flex flex-row items-center justify-center">
+                                <input type="range" min=5 max=500 step=1 id="mskdiam_selector" oninput="updateMskdiam(this)" onmouseup="updateMskdiamSubmit(this)" ontouchend="updateMskdiamSubmit(this)"></input>
+                                <input type="hidden" id="selected_mskdiam" name="mskdiam" value=""/> 
+                                <div id="current_mskdiam" class="w-[20px] pl-[5px] text-[11px]"></div>
+                            </div>
+                        </form>
+                        <form method="POST" action="{% url 'nice_lite:snapshot_stream_classification_2D' %}">
+                            {% csrf_token %}
+                            <input name="selected_job_id" value="{{ jobid }}" type="hidden"/>
+                            <input type="hidden" id="snapshot_iteration" name="snapshot_iteration" value="{{ jobstats.iteration }}"/>
+                            <input type="hidden" id="snapshot_selection" name="snapshot_selection" value=""/>
+                            <button type="button" onclick="selectCls(this)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity">create snapshot particle set</button>
+                        </form>
+                    {% endif %}
+                {% elif status == "finished" %}
+                    <form method="POST" action={% url 'nice_lite:select_stream_classification_2D' %}>
+                        {% csrf_token %}
+                        <input name="selected_job_id" value="{{ jobid }}" type="hidden"/>
+                        <input type="hidden" id="final_deselection"     name="final_deselection"     value=""/>
+                        <input type="hidden" id="final_selection_ptcls" name="final_selection_ptcls" value=""/>
+                        <button class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity" type="button" onclick="selectClsFinal(this)">create final particle set</button>
+                    </form>
+                {% endif %}
+            </div>
         </div>
     </div>
 </body>

@@ -46,8 +46,12 @@
 
         <!-- Count tiles -->
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
-            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_accepted label="mics picked" sublabel=jobstats.micrographs_accepted sublabel_sep="/" variant="action"%}
-            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_extracted label="particles" sublabel=jobstats.particles_per_mic sublabel_unit="/mic" %}
+            {% if jobstats.micrographs_accepted == jobstats.micrographs_imported %}
+                {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_accepted label="micrographs picked" sublabel=jobstats.micrographs_imported sublabel_sep="/" %}
+            {% else %}
+                {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_accepted label="micrographs picked" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="action" %}
+            {% endif %}
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_extracted label="particles extracted" sublabel=jobstats.particles_per_mic sublabel_unit="/mic" %}
         </div>
 
         <!-- Micrograph slider (pick locations) -->

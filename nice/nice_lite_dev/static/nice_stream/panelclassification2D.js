@@ -118,8 +118,9 @@ const drawMask = ()  => {
     const canvas   = cls2D.getElementsByClassName("mskcanvas")[0]
     const mskscale = Number(canvas.dataset.mskscale)
     const ctx = canvas.getContext("2d")
-    ctx.strokeStyle = "yellow";
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--color-streamaction').trim();
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.lineWidth = 2
     ctx.beginPath();
     ctx.arc(canvas.width / 2, canvas.height / 2, Number(selected_mskdiam.value) * canvas.width / (mskscale * 2), 0, 2 * Math.PI);
     ctx.stroke();

@@ -11,27 +11,45 @@
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='optics assignment' %}
-    <div class="w-full flex flex-row p-[10px]">
-        <div class="flex flex-1 flex-col bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline overflow-hidden">
-            {% include 'nice_stream/includes/_zoom_log_errors_pre_body.html' %}
+    <div class="w-full flex flex-row p-[10px] max-h-[320px]">
+        {% if "optics_groups_assigned" in jobstats%}
+            <div class="flex flex-col h-full gap-2.5">
+                <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                        <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">micrographs</p>
+                    </div>
+                    <!-- Count tiles -->
+                    <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.optics_groups_assigned label="micrographs assigned" sublabel=jobstats.optics_groups_assigned sublabel_sep="/" %}
+                    </div>
+                </div>
+                <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                        <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">optics groups</p>
+                    </div>
+                    <!-- Count tiles -->
+                    <div class="grid grid-cols-2 gap-2 px-4 pt-2">
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.optics_groups_assigned label="optics groups assigned" %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        <div class="flex ml-[10px] flex-1 flex-col bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
+            {% include 'nice_stream/includes/_zoom_log_errors_parts_body.html' %}
         </div>
         {% include 'nice_stream/includes/_zoom_help_panel.html' %}
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
-        <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl p-[5px] text-streamtext border border-streamline">
-            <div class="flex flex-col divide-y divide-streamline mx-[10px] mt-[5px]">
-                {% if "optics_groups_assigned" in jobstats %}
-                    <div class="flex items-baseline justify-between py-1.5">
-                        <span class="text-[11px] text-streamlabel">groups assigned</span>
-                        <span class="text-[11px] font-medium text-streamtext font-mono">{{ jobstats.optics_groups_assigned }}</span>
-                    </div>
-                {% endif %}
-            </div>
+        <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
             {% if "optics_assignments" in jobstats %}
                 <div class="flex flex-col flex-1">
-                    <div class="text-[10px] font-medium text-streamlabel uppercase tracking-widest pl-[10px] mb-2">beam shift groupings</div>
-                    <div class="p-[50px] w-full h-full">
-                        <canvas class="optics_scatter_chart" data-assignments='{{ jobstats.optics_assignments }}''></canvas>
+                    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                        <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">beam shift groupings</p>
+                    </div>
+                    <div class="w-full h-full p-[10px] flex items-center justify-center">
+                        <div class="h-[calc(100%-20px)] max-h-full aspect-square">
+                            <canvas class="optics_scatter_chart w-full h-full" data-assignments='{{ jobstats.optics_assignments }}'></canvas>
+                        </div>
                     </div>
                 </div>
             {% endif %}

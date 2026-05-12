@@ -6,42 +6,13 @@
 {% endcomment %}
 {% load humanize %}
 {% with ms=job.preprocessing_stats cs=job.classification_2D_stats %}
-<div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamring/10{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden">
+<div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamring/10{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden w-[260px]">
 
     <!-- Header: status dot · stream name · open-detail button -->
-    <div class="flex items-center justify-between px-3 pt-3 pb-1">
-        <div class="flex items-center gap-1.5">
-            {% if job.status == "running" %}
-                <span class="w-2 h-2 rounded-full bg-streamring animate-pulse"></span>
-            {% elif job.status == "finished" or job.status == "alarm" %}
-                <span class="w-2 h-2 rounded-full bg-streamring"></span>
-            {% else %}
-                <span class="w-2 h-2 rounded-full bg-streamerror"></span>
-            {% endif %}
-            <span class="text-xs font-medium text-streaminput">{{ job.disp }} stream</span>
-        </div>
-    </div>
+    {% include 'nice_stream/includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" stream" status=job.status hide_actions=True show_description_editor=True description_value=job.desc description_jobid=job.id %}
 
     <!-- Body -->
-    <div class="px-3 pb-2 flex-1 flex flex-col">
-
-        <!-- Editable description -->
-        <div class="flex items-center gap-1 pb-1">
-            <form method="POST" action="{% url 'nice_lite:update_stream_description' %}" class="flex flex-1 min-w-0">
-                {% csrf_token %}
-                <input type="hidden" name="selected_job_id" value="{{ job.id }}">
-                <input name="new_stream_description" value="{{ job.desc }}"
-                       onblur="this.form.submit()" disabled
-                       class="w-full text-[10px] text-streamlabel bg-transparent border-none outline-none truncate disabled:cursor-default">
-            </form>
-            <button onclick="enableStreamDescription(this)" title="edit description"
-                    class="flex-shrink-0 text-streamicon hover:text-streamsubtle transition-colors">
-                <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.262a1.75 1.75 0 0 0 0-2.474Z"/>
-                    <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9A.75.75 0 0 1 14 9v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z"/>
-                </svg>
-            </button>
-        </div>
+    <div class="px-3 py-2 flex-1 flex flex-col">
 
         {% if job.status == "failed" or job.status == "stopped" %}
 
@@ -61,59 +32,26 @@
 
         {% else %}
 
-            <!-- Chart row: badge + donut per stat type, shared legend -->
-            <div class="flex items-center gap-3 mb-2">
-                {% if "movies_imported" in ms and ms.movies_imported > 0 %}
-                    <div class="flex flex-col items-center gap-1 flex-shrink-0">
-                        <span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamaccent">
-                            <span class="w-1.5 h-1.5 rounded-full bg-streamaccent"></span>
-                            {{ ms.movies_imported|intcomma }} movies
-                        </span>
-                        <canvas class="movies_pie_chart"
-                                width="40" height="40"
-                                data-imported="{{ ms.movies_imported }}"
-                                data-processed="{{ ms.movies_processed|default:'' }}"
-                                data-rejected="{{ ms.movies_rejected|default:'' }}">
-                        </canvas>
-                    </div>
+            <!-- Count tiles -->
+            <div class="grid grid-cols-2 gap-2">
+                {% if ms.movies_processed|add:ms.movies_rejected == ms.movies_imported %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" %}
+                {% else %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" variant="action" %}
                 {% endif %}
-                {% if "particles_imported" in cs and cs.particles_imported > 0 %}
-                    <div class="flex flex-col items-center gap-1 flex-shrink-0">
-                        <span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamaccent">
-                            <span class="w-1.5 h-1.5 rounded-full bg-streamaccent"></span>
-                            {{ cs.particles_imported|intcomma }} particles
-                        </span>
-                        <canvas class="particles_pie_chart"
-                                width="40" height="40"
-                                data-imported="{{ cs.particles_imported }}"
-                                data-accepted="{{ cs.particles_accepted|default:'' }}"
-                                data-rejected="{{ cs.particles_rejected|default:'' }}">
-                        </canvas>
-                    </div>
+                 {% if cs.particles_processed|add:cs.particles_rejected == cs.particles_imported %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=cs.particles_processed label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" %}
+                {% else %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=cs.particles_processed label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" variant="action" %}
                 {% endif %}
-                <!-- Legend (always shown; colours match JS chart colours) -->
-                <div class="flex flex-col self-end">
-                    <div class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-sm bg-streamring"></span>
-                        <span class="text-[10px] text-streamsubtle">imported</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-sm bg-streamicon"></span>
-                        <span class="text-[10px] text-streamsubtle">processed</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-sm bg-streamrejected"></span>
-                        <span class="text-[10px] text-streamsubtle">rejected</span>
-                    </div>
-                </div>
             </div>
 
             <!-- Thumbnail: 2D class grid or latest micrograph -->
             {% if "latest_cls2D" in cs and cs.latest_cls2D|length > 0 %}
-                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1">latest 2D classes</div>
-                <div class="grid grid-cols-4 gap-0.5">
+                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1 pt-2">latest 2D classes</div>
+                <div class="grid grid-cols-3 gap-0.5 w-[180px] h-[180px] m-auto">
                     {% for cls2D in cs.latest_cls2D %}
-                        {% if forloop.counter <= 16 %}
+                        {% if forloop.counter <= 9 %}
                             <div class="aspect-square overflow-hidden bg-black rounded-sm">
                                 <div onclick="toggleCls(this)" data-idx="{{ cls2D.mrcidx }}"
                                      style="background:url({% url 'nice_lite:image' cls2D.path %});background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%;background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%"
@@ -124,9 +62,9 @@
                     {% endfor %}
                 </div>
             {% elif "latest_micrographs" in ms and ms.latest_micrographs|length > 0 %}
-                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1">latest micrograph</div>
+                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1 pt-2">latest micrograph</div>
                 <!-- Show right half of the double-width composite image -->
-                <div class="rounded-md overflow-hidden aspect-square w-full bg-black relative">
+                <div class="rounded-md overflow-hidden aspect-square bg-black relative w-[180px] h-[180px] m-auto">
                     <img src="{% url 'nice_lite:image' ms.latest_micrographs.0.path %}"
                          loading="lazy" alt="latest micrograph"
                          class="absolute h-full object-cover" style="width:200%;right:0;top:0;object-fit:cover;object-position:100%;">

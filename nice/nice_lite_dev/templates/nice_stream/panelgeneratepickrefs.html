@@ -32,17 +32,14 @@
 
     <!-- Loading gauze -->
     {% include 'nice_stream/includes/_panel_gauze_loading.html' %}
-
-    <!-- Transient status overlays -->
-    {% include 'nice_stream/includes/_panel_status_overlay.html' %}
-
+    
     <div class="flex flex-col h-full">
 
         <!-- Header: status · title · zoom · stop/restart -->
         {% include 'nice_stream/includes/_panel_header.html' with panel_title="opening 2D classification" zoom_url="nice_lite:view_stream_generate_pickrefs_zoom" terminate_field="terminate_generate_pickrefs" restart_field="restart_generate_pickrefs" last_import=jobstats.last_micrograph_imported has_skipped=True user_input_url="nice_lite:view_stream_generate_pickrefs_zoom" user_input_title="select references" %}
 
         <!-- Waiting gauze: shown until particles arrive (below header) -->
-        {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
+        {% if "final_cls2D" not in jobstats and "latest_cls2D" not in jobstats %}
             {% include 'nice_stream/includes/_panel_waiting_gauze.html' %}
         {% else %}
         
@@ -53,7 +50,7 @@
             {% else %}
                 {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_imported label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%} 
             {% endif %}
-            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.mask_diam label="mask" count_unit="Å" %}
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.mask_diam label="particle mask" count_unit="Å" %}
         </div>
 
         <!-- Selected references gallery -->
@@ -87,7 +84,7 @@
                         <!-- Context menu -->
                         <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
                             <div name="selectmenubox"
-                                 class="absolute flex flex-col bg-streambar border border-streamline rounded-lg shadow-sm text-[11px] text-streamtext p-1">
+                                 class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
                                 <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
                                 <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
                             </div>
@@ -132,7 +129,7 @@
                         <!-- Context menu -->
                         <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
                             <div name="selectmenubox"
-                                 class="absolute flex flex-col bg-streambar border border-streamline rounded-lg shadow-sm text-[11px] text-streamtext p-1">
+                                 class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
                                 <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
                                 <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
                             </div>
@@ -143,19 +140,8 @@
 
                 </div>
             </div>
-
-        {% elif status == "running" and "stage" in jobstats and jobstats.stage == "saving selection" %}
-            <div class="flex flex-1 items-center justify-center text-[11px] text-streamlabel">
-                saving selection&hellip;
-            </div>
-        {% elif status == "running" %}
-            <div class="flex flex-1 items-center justify-center text-[11px] text-streamlabel">
-                generating references&hellip;
-            </div>
         {% endif %}
         {% endif %}
-
-
     </div>
 
 </body>

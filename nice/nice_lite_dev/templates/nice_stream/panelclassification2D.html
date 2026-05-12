@@ -50,8 +50,8 @@
 
         <!-- Count tiles -->
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
-            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="assigned" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%}
-            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_rejected label="resolution" sublabel=jobstats.particles_imported %}
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%}
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.mskdiam label="resolution" count_unit="Å" %}
         </div>
 
         <!-- Latest classes gallery (user-input mode, iteration > 0) -->
@@ -89,7 +89,7 @@
                         <!-- Context menu -->
                         <div name="selectmenu" class="hidden absolute inset-0 bg-transparent z-20" onclick="hideMenu()">
                             <div name="selectmenubox"
-                                 class="absolute flex flex-col bg-streambar border border-streamline rounded-lg shadow-sm text-[11px] text-streamtext p-1">
+                                 class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
                                 <div id="sortpop" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on pop</div>
                                 <div id="sortres" class="px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">sort on res</div>
                                 <div id="selectabove" class="hidden px-3 py-1 text-[11px] text-streamaccent hover:bg-streamring/15 rounded cursor-pointer">select above</div>
@@ -103,9 +103,7 @@
                 </div>
             </div>
         {% endif %}
-        {% endif %}
-
-
+    {% endif %}
     </div>
 
 </body>

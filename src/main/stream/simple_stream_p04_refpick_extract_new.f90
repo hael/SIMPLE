@@ -239,6 +239,8 @@ contains
                         call pickrefsoris%read(string(STREAM_MOLDIAM))
                         call pickrefsoris%set(1, 'imgkind', 'pickrefs')
                         call pickrefsoris%set(1, 'stk', cwd_job//'/'//PICKREFS_FBODY//params%ext%to_char())
+                        ! set box size
+                        params%box = pickrefsoris%get(1, 'box_for_extract')  ! assumes square boxes
                         ! create pickrefs jpeg
                         call mrc2jpeg_tiled(string(PICKREFS_FBODY)//params%ext, string(PICKREFS_FBODY)//".jpeg",&
                         &scale=pickrefs_thumbnail_scale, ntiles=n_pickrefs, n_xtiles=xtiles, n_ytiles=ytiles)
@@ -710,11 +712,11 @@ contains
             ! Broadcast initial-picking progress to the GUI.
             subroutine send_meta( my_stage )
                 type(string), intent(in) :: my_stage
-                call meta_reference_picking%set(                                   &
-                    stage                = my_stage,                             &
-                    micrographs_imported = spproj%os_mic%get_noris(),            &
-                    micrographs_accepted = n_imported,  &
-                    particles_extracted  = nptcls_glob,         &
+                call meta_reference_picking%set(                                                        &
+                    stage                = my_stage,                                                    &
+                    micrographs_imported = spproj%os_mic%get_noris() + qenv%qscripts%get_stack_range(), &
+                    micrographs_accepted = n_imported,                                                  &
+                    particles_extracted  = nptcls_glob,                                                 &
                     box_size             = params%box)
                 if( meta_reference_picking%assigned() .and. mq_stream_master_in%is_active() ) then
                     call meta_reference_picking%serialise(meta_buffer)

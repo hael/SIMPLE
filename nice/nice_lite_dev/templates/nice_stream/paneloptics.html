@@ -35,7 +35,7 @@
     <div class="flex flex-col h-full">
 
         <!-- Header: status · title · zoom · stop/restart -->
-        {% include 'nice_stream/includes/_panel_header.html' with panel_title="optics assignment" zoom_url="nice_lite:view_stream_optics_zoom" zoom_method="POST" terminate_field="terminate_optics_assignment" restart_field="restart_optics_assignment" last_import=jobstats.last_micrograph_imported %}
+        {% include 'nice_stream/includes/_panel_header.html' with panel_title="optics assignment" zoom_url="nice_lite:view_stream_optics_zoom" zoom_method="GET" terminate_field="terminate_optics_assignment" restart_field="restart_optics_assignment" last_import=jobstats.last_micrograph_imported %}
 
         <!-- Waiting gauze: shown until micrographs are available (below header) -->
         {% if "micrographs_assigned" not in jobstats or jobstats.micrographs_assigned == 0 %}

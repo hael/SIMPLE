@@ -75,11 +75,14 @@ class StreamJob:
         """
         if self.jobmodel is None:
             return "unknown"
-        if self.jobmodel.master_status in ("running", "unknown"):
+        if self.jobmodel.master_status in ["running", "unknown", "error", "queued"] and self.jobmodel.master_heartbeat > 0:
             if self.jobmodel.master_heartbeat < int(time.time()) - 60:
                 print_error("heartbeat from job " + str(self.jobmodel.id) + " not heard for 60 seconds. Failing job")
                 self.jobmodel.master_status = "failed"
                 self.jobmodel.save()
+        if self.jobmodel.master_status != self.jobmodel.status:
+            self.jobmodel.status = self.jobmodel.master_status
+            self.jobmodel.save()
         return self.jobmodel.master_status
 
     def get_master_update(self):

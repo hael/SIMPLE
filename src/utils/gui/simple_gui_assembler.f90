@@ -163,7 +163,11 @@ contains
     if( n_unknown > 0 ) then
       call self%json%add(json_master_ptr, 'status', 'unknown')
     else if( n_failed > 0 ) then
-      call self%json%add(json_master_ptr, 'status', 'failed')
+      if( n_running == 0 ) then
+        call self%json%add(json_master_ptr, 'status', 'failed')
+      else
+        call self%json%add(json_master_ptr, 'status', 'error')
+      endif
     else if( n_restarting > 0 ) then
       call self%json%add(json_master_ptr, 'status', 'running')
     else if( n_running == 0 ) then

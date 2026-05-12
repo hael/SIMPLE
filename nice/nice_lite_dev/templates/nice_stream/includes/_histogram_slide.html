@@ -11,6 +11,8 @@
     form_id      — (optional) id of hidden POST form for cutoff updates
     form_field   — (optional) POST field name for the cutoff parameter
                    (requires jobid from parent context)
+    canvas_width  — (optional) canvas width in px, default 200
+    canvas_height — (optional) canvas height in px, default 60
 {% endcomment %}
 <div class="snap-center flex flex-col gap-1 flex-shrink-0 w-full" data-label="{{ label }}">
     {% if not no_label %}<span class="text-[10px] text-streamlabel w-full block">{{ label }}</span>{% endif %}
@@ -21,7 +23,7 @@
             <input type="hidden" name="{{ form_field }}" value="0">
         </form>
     {% endif %}
-    <canvas class="{{ canvas_class }}" width="200" height="60"
+    <canvas class="{{ canvas_class }}" width="{{ canvas_width|default:'200' }}" height="{{ canvas_height|default:'60' }}"
             {% if savedval %}data-savedval="{{ savedval }}"{% endif %}
             data-labels="{{ labels }}"
             data-values="{{ values }}"

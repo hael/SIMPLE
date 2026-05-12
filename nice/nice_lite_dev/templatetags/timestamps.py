@@ -12,3 +12,14 @@ def print_timestamp(ts_in):
     except ValueError:
         return None
     return datetime.datetime.fromtimestamp(ts)
+
+
+@register.filter
+def mean_with(value, other):
+    """Return the arithmetic mean of two values, or None if either is invalid."""
+    try:
+        left = float(value)
+        right = float(other)
+    except (TypeError, ValueError):
+        return None
+    return 0.5 * (left + right)

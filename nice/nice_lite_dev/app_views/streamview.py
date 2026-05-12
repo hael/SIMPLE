@@ -97,14 +97,14 @@ class StreamViewPreprocess:
             "status"    : self.jobmodel.preprocessing_status,
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    context["log"].append({"text":str(logtext, errors='replace')})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -152,14 +152,14 @@ class StreamViewOptics:
             "status"    : self.jobmodel.optics_assignment_status,     
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    context["log"].append({"text":str(logtext, errors='replace')})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -207,14 +207,14 @@ class StreamViewInitialPick:
             "status"       : self.jobmodel.initial_picking_status
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    context["log"].append({"text":str(logtext, errors='replace')})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -327,14 +327,14 @@ class StreamViewReferencePicking:
             "status"   : self.jobmodel.reference_picking_status,         
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    context["log"].append({"text":str(logtext, errors='replace')})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -453,9 +453,18 @@ class StreamViewClassification2D:
     def render(self):
         if self.jobmodel is None:
             return HttpResponseNoContent()
-        # sort cls2D on pop
+        # Remove empty classes (pop == 0), then sort by resolution.
         if "latest_cls2D" in self.jobmodel.classification_2D_stats:
-            self.jobmodel.classification_2D_stats["latest_cls2D"] = sorted(self.jobmodel.classification_2D_stats["latest_cls2D"], key=lambda d: d['pop'], reverse=True)
+            latest_cls2d = []
+            for cls2d in self.jobmodel.classification_2D_stats["latest_cls2D"]:
+                try:
+                    if float(cls2d.get("pop", 0)) == 0.0:
+                        continue
+                except (TypeError, ValueError, AttributeError):
+                    pass
+                latest_cls2d.append(cls2d)
+            self.jobmodel.classification_2D_stats["latest_cls2D"] = sorted(latest_cls2d, key=lambda d: d['res'], reverse=False)
+            
         context = {
             "jobid"    : self.jobmodel.id,
             "jobstats" : self.jobmodel.classification_2D_stats,
