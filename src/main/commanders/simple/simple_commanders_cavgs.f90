@@ -327,6 +327,7 @@ contains
             case DEFAULT
                 THROW_HARD('cluster_cavgs_quality: quality_mode must be apply or analyze')
         end select
+        if( params%quality_recall_margin < 0.0 ) THROW_HARD('cluster_cavgs_quality: quality_recall_margin must be >= 0')
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
         if( ncls == 0 ) THROW_HARD('cluster_cavgs_quality: project has no cls2D entries')
@@ -334,12 +335,14 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('cluster_cavgs_quality: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
+        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, params%quality_recall_margin)
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
-        write(logfhandle,'(A,F8.3,A,F8.3,A,L1)') '>>> CAVG QUALITY THRESHOLD / SEPARATION : ', &
-            quality%threshold, ' / ', quality%separation, ' USED=', quality%used_threshold
+        write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / MARGIN / EFFECTIVE : ', &
+            quality%raw_threshold, ' / ', quality%threshold_margin, ' / ', quality%threshold
+        write(logfhandle,'(A,F8.3,A,L1)') '>>> CAVG QUALITY SEPARATION / USED THRESHOLD : ', &
+            quality%separation, ' USED=', quality%used_threshold
         if( l_analyze )then
             write(logfhandle,'(A,I6,A,I6)') '>>> MANUAL REFERENCE SELECTED / REJECTED : ', &
                 count(reference_states > 0), ' / ', count(reference_states <= 0)

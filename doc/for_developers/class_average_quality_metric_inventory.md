@@ -48,6 +48,8 @@ The current worktree also has a commander hook in `src/main/commanders/simple/si
   - writes `cavgs_quality_features.txt`
   - writes selected and rejected stacks
   - annotates `cls2D` fields `quality`, `quality_cluster`, and `accept`
+  - supports `quality_recall_margin`, a score margin subtracted from the
+    automated threshold to bias the selection toward retaining good classes
 
 This is already very close to a reusable scalar metric pipeline. The remaining inventory below lists additional existing routines that can either support this module or expand it.
 

@@ -520,6 +520,7 @@ type :: parameters
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
+    real    :: quality_recall_margin=0.20 !< score margin subtracted from automated cavg quality threshold{0.20}
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
     real    :: scale=1.            !< image scale factor{1}

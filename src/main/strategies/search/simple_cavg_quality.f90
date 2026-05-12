@@ -25,12 +25,13 @@ public :: write_cavg_quality_reference_analysis
 
 integer, parameter :: CAVG_QUALITY_NFEATS = 8
 
-real, parameter :: EPS                  = 1.0e-6
-real, parameter :: LOG_EPS              = 1.0e-12
-real, parameter :: CLIP_Z               = 4.0
-real, parameter :: MIN_SCORE_SEPARATION = 0.15
-real, parameter :: HP_SPEC              = 20.0
-real, parameter :: LP_SPEC              = 6.0
+real, parameter :: EPS                   = 1.0e-6
+real, parameter :: LOG_EPS               = 1.0e-12
+real, parameter :: CLIP_Z                = 4.0
+real, parameter :: MIN_SCORE_SEPARATION  = 0.15
+real, parameter :: RECALL_MARGIN_DEFAULT = 0.20
+real, parameter :: HP_SPEC               = 20.0
+real, parameter :: LP_SPEC               = 6.0
 
 integer, parameter :: I_LOG_POP         = 1
 integer, parameter :: I_NEG_LOG_RES     = 2
@@ -56,10 +57,12 @@ type :: cavg_quality_result
     integer, allocatable :: labels(:)
     integer, allocatable :: medoids(:)
     logical, allocatable :: hard_reject(:)
-    real                 :: threshold  = 0.0
-    real                 :: separation = 0.0
-    integer              :: nclust     = 0
-    integer              :: good_label = 0
+    real                 :: threshold        = 0.0
+    real                 :: raw_threshold    = 0.0
+    real                 :: threshold_margin = 0.0
+    real                 :: separation       = 0.0
+    integer              :: nclust           = 0
+    integer              :: good_label       = 0
     logical              :: used_threshold = .false.
 end type cavg_quality_result
 
@@ -72,17 +75,22 @@ contains
         name = FEATURE_NAMES(i)
     end function cavg_quality_feature_name
 
-    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality )
+    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, recall_margin )
         class(image),              intent(inout) :: imgs(:)
         type(oris),                intent(in)    :: cls_oris
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
+        real, optional,            intent(in)    :: recall_margin
+        real :: margin
         call reset_quality_result(quality)
+        margin = RECALL_MARGIN_DEFAULT
+        if( present(recall_margin) ) margin = recall_margin
         call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call cluster_cavg_quality(quality%features, quality%hard_reject, quality%states, quality%labels, &
-                                                            quality%medoids, quality%scores, quality%threshold, quality%separation, &
-                                                            quality%nclust, quality%good_label, quality%used_threshold)
+                                  quality%medoids, quality%scores, quality%threshold, quality%raw_threshold, &
+                                  quality%threshold_margin, quality%separation, quality%nclust, quality%good_label, &
+                                  quality%used_threshold, margin)
     end subroutine evaluate_cavg_quality
 
     subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject )
@@ -172,19 +180,21 @@ contains
         end do
     end subroutine normalize_cavg_quality_features
 
-    subroutine cluster_cavg_quality( features, hard_reject, states, labels, medoids, scores, threshold, &
-                                                                      separation, nclust, good_label, used_threshold )
+    subroutine cluster_cavg_quality( features, hard_reject, states, labels, medoids, scores, threshold, raw_threshold, &
+                                                                      threshold_margin, separation, nclust, good_label, &
+                                                                      used_threshold, recall_margin )
         real,                 intent(in)    :: features(:,:)
         logical,              intent(in)    :: hard_reject(:)
         integer, allocatable, intent(inout) :: states(:), labels(:), medoids(:)
         real,    allocatable, intent(inout) :: scores(:)
-        real,                 intent(out)   :: threshold, separation
+        real,                 intent(out)   :: threshold, raw_threshold, threshold_margin, separation
         integer,              intent(out)   :: nclust, good_label
         logical,              intent(out)   :: used_threshold
+        real, optional,       intent(in)    :: recall_margin
         real,    allocatable :: dmat(:,:), feats_fit(:,:), score_fit(:)
         integer, allocatable :: inds(:), labels_fit(:), medoids_fit(:)
         integer              :: ncls, nfit, i, j, k, good_fit_label, bad_fit_label
-        real                 :: d, dmin, dmax, score1, score2
+        real                 :: d, dmin, dmax, score1, score2, margin
         ncls = size(features, dim=1)
         if( size(features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cluster_cavg_quality: invalid feature count')
         if( size(hard_reject) /= ncls ) THROW_HARD('cluster_cavg_quality: invalid mask size')
@@ -196,11 +206,16 @@ contains
         allocate(scores(ncls), source=0.0)
         scores = matmul(features, FEATURE_WEIGHTS)
         where( hard_reject ) scores = -CLIP_Z
-        threshold      = 0.0
-        separation     = 0.0
-        nclust         = 0
-        good_label     = 0
-        used_threshold = .false.
+        threshold        = 0.0
+        raw_threshold    = 0.0
+        threshold_margin = 0.0
+        separation       = 0.0
+        nclust           = 0
+        good_label       = 0
+        used_threshold   = .false.
+        margin = RECALL_MARGIN_DEFAULT
+        if( present(recall_margin) ) margin = recall_margin
+        margin = max(0.0, margin)
         nfit = count(.not. hard_reject)
         if( nfit == 0 ) return
         inds = pack([(i, i=1,ncls)], .not. hard_reject)
@@ -208,9 +223,11 @@ contains
             states(inds) = 1
             labels(inds) = 1
             allocate(medoids(1), source=inds(1))
-            threshold  = minval(scores(inds)) - EPS
-            nclust     = 1
-            good_label = 1
+            threshold        = minval(scores(inds)) - EPS
+            raw_threshold    = threshold
+            threshold_margin = 0.0
+            nclust           = 1
+            good_label       = 1
             return
         end if
         allocate(feats_fit(nfit, CAVG_QUALITY_NFEATS), score_fit(nfit))
@@ -232,9 +249,11 @@ contains
             states(inds) = 1
             labels(inds) = 1
             allocate(medoids(1), source=inds(1))
-            threshold  = minval(scores(inds)) - EPS
-            nclust     = 1
-            good_label = 1
+            threshold        = minval(scores(inds)) - EPS
+            raw_threshold    = threshold
+            threshold_margin = 0.0
+            nclust           = 1
+            good_label       = 1
             deallocate(dmat, feats_fit, score_fit, inds)
             return
         end if
@@ -252,8 +271,12 @@ contains
             bad_fit_label  = 1
         end if
         separation = abs(score1 - score2)
-        threshold  = 0.5 * (mean_score_for_label(score_fit, labels_fit, good_fit_label) + &
+        ! The weighted feature score is fixed by design; this recall margin is the single
+        ! exposed decision-boundary knob. Larger margins lower the effective threshold
+        ! and retain more borderline classes, reducing false rejection of good classes.
+        raw_threshold = 0.5 * (mean_score_for_label(score_fit, labels_fit, good_fit_label) + &
                                                 mean_score_for_label(score_fit, labels_fit, bad_fit_label))
+        threshold = raw_threshold - margin
         labels(inds) = labels_fit
         allocate(medoids(size(medoids_fit)))
         do k = 1, size(medoids_fit)
@@ -266,8 +289,10 @@ contains
             nclust          = 1
             good_label      = 1
             threshold       = minval(scores(inds)) - EPS
+            threshold_margin = 0.0
             used_threshold  = .false.
         else
+            threshold_margin = margin
             do i = 1, nfit
                 if( scores(inds(i)) >= threshold ) states(inds(i)) = 1
             end do
@@ -427,6 +452,8 @@ contains
         write(funit,'(A,F10.5)') 'balanced_accuracy=', balacc
         write(funit,'(A,F10.5)') 'accuracy=', accuracy
         write(funit,'(A,F10.5)') 'score_auc=', auc_for_values(quality%scores, reference_states)
+        write(funit,'(A,F10.5)') 'raw_score_threshold=', quality%raw_threshold
+        write(funit,'(A,F10.5)') 'threshold_recall_margin=', quality%threshold_margin
         write(funit,'(A,F10.5)') 'current_score_threshold=', quality%threshold
         write(funit,'(A,F10.5)') 'best_balacc_threshold=', best_bal_thr
         write(funit,'(A,F10.5)') 'best_balacc=', best_balacc
@@ -593,11 +620,13 @@ contains
         if( allocated(quality%labels)      ) deallocate(quality%labels)
         if( allocated(quality%medoids)     ) deallocate(quality%medoids)
         if( allocated(quality%hard_reject) ) deallocate(quality%hard_reject)
-        quality%threshold      = 0.0
-        quality%separation     = 0.0
-        quality%nclust         = 0
-        quality%good_label     = 0
-        quality%used_threshold = .false.
+        quality%threshold        = 0.0
+        quality%raw_threshold    = 0.0
+        quality%threshold_margin = 0.0
+        quality%separation       = 0.0
+        quality%nclust           = 0
+        quality%good_label       = 0
+        quality%used_threshold   = .false.
     end subroutine reset_quality_result
 
 end module simple_cavg_quality
