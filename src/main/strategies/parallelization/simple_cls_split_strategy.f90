@@ -27,6 +27,7 @@ integer, parameter :: CLS_SPLIT_ICM_RANK_MAXITS = 16
 real,    parameter :: CLS_SPLIT_ICM_RANK_BETA_FRAC = 0.35       ! neighbor penalty: larger values discourage fragmented spectra such as keep/drop/keep.
 real,    parameter :: CLS_SPLIT_ICM_RANK_COMPLEXITY_FRAC = 0.10 ! Late-rank complexity penalty: larger values make high-index eigenfeatures harder to retain.
 real,    parameter :: CLS_SPLIT_ICM_RANK_LOWER_SEED_FRAC = 0.50 ! Lower-seed fraction of the eigengap upper bound; smaller values probe more compact latent spaces.
+logical, parameter :: CLS_SPLIT_DEBUG_WRITE_PARTICLES = .false.
 
 type, abstract :: cls_split_strategy
 contains
@@ -392,31 +393,38 @@ contains
         type(image), allocatable :: normal_ptcls(:), den_ptcls(:), coeff_ptcls(:)
         integer, allocatable :: cls_inds(:), cls_pops(:), pinds(:), labels(:), new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
         integer :: i, j, k, iglob, iptcl_glob, nsplit, subcls_offset, funit_map, funit_assign, funit_ptcl_map
-        logical :: l_phflip, l_pre_norm, l_fixed_nsubcls
+        logical :: l_phflip, l_pre_norm, l_fixed_nsubcls, l_write_ptcls
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
         call determine_split_label(params, build, label)
         l_pre_norm = (trim(params%pre_norm) .eq. 'yes')
         l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
+        l_write_ptcls = CLS_SPLIT_DEBUG_WRITE_PARTICLES
         call determine_phase_flip(spproj, params, l_phflip)
         if( l_write_project )then
             map_fname = string('cls_split_class_map.txt')
             raw_fname = string('cls_split_subclass_avgs.mrcs')
             den_fname = string('cls_split_subclass_avgs_conditioned.mrcs')
             coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj.mrcs')
-            normal_ptcl_fname = string('cls_split_particles.mrcs')
-            den_ptcl_fname    = string('cls_split_particles_denoised.mrcs')
-            coeff_ptcl_fname  = string('cls_split_particles_steer_coeffproj.mrcs')
-            ptcl_map_fname    = string('cls_split_particles_map.txt')
+            if( l_write_ptcls )then
+                normal_ptcl_fname = string('cls_split_particles.mrcs')
+                den_ptcl_fname    = string('cls_split_particles_denoised.mrcs')
+                coeff_ptcl_fname  = string('cls_split_particles_steer_coeffproj.mrcs')
+                ptcl_map_fname    = string('cls_split_particles_map.txt')
+            endif
             call del_file(raw_fname)
             call del_file(den_fname)
             call del_file(coeff_fname)
-            call del_file(normal_ptcl_fname)
-            call del_file(den_ptcl_fname)
-            call del_file(coeff_ptcl_fname)
+            if( l_write_ptcls )then
+                call del_file(normal_ptcl_fname)
+                call del_file(den_ptcl_fname)
+                call del_file(coeff_ptcl_fname)
+            endif
             open(newunit=funit_map, file=map_fname%to_char(), status='replace', action='write')
-            open(newunit=funit_ptcl_map, file=ptcl_map_fname%to_char(), status='replace', action='write')
             write(funit_map,'(A)') '# global_subclass parent_class local_subclass pop'
-            write(funit_ptcl_map,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
+            if( l_write_ptcls )then
+                open(newunit=funit_ptcl_map, file=ptcl_map_fname%to_char(), status='replace', action='write')
+                write(funit_ptcl_map,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
+            endif
             select case(trim(params%oritype))
                 case('ptcl2D')
                     allocate(new_class(spproj%os_ptcl2D%get_noris()), new_parent(spproj%os_ptcl2D%get_noris()), source=0)
@@ -430,22 +438,28 @@ contains
             raw_fname    = string('cls_split_subclass_avgs_part')//int2str_pad(part, params%numlen)//'.mrcs'
             den_fname    = string('cls_split_subclass_avgs_conditioned_part')//int2str_pad(part, params%numlen)//'.mrcs'
             coeff_fname  = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(part, params%numlen)//'.mrcs'
-            normal_ptcl_fname = string('cls_split_particles_part')//int2str_pad(part, params%numlen)//'.mrcs'
-            den_ptcl_fname    = string('cls_split_particles_denoised_part')//int2str_pad(part, params%numlen)//'.mrcs'
-            coeff_ptcl_fname  = string('cls_split_particles_steer_coeffproj_part')//int2str_pad(part, params%numlen)//'.mrcs'
-            ptcl_map_fname    = string('cls_split_particles_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
+            if( l_write_ptcls )then
+                normal_ptcl_fname = string('cls_split_particles_part')//int2str_pad(part, params%numlen)//'.mrcs'
+                den_ptcl_fname    = string('cls_split_particles_denoised_part')//int2str_pad(part, params%numlen)//'.mrcs'
+                coeff_ptcl_fname  = string('cls_split_particles_steer_coeffproj_part')//int2str_pad(part, params%numlen)//'.mrcs'
+                ptcl_map_fname    = string('cls_split_particles_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
+            endif
             call del_file(raw_fname)
             call del_file(den_fname)
             call del_file(coeff_fname)
-            call del_file(normal_ptcl_fname)
-            call del_file(den_ptcl_fname)
-            call del_file(coeff_ptcl_fname)
+            if( l_write_ptcls )then
+                call del_file(normal_ptcl_fname)
+                call del_file(den_ptcl_fname)
+                call del_file(coeff_ptcl_fname)
+            endif
             open(newunit=funit_map,    file=map_fname%to_char(),    status='replace', action='write')
             open(newunit=funit_assign, file=assign_fname%to_char(), status='replace', action='write')
-            open(newunit=funit_ptcl_map, file=ptcl_map_fname%to_char(), status='replace', action='write')
             write(funit_map,'(A)')    '# local_stack_index parent_class local_subclass pop'
             write(funit_assign,'(A)') '# particle_index parent_class local_subclass'
-            write(funit_ptcl_map,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
+            if( l_write_ptcls )then
+                open(newunit=funit_ptcl_map, file=ptcl_map_fname%to_char(), status='replace', action='write')
+                write(funit_ptcl_map,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
+            endif
         endif
         iglob = 0
         iptcl_glob = 0
@@ -453,6 +467,7 @@ contains
             write(logfhandle,'(A,I8,A,I8)') 'Cls split starting: class=', cls_inds(i), ' nptcls=', cls_pops(i)
             call flush(logfhandle)
             call split_one_parent_class(params, build, spproj, cls_inds(i), l_phflip, l_pre_norm, l_fixed_nsubcls, &
+                                        l_write_ptcls, &
                                         nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
                                         normal_ptcls, den_ptcls, coeff_ptcls)
             if( nsplit < 1 ) cycle
@@ -475,19 +490,21 @@ contains
                 endif
             end do
             subcls_offset = iglob - nsplit
-            do k = 1, size(labels)
-                if( labels(k) <= 0 ) cycle
-                iptcl_glob = iptcl_glob + 1
-                if( allocated(normal_ptcls) ) call normal_ptcls(k)%write(normal_ptcl_fname, iptcl_glob)
-                if( allocated(den_ptcls) )then
-                    call den_ptcls(k)%write(den_ptcl_fname, iptcl_glob)
-                else if( allocated(normal_ptcls) )then
-                    call normal_ptcls(k)%write(den_ptcl_fname, iptcl_glob)
-                endif
-                if( allocated(coeff_ptcls) ) call coeff_ptcls(k)%write(coeff_ptcl_fname, iptcl_glob)
-                write(funit_ptcl_map,'(I10,1X,I10,1X,I10,1X,I10,1X,I10)') &
-                    iptcl_glob, pinds(k), cls_inds(i), labels(k), subcls_offset + labels(k)
-            end do
+            if( l_write_ptcls )then
+                do k = 1, size(labels)
+                    if( labels(k) <= 0 ) cycle
+                    iptcl_glob = iptcl_glob + 1
+                    if( allocated(normal_ptcls) ) call normal_ptcls(k)%write(normal_ptcl_fname, iptcl_glob)
+                    if( allocated(den_ptcls) )then
+                        call den_ptcls(k)%write(den_ptcl_fname, iptcl_glob)
+                    else if( allocated(normal_ptcls) )then
+                        call normal_ptcls(k)%write(den_ptcl_fname, iptcl_glob)
+                    endif
+                    if( allocated(coeff_ptcls) ) call coeff_ptcls(k)%write(coeff_ptcl_fname, iptcl_glob)
+                    write(funit_ptcl_map,'(I10,1X,I10,1X,I10,1X,I10,1X,I10)') &
+                        iptcl_glob, pinds(k), cls_inds(i), labels(k), subcls_offset + labels(k)
+                end do
+            endif
             if( l_write_project )then
                 do k = 1, size(labels)
                     if( labels(k) <= 0 ) cycle
@@ -510,7 +527,7 @@ contains
             if( allocated(labels) ) deallocate(labels)
         end do
         close(funit_map)
-        close(funit_ptcl_map)
+        if( l_write_ptcls ) close(funit_ptcl_map)
         if( .not. l_write_project ) close(funit_assign)
         if( l_write_project )then
             call apply_split_project_updates(spproj, params, iglob, new_class, new_parent, parent_of_subcls(1:iglob), pop_of_subcls(1:iglob))
@@ -531,6 +548,7 @@ contains
     end subroutine run_local_split
 
     subroutine split_one_parent_class(params, build, spproj, cls_id, l_phflip, l_pre_norm, l_fixed_nsubcls, &
+                                      l_write_ptcls, &
                                       nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
                                       normal_ptcls, den_ptcls, coeff_ptcls)
         use simple_diffusion_maps,   only: diffusion_map_generate_subavg_vectors, &
@@ -542,7 +560,7 @@ contains
         type(builder),            intent(inout) :: build
         type(sp_project),         intent(inout) :: spproj
         integer,                  intent(in)    :: cls_id
-        logical,                  intent(in)    :: l_phflip, l_pre_norm, l_fixed_nsubcls
+        logical,                  intent(in)    :: l_phflip, l_pre_norm, l_fixed_nsubcls, l_write_ptcls
         integer,                  intent(out)   :: nsplit
         integer,     allocatable, intent(out)   :: pinds(:), labels(:)
         type(image), allocatable, intent(out)   :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
@@ -607,7 +625,7 @@ contains
         if( trim(params%pca_mode) == 'diffusion_maps' )then
             call make_pcavecs(imgs, preimg_npix, preimg_avg, preimg_pcavecs, transp=.false.)
         endif
-        normal_ptcls = copy_imgarr(imgs_ppca)
+        if( l_write_ptcls ) normal_ptcls = copy_imgarr(imgs_ppca)
         call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, steer_aff, steer_theta)
         if( trim(params%pca_mode) == 'steerable_diff_map' )then
             call steerable_transport_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, den_ptcls)
@@ -1304,7 +1322,8 @@ contains
             endif
         end do
         close(funit)
-        call merge_worker_particle_stacks(params, nparts_run, part_counts, part_parent, part_local, part_global)
+        write(logfhandle,'(A)') 'Cls split merge: leaving per-part particle stacks unmerged'
+        call flush(logfhandle)
         if( trim(params%oritype) .eq. 'ptcl2D' )then
             allocate(new_class(spproj%os_ptcl2D%get_noris()), new_parent(spproj%os_ptcl2D%get_noris()), source=0)
         else
@@ -1337,87 +1356,6 @@ contains
                    comb_part, comb_row, comb_parent, comb_local, comb_pop)
         call map_fname%kill
     end subroutine merge_worker_outputs
-
-    subroutine merge_worker_particle_stacks(params, nparts_run, part_counts, part_parent, part_local, part_global)
-        type(parameters), intent(inout) :: params
-        integer,          intent(in)    :: nparts_run
-        integer,          intent(in)    :: part_counts(:), part_parent(:,:), part_local(:,:), part_global(:,:)
-        type(image) :: img
-        type(string) :: part_map_fname, normal_fname, den_fname, coeff_fname, out_map_fname
-        integer :: ipart, funit_in, funit_out, ios, stack_idx, pind, parent_cls, local_cls, local_global
-        integer :: global_cls, global_stack, first_part, ldim(3), nstk
-        real    :: smpd
-        logical :: have_ptcls, have_coeff_ptcls
-        character(len=XLONGSTRLEN) :: line
-        have_ptcls = .false.
-        first_part = 0
-        do ipart = 1, nparts_run
-            normal_fname = string('cls_split_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            if( file_exists(normal_fname%to_char()) )then
-                have_ptcls = .true.
-                first_part = ipart
-                exit
-            endif
-            call normal_fname%kill
-        end do
-        if( .not. have_ptcls ) return
-        if( normal_fname%is_allocated() ) call normal_fname%kill
-        call del_file(string('cls_split_particles.mrcs'))
-        call del_file(string('cls_split_particles_denoised.mrcs'))
-        call del_file(string('cls_split_particles_steer_coeffproj.mrcs'))
-        normal_fname = string('cls_split_particles_part')//int2str_pad(first_part, params%numlen)//'.mrcs'
-        coeff_fname  = string('cls_split_particles_steer_coeffproj_part')//int2str_pad(first_part, params%numlen)//'.mrcs'
-        have_coeff_ptcls = file_exists(coeff_fname%to_char())
-        call coeff_fname%kill
-        call find_ldim_nptcls(normal_fname, ldim, nstk)
-        smpd = params%smpd_crop
-        ldim(3) = 1
-        call img%new(ldim, smpd)
-        out_map_fname = string('cls_split_particles_map.txt')
-        open(newunit=funit_out, file=out_map_fname%to_char(), status='replace', action='write')
-        write(funit_out,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
-        global_stack = 0
-        do ipart = 1, nparts_run
-            part_map_fname = string('cls_split_particles_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
-            normal_fname   = string('cls_split_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            den_fname      = string('cls_split_particles_denoised_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            coeff_fname    = string('cls_split_particles_steer_coeffproj_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            open(newunit=funit_in, file=part_map_fname%to_char(), status='old', action='read', iostat=ios)
-            call fileiochk('merge_worker_particle_stacks opening '//part_map_fname%to_char(), ios)
-            do
-                read(funit_in,'(A)',iostat=ios) line
-                if( ios /= 0 ) exit
-                if( len_trim(line) == 0 ) cycle
-                if( line(1:1) == '#' ) cycle
-                read(line,*) stack_idx, pind, parent_cls, local_cls, local_global
-                global_cls = lookup_part_global(part_counts(ipart), part_parent(1:part_counts(ipart), ipart), &
-                                                part_local(1:part_counts(ipart), ipart), part_global(1:part_counts(ipart), ipart), &
-                                                parent_cls, local_cls)
-                if( global_cls <= 0 ) THROW_HARD('Could not map worker particle stack row to global subclass during merge')
-                global_stack = global_stack + 1
-                call img%read(normal_fname, stack_idx)
-                call img%write(string('cls_split_particles.mrcs'), global_stack)
-                call img%read(den_fname, stack_idx)
-                call img%write(string('cls_split_particles_denoised.mrcs'), global_stack)
-                if( have_coeff_ptcls )then
-                    call img%read(coeff_fname, stack_idx)
-                    call img%write(string('cls_split_particles_steer_coeffproj.mrcs'), global_stack)
-                endif
-                write(funit_out,'(I10,1X,I10,1X,I10,1X,I10,1X,I10)') &
-                    global_stack, pind, parent_cls, local_cls, global_cls
-            end do
-            close(funit_in)
-            call part_map_fname%kill
-            call normal_fname%kill
-            call den_fname%kill
-            call coeff_fname%kill
-        end do
-        close(funit_out)
-        write(logfhandle,'(A,I10)') 'Cls split merged particle stacks: n=', global_stack
-        call flush(logfhandle)
-        call img%kill
-        call out_map_fname%kill
-    end subroutine merge_worker_particle_stacks
 
     integer function lookup_part_global(nrows, parents, locals, globals, parent_cls, local_cls) result(global_cls)
         integer, intent(in) :: nrows, parents(:), locals(:), globals(:), parent_cls, local_cls
