@@ -2,6 +2,7 @@
 module simple_cavg_quality
 use simple_defs,             only: logfhandle
 use simple_error,            only: simple_exception
+use simple_histogram,        only: histogram
 use simple_image,            only: image
 use simple_image_bin,        only: image_bin
 use simple_oris,             only: oris
@@ -23,15 +24,21 @@ public :: write_cavg_quality_reference_analysis
 
 #include "simple_local_flags.inc"
 
-integer, parameter :: CAVG_QUALITY_NFEATS = 8
+integer, parameter :: CAVG_QUALITY_NFEATS = 9
 
 real, parameter :: EPS                     = 1.0e-6
 real, parameter :: LOG_EPS                 = 1.0e-12
 real, parameter :: CLIP_Z                  = 4.0
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
 real, parameter :: BOUNDARY_MARGIN_DEFAULT = -0.10
+real, parameter :: HIST_DMAT_WEIGHT        = 0.50
+real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
 real, parameter :: HP_SPEC                 = 20.0
 real, parameter :: LP_SPEC                 = 6.0
+integer, parameter :: NHISTBINS            = 128
+integer, parameter :: HIST_KNN_MIN         = 5
+integer, parameter :: HIST_KNN_MAX         = 20
+real,    parameter :: HIST_KNN_FRAC        = 0.05
 
 integer, parameter :: I_LOG_POP         = 1
 integer, parameter :: I_NEG_LOG_RES     = 2
@@ -41,18 +48,28 @@ integer, parameter :: I_LOCVAR_FG       = 5
 integer, parameter :: I_LOCVAR_BG       = 6
 integer, parameter :: I_SPEC_DYNRANGE   = 7
 integer, parameter :: I_CC_SINGLE       = 8
+integer, parameter :: I_HIST_KNN        = 9
 
 character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(len=32) :: &
     'log_pop', 'neg_log_res', 'mask_inside', 'centered', &
-    'log_locvar_fg', 'log_locvar_bg', 'spectrum_dynrange', 'single_component']
+    'log_locvar_fg', 'log_locvar_bg', 'spectrum_dynrange', 'single_component', &
+    'hist_knn']
 
 ! Tuning guide:
 ! - FEATURE_WEIGHTS is the main calibration surface. It maps robust-normalized
 !   features into the scalar score used to identify the high-quality cluster.
 !   The default profile is intentionally recall-preserving for good classes:
 !   population, resolution, and local-variance contrast carry the decision,
-!   while geometry/spectrum diagnostics remain available for analysis unless
-!   validation shows they generalize cleanly.
+!   with histogram-neighborhood support to capture the strong old
+!   cluster_cavgs observation that overfitted class averages often have
+!   abnormal intensity distributions. Geometry/spectrum diagnostics remain
+!   available for analysis unless validation shows they generalize cleanly.
+! - HIST_DMAT_WEIGHT blends the legacy histogram-distance matrix (TVD/JSD/HD)
+!   into the feature-space k-medoids distance matrix. This affects the
+!   automatic boundary estimated from the two quality clusters.
+! - CLUSTER_RESCUE_MARGIN allows only borderline classes in the high-quality
+!   cluster to be retained below the scalar threshold. This restores a cluster
+!   based rescue path without accepting every member of the good cluster.
 ! - BOUNDARY_MARGIN_DEFAULT is an internal threshold offset. Positive values
 !   retain more borderline classes; negative values raise the boundary and
 !   reject more junk. Tune this first when validation shows a systematic
@@ -69,7 +86,7 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
 !   is retained for analysis but not scored by default because high spectral
 !   dynamic range can also indicate ring/ice artifacts.
 real, parameter :: FEATURE_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    0.40, 0.19, 0.00, 0.01, 0.20, 0.20, 0.00, 0.00 ]
+    0.34, 0.18, 0.00, 0.00, 0.16, 0.18, 0.00, 0.00, 0.14 ]
 
 type :: cavg_quality_result
     real,    allocatable :: raw(:,:)
@@ -103,16 +120,19 @@ contains
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
         real, optional,            intent(in)    :: boundary_margin
+        real, allocatable :: hist_dmat(:,:)
         real :: margin
         call reset_quality_result(quality)
         margin = BOUNDARY_MARGIN_DEFAULT
         if( present(boundary_margin) ) margin = boundary_margin
         call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
+        call calc_histogram_quality_signal(imgs, mskdiam, quality%hard_reject, quality%raw(:,I_HIST_KNN), hist_dmat)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call cluster_cavg_quality(quality%features, quality%hard_reject, quality%states, quality%labels, &
                                   quality%medoids, quality%scores, quality%threshold, quality%raw_threshold, &
                                   quality%threshold_margin, quality%separation, quality%nclust, quality%good_label, &
-                                  quality%used_threshold, margin)
+                                  quality%used_threshold, margin, hist_dmat)
+        if( allocated(hist_dmat) ) deallocate(hist_dmat)
     end subroutine evaluate_cavg_quality
 
     subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject )
@@ -204,7 +224,7 @@ contains
 
     subroutine cluster_cavg_quality( features, hard_reject, states, labels, medoids, scores, threshold, raw_threshold, &
                                                                       threshold_margin, separation, nclust, good_label, &
-                                                                      used_threshold, boundary_margin )
+                                                                      used_threshold, boundary_margin, signal_dmat )
         real,                 intent(in)    :: features(:,:)
         logical,              intent(in)    :: hard_reject(:)
         integer, allocatable, intent(inout) :: states(:), labels(:), medoids(:)
@@ -213,13 +233,19 @@ contains
         integer,              intent(out)   :: nclust, good_label
         logical,              intent(out)   :: used_threshold
         real, optional,       intent(in)    :: boundary_margin
-        real,    allocatable :: dmat(:,:), feats_fit(:,:), score_fit(:)
+        real, optional,       intent(in)    :: signal_dmat(:,:)
+        real,    allocatable :: dmat(:,:), dmat_signal_fit(:,:), feats_fit(:,:), score_fit(:)
         integer, allocatable :: inds(:), labels_fit(:), medoids_fit(:)
         integer              :: ncls, nfit, i, j, k, good_fit_label, bad_fit_label
-        real                 :: d, dmin, dmax, score1, score2, margin
+        real                 :: d, score1, score2, margin, rescue_threshold
+        logical              :: dmat_ok, signal_ok
         ncls = size(features, dim=1)
         if( size(features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cluster_cavg_quality: invalid feature count')
         if( size(hard_reject) /= ncls ) THROW_HARD('cluster_cavg_quality: invalid mask size')
+        if( present(signal_dmat) )then
+            if( size(signal_dmat, dim=1) /= ncls .or. size(signal_dmat, dim=2) /= ncls ) &
+                THROW_HARD('cluster_cavg_quality: invalid signal dmat size')
+        endif
         if( allocated(states) ) deallocate(states)
         if( allocated(labels) ) deallocate(labels)
         if( allocated(medoids)) deallocate(medoids)
@@ -264,9 +290,8 @@ contains
                 dmat(j,i) = d
             end do
         end do
-        dmin = minval(dmat)
-        dmax = maxval(dmat)
-        if( dmax - dmin <= EPS ) then
+        call normalize_quality_dmat(dmat, dmat_ok)
+        if( .not. dmat_ok ) then
             states(inds) = 1
             labels(inds) = 1
             allocate(medoids(1), source=inds(1))
@@ -278,7 +303,20 @@ contains
             deallocate(dmat, feats_fit, score_fit, inds)
             return
         end if
-        dmat = (dmat - dmin) / (dmax - dmin)
+        if( present(signal_dmat) )then
+            allocate(dmat_signal_fit(nfit, nfit), source=0.0)
+            do i = 1, nfit
+                do j = 1, nfit
+                    dmat_signal_fit(i,j) = signal_dmat(inds(i), inds(j))
+                end do
+            end do
+            call normalize_quality_dmat(dmat_signal_fit, signal_ok)
+            if( signal_ok )then
+                dmat = (1.0 - HIST_DMAT_WEIGHT) * dmat + HIST_DMAT_WEIGHT * dmat_signal_fit
+                call normalize_quality_dmat(dmat, dmat_ok)
+            endif
+            deallocate(dmat_signal_fit)
+        endif
         nclust = 2
         call cluster_dmat(dmat, 'kmed', nclust, medoids_fit, labels_fit)
         if( nclust /= 2 ) THROW_HARD('cluster_cavg_quality: expected two k-medoids clusters')
@@ -315,14 +353,126 @@ contains
             used_threshold  = .false.
         else
             threshold_margin = margin
+            rescue_threshold = threshold - CLUSTER_RESCUE_MARGIN
             do i = 1, nfit
-                if( scores(inds(i)) >= threshold ) states(inds(i)) = 1
+                if( scores(inds(i)) >= threshold .or. &
+                   (labels_fit(i) == good_fit_label .and. scores(inds(i)) >= rescue_threshold) ) states(inds(i)) = 1
             end do
             good_label     = good_fit_label
             used_threshold = .true.
         end if
         deallocate(dmat, feats_fit, score_fit, inds, labels_fit, medoids_fit)
     end subroutine cluster_cavg_quality
+
+    subroutine calc_histogram_quality_signal( imgs, mskdiam, hard_reject, hist_knn, hist_dmat )
+        class(image),         intent(inout) :: imgs(:)
+        real,                 intent(in)    :: mskdiam
+        logical,              intent(in)    :: hard_reject(:)
+        real,                 intent(inout) :: hist_knn(:)
+        real,    allocatable, intent(inout) :: hist_dmat(:,:)
+        type(histogram), allocatable :: hists(:)
+        real, allocatable :: dmat_tvd(:,:), dmat_jsd(:,:), dmat_hd(:,:)
+        real :: smpd, rad_px, mm(2), mm_i(2)
+        integer :: ncls, nfit, i, j, k, ncontrib
+        logical :: ok
+        ncls = size(imgs)
+        if( size(hard_reject) /= ncls ) THROW_HARD('calc_histogram_quality_signal: invalid mask size')
+        if( size(hist_knn) /= ncls ) THROW_HARD('calc_histogram_quality_signal: invalid feature size')
+        if( allocated(hist_dmat) ) deallocate(hist_dmat)
+        allocate(hist_dmat(ncls, ncls), source=0.0)
+        hist_knn = 0.0
+        nfit = count(.not. hard_reject)
+        if( nfit < 4 ) return
+        smpd = imgs(1)%get_smpd()
+        if( smpd <= 0.0 ) THROW_HARD('calc_histogram_quality_signal: non-positive smpd')
+        rad_px = (mskdiam / smpd) / 2.0
+        mm = [huge(1.0), -huge(1.0)]
+        do i = 1, ncls
+            if( hard_reject(i) ) cycle
+            mm_i  = imgs(i)%minmax(radius=rad_px)
+            mm(1) = min(mm(1), mm_i(1))
+            mm(2) = max(mm(2), mm_i(2))
+        end do
+        if( mm(2) - mm(1) <= EPS ) return
+        allocate(hists(ncls))
+        do i = 1, ncls
+            if( .not. hard_reject(i) ) call hists(i)%new(imgs(i), NHISTBINS, minmax=mm, radius=rad_px)
+        end do
+        allocate(dmat_tvd(ncls,ncls), dmat_jsd(ncls,ncls), dmat_hd(ncls,ncls), source=0.0)
+        do i = 1, ncls - 1
+            if( hard_reject(i) ) cycle
+            do j = i + 1, ncls
+                if( hard_reject(j) ) cycle
+                dmat_tvd(i,j) = hists(i)%TVD(hists(j))
+                dmat_tvd(j,i) = dmat_tvd(i,j)
+                dmat_jsd(i,j) = hists(i)%JSD(hists(j))
+                dmat_jsd(j,i) = dmat_jsd(i,j)
+                dmat_hd(i,j)  = hists(i)%HD(hists(j))
+                dmat_hd(j,i)  = dmat_hd(i,j)
+            end do
+        end do
+        ncontrib = 0
+        call normalize_quality_dmat(dmat_tvd, ok)
+        if( ok )then
+            hist_dmat = hist_dmat + dmat_tvd
+            ncontrib  = ncontrib + 1
+        endif
+        call normalize_quality_dmat(dmat_jsd, ok)
+        if( ok )then
+            hist_dmat = hist_dmat + dmat_jsd
+            ncontrib  = ncontrib + 1
+        endif
+        call normalize_quality_dmat(dmat_hd, ok)
+        if( ok )then
+            hist_dmat = hist_dmat + dmat_hd
+            ncontrib  = ncontrib + 1
+        endif
+        if( ncontrib > 0 ) hist_dmat = hist_dmat / real(ncontrib)
+        k = min(nfit - 1, max(HIST_KNN_MIN, ceiling(HIST_KNN_FRAC * real(nfit))))
+        k = min(k, HIST_KNN_MAX)
+        do i = 1, ncls
+            if( hard_reject(i) ) cycle
+            hist_knn(i) = -avg_nearest_hist_distance(hist_dmat(i,:), hard_reject, i, k)
+        end do
+        call hists(:)%kill
+        deallocate(hists, dmat_tvd, dmat_jsd, dmat_hd)
+    end subroutine calc_histogram_quality_signal
+
+    subroutine normalize_quality_dmat( dmat, ok )
+        real,    intent(inout) :: dmat(:,:)
+        logical, intent(out)   :: ok
+        real :: dmin, dmax
+        dmin = minval(dmat)
+        dmax = maxval(dmat)
+        ok   = dmax - dmin > EPS
+        if( ok ) dmat = (dmat - dmin) / (dmax - dmin)
+    end subroutine normalize_quality_dmat
+
+    real function avg_nearest_hist_distance( dists, hard_reject, self_ind, k )
+        real,    intent(in) :: dists(:)
+        logical, intent(in) :: hard_reject(:)
+        integer, intent(in) :: self_ind, k
+        real, allocatable :: vals(:)
+        integer :: i, n, cnt, kk, loc
+        avg_nearest_hist_distance = 0.0
+        n = count(.not. hard_reject) - 1
+        if( n <= 0 .or. k <= 0 ) return
+        allocate(vals(n), source=0.0)
+        cnt = 0
+        do i = 1, size(dists)
+            if( i == self_ind .or. hard_reject(i) ) cycle
+            cnt = cnt + 1
+            vals(cnt) = dists(i)
+        end do
+        kk = min(k, cnt)
+        do i = 1, kk
+            loc = minloc(vals(1:cnt), dim=1)
+            avg_nearest_hist_distance = avg_nearest_hist_distance + vals(loc)
+            vals(loc) = huge(1.0)
+        end do
+        avg_nearest_hist_distance = avg_nearest_hist_distance / real(kk)
+        deallocate(vals)
+    end function avg_nearest_hist_distance
 
     subroutine calc_mask_features( img, bin_img, cc_img, rmat_cc, rmat_disc, rad_px, outside_frac, &
                                                                   centroid_norm, nccs_valid, no_component )
