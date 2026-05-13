@@ -18,17 +18,26 @@
     (function () {
         var panels = document.querySelectorAll('.js-expandable-panel');
 
+        function getExpandTarget(panel) {
+            return panel.parentElement;
+        }
+
         function expandPanel(panel) {
+            var target = getExpandTarget(panel);
+            if (!target) return;
+
             panel.dataset.expanded = '1';
-            panel.dataset.originalStyle = panel.getAttribute('style') || '';
-            panel.style.position = 'fixed';
-            panel.style.inset = '0';
-            panel.style.width = '100vw';
-            panel.style.height = '100vh';
-            panel.style.maxHeight = 'none';
-            panel.style.margin = '0';
-            panel.style.borderRadius = '0';
-            panel.style.zIndex = '9999';
+            panel.dataset.expandTargetOriginalStyle = target.getAttribute('style') || '';
+
+            target.style.position = 'fixed';
+            target.style.inset = '0';
+            target.style.width = 'calc(100vw - 0.5rem)';
+            target.style.height = 'calc(100vh - 0.5rem)';
+            target.style.maxHeight = 'none';
+            target.style.margin = '0.25rem';
+            target.style.borderRadius = '0.5rem';
+            target.style.zIndex = '9999';
+
             panel.classList.add('cursor-zoom-out');
             panel.classList.remove('cursor-zoom-in');
             panel.title = 'click to collapse';
@@ -36,8 +45,12 @@
         }
 
         function collapsePanel(panel) {
+            var target = getExpandTarget(panel);
+            if (!target) return;
+
             panel.dataset.expanded = '0';
-            panel.setAttribute('style', panel.dataset.originalStyle || '');
+            target.setAttribute('style', panel.dataset.expandTargetOriginalStyle || '');
+
             panel.classList.remove('cursor-zoom-out');
             panel.classList.add('cursor-zoom-in');
             panel.title = 'click to expand';

@@ -181,6 +181,7 @@ contains
         integer           :: n, ires0143, ires05
         n = size(corrs)
         ires0143 = 1
+        if( corrs(1) < 0.143 .and. corrs(2) > 0.143 ) ires0143 = 2
         do while( ires0143 <= n )
             if( corrs(ires0143) >= 0.143 )then
                 ires0143 = ires0143 + 1
@@ -196,6 +197,7 @@ contains
             fsc0143 = res(ires0143)
         endif
         ires05 = 1
+        if( corrs(1) < 0.5 .and. corrs(2) > 0.5 ) ires05 = 2
         do while( ires05 <= n )
             if( corrs(ires05) >= 0.5 )then
                 ires05 = ires05+1
