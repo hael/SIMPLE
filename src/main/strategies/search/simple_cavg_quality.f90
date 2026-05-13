@@ -14,6 +14,8 @@ implicit none
 private
 
 public :: CAVG_QUALITY_NFEATS
+public :: CAVG_REJECTION_CHUNK
+public :: CAVG_REJECTION_POOL
 public :: cavg_quality_result
 public :: cavg_quality_feature_name
 public :: extract_cavg_quality_features
@@ -24,31 +26,37 @@ public :: write_cavg_quality_reference_analysis
 
 #include "simple_local_flags.inc"
 
-integer, parameter :: CAVG_QUALITY_NFEATS = 9
+integer, parameter :: CAVG_QUALITY_NFEATS     = 9
+integer, parameter :: CAVG_REJECTION_CHUNK    = 1
+integer, parameter :: CAVG_REJECTION_POOL     = 2
 
-real, parameter :: EPS                     = 1.0e-6
-real, parameter :: LOG_EPS                 = 1.0e-12
-real, parameter :: CLIP_Z                  = 4.0
-real, parameter :: MIN_SCORE_SEPARATION    = 0.15
-real, parameter :: BOUNDARY_MARGIN_DEFAULT = 0.05
-real, parameter :: HIST_DMAT_WEIGHT        = 0.50
-real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
-real, parameter :: HP_SPEC                 = 20.0
-real, parameter :: LP_SPEC                 = 6.0
-integer, parameter :: NHISTBINS            = 128
-integer, parameter :: HIST_KNN_MIN         = 5
-integer, parameter :: HIST_KNN_MAX         = 20
-real,    parameter :: HIST_KNN_FRAC        = 0.05
+real,    parameter :: EPS                     = 1.0e-6
+real,    parameter :: LOG_EPS                 = 1.0e-12
+real,    parameter :: CLIP_Z                  = 4.0
+real,    parameter :: MIN_SCORE_SEPARATION    = 0.15
+real,    parameter :: BOUNDARY_MARGIN_DEFAULT = 0.05
+real,    parameter :: CHUNK_BOUNDARY_OFFSET   = 0.20
+real,    parameter :: CHUNK_OTSU_MIN_OFFSET   = 0.05
+real,    parameter :: CHUNK_OTSU_MAX_OFFSET   = 0.35
+real,    parameter :: POOL_MIN_ACCEPT_FRAC    = 0.65
+real,    parameter :: HIST_DMAT_WEIGHT        = 0.50
+real,    parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
+real,    parameter :: HP_SPEC                 = 20.0
+real,    parameter :: LP_SPEC                 = 6.0
+integer, parameter :: NHISTBINS               = 128
+integer, parameter :: HIST_KNN_MIN            = 5
+integer, parameter :: HIST_KNN_MAX            = 20
+real,    parameter :: HIST_KNN_FRAC           = 0.05
 
-integer, parameter :: I_LOG_POP         = 1
-integer, parameter :: I_NEG_LOG_RES     = 2
-integer, parameter :: I_MASK_INSIDE     = 3
-integer, parameter :: I_CENTERED        = 4
-integer, parameter :: I_LOCVAR_FG       = 5
-integer, parameter :: I_LOCVAR_BG       = 6
-integer, parameter :: I_SPEC_DYNRANGE   = 7
-integer, parameter :: I_CC_SINGLE       = 8
-integer, parameter :: I_HIST_KNN        = 9
+integer, parameter :: I_LOG_POP               = 1
+integer, parameter :: I_NEG_LOG_RES           = 2
+integer, parameter :: I_MASK_INSIDE           = 3
+integer, parameter :: I_CENTERED              = 4
+integer, parameter :: I_LOCVAR_FG             = 5
+integer, parameter :: I_LOCVAR_BG             = 6
+integer, parameter :: I_SPEC_DYNRANGE         = 7
+integer, parameter :: I_CC_SINGLE             = 8
+integer, parameter :: I_HIST_KNN              = 9
 
 character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(len=32) :: &
     'log_pop', 'neg_log_res', 'mask_inside', 'centered', &
@@ -64,25 +72,31 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
 !   cluster_cavgs observation that overfitted class averages often have
 !   abnormal intensity distributions. Geometry/spectrum diagnostics remain
 !   available for analysis unless validation shows they generalize cleanly.
+! - CAVG_REJECTION_CHUNK and CAVG_REJECTION_POOL intentionally expose two
+!   operating points instead of one magic margin. Chunk rejection is for
+!   stream-style partitions with a low good-class fraction and substantial
+!   junk: it raises the cluster midpoint by CHUNK_BOUNDARY_OFFSET, disables
+!   cluster rescue, and only lets Otsu refine the boundary when Otsu lands in a
+!   narrow plausible window around that stricter midpoint. Pool rejection is
+!   for larger pooled/batch selections where most classes are expected to be
+!   useful: it keeps the recall-preserving boundary/rescue behavior and applies
+!   POOL_MIN_ACCEPT_FRAC as a conservative cap on how aggressively the automatic
+!   selector may reject non-hard-rejected classes.
 ! - HIST_DMAT_WEIGHT blends the legacy histogram-distance matrix (TVD/JSD/HD)
 !   into the feature-space k-medoids distance matrix. This affects the
 !   automatic boundary estimated from the two quality clusters.
-! - CLUSTER_RESCUE_MARGIN allows only borderline classes in the high-quality
-!   cluster to be retained below the scalar threshold. This restores a cluster
-!   based rescue path without accepting every member of the good cluster.
-! - BOUNDARY_MARGIN_DEFAULT is an internal threshold offset. Positive values
-!   retain more borderline classes; negative values raise the boundary and
-!   reject more junk. Tune this first when validation shows a systematic
-!   recall/precision imbalance: moving it toward zero recovers borderline good
-!   classes. The default is slightly positive because MSP1 validation showed
-!   good class averages just below the cluster-derived midpoint; larger positive
-!   values admit substantially more junk.
-!   This is deliberately not exposed as a command-line knob.
-! - MIN_SCORE_SEPARATION controls when two clusters are trusted at all; if the
-!   cluster mean scores are closer than this, the selector falls back to a
-!   score-only Otsu boundary if the score distribution is itself separated.
-!   Only datasets lacking both cluster and score-distribution evidence keep all
-!   non-hard-rejected classes.
+! - CLUSTER_RESCUE_MARGIN is used by pool rejection only. It retains borderline
+!   members of the high-quality cluster below the scalar threshold without
+!   accepting every member of that cluster. Chunk rejection disables this rescue
+!   because the stream-partition failure mode is too much junk in the good set.
+! - BOUNDARY_MARGIN_DEFAULT is the pool-mode threshold offset. Positive values
+!   retain more borderline classes. Chunk mode uses the stricter
+!   CHUNK_BOUNDARY_OFFSET instead. These constants are deliberately kept as
+!   code-level calibration knobs rather than command-line parameters.
+! - MIN_SCORE_SEPARATION controls when two clusters are trusted at all. Chunk
+!   mode may fall back to a score-only Otsu boundary when the score distribution
+!   is separated. Pool mode keeps all non-hard-rejected classes in that ambiguous
+!   case because pooled data are expected to contain many more good classes.
 ! - CLIP_Z limits the influence of feature outliers after median/MAD
 !   normalization. The hard-reject rule in extract_cavg_quality_features is the
 !   only pre-clustering veto and should remain conservative.
@@ -106,6 +120,7 @@ type :: cavg_quality_result
     real                 :: separation       = 0.0
     integer              :: nclust           = 0
     integer              :: good_label       = 0
+    integer              :: rejection_type   = CAVG_REJECTION_CHUNK
     logical              :: used_threshold = .false.
 end type cavg_quality_result
 
@@ -118,16 +133,22 @@ contains
         name = FEATURE_NAMES(i)
     end function cavg_quality_feature_name
 
-    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, boundary_margin )
+    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, boundary_margin, rejection_type )
         class(image),              intent(inout) :: imgs(:)
         type(oris),                intent(in)    :: cls_oris
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
         real, optional,            intent(in)    :: boundary_margin
+        integer, optional,         intent(in)    :: rejection_type
         real, allocatable :: hist_dmat(:,:)
         real :: margin
+        integer :: rej_type
         call reset_quality_result(quality)
-        margin = BOUNDARY_MARGIN_DEFAULT
+        rej_type = CAVG_REJECTION_CHUNK
+        if( present(rejection_type) ) rej_type = rejection_type
+        call assert_valid_rejection_type(rej_type)
+        quality%rejection_type = rej_type
+        margin = rejection_type_default_margin(rej_type)
         if( present(boundary_margin) ) margin = boundary_margin
         call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
         call calc_histogram_quality_signal(imgs, mskdiam, quality%hard_reject, quality%raw(:,I_HIST_KNN), hist_dmat)
@@ -135,7 +156,7 @@ contains
         call cluster_cavg_quality(quality%features, quality%hard_reject, quality%states, quality%labels, &
                                   quality%medoids, quality%scores, quality%threshold, quality%raw_threshold, &
                                   quality%threshold_margin, quality%separation, quality%nclust, quality%good_label, &
-                                  quality%used_threshold, margin, hist_dmat)
+                                  quality%used_threshold, margin, hist_dmat, rej_type)
         if( allocated(hist_dmat) ) deallocate(hist_dmat)
     end subroutine evaluate_cavg_quality
 
@@ -228,7 +249,7 @@ contains
 
     subroutine cluster_cavg_quality( features, hard_reject, states, labels, medoids, scores, threshold, raw_threshold, &
                                                                       threshold_margin, separation, nclust, good_label, &
-                                                                      used_threshold, boundary_margin, signal_dmat )
+                                                                      used_threshold, boundary_margin, signal_dmat, rejection_type )
         real,                 intent(in)    :: features(:,:)
         logical,              intent(in)    :: hard_reject(:)
         integer, allocatable, intent(inout) :: states(:), labels(:), medoids(:)
@@ -238,14 +259,20 @@ contains
         logical,              intent(out)   :: used_threshold
         real, optional,       intent(in)    :: boundary_margin
         real, optional,       intent(in)    :: signal_dmat(:,:)
+        integer, optional,    intent(in)    :: rejection_type
         real,    allocatable :: dmat(:,:), dmat_signal_fit(:,:), feats_fit(:,:), score_fit(:)
         integer, allocatable :: inds(:), labels_fit(:), medoids_fit(:)
         integer              :: ncls, nfit, i, j, k, good_fit_label, bad_fit_label
+        integer              :: rej_type
         real                 :: d, score1, score2, margin, rescue_threshold, otsu_threshold, otsu_separation
+        real                 :: candidate_threshold
         logical              :: dmat_ok, signal_ok, otsu_ok
         ncls = size(features, dim=1)
         if( size(features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cluster_cavg_quality: invalid feature count')
         if( size(hard_reject) /= ncls ) THROW_HARD('cluster_cavg_quality: invalid mask size')
+        rej_type = CAVG_REJECTION_CHUNK
+        if( present(rejection_type) ) rej_type = rejection_type
+        call assert_valid_rejection_type(rej_type)
         if( present(signal_dmat) )then
             if( size(signal_dmat, dim=1) /= ncls .or. size(signal_dmat, dim=2) /= ncls ) &
                 THROW_HARD('cluster_cavg_quality: invalid signal dmat size')
@@ -265,7 +292,7 @@ contains
         nclust           = 0
         good_label       = 0
         used_threshold   = .false.
-        margin = BOUNDARY_MARGIN_DEFAULT
+        margin = rejection_type_default_margin(rej_type)
         if( present(boundary_margin) ) margin = boundary_margin
         nfit = count(.not. hard_reject)
         if( nfit == 0 ) return
@@ -340,15 +367,14 @@ contains
         ! more junk.
         raw_threshold = 0.5 * (mean_score_for_label(score_fit, labels_fit, good_fit_label) + &
                                                 mean_score_for_label(score_fit, labels_fit, bad_fit_label))
-        threshold = raw_threshold - margin
         labels(inds) = labels_fit
         allocate(medoids(size(medoids_fit)))
         do k = 1, size(medoids_fit)
             medoids(k) = inds(medoids_fit(k))
         end do
+        call otsu_score_threshold(score_fit, otsu_threshold, otsu_separation, otsu_ok)
         if( separation < MIN_SCORE_SEPARATION ) then
-            call otsu_score_threshold(score_fit, otsu_threshold, otsu_separation, otsu_ok)
-            if( otsu_ok .and. otsu_separation >= MIN_SCORE_SEPARATION )then
+            if( rej_type == CAVG_REJECTION_CHUNK .and. otsu_ok .and. otsu_separation >= MIN_SCORE_SEPARATION )then
                 raw_threshold     = otsu_threshold
                 threshold         = otsu_threshold
                 threshold_margin  = 0.0
@@ -368,18 +394,55 @@ contains
                 threshold_margin = 0.0
                 used_threshold   = .false.
             endif
+        else if( rej_type == CAVG_REJECTION_CHUNK )then
+            candidate_threshold = raw_threshold - margin
+            threshold = candidate_threshold
+            if( otsu_ok .and. otsu_separation >= MIN_SCORE_SEPARATION .and. &
+                otsu_threshold >= raw_threshold + CHUNK_OTSU_MIN_OFFSET .and. &
+                otsu_threshold <= raw_threshold + CHUNK_OTSU_MAX_OFFSET ) threshold = otsu_threshold
+            threshold_margin = raw_threshold - threshold
+            do i = 1, nfit
+                if( scores(inds(i)) >= threshold ) states(inds(i)) = 1
+            end do
+            good_label     = good_fit_label
+            used_threshold = .true.
         else
+            threshold = raw_threshold - margin
             threshold_margin = margin
             rescue_threshold = threshold - CLUSTER_RESCUE_MARGIN
             do i = 1, nfit
                 if( scores(inds(i)) >= threshold .or. &
                    (labels_fit(i) == good_fit_label .and. scores(inds(i)) >= rescue_threshold) ) states(inds(i)) = 1
             end do
+            call enforce_min_accept_fraction(scores, hard_reject, states, threshold, POOL_MIN_ACCEPT_FRAC)
+            threshold_margin = raw_threshold - threshold
             good_label     = good_fit_label
             used_threshold = .true.
         end if
         deallocate(dmat, feats_fit, score_fit, inds, labels_fit, medoids_fit)
     end subroutine cluster_cavg_quality
+
+    subroutine assert_valid_rejection_type( rejection_type )
+        integer, intent(in) :: rejection_type
+        select case(rejection_type)
+            case(CAVG_REJECTION_CHUNK, CAVG_REJECTION_POOL)
+                return
+            case DEFAULT
+                THROW_HARD('invalid class-average rejection type')
+        end select
+    end subroutine assert_valid_rejection_type
+
+    real function rejection_type_default_margin( rejection_type )
+        integer, intent(in) :: rejection_type
+        select case(rejection_type)
+            case(CAVG_REJECTION_CHUNK)
+                rejection_type_default_margin = -CHUNK_BOUNDARY_OFFSET
+            case(CAVG_REJECTION_POOL)
+                rejection_type_default_margin = BOUNDARY_MARGIN_DEFAULT
+            case DEFAULT
+                THROW_HARD('invalid class-average rejection type')
+        end select
+    end function rejection_type_default_margin
 
     subroutine otsu_score_threshold( scores, threshold, separation, ok )
         real,    intent(in)  :: scores(:)
@@ -409,6 +472,36 @@ contains
             endif
         end do
     end subroutine otsu_score_threshold
+
+    subroutine enforce_min_accept_fraction( scores, hard_reject, states, threshold, min_accept_frac )
+        real,    intent(in)    :: scores(:)
+        logical, intent(in)    :: hard_reject(:)
+        integer, intent(inout) :: states(:)
+        real,    intent(inout) :: threshold
+        real,    intent(in)    :: min_accept_frac
+        real, allocatable :: vals(:)
+        integer :: nfit, min_accept, naccepted, i, loc
+        real    :: floor_threshold
+        if( size(hard_reject) /= size(scores) ) THROW_HARD('enforce_min_accept_fraction: mask size mismatch')
+        if( size(states)      /= size(scores) ) THROW_HARD('enforce_min_accept_fraction: state size mismatch')
+        nfit = count(.not. hard_reject)
+        if( nfit <= 0 ) return
+        min_accept = min(nfit, max(1, ceiling(min_accept_frac * real(nfit))))
+        naccepted  = count(states > 0 .and. .not. hard_reject)
+        if( naccepted >= min_accept ) return
+        vals = pack(scores, .not. hard_reject)
+        floor_threshold = minval(vals)
+        do i = 1, min_accept
+            loc = maxloc(vals, dim=1)
+            floor_threshold = vals(loc)
+            vals(loc) = -huge(1.0)
+        end do
+        do i = 1, size(scores)
+            if( .not. hard_reject(i) .and. scores(i) >= floor_threshold ) states(i) = 1
+        end do
+        threshold = min(threshold, floor_threshold)
+        deallocate(vals)
+    end subroutine enforce_min_accept_fraction
 
     subroutine calc_histogram_quality_signal( imgs, mskdiam, hard_reject, hist_knn, hist_dmat )
         class(image),         intent(inout) :: imgs(:)
@@ -844,6 +937,7 @@ contains
         quality%separation       = 0.0
         quality%nclust           = 0
         quality%good_label       = 0
+        quality%rejection_type   = CAVG_REJECTION_CHUNK
         quality%used_threshold   = .false.
     end subroutine reset_quality_result
 

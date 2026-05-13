@@ -127,6 +127,7 @@ type(ui_param) :: qsys_name
 type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
 type(ui_param) :: qsys_reservation
+type(ui_param) :: rejection_type
 type(ui_param) :: remap_cls
 type(ui_param) :: remove_chunks
 type(ui_param) :: script
@@ -631,6 +632,10 @@ subroutine set_ui_params
     call quality_mode%set_param(   'quality_mode',    'multi',  'Class-average quality mode', &
                                    'Whether to apply automated selection or analyze it against the current manual selection(apply|analyze){apply}', &
                                    'Class-average quality mode(apply|analyze){apply}', .false., 'apply')
+
+    call rejection_type%set_param(  'rejection_type',  'multi',  'Class-average rejection type', &
+                                   'Use chunk for high-junk stream partitions or pool for larger pooled/batch sets(chunk|pool){chunk}', &
+                                   'Class-average rejection type(chunk|pool){chunk}', .false., 'chunk')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
                                    'Queue system kind(local|slurm|pbs|lsf)', &

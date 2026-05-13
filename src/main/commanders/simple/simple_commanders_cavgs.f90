@@ -1,7 +1,7 @@
 !@descr: analysis of class averages
 module simple_commanders_cavgs
 use simple_commanders_api
-use simple_cavg_quality, only: CAVG_QUALITY_NFEATS, cavg_quality_result, &
+use simple_cavg_quality, only: CAVG_QUALITY_NFEATS, CAVG_REJECTION_CHUNK, CAVG_REJECTION_POOL, cavg_quality_result, &
     cavg_quality_feature_name, evaluate_cavg_quality, write_cavg_quality_reference_analysis
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
@@ -312,7 +312,7 @@ contains
         type(cavg_quality_result) :: quality
         type(string)              :: stkname
         integer, allocatable      :: reference_states(:)
-        integer                   :: ncls, nsel, nrej
+        integer                   :: ncls, nsel, nrej, rejection_type
         real                      :: smpd
         logical                   :: l_analyze
         call cline%set('oritype', 'cls2D')
@@ -327,6 +327,14 @@ contains
             case DEFAULT
                 THROW_HARD('cluster_cavgs_quality: quality_mode must be apply or analyze')
         end select
+        select case(trim(params%rejection_type))
+            case('chunk')
+                rejection_type = CAVG_REJECTION_CHUNK
+            case('pool')
+                rejection_type = CAVG_REJECTION_POOL
+            case DEFAULT
+                THROW_HARD('cluster_cavgs_quality: rejection_type must be chunk or pool')
+        end select
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
         if( ncls == 0 ) THROW_HARD('cluster_cavgs_quality: project has no cls2D entries')
@@ -334,9 +342,10 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('cluster_cavgs_quality: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
+        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, rejection_type=rejection_type)
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
+        write(logfhandle,'(A,A)') '>>> CAVG QUALITY REJECTION TYPE : ', trim(params%rejection_type)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
         write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / MARGIN / EFFECTIVE : ', &
             quality%raw_threshold, ' / ', quality%threshold_margin, ' / ', quality%threshold
