@@ -265,7 +265,7 @@ contains
         frcval = FSC4EOAVG2D
         if( present(frc4eoavg) ) frcval = frc4eoavg
         call self%raise_exception( cls, sstate, 'ERROR, out of bounds in estimate_find_for_eoavg')
-        find = max(K4EOAVGLB,get_find_at_crit(self%frcs(sstate,cls,:), FSC4EOAVG2D))
+        find = max(K4EOAVGLB,get_find_at_crit(self%frcs(sstate,cls,:), frcval))
     end function estimate_find_for_eoavg
 
     function estimate_lp_for_align( self, state, crit0143 ) result( lp )

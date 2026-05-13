@@ -192,6 +192,7 @@ contains
         iincrreslim = .false.
         if( present(incrreslim) ) iincrreslim = incrreslim
         n = size(corrs)
+        find = n - 1
         do h=3,n-1
             if( corrs(h) >= crit_corr )then
                 cycle
