@@ -255,10 +255,13 @@ class StreamViewGeneratePickrefs:
     def render(self):
         if self.jobmodel is None:
             return HttpResponseNoContent()
+        stats = self.jobmodel.generate_pickrefs_stats
+        if "latest_cls2D" in stats:
+            stats["latest_cls2D"].sort(key=lambda d: d['res'])
         context = {
             "jobid"     : self.jobmodel.id,
             "displayid" : self.jobmodel.disp,
-            "jobstats"  : self.jobmodel.generate_pickrefs_stats,
+            "jobstats"  : stats,
             "status"    : self.jobmodel.generate_pickrefs_status,    
         }
         if self.zoom:

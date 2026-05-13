@@ -44,7 +44,7 @@
         {% include 'nice_stream/includes/_panel_header.html' with panel_title="2D classification" zoom_url="nice_lite:view_stream_classification_2D_zoom" terminate_field="terminate_pool2D" restart_field="restart_pool2D" last_import=jobstats.last_particles_imported use_js=True user_input_url="nice_lite:view_stream_classification_2D_zoom" user_input_title="select classes" %}
 
         <!-- Waiting gauze: shown until sieved particles arrive (below header) -->
-        {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
+        {% if "particles_imported" not in jobstats or jobstats.particles_accepted == 0 %}
             {% include 'nice_stream/includes/_panel_waiting_gauze.html' %}
         {% else %}
 

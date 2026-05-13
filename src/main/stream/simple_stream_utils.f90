@@ -431,7 +431,9 @@ contains
         call stkio_w%close
         ! write deselected refs for posterity
         allocate( cavgs(ncls-nsel) )
-        call stkio_r%read_whole
+        do icls = 1, ncls-nsel
+            call cavgs(icls)%new([ldim(1),ldim(2),1], smpd)
+        end do
         call stkio_w%open(string(STREAM_DESELECTED_REFS)//STK_EXT, smpd, 'write', box=box_for_extract, bufsz=ncls-nsel)
         icls = 0
         do i = 1, ncls

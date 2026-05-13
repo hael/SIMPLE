@@ -119,7 +119,7 @@ contains
         type(cmdline)                              :: cline_particle_sieving, cline_pool2D
         type(http_post)                            :: post
         type(http_response)                        :: response
-        type(string)                               :: request
+        type(string)                               :: request, cwd
         type(json_core)                            :: json
         type(json_value),              pointer     :: json_response_ptr => null()
         type(gui_assembler)                        :: assembler
@@ -168,6 +168,7 @@ contains
         if( cline%defined('box_extract') ) l_existing_box      = .true.
         ! init params
         call params%new(cline)
+        call simple_getcwd(cwd)
         ! init assembler and http handler
         call post%new(params%niceserver)
         call assembler%new(params%niceprocid)
@@ -775,7 +776,7 @@ contains
             call cline_opening2D%set('projfile', OPENING2D_JOB_NAME//METADATA_EXT)
             call cline_opening2D%set('outdir',                 OPENING2D_JOB_NAME)
             call cline_opening2D%set('dir_target',               PREPROC_JOB_NAME)
-            call cline_opening2D%set('optics_dir',                OPTICS_JOB_NAME)
+            call cline_opening2D%set('optics_dir',  cwd // '/' // OPTICS_JOB_NAME)
             call cline_opening2D%set('nthr',                                   32)
             call cline_opening2D%set('mkdir',                               'yes')
         end subroutine init_cline_opening2D
@@ -796,7 +797,7 @@ contains
             call cline_reference_picking%set('projfile',   REFPICK_JOB_NAME//METADATA_EXT)
             call cline_reference_picking%set('outdir',                   REFPICK_JOB_NAME)
             call cline_reference_picking%set('dir_target',               PREPROC_JOB_NAME)
-            call cline_reference_picking%set('optics_dir',                OPTICS_JOB_NAME)
+            call cline_reference_picking%set('optics_dir',  cwd // '/' // OPTICS_JOB_NAME)
             call cline_reference_picking%set('nthr',                                    8)
             call cline_reference_picking%set('mkdir',                               'yes')
             call cline_reference_picking%set('nparts',                                  8)
@@ -821,7 +822,7 @@ contains
             call cline_particle_sieving%set('projfile',   SIEVING_JOB_NAME//METADATA_EXT)
             call cline_particle_sieving%set('outdir',                   SIEVING_JOB_NAME)
             call cline_particle_sieving%set('dir_target',               REFPICK_JOB_NAME)
-            call cline_particle_sieving%set('optics_dir',                OPTICS_JOB_NAME)
+            call cline_particle_sieving%set('optics_dir',  cwd // '/' // OPTICS_JOB_NAME)
             call cline_particle_sieving%set('nthr',                                    4)
             call cline_particle_sieving%set('mkdir',                               'yes')
             call cline_particle_sieving%set('nparts',                                  4)
@@ -842,7 +843,7 @@ contains
             call cline_pool2D%set('projfile',       CLASS2D_JOB_NAME//METADATA_EXT)
             call cline_pool2D%set('outdir',                       CLASS2D_JOB_NAME)
             call cline_pool2D%set('dir_target',                   SIEVING_JOB_NAME)
-            call cline_pool2D%set('optics_dir',                    OPTICS_JOB_NAME)
+            call cline_pool2D%set('optics_dir',      cwd // '/' // OPTICS_JOB_NAME)
             call cline_pool2D%set('projfile_optics', OPTICS_JOB_NAME//METADATA_EXT)
             call cline_pool2D%set('nthr',                                        8)
             call cline_pool2D%set('mkdir',                                   'yes')

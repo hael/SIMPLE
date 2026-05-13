@@ -183,19 +183,46 @@ contains
                 call unpause_pool
             endif
             l_imported = setslist%get_included_flags()
-            ! pause?
-            if( (pool_iter >= iter_last_import+PAUSE_NITERS+extra_pause_iters) .or.&
-                & (time8()-time_last_import>PAUSE_TIMELIMIT) )then
-                if( .not.l_pause )then
-                    l_pause = is_pool_available()
-                    extra_pause_iters = 0
-                    if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+            
+            ! Adaptive pause policy:
+            ! - iterations 11..20: pause only if no imports for >5 iterations
+            ! - iterations 21+:    pause after 1 iteration without imports
+            if( pool_iter > 10 .and. pool_iter <= 20 ) then
+                if( pool_iter > iter_last_import + 5 ) then
+                    if( .not.l_pause ) then
+                        l_pause = is_pool_available()
+                        extra_pause_iters = 0
+                        if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+                    endif
+                end if
+            else if( pool_iter > 20 ) then
+                if( pool_iter > iter_last_import ) then
+                    if( .not.l_pause )then
+                        l_pause = is_pool_available()
+                        extra_pause_iters = 0
+                        if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+                    endif
                 endif
             endif
+            ! pause?
+            ! if( (pool_iter >= iter_last_import+PAUSE_NITERS+extra_pause_iters) .or.&
+            !     & (time8()-time_last_import>PAUSE_TIMELIMIT) )then
+            !     if( .not.l_pause )then
+            !         l_pause = is_pool_available()
+            !         extra_pause_iters = 0
+            !         if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+            !     endif
+            ! endif
             ! Performs clustering iteration
             if( l_pause )then
                 ! skip iteration
                 call send_meta(string('paused whilst awaiting new particles'))
+            else if( nptcls_glob == 0 ) then
+                ! skip iteration but update metadata
+                call send_meta(string('waiting for sieved particles'))
+            else if( nptcls_glob < params%ncls * 100 ) then
+                ! skip iteration but update metadata
+                call send_meta(string('waiting for minimum number sieved particles ... '// int2str(ceiling(float(nptcls_glob) / float((params%ncls * 100)) * 100)) // '%'))
             else
                 ! optionally updates alignment parameters
                 call update_pool_aln_params

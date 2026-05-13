@@ -108,8 +108,8 @@
                         <div class="flex flex-1 flex-row gap-2 justify-end">
                             {% url 'nice_lite:regenerate_pickrefs' as regenerate_pickrefs_action %}
                             {% url 'nice_lite:select_pickrefs' as select_pickrefs_action %}
-                            {% include 'nice_stream/includes/_action_button.html' with label='use more particles' action_url=regenerate_pickrefs_action jobid=jobid method='POST' target='' wrapper_class='flex justify-center' button_class='text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity' %}
-                            {% include 'nice_stream/includes/_action_button.html' with label='use selection' action_url=select_pickrefs_action jobid=jobid method='POST' target='' button_type='button' onclick='selectRefs(this)' include_final_selection_fields=True wrapper_class='flex justify-center' button_class='text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity' %}
+                            {% include 'nice_stream/includes/_action_button.html' with label='use more particles' action_url=regenerate_pickrefs_action jobid=jobid method='POST' target='_self' wrapper_class='flex justify-center' button_class='text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity' %}
+                            {% include 'nice_stream/includes/_action_button.html' with label='use selection' action_url=select_pickrefs_action jobid=jobid method='POST' target='_self' button_type='button' onclick='selectRefs(this)' include_final_selection_fields=True wrapper_class='flex justify-center' button_class='text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity' %}
                         </div>
                     </div>
                 {% else %}
