@@ -29,7 +29,7 @@ real, parameter :: EPS                     = 1.0e-6
 real, parameter :: LOG_EPS                 = 1.0e-12
 real, parameter :: CLIP_Z                  = 4.0
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
-real, parameter :: BOUNDARY_MARGIN_DEFAULT = -0.35
+real, parameter :: BOUNDARY_MARGIN_DEFAULT = -0.30
 real, parameter :: HP_SPEC                 = 20.0
 real, parameter :: LP_SPEC                 = 6.0
 
@@ -62,7 +62,7 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
 !   is retained for analysis but not scored by default because high spectral
 !   dynamic range can also indicate ring/ice artifacts.
 real, parameter :: FEATURE_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    0.24, 0.17, 0.00, 0.13, 0.30, 0.16, 0.00, 0.00 ]
+    0.27, 0.13, 0.00, 0.15, 0.30, 0.15, 0.00, 0.00 ]
 
 type :: cavg_quality_result
     real,    allocatable :: raw(:,:)
