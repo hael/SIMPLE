@@ -120,6 +120,7 @@ contains
             do i = 1,self%n
                 call self%ioimgs(i)%close
             enddo
+            call self%stknames(:)%kill
             deallocate(self%stknames,self%nptcls,self%fts,self%l_open,self%ioimgs)
             self%n      = 0
             self%box    = 0

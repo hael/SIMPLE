@@ -395,6 +395,8 @@ contains
         call cline%set('mkdir', 'no')  ! avoid nested dirs in workers
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)
+        call build_tmp%spproj%kill
+        call build_tmp%kill_general_tbox
     end subroutine master_initialize
 
     subroutine master_execute(self, params, cline)

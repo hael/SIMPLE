@@ -165,7 +165,7 @@ contains
             do i = 1,nrange
                 call ptcls_saved(i)%shift2Dserial(-opt_shifts(i,:))
             enddo
-            !$omp parallel do
+            !$omp end parallel do
             do i = 1,nrange
                 call reference%add(ptcls_saved(i),w=1./real(nrange))
             enddo
