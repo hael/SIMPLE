@@ -25,13 +25,13 @@ public :: write_cavg_quality_reference_analysis
 
 integer, parameter :: CAVG_QUALITY_NFEATS = 8
 
-real, parameter :: EPS                   = 1.0e-6
-real, parameter :: LOG_EPS               = 1.0e-12
-real, parameter :: CLIP_Z                = 4.0
-real, parameter :: MIN_SCORE_SEPARATION  = 0.15
-real, parameter :: RECALL_MARGIN_DEFAULT = 0.20
-real, parameter :: HP_SPEC               = 20.0
-real, parameter :: LP_SPEC               = 6.0
+real, parameter :: EPS                     = 1.0e-6
+real, parameter :: LOG_EPS                 = 1.0e-12
+real, parameter :: CLIP_Z                  = 4.0
+real, parameter :: MIN_SCORE_SEPARATION    = 0.15
+real, parameter :: BOUNDARY_MARGIN_DEFAULT = -0.35
+real, parameter :: HP_SPEC                 = 20.0
+real, parameter :: LP_SPEC                 = 6.0
 
 integer, parameter :: I_LOG_POP         = 1
 integer, parameter :: I_NEG_LOG_RES     = 2
@@ -46,10 +46,23 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
     'log_pop', 'neg_log_res', 'mask_inside', 'centered', &
     'log_locvar_fg', 'log_locvar_bg', 'spectrum_dynrange', 'single_component']
 
-! spectrum_dynrange is retained as a diagnostic feature but not scored by default:
-! high spectral dynamic range can also indicate ring/ice artifacts rather than good signal.
+! Tuning guide:
+! - FEATURE_WEIGHTS is the main calibration surface. It maps robust-normalized
+!   features into the scalar score used to identify the high-quality cluster.
+! - BOUNDARY_MARGIN_DEFAULT is an internal threshold offset. Positive values
+!   retain more borderline classes; negative values raise the boundary and
+!   reject more junk. This is deliberately not exposed as a command-line knob.
+! - MIN_SCORE_SEPARATION controls when two clusters are trusted at all; if the
+!   cluster mean scores are closer than this, the selector falls back to keeping
+!   all non-hard-rejected classes.
+! - CLIP_Z limits the influence of feature outliers after median/MAD
+!   normalization. The hard-reject rule in extract_cavg_quality_features is the
+!   only pre-clustering veto and should remain conservative.
+! - HP_SPEC/LP_SPEC only affect the spectrum_dynrange diagnostic. That feature
+!   is retained for analysis but not scored by default because high spectral
+!   dynamic range can also indicate ring/ice artifacts.
 real, parameter :: FEATURE_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    0.37, 0.37, 0.00, 0.00, 0.16, 0.10, 0.00, 0.00 ]
+    0.24, 0.17, 0.00, 0.13, 0.30, 0.16, 0.00, 0.00 ]
 
 type :: cavg_quality_result
     real,    allocatable :: raw(:,:)
@@ -77,16 +90,16 @@ contains
         name = FEATURE_NAMES(i)
     end function cavg_quality_feature_name
 
-    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, recall_margin )
+    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, boundary_margin )
         class(image),              intent(inout) :: imgs(:)
         type(oris),                intent(in)    :: cls_oris
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
-        real, optional,            intent(in)    :: recall_margin
+        real, optional,            intent(in)    :: boundary_margin
         real :: margin
         call reset_quality_result(quality)
-        margin = RECALL_MARGIN_DEFAULT
-        if( present(recall_margin) ) margin = recall_margin
+        margin = BOUNDARY_MARGIN_DEFAULT
+        if( present(boundary_margin) ) margin = boundary_margin
         call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call cluster_cavg_quality(quality%features, quality%hard_reject, quality%states, quality%labels, &
@@ -184,7 +197,7 @@ contains
 
     subroutine cluster_cavg_quality( features, hard_reject, states, labels, medoids, scores, threshold, raw_threshold, &
                                                                       threshold_margin, separation, nclust, good_label, &
-                                                                      used_threshold, recall_margin )
+                                                                      used_threshold, boundary_margin )
         real,                 intent(in)    :: features(:,:)
         logical,              intent(in)    :: hard_reject(:)
         integer, allocatable, intent(inout) :: states(:), labels(:), medoids(:)
@@ -192,7 +205,7 @@ contains
         real,                 intent(out)   :: threshold, raw_threshold, threshold_margin, separation
         integer,              intent(out)   :: nclust, good_label
         logical,              intent(out)   :: used_threshold
-        real, optional,       intent(in)    :: recall_margin
+        real, optional,       intent(in)    :: boundary_margin
         real,    allocatable :: dmat(:,:), feats_fit(:,:), score_fit(:)
         integer, allocatable :: inds(:), labels_fit(:), medoids_fit(:)
         integer              :: ncls, nfit, i, j, k, good_fit_label, bad_fit_label
@@ -215,9 +228,8 @@ contains
         nclust           = 0
         good_label       = 0
         used_threshold   = .false.
-        margin = RECALL_MARGIN_DEFAULT
-        if( present(recall_margin) ) margin = recall_margin
-        margin = max(0.0, margin)
+        margin = BOUNDARY_MARGIN_DEFAULT
+        if( present(boundary_margin) ) margin = boundary_margin
         nfit = count(.not. hard_reject)
         if( nfit == 0 ) return
         inds = pack([(i, i=1,ncls)], .not. hard_reject)
@@ -273,9 +285,10 @@ contains
             bad_fit_label  = 1
         end if
         separation = abs(score1 - score2)
-        ! The weighted feature score is fixed by design; this recall margin is the single
-        ! exposed decision-boundary knob. Larger margins lower the effective threshold
-        ! and retain more borderline classes, reducing false rejection of good classes.
+        ! The weighted feature score is fixed by design; this margin is the single
+        ! exposed decision-boundary knob. Positive margins lower the effective
+        ! threshold to retain more classes; negative margins raise it to reject
+        ! more junk.
         raw_threshold = 0.5 * (mean_score_for_label(score_fit, labels_fit, good_fit_label) + &
                                                 mean_score_for_label(score_fit, labels_fit, bad_fit_label))
         threshold = raw_threshold - margin
@@ -455,7 +468,7 @@ contains
         write(funit,'(A,F10.5)') 'accuracy=', accuracy
         write(funit,'(A,F10.5)') 'score_auc=', auc_for_values(quality%scores, reference_states)
         write(funit,'(A,F10.5)') 'raw_score_threshold=', quality%raw_threshold
-        write(funit,'(A,F10.5)') 'threshold_recall_margin=', quality%threshold_margin
+        write(funit,'(A,F10.5)') 'threshold_boundary_margin=', quality%threshold_margin
         write(funit,'(A,F10.5)') 'current_score_threshold=', quality%threshold
         write(funit,'(A,F10.5)') 'best_balacc_threshold=', best_bal_thr
         write(funit,'(A,F10.5)') 'best_balacc=', best_balacc

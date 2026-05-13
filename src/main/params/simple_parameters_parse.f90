@@ -471,7 +471,6 @@ contains
         call reg%add_real('overlap', self%overlap)
         call reg%add_real('phranlp', self%phranlp)
         call reg%add_real('prob_athres', self%prob_athres)
-        call reg%add_real('quality_recall_margin', self%quality_recall_margin)
         call reg%add_real('rec_athres', self%rec_athres)
         call reg%add_real('res_target', self%res_target)
         call reg%add_real('scale', self%scale)

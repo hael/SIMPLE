@@ -123,7 +123,6 @@ type(ui_param) :: projname
 type(ui_param) :: prune
 type(ui_param) :: pspecsz
 type(ui_param) :: quality_mode
-type(ui_param) :: quality_recall_margin
 type(ui_param) :: qsys_name
 type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
@@ -632,10 +631,6 @@ subroutine set_ui_params
     call quality_mode%set_param(   'quality_mode',    'multi',  'Class-average quality mode', &
                                    'Whether to apply automated selection or analyze it against the current manual selection(apply|analyze){apply}', &
                                    'Class-average quality mode(apply|analyze){apply}', .false., 'apply')
-
-    call quality_recall_margin%set_param( 'quality_recall_margin', 'num', 'Class-average quality recall margin', &
-                                   'Score margin subtracted from automated quality threshold{0.20}', &
-                                   'Class-average quality recall margin{0.20}', .false., 0.20)
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
                                    'Queue system kind(local|slurm|pbs|lsf)', &

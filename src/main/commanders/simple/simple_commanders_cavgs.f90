@@ -327,7 +327,6 @@ contains
             case DEFAULT
                 THROW_HARD('cluster_cavgs_quality: quality_mode must be apply or analyze')
         end select
-        if( params%quality_recall_margin < 0.0 ) THROW_HARD('cluster_cavgs_quality: quality_recall_margin must be >= 0')
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
         if( ncls == 0 ) THROW_HARD('cluster_cavgs_quality: project has no cls2D entries')
@@ -335,7 +334,7 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('cluster_cavgs_quality: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, params%quality_recall_margin)
+        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej

@@ -48,8 +48,9 @@ The current worktree also has a commander hook in `src/main/commanders/simple/si
   - writes `cavgs_quality_features.txt`
   - writes selected and rejected stacks
   - annotates `cls2D` fields `quality`, `quality_cluster`, and `accept`
-  - supports `quality_recall_margin`, a score margin subtracted from the
-    automated threshold to bias the selection toward retaining good classes
+  - uses an internal signed boundary margin; positive values retain more
+    borderline classes, while negative values raise the boundary and reject more
+    junk
   - keeps `spectrum_dynrange` in the feature table for diagnostics, but does
     not currently give it positive score weight because high values can reflect
     ring or ice artifacts rather than good class-average signal
