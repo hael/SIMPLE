@@ -29,7 +29,7 @@ real, parameter :: EPS                     = 1.0e-6
 real, parameter :: LOG_EPS                 = 1.0e-12
 real, parameter :: CLIP_Z                  = 4.0
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
-real, parameter :: BOUNDARY_MARGIN_DEFAULT = -0.20
+real, parameter :: BOUNDARY_MARGIN_DEFAULT = -0.10
 real, parameter :: HP_SPEC                 = 20.0
 real, parameter :: LP_SPEC                 = 6.0
 
@@ -49,11 +49,15 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
 ! Tuning guide:
 ! - FEATURE_WEIGHTS is the main calibration surface. It maps robust-normalized
 !   features into the scalar score used to identify the high-quality cluster.
+!   The default profile is intentionally recall-preserving for good classes:
+!   population, resolution, and local-variance contrast carry the decision,
+!   while geometry/spectrum diagnostics remain available for analysis unless
+!   validation shows they generalize cleanly.
 ! - BOUNDARY_MARGIN_DEFAULT is an internal threshold offset. Positive values
 !   retain more borderline classes; negative values raise the boundary and
 !   reject more junk. Tune this first when validation shows a systematic
-!   recall/precision imbalance: moving -0.30 -> -0.20 is a conservative
-!   recall recovery, while values near zero admit substantially more junk.
+!   recall/precision imbalance: moving it toward zero recovers borderline good
+!   classes, while values near or above zero admit substantially more junk.
 !   This is deliberately not exposed as a command-line knob.
 ! - MIN_SCORE_SEPARATION controls when two clusters are trusted at all; if the
 !   cluster mean scores are closer than this, the selector falls back to keeping
@@ -65,7 +69,7 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
 !   is retained for analysis but not scored by default because high spectral
 !   dynamic range can also indicate ring/ice artifacts.
 real, parameter :: FEATURE_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    0.27, 0.13, 0.00, 0.15, 0.30, 0.15, 0.00, 0.00 ]
+    0.40, 0.19, 0.00, 0.01, 0.20, 0.20, 0.00, 0.00 ]
 
 type :: cavg_quality_result
     real,    allocatable :: raw(:,:)
