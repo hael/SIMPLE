@@ -79,8 +79,10 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
 !   values admit substantially more junk.
 !   This is deliberately not exposed as a command-line knob.
 ! - MIN_SCORE_SEPARATION controls when two clusters are trusted at all; if the
-!   cluster mean scores are closer than this, the selector falls back to keeping
-!   all non-hard-rejected classes.
+!   cluster mean scores are closer than this, the selector falls back to a
+!   score-only Otsu boundary if the score distribution is itself separated.
+!   Only datasets lacking both cluster and score-distribution evidence keep all
+!   non-hard-rejected classes.
 ! - CLIP_Z limits the influence of feature outliers after median/MAD
 !   normalization. The hard-reject rule in extract_cavg_quality_features is the
 !   only pre-clustering veto and should remain conservative.
@@ -239,8 +241,8 @@ contains
         real,    allocatable :: dmat(:,:), dmat_signal_fit(:,:), feats_fit(:,:), score_fit(:)
         integer, allocatable :: inds(:), labels_fit(:), medoids_fit(:)
         integer              :: ncls, nfit, i, j, k, good_fit_label, bad_fit_label
-        real                 :: d, score1, score2, margin, rescue_threshold
-        logical              :: dmat_ok, signal_ok
+        real                 :: d, score1, score2, margin, rescue_threshold, otsu_threshold, otsu_separation
+        logical              :: dmat_ok, signal_ok, otsu_ok
         ncls = size(features, dim=1)
         if( size(features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cluster_cavg_quality: invalid feature count')
         if( size(hard_reject) /= ncls ) THROW_HARD('cluster_cavg_quality: invalid mask size')
@@ -345,14 +347,27 @@ contains
             medoids(k) = inds(medoids_fit(k))
         end do
         if( separation < MIN_SCORE_SEPARATION ) then
-            states(inds)    = 1
-            labels(inds)    = 1
-            medoids         = [inds(1)]
-            nclust          = 1
-            good_label      = 1
-            threshold       = minval(scores(inds)) - EPS
-            threshold_margin = 0.0
-            used_threshold  = .false.
+            call otsu_score_threshold(score_fit, otsu_threshold, otsu_separation, otsu_ok)
+            if( otsu_ok .and. otsu_separation >= MIN_SCORE_SEPARATION )then
+                raw_threshold     = otsu_threshold
+                threshold         = otsu_threshold
+                threshold_margin  = 0.0
+                do i = 1, nfit
+                    if( scores(inds(i)) >= threshold ) states(inds(i)) = 1
+                end do
+                good_label     = good_fit_label
+                used_threshold = .true.
+            else
+                states(inds)     = 1
+                labels(inds)     = 1
+                medoids          = [inds(1)]
+                nclust           = 1
+                good_label       = 1
+                threshold        = minval(scores(inds)) - EPS
+                raw_threshold    = threshold
+                threshold_margin = 0.0
+                used_threshold   = .false.
+            endif
         else
             threshold_margin = margin
             rescue_threshold = threshold - CLUSTER_RESCUE_MARGIN
@@ -365,6 +380,35 @@ contains
         end if
         deallocate(dmat, feats_fit, score_fit, inds, labels_fit, medoids_fit)
     end subroutine cluster_cavg_quality
+
+    subroutine otsu_score_threshold( scores, threshold, separation, ok )
+        real,    intent(in)  :: scores(:)
+        real,    intent(out) :: threshold, separation
+        logical, intent(out) :: ok
+        integer :: i, n, nlo, nhi
+        real    :: candidate, mean_lo, mean_hi, between, best_between
+        n = size(scores)
+        threshold  = minval(scores) - EPS
+        separation = 0.0
+        ok         = .false.
+        if( n < 4 ) return
+        best_between = -huge(1.0)
+        do i = 1, n
+            candidate = scores(i)
+            nlo = count(scores <  candidate)
+            nhi = count(scores >= candidate)
+            if( nlo == 0 .or. nhi == 0 ) cycle
+            mean_lo = sum(scores, mask=scores <  candidate) / real(nlo)
+            mean_hi = sum(scores, mask=scores >= candidate) / real(nhi)
+            between = real(nlo) * real(nhi) * (mean_hi - mean_lo)**2
+            if( between > best_between )then
+                best_between = between
+                threshold    = candidate
+                separation   = mean_hi - mean_lo
+                ok           = .true.
+            endif
+        end do
+    end subroutine otsu_score_threshold
 
     subroutine calc_histogram_quality_signal( imgs, mskdiam, hard_reject, hist_knn, hist_dmat )
         class(image),         intent(inout) :: imgs(:)
