@@ -29,7 +29,7 @@ real, parameter :: EPS                     = 1.0e-6
 real, parameter :: LOG_EPS                 = 1.0e-12
 real, parameter :: CLIP_Z                  = 4.0
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
-real, parameter :: BOUNDARY_MARGIN_DEFAULT = -0.30
+real, parameter :: BOUNDARY_MARGIN_DEFAULT = -0.20
 real, parameter :: HP_SPEC                 = 20.0
 real, parameter :: LP_SPEC                 = 6.0
 
@@ -51,7 +51,10 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
 !   features into the scalar score used to identify the high-quality cluster.
 ! - BOUNDARY_MARGIN_DEFAULT is an internal threshold offset. Positive values
 !   retain more borderline classes; negative values raise the boundary and
-!   reject more junk. This is deliberately not exposed as a command-line knob.
+!   reject more junk. Tune this first when validation shows a systematic
+!   recall/precision imbalance: moving -0.30 -> -0.20 is a conservative
+!   recall recovery, while values near zero admit substantially more junk.
+!   This is deliberately not exposed as a command-line knob.
 ! - MIN_SCORE_SEPARATION controls when two clusters are trusted at all; if the
 !   cluster mean scores are closer than this, the selector falls back to keeping
 !   all non-hard-rejected classes.
@@ -285,8 +288,8 @@ contains
             bad_fit_label  = 1
         end if
         separation = abs(score1 - score2)
-        ! The weighted feature score is fixed by design; this margin is the single
-        ! exposed decision-boundary knob. Positive margins lower the effective
+        ! The weighted feature score is fixed by design; this margin is the internal
+        ! decision-boundary knob. Positive margins lower the effective
         ! threshold to retain more classes; negative margins raise it to reject
         ! more junk.
         raw_threshold = 0.5 * (mean_score_for_label(score_fit, labels_fit, good_fit_label) + &
