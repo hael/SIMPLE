@@ -30,7 +30,7 @@ real, parameter :: EPS                     = 1.0e-6
 real, parameter :: LOG_EPS                 = 1.0e-12
 real, parameter :: CLIP_Z                  = 4.0
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
-real, parameter :: BOUNDARY_MARGIN_DEFAULT = -0.10
+real, parameter :: BOUNDARY_MARGIN_DEFAULT = 0.05
 real, parameter :: HIST_DMAT_WEIGHT        = 0.50
 real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
 real, parameter :: HP_SPEC                 = 20.0
@@ -74,7 +74,9 @@ character(len=32), parameter :: FEATURE_NAMES(CAVG_QUALITY_NFEATS) = [character(
 !   retain more borderline classes; negative values raise the boundary and
 !   reject more junk. Tune this first when validation shows a systematic
 !   recall/precision imbalance: moving it toward zero recovers borderline good
-!   classes, while values near or above zero admit substantially more junk.
+!   classes. The default is slightly positive because MSP1 validation showed
+!   good class averages just below the cluster-derived midpoint; larger positive
+!   values admit substantially more junk.
 !   This is deliberately not exposed as a command-line knob.
 ! - MIN_SCORE_SEPARATION controls when two clusters are trusted at all; if the
 !   cluster mean scores are closer than this, the selector falls back to keeping
