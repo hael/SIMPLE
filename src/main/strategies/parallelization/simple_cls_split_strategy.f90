@@ -399,6 +399,10 @@ contains
         l_pre_norm = (trim(params%pre_norm) .eq. 'yes')
         l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
         l_write_ptcls = CLS_SPLIT_DEBUG_WRITE_PARTICLES
+        if( l_write_ptcls )then
+            write(logfhandle,'(A)') 'Cls split debug: writing per-particle stacks'
+            call flush(logfhandle)
+        endif
         call determine_phase_flip(spproj, params, l_phflip)
         if( l_write_project )then
             map_fname = string('cls_split_class_map.txt')
@@ -667,9 +671,9 @@ contains
             call flush(logfhandle)
         endif
         l_diffmap_vec_den = .false.
-        if( trim(params%pca_mode) == 'diffusion_maps' )then
+        if( trim(params%pca_mode) == 'diffusion_maps' ) then
             call diffusion_map_generate_subavg_vectors(params, cls_id, coords, preimg_pcavecs, preimg_avg, labels, nsplit, &
-                                                       diffmap_den_subavg_vecs, l_diffmap_vec_den)
+                                                        diffmap_den_subavg_vecs, l_diffmap_vec_den)
         endif
         call cavg_den%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
         if( allocated(coeff_ptcls) ) call cavg_coeff%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
@@ -1243,39 +1247,57 @@ contains
     end subroutine apply_split_project_updates
 
     subroutine merge_worker_outputs(params, nparts_run)
+        use simple_stack_io, only: stack_io
         type(parameters), intent(inout) :: params
         integer,          intent(in)    :: nparts_run
         type(sp_project) :: spproj
         type(image)      :: img
-        integer, allocatable :: part_counts(:), part_localstack(:,:), part_parent(:,:), part_local(:,:), part_pop(:,:), part_global(:,:)
-        integer, allocatable :: comb_part(:), comb_row(:), comb_parent(:), comb_local(:), comb_pop(:)
+        type(stack_io), allocatable :: raw_ios(:), den_ios(:), coeff_ios(:)
+        type(stack_io) :: raw_out_io, den_out_io, coeff_out_io
+        integer, allocatable :: part_counts(:), part_localstack(:,:), part_parent(:,:), part_local(:,:)
+        integer, allocatable :: part_pop(:,:), part_global(:,:)
+        integer, allocatable :: comb_part(:), comb_row(:), comb_parent(:), comb_local(:), comb_pop(:), last_localstack(:)
         integer, allocatable :: new_class(:), new_parent(:)
         type(string) :: map_fname, assign_fname, raw_fname, den_fname, coeff_fname
+        integer, parameter :: MERGE_STACK_BUFSZ = 64
         integer :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, global_cls, ldim(3), nstk
         real    :: smpd
         logical :: have_coeff_avgs
         character(len=XLONGSTRLEN) :: line
         call spproj%read(params%projfile)
+        write(logfhandle,'(A,I8)') 'Cls split merge: start nparts=', nparts_run
+        call flush(logfhandle)
         allocate(part_counts(nparts_run), source=0)
         total = 0
         do ipart = 1, nparts_run
             map_fname = string('cls_split_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
+            write(logfhandle,'(A,I8,A,A)') 'Cls split merge: counting map part=', ipart, ' file=', trim(map_fname%to_char())
+            call flush(logfhandle)
             call count_data_lines(map_fname, nlocal)
             part_counts(ipart) = nlocal
             total = total + nlocal
+            write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls split merge: counted map part=', ipart, ' rows=', nlocal, &
+                ' running_total=', total
+            call flush(logfhandle)
             call map_fname%kill
         end do
         if( total < 1 ) THROW_HARD('No subclass outputs produced by distributed cls_split workers')
         max_count = maxval(part_counts)
+        write(logfhandle,'(A,I8,A,I8)') 'Cls split merge: maps counted total=', total, ' max_count=', max_count
+        call flush(logfhandle)
         allocate(part_localstack(max_count, nparts_run), part_parent(max_count, nparts_run), part_local(max_count, nparts_run), &
                  part_pop(max_count, nparts_run), part_global(max_count, nparts_run), source=0)
         allocate(comb_part(total), comb_row(total), comb_parent(total), comb_local(total), comb_pop(total), source=0)
         idx = 0
         do ipart = 1, nparts_run
             map_fname = string('cls_split_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
+            write(logfhandle,'(A,I8,A,A)') 'Cls split merge: reading map part=', ipart, ' file=', trim(map_fname%to_char())
+            call flush(logfhandle)
             call read_part_map(map_fname, part_counts(ipart), part_localstack(1:part_counts(ipart), ipart), &
                                part_parent(1:part_counts(ipart), ipart), part_local(1:part_counts(ipart), ipart), &
                                part_pop(1:part_counts(ipart), ipart))
+            write(logfhandle,'(A,I8,A,I8)') 'Cls split merge: read map part=', ipart, ' rows=', part_counts(ipart)
+            call flush(logfhandle)
             do i = 1, part_counts(ipart)
                 idx = idx + 1
                 comb_part(idx)   = ipart
@@ -1286,18 +1308,81 @@ contains
             end do
             call map_fname%kill
         end do
+        write(logfhandle,'(A,I8)') 'Cls split merge: sorting subclass map rows=', total
+        call flush(logfhandle)
         call sort_combined_maps(comb_part, comb_row, comb_parent, comb_local, comb_pop)
+        write(logfhandle,'(A)') 'Cls split merge: deleting previous global class-average stacks'
+        call flush(logfhandle)
         call del_file(string('cls_split_subclass_avgs.mrcs'))
         call del_file(string('cls_split_subclass_avgs_conditioned.mrcs'))
         call del_file(string('cls_split_subclass_avgs_steer_coeffproj.mrcs'))
         raw_fname = string('cls_split_subclass_avgs_part')//int2str_pad(comb_part(1), params%numlen)//'.mrcs'
         coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(comb_part(1), params%numlen)//'.mrcs'
-        have_coeff_avgs = file_exists(coeff_fname%to_char())
+        have_coeff_avgs = trim(params%pca_mode) == 'steerable_diff_map' .and. file_exists(coeff_fname%to_char())
         call coeff_fname%kill
+        if( have_coeff_avgs )then
+            do ipart = 1, nparts_run
+                coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+                if( .not. file_exists(coeff_fname%to_char()) )then
+                    write(logfhandle,'(A,I8,A,A)') 'Cls split merge: disabling coeff-stack merge; missing part=', ipart, &
+                        ' file=', trim(coeff_fname%to_char())
+                    call flush(logfhandle)
+                    have_coeff_avgs = .false.
+                    exit
+                endif
+                call coeff_fname%kill
+            end do
+        endif
+        if( .not. file_exists(raw_fname%to_char()) )then
+            write(logfhandle,'(A,A)') 'Cls split merge error: missing first raw class-average stack file=', &
+                trim(raw_fname%to_char())
+            call flush(logfhandle)
+            THROW_HARD('Missing raw class-average stack while merging cls_split outputs')
+        endif
+        write(logfhandle,'(A,A)') 'Cls split merge: probing class-average stack file=', trim(raw_fname%to_char())
+        call flush(logfhandle)
         call find_ldim_nptcls(raw_fname, ldim, nstk)
+        write(logfhandle,'(A,3(I8,1X),A,I8,A,L1)') 'Cls split merge: class-average stack dims=', ldim, &
+            ' nstk=', nstk, ' have_coeff=', have_coeff_avgs
+        call flush(logfhandle)
         smpd = params%smpd_crop
         ldim(3) = 1
         call img%new(ldim, smpd)
+        allocate(raw_ios(nparts_run), den_ios(nparts_run))
+        if( have_coeff_avgs ) allocate(coeff_ios(nparts_run))
+        do ipart = 1, nparts_run
+            if( part_counts(ipart) < 1 ) cycle
+            raw_fname = string('cls_split_subclass_avgs_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            den_fname = string('cls_split_subclass_avgs_conditioned_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            if( .not. file_exists(raw_fname%to_char()) )then
+                write(logfhandle,'(A,A)') 'Cls split merge error: missing raw class-average stack file=', trim(raw_fname%to_char())
+                call flush(logfhandle)
+                THROW_HARD('Missing raw class-average stack while merging cls_split outputs')
+            endif
+            if( .not. file_exists(den_fname%to_char()) )then
+                write(logfhandle,'(A,A)') 'Cls split merge error: missing conditioned class-average stack file=', &
+                    trim(den_fname%to_char())
+                call flush(logfhandle)
+                THROW_HARD('Missing conditioned class-average stack while merging cls_split outputs')
+            endif
+            write(logfhandle,'(A,I8,A,I8)') 'Cls split merge: opening class-average part=', ipart, ' rows=', part_counts(ipart)
+            call flush(logfhandle)
+            call raw_ios(ipart)%open(raw_fname, smpd, 'READ', bufsz=MERGE_STACK_BUFSZ)
+            call den_ios(ipart)%open(den_fname, smpd, 'READ', bufsz=MERGE_STACK_BUFSZ)
+            if( have_coeff_avgs )then
+                coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+                call coeff_ios(ipart)%open(coeff_fname, smpd, 'READ', bufsz=MERGE_STACK_BUFSZ)
+                call coeff_fname%kill
+            endif
+            call raw_fname%kill
+            call den_fname%kill
+        end do
+        call raw_out_io%open(string('cls_split_subclass_avgs.mrcs'), smpd, 'WRITE', box=ldim(1), bufsz=MERGE_STACK_BUFSZ)
+        call den_out_io%open(string('cls_split_subclass_avgs_conditioned.mrcs'), smpd, 'WRITE', box=ldim(1), &
+            bufsz=MERGE_STACK_BUFSZ)
+        if( have_coeff_avgs ) call coeff_out_io%open(string('cls_split_subclass_avgs_steer_coeffproj.mrcs'), &
+            smpd, 'WRITE', box=ldim(1), bufsz=MERGE_STACK_BUFSZ)
+        allocate(last_localstack(nparts_run), source=0)
         map_fname = string('cls_split_class_map.txt')
         open(newunit=funit, file=map_fname%to_char(), status='replace', action='write')
         write(funit,'(A)') '# global_subclass parent_class local_subclass pop'
@@ -1309,19 +1394,38 @@ contains
             endif
             part_global(comb_row(idx), comb_part(idx)) = idx
             write(funit,'(I8,1X,I8,1X,I8,1X,I8)') idx, comb_parent(idx), comb_local(idx), comb_pop(idx)
-            raw_fname = string('cls_split_subclass_avgs_part')//int2str_pad(comb_part(idx), params%numlen)//'.mrcs'
-            den_fname = string('cls_split_subclass_avgs_conditioned_part')//int2str_pad(comb_part(idx), params%numlen)//'.mrcs'
-            coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(comb_part(idx), params%numlen)//'.mrcs'
-            call img%read(raw_fname, part_localstack(comb_row(idx), comb_part(idx)))
-            call img%write(string('cls_split_subclass_avgs.mrcs'), idx)
-            call img%read(den_fname, part_localstack(comb_row(idx), comb_part(idx)))
-            call img%write(string('cls_split_subclass_avgs_conditioned.mrcs'), idx)
-            if( have_coeff_avgs )then
-                call img%read(coeff_fname, part_localstack(comb_row(idx), comb_part(idx)))
-                call img%write(string('cls_split_subclass_avgs_steer_coeffproj.mrcs'), idx)
+            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split merge avg: idx=', idx, ' total=', total, &
+                ' part=', comb_part(idx), ' row=', comb_row(idx), ' stack=', part_localstack(comb_row(idx), comb_part(idx))
+            call flush(logfhandle)
+            if( part_localstack(comb_row(idx), comb_part(idx)) <= last_localstack(comb_part(idx)) )then
+                THROW_HARD('Non-monotonic class-average stack merge order; merge_worker_outputs')
             endif
+            last_localstack(comb_part(idx)) = part_localstack(comb_row(idx), comb_part(idx))
+            call raw_ios(comb_part(idx))%read(part_localstack(comb_row(idx), comb_part(idx)), img)
+            call raw_out_io%write(idx, img)
+            call den_ios(comb_part(idx))%read(part_localstack(comb_row(idx), comb_part(idx)), img)
+            call den_out_io%write(idx, img)
+            if( have_coeff_avgs )then
+                call coeff_ios(comb_part(idx))%read(part_localstack(comb_row(idx), comb_part(idx)), img)
+                call coeff_out_io%write(idx, img)
+            endif
+            write(logfhandle,'(A,I8)') 'Cls split merge avg: done idx=', idx
+            call flush(logfhandle)
         end do
         close(funit)
+        call raw_out_io%close
+        call den_out_io%close
+        if( have_coeff_avgs ) call coeff_out_io%close
+        do ipart = 1, nparts_run
+            if( part_counts(ipart) < 1 ) cycle
+            call raw_ios(ipart)%close
+            call den_ios(ipart)%close
+            if( have_coeff_avgs ) call coeff_ios(ipart)%close
+        end do
+        deallocate(raw_ios, den_ios, last_localstack)
+        if( allocated(coeff_ios) ) deallocate(coeff_ios)
+        write(logfhandle,'(A,I8)') 'Cls split merge: class-average stacks merged total=', total
+        call flush(logfhandle)
         write(logfhandle,'(A)') 'Cls split merge: leaving per-part particle stacks unmerged'
         call flush(logfhandle)
         if( trim(params%oritype) .eq. 'ptcl2D' )then
