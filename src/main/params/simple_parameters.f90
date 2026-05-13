@@ -72,6 +72,7 @@ type :: parameters
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: doprint='no'
     character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
+    character(len=3)          :: dw='yes'             !< Whether dose weighted micrographs will be generated, for use outside of the motion correction path(yes|no){yes}
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
     character(len=3)          :: empty3Dcavgs='yes'   !< whether 3D empty cavgs are okay(yes|no){yes}
     character(len=3)          :: envfsc='no'          !< envelope mask even/odd pairs for FSC calculation(yes|no){no}
@@ -123,7 +124,7 @@ type :: parameters
     character(len=3)          :: potts_prior='no'     !< ordered-label/Potts prior for nonuniform filter(yes|no){no}
     character(len=3)          :: postprocess='yes'    !< postprocess reconstruction output(yes|no){yes}
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
-    character(len=3)          :: print_corrs='no'     !< exporting corrs during the refinement(yes|no){no}
+    character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'

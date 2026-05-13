@@ -54,12 +54,13 @@ end type mic_generator
 contains
 
     !>  Constructor
-    subroutine new( self, omic, convention, frames_range )
+    subroutine new( self, omic, convention, frames_range, dw )
         use simple_ori, only: ori
         class(mic_generator), intent(inout) :: self
         class(ori),           intent(in)    :: omic
         character(len=*),     intent(in)    :: convention
         integer,              intent(in)    :: frames_range(2)
+        logical,              intent(in)    :: dw
         real(dp), allocatable :: poly(:)
         type(string) :: poly_fname
         integer      :: iframe
@@ -85,11 +86,15 @@ contains
         ! get movie info
         call self%parse_movie_metadata
         if( .not.file_exists(self%moviename) ) THROW_HARD('Movie cannot be found: '//self%moviename%to_char())
-        ! dose-weighing
+        ! Dose-weighing
+        ! optionally deactivates dose weighted micrographs generation
         if( self%l_doseweighing )then
-            self%total_dose = real(self%nframes) * self%doseperframe
+            self%l_doseweighing = dw
         else
             THROW_WARN('Dose-weighing metadata cannot be found in: '//self%docname%to_char())
+        endif
+        if( self%l_doseweighing )then
+            self%total_dose = real(self%nframes) * self%doseperframe
         endif
         ! frames range
         if( frames_range(1) < 1 ) THROW_HARD('Invalid starting frame')
@@ -448,6 +453,7 @@ contains
         character(len=*),     intent(in) :: star_fname
         type(starfile_table_type) :: starfile
         real(dp) :: polyx(POLYDIM), polyy(POLYDIM), isoshifts(2,self%nframes), shift(2), dpscale
+        real(dp) :: align_shifts(2)
         real     :: doseperframe
         integer  :: i, iframe, motion_model
         dpscale      = real(self%scale,dp)
@@ -459,6 +465,12 @@ contains
             polyx        = self%polyx_bak
             polyy        = self%polyy_bak
         endif
+        select case(self%convention%to_char())
+            case('cs')
+                align_shifts = isoshifts(:,self%align_frame)
+            case DEFAULT
+                align_shifts = isoshifts(:,1)
+        end select
         call starfile_table__new(starfile)
         call starfile_table__open_ofile(starfile, star_fname)
         ! global fields
@@ -506,12 +518,7 @@ contains
             call starfile_table__addObject(starfile)
             call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
             if( self%weights(iframe) > 0.000001 )then
-                select case(self%convention%to_char())
-                    case('cs')
-                        shift = isoshifts(:,iframe) - isoshifts(:,self%align_frame)
-                    case DEFAULT
-                        shift = isoshifts(:,iframe) - isoshifts(:,1)
-                end select
+                shift = isoshifts(:,iframe) - align_shifts
                 call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_X, shift(1))
                 call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_Y, shift(2))
                 call starfile_table__setValue_double(starfile, SMPL_MOVIE_FRAME_WEIGHT, real(self%weights(iframe),dp))
@@ -556,7 +563,7 @@ contains
             do i = 1,self%nhotpix
                 call starfile_table__addObject(starfile)
                 call starfile_table__setValue_double(starfile, EMDL_IMAGE_COORD_X, real(self%hotpix_coords(1,i)-1,dp))
-                call starfile_table__setValue_double(starfile, EMDL_IMAGE_COORD_y, real(self%hotpix_coords(2,i)-1,dp))
+                call starfile_table__setValue_double(starfile, EMDL_IMAGE_COORD_Y, real(self%hotpix_coords(2,i)-1,dp))
             end do
             call starfile_table__write_ofile(starfile)
         endif

@@ -767,4 +767,18 @@ contains
         call noisevol%kill
     end subroutine generate_random_volumes
 
+    subroutine print_states( params, istage )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        type(sp_project)     :: spproj
+        integer, allocatable :: states(:)
+        if( nstates_glob == 1 )return
+        if( params%print_states /= 'yes' )return
+        call spproj%read_segment('ptcl3D', params%projfile)
+        states = nint(spproj%os_ptcl3D%get_all('state'))
+        call arr2txtfile(states, string('states_stage'//int2str(istage)//'.txt'))
+        deallocate(states)
+        call spproj%kill
+    end subroutine
+
 end module simple_abinitio_utils

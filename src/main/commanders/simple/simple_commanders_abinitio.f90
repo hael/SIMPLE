@@ -648,6 +648,7 @@ contains
             call calc_rec(params, params%projfile, xrec3D, start_stage)
         endif
         ! Frequency marching
+        call print_states(params, 0)
         ! nice
         nice_comm%stat_root%stage = "starting workflow"
         call nice_comm%cycle()
@@ -687,6 +688,7 @@ contains
             call exec_refine3D(params, istage, xrefine3D)
             write(logfhandle,'(A,I0)')'>>> ABINITIO3D RETURNED FROM REFINE3D STAGE ', istage
             call flush(logfhandle)
+            call print_states(params, istage)
             ! Symmetrization
             if( istage == SYMSRCH_STAGE )then
                 call symmetrize(params, istage, spproj, params%projfile, xrec3D)

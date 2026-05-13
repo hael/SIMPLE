@@ -271,7 +271,7 @@ contains
             cnt = cnt + 1
             orig_mic = o%get_str('intg')
             ! new micrograph
-            call generator%new(o, params%mcconvention, [params%fromf, params%tof])
+            call generator%new(o, params%mcconvention, [params%fromf, params%tof], params%dw=='yes')
             select case(trim(params%mcconvention))
             case('cs')
                 call generator%generate_micrographs(micrograph_dw, micrograph_nodw, background=background)
@@ -300,8 +300,8 @@ contains
             ! write
             if( .not.micrograph_dw%exists() )then
                 ! doses not defined
+                mic_fname = forctf_fname
                 call micrograph_nodw%write(mic_fname)
-                forctf_fname = mic_fname
             else
                 call micrograph_dw%write(mic_fname)
                 call micrograph_nodw%write(forctf_fname)
