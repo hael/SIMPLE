@@ -369,7 +369,7 @@ contains
         real,              allocatable :: diams(:), shifts(:,:)
         logical,           parameter   :: DEBUG = .false.
         real    :: maxdiam, mskrad_in_pix, moldiam
-        integer :: ldim(3), icls, ncls, nsel
+        integer :: ldim(3), icls, ncls, nsel, i, nxtiles_loc, nytiles_loc
         nsel = size(selection)
         if( nsel == 0 ) return
         write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', nsel,' clusters'
@@ -429,9 +429,34 @@ contains
         end do
         deallocate(cavgs)
         call stkio_w%close
+        ! write deselected refs for posterity
+        allocate( cavgs(ncls-nsel) )
+        call stkio_r%read_whole
+        call stkio_w%open(string(STREAM_DESELECTED_REFS)//STK_EXT, smpd, 'write', box=box_for_extract, bufsz=ncls-nsel)
+        icls = 0
+        do i = 1, ncls
+            if( any(selection == i) ) cycle
+            icls = icls + 1
+            call stkio_r%get_image(i, cavgs(icls))
+            if( ldim(1) > box_for_extract ) then    
+                call cavgs(icls)%clip_inplace([box_for_extract,box_for_extract,1])
+            else
+                call cavgs(icls)%pad_inplace([box_for_extract,box_for_extract,1])
+            endif
+            call cavgs(icls)%mask2D_softavg(mskrad_in_pix)
+            call stkio_w%write(icls, cavgs(icls))
+            call cavgs(icls)%kill
+        end do
+        deallocate(cavgs)
+        call stkio_w%close
         call stkio_r%close
         ! write jpeg
-        call mrc2jpeg_tiled(string(STREAM_SELECTED_REFS)//STK_EXT, string(STREAM_SELECTED_REFS)//JPG_EXT, n_xtiles=nxtiles, n_ytiles=nytiles)
+        call mrc2jpeg_tiled(string(STREAM_SELECTED_REFS)//STK_EXT,   string(STREAM_SELECTED_REFS)//JPG_EXT,   n_xtiles=nxtiles,     n_ytiles=nytiles)
+        call mrc2jpeg_tiled(string(STREAM_DESELECTED_REFS)//STK_EXT, string(STREAM_DESELECTED_REFS)//JPG_EXT, n_xtiles=nxtiles_loc, n_ytiles=nytiles_loc)
+        write(logfhandle,'(A)')'>>> DESELECTED REFERENCES'
+        write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_DESELECTED_REFS)//JPG_EXT
+        write(logfhandle,'(A)')'>>> SELECTED REFERENCES'
+        write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_SELECTED_REFS)//JPG_EXT
     end subroutine process_selected_refs
     
     function get_latest_optics_map_id(optics_dir) result (lastmap)

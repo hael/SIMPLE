@@ -358,6 +358,8 @@ contains
                             if( spproj%os_mic%get(imic,'astig') > (params%astigthreshold-0.001) ) call spproj%os_mic%set(imic, 'state', 0)
                         end if
                     enddo
+                    !send progress update to GUI
+                    if( n_oris > 0 ) call send_meta(string('importing micrographs'))
                     ! enough accepted micrographs — expose dead mics as state=0 and return
                     if( spproj%os_mic%count_state_gt_zero() >= nmics ) then
                         do imic = 1, n_oris

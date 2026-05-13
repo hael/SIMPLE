@@ -6,7 +6,7 @@
 {% endcomment %}
 {% load humanize %}
 {% with ms=job.preprocessing_stats cs=job.classification_2D_stats %}
-<div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamring/10{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden w-[260px]">
+<div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamring/10{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px]">
 
     <!-- Header: status dot · stream name · open-detail button -->
     {% include 'nice_stream/includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" stream" status=job.status hide_actions=True show_description_editor=True description_value=job.desc description_jobid=job.id %}

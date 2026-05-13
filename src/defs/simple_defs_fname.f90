@@ -104,6 +104,7 @@ character(len=*), parameter :: STREAM_SPPROJFILES            = './stream_spprojf
 character(len=*), parameter :: TERM_STREAM                   = './SIMPLE_TERM_STREAM'
 character(len=*), parameter :: PAUSE_STREAM                  = './SIMPLE_PAUSE_STREAM'
 character(len=*), parameter :: STREAM_SELECTED_REFS          = './selected_references'
+character(len=*), parameter :: STREAM_DESELECTED_REFS        = './deselected_references'
 character(len=*), parameter :: STREAM_MOLDIAM                = 'moldiam.txt'
 character(len=*), parameter :: STREAM_NMICS                  = 'nmics.txt'
 character(len=*), parameter :: CALCPSPEC_FINISHED            = 'CALCPSPEC_FINISHED'

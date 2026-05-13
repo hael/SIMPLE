@@ -36,7 +36,7 @@
         {% include 'nice_stream/includes/_panel_header.html' with panel_title="initial picking" zoom_url="nice_lite:view_stream_initial_pick_zoom" terminate_field="terminate_initial_pick" restart_field="restart_initial_pick" last_import=jobstats.last_micrograph_imported has_skipped=True use_js=True %}
 
         <!-- Waiting gauze: shown until preprocessed micrographs arrive (below header) -->
-        {% if "micrographs_imported" not in jobstats or jobstats.micrographs_imported == 0 %}
+        {% if "micrographs_imported" not in jobstats or jobstats.micrographs_accepted == 0 %}
             {% include 'nice_stream/includes/_panel_waiting_gauze.html' %}
         {% else %}
 

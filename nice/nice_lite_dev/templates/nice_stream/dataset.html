@@ -43,7 +43,7 @@
     <!-- Sub-bar: new-stream + count -->
     <div class="bg-streambar border-b border-streamline px-4 h-10 flex items-center gap-3">
         {% url 'nice_lite:new_stream' as new_stream_action %}
-        {% include 'nice_stream/includes/_action_button.html' with label='new stream' action_url=new_stream_action method='POST' target='_self' wrapper_class='flex justify-center' button_class='inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-streamring/15 text-streamaccent hover:bg-streamring/30 transition-colors cursor-pointer' %}
+        {% include 'nice_stream/includes/_action_button.html' with label='new stream' action_url=new_stream_action method='POST' target='_self' wrapper_class='flex justify-center' button_class='text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity' %}
     </div>
 
     <!-- Scrollable stream grid (flex-1 so it fills space between sub-bar and footer) -->
