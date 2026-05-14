@@ -10,7 +10,8 @@ use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, cavg_quality_result, reset_cavg_quality_result
+use simple_cavg_quality_types, only: CAVG_QUALITY_HIST_DMAT_METRIC, CAVG_QUALITY_NFEATS, &
+    CAVG_QUALITY_SPEC_DMAT_METRIC, EPS, cavg_quality_result, reset_cavg_quality_result
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -188,6 +189,7 @@ contains
         if( size(quality%hist_dmat, dim=2) /= ncls ) &
             THROW_HARD('write_hist_dmat_comments: histogram distance matrix is not square')
         write(funit,'(A,I0)') '# hist_dmat_nclasses=', ncls
+        write(funit,'(A,A)') '# hist_dmat_metric=', CAVG_QUALITY_HIST_DMAT_METRIC
         write(funit,'(A)') '# hist_dmat_header=i,j,distance'
         do i = 1, ncls - 1
             do j = i + 1, ncls
@@ -205,6 +207,7 @@ contains
         if( size(quality%spec_dmat, dim=2) /= ncls ) &
             THROW_HARD('write_spec_dmat_comments: spectrum distance matrix is not square')
         write(funit,'(A,I0)') '# spec_dmat_nclasses=', ncls
+        write(funit,'(A,A)') '# spec_dmat_metric=', CAVG_QUALITY_SPEC_DMAT_METRIC
         write(funit,'(A)') '# spec_dmat_header=i,j,distance'
         do i = 1, ncls - 1
             do j = i + 1, ncls

@@ -3,12 +3,13 @@ module simple_cavg_quality_learn
 use simple_defs,               only: logfhandle, LONGSTRLEN, XLONGSTRLEN
 use simple_error,              only: simple_exception
 use simple_string,             only: string
-use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
+use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field, lowercase
 use simple_cavg_quality_feats, only: cavg_quality_feature_name
 use simple_cavg_quality_model, only: CAVG_QUALITY_DEFAULT_WEIGHTS, &
     CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT, CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT, cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
-use simple_cavg_quality_types, only: CAVG_REJECTION_POOL, CAVG_QUALITY_NFEATS, EPS, cavg_quality_model_spec, &
+use simple_cavg_quality_types, only: CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED, CAVG_QUALITY_HIST_DMAT_METRIC, &
+    CAVG_QUALITY_SPEC_DMAT_METRIC, CAVG_REJECTION_POOL, CAVG_QUALITY_NFEATS, EPS, cavg_quality_model_spec, &
     cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
 implicit none
 private
@@ -17,6 +18,8 @@ private
 public :: learn_cavg_quality_model
 
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K = 10
+character(len=*), parameter :: HIST_DMAT_METRIC_PREFIX = '# hist_dmat_metric='
+character(len=*), parameter :: SPEC_DMAT_METRIC_PREFIX = '# spec_dmat_metric='
 real, parameter :: LEARN_WEIGHT_ALPHAS(5) = [0.0, 0.25, 0.50, 0.75, 1.0]
 real, parameter :: LEARN_MINSEPS(5)       = [0.05, 0.10, 0.15, 0.20, 0.30]
 real, parameter :: LEARN_MARGINS(11)      = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
@@ -130,6 +133,14 @@ contains
         do
             read(funit,'(A)',iostat=ios) line
             if( ios /= 0 ) exit
+            if( is_hist_dmat_metric_line(line) )then
+                call read_dmat_metric_line(line, HIST_DMAT_METRIC_PREFIX, dset%hist_dmat_metric)
+                cycle
+            endif
+            if( is_spec_dmat_metric_line(line) )then
+                call read_dmat_metric_line(line, SPEC_DMAT_METRIC_PREFIX, dset%spec_dmat_metric)
+                cycle
+            endif
             if( is_hist_dmat_line(line) )then
                 call read_hist_dmat_line(line, dset)
                 cycle
@@ -198,6 +209,16 @@ contains
         dset%spec_dmat(j,i) = dist
     end subroutine read_spec_dmat_line
 
+    subroutine read_dmat_metric_line( line, prefix, metric )
+        character(len=*), intent(in)    :: line, prefix
+        character(len=*), intent(inout) :: metric
+        character(len=XLONGSTRLEN) :: tmp, val
+        tmp = adjustl(line)
+        if( len_trim(tmp) <= len(prefix) ) return
+        val = adjustl(trim(tmp(len(prefix)+1:)))
+        if( len_trim(val) > 0 ) metric = lowercase(trim(val))
+    end subroutine read_dmat_metric_line
+
     logical function is_analysis_data_line( line )
         character(len=*), intent(in) :: line
         character(len=XLONGSTRLEN) :: tmp
@@ -258,12 +279,26 @@ contains
         is_hist_dmat_line = index(tmp, '# hist_dmat,') == 1
     end function is_hist_dmat_line
 
+    logical function is_hist_dmat_metric_line( line )
+        character(len=*), intent(in) :: line
+        character(len=XLONGSTRLEN) :: tmp
+        tmp = adjustl(line)
+        is_hist_dmat_metric_line = index(tmp, HIST_DMAT_METRIC_PREFIX) == 1
+    end function is_hist_dmat_metric_line
+
     logical function is_spec_dmat_line( line )
         character(len=*), intent(in) :: line
         character(len=XLONGSTRLEN) :: tmp
         tmp = adjustl(line)
         is_spec_dmat_line = index(tmp, '# spec_dmat,') == 1
     end function is_spec_dmat_line
+
+    logical function is_spec_dmat_metric_line( line )
+        character(len=*), intent(in) :: line
+        character(len=XLONGSTRLEN) :: tmp
+        tmp = adjustl(line)
+        is_spec_dmat_metric_line = index(tmp, SPEC_DMAT_METRIC_PREFIX) == 1
+    end function is_spec_dmat_metric_line
 
     subroutine calc_suggested_training_weights( dsets, weights )
         type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
@@ -413,6 +448,14 @@ contains
         write(funit,'(A,F10.5)') 'macro_balanced_accuracy=', best_score
         write(funit,'(A,F10.5)') 'learned_hist_dmat_weight=', learned_model%hist_dmat_weight
         write(funit,'(A,F10.5)') 'learned_spec_dmat_weight=', learned_model%spec_dmat_weight
+        write(funit,'(A,A)') 'expected_hist_dmat_metric=', CAVG_QUALITY_HIST_DMAT_METRIC
+        write(funit,'(A,A)') 'expected_spec_dmat_metric=', CAVG_QUALITY_SPEC_DMAT_METRIC
+        write(funit,'(A,I0)') 'hist_dmat_metric_expected_datasets=', diag%n_hist_metric_expected
+        write(funit,'(A,I0)') 'hist_dmat_metric_unspecified_datasets=', diag%n_hist_metric_unspecified
+        write(funit,'(A,I0)') 'hist_dmat_metric_other_datasets=', diag%n_hist_metric_other
+        write(funit,'(A,I0)') 'spec_dmat_metric_expected_datasets=', diag%n_spec_metric_expected
+        write(funit,'(A,I0)') 'spec_dmat_metric_unspecified_datasets=', diag%n_spec_metric_unspecified
+        write(funit,'(A,I0)') 'spec_dmat_metric_other_datasets=', diag%n_spec_metric_other
         write(funit,'(A,I0)') 'n_datasets=', size(dsets)
         write(funit,'(A,I0)') 'model_search_grid_n=', n_grid
         write(funit,'(A,I0)') 'best_tie_count=', n_best_ties
@@ -467,6 +510,7 @@ contains
         logical :: lowsep, single_cluster, otsu_like, rescue_like, min_accept_like
         diag%n_datasets = size(dsets)
         do ids = 1, size(dsets)
+            call accumulate_pairwise_metric_diagnostics(dsets(ids), diag)
             call classify_training_dataset_detail(dsets(ids), model, quality, tp, fp, tn, fn)
             diag%total_fp = diag%total_fp + fp
             diag%total_fn = diag%total_fn + fn
@@ -503,6 +547,27 @@ contains
             call quality%kill()
         end do
     end subroutine collect_learn_diagnostics
+
+    subroutine accumulate_pairwise_metric_diagnostics( dset, diag )
+        type(cavg_quality_training_dataset), intent(in)    :: dset
+        type(cavg_quality_learn_diagnostics),intent(inout) :: diag
+        select case(trim(dset%hist_dmat_metric))
+            case(CAVG_QUALITY_HIST_DMAT_METRIC)
+                diag%n_hist_metric_expected = diag%n_hist_metric_expected + 1
+            case(CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED)
+                diag%n_hist_metric_unspecified = diag%n_hist_metric_unspecified + 1
+            case default
+                diag%n_hist_metric_other = diag%n_hist_metric_other + 1
+        end select
+        select case(trim(dset%spec_dmat_metric))
+            case(CAVG_QUALITY_SPEC_DMAT_METRIC)
+                diag%n_spec_metric_expected = diag%n_spec_metric_expected + 1
+            case(CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED)
+                diag%n_spec_metric_unspecified = diag%n_spec_metric_unspecified + 1
+            case default
+                diag%n_spec_metric_other = diag%n_spec_metric_other + 1
+        end select
+    end subroutine accumulate_pairwise_metric_diagnostics
 
     logical function threshold_policy_looks_otsu( quality, model )
         type(cavg_quality_result), intent(in) :: quality
@@ -550,6 +615,7 @@ contains
             LEARN_HIST_WEIGHTS, 'best_at_zero_hist_distance_disabled', 'best_at_one_hist_distance_dominant')
         call write_grid_position_diagnostic(funit, 'spec_dmat_weight', learned_model%spec_dmat_weight, &
             LEARN_SPEC_WEIGHTS, 'best_at_zero_spectrum_distance_disabled', 'best_at_one_spectrum_distance_dominant')
+        call write_pairwise_metric_diagnostics(funit, learned_model, diag)
         call write_grid_position_diagnostic(funit, 'min_score_separation', learned_model%min_score_separation, &
             LEARN_MINSEPS, 'best_at_lowest_value_consider_lower_if_accept_all_remains_too_common', &
             'best_at_highest_value_consider_higher_if_unstable_splits_remain')
@@ -566,6 +632,48 @@ contains
         endif
         call write_policy_parameter_diagnostics(funit, learned_model, diag)
     end subroutine write_learn_search_diagnostics
+
+    subroutine write_pairwise_metric_diagnostics( funit, model, diag )
+        integer,                              intent(in) :: funit
+        type(cavg_quality_model),             intent(in) :: model
+        type(cavg_quality_learn_diagnostics), intent(in) :: diag
+        character(len=LONGSTRLEN) :: detail
+        write(detail,'(A,A,A,I0,A,I0,A,I0)') 'expected=', CAVG_QUALITY_HIST_DMAT_METRIC, ';matching=', &
+            diag%n_hist_metric_expected, ';unspecified=', diag%n_hist_metric_unspecified, ';other=', &
+            diag%n_hist_metric_other
+        call write_search_diagnostic(funit, pairwise_metric_level(model%hist_dmat_weight, diag%n_hist_metric_unspecified, &
+            diag%n_hist_metric_other), 'hist_dmat_metric', pairwise_metric_status(diag%n_hist_metric_unspecified, &
+            diag%n_hist_metric_other), trim(detail))
+        write(detail,'(A,A,A,I0,A,I0,A,I0)') 'expected=', CAVG_QUALITY_SPEC_DMAT_METRIC, ';matching=', &
+            diag%n_spec_metric_expected, ';unspecified=', diag%n_spec_metric_unspecified, ';other=', &
+            diag%n_spec_metric_other
+        call write_search_diagnostic(funit, pairwise_metric_level(model%spec_dmat_weight, diag%n_spec_metric_unspecified, &
+            diag%n_spec_metric_other), 'spec_dmat_metric', pairwise_metric_status(diag%n_spec_metric_unspecified, &
+            diag%n_spec_metric_other), trim(detail))
+    end subroutine write_pairwise_metric_diagnostics
+
+    function pairwise_metric_level( weight, n_unspecified, n_other ) result( level )
+        real,    intent(in) :: weight
+        integer, intent(in) :: n_unspecified, n_other
+        character(len=8) :: level
+        if( n_unspecified + n_other > 0 .and. weight > EPS )then
+            level = 'warning'
+        else
+            level = 'note'
+        endif
+    end function pairwise_metric_level
+
+    function pairwise_metric_status( n_unspecified, n_other ) result( status )
+        integer, intent(in) :: n_unspecified, n_other
+        character(len=48) :: status
+        if( n_unspecified + n_other == 0 )then
+            status = 'all_training_files_match'
+        else if( n_other > 0 )then
+            status = 'unexpected_training_metric'
+        else
+            status = 'legacy_unspecified_training_metric'
+        endif
+    end function pairwise_metric_status
 
     subroutine write_weight_alpha_diagnostic( funit, base_weights, suggested_weights, learned_weights )
         integer, intent(in) :: funit

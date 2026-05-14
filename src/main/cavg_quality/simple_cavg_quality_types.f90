@@ -7,6 +7,9 @@ private
 public :: CAVG_REJECTION_CHUNK
 public :: CAVG_REJECTION_POOL
 public :: CAVG_QUALITY_NFEATS
+public :: CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED
+public :: CAVG_QUALITY_HIST_DMAT_METRIC
+public :: CAVG_QUALITY_SPEC_DMAT_METRIC
 public :: EPS
 public :: CLIP_Z
 public :: cavg_quality_feature_def
@@ -21,6 +24,9 @@ integer, parameter :: CAVG_REJECTION_POOL  = 2
 integer, parameter :: CAVG_QUALITY_NFEATS  = 11
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
+character(len=*), parameter :: CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED = 'unspecified'
+character(len=*), parameter :: CAVG_QUALITY_HIST_DMAT_METRIC        = 'hellinger'
+character(len=*), parameter :: CAVG_QUALITY_SPEC_DMAT_METRIC        = 'sqrt_rotational_spectrum_euclidean'
 
 type :: cavg_quality_feature_def
     character(len=32)  :: name        = ''
@@ -75,6 +81,8 @@ end type cavg_quality_result
 type :: cavg_quality_training_dataset
     character(len=LONGSTRLEN) :: fname      = ''
     character(len=LONGSTRLEN) :: dataset_id = ''
+    character(len=32)         :: hist_dmat_metric = CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED
+    character(len=64)         :: spec_dmat_metric = CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED
     integer                   :: ncls       = 0
     real,    allocatable      :: features(:,:)
     real,    allocatable      :: hist_dmat(:,:)
@@ -102,6 +110,12 @@ type :: cavg_quality_learn_diagnostics
     integer :: n_min_accept_like   = 0
     integer :: min_accept_like_fp  = 0
     integer :: min_accept_like_fn  = 0
+    integer :: n_hist_metric_expected = 0
+    integer :: n_hist_metric_unspecified = 0
+    integer :: n_hist_metric_other = 0
+    integer :: n_spec_metric_expected = 0
+    integer :: n_spec_metric_unspecified = 0
+    integer :: n_spec_metric_other = 0
 end type cavg_quality_learn_diagnostics
 
 contains

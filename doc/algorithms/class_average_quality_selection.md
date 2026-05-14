@@ -42,7 +42,7 @@ Important outputs:
 - `quality_selected_cavgs.mrc`
 - `quality_rejected_cavgs.mrc`
 
-The analysis file contains per-class model output, raw features, normalized `z_*` features, manual states, model parameters, feature summaries, threshold scans, and the histogram distance matrix as comment records.
+The analysis file contains per-class model output, raw features, normalized `z_*` features, manual states, model parameters, feature summaries, threshold scans, and the Hellinger histogram distance matrix as comment records.
 
 ### `quality_mode=learn`
 
@@ -101,7 +101,7 @@ The current built-in presets are:
 
 The feature inventory is maintained in `simple_cavg_quality_feats.f90`. Feature extraction produces raw per-class values and a normalized feature matrix. The model uses the normalized `z_*` features, not the raw feature values.
 
-The current feature set includes population/resolution support, foreground geometry, local signal variance, spectrum shape, class statistics, center-edge signal, and ice-score penalty. Histogram distances and rotationally averaged power-spectrum distances are retained as pairwise class-average distance matrices and mixed into the model distance matrix through the learnable `hist_dmat_weight` and `spec_dmat_weight`. A former scalar histogram-neighborhood feature was removed because its direction was dataset-dependent: in some stream chunks histogram-dense neighborhoods were enriched for junk rather than good class averages.
+The current feature set includes population/resolution support, foreground geometry, local signal variance, spectrum shape, class statistics, center-edge signal, and ice-score penalty. Hellinger histogram distances and rotationally averaged power-spectrum distances are retained as pairwise class-average distance matrices and mixed into the model distance matrix through the learnable `hist_dmat_weight` and `spec_dmat_weight`. A former scalar histogram-neighborhood feature was removed because its direction was dataset-dependent: in some stream chunks histogram-dense neighborhoods were enriched for junk rather than good class averages.
 
 Feature definitions should remain centralized in `simple_cavg_quality_feats.f90`, so future feature additions are visible in one inventory rather than being scattered through model code.
 
@@ -175,6 +175,8 @@ Input is a file table of `cavgs_quality_analysis.txt` files. For each analysis f
 - `manual_state`, where `manual_state > 0` is the reference accepted class;
 - `hard_reject`;
 - `# hist_dmat,i,j,distance` comment records.
+- `# hist_dmat_metric=hellinger` to document the histogram distance used in newly generated analysis files.
+- `# spec_dmat_metric=sqrt_rotational_spectrum_euclidean` to document the spectrum distance used in newly generated analysis files.
 
 The learner first derives suggested feature weights. For each feature, all training rows across all datasets are pooled, feature AUC is computed against the manual labels, and the suggested feature weight is:
 
@@ -206,6 +208,7 @@ The best candidate becomes the learned model and is written to the requested mod
 The learn report includes a `search_diagnostic` section. These records flag two classes of follow-up:
 
 - searched parameters whose winning value is on the edge of the current grid, such as `boundary_margin`, `min_score_separation`, `hist_dmat_weight`, `spec_dmat_weight`, or pool `min_accept_frac`;
+- pairwise-matrix provenance, warning when a learned nonzero matrix weight was trained from legacy files with unspecified or unexpected matrix metrics;
 - model policy controls that are currently inherited from the base preset rather than searched, such as Otsu-window settings, low-separation Otsu, cluster rescue, and minimum-accept enforcement.
 
 Warnings in this section do not mean the learned model is invalid. They mean the training set is touching one of the current search boundaries or inherited policy assumptions, so the next validation round should decide whether to broaden the grid or promote that policy control into the searched model space.

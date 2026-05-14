@@ -55,9 +55,9 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 10 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
 | 11 | `neg_ice_score` | class-average power spectrum near `ICE_BAND1` | higher is better | Negative 3.7 A ice-band excess score. |
 
-Histogram distances are retained as a pairwise matrix rather than as a scalar feature. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. The model can still blend the normalized feature-space distance matrix with the normalized histogram distance matrix using `hist_dmat_weight`.
+Histogram distances are retained as a pairwise matrix rather than as a scalar feature. The current `hist_dmat` uses the normalized Hellinger distance between masked class-average histograms. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. The model can still blend the normalized feature-space distance matrix with the normalized histogram distance matrix using `hist_dmat_weight`.
 
-Rotationally averaged power-spectrum distances are also retained as a pairwise matrix. They follow the older `cluster_cavgs` signal-statistics idea: normalize and mask each class average, extract the square-root rotational spectrum over the `HP_SPEC` to `LP_SPEC` band, compute pairwise Euclidean distances between spectra, and min/max-normalize the resulting distance matrix. The model uses this only through `spec_dmat_weight`; it is not exposed as a scalar quality feature.
+Rotationally averaged power-spectrum distances are also retained as a pairwise matrix. They follow the older `cluster_cavgs` signal-statistics idea: normalize and mask each class average, extract the square-root rotational spectrum over the `HP_SPEC` to `LP_SPEC` band, compute pairwise Euclidean distances between spectra, and min/max-normalize the resulting distance matrix. The model uses this only through `spec_dmat_weight`; it is not exposed as a scalar quality feature. Analysis files tag both pairwise matrix metrics so the learn report can warn if a nonzero learned matrix weight came from legacy files with unspecified or unexpected matrix provenance.
 
 ## Current Model Controls
 
@@ -70,7 +70,7 @@ The built-in models are complete `linear_boundary` presets:
 The important model controls are:
 
 - `feature_weights`: nonnegative linear score coefficients, normalized to sum to one.
-- `hist_dmat_weight`: blend between feature-vector distances and histogram distances for clustering. The current chunk default sets this to zero after relearning without the removed scalar histogram feature.
+- `hist_dmat_weight`: blend between feature-vector distances and Hellinger histogram distances for clustering. The current chunk default sets this to zero after relearning without the removed scalar histogram feature.
 - `spec_dmat_weight`: blend between feature-vector distances and rotational power-spectrum distances for clustering. The current built-in defaults set this to zero until retraining demonstrates that the spectral geometry helps.
 - `boundary_margin`: shifts the decision threshold; more negative rejects more aggressively, more positive preserves more borderline classes.
 - `min_score_separation`: below this separation the model treats the partition as unreliable unless low-separation Otsu is enabled and acceptable.

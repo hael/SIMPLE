@@ -536,10 +536,21 @@ contains
         enddo
     end function KLD
 
-    ! Jensen-Shannon Divergence, symmetrized KLD
+    ! Jensen-Shannon Divergence
     real function JSD( self, other )
         class(histogram), intent(in) :: self, other
-        JSD = 0.5 *(self%KLD(other) + other%KLD(self))
+        real    :: pself, pother, pmix
+        integer :: i
+        if( self%nbins /= other%nbins ) THROW_HARD('Invalid dimensions')
+        JSD = 0.
+        do i = 1,self%nbins
+            pself  = self%counts(i)  / self%ntot
+            pother = other%counts(i) / other%ntot
+            pmix   = 0.5 * (pself + pother)
+            if( pself  > TINY ) JSD = JSD + 0.5 * pself  * log(pself  / pmix)
+            if( pother > TINY ) JSD = JSD + 0.5 * pother * log(pother / pmix)
+        enddo
+        JSD = max(0., JSD)
     end function JSD
 
     ! Hellinger Distance

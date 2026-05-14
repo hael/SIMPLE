@@ -240,9 +240,9 @@ contains
         logical,              intent(in)    :: hard_reject(:)
         real,    allocatable, intent(inout) :: hist_dmat(:,:)
         type(histogram), allocatable :: hists(:)
-        real, allocatable :: dmat_tvd(:,:), dmat_jsd(:,:), dmat_hd(:,:)
+        real, allocatable :: dmat_hd(:,:)
         real :: smpd, rad_px, mm(2), mm_i(2)
-        integer :: ncls, nfit, i, j, ncontrib
+        integer :: ncls, nfit, i, j
         logical :: ok
         ncls = size(imgs)
         if( size(hard_reject) /= ncls ) THROW_HARD('calc_histogram_quality_signal: invalid mask size')
@@ -265,40 +265,24 @@ contains
         do i = 1, ncls
             if( .not. hard_reject(i) ) call hists(i)%new(imgs(i), NHISTBINS, minmax=mm, radius=rad_px)
         end do
-        allocate(dmat_tvd(ncls,ncls), dmat_jsd(ncls,ncls), dmat_hd(ncls,ncls), source=0.0)
+        allocate(dmat_hd(ncls,ncls), source=0.0)
         !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
         do i = 1, ncls - 1
             if( hard_reject(i) ) cycle
             do j = i + 1, ncls
                 if( hard_reject(j) ) cycle
-                dmat_tvd(i,j) = hists(i)%TVD(hists(j))
-                dmat_tvd(j,i) = dmat_tvd(i,j)
-                dmat_jsd(i,j) = hists(i)%JSD(hists(j))
-                dmat_jsd(j,i) = dmat_jsd(i,j)
                 dmat_hd(i,j)  = hists(i)%HD(hists(j))
                 dmat_hd(j,i)  = dmat_hd(i,j)
             end do
         end do
         !$omp end parallel do
-        ncontrib = 0
-        call normalize_quality_dmat(dmat_tvd, ok)
-        if( ok )then
-            hist_dmat = hist_dmat + dmat_tvd
-            ncontrib  = ncontrib + 1
-        endif
-        call normalize_quality_dmat(dmat_jsd, ok)
-        if( ok )then
-            hist_dmat = hist_dmat + dmat_jsd
-            ncontrib  = ncontrib + 1
-        endif
+        ! Hellinger is the histogram signal used by cluster_cavgs_quality.
+        ! Earlier averaging with TVD/JSD could dilute a useful, stable
+        ! bounded metric with noisier or implementation-sensitive distances.
         call normalize_quality_dmat(dmat_hd, ok)
-        if( ok )then
-            hist_dmat = hist_dmat + dmat_hd
-            ncontrib  = ncontrib + 1
-        endif
-        if( ncontrib > 0 ) hist_dmat = hist_dmat / real(ncontrib)
+        if( ok ) hist_dmat = dmat_hd
         call hists(:)%kill
-        deallocate(hists, dmat_tvd, dmat_jsd, dmat_hd)
+        deallocate(hists, dmat_hd)
     end subroutine calc_histogram_quality_signal
 
     subroutine calc_power_spectrum_quality_signal( imgs, mskdiam, hard_reject, spec_dmat )
