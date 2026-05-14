@@ -544,14 +544,14 @@ contains
     module subroutine cavger_restore_cavgs( frcs_fname )
         use simple_gridding, only: prep2D_inv_instrfun4mul
         class(string), intent(in) :: frcs_fname
-        real, allocatable :: frc(:,:)
+        real, allocatable :: frcs(:,:)
         type(cavgs_set)   :: cavgs_bak
         type(stack)       :: even_tmp, odd_tmp
         type(image)       :: gridcorr_img
         integer           :: eo_pop(2), icls, ithr, find, pop, filtsz_crop
         ! temporary objects for frc calculation & regularization
         filtsz_crop = fdim(ldim_crop(1))-1
-        allocate(frc(filtsz_crop,nthr_glob),source=0.0)
+        allocate(frcs(filtsz_crop,ncls),source=0.0)
         call cavgs_bak%new_set(ldim_crop, ncls)
         call even_tmp%new_stack(ldim_crop, nthr_glob, alloc_ctfsq=.false.)
         call odd_tmp%new_stack( ldim_crop, nthr_glob, alloc_ctfsq=.false.)
@@ -567,7 +567,7 @@ contains
         !$omp parallel do default(shared) private(icls,ithr,eo_pop,pop,find)&
         !$omp schedule(static) proc_bind(close)
         do icls = 1,ncls
-            ithr = omp_get_thread_num() + 1
+            ithr   = omp_get_thread_num() + 1
             eo_pop = eo_pops(:,icls)
             pop    = sum(eo_pop)
             if(pop == 0)then
@@ -599,12 +599,12 @@ contains
                 call odd_tmp%softmask(ithr)
                 call even_tmp%fft(ithr)
                 call odd_tmp%fft(ithr)
-                call even_tmp%frc(odd_tmp, ithr, frc(:,ithr))
+                call even_tmp%frc(odd_tmp, ithr, frcs(:,icls))
                 ! ML-regularization: add inverse of noise power to ctfsq & normalize again
                 if( p_ptr%l_ml_reg )then
                     ! add noise power term to denominator
-                    call cavgs_bak%even%add_invnoisepower2rho(icls, filtsz_crop, frc(:,ithr))
-                    call cavgs_bak%odd%add_invnoisepower2rho(icls, filtsz_crop, frc(:,ithr))
+                    call cavgs_bak%even%add_invnoisepower2rho(icls, filtsz_crop, frcs(:,icls))
+                    call cavgs_bak%odd%add_invnoisepower2rho(icls, filtsz_crop, frcs(:,icls))
                     if( eo_pop(1) < 3 ) cavgs_bak%even%ctfsq(:,:,icls) = cavgs_bak%even%ctfsq(:,:,icls) + 1.0
                     if( eo_pop(2) < 3 ) cavgs_bak%odd%ctfsq(:,:,icls)  = cavgs_bak%odd%ctfsq(:,:,icls)  + 1.0
                     cavgs_bak%merged%ctfsq(:,:,icls) = cavgs_bak%even%ctfsq(:,:,icls) + cavgs_bak%odd%ctfsq(:,:,icls)
@@ -634,7 +634,7 @@ contains
                 call gridcorr_img%mul_rmat(cavgs%merged%rmat(:ldim_crop(1),:ldim_crop(2),icls:icls))
             endif
             ! store FRC
-            call b_ptr%clsfrcs%set_frc(icls, frc(:,ithr), 1)
+            call b_ptr%clsfrcs%set_frc(icls, frcs(:,icls), 1)
             ! Transfer cavg from stack object to image object used in alignment
             ! only in shared memory execution
             if( .not.l_distr_worker_glob )then
@@ -652,7 +652,7 @@ contains
         call even_tmp%kill_stack
         call odd_tmp%kill_stack
         call cavgs_bak%kill_set
-        deallocate(frc)
+        deallocate(frcs)
     end subroutine cavger_restore_cavgs
 
     ! I/O
