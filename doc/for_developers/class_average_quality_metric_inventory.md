@@ -58,32 +58,32 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 13 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
 | 14 | `cc_diameter_norm` | `image_bin%diameter_cc` | diagnostic | Main connected-component diameter divided by the expected mask diameter. |
 
-Histogram distances are retained as a pairwise matrix rather than as a scalar nearest-neighbor feature. The current `hist_dmat` uses the normalized Hellinger distance between masked class-average histograms. The active `hist_entropy` diagnostic is scalar, but it is derived from those same histograms and therefore does not add another histogram pass. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. The model can still blend the normalized feature-space distance matrix with the normalized histogram distance matrix using `hist_dmat_weight`.
+Histogram distances are retained as a pairwise matrix rather than as a scalar nearest-neighbor feature. The current `hist_dmat` uses the normalized Hellinger distance between masked class-average histograms. The active `hist_entropy` diagnostic is scalar, but it is derived from those same histograms and therefore does not add another histogram pass. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. New learn-mode searches treat histogram distance as an optional alternative to spectrum distance, always mixed with the scalar feature-space distance rather than replacing it.
 
 The three features appended after `neg_ice_score` remain compatibility-friendly: old 11-weight model files load with zero weights for them, and zero-weight appended diagnostics do not perturb feature-space clustering. The current `chunk_default_v2` gives them nonzero learned weights from the batch4chunk round, so they now contribute to both the scalar score and feature-space distance.
 
-Rotationally averaged power-spectrum distances are also retained as a pairwise matrix. They follow the older `cluster_cavgs` signal-statistics idea: normalize and mask each class average, extract the square-root rotational spectrum over the `HP_SPEC` to `LP_SPEC` band, compute pairwise Euclidean distances between spectra, and min/max-normalize the resulting distance matrix. The model uses this only through `spec_dmat_weight`; it is not exposed as a scalar quality feature. Analysis files tag both pairwise matrix metrics so the learn report can warn if a nonzero learned matrix weight came from legacy files with unspecified or unexpected matrix provenance.
+Rotationally averaged power-spectrum distances are also retained as a pairwise matrix. They follow the older `cluster_cavgs` signal-statistics idea: normalize and mask each class average, extract the square-root rotational spectrum over the `HP_SPEC` to `LP_SPEC` band, compute pairwise Euclidean distances between spectra, and min/max-normalize the resulting distance matrix. The model uses this only through `spec_dmat_weight`; it is not exposed as a scalar quality feature. Analysis files tag both pairwise matrix metrics so the learn report can warn if a nonzero learned matrix weight came from legacy files with unspecified or unexpected matrix provenance. The learner searches spectrum distance as an alternative to histogram distance, not together with it.
 
 ## Current Model Controls
 
 The built-in models are complete `linear_boundary` presets:
 
-- `chunk_default_v2`: current default chunk/stream behavior, promoted from trusted batch-style learning cycles and updated from the batch4chunk run.
+- `chunk_default_v2`: current default chunk/stream behavior, promoted from trusted batch-style learning cycles and updated from the constrained batch4chunk run.
 - `chunk_default_v1`: legacy chunk/stream behavior retained for comparison.
 - `pool_default_v1`: recall-preserving behavior for larger pooled/batch datasets.
 
 The important model controls are:
 
 - `feature_weights`: nonnegative linear score coefficients, normalized to sum to one.
-- `hist_dmat_weight`: blend between feature-vector distances and Hellinger histogram distances for clustering. The current chunk default uses a strong nonzero value selected by the batch4chunk learning round.
-- `spec_dmat_weight`: blend between feature-vector distances and rotational power-spectrum distances for clustering. The current chunk default uses a nonzero value selected by the batch4chunk learning round.
+- `hist_dmat_weight`: blend between feature-vector distances and Hellinger histogram distances for clustering. New training searches this as an alternative to spectrum distance; the current chunk default sets it to zero.
+- `spec_dmat_weight`: blend between feature-vector distances and rotational power-spectrum distances for clustering. New training searches this as an alternative to histogram distance; the current chunk default sets it to zero.
 - `boundary_margin`: shifts the decision threshold; more negative rejects more aggressively, more positive preserves more borderline classes.
 - `min_score_separation`: below this separation the model treats the partition as unreliable unless low-separation Otsu is enabled and acceptable.
 - `otsu_min_offset` and `otsu_max_offset`: constrain when an Otsu score threshold may replace the cluster-derived threshold.
 - `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
 - `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
 
-The current learner searches feature-weight interpolation, histogram-distance weight, rotational power-spectrum distance weight, minimum score separation, boundary margin, and pool minimum accepted fraction. It deliberately inherits the higher-level policy flags from the base model.
+The current learner searches feature-weight interpolation, one optional pairwise family at a time, minimum score separation, boundary margin, and pool minimum accepted fraction. Histogram and rotational-spectrum pairwise distances are treated as alternatives, and a scalar feature-space distance component is always retained. The learner deliberately inherits the higher-level policy flags from the base model.
 
 ## Reusable Existing Routines
 

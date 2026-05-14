@@ -5,8 +5,7 @@ use simple_error,              only: simple_exception
 use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field, lowercase
 use simple_cavg_quality_feats, only: cavg_quality_feature_name
-use simple_cavg_quality_model, only: CAVG_QUALITY_DEFAULT_WEIGHTS, &
-    CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT, CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT, cavg_quality_model
+use simple_cavg_quality_model, only: CAVG_QUALITY_DEFAULT_WEIGHTS, cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED, CAVG_QUALITY_HIST_DMAT_METRIC, &
     CAVG_QUALITY_SPEC_DMAT_METRIC, CAVG_REJECTION_POOL, CAVG_QUALITY_NFEATS, EPS, cavg_quality_model_spec, &
@@ -25,8 +24,8 @@ real, parameter :: LEARN_MINSEPS(5)       = [0.05, 0.10, 0.15, 0.20, 0.30]
 real, parameter :: LEARN_MARGINS(11)      = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
                                               -0.05, 0.0, 0.05, 0.10, 0.20]
 real, parameter :: LEARN_POOL_FRACS(5)    = [0.50, 0.60, 0.65, 0.70, 0.80]
-real, parameter :: LEARN_HIST_WEIGHTS(5)  = [CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT, 0.0, 0.25, 0.75, 1.0]
-real, parameter :: LEARN_SPEC_WEIGHTS(5)  = [CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT, 0.25, 0.50, 0.75, 1.0]
+real, parameter :: LEARN_HIST_WEIGHTS(4)  = [0.0, 0.25, 0.50, 0.75]
+real, parameter :: LEARN_SPEC_WEIGHTS(4)  = [0.0, 0.25, 0.50, 0.75]
 
 contains
 
@@ -69,6 +68,8 @@ contains
                 candidate_spec%hist_dmat_weight = LEARN_HIST_WEIGHTS(ih)
                 do ispec = 1, size(LEARN_SPEC_WEIGHTS)
                     candidate_spec%spec_dmat_weight = LEARN_SPEC_WEIGHTS(ispec)
+                    if( .not. learn_pairwise_weights_allowed(candidate_spec%hist_dmat_weight, &
+                        candidate_spec%spec_dmat_weight) ) cycle
                     do isep = 1, size(LEARN_MINSEPS)
                         candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
                         do im = 1, size(LEARN_MARGINS)
@@ -103,6 +104,18 @@ contains
         deallocate(best_tie_specs)
         deallocate(dsets)
     end subroutine learn_cavg_quality_model
+
+    logical function learn_pairwise_weights_allowed( hist_weight, spec_weight )
+        real, intent(in) :: hist_weight, spec_weight
+        ! Histograms and rotational spectra measure related translation-invariant
+        ! statistics, so learn-mode treats them as alternatives.  The scalar
+        ! feature-vector distance remains the localization/geometry anchor and is
+        ! not allowed to be completely replaced by either pairwise matrix.
+        learn_pairwise_weights_allowed = .false.
+        if( hist_weight > EPS .and. spec_weight > EPS ) return
+        if( hist_weight + spec_weight >= 1.0 - EPS ) return
+        learn_pairwise_weights_allowed = .true.
+    end function learn_pairwise_weights_allowed
 
     subroutine read_quality_training_dataset( fname, dset )
         character(len=*),                    intent(in)    :: fname
@@ -460,7 +473,8 @@ contains
         write(funit,'(A,I0)') 'model_search_grid_n=', n_grid
         write(funit,'(A,I0)') 'best_tie_count=', n_best_ties
         write(funit,'(A,I0)') 'top_candidates_reported=', n_top
-        write(funit,'(A)') 'note=pairwise histogram and rotational power-spectrum distance weights were learned from analysis records'
+        write(funit,'(A)') 'note=pairwise histogram and rotational power-spectrum distances were learned as alternatives'
+        write(funit,'(A)') 'grid_pairwise_rule=feature_only_or_feature_plus_one_pairwise_matrix_with_scalar_anchor_retained'
         call write_real_list(funit, 'grid_weight_alphas=', LEARN_WEIGHT_ALPHAS)
         call write_real_list(funit, 'grid_hist_dmat_weights=', LEARN_HIST_WEIGHTS)
         call write_real_list(funit, 'grid_spec_dmat_weights=', LEARN_SPEC_WEIGHTS)
@@ -612,9 +626,9 @@ contains
         write(funit,'(A)') 'search_diagnostic_header=level,parameter,status,detail'
         call write_weight_alpha_diagnostic(funit, base_model%weights, suggested_weights, learned_model%weights)
         call write_grid_position_diagnostic(funit, 'hist_dmat_weight', learned_model%hist_dmat_weight, &
-            LEARN_HIST_WEIGHTS, 'best_at_zero_hist_distance_disabled', 'best_at_one_hist_distance_dominant')
+            LEARN_HIST_WEIGHTS, 'best_at_zero_hist_distance_disabled', 'best_at_highest_allowed_hist_distance')
         call write_grid_position_diagnostic(funit, 'spec_dmat_weight', learned_model%spec_dmat_weight, &
-            LEARN_SPEC_WEIGHTS, 'best_at_zero_spectrum_distance_disabled', 'best_at_one_spectrum_distance_dominant')
+            LEARN_SPEC_WEIGHTS, 'best_at_zero_spectrum_distance_disabled', 'best_at_highest_allowed_spectrum_distance')
         call write_pairwise_metric_diagnostics(funit, learned_model, diag)
         call write_grid_position_diagnostic(funit, 'min_score_separation', learned_model%min_score_separation, &
             LEARN_MINSEPS, 'best_at_lowest_value_consider_lower_if_accept_all_remains_too_common', &

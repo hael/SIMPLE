@@ -95,7 +95,7 @@ The current built-in presets are:
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk_default_v2` is the default chunk/stream operating point promoted from the trusted batch-style learning cycles. Its current feature bank excludes the former scalar histogram-neighborhood feature. The batch4chunk learning round selected nonzero scalar weights for histogram entropy and connected-component shape diagnostics, plus a strong pairwise matrix blend using Hellinger histogram distances and rotational power-spectrum distances. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
+`chunk_default_v2` is the default chunk/stream operating point promoted from the trusted batch-style learning cycles. Its current feature bank excludes the former scalar histogram-neighborhood feature. The constrained batch4chunk learning round selected nonzero scalar weights for histogram entropy and connected-component shape diagnostics, but selected feature-space clustering without histogram or rotational-spectrum pairwise matrices. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
 
 ## Feature Space
 
@@ -197,11 +197,13 @@ candidate_weights = (1 - alpha) * base_weights + alpha * suggested_weights
 The current grid searches:
 
 - feature-weight interpolation alpha;
-- histogram distance matrix weight;
-- rotational power-spectrum distance matrix weight;
+- one optional pairwise distance family: either Hellinger histogram distance or rotational power-spectrum distance;
+- the selected pairwise distance weight, capped below one so the scalar feature-vector distance remains part of clustering;
 - minimum score separation;
 - boundary margin;
 - pool minimum accepted fraction, only for pool models.
+
+Histogram and rotational-spectrum pairwise matrices are searched as alternatives, not as additive co-active families. Learn mode therefore evaluates feature-only, feature-plus-histogram, and feature-plus-spectrum candidates; it does not promote histogram-only, spectrum-only, histogram-plus-spectrum, or feature-plus-both models. This keeps localization and mask/geometry information in the scalar feature distance from being displaced by translation-invariant statistical distances.
 
 Each candidate is evaluated by running the full model classifier on every training dataset. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets, so each dataset contributes equally.
 
