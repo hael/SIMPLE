@@ -54,8 +54,13 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 9 | `corr_frc_proxy` | optional `cls2D` `corr` | higher is better | Uses stored correlation/FRC-like metadata when present. |
 | 10 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
 | 11 | `neg_ice_score` | class-average power spectrum near `ICE_BAND1` | higher is better | Negative 3.7 A ice-band excess score. |
+| 12 | `hist_entropy` | `histogram%entropy` | diagnostic | Bounded entropy from the masked histograms already built for Hellinger distances. |
+| 13 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
+| 14 | `cc_diameter_norm` | `image_bin%diameter_cc` | diagnostic | Main connected-component diameter divided by the expected mask diameter. |
 
-Histogram distances are retained as a pairwise matrix rather than as a scalar feature. The current `hist_dmat` uses the normalized Hellinger distance between masked class-average histograms. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. The model can still blend the normalized feature-space distance matrix with the normalized histogram distance matrix using `hist_dmat_weight`.
+Histogram distances are retained as a pairwise matrix rather than as a scalar nearest-neighbor feature. The current `hist_dmat` uses the normalized Hellinger distance between masked class-average histograms. The active `hist_entropy` diagnostic is scalar, but it is derived from those same histograms and therefore does not add another histogram pass. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. The model can still blend the normalized feature-space distance matrix with the normalized histogram distance matrix using `hist_dmat_weight`.
+
+The three features appended after `neg_ice_score` are deliberately default-zero in built-in models. To avoid silently changing the validated `chunk_default_v2` clustering behavior, appended candidate diagnostics enter the feature-space distance only after learning assigns them a nonzero score weight. This lets the learner test them while preserving compatibility with old 11-weight model files and the current promoted default.
 
 Rotationally averaged power-spectrum distances are also retained as a pairwise matrix. They follow the older `cluster_cavgs` signal-statistics idea: normalize and mask each class average, extract the square-root rotational spectrum over the `HP_SPEC` to `LP_SPEC` band, compute pairwise Euclidean distances between spectra, and min/max-normalize the resulting distance matrix. The model uses this only through `spec_dmat_weight`; it is not exposed as a scalar quality feature. Analysis files tag both pairwise matrix metrics so the learn report can warn if a nonzero learned matrix weight came from legacy files with unspecified or unexpected matrix provenance.
 
@@ -201,12 +206,9 @@ These are feasible first additions because they reuse existing per-image routine
 | --- | --- | --- | --- |
 | `contrast` | `image%contrast` | Detects extremely weak or washed-out averages. | Contrast may also rise for strong junk. Keep as learned/diagnostic initially. |
 | `presence` | `image%presence` | Direct particle-presence proxy. | Need to inspect scale and sign across stream and pool datasets. |
-| `hist_entropy` | `histogram%entropy` | Measures overly flat or overly spiky intensity distributions. | Must use common masked min/max, as current histograms do. |
 | `hist_variance` | `histogram%variance` | Complements local variance with global intensity spread. | Correlated with contrast and local variance. |
 | `fg_bg_locvar_ratio` | `image%loc_var_masked` | Tests whether foreground texture exceeds background texture. | Previous experiments showed background variance can be useful; do not replace the separate fg/bg terms without testing. |
 | `nan_or_bad_pixel_flag` | `image%contains_nans`, min/max checks | Hard diagnostic for corrupt inputs. | Should probably remain a hard reject or warning, not a learned soft feature. |
-| `cc_area_frac` | `image_bin%size_ccs` | Distinguishes tiny specks from plausible particle support. | Requires careful mask/box normalization. |
-| `cc_diameter_norm` | `image_bin%diameter_cc` | Catches over-large components, carbon edges, and tiny specks. | Current CC diameter pruning is crude; normalize by expected mask diameter. |
 
 ### Medium-Risk Spectral Features
 
@@ -262,11 +264,12 @@ Do not add a large feature batch in one pass. The current learner can evaluate a
 
 A practical sequence is:
 
-1. Add cheap diagnostics first: `contrast`, `presence`, `hist_entropy`, `cc_area_frac`, and `cc_diameter_norm`.
-2. Run `quality_mode=analyze` across the trusted datasets and inspect per-feature AUC and learned weights.
+1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `hist_entropy`, `cc_area_frac`, and `cc_diameter_norm`.
+2. Inspect per-feature AUC and learned weights, especially whether any appended diagnostic receives nonzero weight across difficult chunk datasets.
 3. Promote only features that improve holdout behavior, especially on difficult chunk datasets, without damaging easy/manual-trusted cases.
 4. Try spectral additions next, but keep them diagnostic until they prove they do not simply rediscover ice/ring artifacts.
-5. Evaluate pairwise alignment-derived features only as optional experiments because they may be too slow for streaming.
+5. Add `presence` or `contrast` only if the current diagnostics are insufficient; they are cheap, but still add image scans rather than reusing an already-built object.
+6. Evaluate pairwise alignment-derived features only as optional experiments because they may be too slow for streaming.
 
 For any new feature:
 
@@ -295,5 +298,6 @@ Some possible descriptors are available but should not be first-line additions:
 - Use per-dataset robust normalization over non-hard-rejected classes.
 - Treat hard rejection as exceptional and conservative. Most discrimination should happen through the model.
 - Preserve feature ordering compatibility carefully: model files contain one weight per `CAVG_QUALITY_NFEATS` entry.
+- Prefer appending candidate diagnostics over inserting them into the old feature order; default-zero appended diagnostics should not perturb existing built-in behavior.
 - When changing `CAVG_QUALITY_NFEATS`, update promotion snippets, docs, and any tests or analysis parsers that assume the feature count.
 - Benchmark any pairwise or alignment-derived feature on stream chunks before considering it for default use.

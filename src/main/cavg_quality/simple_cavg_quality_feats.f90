@@ -29,6 +29,9 @@ public :: I_CC_SINGLE
 public :: I_CORR_FRC
 public :: I_CENTER_EDGE_SNR
 public :: I_NEG_ICE_SCORE
+public :: I_HIST_ENTROPY
+public :: I_CC_AREA_FRAC
+public :: I_CC_DIAMETER_NORM
 public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
@@ -62,6 +65,9 @@ integer, parameter :: I_CC_SINGLE         = 8
 integer, parameter :: I_CORR_FRC          = 9
 integer, parameter :: I_CENTER_EDGE_SNR   = 10
 integer, parameter :: I_NEG_ICE_SCORE     = 11
+integer, parameter :: I_HIST_ENTROPY      = 12
+integer, parameter :: I_CC_AREA_FRAC      = 13
+integer, parameter :: I_CC_DIAMETER_NORM  = 14
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -85,7 +91,13 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
     cavg_quality_feature_def('log_center_edge_snr', 'higher_is_better', &
         'log central signal variance relative to edge variance in the class average'), &
     cavg_quality_feature_def('neg_ice_score', 'higher_is_better', &
-        'negative class-average ice-ring excess score around the 3.7 Angstrom band') ]
+        'negative class-average ice-ring excess score around the 3.7 Angstrom band'), &
+    cavg_quality_feature_def('hist_entropy', 'diagnostic', &
+        'bounded masked intensity-histogram entropy from the same histograms used for Hellinger distances'), &
+    cavg_quality_feature_def('cc_area_frac', 'diagnostic', &
+        'main connected-component area divided by the expected circular mask area'), &
+    cavg_quality_feature_def('cc_diameter_norm', 'diagnostic', &
+        'main connected-component diameter divided by the expected mask diameter') ]
 
 contains
 
@@ -126,13 +138,14 @@ contains
         real,                 intent(in)    :: mskdiam
         real,    allocatable, intent(inout) :: raw(:,:)
         logical, allocatable, intent(inout) :: hard_reject(:)
-        integer, allocatable :: pop(:)
+        integer, allocatable :: pop(:), disc_area(:)
         real,    allocatable :: res(:), corr(:), corr_in(:)
         integer              :: ncls, i, ldim(3)
         real                 :: smpd, rad_px
         type(image_bin), allocatable :: bin_img(:), cc_img(:), disc_img(:)
         real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
         real                 :: outside_frac, centroid_norm, locvar_fg, locvar_bg
+        real                 :: cc_area_frac, cc_diameter_norm
         real                 :: spec_dynrange, center_edge_snr, ice_score
         integer              :: nccs_valid, ithr
         logical              :: no_component
@@ -161,6 +174,7 @@ contains
         rad_px = (mskdiam / smpd) / 2.0
         call imgs(1)%memoize_mask_coords()
         allocate(bin_img(nthr_glob), cc_img(nthr_glob), disc_img(nthr_glob))
+        allocate(disc_area(nthr_glob), source=0)
         allocate(rmat_cc(ldim(1), ldim(2), ldim(3), nthr_glob), &
                  rmat_disc(ldim(1), ldim(2), ldim(3), nthr_glob))
         do ithr = 1, nthr_glob
@@ -168,15 +182,16 @@ contains
             call cc_img(ithr)%new_bimg(ldim,   smpd, wthreads=.false.)
             call disc_img(ithr)%disc(ldim,     smpd, rad_px)
             call disc_img(ithr)%get_rmat_sub(rmat_disc(:,:,:,ithr))
+            disc_area(ithr) = count(rmat_disc(:,:,:,ithr) > 0.0)
         end do
         !$omp parallel do default(shared) private(i,ithr,outside_frac,centroid_norm,nccs_valid,no_component,&
-        !$omp& locvar_fg,locvar_bg,spec_dynrange,center_edge_snr,ice_score)&
+        !$omp& locvar_fg,locvar_bg,spec_dynrange,center_edge_snr,ice_score,cc_area_frac,cc_diameter_norm)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
             ithr = omp_get_thread_num() + 1
             call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
-                                                  rmat_disc(:,:,:,ithr), rad_px, outside_frac, centroid_norm, &
-                                                  nccs_valid, no_component)
+                                                  rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, outside_frac, &
+                                                  centroid_norm, cc_area_frac, cc_diameter_norm, nccs_valid, no_component)
             call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, spec_dynrange, &
                                             center_edge_snr, ice_score)
             raw(i, I_LOG_POP)       = log(real(max(pop(i), 0)) + 1.0)
@@ -190,6 +205,8 @@ contains
             raw(i, I_CORR_FRC)      = corr(i)
             raw(i, I_CENTER_EDGE_SNR) = log(max(center_edge_snr, LOG_EPS))
             raw(i, I_NEG_ICE_SCORE) = -ice_score
+            raw(i, I_CC_AREA_FRAC)  = cc_area_frac
+            raw(i, I_CC_DIAMETER_NORM) = cc_diameter_norm
             ! A dead image is rejected only when both foreground and background variance vanish.
             hard_reject(i) = pop(i) <= 0 .or. no_component .or. &
                                               (locvar_fg <= EPS .and. locvar_bg <= EPS)
@@ -200,7 +217,7 @@ contains
             call cc_img(ithr)%kill_bimg()
             call disc_img(ithr)%kill_bimg()
         end do
-        deallocate(bin_img, cc_img, disc_img, rmat_cc, rmat_disc, pop, res, corr)
+        deallocate(bin_img, cc_img, disc_img, rmat_cc, rmat_disc, disc_area, pop, res, corr)
     end subroutine extract_cavg_quality_features
 
     subroutine normalize_cavg_quality_features( raw, hard_reject, features )
@@ -234,11 +251,12 @@ contains
         end do
     end subroutine normalize_cavg_quality_features
 
-    subroutine calc_histogram_quality_signal( imgs, mskdiam, hard_reject, hist_dmat )
+    subroutine calc_histogram_quality_signal( imgs, mskdiam, hard_reject, hist_dmat, hist_entropy )
         class(image),         intent(inout) :: imgs(:)
         real,                 intent(in)    :: mskdiam
         logical,              intent(in)    :: hard_reject(:)
         real,    allocatable, intent(inout) :: hist_dmat(:,:)
+        real,    allocatable, intent(inout), optional :: hist_entropy(:)
         type(histogram), allocatable :: hists(:)
         real, allocatable :: dmat_hd(:,:)
         real :: smpd, rad_px, mm(2), mm_i(2)
@@ -248,6 +266,10 @@ contains
         if( size(hard_reject) /= ncls ) THROW_HARD('calc_histogram_quality_signal: invalid mask size')
         if( allocated(hist_dmat) ) deallocate(hist_dmat)
         allocate(hist_dmat(ncls, ncls), source=0.0)
+        if( present(hist_entropy) )then
+            if( allocated(hist_entropy) ) deallocate(hist_entropy)
+            allocate(hist_entropy(ncls), source=0.0)
+        endif
         nfit = count(.not. hard_reject)
         if( nfit < 4 ) return
         smpd = imgs(1)%get_smpd()
@@ -263,7 +285,9 @@ contains
         if( mm(2) - mm(1) <= EPS ) return
         allocate(hists(ncls))
         do i = 1, ncls
-            if( .not. hard_reject(i) ) call hists(i)%new(imgs(i), NHISTBINS, minmax=mm, radius=rad_px)
+            if( hard_reject(i) ) cycle
+            call hists(i)%new(imgs(i), NHISTBINS, minmax=mm, radius=rad_px)
+            if( present(hist_entropy) ) hist_entropy(i) = hists(i)%entropy(bounded=.true.)
         end do
         allocate(dmat_hd(ncls,ncls), source=0.0)
         !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
@@ -353,14 +377,15 @@ contains
         deallocate(inds, profiles)
     end subroutine calc_power_spectrum_quality_signal
 
-    subroutine measure_cavg_foreground_geometry( img, bin_img, cc_img, rmat_cc, rmat_disc, rad_px, outside_frac, &
-                                                 centroid_norm, nccs_valid, no_component )
+    subroutine measure_cavg_foreground_geometry( img, bin_img, cc_img, rmat_cc, rmat_disc, disc_area, rad_px, outside_frac, &
+                                                 centroid_norm, cc_area_frac, cc_diameter_norm, nccs_valid, no_component )
         class(image),     intent(inout) :: img
         type(image_bin),  intent(inout) :: bin_img, cc_img
         real,             intent(inout) :: rmat_cc(:,:,:)
         real,             intent(in)    :: rmat_disc(:,:,:)
+        integer,          intent(in)    :: disc_area
         real,             intent(in)    :: rad_px
-        real,             intent(out)   :: outside_frac, centroid_norm
+        real,             intent(out)   :: outside_frac, centroid_norm, cc_area_frac, cc_diameter_norm
         integer,          intent(out)   :: nccs_valid
         logical,          intent(out)   :: no_component
         real, allocatable :: ccsizes(:)
@@ -370,6 +395,8 @@ contains
         ldim = img%get_ldim()
         outside_frac  = 1.0
         centroid_norm = 2.0
+        cc_area_frac  = 0.0
+        cc_diameter_norm = 0.0
         nccs_valid    = 0
         no_component  = .false.
         call bin_img%copy(img)
@@ -402,10 +429,13 @@ contains
         ccsizes = cc_img%size_ccs()
         loc     = maxloc(ccsizes, dim=1)
         deallocate(ccsizes)
+        call cc_img%diameter_cc(loc, cc_diam)
+        cc_diameter_norm = cc_diam / max(2.0 * rad_px, 1.0)
         call cc_img%cc2bin(loc)
         call cc_img%get_rmat_sub(rmat_cc)
         area    = count(rmat_cc > 0.0)
         outside = count(rmat_cc - rmat_disc > 0.0)
+        cc_area_frac = real(area) / real(max(disc_area, 1))
         outside_frac = real(outside) / real(max(area, 1))
     end subroutine measure_cavg_foreground_geometry
 

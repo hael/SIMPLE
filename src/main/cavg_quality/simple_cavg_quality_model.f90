@@ -44,6 +44,7 @@ real, parameter :: POOL_MIN_ACCEPT_FRAC    = 0.65
 real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
 real, parameter :: CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT = 0.50
 real, parameter :: CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT = 0.00
+integer, parameter :: CAVG_QUALITY_LEGACY_NFEATS = 11
 
 ! Reference v1/base linear score coefficients. These are retained for the
 ! legacy preset and as the learner fallback; feature definitions and extraction
@@ -51,7 +52,8 @@ real, parameter :: CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT = 0.00
 real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     3.953488E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     1.860465E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
+    0.000000E+00, 0.000000E+00 ]
 
 ! Batch-trained chunk default. The scalar histogram-neighborhood feature was
 ! removed after validation showed its direction was dataset-dependent. The
@@ -60,7 +62,8 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.799937E-01, 1.863753E-01, 3.312400E-03, 5.197362E-02, &
     1.575297E-01, 1.574509E-01, 1.108975E-02, 3.312400E-03, &
-    1.494878E-01, 9.616212E-02, 3.312400E-03 ]
+    1.494878E-01, 9.616212E-02, 3.312400E-03, 0.000000E+00, &
+    0.000000E+00, 0.000000E+00 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      = -0.30
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.05
 real, parameter :: CHUNK_V2_HIST_DMAT_WEIGHT     =  0.00
@@ -577,25 +580,60 @@ contains
         character(len=*), intent(in)    :: val
         real,             intent(inout) :: weights(CAVG_QUALITY_NFEATS)
         character(len=LONGSTRLEN) :: field
-        integer :: ios, i
+        integer :: ios, i, nvals
         real    :: parsed(CAVG_QUALITY_NFEATS)
+        real    :: legacy(CAVG_QUALITY_LEGACY_NFEATS)
+        nvals = csv_weight_count(val)
+        if( nvals == CAVG_QUALITY_NFEATS )then
+            parsed = 0.0
+            do i = 1, CAVG_QUALITY_NFEATS
+                field = csv_field(val, i)
+                read(field,*,iostat=ios) parsed(i)
+                if( ios /= 0 ) THROW_HARD('read_model: failed to parse feature_weights')
+            end do
+            weights = parsed
+            return
+        endif
+        if( nvals == CAVG_QUALITY_LEGACY_NFEATS )then
+            legacy = 0.0
+            do i = 1, CAVG_QUALITY_LEGACY_NFEATS
+                field = csv_field(val, i)
+                read(field,*,iostat=ios) legacy(i)
+                if( ios /= 0 ) THROW_HARD('read_model: failed to parse legacy feature_weights')
+            end do
+            weights = 0.0
+            weights(1:CAVG_QUALITY_LEGACY_NFEATS) = legacy
+            return
+        endif
+        if( nvals > 1 )then
+            if( nvals < CAVG_QUALITY_NFEATS ) THROW_HARD('read_model: feature_weights has too few values')
+            THROW_HARD('read_model: feature_weights has too many values')
+        endif
         parsed = weights
         read(val,*,iostat=ios) parsed
         if( ios == 0 )then
             weights = parsed
             return
         endif
-        parsed = weights
-        do i = 1, CAVG_QUALITY_NFEATS
-            field = csv_field(val, i)
-            if( len_trim(field) == 0 ) THROW_HARD('read_model: feature_weights has too few values')
-            read(field,*,iostat=ios) parsed(i)
-            if( ios /= 0 ) THROW_HARD('read_model: failed to parse feature_weights')
-        end do
-        if( len_trim(csv_field(val, CAVG_QUALITY_NFEATS + 1)) > 0 ) &
-            THROW_HARD('read_model: feature_weights has too many values')
-        weights = parsed
+        legacy = 0.0
+        read(val,*,iostat=ios) legacy
+        if( ios == 0 )then
+            weights = 0.0
+            weights(1:CAVG_QUALITY_LEGACY_NFEATS) = legacy
+            return
+        endif
+        THROW_HARD('read_model: failed to parse feature_weights')
     end subroutine read_feature_weights
+
+    integer function csv_weight_count( val )
+        character(len=*), intent(in) :: val
+        integer :: i
+        csv_weight_count = 0
+        do i = 1, CAVG_QUALITY_NFEATS + 1
+            if( len_trim(csv_field(val, i)) == 0 ) exit
+            csv_weight_count = i
+        end do
+    end function csv_weight_count
 
     subroutine parse_model_key_value( line, key, val, ok )
         character(len=*), intent(in)  :: line
@@ -677,7 +715,7 @@ contains
         !$omp parallel do default(shared) private(i,j,d) schedule(static) proc_bind(close)
         do i = 1, nfit - 1
             do j = i + 1, nfit
-                d = sqrt(sum((feats_fit(i,:) - feats_fit(j,:))**2))
+                d = feature_vector_distance(feats_fit(i,:), feats_fit(j,:), model%weights)
                 dmat(i,j) = d
                 dmat(j,i) = d
             end do
@@ -774,6 +812,26 @@ contains
         end if
         deallocate(dmat, feats_fit, score_fit, inds, labels_fit, medoids_fit)
     end subroutine apply_linear_boundary
+
+    real function feature_vector_distance( feat1, feat2, weights )
+        real, intent(in) :: feat1(:), feat2(:), weights(:)
+        integer :: ifeat
+        real    :: delta
+        if( size(feat1) /= CAVG_QUALITY_NFEATS .or. size(feat2) /= CAVG_QUALITY_NFEATS .or. &
+            size(weights) /= CAVG_QUALITY_NFEATS ) &
+            THROW_HARD('feature_vector_distance: invalid feature vector size')
+        feature_vector_distance = 0.0
+        do ifeat = 1, CAVG_QUALITY_NFEATS
+            ! The original 11-dimensional feature bank remains always-on in the
+            ! clustering distance to preserve validated v2 behavior. Features
+            ! appended later are candidate diagnostics; they enter clustering
+            ! only after learning assigns them a nonzero score weight.
+            if( ifeat > CAVG_QUALITY_LEGACY_NFEATS .and. weights(ifeat) <= EPS ) cycle
+            delta = feat1(ifeat) - feat2(ifeat)
+            feature_vector_distance = feature_vector_distance + delta**2
+        end do
+        feature_vector_distance = sqrt(feature_vector_distance)
+    end function feature_vector_distance
 
     subroutine add_pairwise_dmat_component( source_dmat, inds, weight, dmat_mix, mix_weight )
         real,    intent(in)    :: source_dmat(:,:)

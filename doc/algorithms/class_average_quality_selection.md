@@ -101,7 +101,9 @@ The current built-in presets are:
 
 The feature inventory is maintained in `simple_cavg_quality_feats.f90`. Feature extraction produces raw per-class values and a normalized feature matrix. The model uses the normalized `z_*` features, not the raw feature values.
 
-The current feature set includes population/resolution support, foreground geometry, local signal variance, spectrum shape, class statistics, center-edge signal, and ice-score penalty. Hellinger histogram distances and rotationally averaged power-spectrum distances are retained as pairwise class-average distance matrices and mixed into the model distance matrix through the learnable `hist_dmat_weight` and `spec_dmat_weight`. A former scalar histogram-neighborhood feature was removed because its direction was dataset-dependent: in some stream chunks histogram-dense neighborhoods were enriched for junk rather than good class averages.
+The current feature set includes population/resolution support, foreground geometry, local signal variance, spectrum shape, class statistics, center-edge signal, ice-score penalty, bounded histogram entropy, and two connected-component shape diagnostics. Hellinger histogram distances and rotationally averaged power-spectrum distances are retained as pairwise class-average distance matrices and mixed into the model distance matrix through the learnable `hist_dmat_weight` and `spec_dmat_weight`. A former scalar histogram-neighborhood feature was removed because its direction was dataset-dependent: in some stream chunks histogram-dense neighborhoods were enriched for junk rather than good class averages.
+
+The appended diagnostics `hist_entropy`, `cc_area_frac`, and `cc_diameter_norm` are emitted in analysis files but have zero built-in model weight. They are included in the feature-space clustering distance only after learning assigns them nonzero score weight, so adding them does not change the promoted `chunk_default_v2` behavior until a new model is trained and promoted.
 
 Feature definitions should remain centralized in `simple_cavg_quality_feats.f90`, so future feature additions are visible in one inventory rather than being scattered through model code.
 
@@ -117,7 +119,7 @@ For one dataset, the model classifies as follows:
 
 2. Assign hard-rejected classes a low sentinel score and remove them from the fitted partition.
 
-3. Build a Euclidean distance matrix between non-hard-rejected normalized feature vectors.
+3. Build a Euclidean distance matrix between non-hard-rejected normalized feature vectors. The original 11-dimensional bank is always included for compatibility; appended candidate diagnostics enter this distance only when their learned model weight is nonzero.
 
 4. Normalize that feature distance matrix.
 
