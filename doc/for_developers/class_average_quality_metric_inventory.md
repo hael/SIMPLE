@@ -63,7 +63,7 @@ Rotationally averaged power-spectrum distances are also retained as a pairwise m
 
 The built-in models are complete `linear_boundary` presets:
 
-- `chunk_default_v2`: current default chunk/stream behavior, promoted from the first trusted batch-style learning cycle.
+- `chunk_default_v2`: current default chunk/stream behavior, promoted from trusted batch-style learning cycles and updated from the batch3chunk run.
 - `chunk_default_v1`: legacy chunk/stream behavior retained for comparison.
 - `pool_default_v1`: recall-preserving behavior for larger pooled/batch datasets.
 
@@ -71,7 +71,7 @@ The important model controls are:
 
 - `feature_weights`: nonnegative linear score coefficients, normalized to sum to one.
 - `hist_dmat_weight`: blend between feature-vector distances and Hellinger histogram distances for clustering. The current chunk default sets this to zero after relearning without the removed scalar histogram feature.
-- `spec_dmat_weight`: blend between feature-vector distances and rotational power-spectrum distances for clustering. The current built-in defaults set this to zero until retraining demonstrates that the spectral geometry helps.
+- `spec_dmat_weight`: blend between feature-vector distances and rotational power-spectrum distances for clustering. The current chunk default uses a small nonzero value selected by the batch3chunk learning round.
 - `boundary_margin`: shifts the decision threshold; more negative rejects more aggressively, more positive preserves more borderline classes.
 - `min_score_separation`: below this separation the model treats the partition as unreliable unless low-separation Otsu is enabled and acceptable.
 - `otsu_min_offset` and `otsu_max_offset`: constrain when an Otsu score threshold may replace the cluster-derived threshold.

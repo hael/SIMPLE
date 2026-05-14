@@ -54,18 +54,17 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
 ! Batch-trained chunk default. The scalar histogram-neighborhood feature was
-! removed after validation showed its direction was dataset-dependent; relearning
-! on the trusted chunk set then selected zero histogram-distance mixing. The
-! histogram matrix remains part of the model representation so future learn runs
-! can re-enable it if a broader training set supports it.
+! removed after validation showed its direction was dataset-dependent. The
+! batch3chunk learning round kept Hellinger histogram mixing disabled and
+! selected a small rotational-spectrum distance contribution.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.799937E-01, 1.863753E-01, 3.312400E-03, 5.197362E-02, &
     1.575297E-01, 1.574509E-01, 1.108975E-02, 3.312400E-03, &
     1.494878E-01, 9.616212E-02, 3.312400E-03 ]
-real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      = -0.25
+real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      = -0.30
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.05
 real, parameter :: CHUNK_V2_HIST_DMAT_WEIGHT     =  0.00
-real, parameter :: CHUNK_V2_SPEC_DMAT_WEIGHT     =  0.00
+real, parameter :: CHUNK_V2_SPEC_DMAT_WEIGHT     =  0.25
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT

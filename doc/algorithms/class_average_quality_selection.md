@@ -95,7 +95,7 @@ The current built-in presets are:
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk_default_v2` is the default chunk/stream operating point promoted from the trusted batch-style learning cycles. Its current feature bank excludes the former scalar histogram-neighborhood feature, and its learned histogram-distance matrix weight is zero. The rotational power-spectrum distance matrix is available to the model but defaults to zero until retrained from analysis files that contain that matrix. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
+`chunk_default_v2` is the default chunk/stream operating point promoted from the trusted batch-style learning cycles. Its current feature bank excludes the former scalar histogram-neighborhood feature, and its learned Hellinger histogram-distance matrix weight is zero. The batch3chunk learning round selected a small rotational power-spectrum distance contribution. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
 
 ## Feature Space
 
