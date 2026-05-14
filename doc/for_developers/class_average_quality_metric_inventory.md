@@ -57,10 +57,14 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 12 | `hist_entropy` | `histogram%entropy` | diagnostic | Bounded entropy from the masked histograms already built for Hellinger distances. |
 | 13 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
 | 14 | `cc_diameter_norm` | `image_bin%diameter_cc` | diagnostic | Main connected-component diameter divided by the expected mask diameter. |
+| 15 | `presence` | `image%presence` | higher is better | Central signal excess relative to border background noise. |
+| 16 | `log_contrast` | `image%contrast` | diagnostic | Log full-image intensity standard deviation after edge background subtraction. |
+| 17 | `log_hist_variance` | `histogram%variance` | diagnostic | Log masked intensity-histogram variance from the Hellinger histogram pass. |
+| 18 | `log_fg_bg_locvar_ratio` | `image%loc_var_masked` | higher is better | Log foreground/background local-variance ratio. |
 
 Histogram distances are retained as a pairwise matrix rather than as a scalar nearest-neighbor feature. The current `hist_dmat` uses the normalized Hellinger distance between masked class-average histograms. The active `hist_entropy` diagnostic is scalar, but it is derived from those same histograms and therefore does not add another histogram pass. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. New learn-mode searches treat histogram distance as an optional alternative to spectrum distance, always mixed with the scalar feature-space distance rather than replacing it.
 
-The three features appended after `neg_ice_score` remain compatibility-friendly: old 11-weight model files load with zero weights for them, and zero-weight appended diagnostics do not perturb feature-space clustering. The current `chunk_default_v2` gives them nonzero learned weights from the batch4chunk round, so they now contribute to both the scalar score and feature-space distance.
+The seven features appended after `neg_ice_score` remain compatibility-friendly: old 11-weight model files and the previous 14-weight feature-bank model files load with zero weights for newly appended terms, and zero-weight appended diagnostics do not perturb feature-space clustering. The current `chunk_default_v2` gives the batch4chunk-connected-component and histogram-entropy diagnostics nonzero learned weights, while the newly appended scalar diagnostics default to zero until a new training round assigns them value.
 
 Mask-geometry validity is deliberately outside the learned model. The feature extractor hard rejects class averages when the Otsu/connected-component pass finds no valid foreground component, any foreground-component centroid outside the mask radius, or more than 10 pixels of the largest component outside the mask disc. This mirrors the proven microchunk rejection concept without depending on the stream/microchunk modules.
 
@@ -206,10 +210,10 @@ These are feasible first additions because they reuse existing per-image routine
 
 | Candidate | Existing source | Why it may help | Caution |
 | --- | --- | --- | --- |
-| `contrast` | `image%contrast` | Detects extremely weak or washed-out averages. | Contrast may also rise for strong junk. Keep as learned/diagnostic initially. |
-| `presence` | `image%presence` | Direct particle-presence proxy. | Need to inspect scale and sign across stream and pool datasets. |
-| `hist_variance` | `histogram%variance` | Complements local variance with global intensity spread. | Correlated with contrast and local variance. |
-| `fg_bg_locvar_ratio` | `image%loc_var_masked` | Tests whether foreground texture exceeds background texture. | Previous experiments showed background variance can be useful; do not replace the separate fg/bg terms without testing. |
+| `contrast` variants | `image%contrast` | Detects extremely weak or washed-out averages. | `log_contrast` is now active as a diagnostic; consider variants only if validation shows a more stable transform is needed. |
+| `presence` variants | `image%presence` | Direct particle-presence proxy. | `presence` is now active; inspect scale and sign across stream and pool datasets before assigning much model weight. |
+| `hist_variance` variants | `histogram%variance` | Complements local variance with global intensity spread. | `log_hist_variance` is now active and correlated with contrast and local variance. |
+| `fg_bg_locvar_ratio` variants | `image%loc_var_masked` | Tests whether foreground texture exceeds background texture. | `log_fg_bg_locvar_ratio` is now active; do not replace the separate fg/bg terms without testing. |
 | `nan_or_bad_pixel_flag` | `image%contains_nans`, min/max checks | Hard diagnostic for corrupt inputs. | Should probably remain a hard reject or warning, not a learned soft feature. |
 
 ### Medium-Risk Spectral Features
@@ -266,11 +270,11 @@ Do not add a large feature batch in one pass. The current learner can evaluate a
 
 A practical sequence is:
 
-1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `hist_entropy`, `cc_area_frac`, and `cc_diameter_norm`.
+1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `hist_entropy`, `cc_area_frac`, `cc_diameter_norm`, `presence`, `log_contrast`, `log_hist_variance`, and `log_fg_bg_locvar_ratio`.
 2. Inspect per-feature AUC and learned weights, especially whether any appended diagnostic receives nonzero weight across difficult chunk datasets.
 3. Promote only features that improve holdout behavior, especially on difficult chunk datasets, without damaging easy/manual-trusted cases.
 4. Try spectral additions next, but keep them diagnostic until they prove they do not simply rediscover ice/ring artifacts.
-5. Add `presence` or `contrast` only if the current diagnostics are insufficient; they are cheap, but still add image scans rather than reusing an already-built object.
+5. Consider automask or shape-ranking features only if the cheap scalar diagnostics are still insufficient.
 6. Evaluate pairwise alignment-derived features only as optional experiments because they may be too slow for streaming.
 
 For any new feature:

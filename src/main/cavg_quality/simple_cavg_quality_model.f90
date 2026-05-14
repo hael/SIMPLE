@@ -45,6 +45,7 @@ real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
 real, parameter :: CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT = 0.50
 real, parameter :: CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT = 0.00
 integer, parameter :: CAVG_QUALITY_LEGACY_NFEATS = 11
+integer, parameter :: CAVG_QUALITY_PREV_NFEATS   = 14
 
 ! Reference v1/base linear score coefficients. These are retained for the
 ! legacy preset and as the learner fallback; feature definitions and extraction
@@ -52,6 +53,7 @@ integer, parameter :: CAVG_QUALITY_LEGACY_NFEATS = 11
 real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     3.953488E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     1.860465E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00 ]
 
@@ -65,7 +67,8 @@ real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.061877E-01, 1.451783E-01, 3.235186E-03, 5.076208E-02, &
     1.210998E-01, 1.169281E-01, 1.083124E-02, 3.235186E-03, &
     1.460031E-01, 9.392051E-02, 3.235186E-03, 9.472081E-02, &
-    4.138006E-02, 6.328278E-02 ]
+    4.138006E-02, 6.328278E-02, 0.000000E+00, 0.000000E+00, &
+    0.000000E+00, 0.000000E+00 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_HIST_DMAT_WEIGHT     =  0.00
@@ -584,6 +587,7 @@ contains
         character(len=LONGSTRLEN) :: field
         integer :: ios, i, nvals
         real    :: parsed(CAVG_QUALITY_NFEATS)
+        real    :: previous(CAVG_QUALITY_PREV_NFEATS)
         real    :: legacy(CAVG_QUALITY_LEGACY_NFEATS)
         nvals = csv_weight_count(val)
         if( nvals == CAVG_QUALITY_NFEATS )then
@@ -594,6 +598,17 @@ contains
                 if( ios /= 0 ) THROW_HARD('read_model: failed to parse feature_weights')
             end do
             weights = parsed
+            return
+        endif
+        if( nvals == CAVG_QUALITY_PREV_NFEATS )then
+            previous = 0.0
+            do i = 1, CAVG_QUALITY_PREV_NFEATS
+                field = csv_field(val, i)
+                read(field,*,iostat=ios) previous(i)
+                if( ios /= 0 ) THROW_HARD('read_model: failed to parse previous feature_weights')
+            end do
+            weights = 0.0
+            weights(1:CAVG_QUALITY_PREV_NFEATS) = previous
             return
         endif
         if( nvals == CAVG_QUALITY_LEGACY_NFEATS )then
@@ -615,6 +630,13 @@ contains
         read(val,*,iostat=ios) parsed
         if( ios == 0 )then
             weights = parsed
+            return
+        endif
+        previous = 0.0
+        read(val,*,iostat=ios) previous
+        if( ios == 0 )then
+            weights = 0.0
+            weights(1:CAVG_QUALITY_PREV_NFEATS) = previous
             return
         endif
         legacy = 0.0

@@ -21,7 +21,7 @@ public :: reset_cavg_quality_result
 
 integer, parameter :: CAVG_REJECTION_CHUNK = 1
 integer, parameter :: CAVG_REJECTION_POOL  = 2
-integer, parameter :: CAVG_QUALITY_NFEATS  = 14
+integer, parameter :: CAVG_QUALITY_NFEATS  = 18
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
 character(len=*), parameter :: CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED = 'unspecified'

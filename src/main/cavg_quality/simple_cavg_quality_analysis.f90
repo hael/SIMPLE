@@ -6,7 +6,7 @@ use simple_image,              only: image
 use simple_oris,               only: oris
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
     calc_histogram_quality_signal, calc_power_spectrum_quality_signal, extract_cavg_quality_features, &
-    normalize_cavg_quality_features, write_cavg_quality_feature_inventory, I_HIST_ENTROPY
+    normalize_cavg_quality_features, write_cavg_quality_feature_inventory, I_HIST_ENTROPY, I_LOG_HIST_VARIANCE
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
@@ -28,15 +28,22 @@ contains
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
         type(cavg_quality_model),  intent(in)    :: model
-        real, allocatable :: hist_entropy(:)
+        real, allocatable :: hist_entropy(:), hist_variance(:)
         call reset_cavg_quality_result(quality)
         call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
-        call calc_histogram_quality_signal(imgs, mskdiam, quality%hard_reject, quality%hist_dmat, hist_entropy)
+        call calc_histogram_quality_signal(imgs, mskdiam, quality%hard_reject, quality%hist_dmat, &
+                                           hist_entropy, hist_variance)
         if( allocated(hist_entropy) )then
             if( size(hist_entropy) /= size(quality%raw, dim=1) ) &
                 THROW_HARD('evaluate_cavg_quality: invalid histogram entropy size')
             quality%raw(:, I_HIST_ENTROPY) = hist_entropy
             deallocate(hist_entropy)
+        endif
+        if( allocated(hist_variance) )then
+            if( size(hist_variance) /= size(quality%raw, dim=1) ) &
+                THROW_HARD('evaluate_cavg_quality: invalid histogram variance size')
+            quality%raw(:, I_LOG_HIST_VARIANCE) = hist_variance
+            deallocate(hist_variance)
         endif
         call calc_power_spectrum_quality_signal(imgs, mskdiam, quality%hard_reject, quality%spec_dmat)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)

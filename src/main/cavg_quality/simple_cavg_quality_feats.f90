@@ -32,6 +32,10 @@ public :: I_NEG_ICE_SCORE
 public :: I_HIST_ENTROPY
 public :: I_CC_AREA_FRAC
 public :: I_CC_DIAMETER_NORM
+public :: I_PRESENCE
+public :: I_LOG_CONTRAST
+public :: I_LOG_HIST_VARIANCE
+public :: I_LOG_FG_BG_LOCVAR_RATIO
 public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
@@ -69,6 +73,10 @@ integer, parameter :: I_NEG_ICE_SCORE     = 11
 integer, parameter :: I_HIST_ENTROPY      = 12
 integer, parameter :: I_CC_AREA_FRAC      = 13
 integer, parameter :: I_CC_DIAMETER_NORM  = 14
+integer, parameter :: I_PRESENCE          = 15
+integer, parameter :: I_LOG_CONTRAST      = 16
+integer, parameter :: I_LOG_HIST_VARIANCE = 17
+integer, parameter :: I_LOG_FG_BG_LOCVAR_RATIO = 18
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -98,7 +106,15 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
     cavg_quality_feature_def('cc_area_frac', 'diagnostic', &
         'main connected-component area divided by the expected circular mask area'), &
     cavg_quality_feature_def('cc_diameter_norm', 'diagnostic', &
-        'main connected-component diameter divided by the expected mask diameter') ]
+        'main connected-component diameter divided by the expected mask diameter'), &
+    cavg_quality_feature_def('presence', 'higher_is_better', &
+        'central signal excess relative to border background noise'), &
+    cavg_quality_feature_def('log_contrast', 'diagnostic', &
+        'log full-image intensity standard deviation after edge background subtraction'), &
+    cavg_quality_feature_def('log_hist_variance', 'diagnostic', &
+        'log masked intensity-histogram variance from the same histograms used for Hellinger distances'), &
+    cavg_quality_feature_def('log_fg_bg_locvar_ratio', 'higher_is_better', &
+        'log ratio of foreground to background local variance') ]
 
 contains
 
@@ -147,9 +163,9 @@ contains
         real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
         real                 :: outside_frac, centroid_norm, locvar_fg, locvar_bg
         real                 :: cc_area_frac, cc_diameter_norm
-        real                 :: spec_dynrange, center_edge_snr, ice_score
+        real                 :: spec_dynrange, center_edge_snr, ice_score, presence_score, contrast
         integer              :: nccs_valid, ithr
-        logical              :: no_component, mask_hard_reject
+        logical              :: no_component, mask_hard_reject, bad_pixels
         ncls = size(imgs)
         if( ncls == 0 ) THROW_HARD('extract_cavg_quality_features: no class averages')
         if( cls_oris%get_noris() /= ncls ) THROW_HARD('extract_cavg_quality_features: # cls oris /= # cavgs')
@@ -186,16 +202,35 @@ contains
             disc_area(ithr) = count(rmat_disc(:,:,:,ithr) > 0.0)
         end do
         !$omp parallel do default(shared) private(i,ithr,outside_frac,centroid_norm,nccs_valid,no_component,&
-        !$omp& mask_hard_reject,locvar_fg,locvar_bg,spec_dynrange,center_edge_snr,ice_score,cc_area_frac,cc_diameter_norm)&
+        !$omp& mask_hard_reject,bad_pixels,locvar_fg,locvar_bg,spec_dynrange,center_edge_snr,ice_score,presence_score,&
+        !$omp& contrast,cc_area_frac,cc_diameter_norm)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
             ithr = omp_get_thread_num() + 1
-            call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
-                                                  rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, outside_frac, &
-                                                  centroid_norm, cc_area_frac, cc_diameter_norm, nccs_valid, &
-                                                  no_component, mask_hard_reject)
-            call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, spec_dynrange, &
-                                            center_edge_snr, ice_score)
+            bad_pixels = imgs(i)%contains_nans()
+            if( bad_pixels )then
+                outside_frac     = 1.0
+                centroid_norm    = 2.0
+                cc_area_frac     = 0.0
+                cc_diameter_norm = 0.0
+                nccs_valid       = 0
+                no_component     = .true.
+                mask_hard_reject = .true.
+                locvar_fg        = 0.0
+                locvar_bg        = 0.0
+                spec_dynrange    = 0.0
+                center_edge_snr  = 0.0
+                ice_score        = 0.0
+                presence_score   = 0.0
+                contrast         = 0.0
+            else
+                call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
+                                                      rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, outside_frac, &
+                                                      centroid_norm, cc_area_frac, cc_diameter_norm, nccs_valid, &
+                                                      no_component, mask_hard_reject)
+                call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, spec_dynrange, &
+                                                center_edge_snr, ice_score, presence_score, contrast)
+            endif
             raw(i, I_LOG_POP)       = log(real(max(pop(i), 0)) + 1.0)
             raw(i, I_NEG_LOG_RES)   = resolution_feature(res(i))
             raw(i, I_MASK_INSIDE)   = -outside_frac
@@ -209,9 +244,12 @@ contains
             raw(i, I_NEG_ICE_SCORE) = -ice_score
             raw(i, I_CC_AREA_FRAC)  = cc_area_frac
             raw(i, I_CC_DIAMETER_NORM) = cc_diameter_norm
+            raw(i, I_PRESENCE)      = presence_score
+            raw(i, I_LOG_CONTRAST)  = log(max(contrast, LOG_EPS))
+            raw(i, I_LOG_FG_BG_LOCVAR_RATIO) = log(max(locvar_fg, LOG_EPS)) - log(max(locvar_bg, LOG_EPS))
             ! Geometry failures are hard validity rejects; the model should not
             ! rescue classes whose segmented foreground lies outside the mask.
-            hard_reject(i) = pop(i) <= 0 .or. no_component .or. mask_hard_reject .or. &
+            hard_reject(i) = pop(i) <= 0 .or. bad_pixels .or. no_component .or. mask_hard_reject .or. &
                                               (locvar_fg <= EPS .and. locvar_bg <= EPS)
         end do
         !$omp end parallel do
@@ -254,12 +292,13 @@ contains
         end do
     end subroutine normalize_cavg_quality_features
 
-    subroutine calc_histogram_quality_signal( imgs, mskdiam, hard_reject, hist_dmat, hist_entropy )
+    subroutine calc_histogram_quality_signal( imgs, mskdiam, hard_reject, hist_dmat, hist_entropy, hist_variance )
         class(image),         intent(inout) :: imgs(:)
         real,                 intent(in)    :: mskdiam
         logical,              intent(in)    :: hard_reject(:)
         real,    allocatable, intent(inout) :: hist_dmat(:,:)
         real,    allocatable, intent(inout), optional :: hist_entropy(:)
+        real,    allocatable, intent(inout), optional :: hist_variance(:)
         type(histogram), allocatable :: hists(:)
         real, allocatable :: dmat_hd(:,:)
         real :: smpd, rad_px, mm(2), mm_i(2)
@@ -272,6 +311,10 @@ contains
         if( present(hist_entropy) )then
             if( allocated(hist_entropy) ) deallocate(hist_entropy)
             allocate(hist_entropy(ncls), source=0.0)
+        endif
+        if( present(hist_variance) )then
+            if( allocated(hist_variance) ) deallocate(hist_variance)
+            allocate(hist_variance(ncls), source=0.0)
         endif
         nfit = count(.not. hard_reject)
         if( nfit < 4 ) return
@@ -291,6 +334,7 @@ contains
             if( hard_reject(i) ) cycle
             call hists(i)%new(imgs(i), NHISTBINS, minmax=mm, radius=rad_px)
             if( present(hist_entropy) ) hist_entropy(i) = hists(i)%entropy(bounded=.true.)
+            if( present(hist_variance) ) hist_variance(i) = log(max(hists(i)%variance(), LOG_EPS))
         end do
         allocate(dmat_hd(ncls,ncls), source=0.0)
         !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
@@ -447,10 +491,12 @@ contains
         if( outside > MASK_HARD_OUTSIDE_PIXELS ) mask_hard_reject = .true.
     end subroutine measure_cavg_foreground_geometry
 
-    subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, spec_dynrange, center_edge_snr, ice_score )
+    subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, spec_dynrange, center_edge_snr, &
+                                           ice_score, presence_score, contrast )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
         real,         intent(out)   :: locvar_fg, locvar_bg, spec_dynrange, center_edge_snr, ice_score
+        real,         intent(out)   :: presence_score, contrast
         type(image)       :: img, img_bin, img_ice
         real, allocatable :: bin_mask(:,:,:), pspec(:), ice_pspec(:)
         integer           :: ldim(3), k_hp, k_lp
@@ -466,6 +512,8 @@ contains
         endif
         img  = img_src
         call img%zero_edgeavg()
+        presence_score = img%presence()
+        contrast       = img%contrast()
         center_edge_snr = img%center_edge_snr(rad_px)
         call img%bp(0.0, SIGNAL_METRIC_LP)
         img_bin = img
