@@ -2,7 +2,7 @@
 
 ## Overview
 
-`cluster_cavgs_quality` is the SIMPLE class-average quality selection program. It replaces a field of scalar rejection thresholds with an explicit, interpretable multivariate model. The program evaluates every 2D class average, measures a fixed inventory of quality features, normalizes those features within the dataset, and applies an instantiable quality model that partitions class averages into accepted and rejected sets.
+`cluster_cavgs_quality` is the SIMPLE class-average quality selection program. It replaces a field of scalar rejection thresholds with an explicit, interpretable multivariate model. The program evaluates every 2D class average, applies hard validity rejects for non-negotiable failures, measures a fixed inventory of quality features, normalizes those features within the dataset, and applies an instantiable quality model that partitions the remaining class averages into accepted and rejected sets.
 
 The current implementation is intentionally not a black-box classifier. A model is a named `linear_boundary` specification with feature weights, a histogram-distance weight, threshold controls, and policy flags for chunk-like or pool-like behavior. Learned models can be used directly from a model file, and a separate promotion mode can emit the Fortran code needed to add a validated learned model as a built-in library option.
 
@@ -103,6 +103,8 @@ The feature inventory is maintained in `simple_cavg_quality_feats.f90`. Feature 
 
 The current feature set includes population/resolution support, foreground geometry, local signal variance, spectrum shape, class statistics, center-edge signal, ice-score penalty, bounded histogram entropy, and two connected-component shape diagnostics. Hellinger histogram distances and rotationally averaged power-spectrum distances are retained as pairwise class-average distance matrices and mixed into the model distance matrix through the learnable `hist_dmat_weight` and `spec_dmat_weight`. A former scalar histogram-neighborhood feature was removed because its direction was dataset-dependent: in some stream chunks histogram-dense neighborhoods were enriched for junk rather than good class averages.
 
+Foreground geometry also contributes hard validity rejects before the learned model is fit. After Otsu segmentation and connected-component cleanup, a class is hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar geometry features remain in the analysis table as diagnostics, but catastrophic outside-mask density is not left for the model to rescue.
+
 The appended diagnostics `hist_entropy`, `cc_area_frac`, and `cc_diameter_norm` are emitted in analysis files and can be learned like the original scalar features. They are included in the feature-space clustering distance only after learning assigns them nonzero score weight, preserving compatibility for old zero-weight model files while allowing the current `chunk_default_v2` model to use them.
 
 Feature definitions should remain centralized in `simple_cavg_quality_feats.f90`, so future feature additions are visible in one inventory rather than being scattered through model code.
@@ -117,7 +119,7 @@ For one dataset, the model classifies as follows:
    score = sum(z_feature_i * weight_i)
    ```
 
-2. Assign hard-rejected classes a low sentinel score and remove them from the fitted partition.
+2. Assign hard-rejected classes a low sentinel score and remove them from the fitted partition. Hard rejects include empty/dead classes and foreground geometry failures outside the expected mask.
 
 3. Build a Euclidean distance matrix between non-hard-rejected normalized feature vectors. The original 11-dimensional bank is always included for compatibility; appended candidate diagnostics enter this distance only when their learned model weight is nonzero.
 

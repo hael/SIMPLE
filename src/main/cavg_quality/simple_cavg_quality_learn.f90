@@ -123,6 +123,7 @@ contains
         character(len=XLONGSTRLEN) :: line
         character(len=LONGSTRLEN)  :: field
         integer :: funit, ios, nrows, irow, ifeat, feat_col(CAVG_QUALITY_NFEATS)
+        integer :: raw_mask_inside_col, raw_centered_col
         logical :: have_feature_header
         dset%fname = trim(fname)
         open(newunit=funit, file=trim(fname), status='old', action='read', iostat=ios)
@@ -142,6 +143,8 @@ contains
         rewind(funit)
         irow = 0
         feat_col = 0
+        raw_mask_inside_col = 0
+        raw_centered_col    = 0
         have_feature_header = .false.
         do
             read(funit,'(A)',iostat=ios) line
@@ -164,6 +167,7 @@ contains
             endif
             if( is_analysis_header_line(line) )then
                 call map_analysis_feature_columns(line, feat_col)
+                call map_analysis_raw_geometry_columns(line, raw_mask_inside_col, raw_centered_col)
                 call require_analysis_feature_columns(feat_col, trim(fname))
                 have_feature_header = .true.
                 cycle
@@ -174,6 +178,8 @@ contains
             if( irow == 1 ) dset%dataset_id = trim(field)
             field = csv_field(line, 6)
             dset%hard_reject(irow) = str_is_true(field)
+            if( analysis_row_geometry_hard_reject(line, raw_mask_inside_col, raw_centered_col) ) &
+                dset%hard_reject(irow) = .true.
             field = csv_field(line, 9)
             dset%manual_states(irow) = str2int(trim(field))
             do ifeat = 1, CAVG_QUALITY_NFEATS
@@ -270,6 +276,51 @@ contains
             end do
         end do
     end subroutine map_analysis_feature_columns
+
+    subroutine map_analysis_raw_geometry_columns( line, raw_mask_inside_col, raw_centered_col )
+        character(len=*), intent(in)  :: line
+        integer,          intent(out) :: raw_mask_inside_col, raw_centered_col
+        character(len=LONGSTRLEN) :: field
+        integer :: icol
+        raw_mask_inside_col = 0
+        raw_centered_col    = 0
+        do icol = 1, 512
+            field = csv_field(line, icol)
+            if( len_trim(field) == 0 ) exit
+            select case(trim(field))
+                case('raw_mask_inside')
+                    raw_mask_inside_col = icol
+                case('raw_centered')
+                    raw_centered_col = icol
+            end select
+        end do
+    end subroutine map_analysis_raw_geometry_columns
+
+    logical function analysis_row_geometry_hard_reject( line, raw_mask_inside_col, raw_centered_col )
+        character(len=*), intent(in) :: line
+        integer,          intent(in) :: raw_mask_inside_col, raw_centered_col
+        character(len=LONGSTRLEN) :: field
+        real :: raw_mask_inside, raw_centered
+        ! Legacy analysis records lack the exact largest-CC outside-pixel count,
+        ! but they do carry the raw mask/centroid diagnostics from the same
+        ! segmentation pass. Use them to keep obvious mask failures out of the
+        ! learned quality model when retraining from existing analysis files.
+        analysis_row_geometry_hard_reject = .false.
+        if( raw_centered_col > 0 )then
+            field = csv_field(line, raw_centered_col)
+            if( len_trim(field) > 0 )then
+                raw_centered = str2real(trim(field))
+                if( raw_centered < -1.0 - EPS ) analysis_row_geometry_hard_reject = .true.
+            endif
+        endif
+        if( raw_mask_inside_col > 0 )then
+            field = csv_field(line, raw_mask_inside_col)
+            if( len_trim(field) > 0 )then
+                raw_mask_inside = str2real(trim(field))
+                if( raw_mask_inside < -EPS ) analysis_row_geometry_hard_reject = .true.
+            endif
+        endif
+    end function analysis_row_geometry_hard_reject
 
     subroutine require_analysis_feature_columns( feat_col, fname )
         integer,          intent(in) :: feat_col(CAVG_QUALITY_NFEATS)
@@ -475,6 +526,7 @@ contains
         write(funit,'(A,I0)') 'top_candidates_reported=', n_top
         write(funit,'(A)') 'note=pairwise histogram and rotational power-spectrum distances were learned as alternatives'
         write(funit,'(A)') 'grid_pairwise_rule=feature_only_or_feature_plus_one_pairwise_matrix_with_scalar_anchor_retained'
+        write(funit,'(A)') 'note=legacy_raw_geometry_mask_failures_are_honored_as_hard_rejects_when_present'
         call write_real_list(funit, 'grid_weight_alphas=', LEARN_WEIGHT_ALPHAS)
         call write_real_list(funit, 'grid_hist_dmat_weights=', LEARN_HIST_WEIGHTS)
         call write_real_list(funit, 'grid_spec_dmat_weights=', LEARN_SPEC_WEIGHTS)

@@ -45,8 +45,8 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | --- | --- | --- | --- | --- |
 | 1 | `log_pop` | `cls2D` `pop` | higher is better | Log population support. |
 | 2 | `neg_log_res` | `cls2D` `res` | higher is better | Lower Angstrom resolution maps to a larger score. |
-| 3 | `mask_inside` | Otsu foreground CC vs. mask disc | higher is better | Negative outside-mask fraction of the main segmented component. |
-| 4 | `centered` | Otsu CC mass centers | higher is better | Negative normalized centroid displacement. |
+| 3 | `mask_inside` | Otsu foreground CC vs. mask disc | higher is better | Negative outside-mask fraction of the main segmented component. Extreme failures are hard rejected before modeling. |
+| 4 | `centered` | Otsu CC mass centers | higher is better | Negative normalized centroid displacement. Component centroids outside the mask are hard rejected before modeling. |
 | 5 | `log_locvar_fg` | `image%loc_var_masked` | higher is better | Foreground local variance after low-pass filtering and Otsu masking. |
 | 6 | `log_locvar_bg` | `image%loc_var_masked` | higher is better | Complementary background local variance. |
 | 7 | `spectrum_dynrange` | `image%spectrum('sqrt')` | diagnostic | Retained for analysis; high values can be good signal or ring/ice pathology. |
@@ -61,6 +61,8 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 Histogram distances are retained as a pairwise matrix rather than as a scalar nearest-neighbor feature. The current `hist_dmat` uses the normalized Hellinger distance between masked class-average histograms. The active `hist_entropy` diagnostic is scalar, but it is derived from those same histograms and therefore does not add another histogram pass. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. New learn-mode searches treat histogram distance as an optional alternative to spectrum distance, always mixed with the scalar feature-space distance rather than replacing it.
 
 The three features appended after `neg_ice_score` remain compatibility-friendly: old 11-weight model files load with zero weights for them, and zero-weight appended diagnostics do not perturb feature-space clustering. The current `chunk_default_v2` gives them nonzero learned weights from the batch4chunk round, so they now contribute to both the scalar score and feature-space distance.
+
+Mask-geometry validity is deliberately outside the learned model. The feature extractor hard rejects class averages when the Otsu/connected-component pass finds no valid foreground component, any foreground-component centroid outside the mask radius, or more than 10 pixels of the largest component outside the mask disc. This mirrors the proven microchunk rejection concept without depending on the stream/microchunk modules.
 
 Rotationally averaged power-spectrum distances are also retained as a pairwise matrix. They follow the older `cluster_cavgs` signal-statistics idea: normalize and mask each class average, extract the square-root rotational spectrum over the `HP_SPEC` to `LP_SPEC` band, compute pairwise Euclidean distances between spectra, and min/max-normalize the resulting distance matrix. The model uses this only through `spec_dmat_weight`; it is not exposed as a scalar quality feature. Analysis files tag both pairwise matrix metrics so the learn report can warn if a nonzero learned matrix weight came from legacy files with unspecified or unexpected matrix provenance. The learner searches spectrum distance as an alternative to histogram distance, not together with it.
 
