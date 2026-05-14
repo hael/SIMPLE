@@ -221,7 +221,7 @@ contains
         type(cavg_quality_model),  intent(in) :: model
         type(cavg_quality_result), intent(in) :: quality
         integer :: ifeat
-        write(funit,'(A,A,A,A,A,I0,A,I0,A,L1,A,I0,A,ES14.6,A,I0,A,I0)', advance='no') &
+        write(funit,'(A,A,A,A,A,A,I0,A,I0,A,L1,A,I0,A,ES14.6,A,I0,A,I0)', advance='no') &
             trim(dataset_id), ',', trim(model%context), ',', trim(model%name), ',', icls, ',', quality%states(icls), ',', &
             quality%hard_reject(icls), ',', quality%labels(icls), ',', quality%scores(icls), ',', manual_state, ',', &
             auto_match

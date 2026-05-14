@@ -165,6 +165,7 @@ contains
         smpd = imgs(1)%get_smpd()
         if( smpd <= 0.0 ) THROW_HARD('extract_cavg_quality_features: non-positive smpd')
         rad_px = (mskdiam / smpd) / 2.0
+        call imgs(1)%memoize_mask_coords()
         allocate(bin_img(nthr_glob), cc_img(nthr_glob), disc_img(nthr_glob))
         allocate(rmat_cc(ldim(1), ldim(2), ldim(3), nthr_glob), &
                  rmat_disc(ldim(1), ldim(2), ldim(3), nthr_glob))
