@@ -1,93 +1,99 @@
 # Class-Average Quality Metric Inventory
 
-**Date:** May 12, 2026  
-**Status:** Developer inventory / metric design input  
-**Scope:** Existing SIMPLE routines that can be reused to derive scalar features for separating good and bad cryo-EM 2D class averages.
+**Date:** May 14, 2026
+**Status:** Developer inventory / future feature planning
+**Scope:** Existing SIMPLE routines that can support scalar and pairwise features for `cluster_cavgs_quality`.
 
 ## Purpose
 
-This note inventories image-processing and class-average routines already present in SIMPLE that can be reused to build scalar quality metrics for 2D class averages. The goal is to avoid inventing a new image-quality stack when the library already has useful signal, mask, resolution, connected-component, spectral, and clustering primitives.
+This note inventories image-processing, class-average, and clustering routines already present in SIMPLE that can be reused when extending the `cluster_cavgs_quality` feature bank. The goal is to keep quality selection interpretable and reproducible: every feature should have a clear source, a documented direction, and a diagnostic raw value in the analysis table.
 
-The strongest path is to treat class-average quality as a small feature-vector problem:
+The current implementation treats class-average quality as a feature-vector and model-selection problem:
 
-1. Extract robust scalar descriptors from each class average.
-2. Keep raw values and normalized values.
-3. Apply hard rejection for pathological cases.
-4. Combine the remaining descriptors with robust normalization, simple weights, or a small clustering step.
-5. Persist both the final quality score and the raw feature table so that bad decisions can be diagnosed.
+1. Extract raw scalar descriptors for each 2D class average.
+2. Apply only conservative hard rejections for pathological cases.
+3. Normalize non-hard-rejected classes within the dataset by robust statistics.
+4. Use an explicit quality model to score and cluster the class averages.
+5. Preserve the raw features, normalized features, model parameters, and manual reference labels in `cavgs_quality_analysis.txt`.
+6. Use `quality_mode=learn` to tune interpretable model parameters against trusted manual selections.
 
-## Current Worktree Capability
+## Current Implementation
 
-The current worktree contains a directly relevant work-in-progress module:
+The refactored code lives under `src/main/cavg_quality`:
 
-- `src/main/strategies/search/simple_cavg_quality.f90`
-  - `evaluate_cavg_quality`
-  - `extract_cavg_quality_features`
-  - `normalize_cavg_quality_features`
-  - `cluster_cavg_quality`
-  - `cavg_quality_result`
+- `simple_cavg_quality_types.f90`: shared constants and derived types.
+- `simple_cavg_quality_feats.f90`: feature definitions, feature extraction, robust normalization, and histogram distance extraction.
+- `simple_cavg_quality_stats.f90`: binary metrics, AUC, robust summaries, and distance-matrix normalization helpers.
+- `simple_cavg_quality_model.f90`: built-in model presets, model file I/O, linear scoring, mixed-distance clustering, threshold policy, and promotion-code generation.
+- `simple_cavg_quality_analysis.f90`: `apply`/`analyze` evaluation and reporting.
+- `simple_cavg_quality_learn.f90`: analysis-table reader and grid search over interpretable model parameters.
 
-This module already implements an eight-feature class-average quality vector:
+The command entry point is `exec_cluster_cavgs_quality` in `src/main/commanders/simple/simple_commanders_cavgs.f90`.
 
-| Feature | Raw source | Quality direction |
-| --- | --- | --- |
-| `log_pop` | `cls2D` population | larger is better |
-| `neg_log_res` | `cls2D` resolution | larger is better, because lower resolution in Angstrom is better |
-| `mask_inside` | largest Otsu foreground component outside mask disc | larger is better after sign flip |
-| `centered` | foreground component centroid offset normalized by mask radius | larger is better after sign flip |
-| `log_locvar_fg` | masked foreground local variance | larger is usually better |
-| `log_locvar_bg` | masked background local variance | larger is usually better |
-| `spectrum_dynrange` | square-root spectrum at high-pass and low-pass indices | larger is usually better |
-| `single_component` | connected-component count penalty | closer to one component is better |
+The current application modes are:
 
-The current worktree also has a commander hook in `src/main/commanders/simple/simple_commanders_cavgs.f90`:
+- `quality_mode=apply`: production selection, writes selected/rejected stacks and updates the project.
+- `quality_mode=analyze`: runs the model against an existing manual selection and writes a self-contained analysis file.
+- `quality_mode=learn`: reads a file table of analysis files and learns a model file.
+- `quality_mode=promote`: converts a validated learned model file into a Fortran built-in preset snippet.
 
-- `exec_cluster_cavgs_quality`
-  - reads class averages from a project
-  - calls `evaluate_cavg_quality`
-  - writes `cavgs_quality_features.txt`
-  - writes selected and rejected stacks
-  - annotates `cls2D` fields `quality`, `quality_cluster`, and `accept`
-  - uses an internal signed boundary margin; positive values retain more
-    borderline classes, while negative values raise the boundary and reject more
-    junk
-  - keeps `spectrum_dynrange` in the feature table for diagnostics, but does
-    not currently give it positive score weight because high values can reflect
-    ring or ice artifacts rather than good class-average signal
+## Current Feature Bank
 
-This is already very close to a reusable scalar metric pipeline. The remaining inventory below lists additional existing routines that can either support this module or expand it.
+The active inventory is centralized in `simple_cavg_quality_feats.f90` through `FEATURE_DEFS` and `CAVG_QUALITY_NFEATS`. Every feature is emitted as both a raw value and a normalized `z_*` value in analysis output.
 
-## Ready-Made Class-Average Signals
+| Index | Feature | Source | Direction | Notes |
+| --- | --- | --- | --- | --- |
+| 1 | `log_pop` | `cls2D` `pop` | higher is better | Log population support. |
+| 2 | `neg_log_res` | `cls2D` `res` | higher is better | Lower Angstrom resolution maps to a larger score. |
+| 3 | `mask_inside` | Otsu foreground CC vs. mask disc | higher is better | Negative outside-mask fraction of the main segmented component. |
+| 4 | `centered` | Otsu CC mass centers | higher is better | Negative normalized centroid displacement. |
+| 5 | `log_locvar_fg` | `image%loc_var_masked` | higher is better | Foreground local variance after low-pass filtering and Otsu masking. |
+| 6 | `log_locvar_bg` | `image%loc_var_masked` | higher is better | Complementary background local variance. |
+| 7 | `spectrum_dynrange` | `image%spectrum('sqrt')` | diagnostic | Retained for analysis; high values can be good signal or ring/ice pathology. |
+| 8 | `single_component` | `image_bin%find_ccs` | higher is better | Negative distance from exactly one valid component. |
+| 9 | `corr_frc_proxy` | optional `cls2D` `corr` | higher is better | Uses stored correlation/FRC-like metadata when present. |
+| 10 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
+| 11 | `neg_ice_score` | class-average power spectrum near `ICE_BAND1` | higher is better | Negative 3.7 A ice-band excess score. |
+| 12 | `hist_knn` | masked intensity histograms | higher is better | Negative mean nearest-neighbor histogram distance. |
 
-### Cluster2D Rejection
+Histogram distances are also retained as a pairwise matrix, not only as the scalar `hist_knn` feature. The model can blend the normalized feature-space distance matrix with the normalized histogram distance matrix using `hist_dmat_weight`.
+
+## Current Model Controls
+
+The built-in models are complete `linear_boundary` presets:
+
+- `chunk_default_v2`: current default chunk/stream behavior, promoted from the first trusted batch-style learning cycle.
+- `chunk_default_v1`: legacy chunk/stream behavior retained for comparison.
+- `pool_default_v1`: recall-preserving behavior for larger pooled/batch datasets.
+
+The important model controls are:
+
+- `feature_weights`: nonnegative linear score coefficients, normalized to sum to one.
+- `hist_dmat_weight`: blend between feature-vector distances and histogram distances for clustering.
+- `boundary_margin`: shifts the decision threshold; more negative rejects more aggressively, more positive preserves more borderline classes.
+- `min_score_separation`: below this separation the model treats the partition as unreliable unless low-separation Otsu is enabled and acceptable.
+- `otsu_min_offset` and `otsu_max_offset`: constrain when an Otsu score threshold may replace the cluster-derived threshold.
+- `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
+- `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
+
+The current learner searches feature-weight interpolation, histogram-distance weight, minimum score separation, boundary margin, and pool minimum accepted fraction. It deliberately inherits the higher-level policy flags from the base model.
+
+## Reusable Existing Routines
+
+### Microchunk Rejector
 
 Source:
 
 - `src/main/stream/simple_cluster2D_rejector.f90`
 
-Reusable routines:
+Relevant routines:
 
 - `reject_pop`
 - `reject_res`
 - `reject_mask`
 - `reject_local_variance`
 
-These routines already encode practical good/bad criteria:
-
-- population rejection using a small fraction of the total population
-- resolution rejection using `RES_THRESHOLD = 40.0`
-- mask rejection using Otsu foreground, connected components, and outside-mask pixels
-- flat-class rejection using foreground/background local variance and robust z-scores
-
-Metric candidates:
-
-- population fraction
-- resolution pass/fail or continuous resolution score
-- outside-mask pixel count or outside-mask fraction
-- largest-component centroid offset
-- foreground and background local variance
-- robust local-variance z-score
-- hard-reject flag
+These routines remain useful as historical, operationally tested rejection criteria. They are now better viewed as feature sources or sanity checks than as the final quality selector. The refactored quality app already mirrors the strongest pieces: population, resolution, mask geometry, connected components, and local variance.
 
 ### Older Non-Junk Gate
 
@@ -95,57 +101,31 @@ Source:
 
 - `src/main/strategies/search/simple_strategy2D_utils.f90`
 
-Reusable routine:
+Relevant routine:
 
 - `flag_non_junk_cavgs`
 
-This routine combines several lightweight quality tests:
+This path combines spectral dynamic range, density inside/outside a mask, center offset, and minimum population. It is useful as a source of candidate features and for understanding prior behavior, but its hard gate should not be copied wholesale into the new model.
 
-- spectral dynamic range
-- density inside/outside the mask
-- center offset
-- minimum class population
-
-Metric candidates:
-
-- spectrum dynamic range between chosen spatial-frequency bands
-- density ratio inside the mask
-- center-offset penalty
-- population threshold flag
-- combined non-junk flag
-
-### Cluster-Based Class-Average Scores
+### Cluster-Average Similarity Matrices
 
 Source:
 
 - `src/main/strategies/search/simple_strategy2D_utils.f90`
-- `src/defs/simple_type_defs.f90`
 
-Reusable routines and fields:
+Relevant routines and fields:
 
 - `calc_sigstats_dmats`
 - `calc_cc_and_res_dmats`
 - `calc_cluster_cavgs_dmat`
 - `align_and_score_cavg_clusters`
-- `clust_info%euclid`
 - `clust_info%homogeneity`
 - `clust_info%resscore`
 - `clust_info%clustscore`
 - `clust_info%jointscore`
-- `clust_info%good_bad`
 - `clust_info%icescore`
 
-These routines already build distance matrices and convert cluster properties into percent-style scores. They are useful when quality is better judged by consistency with other class averages rather than by single-image statistics alone.
-
-Metric candidates:
-
-- distance to medoid
-- mean distance to assigned cluster
-- cluster homogeneity percentile
-- cluster resolution percentile
-- cluster score percentile
-- joint score
-- good/bad cluster label
+These routines are most valuable when quality is better judged by consistency with other class averages than by single-image statistics. They are also more expensive because some paths perform pairwise matching or cluster alignment. They are good candidates for optional analysis/learn experiments, not for an always-on stream default without timing measurements.
 
 ### FRC and Resolution Infrastructure
 
@@ -157,7 +137,7 @@ Sources:
 - `src/utils/filter/simple_estimate_ssnr.f90`
 - `src/utils/filter/simple_opt_filter.f90`
 
-Reusable routines:
+Relevant routines:
 
 - `class_frcs%frc_getter`
 - `class_frcs%avg_frc_getter`
@@ -169,17 +149,7 @@ Reusable routines:
 - `estimate_lplim`
 - `estimate_lplims2D`
 
-The restoration path already computes even/odd FRCs and persists per-class `pop`, `res`, `corr`, and `w` fields. These are high-value quality signals and should be reused before recomputing anything expensive.
-
-Metric candidates:
-
-- FRC 0.5 resolution
-- FRC 0.143 resolution
-- mean FRC over a target band
-- first frequency index below threshold
-- estimated alignment low-pass limit
-- even/odd class-average correlation
-- SSNR-derived quality summary
+Stored `cls2D` metadata should be preferred when available. Recomputing even/odd FRC-like summaries during quality selection would be more invasive and should be justified by validation, but FRC-band summaries are scientifically plausible future features.
 
 ### Shape Ranking
 
@@ -187,266 +157,139 @@ Source:
 
 - `src/main/commanders/simple/simple_commanders_cavgs.f90`
 
-Reusable routine:
+Relevant routine:
 
 - `exec_shape_rank_cavgs`
 
-This path uses `automask2D`, integrated masked intensity, object diameter, and center shifts to rank non-junk class averages.
+This path uses `automask2D`, integrated masked intensity, object diameter, and center shifts to rank class averages. Several of those outputs are attractive quality features if they can be computed without making quality selection too slow or too dependent on automask parameters.
 
-Metric candidates:
-
-- automask diameter
-- automask center shift
-- integrated masked intensity
-- shape rank
-- masked area or occupancy fraction
-
-## Reusable Image-Level Primitives
-
-### Masking and Connected Components
+### Image-Level Primitives
 
 Sources:
 
+- `src/main/image/simple_image.f90`
+- `src/main/image/simple_image_calc.f90`
 - `src/main/image/simple_image_msk.f90`
 - `src/main/image/simple_image_bin.f90`
-- `src/main/image/simple_image.f90`
-
-Reusable routines:
-
-- `automask2D`
-- `density_inoutside_mask`
-- `image%density_inoutside`
-- `image%nforeground`
-- `image%nbackground`
-- `image_bin%find_ccs`
-- `image_bin%size_ccs`
-- `image_bin%diameter_cc`
-- `image_bin%masscen_cc`
-- `image_bin%order_ccs`
-- `image_bin%cc2bin`
-
-Metric candidates:
-
-- foreground area
-- background area
-- foreground/background density ratio
-- largest connected-component area
-- connected-component count
-- largest-component diameter
-- largest-component centroid offset
-- outside-mask fraction
-- occupancy fraction within expected particle mask
-
-### Local Signal and Texture
-
-Source:
-
-- `src/main/image/simple_image.f90`
-
-Reusable routines:
-
-- `image%loc_sdev`
-- `image%avg_loc_sdev`
-- `image%loc_var`
-- `image%loc_var_masked`
-- `image%GLCM`
-- `image%variance`
-- `image%skew`
-- `image%kurt`
-- `image%noisesdev`
-
-Metric candidates:
-
-- average local standard deviation
-- average local variance
-- foreground local variance
-- background local variance
-- foreground/background local-variance ratio
-- image variance
-- skewness
-- kurtosis
-- gray-level co-occurrence texture summaries
-
-### Spectral and Frequency-Domain Signal
-
-Sources:
-
-- `src/main/image/simple_image.f90`
 - `src/main/simple_pspecs.f90`
-
-Reusable routines:
-
-- `image%spectrum`
-- `image%power_spectrum`
-- `image%guinier_bfac`
-- `image%guinier`
-- `image%fsc`
-- `image%frc_pspec`
-- `image%fsvar`
-- `image%get_res`
-- `image%fcomps_below_noise_power_stats`
-- `pspecs%new`
-
-Metric candidates:
-
-- spectrum dynamic range
-- high-frequency to low-frequency power ratio
-- band-limited power ratios
-- Guinier slope or B-factor proxy
-- estimated resolution from FRC/FSC curve
-- fraction of Fourier components below noise power
-- power-spectrum distance to good-class medoid
-
-### Correlation, Similarity, and Alignment Consistency
-
-Sources:
-
-- `src/main/image/simple_image.f90`
-- `src/main/strategies/search/simple_strategy2D_utils.f90`
-
-Reusable routines:
-
-- `image%corr`
-- `image%corr_shifted`
-- `image%real_corr`
-- `image%phase_corr`
-- `image%fcorr_shift`
-- `image%radial_cc`
-- `image%sqeuclid`
-- `image%weighted_subtr_corr`
-- `image%masked_subtr_corr`
-- `calc_cc_and_res_dmats`
-- `calc_cluster_cavgs_dmat`
-
-Metric candidates:
-
-- nearest-neighbor correlation
-- shifted correlation to a medoid
-- phase-correlation peak strength
-- radial correlation summary
-- masked Euclidean distance to medoid
-- cluster-average similarity
-- consistency of class average with nearby class averages
-
-### Centering, Presence, Contrast, and Sanity Checks
-
-Source:
-
-- `src/main/image/simple_image.f90`
-
-Reusable routines:
-
-- `image%center_edge_snr`
-- `image%presence`
-- `image%contrast`
-- `image%contains_nans`
-- `image%rmsd`
-- `image%snr`
-
-Metric candidates:
-
-- center-edge SNR
-- particle-presence score
-- contrast
-- NaN flag
-- RMSD to reference, medoid, or local average
-- simple SNR estimate
-
-### Ice and Artifact Scores
-
-Source:
-
-- `src/main/image/simple_image.f90`
-
-Reusable routine:
-
-- `image%calc_ice_score`
-
-Metric candidates:
-
-- ice score
-- ice-score percentile within a run
-- hard artifact flag for extreme ice-score outliers
-
-### Histogram-Based Statistics
-
-Source:
-
 - `src/utils/math/simple_histogram.f90`
+- `src/utils/math/simple_stat.f90`
 
-Reusable routines:
+Useful primitives include:
 
-- `histogram%variance`
-- `histogram%entropy`
-- histogram moments and distance measures
+- `image%loc_var_masked`, `image%variance`, `image%skew`, `image%kurt`, `image%GLCM`
+- `image%spectrum`, `image%power_spectrum`, `image%guinier`, `image%guinier_bfac`, `image%frc_pspec`
+- `image%fcomps_below_noise_power_stats`
+- `image%center_edge_snr`, `image%presence`, `image%contrast`, `image%contains_nans`
+- `image%corr`, `image%corr_shifted`, `image%real_corr`, `image%phase_corr`, `image%radial_cc`, `image%sqeuclid`
+- `image%calc_ice_score`
+- `image_bin%find_ccs`, `image_bin%size_ccs`, `image_bin%diameter_cc`, `image_bin%masscen_cc`
+- `automask2D`, `density_inoutside_mask`, `image%density_inoutside`
+- `histogram%variance`, `histogram%skew`, `histogram%entropy`, `histogram%TVD`, `histogram%JSD`, `histogram%HD`
 
-Metric candidates:
+## Feasible Future Feature Extensions
 
-- bounded entropy of intensity histogram
-- histogram variance
-- histogram skewness
-- histogram distance to good-class distribution
-- Jensen-Shannon or Hellinger distance to a reference distribution
+The best future additions are cheap, interpretable, and likely to generalize across datasets. They should be added one or two at a time, then validated through `quality_mode=analyze` and `quality_mode=learn` before changing built-in weights.
 
-## Recommended First Metric Vector
+### Low-Risk Scalar Features
 
-The current `simple_cavg_quality` feature vector is a good first implementation because it is scalar, interpretable, robustly normalized, and tied to existing class-average rejection logic. For a first production-quality pass, the following vector is a practical target:
+These are feasible first additions because they reuse existing per-image routines and do not require pairwise alignment.
 
-| Feature | Existing source | Notes |
-| --- | --- | --- |
-| `log_pop` | `cls2D%pop` | Avoids over-penalizing large-population classes by using log scale. |
-| `neg_log_res` | `cls2D%res`, `class_frcs%estimate_res` | Reuse stored resolution when available. |
-| `corr` or FRC-band mean | `cls2D%corr`, `class_frcs%frc_getter` | Adds more information than a single resolution cutoff. |
-| `outside_mask_frac` | `density_inoutside_mask`, connected components | Penalizes off-mask junk. |
-| `centroid_offset` | `image_bin%masscen_cc` | Penalizes off-center particles. |
-| `ncc_penalty` | `image_bin%find_ccs` | Penalizes fragmented foreground. |
-| `locvar_fg` | `image%loc_var_masked` | Detects flat or featureless foreground. |
-| `locvar_ratio` | `image%loc_var_masked` | Compares foreground and background texture. |
-| `spectrum_dynrange` | `image%spectrum` | Detects weak or overfiltered averages. |
-| `center_edge_snr` | `image%center_edge_snr` | Captures particle-like center signal. |
-| `contrast` | `image%contrast` | Lightweight single-image contrast signal. |
-| `ice_score` | `image%calc_ice_score` | Useful artifact indicator when calibrated per data set. |
+| Candidate | Existing source | Why it may help | Caution |
+| --- | --- | --- | --- |
+| `contrast` | `image%contrast` | Detects extremely weak or washed-out averages. | Contrast may also rise for strong junk. Keep as learned/diagnostic initially. |
+| `presence` | `image%presence` | Direct particle-presence proxy. | Need to inspect scale and sign across stream and pool datasets. |
+| `hist_entropy` | `histogram%entropy` | Measures overly flat or overly spiky intensity distributions. | Must use common masked min/max, as current histograms do. |
+| `hist_variance` | `histogram%variance` | Complements local variance with global intensity spread. | Correlated with contrast and local variance. |
+| `fg_bg_locvar_ratio` | `image%loc_var_masked` | Tests whether foreground texture exceeds background texture. | Previous experiments showed background variance can be useful; do not replace the separate fg/bg terms without testing. |
+| `nan_or_bad_pixel_flag` | `image%contains_nans`, min/max checks | Hard diagnostic for corrupt inputs. | Should probably remain a hard reject or warning, not a learned soft feature. |
+| `cc_area_frac` | `image_bin%size_ccs` | Distinguishes tiny specks from plausible particle support. | Requires careful mask/box normalization. |
+| `cc_diameter_norm` | `image_bin%diameter_cc` | Catches over-large components, carbon edges, and tiny specks. | Current CC diameter pruning is crude; normalize by expected mask diameter. |
 
-The scalar score should keep each feature direction explicit. A simple robust approach is:
+### Medium-Risk Spectral Features
 
-1. Hard-reject NaNs, empty populations, missing foreground components, and near-zero local variance.
-2. Normalize each feature by median and MAD over non-rejected classes.
-3. Clip z-scores to a small range such as `[-4, 4]`.
-4. Combine with transparent weights.
-5. Optionally split scores into good and bad by k-medoids or by an adaptive threshold.
+These are plausible and cheap enough, but our experience with `spectrum_dynrange` says they should start as diagnostics.
 
-## Suggested Composite Outputs
+| Candidate | Existing source | Why it may help | Caution |
+| --- | --- | --- | --- |
+| `bandpower_mid_low_ratio` | `image%spectrum` or `image%power_spectrum` | Separates real mid-frequency structure from low-frequency blobs. | Ring artifacts can mimic high quality. |
+| `bandpower_high_mid_ratio` | `image%spectrum` | Catches over-sharpened/overfitted averages. | Needs ice/ring-aware calibration. |
+| `guinier_slope` or `bfac_proxy` | `image%guinier`, `image%guinier_bfac` | Captures spectral falloff shape. | Sensitive to preprocessing and box/mask choices. |
+| `below_noise_fraction` | `image%fcomps_below_noise_power_stats` | Identifies weak averages with little usable Fourier signal. | Needs a stable noise definition for class averages. |
+| `frc_pspec_summary` | `image%frc_pspec` | May approximate consistency without full even/odd class FRC infrastructure. | Must verify the input assumptions for class-average images. |
 
-Useful outputs for developers and users:
+### Medium- to High-Cost Pairwise Features
 
-- `quality`: scalar normalized score, larger means better.
-- `accept`: hard selection state, `1` for accepted and `0` for rejected.
-- `quality_cluster`: cluster label when clustering was used.
-- `hard_reject`: diagnostic hard-rejection flag.
-- `quality_reason`: optional future field for the dominant rejection reason.
-- `cavgs_quality_features.txt`: raw and normalized feature table.
+These are attractive for difficult cases, especially when junk is statistically similar to good classes, but they add quadratic cost and sometimes alignment cost.
 
-The current commander already writes the feature table and selected/rejected stacks. That is the right diagnostic shape.
+| Candidate | Existing source | Why it may help | Caution |
+| --- | --- | --- | --- |
+| `sig_knn` | `calc_sigstats_dmats` | Extends current histogram KNN with power-spectrum distance. | Already partly represented by histogram matrix; measure incremental value. |
+| `cc_knn` | `calc_cc_and_res_dmats` | Good classes should correlate with nearby good classes after in-plane search. | Expensive for stream chunks; consider optional analyze/learn experiments. |
+| `res_knn` | `calc_cc_and_res_dmats` | Pairwise FRC/resolution consistency may catch overfit junk. | Depends on robust pairwise matching. |
+| `mixed_dmat_knn` | `calc_cluster_cavgs_dmat` | Reuses Joe's signal/correlation/resolution blend as scalar support. | Duplicates current model's distance matrix idea; should be integrated cleanly. |
+| `cluster_jointscore` | `align_and_score_cavg_clusters` | Converts cluster homogeneity/resolution into interpretable scores. | More invasive and too heavy for a default streaming path until timed. |
+
+### FRC-Derived Features
+
+These are scientifically appealing if the relevant metadata is already available from class-average restoration.
+
+| Candidate | Existing source | Why it may help | Caution |
+| --- | --- | --- | --- |
+| `frc_band_mean` | `class_frcs%frc_getter` | Uses more of the FRC curve than one resolution cutoff. | Avoid recomputing FRCs in quality selection if they are not already persisted. |
+| `frc_drop_index` | `class_frcs%frc_getter` | Captures where class consistency collapses. | Resolution estimates already encode part of this. |
+| `ssnr_band_mean` | `fsc2ssnr` | Converts FRC/FSC into a signal-to-noise style summary. | Needs robust handling near invalid correlation values. |
+| `optlp_margin` | `estimate_lplims2D`, `fsc2optlp` | Measures whether usable signal extends beyond the alignment low-pass. | More useful in batch/pool contexts than tiny stream chunks. |
+
+### Shape and Automask Features
+
+These may help when class averages contain strong non-particle objects.
+
+| Candidate | Existing source | Why it may help | Caution |
+| --- | --- | --- | --- |
+| `automask_area_frac` | `automask2D` | Particle-like classes should occupy a plausible mask area. | Automask adds parameters and runtime. |
+| `automask_diameter_norm` | `automask2D` | Flags tiny specks and over-large blobs. | May reject unusual but real projections. |
+| `automask_shift_norm` | `automask2D` | Independent centering signal. | Correlated with current `centered` feature. |
+| `masked_integrated_intensity` | `exec_shape_rank_cavgs` pattern | Catches strong coherent particle density. | Contrast/sign conventions must be consistent. |
+
+## Suggested Extension Strategy
+
+Do not add a large feature batch in one pass. The current learner can evaluate all features, but feature interpretation becomes harder if many correlated features arrive together.
+
+A practical sequence is:
+
+1. Add cheap diagnostics first: `contrast`, `presence`, `hist_entropy`, `cc_area_frac`, and `cc_diameter_norm`.
+2. Run `quality_mode=analyze` across the trusted datasets and inspect per-feature AUC and learned weights.
+3. Promote only features that improve holdout behavior, especially on difficult chunk datasets, without damaging easy/manual-trusted cases.
+4. Try spectral additions next, but keep them diagnostic until they prove they do not simply rediscover ice/ring artifacts.
+5. Evaluate pairwise alignment-derived features only as optional experiments because they may be too slow for streaming.
+
+For any new feature:
+
+- Add its index and definition in `simple_cavg_quality_feats.f90`.
+- Keep the sign convention `higher_is_better` unless the feature is explicitly diagnostic.
+- Write both raw and normalized values through the existing analysis path.
+- Add it to model files through the existing `feature_weights` machinery.
+- Re-run learning from analysis files; do not hand-tune weights first.
+- Validate separately for `chunk` and `pool` contexts.
+
+## Features to Avoid for Now
+
+Some possible descriptors are available but should not be first-line additions:
+
+- Raw unmasked image mean or total intensity: too dependent on normalization and background convention.
+- Many texture features from `GLCM`: potentially useful, but easy to overfit and harder to interpret.
+- Absolute thresholds on spectrum or ice scores: dataset and sampling dependent; prefer normalized features and learned weights.
+- Full pairwise image alignment in the default stream path: potentially informative but likely too expensive unless timing proves otherwise.
+- A black-box classifier that bypasses the current model file and analysis/reporting flow: this would make failures harder to debug.
 
 ## Implementation Notes
 
-- Prefer reusing stored `cls2D` metadata (`pop`, `res`, `corr`) before recomputing FRCs.
-- Keep feature extraction in a standalone module, not buried in a commander, so stream and project workflows can share it.
-- Preserve both raw and normalized values. Raw values are essential for debugging thresholds.
-- Normalize per run with robust statistics. Absolute thresholds are useful for hard rejection, but dataset-level contrast and ice behavior vary.
-- Document the sign of every scalar feature. Every combined feature should have the same direction before scoring.
-- Treat resolution and population as correlated features. A quality score should not become only a population score.
-- Avoid training an opaque classifier until the raw feature table has been validated across several datasets.
-- Keep mask radius and sampling distance explicit in every metric that depends on physical scale.
-
-## Highest-Value Additions Beyond The Current WIP Module
-
-The current worktree feature vector can be strengthened with these existing routines:
-
-1. Add `image%center_edge_snr` as a direct particle-presence metric.
-2. Add `image%contrast` to detect extremely weak averages.
-3. Add `image%calc_ice_score`, but report it separately until calibrated.
-4. Add an FRC-band summary from `class_frcs%frc_getter`, not only the final resolution estimate.
-5. Add medoid-distance or nearest-neighbor consistency from `calc_cluster_cavgs_dmat` when enough classes are present.
-
-These additions would make the scalar quality score sensitive to alignment consistency, spectral support, particle localization, artifact content, and class population without leaving the existing SIMPLE image-processing library.
+- Prefer stored `cls2D` metadata (`pop`, `res`, `corr`) before recomputing expensive quantities.
+- Keep feature extraction in `simple_cavg_quality_feats.f90`; commanders should orchestrate, not own quality logic.
+- Keep raw values in analysis files even if a feature has zero model weight.
+- Use per-dataset robust normalization over non-hard-rejected classes.
+- Treat hard rejection as exceptional and conservative. Most discrimination should happen through the model.
+- Preserve feature ordering compatibility carefully: model files contain one weight per `CAVG_QUALITY_NFEATS` entry.
+- When increasing `CAVG_QUALITY_NFEATS`, update promotion snippets, docs, and any tests or analysis parsers that assume the feature count.
+- Benchmark any pairwise or alignment-derived feature on stream chunks before considering it for default use.

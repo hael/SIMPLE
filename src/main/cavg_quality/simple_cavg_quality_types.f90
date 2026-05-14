@@ -13,6 +13,7 @@ public :: cavg_quality_feature_def
 public :: cavg_quality_model_spec
 public :: cavg_quality_result
 public :: cavg_quality_training_dataset
+public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
 integer, parameter :: CAVG_REJECTION_CHUNK = 1
@@ -78,6 +79,27 @@ type :: cavg_quality_training_dataset
     integer, allocatable      :: manual_states(:)
     logical, allocatable      :: hard_reject(:)
 end type cavg_quality_training_dataset
+
+type :: cavg_quality_learn_diagnostics
+    integer :: n_datasets          = 0
+    integer :: total_fp            = 0
+    integer :: total_fn            = 0
+    integer :: n_lowsep            = 0
+    integer :: lowsep_fp           = 0
+    integer :: lowsep_fn           = 0
+    integer :: n_single_cluster    = 0
+    integer :: single_cluster_fp   = 0
+    integer :: single_cluster_fn   = 0
+    integer :: n_otsu_like         = 0
+    integer :: otsu_like_fp        = 0
+    integer :: otsu_like_fn        = 0
+    integer :: n_rescue_like       = 0
+    integer :: rescue_like_fp      = 0
+    integer :: rescue_like_fn      = 0
+    integer :: n_min_accept_like   = 0
+    integer :: min_accept_like_fp  = 0
+    integer :: min_accept_like_fn  = 0
+end type cavg_quality_learn_diagnostics
 
 contains
 

@@ -28,10 +28,11 @@ public :: write_cavg_quality_model_builtin_code
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in builtin_names.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_DEFAULT       = 'default'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v1'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1 = 'chunk_default_v1'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v1'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
-    CAVG_QUALITY_MODEL_POOL_DEFAULT
+    CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1//'|'//CAVG_QUALITY_MODEL_POOL_DEFAULT
 
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
 real, parameter :: BOUNDARY_MARGIN_DEFAULT = 0.05
@@ -42,20 +43,32 @@ real, parameter :: POOL_MIN_ACCEPT_FRAC    = 0.65
 real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
 real, parameter :: CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT = 0.50
 
-! Default interpretable linear score coefficients. These are model parameters,
-! while the feature definitions and extraction live in simple_cavg_quality_feats.
+! Reference v1/base linear score coefficients. These are retained for the
+! legacy preset and as the learner fallback; feature definitions and extraction
+! live in simple_cavg_quality_feats.
 real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     0.34, 0.18, 0.00, 0.00, 0.16, 0.18, 0.00, 0.00, 0.00, 0.00, 0.00, 0.14 ]
+
+! Batch-trained chunk default, promoted from the first trusted learn/validation
+! cycle. Keep this separate from CAVG_QUALITY_DEFAULT_WEIGHTS so legacy and pool
+! presets remain stable and explicit.
+real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
+    2.880873E-01, 1.802364E-01, 1.008059E-03, 1.581707E-02, &
+    1.577338E-01, 1.714339E-01, 3.374931E-03, 1.008059E-03, &
+    4.549345E-02, 2.926490E-02, 1.008059E-03, 1.055341E-01 ]
+real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      = -0.30
+real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.05
+real, parameter :: CHUNK_V2_HIST_DMAT_WEIGHT     =  0.25
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: family                  = 'linear_boundary'
     character(len=32) :: context                 = 'chunk'
     integer           :: rejection_type          = CAVG_REJECTION_CHUNK
-    real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_DEFAULT_WEIGHTS
-    real              :: boundary_margin         = -CHUNK_BOUNDARY_OFFSET
-    real              :: min_score_separation    = MIN_SCORE_SEPARATION
-    real              :: hist_dmat_weight        = CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT
+    real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
+    real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
+    real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
+    real              :: hist_dmat_weight        = CHUNK_V2_HIST_DMAT_WEIGHT
     real              :: otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
     real              :: otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
     real              :: cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
@@ -99,7 +112,9 @@ contains
         character(len=LONGSTRLEN) :: errmsg
         select case(trim(preset_name))
             case(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-                spec = chunk_default_model_spec()
+                spec = chunk_default_v2_model_spec()
+            case(CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1)
+                spec = chunk_default_v1_model_spec()
             case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
                 spec = pool_default_model_spec()
             case default
@@ -172,9 +187,29 @@ contains
         spec%enforce_min_accept_frac = self%enforce_min_accept_frac
     end function get_spec
 
-    function chunk_default_model_spec() result( spec )
+    function chunk_default_v2_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
+        spec%family                  = 'linear_boundary'
+        spec%context                 = 'chunk'
+        spec%rejection_type          = CAVG_REJECTION_CHUNK
+        spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
+        spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
+        spec%min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
+        spec%hist_dmat_weight        = CHUNK_V2_HIST_DMAT_WEIGHT
+        spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
+        spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
+        spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
+        spec%min_accept_frac         = 0.0
+        spec%use_lowsep_otsu         = .true.
+        spec%use_otsu_window         = .true.
+        spec%use_cluster_rescue      = .false.
+        spec%enforce_min_accept_frac = .false.
+    end function chunk_default_v2_model_spec
+
+    function chunk_default_v1_model_spec() result( spec )
+        type(cavg_quality_model_spec) :: spec
+        spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1
         spec%family                  = 'linear_boundary'
         spec%context                 = 'chunk'
         spec%rejection_type          = CAVG_REJECTION_CHUNK
@@ -190,7 +225,7 @@ contains
         spec%use_otsu_window         = .true.
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
-    end function chunk_default_model_spec
+    end function chunk_default_v1_model_spec
 
     function pool_default_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec

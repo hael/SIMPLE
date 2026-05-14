@@ -88,12 +88,13 @@ The current model family is `linear_boundary`. A model contains:
 
 `quality_model` is the primary selector for built-in presets. `rejection_type` is retained as a legacy hint for choosing a default model when no explicit model is requested.
 
-The two current built-in presets are:
+The current built-in presets are:
 
+- `chunk_default_v2`
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk` is the stricter stream-partition operating point. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
+`chunk_default_v2` is the default chunk/stream operating point promoted from the first trusted batch-style learning cycle. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
 
 ## Feature Space
 
@@ -194,6 +195,13 @@ Each candidate is evaluated by running the full model classifier on every traini
 
 The best candidate becomes the learned model and is written to the requested model file. The learn report also records the full search grid, the top candidates, all best-score ties, suggested weights, learned histogram-distance weight, and per-dataset confusion metrics.
 
+The learn report includes a `search_diagnostic` section. These records flag two classes of follow-up:
+
+- searched parameters whose winning value is on the edge of the current grid, such as `boundary_margin`, `min_score_separation`, `hist_dmat_weight`, or pool `min_accept_frac`;
+- model policy controls that are currently inherited from the base preset rather than searched, such as Otsu-window settings, low-separation Otsu, cluster rescue, and minimum-accept enforcement.
+
+Warnings in this section do not mean the learned model is invalid. They mean the training set is touching one of the current search boundaries or inherited policy assumptions, so the next validation round should decide whether to broaden the grid or promote that policy control into the searched model space.
+
 ## Basic Instruction Manual
 
 ### 1. Generate Analysis Files
@@ -204,7 +212,7 @@ Run `analyze` on each dataset with a trusted manual selection already encoded in
 simple_exec prg=cluster_cavgs_quality quality_mode=analyze \
   projfile=my_project.simple \
   mskdiam=180 \
-  quality_model=chunk_default_v1
+  quality_model=chunk_default_v2
 ```
 
 For pool-like datasets, use:
@@ -236,7 +244,7 @@ For chunk:
 
 ```bash
 simple_exec prg=cluster_cavgs_quality quality_mode=learn \
-  quality_model=chunk_default_v1 \
+  quality_model=chunk_default_v2 \
   filetab=cavgs_quality_chunk_analyses.txt \
   fname=cavgs_quality_model_chunk_learned.txt
 ```
@@ -311,7 +319,7 @@ Review the code, paste it into `simple_cavg_quality_model.f90`, update the user-
 simple_exec prg=cluster_cavgs_quality quality_mode=analyze \
   projfile=my_project.simple \
   mskdiam=180 \
-  quality_model=chunk_learned_v1
+  quality_model=chunk_default_v2
 ```
 
 ## Recommended Validation Practice
@@ -329,9 +337,8 @@ For every candidate learned model, check:
 
 ## Current Limitations and Future Directions
 
-The current learner searches only a limited set of model parameters. It inherits behavior flags such as Otsu use and cluster rescue from the base model. That is deliberate for now, but future training could search those flags explicitly.
+The current learner searches only a limited set of model parameters. It inherits behavior flags such as Otsu use and cluster rescue from the base model. That is deliberate for now. The learn report flags when those inherited controls are active on datasets that still have false positives or false negatives, which is the cue to consider searching those flags explicitly.
 
 The accept-all behavior is currently implicit through the single-cluster fallback and `min_score_separation`. A future model version may make accept-all behavior an explicit learned operating mode.
 
 Feature weights are currently suggested by independent AUC scoring and then blended with the base weights. A linear SVM or regularized logistic regression could be added later as an alternative way to propose multivariate weights, while still keeping the explicit SIMPLE decision model around the learned coefficients.
-

@@ -636,8 +636,10 @@ subroutine set_ui_params
                                    'Class-average quality mode(apply|analyze|learn|promote){apply}', .false., 'apply')
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
-                                   'Built-in quality model preset(default|chunk_default_v1|pool_default_v1){default}', &
-                                   'Class-average quality model preset(default|chunk_default_v1|pool_default_v1){default}', .false., 'default')
+                                   'Built-in quality model preset(default|chunk_default_v2|chunk_default_v1|'//&
+                                   'pool_default_v1){default}', &
+                                   'Class-average quality model preset(default|chunk_default_v2|chunk_default_v1|'//&
+                                   'pool_default_v1){default}', .false., 'default')
 
     call rejection_type%set_param(  'rejection_type',  'multi',  'Legacy class-average model hint', &
                                    'Legacy hint for selecting the default class-average quality model(chunk|pool){chunk}', &

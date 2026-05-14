@@ -9,7 +9,7 @@ use simple_cavg_quality_model, only: CAVG_QUALITY_DEFAULT_WEIGHTS, &
     CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT, cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_REJECTION_POOL, CAVG_QUALITY_NFEATS, EPS, cavg_quality_model_spec, &
-    cavg_quality_result, cavg_quality_training_dataset
+    cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -335,7 +335,17 @@ contains
         type(cavg_quality_model),            intent(in) :: model
         integer,                             intent(out):: tp, fp, tn, fn
         type(cavg_quality_result) :: quality
+        call classify_training_dataset_detail(dset, model, quality, tp, fp, tn, fn)
+        call quality%kill()
+    end subroutine classify_training_dataset
+
+    subroutine classify_training_dataset_detail( dset, model, quality, tp, fp, tn, fn )
+        type(cavg_quality_training_dataset), intent(in)    :: dset
+        type(cavg_quality_model),            intent(in)    :: model
+        type(cavg_quality_result),           intent(inout) :: quality
+        integer,                             intent(out)   :: tp, fp, tn, fn
         logical, allocatable :: pred(:), ref(:)
+        call quality%kill()
         quality%features    = dset%features
         quality%hard_reject = dset%hard_reject
         quality%hist_dmat   = dset%hist_dmat
@@ -344,9 +354,8 @@ contains
         pred = quality%states > 0
         ref  = dset%manual_states > 0
         call calc_confusion(pred, ref, tp, fp, tn, fn)
-        call quality%kill()
         deallocate(pred, ref)
-    end subroutine classify_training_dataset
+    end subroutine classify_training_dataset_detail
 
     subroutine write_cavg_quality_learn_report( fname, dsets, base_model, suggested_weights, learned_model, best_score, &
                                                 n_grid, top_specs, top_scores, n_top, best_tie_specs, n_best_ties )
@@ -358,8 +367,10 @@ contains
         integer,                             intent(in) :: n_grid, n_top, n_best_ties
         type(cavg_quality_model_spec),       intent(in) :: top_specs(:), best_tie_specs(:)
         real,                                intent(in) :: top_scores(:)
+        type(cavg_quality_learn_diagnostics) :: diag
         integer :: funit, ids, i, tp, fp, tn, fn
         real :: precision, recall, specificity, f1, balacc, accuracy
+        call collect_learn_diagnostics(dsets, learned_model, diag)
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# cluster_cavgs_quality learn report'
         write(funit,'(A,A)') 'context=', trim(learned_model%context)
@@ -385,6 +396,8 @@ contains
         end do
         write(funit,*)
         write(funit,'(A)') ''
+        call write_learn_search_diagnostics(funit, base_model, suggested_weights, learned_model, diag)
+        write(funit,'(A)') ''
         call write_candidate_table_header(funit, 'top_candidate_header=')
         do i = 1, n_top
             call write_candidate_row(funit, 'top_candidate', i, top_scores(i), top_specs(i))
@@ -408,6 +421,241 @@ contains
         close(funit)
         write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
     end subroutine write_cavg_quality_learn_report
+
+    subroutine collect_learn_diagnostics( dsets, model, diag )
+        type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
+        type(cavg_quality_model),            intent(in)  :: model
+        type(cavg_quality_learn_diagnostics),intent(out) :: diag
+        type(cavg_quality_result) :: quality
+        integer :: ids, tp, fp, tn, fn
+        logical :: lowsep, single_cluster, otsu_like, rescue_like, min_accept_like
+        diag%n_datasets = size(dsets)
+        do ids = 1, size(dsets)
+            call classify_training_dataset_detail(dsets(ids), model, quality, tp, fp, tn, fn)
+            diag%total_fp = diag%total_fp + fp
+            diag%total_fn = diag%total_fn + fn
+            lowsep = quality%separation < model%min_score_separation
+            single_cluster = quality%nclust <= 1 .or. .not. quality%used_threshold
+            otsu_like = threshold_policy_looks_otsu(quality, model)
+            rescue_like = cluster_rescue_looks_active(quality, model)
+            min_accept_like = min_accept_fraction_looks_active(quality, model)
+            if( lowsep )then
+                diag%n_lowsep  = diag%n_lowsep + 1
+                diag%lowsep_fp = diag%lowsep_fp + fp
+                diag%lowsep_fn = diag%lowsep_fn + fn
+            endif
+            if( single_cluster )then
+                diag%n_single_cluster  = diag%n_single_cluster + 1
+                diag%single_cluster_fp = diag%single_cluster_fp + fp
+                diag%single_cluster_fn = diag%single_cluster_fn + fn
+            endif
+            if( otsu_like )then
+                diag%n_otsu_like  = diag%n_otsu_like + 1
+                diag%otsu_like_fp = diag%otsu_like_fp + fp
+                diag%otsu_like_fn = diag%otsu_like_fn + fn
+            endif
+            if( rescue_like )then
+                diag%n_rescue_like  = diag%n_rescue_like + 1
+                diag%rescue_like_fp = diag%rescue_like_fp + fp
+                diag%rescue_like_fn = diag%rescue_like_fn + fn
+            endif
+            if( min_accept_like )then
+                diag%n_min_accept_like  = diag%n_min_accept_like + 1
+                diag%min_accept_like_fp = diag%min_accept_like_fp + fp
+                diag%min_accept_like_fn = diag%min_accept_like_fn + fn
+            endif
+            call quality%kill()
+        end do
+    end subroutine collect_learn_diagnostics
+
+    logical function threshold_policy_looks_otsu( quality, model )
+        type(cavg_quality_result), intent(in) :: quality
+        type(cavg_quality_model),  intent(in) :: model
+        threshold_policy_looks_otsu = .false.
+        if( .not. quality%used_threshold ) return
+        if( quality%nclust /= 2 ) return
+        if( quality%separation < model%min_score_separation )then
+            threshold_policy_looks_otsu = model%use_lowsep_otsu
+        else if( model%use_otsu_window )then
+            threshold_policy_looks_otsu = abs(quality%threshold_margin - model%boundary_margin) > 1.0e-4
+        endif
+    end function threshold_policy_looks_otsu
+
+    logical function cluster_rescue_looks_active( quality, model )
+        type(cavg_quality_result), intent(in) :: quality
+        type(cavg_quality_model),  intent(in) :: model
+        cluster_rescue_looks_active = .false.
+        if( .not. model%use_cluster_rescue ) return
+        if( .not. allocated(quality%states) ) return
+        if( .not. allocated(quality%scores) ) return
+        if( .not. allocated(quality%labels) ) return
+        if( quality%good_label <= 0 ) return
+        cluster_rescue_looks_active = any(quality%states > 0 .and. &
+            quality%scores < quality%threshold - EPS .and. quality%labels == quality%good_label)
+    end function cluster_rescue_looks_active
+
+    logical function min_accept_fraction_looks_active( quality, model )
+        type(cavg_quality_result), intent(in) :: quality
+        type(cavg_quality_model),  intent(in) :: model
+        min_accept_fraction_looks_active = .false.
+        if( .not. model%enforce_min_accept_frac ) return
+        if( .not. quality%used_threshold ) return
+        min_accept_fraction_looks_active = quality%threshold_margin > model%boundary_margin + 1.0e-4
+    end function min_accept_fraction_looks_active
+
+    subroutine write_learn_search_diagnostics( funit, base_model, suggested_weights, learned_model, diag )
+        integer,                             intent(in) :: funit
+        type(cavg_quality_model),            intent(in) :: base_model, learned_model
+        real,                                intent(in) :: suggested_weights(:)
+        type(cavg_quality_learn_diagnostics),intent(in) :: diag
+        write(funit,'(A)') 'search_diagnostic_header=level,parameter,status,detail'
+        call write_weight_alpha_diagnostic(funit, base_model%weights, suggested_weights, learned_model%weights)
+        call write_grid_position_diagnostic(funit, 'hist_dmat_weight', learned_model%hist_dmat_weight, &
+            LEARN_HIST_WEIGHTS, 'best_at_zero_hist_distance_disabled', 'best_at_one_hist_distance_dominant')
+        call write_grid_position_diagnostic(funit, 'min_score_separation', learned_model%min_score_separation, &
+            LEARN_MINSEPS, 'best_at_lowest_value_consider_lower_if_accept_all_remains_too_common', &
+            'best_at_highest_value_consider_higher_if_unstable_splits_remain')
+        call write_grid_position_diagnostic(funit, 'boundary_margin', learned_model%boundary_margin, &
+            LEARN_MARGINS, 'best_at_lowest_value_consider_more_negative_if_junk_leaks_after_validation', &
+            'best_at_highest_value_consider_more_positive_if_good_classes_are_rejected')
+        if( learned_model%rejection_type == CAVG_REJECTION_POOL )then
+            call write_grid_position_diagnostic(funit, 'min_accept_frac', learned_model%min_accept_frac, &
+                LEARN_POOL_FRACS, 'best_at_lowest_value_consider_lower_if_pool_model_keeps_too_much_junk', &
+                'best_at_highest_value_consider_higher_if_pool_model_rejects_good_classes')
+        else
+            call write_search_diagnostic(funit, 'note', 'min_accept_frac', 'not_searched_in_chunk_context', &
+                'enforce_min_accept_frac is false for the current learned model')
+        endif
+        call write_policy_parameter_diagnostics(funit, learned_model, diag)
+    end subroutine write_learn_search_diagnostics
+
+    subroutine write_weight_alpha_diagnostic( funit, base_weights, suggested_weights, learned_weights )
+        integer, intent(in) :: funit
+        real,    intent(in) :: base_weights(:), suggested_weights(:), learned_weights(:)
+        if( weights_close(base_weights, suggested_weights) )then
+            call write_search_diagnostic(funit, 'note', 'feature_weight_alpha', 'suggested_equals_base', &
+                'AUC_suggested_weights_match_base_weights_no_alpha_range_signal')
+        else if( weights_close(learned_weights, base_weights) )then
+            call write_search_diagnostic(funit, 'note', 'feature_weight_alpha', 'best_at_base_edge', &
+                'best_candidate_used_alpha_zero_suggested_weights_did_not_help')
+        else if( weights_close(learned_weights, suggested_weights) )then
+            call write_search_diagnostic(funit, 'warning', 'feature_weight_alpha', 'best_at_suggested_edge', &
+                'best_candidate_used_alpha_one_consider_alternative_weight_proposal_if_validation_fails')
+        else
+            call write_search_diagnostic(funit, 'note', 'feature_weight_alpha', 'interior', &
+                'best_candidate_used_a_blend_of_base_and_suggested_weights')
+        endif
+    end subroutine write_weight_alpha_diagnostic
+
+    logical function weights_close( a, b )
+        real, intent(in) :: a(:), b(:)
+        weights_close = .false.
+        if( size(a) /= size(b) ) return
+        weights_close = maxval(abs(a - b)) <= 1.0e-5
+    end function weights_close
+
+    subroutine write_grid_position_diagnostic( funit, param, val, grid, low_status, high_status )
+        integer,          intent(in) :: funit
+        character(len=*), intent(in) :: param, low_status, high_status
+        real,             intent(in) :: val, grid(:)
+        if( real_close(val, minval(grid)) )then
+            call write_search_diagnostic(funit, 'warning', param, low_status, &
+                'learned_value_is_on_lower_edge_of_current_grid')
+        else if( real_close(val, maxval(grid)) )then
+            call write_search_diagnostic(funit, 'warning', param, high_status, &
+                'learned_value_is_on_upper_edge_of_current_grid')
+        else
+            call write_search_diagnostic(funit, 'note', param, 'interior', &
+                'learned_value_is_not_on_a_search_grid_edge')
+        endif
+    end subroutine write_grid_position_diagnostic
+
+    logical function real_close( a, b )
+        real, intent(in) :: a, b
+        real_close = abs(a - b) <= 1.0e-5 * max(1.0, abs(a), abs(b))
+    end function real_close
+
+    subroutine write_policy_parameter_diagnostics( funit, model, diag )
+        integer,                              intent(in) :: funit
+        type(cavg_quality_model),             intent(in) :: model
+        type(cavg_quality_learn_diagnostics), intent(in) :: diag
+        character(len=LONGSTRLEN) :: detail
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'inherited=', model%use_lowsep_otsu, ';active_datasets=', &
+            diag%n_lowsep, ';fp=', diag%lowsep_fp, ';fn=', diag%lowsep_fn
+        call write_search_diagnostic(funit, policy_level(diag%n_lowsep, diag%lowsep_fp, diag%lowsep_fn), &
+            'use_lowsep_otsu', 'not_searched', trim(detail))
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'inherited=', model%use_otsu_window, ';otsu_like_datasets=', &
+            diag%n_otsu_like, ';fp=', diag%otsu_like_fp, ';fn=', diag%otsu_like_fn
+        call write_search_diagnostic(funit, policy_level(diag%n_otsu_like, diag%otsu_like_fp, diag%otsu_like_fn), &
+            'use_otsu_window', 'not_searched', trim(detail))
+        write(detail,'(A,F8.4,A,I0,A,I0,A,I0)') 'inherited=', model%otsu_min_offset, ';otsu_like_datasets=', &
+            diag%n_otsu_like, ';fp=', diag%otsu_like_fp, ';fn=', diag%otsu_like_fn
+        call write_search_diagnostic(funit, policy_level(diag%n_otsu_like, diag%otsu_like_fp, diag%otsu_like_fn), &
+            'otsu_min_offset', 'not_searched', trim(detail))
+        write(detail,'(A,F8.4,A,I0,A,I0,A,I0)') 'inherited=', model%otsu_max_offset, ';otsu_like_datasets=', &
+            diag%n_otsu_like, ';fp=', diag%otsu_like_fp, ';fn=', diag%otsu_like_fn
+        call write_search_diagnostic(funit, policy_level(diag%n_otsu_like, diag%otsu_like_fp, diag%otsu_like_fn), &
+            'otsu_max_offset', 'not_searched', trim(detail))
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'inherited=', model%use_cluster_rescue, ';rescue_like_datasets=', &
+            diag%n_rescue_like, ';fp=', diag%rescue_like_fp, ';fn=', diag%rescue_like_fn
+        call write_search_diagnostic(funit, rescue_policy_level(model, diag), 'use_cluster_rescue', 'not_searched', &
+            trim(detail))
+        write(detail,'(A,F8.4,A,I0,A,I0,A,I0)') 'inherited=', model%cluster_rescue_margin, ';rescue_like_datasets=', &
+            diag%n_rescue_like, ';fp=', diag%rescue_like_fp, ';fn=', diag%rescue_like_fn
+        call write_search_diagnostic(funit, rescue_policy_level(model, diag), 'cluster_rescue_margin', 'not_searched', &
+            trim(detail))
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'inherited=', model%enforce_min_accept_frac, ';min_accept_datasets=', &
+            diag%n_min_accept_like, ';fp=', diag%min_accept_like_fp, ';fn=', diag%min_accept_like_fn
+        call write_search_diagnostic(funit, min_accept_policy_level(model, diag), 'enforce_min_accept_frac', &
+            'not_searched', trim(detail))
+        write(detail,'(A,I0,A,I0,A,I0,A,I0,A,I0)') 'single_cluster_datasets=', diag%n_single_cluster, &
+            ';fp=', diag%single_cluster_fp, ';fn=', diag%single_cluster_fn, ';total_fp=', diag%total_fp, &
+            ';total_fn=', diag%total_fn
+        call write_search_diagnostic(funit, policy_level(diag%n_single_cluster, diag%single_cluster_fp, &
+            diag%single_cluster_fn), 'accept_all_fallback', 'implicit_not_searched', trim(detail))
+    end subroutine write_policy_parameter_diagnostics
+
+    function policy_level( nactive, fp, fn ) result( level )
+        integer, intent(in) :: nactive, fp, fn
+        character(len=8) :: level
+        if( nactive > 0 .and. fp + fn > 0 )then
+            level = 'warning'
+        else
+            level = 'note'
+        endif
+    end function policy_level
+
+    function rescue_policy_level( model, diag ) result( level )
+        type(cavg_quality_model),             intent(in) :: model
+        type(cavg_quality_learn_diagnostics), intent(in) :: diag
+        character(len=8) :: level
+        if( model%use_cluster_rescue )then
+            level = policy_level(diag%n_rescue_like, diag%rescue_like_fp, diag%rescue_like_fn)
+        else if( diag%total_fn > 0 )then
+            level = 'warning'
+        else
+            level = 'note'
+        endif
+    end function rescue_policy_level
+
+    function min_accept_policy_level( model, diag ) result( level )
+        type(cavg_quality_model),             intent(in) :: model
+        type(cavg_quality_learn_diagnostics), intent(in) :: diag
+        character(len=8) :: level
+        if( model%enforce_min_accept_frac )then
+            level = policy_level(diag%n_min_accept_like, diag%min_accept_like_fp, diag%min_accept_like_fn)
+        else if( diag%total_fn > 0 .and. model%rejection_type == CAVG_REJECTION_POOL )then
+            level = 'warning'
+        else
+            level = 'note'
+        endif
+    end function min_accept_policy_level
+
+    subroutine write_search_diagnostic( funit, level, param, status, detail )
+        integer,          intent(in) :: funit
+        character(len=*), intent(in) :: level, param, status, detail
+        write(funit,'(8A)') 'search_diagnostic,', trim(level), ',', trim(param), ',', trim(status), ',', trim(detail)
+    end subroutine write_search_diagnostic
 
     subroutine write_real_list( funit, key, vals )
         integer,          intent(in) :: funit
