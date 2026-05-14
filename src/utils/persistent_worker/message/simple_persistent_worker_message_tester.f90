@@ -82,12 +82,14 @@ contains
     call assert_int(0, msg%heartbeat_time,           'heartbeat new() resets heartbeat_time')
     call assert_int(0, msg%nthr_used,                'heartbeat new() resets nthr_used')
     call assert_int(0, msg%nthr_total,               'heartbeat new() resets nthr_total')
+    call assert_int(0, msg%fd,                       'heartbeat new() resets fd')
     call assert_true(len_trim(msg%worker_uid) == 0,  'heartbeat new() resets worker_uid')
 
     msg%worker_id      = 7
     msg%heartbeat_time = 123456789
     msg%nthr_used      = 3
     msg%nthr_total     = 8
+    msg%fd             = 42
     msg%worker_uid     = 'nodeA_4242'
     call msg%serialise(buffer)
     call assert_int(int(sizeof(msg), kind=4), len(buffer), 'heartbeat serialise buffer length equals sizeof(heartbeat)')
@@ -97,6 +99,7 @@ contains
     call assert_int(123456789, decoded%heartbeat_time, 'heartbeat roundtrip heartbeat_time')
     call assert_int(3, decoded%nthr_used, 'heartbeat roundtrip nthr_used')
     call assert_int(8, decoded%nthr_total, 'heartbeat roundtrip nthr_total')
+    call assert_int(42, decoded%fd, 'heartbeat roundtrip fd')
     call assert_true(trim(decoded%worker_uid) == 'nodeA_4242', 'heartbeat roundtrip worker_uid')
 
     call msg%kill()
@@ -105,6 +108,7 @@ contains
     call assert_int(0, msg%heartbeat_time,         'heartbeat kill() resets heartbeat_time')
     call assert_int(0, msg%nthr_used,              'heartbeat kill() resets nthr_used')
     call assert_int(0, msg%nthr_total,             'heartbeat kill() resets nthr_total')
+    call assert_int(0, msg%fd,                     'heartbeat kill() resets fd')
     call assert_true(len_trim(msg%worker_uid) == 0,'heartbeat kill() resets worker_uid')
   end subroutine test_heartbeat_new_kill_and_serialise
 
@@ -122,6 +126,7 @@ contains
     call assert_int(0, msg%exit_code,              'task new() resets exit_code')
     call assert_int(0, msg%nthr,                   'task new() resets nthr')
     call assert_true(.not. msg%submitted,          'task new() resets submitted')
+    call assert_true(.not. msg%priority,           'task new() resets priority')
     call assert_true(len_trim(msg%script_path) == 0, 'task new() resets script_path')
 
     msg%job_id     = 21
@@ -131,6 +136,7 @@ contains
     msg%exit_code  = 0
     msg%nthr       = 4
     msg%submitted  = .true.
+    msg%priority   = .true.
     msg%script_path = '/tmp/task_0021.sh'
     call msg%serialise(buffer)
     call assert_int(int(sizeof(msg), kind=4), len(buffer), 'task serialise buffer length equals sizeof(task)')
@@ -143,6 +149,7 @@ contains
     call assert_int(0, decoded%exit_code, 'task roundtrip exit_code')
     call assert_int(4, decoded%nthr, 'task roundtrip nthr')
     call assert_true(decoded%submitted, 'task roundtrip submitted')
+    call assert_true(decoded%priority, 'task roundtrip priority')
     call assert_true(trim(decoded%script_path) == '/tmp/task_0021.sh', 'task roundtrip script_path')
 
     call msg%kill()
@@ -154,6 +161,7 @@ contains
     call assert_int(0, msg%exit_code,               'task kill() resets exit_code')
     call assert_int(0, msg%nthr,                    'task kill() resets nthr')
     call assert_true(.not. msg%submitted,           'task kill() resets submitted')
+    call assert_true(.not. msg%priority,            'task kill() resets priority')
     call assert_true(len_trim(msg%script_path) == 0,'task kill() resets script_path')
   end subroutine test_task_new_kill_and_serialise
 

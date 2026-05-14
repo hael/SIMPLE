@@ -83,6 +83,7 @@ contains
         self%vols(MAXS)=''
         self%vols_even(MAXS)=''
         self%vols_odd(MAXS)=''
+        self%worker_priority=''   !< priority to submit jobs with
         self%worker_server=''     !< address and port of worker server for job submission
         self%xmldir=''
         self%xmlloc=''

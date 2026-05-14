@@ -2,8 +2,10 @@
 ! MODULE: simple_persistent_worker_message_task
 !
 ! PURPOSE:
-!   Provides the concrete task message type sent by the queue-system server
-!   to persistent-worker processes to dispatch a job for execution.
+!   Defines the task wire message exchanged between the persistent-worker
+!   server and workers.  The same payload is used for:
+!     - queued task requests (master -> listener)
+!     - dispatched tasks     (listener -> worker)
 !
 !   When a persistent worker sends a heartbeat and the server has a queued job that fits
 !   the worker's available thread capacity, the server replies with a task
@@ -15,6 +17,7 @@
 !     - exit_code    — script exit status after completion
 !     - nthr         — thread slots required
 !     - submitted    — .true. once dispatched to a persistent worker
+!     - priority     — .true. when caller requests priority handling
 !     - script_path  — absolute path to the bash script
 !
 ! DESIGN CONTRACT:
@@ -36,6 +39,7 @@
 !   task%exit_code    = 0
 !   task%nthr         = required_threads
 !   task%submitted    = .false.
+!   task%priority     = .false.
 !   task%script_path  = script_path
 !   call task%serialise(buffer)
 !
@@ -52,17 +56,18 @@ module simple_persistent_worker_message_task
     public  :: qsys_persistent_worker_message_task
     private
 
-    !> Task wire message sent by the server to a persistent worker to dispatch a job.
-    !> Carries the job identity, timing information, resource requirements,
-    !> and the path of the script the worker should execute.
+    !> Task wire payload for queueing and dispatch.
+    !> Carries job identity, lifecycle timestamps, scheduling hints,
+    !> required thread count, and executable script path.
     type, extends(qsys_persistent_worker_message_base) :: qsys_persistent_worker_message_task
-        integer :: job_id     = 0               !< unique job counter (>0 when active)
-        integer :: queue_time = 0               !< UNIX time of enqueue
-        integer :: start_time = 0               !< UNIX time worker started execution
-        integer :: end_time   = 0               !< UNIX time of completion (0 = pending)
-        integer :: exit_code  = 0               !< script exit status after completion
-        integer :: nthr       = 0               !< thread slots required
-        logical :: submitted  = .false.         !< .true. once dispatched to a persistent worker
+        integer :: job_id     = 0                  !< unique job counter (>0 when active)
+        integer :: queue_time = 0                  !< UNIX time of enqueue
+        integer :: start_time = 0                  !< UNIX time worker started execution
+        integer :: end_time   = 0                  !< UNIX time of completion (0 = pending)
+        integer :: exit_code  = 0                  !< script exit status after completion
+        integer :: nthr       = 0                  !< thread slots required
+        logical :: submitted  = .false.            !< .true. once dispatched to a persistent worker
+        logical :: priority   = .false.            !< .true. if this task should be prioritised over others in the queue
         character(len=STDLEN) :: script_path = ''  !< absolute path to the bash script
     contains
         procedure :: new       => new_qsys_persistent_worker_message_task       !< constructor
@@ -72,9 +77,8 @@ module simple_persistent_worker_message_task
 
 contains
 
-    !> Initialise a task message.
-    !> Sets msg_type to WORKER_TASK_MSG; all payload fields retain their
-    !> default zero values and must be filled by the caller before transmission.
+    !> Initialise a task message to a clean default state.
+    !> Sets msg_type to WORKER_TASK_MSG and clears all payload fields.
     subroutine new_qsys_persistent_worker_message_task( self )
         class(qsys_persistent_worker_message_task), intent(inout) :: self
         call self%kill()
@@ -82,7 +86,7 @@ contains
     end subroutine new_qsys_persistent_worker_message_task
 
     !> Reset all fields to their default zero / invalid state.
-    !> No dynamic resources are held by this type; this is a plain field reset.
+    !> This type owns no dynamic resources; kill() is a pure field reset.
     subroutine kill_qsys_persistent_worker_message_task( self )
         class(qsys_persistent_worker_message_task), intent(inout) :: self
         self%msg_type       = 0
@@ -93,6 +97,7 @@ contains
         self%exit_code      = 0
         self%nthr           = 0
         self%submitted      = .false.
+        self%priority       = .false.
         self%script_path    = ''
     end subroutine kill_qsys_persistent_worker_message_task
 

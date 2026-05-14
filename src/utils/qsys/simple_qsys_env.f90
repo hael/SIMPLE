@@ -23,18 +23,19 @@ private
 
 type :: qsys_env
     ! --- public state (read directly by callers) ---
-    integer, allocatable,        public  :: parts(:,:)             !< particle ranges [ipart, start/end]
-    type(qsys_ctrl),             public  :: qscripts               !< script controller for the dispatch path
-    type(chash),                 public  :: qdescr                 !< key/value queue-job description
+    integer, allocatable,        public  :: parts(:,:)                 !< particle ranges [ipart, start/end]
+    type(qsys_ctrl),             public  :: qscripts                   !< script controller for the dispatch path
+    type(chash),                 public  :: qdescr                     !< key/value queue-job description
     ! --- private implementation details ---
-    type(qsys_ctrl),             private :: base_qscripts          !< script controller for the base/worker-launch path
-    type(string),                private :: simple_exec_bin        !< fully resolved path to submission executable
-    type(qsys_factory),          private :: qsys_fac_base          !< factory that owns base_qsys
-    type(qsys_factory),          private :: qsys_fac_dispatch      !< factory that owns dispatch_qsys
-    class(qsys_base),   pointer, private :: base_qsys     => null() !< base backend (local/slurm/lsf/…)
-    class(qsys_base),   pointer, private :: dispatch_qsys => null() !< dispatch backend (persistent_worker)
-    integer,                     private :: nparts                 !< number of job partitions
-    logical,                     private :: existence   = .false.  !< .true. after new(); .false. after kill()
+    type(qsys_ctrl),             private :: base_qscripts              !< script controller for the base/worker-launch path
+    type(string),                private :: simple_exec_bin            !< fully resolved path to submission executable
+    type(qsys_factory),          private :: qsys_fac_base              !< factory that owns base_qsys
+    type(qsys_factory),          private :: qsys_fac_dispatch          !< factory that owns dispatch_qsys
+    class(qsys_base),   pointer, private :: base_qsys     => null()    !< base backend (local/slurm/lsf/…)
+    class(qsys_base),   pointer, private :: dispatch_qsys => null()    !< dispatch backend (persistent_worker)
+    integer,                     private :: nparts                     !< number of job partitions
+    logical,                     private :: existence       = .false.  !< .true. after new(); .false. after kill()
+    logical,                     private :: worker_priority = .false.  !< .true. if tasks should be prioritised when dispatching to workers
     contains
     procedure :: new
     procedure :: exists
@@ -157,6 +158,10 @@ contains
         else
             call init_qdescr_from_runtime(self%qdescr, params, qsys_name, qsys_partition)
         end if
+        ! set worker priority
+        if( params%worker_priority == 'high' ) then
+            self%worker_priority = .true.
+        end if
         ! Derive per-job runtime budget.
         call get_environment_variable(SIMPLE_DEFAULT_PARTITION_TIME, default_time_env, envlen)
         if( envlen > 0 .and. trim(default_time_env) .eq. 'true' ) then
@@ -214,7 +219,7 @@ contains
             call self%qsys_fac_dispatch%new(string('persistent_worker'), self%dispatch_qsys)
             ! qscripts dispatches through the TCP worker path.
             call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
-                &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers)
+                &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers, worker_priority=self%worker_priority)
             ! base_qscripts submits directly via the base scheduler (used to launch worker processes).
             call self%base_qscripts%new(self%simple_exec_bin, self%base_qsys, self%parts,&
                 &[1, self%nparts], params%ncunits, sstream, numlen)

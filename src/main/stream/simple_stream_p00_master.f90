@@ -779,6 +779,7 @@ contains
             call cline_opening2D%set('optics_dir',  cwd // '/' // OPTICS_JOB_NAME)
             call cline_opening2D%set('nthr',                                   32)
             call cline_opening2D%set('mkdir',                               'yes')
+            call cline_opening2D%set('worker_priority',                    'high')
         end subroutine init_cline_opening2D
 
         subroutine init_metadata_opening2D()
@@ -827,6 +828,7 @@ contains
             call cline_particle_sieving%set('mkdir',                               'yes')
             call cline_particle_sieving%set('nparts',                                  4)
             call cline_particle_sieving%set('nchunks',                                 8)
+            call cline_particle_sieving%set('worker_priority',                    'high')
             if( server_address%strlen() > 0 ) call cline_particle_sieving%set('worker_server', server_address)
         end subroutine init_cline_particle_sieving
 
@@ -849,6 +851,7 @@ contains
             call cline_pool2D%set('mkdir',                                   'yes')
             call cline_pool2D%set('nparts',                                      5)
             call cline_pool2D%set('ncls',                                      200)
+            call cline_pool2D%set('worker_priority',                        'high')
             if( server_address%strlen() > 0 ) call cline_pool2D%set('worker_server', server_address)
         end subroutine init_cline_pool2D
 

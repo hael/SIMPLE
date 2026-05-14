@@ -49,8 +49,9 @@ type qsys_ctrl
     class(cmdline),   allocatable :: stream_cline_fail_stack(:)    !< command lines that exited with an error
     integer                       :: n_stream_updates       = 0    !< number of times update_queue has been called
     integer                       :: cline_stacksz          = 0    !< current number of entries in stream_cline_stack
-    logical                       :: stream    = .false.           !< .true. when running in streaming (continuous) mode
-    logical                       :: existence = .false.           !< .true. after new(); .false. after kill()
+    logical                       :: stream          = .false.     !< .true. when running in streaming (continuous) mode
+    logical                       :: existence       = .false.     !< .true. after new(); .false. after kill()
+    logical                       :: worker_priority = .false.     !< .true. for high priority workers (persistent worker backend only)
     contains
     ! CONSTRUCTORS
     procedure          :: new
@@ -114,7 +115,7 @@ contains
 
     !> Initialise (or reinitialise) the controller: wire scheduler pointers, allocate
     !! tracking arrays, and pre-compute script and sentinel file names.
-    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen, nthr_worker )
+    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen, nthr_worker, worker_priority )
         class(qsys_ctrl),         intent(inout) :: self             !< this instance
         class(string),            intent(in)    :: exec_binary      !< executable launched by generated scripts
         class(qsys_base), target, intent(in)    :: qsys_obj         !< scheduler backend (not owned)
@@ -124,6 +125,7 @@ contains
         logical,                  intent(in)    :: stream           !< .true. for streaming / continuous mode
         integer, optional,        intent(in)    :: numlen           !< explicit zero-padding width; derived from nparts_tot when absent
         integer, optional,        intent(in)    :: nthr_worker      !< thread slots per job for persistent worker backend (default 1)
+        logical, optional,        intent(in)    :: worker_priority  !< .true. for high priority workers (default .false.)
         integer :: ipart
         call self%kill
         ! Wire scheduler state.
@@ -135,7 +137,8 @@ contains
         self%nparts_tot             =  size(parts, 1)
         self%ncomputing_units       =  ncomputing_units
         self%ncomputing_units_avail =  ncomputing_units
-        if( present(nthr_worker) ) self%nthr_worker = nthr_worker
+        if( present(nthr_worker)     ) self%nthr_worker     = nthr_worker
+        if( present(worker_priority) ) self%worker_priority = worker_priority
         ! Streaming mode uses fixed 5-digit padding; batch mode derives it from nparts_tot.
         if( self%stream ) then
             self%numlen = 5
@@ -679,10 +682,10 @@ contains
     !! via exec_cmdline with up to QSYS_SUBMISSION_RETRY_LIMIT retries on failure.
     subroutine submit_scripts( self )
         use simple_qsys_local,   only: qsys_local
-        class(qsys_ctrl), intent(inout) :: self
-        type(string) :: qsys_cmd, script_name
-        integer      :: ipart, submission_exitstat, submission_retry
-        logical      :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
+        class(qsys_ctrl),  intent(inout) :: self
+        type(string)                     :: qsys_cmd, script_name
+        integer                          :: ipart, submission_exitstat, submission_retry
+        logical                          :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
         ! Build a submission mask: mark each unsubmitted job that fits in available slots.
         submit_or_not = .false.
         do ipart = self%fromto_part(1), self%fromto_part(2)
@@ -730,10 +733,10 @@ contains
     !! QSYS_SUBMISSION_RETRY_LIMIT retries on failure.
     subroutine submit_script( self, script_name )
         use simple_qsys_local, only: qsys_local
-        class(qsys_ctrl), intent(inout) :: self
-        class(string),    intent(in)    :: script_name !< path of the script to submit
-        type(string) :: cmd
-        integer      :: submission_exitstat, submission_retry
+        class(qsys_ctrl),  intent(inout) :: self
+        class(string),     intent(in)    :: script_name !< path of the script to submit
+        type(string)                     :: cmd
+        integer                          :: submission_exitstat, submission_retry
         if( .not. file_exists(filepath(string(PATH_HERE), script_name)) ) &
             write(logfhandle,'(A,A)') 'FILE DOES NOT EXIST: ', script_name%to_char()
         select type( pmyqsys => self%myqsys )
@@ -762,9 +765,9 @@ contains
     !! nthr is the number of thread slots required by the task.
     !! If the server is not associated the task is silently dropped with a log warning.
     subroutine dispatch_task_to_persistent_worker( self, script_path, nthr )
-        class(qsys_ctrl), intent(inout) :: self
-        type(string),     intent(in)    :: script_path !< absolute path of the script to enqueue
-        integer,          intent(in)    :: nthr         !< thread slots required by this task
+        class(qsys_ctrl),             intent(inout) :: self
+        type(string),                 intent(in)    :: script_path !< absolute path of the script to enqueue
+        integer,                      intent(in)    :: nthr         !< thread slots required by this task
         type(qsys_persistent_worker_message_task)   :: task_msg
         if( .not. associated(persistent_worker%server) ) then
             write(logfhandle,'(A)') '>>> QSYS_CTRL dispatch_task_to_persistent_worker: worker server not initialised; task ignored'
@@ -773,8 +776,13 @@ contains
         call task_msg%new()
         task_msg%nthr        = nthr
         task_msg%script_path = script_path%to_char()
+        task_msg%priority    = self%worker_priority
         if( .not. persistent_worker%server%queue_task(task_msg, string('norm')) ) then
-            write(logfhandle,'(A,A)') '>>> QSYS_CTRL dispatch_task_to_persistent_worker: normal-priority queue full; dropped job_id ', int2str(task_msg%job_id)
+            if( self%worker_priority ) then
+                write(logfhandle,'(A,A)') '>>> QSYS_CTRL dispatch_task_to_persistent_worker: high-priority queue full; dropped job_id ', int2str(task_msg%job_id)
+            else
+                write(logfhandle,'(A,A)') '>>> QSYS_CTRL dispatch_task_to_persistent_worker: normal-priority queue full; dropped job_id ', int2str(task_msg%job_id)
+            end if
         end if
         call task_msg%kill
     end subroutine dispatch_task_to_persistent_worker

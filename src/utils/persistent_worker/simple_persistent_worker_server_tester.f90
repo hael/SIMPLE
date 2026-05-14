@@ -16,7 +16,7 @@
 !==============================================================================
 module simple_persistent_worker_server_tester
   use simple_persistent_worker_server,       only: persistent_worker, persistent_worker_server, TCP_BUFSZ
-  use simple_test_utils,                     only: assert_true, assert_false, assert_int
+  use simple_test_utils,                     only: assert_true, assert_false, assert_int, assert_string_eq
   use simple_persistent_worker_message_task, only: qsys_persistent_worker_message_task
   use simple_string,                         only: string
   implicit none
@@ -39,7 +39,10 @@ contains
 
     call test_module_defaults_and_constants()
     call test_server_default_state()
+    call test_get_host_ips_default_empty()
     call test_new_invalid_args_do_not_start()
+    call test_new_client_only_valid_address_parse()
+    call test_new_client_only_invalid_address_rejected()
     call test_new_and_kill_lifecycle()
     call test_new_is_idempotent_while_running()
     call test_queue_task_priority_requests()
@@ -70,6 +73,12 @@ contains
     call assert_false(associated(server%worker_data), 'default worker_data should not be associated')
     call assert_false(associated(server%listener_args), 'default listener_args should not be associated')
   end subroutine test_server_default_state
+
+  subroutine test_get_host_ips_default_empty()
+    type(persistent_worker_server) :: server
+    write(*,'(A)') 'test_get_host_ips_default_empty'
+    call assert_string_eq('', server%get_host_ips(), 'default get_host_ips() should be empty')
+  end subroutine test_get_host_ips_default_empty
 
   subroutine test_new_invalid_args_do_not_start()
     type(persistent_worker_server) :: server
@@ -108,6 +117,24 @@ contains
     call assert_int(0, server%nthr_workers, 'kill() should reset nthr_workers to 0')
     call assert_int(0, server%job_count, 'kill() should reset job_count to 0')
   end subroutine test_new_and_kill_lifecycle
+
+  subroutine test_new_client_only_valid_address_parse()
+    type(persistent_worker_server) :: server
+    write(*,'(A)') 'test_new_client_only_valid_address_parse'
+    call server%new(TEST_NWORKERS, TEST_NTHR_WORKERS, string('127.0.0.1:34567'))
+    call assert_int(34567, server%get_port(), 'client_only new() should parse and publish port')
+    call assert_string_eq('127.0.0.1', server%get_host_ips(), 'client_only new() should parse and publish host ips')
+    call server%kill()
+  end subroutine test_new_client_only_valid_address_parse
+
+  subroutine test_new_client_only_invalid_address_rejected()
+    type(persistent_worker_server) :: server
+    write(*,'(A)') 'test_new_client_only_invalid_address_rejected'
+    call server%new(TEST_NWORKERS, TEST_NTHR_WORKERS, string('invalid_address_without_port'))
+    call assert_int(0, server%get_port(), 'client_only new() should reject invalid address without port separator')
+    call assert_string_eq('', server%get_host_ips(), 'client_only new() should clear host ips on invalid address')
+    call server%kill()
+  end subroutine test_new_client_only_invalid_address_rejected
 
   subroutine test_new_is_idempotent_while_running()
     type(persistent_worker_server) :: server

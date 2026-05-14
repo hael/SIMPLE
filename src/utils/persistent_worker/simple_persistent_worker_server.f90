@@ -222,7 +222,8 @@ contains
     end subroutine kill
 
     !> Submit \p task to the listener thread over a short-lived TCP connection.
-    !> Current wire path enqueues into the listener's normal-priority queue.
+    !> Queue selection is encoded in task%priority (.true. => high-priority queue,
+    !> .false. => normal-priority queue).
     !> Returns .false. if no valid status reply is received or if the listener
     !> rejects the task.
     function queue_task( self, task, priority ) result( queued )
@@ -567,7 +568,8 @@ contains
 
         !> Handle a WORKER_NEW_TASK_MSG sent by queue_task via a short-lived TCP client.
         !> Deserialises the task from buf, assigns a job_id, and appends it to the
-        !> normal-priority queue.  No mutex is needed: the task queues and job_count are
+        !> high-priority queue when new_task%priority=.true., otherwise normal-priority.
+        !> No mutex is needed: the task queues and job_count are
         !> thread-local to worker_listener_thread and only ever accessed from here.
         !> Replies with WORKER_STATUS_IDLE to acknowledge receipt; the actual dispatch
         !> happens at the next worker heartbeat.
@@ -575,21 +577,45 @@ contains
         subroutine handle_new_task_msg()
             type(qsys_persistent_worker_message_task) :: new_task
             integer                                   :: slot
+            logical                                   :: enqueued_high
             new_task = transfer(buf, new_task)
             slot     = 0
+            enqueued_high = .false.
             ! task queues and job_count are thread-local — no mutex needed
             job_count       = job_count + 1
             new_task%job_id = job_count
-            if( n_norm < TASK_QUEUE_SIZE ) then
-                n_norm = n_norm + 1
-                tasks_priority_norm(n_norm) = new_task
-                slot = n_norm
+            if( new_task%priority ) then
+                if( n_high < TASK_QUEUE_SIZE ) then
+                    n_high = n_high + 1
+                    tasks_priority_high(n_high) = new_task
+                    slot = n_high
+                    enqueued_high = .true.
+                end if
+            else
+                if( n_norm < TASK_QUEUE_SIZE ) then
+                    n_norm = n_norm + 1
+                    tasks_priority_norm(n_norm) = new_task
+                    slot = n_norm
+                end if
             end if
             if( slot > 0 ) then
-                if( DEBUG ) write(logfhandle,'(A,A,A,A)') '>>> PERSISTENT_WORKER_SERVER queued job_id ', int2str(new_task%job_id), &
-                        ' in normal-priority slot ', int2str(slot)
+                if( DEBUG ) then
+                    if( enqueued_high ) then
+                        write(logfhandle,'(A,A,A,A)') '>>> PERSISTENT_WORKER_SERVER queued job_id ', int2str(new_task%job_id), &
+                                ' in high-priority slot ', int2str(slot)
+                    else
+                        write(logfhandle,'(A,A,A,A)') '>>> PERSISTENT_WORKER_SERVER queued job_id ', int2str(new_task%job_id), &
+                                ' in normal-priority slot ', int2str(slot)
+                    end if
+                end if
             else
-                if( DEBUG ) write(logfhandle,'(A,A)') '>>> PERSISTENT_WORKER_SERVER normal-priority queue full; dropped job_id ', int2str(new_task%job_id)
+                if( DEBUG ) then
+                    if( new_task%priority ) then
+                        write(logfhandle,'(A,A)') '>>> PERSISTENT_WORKER_SERVER high-priority queue full; dropped job_id ', int2str(new_task%job_id)
+                    else
+                        write(logfhandle,'(A,A)') '>>> PERSISTENT_WORKER_SERVER normal-priority queue full; dropped job_id ', int2str(new_task%job_id)
+                    end if
+                end if
             end if
             ! Reply with idle only when enqueued; queue-full returns error so queue_task can fail.
             call status_msg%new()
@@ -673,7 +699,8 @@ contains
             ! Log lines are deferred to outside the mutex (design contract point 5).
             call update_worker_registry()
 
-            ! Select one task (highest priority first) if not terminating.
+            ! Select one task with strict priority ordering if not terminating.
+            ! Normal/low queues are considered only when the high-priority queue is empty.
             ! dispatch_task is re-initialised here so stale values from a prior
             ! heartbeat cannot be accidentally re-sent.
             call dispatch_task%new()
@@ -686,7 +713,7 @@ contains
                     tasks_priority_high(j)%job_id = 0  ! mark slot inactive to avoid re-dispatch
                     has_task = .true.
                 end if
-                if( .not. has_task ) then
+                if( .not. has_task .and. n_high == 0 ) then
                     j = find_first_dispatchable(tasks_priority_norm, n_norm, nthr_avail)
                     if( j > 0 ) then
                         tasks_priority_norm(j)%submitted = .true.
@@ -695,7 +722,7 @@ contains
                         has_task = .true.
                     end if
                 end if
-                if( .not. has_task ) then
+                if( .not. has_task .and. n_high == 0 .and. n_norm == 0 ) then
                     j = find_first_dispatchable(tasks_priority_low, n_low, nthr_avail)
                     if( j > 0 ) then
                         tasks_priority_low(j)%submitted = .true.
