@@ -79,6 +79,8 @@ contains
         endif
         if( associated(self%ptr2prg) .and. .not. self%executable%has_substr('private') )then
             self%sp_required = self%ptr2prg%requires_sp_project()
+            if( trim(self%prg%to_char()) == 'cluster_cavgs_quality' .and. trim(self%quality_mode) == 'learn' ) &
+                self%sp_required = .false.
             if( .not. cline%defined('projfile') .and. self%sp_required )then
                 if( nsp_files > 1 )then
                     write(logfhandle,*) 'Multiple *simple project files detected'
@@ -446,6 +448,7 @@ contains
             integer :: funit, io_stat, ios
             if( cntfile_loc == 0 )then
                 if( cline%defined('filetab') )then
+                    if( trim(self%prg%to_char()) == 'cluster_cavgs_quality' .and. trim(self%quality_mode) == 'learn' ) return
                     call fopen(funit, status='old', file=self%filetab, iostat=io_stat)
                     call fileiochk("In parameters::double_check_file_formats fopen failed "//self%filetab%to_char(), io_stat)
                     call fname%readline(funit, ios)

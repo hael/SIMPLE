@@ -123,6 +123,7 @@ type(ui_param) :: projname
 type(ui_param) :: prune
 type(ui_param) :: pspecsz
 type(ui_param) :: quality_mode
+type(ui_param) :: quality_model
 type(ui_param) :: qsys_name
 type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
@@ -630,8 +631,12 @@ subroutine set_ui_params
                                    'give # pixels{512}', .false., 512.)
 
     call quality_mode%set_param(   'quality_mode',    'multi',  'Class-average quality mode', &
-                                   'Whether to apply automated selection or analyze it against the current manual selection(apply|analyze){apply}', &
-                                   'Class-average quality mode(apply|analyze){apply}', .false., 'apply')
+                                   'Whether to apply automated selection, analyze it against manual selection, or learn a model(apply|analyze|learn){apply}', &
+                                   'Class-average quality mode(apply|analyze|learn){apply}', .false., 'apply')
+
+    call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
+                                   'Built-in quality model preset(default|chunk_default_v1|pool_default_v1){default}', &
+                                   'Class-average quality model preset(default|chunk_default_v1|pool_default_v1){default}', .false., 'default')
 
     call rejection_type%set_param(  'rejection_type',  'multi',  'Class-average rejection type', &
                                    'Use chunk for high-junk stream partitions or pool for larger pooled/batch sets(chunk|pool){chunk}', &

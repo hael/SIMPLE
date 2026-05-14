@@ -583,6 +583,14 @@ contains
          end if
     end function str_is_blank
 
+    !>  \brief works out whether a character string represents a true logical value
+    pure logical function str_is_true( str )
+        character(len=*), intent(in) :: str
+        character(len=len(str))      :: tmp
+        tmp = lowercase(adjustl(trim(str)))
+        str_is_true = tmp == 't' .or. tmp == 'true' .or. tmp == 'yes' .or. tmp == '1' .or. tmp == '.true.'
+    end function str_is_true
+
     !>  \brief  Find the first non-blank character in a string and return its position.
     pure integer function first_non_blank( str, back )
         character(len=*), intent(in)  :: str !< input string

@@ -75,16 +75,25 @@ contains
         &'Quality-vector clustering of class averages',&                         ! descr_short
         &'is a program for automatic class-average selection using normalized quality feature vectors',& ! descr_long
         &'simple_exec',&                                                         ! executable
-        &.true.)                                                                 ! requires sp_project
+        &.true.)                                                                 ! requires sp_project except quality_mode=learn
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call cluster_cavgs_quality%add_input(UI_PARM, quality_mode)
         call cluster_cavgs_quality%add_input(UI_PARM, rejection_type)
+        call cluster_cavgs_quality%add_input(UI_PARM, quality_model)
         call cluster_cavgs_quality%add_input(UI_PARM, prune)
         ! alternative inputs
-        ! <empty>
+        call cluster_cavgs_quality%add_input(UI_ALT, 'filetab', 'file', 'Analysis file table', &
+        &'File table of cavgs_quality_analysis.txt files for quality_mode=learn', &
+        &'e.g. cavgs_quality_analyses.txt', .false., '', gui_active_flags='quality_mode=learn')
+        call cluster_cavgs_quality%add_input(UI_ALT, 'infile', 'file', 'Quality model input', &
+        &'Optional learned quality model file for apply/analyze', &
+        &'e.g. cavgs_quality_model_chunk_learned.txt', .false., '', gui_active_flags='quality_mode=apply|analyze')
+        call cluster_cavgs_quality%add_input(UI_ALT, 'fname', 'file', 'Quality model output', &
+        &'Output quality model file for quality_mode=learn', &
+        &'e.g. cavgs_quality_model_chunk_learned.txt', .false., '', gui_active_flags='quality_mode=learn')
         ! search controls
         ! <empty>
         ! filter controls

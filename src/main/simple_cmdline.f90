@@ -64,6 +64,7 @@ contains
         type(string)                   :: prgname, exec_cmd_ui, exec_cmd, executable
         character(len=XLONGSTRLEN)     :: arg, buffer
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
+        logical :: skip_required_keys
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
@@ -140,12 +141,18 @@ contains
             THROW_HARD('inputted prg not supported, use prg=list to list all available programs')
         endif
         ! get required keys
-        sz_keys_req = ptr2prg%get_nrequired_keys()
-        if( sz_keys_req > 0 )then
-            keys_required  = ptr2prg%get_required_keys()
-            nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
-        else
+        skip_required_keys = skip_mode_required_keys(prgname%to_char(), self%entire_line)
+        if( skip_required_keys )then
+            sz_keys_req    = 0
             nargs_required = 1
+        else
+            sz_keys_req = ptr2prg%get_nrequired_keys()
+            if( sz_keys_req > 0 )then
+                keys_required  = ptr2prg%get_required_keys()
+                nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
+            else
+                nargs_required = 1
+            endif
         endif
         if( self%argcnt < nargs_required )then
             call ptr2prg%print_cmdline()
@@ -181,6 +188,7 @@ contains
         character(len=XLONGSTRLEN)     :: arg
         type(ui_program), pointer :: ptr2prg => null()
         integer :: i, ikey, pos, cmdstat, cmdlen, sz_keys_req, nargs_required
+        logical :: skip_required_keys
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
@@ -200,12 +208,18 @@ contains
             case DEFAULT
                 if( associated(ptr2prg) )then
                     ! get required keys
-                    sz_keys_req = ptr2prg%get_nrequired_keys()
-                    if( sz_keys_req > 0 )then
-                        keys_required  = ptr2prg%get_required_keys()
-                        nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
-                    else
+                    skip_required_keys = skip_mode_required_keys(trim(arg(pos+1:)), self%entire_line)
+                    if( skip_required_keys )then
+                        sz_keys_req    = 0
                         nargs_required = 1
+                    else
+                        sz_keys_req = ptr2prg%get_nrequired_keys()
+                        if( sz_keys_req > 0 )then
+                            keys_required  = ptr2prg%get_required_keys()
+                            nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
+                        else
+                            nargs_required = 1
+                        endif
                     endif
                     if( self%argcnt < nargs_required )then
                         call ptr2prg%print_cmdline()
@@ -254,6 +268,12 @@ contains
         end do
         if( sz_keys_req > 0 ) call self%check
     end subroutine parse_private
+
+    logical function skip_mode_required_keys( prgname, line )
+        character(len=*), intent(in) :: prgname, line
+        skip_mode_required_keys = trim(prgname) == 'cluster_cavgs_quality' .and. &
+            str_has_substr(line, 'quality_mode=learn')
+    end function skip_mode_required_keys
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse_oldschool( self, keys_required, keys_optional )
