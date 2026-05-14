@@ -179,9 +179,19 @@ contains
         real, intent(in)  :: corrs(:), res(:) !<  corrs Fourier shell correlation
         real, intent(out) :: fsc05, fsc0143   !<  fsc05 resolution at FSC=0.5,  fsc0143 resolution at FSC=0.143
         integer           :: n, ires0143, ires05
-        n = size(corrs)
+        n        = size(corrs)
+        ! Start the scan from the first shell that is above the 0.143 threshold.
+        ! For a normal monotonically-decreasing FSC this is always shell 1.
+        ! For a non-monotonic FSC (e.g. spike in low shells) the true crossing
+        ! can begin at shell 2 or 3; bounds are guarded by the n >= k checks.
         ires0143 = 1
-        if( corrs(1) < 0.143 .and. corrs(2) > 0.143 ) ires0143 = 2
+        if( corrs(1) < 0.143 ) then
+            if( n >= 2 .and. corrs(2) > 0.143 ) then
+                ires0143 = 2
+            else if( n >= 3 .and. corrs(3) > 0.143 ) then
+                ires0143 = 3
+            end if
+        end if
         do while( ires0143 <= n )
             if( corrs(ires0143) >= 0.143 )then
                 ires0143 = ires0143 + 1
@@ -196,8 +206,15 @@ contains
         else
             fsc0143 = res(ires0143)
         endif
+        ! Same non-monotonic FSC logic as for ires0143 above, applied at the 0.5 threshold.
         ires05 = 1
-        if( corrs(1) < 0.5 .and. corrs(2) > 0.5 ) ires05 = 2
+        if( corrs(1) < 0.5 ) then
+            if( n >= 2 .and. corrs(2) > 0.5 ) then
+                ires05 = 2
+            else if( n >= 3 .and. corrs(3) > 0.5 ) then
+                ires05 = 3
+            end if
+        end if
         do while( ires05 <= n )
             if( corrs(ires05) >= 0.5 )then
                 ires05 = ires05+1
