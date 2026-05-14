@@ -4,19 +4,20 @@ use simple_defs,               only: logfhandle, LONGSTRLEN
 use simple_error,              only: simple_exception
 use simple_image,              only: image
 use simple_oris,               only: oris
-use simple_cavg_quality_feats, only: CAVG_QUALITY_NFEATS, EPS, cavg_quality_feature_name, &
+use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
     I_HIST_KNN, calc_histogram_quality_signal, extract_cavg_quality_features, &
     normalize_cavg_quality_features, write_cavg_quality_feature_inventory
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
-use simple_cavg_quality_types, only: cavg_quality_result, reset_cavg_quality_result
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, cavg_quality_result, reset_cavg_quality_result
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: evaluate_cavg_quality
 public :: write_cavg_quality_analysis
+public :: write_cavg_quality_feature_table
 
 contains
 
@@ -73,7 +74,7 @@ contains
         write(funit,'(A,A)') '# dataset_id=', trim(dataset)
         write(funit,'(A,A)') '# model_name=', trim(model%name)
         write(funit,'(A,A)') '# model_family=', trim(model%family)
-        write(funit,'(A,A)') '# rejection_type=', trim(model%context)
+        write(funit,'(A,A)') '# model_context=', trim(model%context)
         write(funit,'(A,I0)') '# n_classes=', ncls
         write(funit,'(A,I0)') '# manual_selected=', ngood
         write(funit,'(A,I0)') '# manual_rejected=', nbad
@@ -122,6 +123,37 @@ contains
         deallocate(auto, ref, suggested_weights)
     end subroutine write_cavg_quality_analysis
 
+    subroutine write_cavg_quality_feature_table( quality, model, fname, dataset_id, manual_states )
+        type(cavg_quality_result), intent(in) :: quality
+        type(cavg_quality_model),  intent(in) :: model
+        character(len=*),          intent(in) :: fname
+        character(len=*),          intent(in) :: dataset_id
+        integer, optional,         intent(in) :: manual_states(:)
+        integer :: funit, icls, ncls, manual_state, auto_match
+        logical :: have_manual
+        ncls = size(quality%states)
+        if( size(quality%scores) /= ncls ) THROW_HARD('write_cavg_quality_feature_table: score size mismatch')
+        if( size(quality%features, dim=1) /= ncls ) THROW_HARD('write_cavg_quality_feature_table: feature size mismatch')
+        have_manual = present(manual_states)
+        if( have_manual )then
+            if( size(manual_states) /= ncls ) THROW_HARD('write_cavg_quality_feature_table: manual state size mismatch')
+        endif
+        open(newunit=funit, file=trim(fname), status='replace', action='write')
+        call write_analysis_class_header(funit)
+        do icls = 1, ncls
+            if( have_manual )then
+                manual_state = manual_states(icls)
+                auto_match   = merge(1, 0, (manual_state > 0) .eqv. (quality%states(icls) > 0))
+            else
+                manual_state = 0
+                auto_match   = 0
+            endif
+            call write_feature_table_class_row(funit, dataset_id, model, quality, icls, manual_state, auto_match)
+        end do
+        close(funit)
+        write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
+    end subroutine write_cavg_quality_feature_table
+
     subroutine write_model_as_analysis_comments( funit, model )
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
@@ -165,7 +197,7 @@ contains
     subroutine write_analysis_class_header( funit )
         integer, intent(in) :: funit
         integer :: ifeat
-        write(funit,'(A)', advance='no') 'dataset_id,rejection_type,model_name,class,state,hard_reject,quality_cluster,quality_score,manual_state,auto_matches_manual'
+        write(funit,'(A)', advance='no') 'dataset_id,model_context,model_name,class,state,hard_reject,quality_cluster,quality_score,manual_state,auto_matches_manual'
         do ifeat = 1, CAVG_QUALITY_NFEATS
             write(funit,'(A)', advance='no') ',raw_'//trim(cavg_quality_feature_name(ifeat))// &
                 ',z_'//trim(cavg_quality_feature_name(ifeat))
@@ -179,16 +211,25 @@ contains
         type(cavg_quality_model),  intent(in) :: model
         type(cavg_quality_result), intent(in) :: quality
         integer,                   intent(in) :: manual_states(:)
+        call write_feature_table_class_row(funit, dataset_id, model, quality, icls, manual_states(icls), &
+            merge(1, 0, (manual_states(icls) > 0) .eqv. (quality%states(icls) > 0)))
+    end subroutine write_analysis_class_row
+
+    subroutine write_feature_table_class_row( funit, dataset_id, model, quality, icls, manual_state, auto_match )
+        integer,                   intent(in) :: funit, icls, manual_state, auto_match
+        character(len=*),          intent(in) :: dataset_id
+        type(cavg_quality_model),  intent(in) :: model
+        type(cavg_quality_result), intent(in) :: quality
         integer :: ifeat
         write(funit,'(A,A,A,A,A,I0,A,I0,A,L1,A,I0,A,ES14.6,A,I0,A,I0)', advance='no') &
             trim(dataset_id), ',', trim(model%context), ',', trim(model%name), ',', icls, ',', quality%states(icls), ',', &
-            quality%hard_reject(icls), ',', quality%labels(icls), ',', quality%scores(icls), ',', manual_states(icls), ',', &
-            merge(1, 0, (manual_states(icls) > 0) .eqv. (quality%states(icls) > 0))
+            quality%hard_reject(icls), ',', quality%labels(icls), ',', quality%scores(icls), ',', manual_state, ',', &
+            auto_match
         do ifeat = 1, CAVG_QUALITY_NFEATS
             write(funit,'(A,ES14.6,A,ES14.6)', advance='no') ',', quality%raw(icls,ifeat), ',', quality%features(icls,ifeat)
         enddo
         write(funit,*)
-    end subroutine write_analysis_class_row
+    end subroutine write_feature_table_class_row
 
     subroutine write_threshold_scan_comments( funit, scores, reference_states )
         integer, intent(in) :: funit

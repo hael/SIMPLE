@@ -2,7 +2,7 @@
 module simple_cavg_quality_stats
 use simple_error,              only: simple_exception
 use simple_stat,               only: median, mad_gau
-use simple_cavg_quality_feats, only: EPS
+use simple_cavg_quality_types, only: EPS
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -13,6 +13,7 @@ public :: auc_for_values
 public :: median_by_state
 public :: mad_by_state
 public :: safe_div
+public :: normalize_quality_dmat
 
 contains
 
@@ -37,6 +38,11 @@ contains
         accuracy    = safe_div(real(tp + tn), real(tp + fp + tn + fn))
     end subroutine calc_binary_metrics
 
+    ! 0.9-1.0: Excellent
+    ! 0.8-0.9: Good
+    ! 0.7-0.8: Fair
+    ! 0.6-0.7: Poor
+    ! 0.5:     No better than chance
     real function auc_for_values( vals, reference_states )
         real,    intent(in) :: vals(:)
         integer, intent(in) :: reference_states(:)
@@ -100,5 +106,15 @@ contains
             safe_div = num / den
         end if
     end function safe_div
+
+    subroutine normalize_quality_dmat( dmat, ok )
+        real,    intent(inout) :: dmat(:,:)
+        logical, intent(out)   :: ok
+        real :: dmin, dmax
+        dmin = minval(dmat)
+        dmax = maxval(dmat)
+        ok   = dmax - dmin > EPS
+        if( ok ) dmat = (dmat - dmin) / (dmax - dmin)
+    end subroutine normalize_quality_dmat
 
 end module simple_cavg_quality_stats

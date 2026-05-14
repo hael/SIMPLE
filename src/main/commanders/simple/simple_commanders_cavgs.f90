@@ -1,11 +1,11 @@
 !@descr: analysis of class averages
 module simple_commanders_cavgs
 use simple_commanders_api
-use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis
-use simple_cavg_quality_feats,    only: CAVG_QUALITY_NFEATS, cavg_quality_feature_name
+use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
+    write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: learn_cavg_quality_model
-use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_DEFAULT, cavg_quality_model, &
-    cavg_rejection_type_from_name, cavg_rejection_type_name
+use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_DEFAULT, &
+    cavg_quality_model, cavg_rejection_type_from_name, write_cavg_quality_model_builtin_code
 use simple_cavg_quality_types,    only: cavg_quality_result
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
@@ -318,49 +318,60 @@ contains
         type(string)              :: stkname
         type(string), allocatable :: analysis_files(:)
         integer, allocatable      :: reference_states(:)
-        integer                   :: ncls, nsel, nrej, rejection_type
+        integer                   :: ncls, nsel, nrej
+        integer, parameter        :: QUALITY_MODE_APPLY   = 1
+        integer, parameter        :: QUALITY_MODE_ANALYZE = 2
+        integer, parameter        :: QUALITY_MODE_LEARN   = 3
+        integer, parameter        :: QUALITY_MODE_PROMOTE = 4
+        integer                   :: quality_mode
         real                      :: smpd
-        logical                   :: l_analyze, l_learn
-        character(len=LONGSTRLEN) :: model_fname, report_fname, model_errmsg
+        character(len=LONGSTRLEN) :: model_fname, report_fname
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
         call params%new(cline)
-        l_analyze = .false.
-        l_learn   = .false.
         select case(trim(params%quality_mode))
             case('apply')
-                l_analyze = .false.
+                quality_mode = QUALITY_MODE_APPLY
             case('analyze')
-                l_analyze = .true.
+                quality_mode = QUALITY_MODE_ANALYZE
             case('learn')
-                l_learn = .true.
-            case DEFAULT
-                THROW_HARD('cluster_cavgs_quality: quality_mode must be apply, analyze or learn')
+                quality_mode = QUALITY_MODE_LEARN
+            case('promote')
+                quality_mode = QUALITY_MODE_PROMOTE
+            case default
+                THROW_HARD('cluster_cavgs_quality: quality_mode must be apply, analyze, learn or promote')
         end select
-        rejection_type = cavg_rejection_type_from_name(params%rejection_type)
         if( trim(params%quality_model) == '' .or. trim(params%quality_model) == CAVG_QUALITY_MODEL_DEFAULT )then
-            call model%init_default(rejection_type)
+            if( cline%defined('rejection_type') )then
+                call model%init_default(cavg_rejection_type_from_name(params%rejection_type))
+            else
+                call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
+            endif
         else
             call model%init_preset(params%quality_model)
-            if( model%rejection_type /= rejection_type )then
-                model_errmsg = 'quality_model '//trim(params%quality_model)//' is a '//&
-                    trim(cavg_rejection_type_name(model%rejection_type))//' model, not '//trim(params%rejection_type)
-                THROW_HARD(trim(model_errmsg))
-            endif
         endif
-        if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) call model%read(params%infile%to_char())
-        if( model%rejection_type /= rejection_type )then
-            model_errmsg = 'selected quality model does not match rejection_type='//trim(params%rejection_type)
-            THROW_HARD(trim(model_errmsg))
+        ! Precedence: preset/default first, model file last.
+        ! infile is a complete model and wins over the legacy hint.
+        if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) &
+            call model%read(params%infile%to_char())
+        if( quality_mode == QUALITY_MODE_PROMOTE )then
+            if( .not. cline%defined('infile') ) THROW_HARD('cluster_cavgs_quality quality_mode=promote requires infile')
+            model_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
+            if( cline%defined('fname') ) model_fname = params%fname%to_char()
+            call write_cavg_quality_model_builtin_code(model, trim(model_fname))
+            write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY MODEL PROMOTION CODE : ', trim(model_fname)
+            call simple_end('**** SIMPLE_CLUSTER_CAVGS_QUALITY PROMOTE NORMAL STOP ****', &
+                verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
+            return
         endif
-        if( l_learn )then
+        if( quality_mode == QUALITY_MODE_LEARN )then
             if( .not. cline%defined('filetab') ) THROW_HARD('cluster_cavgs_quality quality_mode=learn requires filetab')
             call read_filetable(params%filetab, analysis_files)
-            model_fname = 'cavgs_quality_model_'//trim(params%rejection_type)//'_learned.txt'
+            model_fname = 'cavgs_quality_model_'//trim(model%context)//'_learned.txt'
             if( cline%defined('fname') ) model_fname = params%fname%to_char()
             report_fname = 'cavgs_quality_learn_report.txt'
-            call learn_cavg_quality_model(analysis_files, rejection_type, model, trim(model_fname), trim(report_fname))
+            call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname))
             write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
             if( allocated(analysis_files) ) deallocate(analysis_files)
             call simple_end('**** SIMPLE_CLUSTER_CAVGS_QUALITY LEARN NORMAL STOP ****', &
@@ -379,23 +390,25 @@ contains
         call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model)
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
-        write(logfhandle,'(A,A)') '>>> CAVG QUALITY REJECTION TYPE : ', trim(params%rejection_type)
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
+        write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL CONTEXT  : ', trim(model%context)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
         write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / MARGIN / EFFECTIVE : ', &
             quality%raw_threshold, ' / ', quality%threshold_margin, ' / ', quality%threshold
         write(logfhandle,'(A,F8.3,A,L1)') '>>> CAVG QUALITY SEPARATION / USED THRESHOLD : ', &
             quality%separation, ' USED=', quality%used_threshold
-        if( l_analyze )then
+        if( quality_mode == QUALITY_MODE_ANALYZE )then
             write(logfhandle,'(A,I6,A,I6)') '>>> MANUAL REFERENCE SELECTED / REJECTED : ', &
                 count(reference_states > 0), ' / ', count(reference_states <= 0)
-            call write_cavg_quality_analysis(quality, reference_states, model, 'cavgs_quality_analysis.txt', params%projfile%to_char())
+            call write_cavg_quality_analysis(quality, reference_states, model, 'cavgs_quality_analysis.txt', &
+                params%projfile%to_char())
         else
-            call write_quality_table(string('cavgs_quality_features.txt'))
+            call write_cavg_quality_feature_table(quality, model, 'cavgs_quality_features.txt', &
+                params%projfile%to_char())
         endif
         call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
         call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
-        if( l_analyze )then
+        if( quality_mode == QUALITY_MODE_ANALYZE )then
             write(logfhandle,'(A)') '>>> QUALITY ANALYSIS MODE: project selection left unchanged'
         else
             call spproj%map_cavgs_selection(quality%states)
@@ -438,29 +451,6 @@ contains
             enddo
             write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
         end subroutine write_quality_stack
-
-        subroutine write_quality_table( fname )
-            type(string), intent(in) :: fname
-            integer :: funit, icls, ifeat
-            open(newunit=funit, file=fname%to_char(), status='replace', action='write')
-            write(funit,'(A)', advance='no') 'class,state,hard_reject,quality_cluster,quality_score'
-            do ifeat = 1, CAVG_QUALITY_NFEATS
-                write(funit,'(A)', advance='no') ',raw_'//trim(cavg_quality_feature_name(ifeat))// &
-                    ',z_'//trim(cavg_quality_feature_name(ifeat))
-            enddo
-            write(funit,*)
-            do icls = 1, ncls
-                write(funit,'(I0,A,I0,A,L1,A,I0,A,ES14.6)', advance='no') icls, ',', quality%states(icls), ',', &
-                    quality%hard_reject(icls), ',', quality%labels(icls), ',', quality%scores(icls)
-                do ifeat = 1, CAVG_QUALITY_NFEATS
-                    write(funit,'(A,ES14.6,A,ES14.6)', advance='no') ',', quality%raw(icls,ifeat), &
-                        ',', quality%features(icls,ifeat)
-                enddo
-                write(funit,*)
-            enddo
-            close(funit)
-            write(logfhandle,'(A,A)') '>>> WROTE ', fname%to_char()
-        end subroutine write_quality_table
 
     end subroutine exec_cluster_cavgs_quality
 

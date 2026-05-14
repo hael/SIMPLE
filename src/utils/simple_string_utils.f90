@@ -591,6 +591,29 @@ contains
         str_is_true = tmp == 't' .or. tmp == 'true' .or. tmp == 'yes' .or. tmp == '1' .or. tmp == '.true.'
     end function str_is_true
 
+    pure function csv_field( line, ifield ) result( field )
+        character(len=*), intent(in) :: line
+        integer,          intent(in) :: ifield
+        character(len=LONGSTRLEN) :: field
+        integer :: i, start, finish, nfield, llen
+        field = ''
+        if( ifield < 1 ) return
+        start  = 1
+        nfield = 1
+        llen   = len_trim(line)
+        do i = 1, llen + 1
+            if( i == llen + 1 .or. line(i:i) == ',' )then
+                finish = i - 1
+                if( nfield == ifield )then
+                    if( finish >= start ) field = adjustl(trim(line(start:finish)))
+                    return
+                endif
+                nfield = nfield + 1
+                start  = i + 1
+            endif
+        end do
+    end function csv_field
+
     !>  \brief  Find the first non-blank character in a string and return its position.
     pure integer function first_non_blank( str, back )
         character(len=*), intent(in)  :: str !< input string

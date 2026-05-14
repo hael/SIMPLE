@@ -2,11 +2,12 @@
 module simple_cavg_quality_model
 use simple_defs,               only: LONGSTRLEN, XLONGSTRLEN
 use simple_error,              only: simple_exception
-use simple_string_utils,       only: str_is_true
+use simple_string_utils,       only: str_is_true, csv_field, lowercase, uppercase
 use simple_clustering_utils,   only: cluster_dmat
-use simple_cavg_quality_feats, only: EPS, CLIP_Z, normalize_quality_dmat
+use simple_srch_sort_loc,      only: hpsort
 use simple_cavg_quality_types, only: CAVG_REJECTION_CHUNK, CAVG_REJECTION_POOL, CAVG_QUALITY_NFEATS, &
-    cavg_quality_model_spec, cavg_quality_result
+    EPS, CLIP_Z, cavg_quality_model_spec, cavg_quality_result
+use simple_cavg_quality_stats, only: normalize_quality_dmat
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -20,28 +21,17 @@ public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
-public :: cavg_quality_model_builtin_names
-public :: cavg_quality_model_default_name
 public :: cavg_rejection_type_from_name
 public :: cavg_rejection_type_name
-public :: cluster_cavg_quality
-public :: normalize_cavg_quality_model
-
-type :: cavg_quality_model_catalog_entry
-    character(len=64) :: name           = ''
-    integer           :: rejection_type = CAVG_REJECTION_CHUNK
-end type cavg_quality_model_catalog_entry
+public :: write_cavg_quality_model_builtin_code
 
 ! Built-in presets are complete model specifications. To promote a learned
-! model into the code, add a named preset and include it in the catalog.
+! model into the code, add a named preset and include it in builtin_names.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_DEFAULT       = 'default'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v1'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v1'
-
-integer, parameter :: CAVG_QUALITY_NBUILTIN_MODELS = 2
-type(cavg_quality_model_catalog_entry), parameter :: CAVG_QUALITY_BUILTIN_MODELS(CAVG_QUALITY_NBUILTIN_MODELS) = [ &
-    cavg_quality_model_catalog_entry(CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_REJECTION_CHUNK), &
-    cavg_quality_model_catalog_entry(CAVG_QUALITY_MODEL_POOL_DEFAULT,  CAVG_REJECTION_POOL) ]
+character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
+    CAVG_QUALITY_MODEL_POOL_DEFAULT
 
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
 real, parameter :: BOUNDARY_MARGIN_DEFAULT = 0.05
@@ -49,14 +39,13 @@ real, parameter :: CHUNK_BOUNDARY_OFFSET   = 0.25
 real, parameter :: CHUNK_OTSU_MIN_OFFSET   = 0.25
 real, parameter :: CHUNK_OTSU_MAX_OFFSET   = 0.50
 real, parameter :: POOL_MIN_ACCEPT_FRAC    = 0.65
-real, parameter :: HIST_DMAT_WEIGHT        = 0.50
 real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
+real, parameter :: CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT = 0.50
 
 ! Default interpretable linear score coefficients. These are model parameters,
 ! while the feature definitions and extraction live in simple_cavg_quality_feats.
 real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     0.34, 0.18, 0.00, 0.00, 0.16, 0.18, 0.00, 0.00, 0.00, 0.00, 0.00, 0.14 ]
-real, parameter :: CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT = HIST_DMAT_WEIGHT
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
@@ -66,7 +55,7 @@ type :: cavg_quality_model
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_DEFAULT_WEIGHTS
     real              :: boundary_margin         = -CHUNK_BOUNDARY_OFFSET
     real              :: min_score_separation    = MIN_SCORE_SEPARATION
-    real              :: hist_dmat_weight        = HIST_DMAT_WEIGHT
+    real              :: hist_dmat_weight        = CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT
     real              :: otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
     real              :: otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
     real              :: cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
@@ -76,35 +65,35 @@ type :: cavg_quality_model
     logical           :: use_cluster_rescue      = .false.
     logical           :: enforce_min_accept_frac = .false.
 contains
-    procedure :: init_default => cavg_quality_model_init_default
-    procedure :: init_preset  => cavg_quality_model_init_preset
-    procedure :: init_spec    => cavg_quality_model_init_spec
-    procedure :: get_spec     => cavg_quality_model_get_spec
-    procedure :: normalize    => cavg_quality_model_normalize
-    procedure :: classify     => cavg_quality_model_classify
-    procedure :: write        => cavg_quality_model_write
-    procedure :: read         => cavg_quality_model_read
-    procedure :: kill         => cavg_quality_model_kill
+    procedure :: init_default
+    procedure :: init_preset
+    procedure :: init_spec
+    procedure :: get_spec
+    procedure :: normalize
+    procedure :: classify
+    procedure :: write => write_model
+    procedure :: read  => read_model
+    procedure :: kill  => reset_model
 end type cavg_quality_model
 
 contains
 
-    subroutine cavg_quality_model_init_default( self, rejection_type )
+    subroutine init_default( self, rejection_type )
         class(cavg_quality_model), intent(inout) :: self
         integer,                   intent(in)    :: rejection_type
         call assert_valid_rejection_type(rejection_type)
-        call self%init_preset(cavg_quality_model_default_name(rejection_type))
-    end subroutine cavg_quality_model_init_default
+        call self%init_preset(default_name(rejection_type))
+    end subroutine init_default
 
-    subroutine cavg_quality_model_init_preset( self, preset_name )
+    subroutine init_preset( self, preset_name )
         class(cavg_quality_model), intent(inout) :: self
         character(len=*),          intent(in)    :: preset_name
         type(cavg_quality_model_spec) :: spec
-        spec = cavg_quality_model_builtin_spec(preset_name)
+        spec = builtin_spec(preset_name)
         call self%init_spec(spec)
-    end subroutine cavg_quality_model_init_preset
+    end subroutine init_preset
 
-    function cavg_quality_model_builtin_spec( preset_name ) result( spec )
+    function builtin_spec( preset_name ) result( spec )
         character(len=*), intent(in) :: preset_name
         type(cavg_quality_model_spec) :: spec
         character(len=LONGSTRLEN) :: errmsg
@@ -113,24 +102,19 @@ contains
                 spec = chunk_default_model_spec()
             case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
                 spec = pool_default_model_spec()
-            case DEFAULT
+            case default
                 errmsg = 'unknown class-average quality model preset: '//trim(preset_name)//&
-                         '; available presets: '//trim(cavg_quality_model_builtin_names())
+                         '; available presets: '//trim(builtin_names())
                 THROW_HARD(trim(errmsg))
         end select
-    end function cavg_quality_model_builtin_spec
+    end function builtin_spec
 
-    function cavg_quality_model_builtin_names() result( names )
+    function builtin_names() result( names )
         character(len=LONGSTRLEN) :: names
-        integer :: i
-        names = ''
-        do i = 1, CAVG_QUALITY_NBUILTIN_MODELS
-            if( i > 1 ) names = trim(names)//'|'
-            names = trim(names)//trim(CAVG_QUALITY_BUILTIN_MODELS(i)%name)
-        end do
-    end function cavg_quality_model_builtin_names
+        names = BUILTIN_MODEL_NAMES
+    end function builtin_names
 
-    function cavg_quality_model_default_name( rejection_type ) result( name )
+    function default_name( rejection_type ) result( name )
         integer, intent(in) :: rejection_type
         character(len=64) :: name
         call assert_valid_rejection_type(rejection_type)
@@ -140,11 +124,11 @@ contains
             case(CAVG_REJECTION_POOL)
                 name = CAVG_QUALITY_MODEL_POOL_DEFAULT
         end select
-    end function cavg_quality_model_default_name
+    end function default_name
 
-    subroutine cavg_quality_model_init_spec( self, spec )
-        class(cavg_quality_model), intent(inout) :: self
-        type(cavg_quality_model_spec), intent(in) :: spec
+    subroutine init_spec( self, spec )
+        class(cavg_quality_model),     intent(inout) :: self
+        type(cavg_quality_model_spec), intent(in)    :: spec
         call assert_valid_rejection_type(spec%rejection_type)
         if( trim(spec%family) /= 'linear_boundary' ) &
             THROW_HARD('unsupported class-average quality model family: '//trim(spec%family))
@@ -165,9 +149,9 @@ contains
         self%use_cluster_rescue      = spec%use_cluster_rescue
         self%enforce_min_accept_frac = spec%enforce_min_accept_frac
         call self%normalize()
-    end subroutine cavg_quality_model_init_spec
+    end subroutine init_spec
 
-    function cavg_quality_model_get_spec( self ) result( spec )
+    function get_spec( self ) result( spec )
         class(cavg_quality_model), intent(in) :: self
         type(cavg_quality_model_spec) :: spec
         spec%name                    = self%name
@@ -186,7 +170,7 @@ contains
         spec%use_otsu_window         = self%use_otsu_window
         spec%use_cluster_rescue      = self%use_cluster_rescue
         spec%enforce_min_accept_frac = self%enforce_min_accept_frac
-    end function cavg_quality_model_get_spec
+    end function get_spec
 
     function chunk_default_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec
@@ -197,7 +181,7 @@ contains
         spec%weights                 = CAVG_QUALITY_DEFAULT_WEIGHTS
         spec%boundary_margin         = -CHUNK_BOUNDARY_OFFSET
         spec%min_score_separation    = MIN_SCORE_SEPARATION
-        spec%hist_dmat_weight        = HIST_DMAT_WEIGHT
+        spec%hist_dmat_weight        = CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT
         spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
         spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
@@ -217,7 +201,7 @@ contains
         spec%weights                 = CAVG_QUALITY_DEFAULT_WEIGHTS
         spec%boundary_margin         = BOUNDARY_MARGIN_DEFAULT
         spec%min_score_separation    = MIN_SCORE_SEPARATION
-        spec%hist_dmat_weight        = HIST_DMAT_WEIGHT
+        spec%hist_dmat_weight        = CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT
         spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
         spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
@@ -228,7 +212,7 @@ contains
         spec%enforce_min_accept_frac = .true.
     end function pool_default_model_spec
 
-    subroutine cavg_quality_model_normalize( self )
+    subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
         self%weights = max(0.0, self%weights)
         if( sum(self%weights) > EPS )then
@@ -237,26 +221,21 @@ contains
             self%weights = CAVG_QUALITY_DEFAULT_WEIGHTS
         endif
         self%hist_dmat_weight = max(0.0, min(1.0, self%hist_dmat_weight))
-    end subroutine cavg_quality_model_normalize
+    end subroutine normalize
 
-    subroutine normalize_cavg_quality_model( model )
-        type(cavg_quality_model), intent(inout) :: model
-        call model%normalize()
-    end subroutine normalize_cavg_quality_model
-
-    subroutine cavg_quality_model_classify( self, quality )
+    subroutine classify( self, quality )
         class(cavg_quality_model), intent(in)    :: self
         type(cavg_quality_result), intent(inout) :: quality
-        if( .not. allocated(quality%features)    ) THROW_HARD('cavg_quality_model_classify: missing features')
-        if( .not. allocated(quality%hard_reject) ) THROW_HARD('cavg_quality_model_classify: missing hard-reject mask')
-        if( .not. allocated(quality%hist_dmat)   ) THROW_HARD('cavg_quality_model_classify: missing histogram distance matrix')
+        if( .not. allocated(quality%features)    ) THROW_HARD('classify: missing features')
+        if( .not. allocated(quality%hard_reject) ) THROW_HARD('classify: missing hard-reject mask')
+        if( .not. allocated(quality%hist_dmat)   ) THROW_HARD('classify: missing histogram distance matrix')
         quality%rejection_type = self%rejection_type
         quality%model_name     = self%name
         quality%model_context  = self%context
-        call cluster_cavg_quality(quality, self)
-    end subroutine cavg_quality_model_classify
+        call apply_linear_boundary(quality, self)
+    end subroutine classify
 
-    subroutine cavg_quality_model_write( self, fname )
+    subroutine write_model( self, fname )
         class(cavg_quality_model), intent(in) :: self
         character(len=*),          intent(in) :: fname
         integer :: funit, i
@@ -285,30 +264,209 @@ contains
         write(funit,'(A,L1)') 'use_cluster_rescue=', self%use_cluster_rescue
         write(funit,'(A,L1)') 'enforce_min_accept_frac=', self%enforce_min_accept_frac
         close(funit)
-    end subroutine cavg_quality_model_write
+    end subroutine write_model
 
-    subroutine cavg_quality_model_read( self, fname )
+    subroutine write_cavg_quality_model_builtin_code( model, fname )
+        type(cavg_quality_model), intent(in) :: model
+        character(len=*),         intent(in) :: fname
+        character(len=64)  :: symbol, func_name
+        character(len=128) :: const_name
+        integer :: funit
+        symbol     = model_symbol_from_name(model%name)
+        func_name  = trim(symbol)//'_model_spec'
+        const_name = 'CAVG_QUALITY_MODEL_'//trim(uppercase(symbol))
+        open(newunit=funit, file=trim(fname), status='replace', action='write')
+        write(funit,'(A)') '! cluster_cavgs_quality built-in model promotion snippet'
+        write(funit,'(A)') '! Generated from learned model: '//trim(model%name)
+        write(funit,'(A)') '! Review the validation report before adding this preset to the library.'
+        write(funit,'(A)') ''
+        write(funit,'(A)') '! 1. Add this constant near the built-in model names in simple_cavg_quality_model.f90:'
+        write(funit,'(A,A,A,A,A)') 'character(len=*), parameter :: ', trim(const_name), ' = ', &
+            trim(fortran_quote(model%name)), ''
+        write(funit,'(A)') ''
+        write(funit,'(A)') '! 2. Append this name to BUILTIN_MODEL_NAMES:'
+        write(funit,'(A,A)') '!     //''|''//', trim(const_name)
+        write(funit,'(A)') ''
+        write(funit,'(A)') '! 3. Add this case in builtin_spec:'
+        write(funit,'(A,A,A)') '            case(', trim(const_name), ')'
+        write(funit,'(A,A,A)') '                spec = ', trim(func_name), '()'
+        write(funit,'(A)') ''
+        write(funit,'(A)') '! 4. Add this function next to the other built-in model specs:'
+        call write_model_spec_function(funit, model, trim(func_name), trim(const_name))
+        write(funit,'(A)') ''
+        write(funit,'(A)') '! 5. Add the model name to the quality_model UI/help option lists:'
+        write(funit,'(A)') '!     src/main/ui/simple_ui_params_common.f90'
+        write(funit,'(A)') '!     src/main/params/simple_parameters.f90'
+        write(funit,'(A,A,A)') '!     option token: ', trim(model%name), ''
+        close(funit)
+    end subroutine write_cavg_quality_model_builtin_code
+
+    subroutine write_model_spec_function( funit, model, func_name, const_name )
+        integer,                  intent(in) :: funit
+        type(cavg_quality_model), intent(in) :: model
+        character(len=*),         intent(in) :: func_name, const_name
+        write(funit,'(A,A,A)') '    function ', trim(func_name), '() result( spec )'
+        write(funit,'(A)') '        type(cavg_quality_model_spec) :: spec'
+        write(funit,'(A,A)') '        spec%name                    = ', trim(const_name)
+        write(funit,'(A,A)') '        spec%family                  = ', trim(fortran_quote(model%family))
+        write(funit,'(A,A)') '        spec%context                 = ', trim(fortran_quote(model%context))
+        write(funit,'(A,A)') '        spec%rejection_type          = ', trim(rejection_type_constant(model%rejection_type))
+        call write_weights_assignment(funit, model%weights)
+        write(funit,'(A,ES14.6)') '        spec%boundary_margin         = ', model%boundary_margin
+        write(funit,'(A,ES14.6)') '        spec%min_score_separation    = ', model%min_score_separation
+        write(funit,'(A,ES14.6)') '        spec%hist_dmat_weight        = ', model%hist_dmat_weight
+        write(funit,'(A,ES14.6)') '        spec%otsu_min_offset         = ', model%otsu_min_offset
+        write(funit,'(A,ES14.6)') '        spec%otsu_max_offset         = ', model%otsu_max_offset
+        write(funit,'(A,ES14.6)') '        spec%cluster_rescue_margin   = ', model%cluster_rescue_margin
+        write(funit,'(A,ES14.6)') '        spec%min_accept_frac         = ', model%min_accept_frac
+        write(funit,'(A,A)') '        spec%use_lowsep_otsu         = ', trim(fortran_logical(model%use_lowsep_otsu))
+        write(funit,'(A,A)') '        spec%use_otsu_window         = ', trim(fortran_logical(model%use_otsu_window))
+        write(funit,'(A,A)') '        spec%use_cluster_rescue      = ', trim(fortran_logical(model%use_cluster_rescue))
+        write(funit,'(A,A)') '        spec%enforce_min_accept_frac = ', trim(fortran_logical(model%enforce_min_accept_frac))
+        write(funit,'(A,A,A)') '    end function ', trim(func_name), ''
+    end subroutine write_model_spec_function
+
+    subroutine write_weights_assignment( funit, weights )
+        integer, intent(in) :: funit
+        real,    intent(in) :: weights(:)
+        integer :: i
+        write(funit,'(A)') '        spec%weights                 = [ &'
+        write(funit,'(A)', advance='no') '            '
+        do i = 1, size(weights)
+            write(funit,'(ES14.6)', advance='no') weights(i)
+            if( i < size(weights) ) write(funit,'(A)', advance='no') ', '
+            if( mod(i, 4) == 0 .and. i < size(weights) )then
+                write(funit,'(A)') '&'
+                write(funit,'(A)', advance='no') '            '
+            endif
+        end do
+        write(funit,'(A)') ' ]'
+    end subroutine write_weights_assignment
+
+    function model_symbol_from_name( name ) result( symbol )
+        character(len=*), intent(in) :: name
+        character(len=64) :: symbol
+        character(len=LONGSTRLEN) :: lower_name
+        character(len=1) :: ch
+        integer :: i, n
+        lower_name = lowercase(adjustl(trim(name)))
+        symbol = ''
+        n = 0
+        do i = 1, len_trim(lower_name)
+            ch = lower_name(i:i)
+            if( is_model_symbol_char(ch) )then
+                call append_symbol_char(symbol, n, ch)
+            else if( n > 0 .and. symbol(n:n) /= '_' )then
+                call append_symbol_char(symbol, n, '_')
+            endif
+        end do
+        do while( n > 1 .and. symbol(n:n) == '_' )
+            symbol(n:n) = ' '
+            n = n - 1
+        end do
+        if( n == 0 )then
+            symbol = 'quality_model'
+        else if( symbol(1:1) >= '0' .and. symbol(1:1) <= '9' )then
+            symbol = 'model_'//trim(symbol)
+        endif
+    end function model_symbol_from_name
+
+    subroutine append_symbol_char( symbol, n, ch )
+        character(len=*), intent(inout) :: symbol
+        integer,          intent(inout) :: n
+        character(len=1), intent(in)    :: ch
+        integer, parameter :: MAX_SYMBOL_LEN = 40
+        if( n >= min(len(symbol), MAX_SYMBOL_LEN) ) return
+        n = n + 1
+        symbol(n:n) = ch
+    end subroutine append_symbol_char
+
+    logical function is_model_symbol_char( ch )
+        character(len=1), intent(in) :: ch
+        is_model_symbol_char = (ch >= 'a' .and. ch <= 'z') .or. (ch >= '0' .and. ch <= '9') .or. ch == '_'
+    end function is_model_symbol_char
+
+    function fortran_quote( str ) result( quoted )
+        character(len=*), intent(in) :: str
+        character(len=XLONGSTRLEN) :: quoted
+        integer :: i, n
+        quoted = ''
+        n = 1
+        quoted(n:n) = ''''
+        do i = 1, len_trim(str)
+            if( n + 2 > len(quoted) ) exit
+            if( str(i:i) == '''' )then
+                quoted(n+1:n+2) = ''''''
+                n = n + 2
+            else
+                quoted(n+1:n+1) = str(i:i)
+                n = n + 1
+            endif
+        end do
+        if( n < len(quoted) )then
+            quoted(n+1:n+1) = ''''
+        else
+            quoted(n:n) = ''''
+        endif
+    end function fortran_quote
+
+    function fortran_logical( val ) result( literal )
+        logical, intent(in) :: val
+        character(len=8) :: literal
+        if( val )then
+            literal = '.true.'
+        else
+            literal = '.false.'
+        endif
+    end function fortran_logical
+
+    function rejection_type_constant( rejection_type ) result( literal )
+        integer, intent(in) :: rejection_type
+        character(len=32) :: literal
+        select case(rejection_type)
+            case(CAVG_REJECTION_CHUNK)
+                literal = 'CAVG_REJECTION_CHUNK'
+            case(CAVG_REJECTION_POOL)
+                literal = 'CAVG_REJECTION_POOL'
+            case default
+                THROW_HARD('rejection_type_constant: invalid class-average rejection type')
+        end select
+    end function rejection_type_constant
+
+    subroutine read_model( self, fname )
         class(cavg_quality_model), intent(inout) :: self
         character(len=*),          intent(in)    :: fname
         character(len=XLONGSTRLEN) :: line
-        character(len=LONGSTRLEN)  :: key, val
-        integer :: funit, ios, ieq, rej_type
+        character(len=LONGSTRLEN)  :: key, val, preset_name
+        integer :: funit, ios, parse_ios, rej_type
+        logical :: have_preset, ok_line
+        ! Model files are complete model definitions. Start from chunk defaults,
+        ! apply any preset found in the file, then apply explicit key overrides.
         call self%init_default(CAVG_REJECTION_CHUNK)
         open(newunit=funit, file=trim(fname), status='old', action='read', iostat=ios)
-        if( ios /= 0 ) THROW_HARD('cavg_quality_model_read: failed to open '//trim(fname))
+        if( ios /= 0 ) THROW_HARD('read_model: failed to open '//trim(fname))
+        have_preset = .false.
+        preset_name = ''
         do
             read(funit,'(A)',iostat=ios) line
             if( ios /= 0 ) exit
-            line = adjustl(line)
-            if( len_trim(line) == 0 ) cycle
-            if( line(1:1) == '#' ) cycle
-            ieq = index(line, '=')
-            if( ieq <= 1 ) cycle
-            key = adjustl(trim(line(1:ieq-1)))
-            val = adjustl(trim(line(ieq+1:)))
+            call parse_model_key_value(line, key, val, ok_line)
+            if( .not. ok_line ) cycle
+            if( trim(key) == 'preset' )then
+                preset_name = trim(val)
+                have_preset = .true.
+            endif
+        end do
+        if( have_preset ) call self%init_preset(trim(preset_name))
+        rewind(funit)
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios /= 0 ) exit
+            call parse_model_key_value(line, key, val, ok_line)
+            if( .not. ok_line ) cycle
             select case(trim(key))
                 case('preset')
-                    call self%init_preset(trim(val))
+                    cycle
                 case('name')
                     self%name = trim(val)
                 case('family')
@@ -317,24 +475,32 @@ contains
                     self%context = trim(val)
                     self%rejection_type = cavg_rejection_type_from_name(trim(val))
                 case('rejection_type')
-                    read(val,*,iostat=ios) rej_type
-                    if( ios == 0 ) self%rejection_type = rej_type
+                    read(val,*,iostat=parse_ios) rej_type
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse rejection_type')
+                    self%rejection_type = rej_type
                 case('feature_weights')
                     call read_feature_weights(val, self%weights)
                 case('boundary_margin')
-                    read(val,*,iostat=ios) self%boundary_margin
+                    read(val,*,iostat=parse_ios) self%boundary_margin
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse boundary_margin')
                 case('min_score_separation')
-                    read(val,*,iostat=ios) self%min_score_separation
+                    read(val,*,iostat=parse_ios) self%min_score_separation
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse min_score_separation')
                 case('hist_dmat_weight')
-                    read(val,*,iostat=ios) self%hist_dmat_weight
+                    read(val,*,iostat=parse_ios) self%hist_dmat_weight
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse hist_dmat_weight')
                 case('otsu_min_offset')
-                    read(val,*,iostat=ios) self%otsu_min_offset
+                    read(val,*,iostat=parse_ios) self%otsu_min_offset
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse otsu_min_offset')
                 case('otsu_max_offset')
-                    read(val,*,iostat=ios) self%otsu_max_offset
+                    read(val,*,iostat=parse_ios) self%otsu_max_offset
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse otsu_max_offset')
                 case('cluster_rescue_margin')
-                    read(val,*,iostat=ios) self%cluster_rescue_margin
+                    read(val,*,iostat=parse_ios) self%cluster_rescue_margin
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse cluster_rescue_margin')
                 case('min_accept_frac')
-                    read(val,*,iostat=ios) self%min_accept_frac
+                    read(val,*,iostat=parse_ios) self%min_accept_frac
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse min_accept_frac')
                 case('use_lowsep_otsu')
                     self%use_lowsep_otsu = str_is_true(val)
                 case('use_otsu_window')
@@ -347,9 +513,11 @@ contains
         end do
         close(funit)
         call assert_valid_rejection_type(self%rejection_type)
+        if( trim(self%family) /= 'linear_boundary' ) &
+            THROW_HARD('read_model: unsupported model family: '//trim(self%family))
         self%context = cavg_rejection_type_name(self%rejection_type)
         call self%normalize()
-    end subroutine cavg_quality_model_read
+    end subroutine read_model
 
     subroutine read_feature_weights( val, weights )
         character(len=*), intent(in)    :: val
@@ -366,41 +534,40 @@ contains
         parsed = weights
         do i = 1, CAVG_QUALITY_NFEATS
             field = csv_field(val, i)
-            if( len_trim(field) == 0 ) exit
+            if( len_trim(field) == 0 ) THROW_HARD('read_model: feature_weights has too few values')
             read(field,*,iostat=ios) parsed(i)
-            if( ios /= 0 ) THROW_HARD('cavg_quality_model_read: failed to parse feature_weights')
+            if( ios /= 0 ) THROW_HARD('read_model: failed to parse feature_weights')
         end do
+        if( len_trim(csv_field(val, CAVG_QUALITY_NFEATS + 1)) > 0 ) &
+            THROW_HARD('read_model: feature_weights has too many values')
         weights = parsed
     end subroutine read_feature_weights
 
-    function csv_field( line, ifield ) result( field )
-        character(len=*), intent(in) :: line
-        integer,          intent(in) :: ifield
-        character(len=LONGSTRLEN) :: field
-        integer :: i, start, finish, nfield, llen
-        field = ''
-        start = 1
-        nfield = 1
-        llen = len_trim(line)
-        do i = 1, llen + 1
-            if( i == llen + 1 .or. line(i:i) == ',' )then
-                finish = i - 1
-                if( nfield == ifield )then
-                    if( finish >= start ) field = adjustl(trim(line(start:finish)))
-                    return
-                endif
-                nfield = nfield + 1
-                start = i + 1
-            endif
-        end do
-    end function csv_field
+    subroutine parse_model_key_value( line, key, val, ok )
+        character(len=*), intent(in)  :: line
+        character(len=*), intent(out) :: key, val
+        logical,          intent(out) :: ok
+        character(len=XLONGSTRLEN) :: tmp
+        integer :: ieq
+        key = ''
+        val = ''
+        ok  = .false.
+        tmp = adjustl(line)
+        if( len_trim(tmp) == 0 ) return
+        if( tmp(1:1) == '#' ) return
+        ieq = index(tmp, '=')
+        if( ieq <= 1 ) return
+        key = adjustl(trim(tmp(1:ieq-1)))
+        val = adjustl(trim(tmp(ieq+1:)))
+        ok  = .true.
+    end subroutine parse_model_key_value
 
-    subroutine cavg_quality_model_kill( self )
+    subroutine reset_model( self )
         class(cavg_quality_model), intent(inout) :: self
         call self%init_default(CAVG_REJECTION_CHUNK)
-    end subroutine cavg_quality_model_kill
+    end subroutine reset_model
 
-    subroutine cluster_cavg_quality( quality, model )
+    subroutine apply_linear_boundary( quality, model )
         type(cavg_quality_result), intent(inout) :: quality
         class(cavg_quality_model), intent(in) :: model
         real,    allocatable :: dmat(:,:), dmat_hist_fit(:,:), feats_fit(:,:), score_fit(:)
@@ -409,15 +576,15 @@ contains
         real                 :: d, score1, score2, rescue_threshold, otsu_threshold, otsu_separation
         real                 :: candidate_threshold
         logical              :: dmat_ok, hist_ok, otsu_ok
-        if( .not. allocated(quality%features)    ) THROW_HARD('cluster_cavg_quality: missing features')
-        if( .not. allocated(quality%hard_reject) ) THROW_HARD('cluster_cavg_quality: missing hard-reject mask')
-        if( .not. allocated(quality%hist_dmat)   ) THROW_HARD('cluster_cavg_quality: missing histogram distance matrix')
+        if( .not. allocated(quality%features)    ) THROW_HARD('apply_linear_boundary: missing features')
+        if( .not. allocated(quality%hard_reject) ) THROW_HARD('apply_linear_boundary: missing hard-reject mask')
+        if( .not. allocated(quality%hist_dmat)   ) THROW_HARD('apply_linear_boundary: missing histogram distance matrix')
         ncls = size(quality%features, dim=1)
-        if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cluster_cavg_quality: invalid feature count')
-        if( size(quality%hard_reject) /= ncls ) THROW_HARD('cluster_cavg_quality: invalid mask size')
+        if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('apply_linear_boundary: invalid feature count')
+        if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_linear_boundary: invalid mask size')
         call assert_valid_rejection_type(model%rejection_type)
         if( size(quality%hist_dmat, dim=1) /= ncls .or. size(quality%hist_dmat, dim=2) /= ncls ) &
-            THROW_HARD('cluster_cavg_quality: invalid histogram distance matrix size')
+            THROW_HARD('apply_linear_boundary: invalid histogram distance matrix size')
         if( allocated(quality%states)  ) deallocate(quality%states)
         if( allocated(quality%labels)  ) deallocate(quality%labels)
         if( allocated(quality%medoids) ) deallocate(quality%medoids)
@@ -440,14 +607,8 @@ contains
         if( nfit == 0 ) return
         inds = pack([(i, i=1,ncls)], .not. quality%hard_reject)
         if( nfit < 4 ) then
-            quality%states(inds) = 1
-            quality%labels(inds) = 1
-            allocate(quality%medoids(1), source=inds(1))
-            quality%threshold        = minval(quality%scores(inds)) - EPS
-            quality%raw_threshold    = quality%threshold
-            quality%threshold_margin = 0.0
-            quality%nclust           = 1
-            quality%good_label       = 1
+            call accept_fit_as_single_cluster(quality, inds)
+            deallocate(inds)
             return
         end if
         allocate(feats_fit(nfit, CAVG_QUALITY_NFEATS), score_fit(nfit))
@@ -456,6 +617,7 @@ contains
             score_fit(i)   = quality%scores(inds(i))
         end do
         allocate(dmat(nfit, nfit), source=0.0)
+        !$omp parallel do default(shared) private(i,j,d) schedule(static) proc_bind(close)
         do i = 1, nfit - 1
             do j = i + 1, nfit
                 d = sqrt(sum((feats_fit(i,:) - feats_fit(j,:))**2))
@@ -463,26 +625,22 @@ contains
                 dmat(j,i) = d
             end do
         end do
+        !$omp end parallel do
         call normalize_quality_dmat(dmat, dmat_ok)
         if( .not. dmat_ok ) then
-            quality%states(inds) = 1
-            quality%labels(inds) = 1
-            allocate(quality%medoids(1), source=inds(1))
-            quality%threshold        = minval(quality%scores(inds)) - EPS
-            quality%raw_threshold    = quality%threshold
-            quality%threshold_margin = 0.0
-            quality%nclust           = 1
-            quality%good_label       = 1
+            call accept_fit_as_single_cluster(quality, inds)
             deallocate(dmat, feats_fit, score_fit, inds)
             return
         end if
         if( model%hist_dmat_weight > EPS )then
             allocate(dmat_hist_fit(nfit, nfit), source=0.0)
+            !$omp parallel do default(shared) private(i,j) schedule(static) proc_bind(close)
             do i = 1, nfit
                 do j = 1, nfit
                     dmat_hist_fit(i,j) = quality%hist_dmat(inds(i), inds(j))
                 end do
             end do
+            !$omp end parallel do
             call normalize_quality_dmat(dmat_hist_fit, hist_ok)
             if( hist_ok )then
                 dmat = (1.0 - model%hist_dmat_weight) * dmat + model%hist_dmat_weight * dmat_hist_fit
@@ -492,16 +650,24 @@ contains
         endif
         quality%nclust = 2
         call cluster_dmat(dmat, 'kmed', quality%nclust, medoids_fit, labels_fit)
-        if( quality%nclust /= 2 ) THROW_HARD('cluster_cavg_quality: expected two k-medoids clusters')
+        if( .not. two_cluster_result_is_valid(quality%nclust, labels_fit, medoids_fit, nfit) )then
+            call accept_fit_as_single_cluster(quality, inds)
+            if( allocated(labels_fit)  ) deallocate(labels_fit)
+            if( allocated(medoids_fit) ) deallocate(medoids_fit)
+            deallocate(dmat, feats_fit, score_fit, inds)
+            return
+        endif
         score1 = mean_score_for_label(score_fit, labels_fit, 1)
         score2 = mean_score_for_label(score_fit, labels_fit, 2)
-        if( score1 >= score2 ) then
+        if( score1 > score2 + EPS ) then
             good_fit_label = 1
             bad_fit_label  = 2
-        else
+        else if( score2 > score1 + EPS )then
             good_fit_label = 2
             bad_fit_label  = 1
-        end if
+        else
+            call choose_tied_good_label(score_fit, labels_fit, medoids_fit, good_fit_label, bad_fit_label)
+        endif
         quality%separation = abs(score1 - score2)
         quality%raw_threshold = 0.5 * (mean_score_for_label(score_fit, labels_fit, good_fit_label) + &
                                                 mean_score_for_label(score_fit, labels_fit, bad_fit_label))
@@ -522,15 +688,7 @@ contains
                 quality%good_label     = good_fit_label
                 quality%used_threshold = .true.
             else
-                quality%states(inds)     = 1
-                quality%labels(inds)     = 1
-                quality%medoids          = [inds(1)]
-                quality%nclust           = 1
-                quality%good_label       = 1
-                quality%threshold        = minval(quality%scores(inds)) - EPS
-                quality%raw_threshold    = quality%threshold
-                quality%threshold_margin = 0.0
-                quality%used_threshold   = .false.
+                call accept_fit_as_single_cluster(quality, inds)
             endif
         else
             candidate_threshold = quality%raw_threshold - model%boundary_margin
@@ -538,7 +696,6 @@ contains
             if( model%use_otsu_window .and. otsu_ok .and. otsu_separation >= model%min_score_separation .and. &
                 otsu_threshold >= quality%raw_threshold + model%otsu_min_offset .and. &
                 otsu_threshold <= quality%raw_threshold + model%otsu_max_offset ) quality%threshold = otsu_threshold
-            quality%threshold_margin = quality%raw_threshold - quality%threshold
             if( model%use_cluster_rescue )then
                 rescue_threshold = quality%threshold - model%cluster_rescue_margin
                 do i = 1, nfit
@@ -559,7 +716,58 @@ contains
             quality%used_threshold = .true.
         end if
         deallocate(dmat, feats_fit, score_fit, inds, labels_fit, medoids_fit)
-    end subroutine cluster_cavg_quality
+    end subroutine apply_linear_boundary
+
+    subroutine accept_fit_as_single_cluster( quality, inds )
+        type(cavg_quality_result), intent(inout) :: quality
+        integer,                   intent(in)    :: inds(:)
+        if( size(inds) == 0 ) return
+        quality%states(inds) = 1
+        quality%labels(inds) = 1
+        if( allocated(quality%medoids) ) deallocate(quality%medoids)
+        allocate(quality%medoids(1), source=inds(1))
+        quality%threshold        = minval(quality%scores(inds)) - EPS
+        quality%raw_threshold    = quality%threshold
+        quality%threshold_margin = 0.0
+        quality%nclust           = 1
+        quality%good_label       = 1
+        quality%used_threshold   = .false.
+    end subroutine accept_fit_as_single_cluster
+
+    logical function two_cluster_result_is_valid( nclust, labels, medoids, nfit )
+        integer,              intent(in) :: nclust, nfit
+        integer, allocatable, intent(in) :: labels(:), medoids(:)
+        two_cluster_result_is_valid = .false.
+        if( nclust /= 2 ) return
+        if( .not. allocated(labels)  ) return
+        if( .not. allocated(medoids) ) return
+        if( size(labels) /= nfit ) return
+        if( size(medoids) < 2 ) return
+        if( count(labels == 1) == 0 .or. count(labels == 2) == 0 ) return
+        two_cluster_result_is_valid = .true.
+    end function two_cluster_result_is_valid
+
+    subroutine choose_tied_good_label( scores, labels, medoids, good_label, bad_label )
+        real,    intent(in)  :: scores(:)
+        integer, intent(in)  :: labels(:), medoids(:)
+        integer, intent(out) :: good_label, bad_label
+        integer :: n1, n2
+        n1 = count(labels == 1)
+        n2 = count(labels == 2)
+        if( n1 > n2 )then
+            good_label = 1
+            bad_label  = 2
+        else if( n2 > n1 )then
+            good_label = 2
+            bad_label  = 1
+        else if( scores(medoids(1)) >= scores(medoids(2)) )then
+            good_label = 1
+            bad_label  = 2
+        else
+            good_label = 2
+            bad_label  = 1
+        endif
+    end subroutine choose_tied_good_label
 
     integer function cavg_rejection_type_from_name( name )
         character(len=*), intent(in) :: name
@@ -568,7 +776,7 @@ contains
                 cavg_rejection_type_from_name = CAVG_REJECTION_CHUNK
             case('pool')
                 cavg_rejection_type_from_name = CAVG_REJECTION_POOL
-            case DEFAULT
+            case default
                 THROW_HARD('invalid class-average rejection type name: '//trim(name))
         end select
     end function cavg_rejection_type_from_name
@@ -581,7 +789,7 @@ contains
                 name = 'chunk'
             case(CAVG_REJECTION_POOL)
                 name = 'pool'
-            case DEFAULT
+            case default
                 THROW_HARD('invalid class-average rejection type')
         end select
     end function cavg_rejection_type_name
@@ -591,7 +799,7 @@ contains
         select case(rejection_type)
             case(CAVG_REJECTION_CHUNK, CAVG_REJECTION_POOL)
                 return
-            case DEFAULT
+            case default
                 THROW_HARD('invalid class-average rejection type')
         end select
     end subroutine assert_valid_rejection_type
@@ -600,29 +808,43 @@ contains
         real,    intent(in)  :: scores(:)
         real,    intent(out) :: threshold, separation
         logical, intent(out) :: ok
+        real, allocatable :: sorted(:), prefix(:)
         integer :: i, n, nlo, nhi
-        real    :: candidate, mean_lo, mean_hi, between, best_between
+        real    :: candidate, mean_lo, mean_hi, between, best_between, total
         n = size(scores)
         threshold  = minval(scores) - EPS
         separation = 0.0
         ok         = .false.
         if( n < 4 ) return
+        allocate(sorted(n), prefix(n))
+        sorted = scores
+        call hpsort(sorted)
+        if( sorted(n) - sorted(1) <= EPS )then
+            deallocate(sorted, prefix)
+            return
+        endif
+        prefix(1) = sorted(1)
+        do i = 2, n
+            prefix(i) = prefix(i-1) + sorted(i)
+        end do
+        total = prefix(n)
         best_between = -huge(1.0)
-        do i = 1, n
-            candidate = scores(i)
-            nlo = count(scores <  candidate)
-            nhi = count(scores >= candidate)
-            if( nlo == 0 .or. nhi == 0 ) cycle
-            mean_lo = sum(scores, mask=scores <  candidate) / real(nlo)
-            mean_hi = sum(scores, mask=scores >= candidate) / real(nhi)
+        do i = 1, n - 1
+            if( sorted(i+1) - sorted(i) <= EPS ) cycle
+            nlo = i
+            nhi = n - i
+            mean_lo = prefix(i) / real(nlo)
+            mean_hi = (total - prefix(i)) / real(nhi)
             between = real(nlo) * real(nhi) * (mean_hi - mean_lo)**2
             if( between > best_between )then
                 best_between = between
+                candidate    = 0.5 * (sorted(i) + sorted(i+1))
                 threshold    = candidate
                 separation   = mean_hi - mean_lo
                 ok           = .true.
             endif
         end do
+        deallocate(sorted, prefix)
     end subroutine otsu_score_threshold
 
     subroutine enforce_min_accept_fraction( scores, hard_reject, states, threshold, min_accept_frac )

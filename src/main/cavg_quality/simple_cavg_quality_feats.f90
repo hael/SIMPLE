@@ -1,6 +1,7 @@
 !@descr: feature inventory and feature extraction for 2D class-average quality
 module simple_cavg_quality_feats
-use simple_defs,         only: ICE_BAND1
+!$ use omp_lib
+use simple_defs,         only: ICE_BAND1, nthr_glob
 use simple_error,        only: simple_exception
 use simple_histogram,    only: histogram
 use simple_image,        only: image
@@ -10,14 +11,13 @@ use simple_oris,         only: oris
 use simple_math_ft,      only: calc_fourier_index
 use simple_segmentation, only: otsu_img
 use simple_stat,         only: median, mad_gau
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, cavg_quality_feature_def
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_feature_def
+use simple_cavg_quality_stats, only: normalize_quality_dmat
 implicit none
 private
 
 public :: CAVG_QUALITY_NFEATS
-public :: EPS
 public :: LOG_EPS
-public :: CLIP_Z
 public :: I_LOG_POP
 public :: I_NEG_LOG_RES
 public :: I_MASK_INSIDE
@@ -38,17 +38,17 @@ public :: write_cavg_quality_feature_inventory
 public :: extract_cavg_quality_features
 public :: normalize_cavg_quality_features
 public :: calc_histogram_quality_signal
-public :: normalize_quality_dmat
 
 #include "simple_local_flags.inc"
 
-real,    parameter :: EPS                 = 1.0e-6
 real,    parameter :: LOG_EPS             = 1.0e-12
-real,    parameter :: CLIP_Z              = 4.0
 real,    parameter :: HP_SPEC             = 20.0
 real,    parameter :: LP_SPEC             = 6.0
 real,    parameter :: ICE_BG_START        = 15.0
 real,    parameter :: ICE_BG_END          = 6.0
+real,    parameter :: FOREGROUND_SEG_LP   = 30.0
+real,    parameter :: SIGNAL_METRIC_LP    = 10.0
+integer, parameter :: LOCVAR_WINDOW       = 10
 integer, parameter :: NHISTBINS           = 128
 integer, parameter :: HIST_KNN_MIN        = 5
 integer, parameter :: HIST_KNN_MAX        = 20
@@ -133,14 +133,14 @@ contains
         real,    allocatable, intent(inout) :: raw(:,:)
         logical, allocatable, intent(inout) :: hard_reject(:)
         integer, allocatable :: pop(:)
-        real,    allocatable :: res(:), corr(:)
+        real,    allocatable :: res(:), corr(:), corr_in(:)
         integer              :: ncls, i, ldim(3)
         real                 :: smpd, rad_px
-        type(image_bin)      :: bin_img, cc_img, disc_img
-        real, allocatable    :: rmat_cc(:,:,:), rmat_disc(:,:,:)
+        type(image_bin), allocatable :: bin_img(:), cc_img(:), disc_img(:)
+        real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
         real                 :: outside_frac, centroid_norm, locvar_fg, locvar_bg
         real                 :: spec_dynrange, center_edge_snr, ice_score
-        integer              :: nccs_valid
+        integer              :: nccs_valid, ithr
         logical              :: no_component
         ncls = size(imgs)
         if( ncls == 0 ) THROW_HARD('extract_cavg_quality_features: no class averages')
@@ -152,22 +152,38 @@ contains
         allocate(hard_reject(ncls),              source=.false.)
         pop  = cls_oris%get_all_asint('pop')
         res  = cls_oris%get_all('res')
+        if( size(pop) /= ncls ) THROW_HARD('extract_cavg_quality_features: invalid pop size')
+        if( size(res) /= ncls ) THROW_HARD('extract_cavg_quality_features: invalid res size')
         allocate(corr(ncls), source=0.0)
-        if( cls_oris%isthere('corr') ) corr = cls_oris%get_all('corr')
+        if( cls_oris%isthere('corr') )then
+            corr_in = cls_oris%get_all('corr')
+            if( size(corr_in) /= ncls ) THROW_HARD('extract_cavg_quality_features: invalid corr size')
+            corr = corr_in
+            deallocate(corr_in)
+        endif
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
         if( smpd <= 0.0 ) THROW_HARD('extract_cavg_quality_features: non-positive smpd')
         rad_px = (mskdiam / smpd) / 2.0
-        call bin_img%new_bimg(ldim,  smpd, wthreads=.false.)
-        call cc_img%new_bimg(ldim,   smpd, wthreads=.false.)
-        call disc_img%disc(ldim,     smpd, rad_px)
-        allocate(rmat_cc(ldim(1), ldim(2), ldim(3)), rmat_disc(ldim(1), ldim(2), ldim(3)))
-        call disc_img%get_rmat_sub(rmat_disc)
+        allocate(bin_img(nthr_glob), cc_img(nthr_glob), disc_img(nthr_glob))
+        allocate(rmat_cc(ldim(1), ldim(2), ldim(3), nthr_glob), &
+                 rmat_disc(ldim(1), ldim(2), ldim(3), nthr_glob))
+        do ithr = 1, nthr_glob
+            call bin_img(ithr)%new_bimg(ldim,  smpd, wthreads=.false.)
+            call cc_img(ithr)%new_bimg(ldim,   smpd, wthreads=.false.)
+            call disc_img(ithr)%disc(ldim,     smpd, rad_px)
+            call disc_img(ithr)%get_rmat_sub(rmat_disc(:,:,:,ithr))
+        end do
+        !$omp parallel do default(shared) private(i,ithr,outside_frac,centroid_norm,nccs_valid,no_component,&
+        !$omp& locvar_fg,locvar_bg,spec_dynrange,center_edge_snr,ice_score)&
+        !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
-            call calc_mask_features(imgs(i), bin_img, cc_img, rmat_cc, rmat_disc, rad_px, &
-                                                            outside_frac, centroid_norm, nccs_valid, no_component)
-            call calc_cavg_signal_quality_features(imgs(i), rad_px, locvar_fg, locvar_bg, spec_dynrange, &
-                                                   center_edge_snr, ice_score)
+            ithr = omp_get_thread_num() + 1
+            call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
+                                                  rmat_disc(:,:,:,ithr), rad_px, outside_frac, centroid_norm, &
+                                                  nccs_valid, no_component)
+            call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, spec_dynrange, &
+                                            center_edge_snr, ice_score)
             raw(i, I_LOG_POP)       = log(real(max(pop(i), 0)) + 1.0)
             raw(i, I_NEG_LOG_RES)   = resolution_feature(res(i))
             raw(i, I_MASK_INSIDE)   = -outside_frac
@@ -179,13 +195,17 @@ contains
             raw(i, I_CORR_FRC)      = corr(i)
             raw(i, I_CENTER_EDGE_SNR) = log(max(center_edge_snr, LOG_EPS))
             raw(i, I_NEG_ICE_SCORE) = -ice_score
+            ! A dead image is rejected only when both foreground and background variance vanish.
             hard_reject(i) = pop(i) <= 0 .or. no_component .or. &
                                               (locvar_fg <= EPS .and. locvar_bg <= EPS)
         end do
-        call bin_img%kill_bimg()
-        call cc_img%kill_bimg()
-        call disc_img%kill_bimg()
-        deallocate(rmat_cc, rmat_disc, pop, res, corr)
+        !$omp end parallel do
+        do ithr = 1, nthr_glob
+            call bin_img(ithr)%kill_bimg()
+            call cc_img(ithr)%kill_bimg()
+            call disc_img(ithr)%kill_bimg()
+        end do
+        deallocate(bin_img, cc_img, disc_img, rmat_cc, rmat_disc, pop, res, corr)
     end subroutine extract_cavg_quality_features
 
     subroutine normalize_cavg_quality_features( raw, hard_reject, features )
@@ -254,6 +274,7 @@ contains
             if( .not. hard_reject(i) ) call hists(i)%new(imgs(i), NHISTBINS, minmax=mm, radius=rad_px)
         end do
         allocate(dmat_tvd(ncls,ncls), dmat_jsd(ncls,ncls), dmat_hd(ncls,ncls), source=0.0)
+        !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
         do i = 1, ncls - 1
             if( hard_reject(i) ) cycle
             do j = i + 1, ncls
@@ -266,6 +287,7 @@ contains
                 dmat_hd(j,i)  = dmat_hd(i,j)
             end do
         end do
+        !$omp end parallel do
         ncontrib = 0
         call normalize_quality_dmat(dmat_tvd, ok)
         if( ok )then
@@ -293,16 +315,6 @@ contains
         deallocate(hists, dmat_tvd, dmat_jsd, dmat_hd)
     end subroutine calc_histogram_quality_signal
 
-    subroutine normalize_quality_dmat( dmat, ok )
-        real,    intent(inout) :: dmat(:,:)
-        logical, intent(out)   :: ok
-        real :: dmin, dmax
-        dmin = minval(dmat)
-        dmax = maxval(dmat)
-        ok   = dmax - dmin > EPS
-        if( ok ) dmat = (dmat - dmin) / (dmax - dmin)
-    end subroutine normalize_quality_dmat
-
     real function avg_nearest_hist_distance( dists, hard_reject, self_ind, k )
         real,    intent(in) :: dists(:)
         logical, intent(in) :: hard_reject(:)
@@ -329,8 +341,8 @@ contains
         deallocate(vals)
     end function avg_nearest_hist_distance
 
-    subroutine calc_mask_features( img, bin_img, cc_img, rmat_cc, rmat_disc, rad_px, outside_frac, &
-                                                                  centroid_norm, nccs_valid, no_component )
+    subroutine measure_cavg_foreground_geometry( img, bin_img, cc_img, rmat_cc, rmat_disc, rad_px, outside_frac, &
+                                                 centroid_norm, nccs_valid, no_component )
         class(image),     intent(inout) :: img
         type(image_bin),  intent(inout) :: bin_img, cc_img
         real,             intent(inout) :: rmat_cc(:,:,:)
@@ -350,7 +362,7 @@ contains
         no_component  = .false.
         call bin_img%copy(img)
         call bin_img%zero_edgeavg()
-        call bin_img%bp(0.0, 30.0)
+        call bin_img%bp(0.0, FOREGROUND_SEG_LP)
         call otsu_img(bin_img)
         call bin_img%set_imat()
         call bin_img%find_ccs(cc_img)
@@ -383,9 +395,9 @@ contains
         area    = count(rmat_cc > 0.0)
         outside = count(rmat_cc - rmat_disc > 0.0)
         outside_frac = real(outside) / real(max(area, 1))
-    end subroutine calc_mask_features
+    end subroutine measure_cavg_foreground_geometry
 
-    subroutine calc_cavg_signal_quality_features( img_src, rad_px, locvar_fg, locvar_bg, spec_dynrange, center_edge_snr, ice_score )
+    subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, spec_dynrange, center_edge_snr, ice_score )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
         real,         intent(out)   :: locvar_fg, locvar_bg, spec_dynrange, center_edge_snr, ice_score
@@ -405,13 +417,13 @@ contains
         img  = img_src
         call img%zero_edgeavg()
         center_edge_snr = img%center_edge_snr(rad_px)
-        call img%bp(0.0, 10.0)
+        call img%bp(0.0, SIGNAL_METRIC_LP)
         img_bin = img
         call otsu_img(img_bin)
         ldim = img%get_ldim()
         allocate(bin_mask(ldim(1), ldim(2), ldim(3)))
         call img_bin%get_rmat_sub(bin_mask)
-        call img%loc_var_masked(bin_mask(:,:,1), 10, locvar_fg, locvar_bg)
+        call img%loc_var_masked(bin_mask(:,:,1), LOCVAR_WINDOW, locvar_fg, locvar_bg)
         smpd = img%get_smpd()
         call img%mask2D_soft(rad_px, backgr=0.0)
         call img%spectrum('sqrt', pspec)
@@ -422,7 +434,7 @@ contains
         if( allocated(ice_pspec) ) deallocate(ice_pspec)
         call img%kill()
         call img_bin%kill()
-    end subroutine calc_cavg_signal_quality_features
+    end subroutine measure_cavg_image_metrics
 
     real function class_average_ice_score( pspec, box, smpd )
         real,    intent(in) :: pspec(:)

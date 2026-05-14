@@ -631,16 +631,17 @@ subroutine set_ui_params
                                    'give # pixels{512}', .false., 512.)
 
     call quality_mode%set_param(   'quality_mode',    'multi',  'Class-average quality mode', &
-                                   'Whether to apply automated selection, analyze it against manual selection, or learn a model(apply|analyze|learn){apply}', &
-                                   'Class-average quality mode(apply|analyze|learn){apply}', .false., 'apply')
+                                   'Whether to apply selection, analyze it, learn, or emit promotion code'//&
+                                   '(apply|analyze|learn|promote){apply}', &
+                                   'Class-average quality mode(apply|analyze|learn|promote){apply}', .false., 'apply')
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
                                    'Built-in quality model preset(default|chunk_default_v1|pool_default_v1){default}', &
                                    'Class-average quality model preset(default|chunk_default_v1|pool_default_v1){default}', .false., 'default')
 
-    call rejection_type%set_param(  'rejection_type',  'multi',  'Class-average rejection type', &
-                                   'Use chunk for high-junk stream partitions or pool for larger pooled/batch sets(chunk|pool){chunk}', &
-                                   'Class-average rejection type(chunk|pool){chunk}', .false., 'chunk')
+    call rejection_type%set_param(  'rejection_type',  'multi',  'Legacy class-average model hint', &
+                                   'Legacy hint for selecting the default class-average quality model(chunk|pool){chunk}', &
+                                   'Legacy class-average quality model hint(chunk|pool){chunk}', .false., 'chunk')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
                                    'Queue system kind(local|slurm|pbs|lsf)', &

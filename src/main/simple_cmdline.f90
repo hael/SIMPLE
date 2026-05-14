@@ -272,7 +272,7 @@ contains
     logical function skip_mode_required_keys( prgname, line )
         character(len=*), intent(in) :: prgname, line
         skip_mode_required_keys = trim(prgname) == 'cluster_cavgs_quality' .and. &
-            str_has_substr(line, 'quality_mode=learn')
+            (str_has_substr(line, 'quality_mode=learn') .or. str_has_substr(line, 'quality_mode=promote'))
     end function skip_mode_required_keys
 
     !> \brief for parsing the command line arguments passed as key=val

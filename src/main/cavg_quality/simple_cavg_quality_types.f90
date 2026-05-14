@@ -7,6 +7,8 @@ private
 public :: CAVG_REJECTION_CHUNK
 public :: CAVG_REJECTION_POOL
 public :: CAVG_QUALITY_NFEATS
+public :: EPS
+public :: CLIP_Z
 public :: cavg_quality_feature_def
 public :: cavg_quality_model_spec
 public :: cavg_quality_result
@@ -16,6 +18,8 @@ public :: reset_cavg_quality_result
 integer, parameter :: CAVG_REJECTION_CHUNK = 1
 integer, parameter :: CAVG_REJECTION_POOL  = 2
 integer, parameter :: CAVG_QUALITY_NFEATS  = 12
+real,    parameter :: EPS                  = 1.0e-6
+real,    parameter :: CLIP_Z               = 4.0
 
 type :: cavg_quality_feature_def
     character(len=32)  :: name        = ''
@@ -61,6 +65,8 @@ type :: cavg_quality_result
     logical              :: used_threshold   = .false.
     character(len=64)    :: model_name       = ''
     character(len=32)    :: model_context    = ''
+contains
+    procedure :: kill => reset_cavg_quality_result
 end type cavg_quality_result
 
 type :: cavg_quality_training_dataset
@@ -76,7 +82,7 @@ end type cavg_quality_training_dataset
 contains
 
     subroutine reset_cavg_quality_result( quality )
-        type(cavg_quality_result), intent(inout) :: quality
+        class(cavg_quality_result), intent(inout) :: quality
         if( allocated(quality%raw)         ) deallocate(quality%raw)
         if( allocated(quality%features)    ) deallocate(quality%features)
         if( allocated(quality%scores)      ) deallocate(quality%scores)
