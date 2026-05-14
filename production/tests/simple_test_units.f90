@@ -36,7 +36,8 @@ use simple_ftiter,                only: test_ftiter
 use simple_image,                 only: test_image
 use simple_online_var,            only: test_online_var
 use simple_ui,                    only: validate_ui_json
-use simple_srchspace_map2D_io,      only: test_srchspace_map2D_io
+use simple_srchspace_map2D_io,    only: test_srchspace_map2D_io
+use simple_starfile_tester,       only: run_all_starfile_tests
 implicit none
 #include "simple_local_flags.inc"
 character(8)          :: datestr
@@ -70,6 +71,7 @@ call run_all_microchunked2D_tests
 call run_all_cluster2D_rejector_tests
 call run_all_persistent_worker_server_tests
 call run_all_persistent_worker_message_tests
+call run_all_starfile_tests
 call report_summary()
 ! hand-written unit tests
 write(*,*)'VALIDATING UI JSON FILE:'
