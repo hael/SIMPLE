@@ -6,7 +6,7 @@ use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name
 use simple_cavg_quality_model, only: CAVG_QUALITY_DEFAULT_WEIGHTS, &
-    CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT, cavg_quality_model
+    CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT, CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT, cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_REJECTION_POOL, CAVG_QUALITY_NFEATS, EPS, cavg_quality_model_spec, &
     cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
@@ -23,6 +23,7 @@ real, parameter :: LEARN_MARGINS(11)      = [-0.60, -0.50, -0.40, -0.30, -0.25, 
                                               -0.05, 0.0, 0.05, 0.10, 0.20]
 real, parameter :: LEARN_POOL_FRACS(5)    = [0.50, 0.60, 0.65, 0.70, 0.80]
 real, parameter :: LEARN_HIST_WEIGHTS(5)  = [CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT, 0.0, 0.25, 0.75, 1.0]
+real, parameter :: LEARN_SPEC_WEIGHTS(5)  = [CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT, 0.25, 0.50, 0.75, 1.0]
 
 contains
 
@@ -38,7 +39,7 @@ contains
         real :: suggested_weights(CAVG_QUALITY_NFEATS)
         real :: top_scores(CAVG_QUALITY_LEARN_TOP_K)
         real :: score, best_score, alpha
-        integer :: i, ia, ih, im, isep, ifrac, max_grid, n_grid, n_top, n_best_ties
+        integer :: i, ia, ih, ispec, im, isep, ifrac, max_grid, n_grid, n_top, n_best_ties
         if( size(analysis_files) == 0 ) THROW_HARD('learn_cavg_quality_model: empty analysis file table')
         allocate(dsets(size(analysis_files)))
         do i = 1, size(analysis_files)
@@ -53,7 +54,8 @@ contains
         n_top       = 0
         n_grid      = 0
         n_best_ties = 0
-        max_grid = size(LEARN_WEIGHT_ALPHAS) * size(LEARN_HIST_WEIGHTS) * size(LEARN_MINSEPS) * size(LEARN_MARGINS)
+        max_grid = size(LEARN_WEIGHT_ALPHAS) * size(LEARN_HIST_WEIGHTS) * size(LEARN_SPEC_WEIGHTS) * &
+                   size(LEARN_MINSEPS) * size(LEARN_MARGINS)
         if( learned_model%rejection_type == CAVG_REJECTION_POOL ) max_grid = max_grid * size(LEARN_POOL_FRACS)
         allocate(best_tie_specs(max_grid))
         do ia = 1, size(LEARN_WEIGHT_ALPHAS)
@@ -62,26 +64,29 @@ contains
             candidate_spec%weights = (1.0 - alpha) * base_spec%weights + alpha * suggested_weights
             do ih = 1, size(LEARN_HIST_WEIGHTS)
                 candidate_spec%hist_dmat_weight = LEARN_HIST_WEIGHTS(ih)
-                do isep = 1, size(LEARN_MINSEPS)
-                    candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
-                    do im = 1, size(LEARN_MARGINS)
-                        candidate_spec%boundary_margin = LEARN_MARGINS(im)
-                        if( learned_model%rejection_type == CAVG_REJECTION_POOL )then
-                            do ifrac = 1, size(LEARN_POOL_FRACS)
-                                candidate_spec%min_accept_frac = LEARN_POOL_FRACS(ifrac)
+                do ispec = 1, size(LEARN_SPEC_WEIGHTS)
+                    candidate_spec%spec_dmat_weight = LEARN_SPEC_WEIGHTS(ispec)
+                    do isep = 1, size(LEARN_MINSEPS)
+                        candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
+                        do im = 1, size(LEARN_MARGINS)
+                            candidate_spec%boundary_margin = LEARN_MARGINS(im)
+                            if( learned_model%rejection_type == CAVG_REJECTION_POOL )then
+                                do ifrac = 1, size(LEARN_POOL_FRACS)
+                                    candidate_spec%min_accept_frac = LEARN_POOL_FRACS(ifrac)
+                                    call candidate%init_spec(candidate_spec)
+                                    score = macro_balacc_for_model(dsets, candidate)
+                                    n_grid = n_grid + 1
+                                    call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
+                                        best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
+                                end do
+                            else
                                 call candidate%init_spec(candidate_spec)
                                 score = macro_balacc_for_model(dsets, candidate)
                                 n_grid = n_grid + 1
                                 call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
                                     best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
-                            end do
-                        else
-                            call candidate%init_spec(candidate_spec)
-                            score = macro_balacc_for_model(dsets, candidate)
-                            n_grid = n_grid + 1
-                            call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
-                                best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
-                        endif
+                            endif
+                        end do
                     end do
                 end do
             end do
@@ -115,6 +120,7 @@ contains
         if( nrows == 0 ) THROW_HARD('read_quality_training_dataset: no class rows in '//trim(fname))
         allocate(dset%features(nrows, CAVG_QUALITY_NFEATS), source=0.0)
         allocate(dset%hist_dmat(nrows, nrows), source=0.0)
+        allocate(dset%spec_dmat(nrows, nrows), source=0.0)
         allocate(dset%manual_states(nrows), source=0)
         allocate(dset%hard_reject(nrows), source=.false.)
         rewind(funit)
@@ -126,6 +132,10 @@ contains
             if( ios /= 0 ) exit
             if( is_hist_dmat_line(line) )then
                 call read_hist_dmat_line(line, dset)
+                cycle
+            endif
+            if( is_spec_dmat_line(line) )then
+                call read_spec_dmat_line(line, dset)
                 cycle
             endif
             if( is_analysis_header_line(line) )then
@@ -171,6 +181,22 @@ contains
         dset%hist_dmat(i,j) = dist
         dset%hist_dmat(j,i) = dist
     end subroutine read_hist_dmat_line
+
+    subroutine read_spec_dmat_line( line, dset )
+        character(len=*),                    intent(in)    :: line
+        type(cavg_quality_training_dataset), intent(inout) :: dset
+        integer :: i, j
+        real    :: dist
+        i    = str2int(trim(csv_field(line, 2)))
+        j    = str2int(trim(csv_field(line, 3)))
+        dist = str2real(trim(csv_field(line, 4)))
+        if( .not. allocated(dset%spec_dmat) ) &
+            THROW_HARD('read_spec_dmat_line: spectrum distance matrix is not allocated')
+        if( i < 1 .or. j < 1 .or. i > size(dset%spec_dmat, dim=1) .or. j > size(dset%spec_dmat, dim=2) ) &
+            THROW_HARD('read_spec_dmat_line: spectrum distance index out of range')
+        dset%spec_dmat(i,j) = dist
+        dset%spec_dmat(j,i) = dist
+    end subroutine read_spec_dmat_line
 
     logical function is_analysis_data_line( line )
         character(len=*), intent(in) :: line
@@ -231,6 +257,13 @@ contains
         tmp = adjustl(line)
         is_hist_dmat_line = index(tmp, '# hist_dmat,') == 1
     end function is_hist_dmat_line
+
+    logical function is_spec_dmat_line( line )
+        character(len=*), intent(in) :: line
+        character(len=XLONGSTRLEN) :: tmp
+        tmp = adjustl(line)
+        is_spec_dmat_line = index(tmp, '# spec_dmat,') == 1
+    end function is_spec_dmat_line
 
     subroutine calc_suggested_training_weights( dsets, weights )
         type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
@@ -349,6 +382,7 @@ contains
         quality%features    = dset%features
         quality%hard_reject = dset%hard_reject
         quality%hist_dmat   = dset%hist_dmat
+        quality%spec_dmat   = dset%spec_dmat
         call model%classify(quality)
         allocate(pred(dset%ncls), ref(dset%ncls))
         pred = quality%states > 0
@@ -378,13 +412,15 @@ contains
         write(funit,'(A,A)') 'learned_model=', trim(learned_model%name)
         write(funit,'(A,F10.5)') 'macro_balanced_accuracy=', best_score
         write(funit,'(A,F10.5)') 'learned_hist_dmat_weight=', learned_model%hist_dmat_weight
+        write(funit,'(A,F10.5)') 'learned_spec_dmat_weight=', learned_model%spec_dmat_weight
         write(funit,'(A,I0)') 'n_datasets=', size(dsets)
         write(funit,'(A,I0)') 'model_search_grid_n=', n_grid
         write(funit,'(A,I0)') 'best_tie_count=', n_best_ties
         write(funit,'(A,I0)') 'top_candidates_reported=', n_top
-        write(funit,'(A)') 'note=histogram distance matrix weight was learned from analysis records'
+        write(funit,'(A)') 'note=pairwise histogram and rotational power-spectrum distance weights were learned from analysis records'
         call write_real_list(funit, 'grid_weight_alphas=', LEARN_WEIGHT_ALPHAS)
         call write_real_list(funit, 'grid_hist_dmat_weights=', LEARN_HIST_WEIGHTS)
+        call write_real_list(funit, 'grid_spec_dmat_weights=', LEARN_SPEC_WEIGHTS)
         call write_real_list(funit, 'grid_min_score_separations=', LEARN_MINSEPS)
         call write_real_list(funit, 'grid_boundary_margins=', LEARN_MARGINS)
         if( learned_model%rejection_type == CAVG_REJECTION_POOL ) &
@@ -512,6 +548,8 @@ contains
         call write_weight_alpha_diagnostic(funit, base_model%weights, suggested_weights, learned_model%weights)
         call write_grid_position_diagnostic(funit, 'hist_dmat_weight', learned_model%hist_dmat_weight, &
             LEARN_HIST_WEIGHTS, 'best_at_zero_hist_distance_disabled', 'best_at_one_hist_distance_dominant')
+        call write_grid_position_diagnostic(funit, 'spec_dmat_weight', learned_model%spec_dmat_weight, &
+            LEARN_SPEC_WEIGHTS, 'best_at_zero_spectrum_distance_disabled', 'best_at_one_spectrum_distance_dominant')
         call write_grid_position_diagnostic(funit, 'min_score_separation', learned_model%min_score_separation, &
             LEARN_MINSEPS, 'best_at_lowest_value_consider_lower_if_accept_all_remains_too_common', &
             'best_at_highest_value_consider_higher_if_unstable_splits_remain')
@@ -674,7 +712,7 @@ contains
         integer,          intent(in) :: funit
         character(len=*), intent(in) :: key
         write(funit,'(A)') trim(key)//&
-            'rank,balanced_accuracy,boundary_margin,min_score_separation,hist_dmat_weight,min_accept_frac,'//&
+            'rank,balanced_accuracy,boundary_margin,min_score_separation,hist_dmat_weight,spec_dmat_weight,min_accept_frac,'//&
             'use_lowsep_otsu,use_otsu_window,use_cluster_rescue,enforce_min_accept_frac,feature_weights_semicolon'
     end subroutine write_candidate_table_header
 
@@ -684,10 +722,10 @@ contains
         real,                          intent(in) :: score
         type(cavg_quality_model_spec), intent(in) :: spec
         integer :: i
-        write(funit,'(A,A,I0,A,F10.5,A,ES14.6,A,ES14.6,A,ES14.6,A,ES14.6,A,L1,A,L1,A,L1,A,L1,A)', advance='no') &
+        write(funit,'(A,A,I0,A,F10.5,A,ES14.6,A,ES14.6,A,ES14.6,A,ES14.6,A,ES14.6,A,L1,A,L1,A,L1,A,L1,A)', advance='no') &
             trim(tag), ',', irank, ',', score, ',', spec%boundary_margin, ',', spec%min_score_separation, ',', &
-            spec%hist_dmat_weight, ',', spec%min_accept_frac, ',', spec%use_lowsep_otsu, ',', spec%use_otsu_window, &
-            ',', spec%use_cluster_rescue, ',', spec%enforce_min_accept_frac, ','
+            spec%hist_dmat_weight, ',', spec%spec_dmat_weight, ',', spec%min_accept_frac, ',', spec%use_lowsep_otsu, &
+            ',', spec%use_otsu_window, ',', spec%use_cluster_rescue, ',', spec%enforce_min_accept_frac, ','
         do i = 1, CAVG_QUALITY_NFEATS
             if( i > 1 ) write(funit,'(A)', advance='no') ';'
             write(funit,'(ES14.6)', advance='no') spec%weights(i)
@@ -701,6 +739,7 @@ contains
         do i = 1, size(dsets)
             if( allocated(dsets(i)%features)      ) deallocate(dsets(i)%features)
             if( allocated(dsets(i)%hist_dmat)     ) deallocate(dsets(i)%hist_dmat)
+            if( allocated(dsets(i)%spec_dmat)     ) deallocate(dsets(i)%spec_dmat)
             if( allocated(dsets(i)%manual_states) ) deallocate(dsets(i)%manual_states)
             if( allocated(dsets(i)%hard_reject)   ) deallocate(dsets(i)%hard_reject)
         end do

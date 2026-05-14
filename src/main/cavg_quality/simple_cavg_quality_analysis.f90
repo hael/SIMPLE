@@ -5,7 +5,7 @@ use simple_error,              only: simple_exception
 use simple_image,              only: image
 use simple_oris,               only: oris
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
-    I_HIST_KNN, calc_histogram_quality_signal, extract_cavg_quality_features, &
+    calc_histogram_quality_signal, calc_power_spectrum_quality_signal, extract_cavg_quality_features, &
     normalize_cavg_quality_features, write_cavg_quality_feature_inventory
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
@@ -29,8 +29,8 @@ contains
         type(cavg_quality_model),  intent(in)    :: model
         call reset_cavg_quality_result(quality)
         call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
-        call calc_histogram_quality_signal(imgs, mskdiam, quality%hard_reject, quality%raw(:,I_HIST_KNN), &
-                                           quality%hist_dmat)
+        call calc_histogram_quality_signal(imgs, mskdiam, quality%hard_reject, quality%hist_dmat)
+        call calc_power_spectrum_quality_signal(imgs, mskdiam, quality%hard_reject, quality%spec_dmat)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call model%classify(quality)
     end subroutine evaluate_cavg_quality
@@ -100,6 +100,7 @@ contains
         call write_model_as_analysis_comments(funit, model)
         call write_cavg_quality_feature_inventory(funit)
         call write_hist_dmat_comments(funit, quality)
+        call write_spec_dmat_comments(funit, quality)
         write(funit,'(A)') '# feature_summary_header=feature,auc,median_manual_good,median_manual_bad,robust_separation,current_weight,suggested_weight'
         do ifeat = 1, CAVG_QUALITY_NFEATS
             auc      = auc_for_values(quality%features(:,ifeat), reference_states)
@@ -167,6 +168,7 @@ contains
         write(funit,'(A,ES14.6)') '# model_boundary_margin=', model%boundary_margin
         write(funit,'(A,ES14.6)') '# model_min_score_separation=', model%min_score_separation
         write(funit,'(A,ES14.6)') '# model_hist_dmat_weight=', model%hist_dmat_weight
+        write(funit,'(A,ES14.6)') '# model_spec_dmat_weight=', model%spec_dmat_weight
         write(funit,'(A,ES14.6)') '# model_otsu_min_offset=', model%otsu_min_offset
         write(funit,'(A,ES14.6)') '# model_otsu_max_offset=', model%otsu_max_offset
         write(funit,'(A,ES14.6)') '# model_cluster_rescue_margin=', model%cluster_rescue_margin
@@ -193,6 +195,23 @@ contains
             end do
         end do
     end subroutine write_hist_dmat_comments
+
+    subroutine write_spec_dmat_comments( funit, quality )
+        integer,                   intent(in) :: funit
+        type(cavg_quality_result), intent(in) :: quality
+        integer :: i, j, ncls
+        if( .not. allocated(quality%spec_dmat) ) return
+        ncls = size(quality%spec_dmat, dim=1)
+        if( size(quality%spec_dmat, dim=2) /= ncls ) &
+            THROW_HARD('write_spec_dmat_comments: spectrum distance matrix is not square')
+        write(funit,'(A,I0)') '# spec_dmat_nclasses=', ncls
+        write(funit,'(A)') '# spec_dmat_header=i,j,distance'
+        do i = 1, ncls - 1
+            do j = i + 1, ncls
+                write(funit,'(A,I0,A,I0,A,ES14.6)') '# spec_dmat,', i, ',', j, ',', quality%spec_dmat(i,j)
+            end do
+        end do
+    end subroutine write_spec_dmat_comments
 
     subroutine write_analysis_class_header( funit )
         integer, intent(in) :: funit

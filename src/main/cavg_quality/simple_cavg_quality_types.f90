@@ -18,7 +18,7 @@ public :: reset_cavg_quality_result
 
 integer, parameter :: CAVG_REJECTION_CHUNK = 1
 integer, parameter :: CAVG_REJECTION_POOL  = 2
-integer, parameter :: CAVG_QUALITY_NFEATS  = 12
+integer, parameter :: CAVG_QUALITY_NFEATS  = 11
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
 
@@ -37,6 +37,7 @@ type :: cavg_quality_model_spec
     real              :: boundary_margin         = 0.0
     real              :: min_score_separation    = 0.0
     real              :: hist_dmat_weight        = 0.0
+    real              :: spec_dmat_weight        = 0.0
     real              :: otsu_min_offset         = 0.0
     real              :: otsu_max_offset         = 0.0
     real              :: cluster_rescue_margin   = 0.0
@@ -56,6 +57,7 @@ type :: cavg_quality_result
     integer, allocatable :: medoids(:)
     logical, allocatable :: hard_reject(:)
     real,    allocatable :: hist_dmat(:,:)
+    real,    allocatable :: spec_dmat(:,:)
     real                 :: threshold        = 0.0
     real                 :: raw_threshold    = 0.0
     real                 :: threshold_margin = 0.0
@@ -76,6 +78,7 @@ type :: cavg_quality_training_dataset
     integer                   :: ncls       = 0
     real,    allocatable      :: features(:,:)
     real,    allocatable      :: hist_dmat(:,:)
+    real,    allocatable      :: spec_dmat(:,:)
     integer, allocatable      :: manual_states(:)
     logical, allocatable      :: hard_reject(:)
 end type cavg_quality_training_dataset
@@ -113,6 +116,7 @@ contains
         if( allocated(quality%medoids)     ) deallocate(quality%medoids)
         if( allocated(quality%hard_reject) ) deallocate(quality%hard_reject)
         if( allocated(quality%hist_dmat)   ) deallocate(quality%hist_dmat)
+        if( allocated(quality%spec_dmat)   ) deallocate(quality%spec_dmat)
         quality%threshold        = 0.0
         quality%raw_threshold    = 0.0
         quality%threshold_margin = 0.0

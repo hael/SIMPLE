@@ -77,6 +77,7 @@ The current model family is `linear_boundary`. A model contains:
 - `boundary_margin`
 - `min_score_separation`
 - `hist_dmat_weight`
+- `spec_dmat_weight`
 - `otsu_min_offset`
 - `otsu_max_offset`
 - `cluster_rescue_margin`
@@ -94,13 +95,13 @@ The current built-in presets are:
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk_default_v2` is the default chunk/stream operating point promoted from the first trusted batch-style learning cycle. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
+`chunk_default_v2` is the default chunk/stream operating point promoted from the trusted batch-style learning cycles. Its current feature bank excludes the former scalar histogram-neighborhood feature, and its learned histogram-distance matrix weight is zero. The rotational power-spectrum distance matrix is available to the model but defaults to zero until retrained from analysis files that contain that matrix. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
 
 ## Feature Space
 
 The feature inventory is maintained in `simple_cavg_quality_feats.f90`. Feature extraction produces raw per-class values and a normalized feature matrix. The model uses the normalized `z_*` features, not the raw feature values.
 
-The current feature set includes population/resolution support, foreground geometry, local signal variance, spectrum shape, class statistics, center-edge signal, ice-score penalty, and histogram-neighborhood support. Histogram distances are also retained as a pairwise class-average distance matrix and mixed into the model distance matrix through the learnable `hist_dmat_weight`.
+The current feature set includes population/resolution support, foreground geometry, local signal variance, spectrum shape, class statistics, center-edge signal, and ice-score penalty. Histogram distances and rotationally averaged power-spectrum distances are retained as pairwise class-average distance matrices and mixed into the model distance matrix through the learnable `hist_dmat_weight` and `spec_dmat_weight`. A former scalar histogram-neighborhood feature was removed because its direction was dataset-dependent: in some stream chunks histogram-dense neighborhoods were enriched for junk rather than good class averages.
 
 Feature definitions should remain centralized in `simple_cavg_quality_feats.f90`, so future feature additions are visible in one inventory rather than being scattered through model code.
 
@@ -120,14 +121,20 @@ For one dataset, the model classifies as follows:
 
 4. Normalize that feature distance matrix.
 
-5. If `hist_dmat_weight > 0`, extract and normalize the histogram distance matrix for the same class subset, then mix the two matrices:
+5. If `hist_dmat_weight > 0` or `spec_dmat_weight > 0`, extract and normalize the requested pairwise distance matrices for the same class subset, then mix the valid components:
 
    ```text
-   dmat = (1 - hist_dmat_weight) * feature_dmat
-        + hist_dmat_weight       * hist_dmat
+   pairwise_weight = sum(weights for usable pairwise matrices)
+   feature_weight  = max(0, 1 - pairwise_weight)
+
+   dmat = feature_weight       * feature_dmat
+        + usable_hist_weight   * hist_dmat
+        + usable_spec_weight   * spec_dmat
+
+   dmat = dmat / sum(valid component weights)
    ```
 
-6. Normalize the mixed distance matrix.
+6. Normalize the mixed distance matrix. If a requested pairwise matrix has no usable variation, it is ignored for that dataset and the valid components are renormalized.
 
 7. Run two-cluster k-medoids on the distance matrix.
 
@@ -187,17 +194,18 @@ The current grid searches:
 
 - feature-weight interpolation alpha;
 - histogram distance matrix weight;
+- rotational power-spectrum distance matrix weight;
 - minimum score separation;
 - boundary margin;
 - pool minimum accepted fraction, only for pool models.
 
 Each candidate is evaluated by running the full model classifier on every training dataset. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets, so each dataset contributes equally.
 
-The best candidate becomes the learned model and is written to the requested model file. The learn report also records the full search grid, the top candidates, all best-score ties, suggested weights, learned histogram-distance weight, and per-dataset confusion metrics.
+The best candidate becomes the learned model and is written to the requested model file. The learn report also records the full search grid, the top candidates, all best-score ties, suggested weights, learned pairwise-distance weights, and per-dataset confusion metrics.
 
 The learn report includes a `search_diagnostic` section. These records flag two classes of follow-up:
 
-- searched parameters whose winning value is on the edge of the current grid, such as `boundary_margin`, `min_score_separation`, `hist_dmat_weight`, or pool `min_accept_frac`;
+- searched parameters whose winning value is on the edge of the current grid, such as `boundary_margin`, `min_score_separation`, `hist_dmat_weight`, `spec_dmat_weight`, or pool `min_accept_frac`;
 - model policy controls that are currently inherited from the base preset rather than searched, such as Otsu-window settings, low-separation Otsu, cluster rescue, and minimum-accept enforcement.
 
 Warnings in this section do not mean the learned model is invalid. They mean the training set is touching one of the current search boundaries or inherited policy assumptions, so the next validation round should decide whether to broaden the grid or promote that policy control into the searched model space.
@@ -266,6 +274,7 @@ Inspect `cavgs_quality_learn_report.txt`. Pay attention to:
 - per-dataset false positives and false negatives;
 - `hard_rejected_manual_good`;
 - the learned `hist_dmat_weight`.
+- the learned `spec_dmat_weight`.
 
 Many tied models mean the current training set does not constrain the searched parameters strongly enough. That is not automatically bad, but it should be understood before promoting a model.
 

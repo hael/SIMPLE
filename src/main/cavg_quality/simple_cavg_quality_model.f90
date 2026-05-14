@@ -16,6 +16,7 @@ public :: CAVG_REJECTION_CHUNK
 public :: CAVG_REJECTION_POOL
 public :: CAVG_QUALITY_DEFAULT_WEIGHTS
 public :: CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT
+public :: CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT
 public :: CAVG_QUALITY_MODEL_DEFAULT
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
@@ -42,23 +43,29 @@ real, parameter :: CHUNK_OTSU_MAX_OFFSET   = 0.50
 real, parameter :: POOL_MIN_ACCEPT_FRAC    = 0.65
 real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
 real, parameter :: CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT = 0.50
+real, parameter :: CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT = 0.00
 
 ! Reference v1/base linear score coefficients. These are retained for the
 ! legacy preset and as the learner fallback; feature definitions and extraction
 ! live in simple_cavg_quality_feats.
 real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    0.34, 0.18, 0.00, 0.00, 0.16, 0.18, 0.00, 0.00, 0.00, 0.00, 0.00, 0.14 ]
+    3.953488E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
+    1.860465E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
+    0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
-! Batch-trained chunk default, promoted from the first trusted learn/validation
-! cycle. Keep this separate from CAVG_QUALITY_DEFAULT_WEIGHTS so legacy and pool
-! presets remain stable and explicit.
+! Batch-trained chunk default. The scalar histogram-neighborhood feature was
+! removed after validation showed its direction was dataset-dependent; relearning
+! on the trusted chunk set then selected zero histogram-distance mixing. The
+! histogram matrix remains part of the model representation so future learn runs
+! can re-enable it if a broader training set supports it.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    2.880873E-01, 1.802364E-01, 1.008059E-03, 1.581707E-02, &
-    1.577338E-01, 1.714339E-01, 3.374931E-03, 1.008059E-03, &
-    4.549345E-02, 2.926490E-02, 1.008059E-03, 1.055341E-01 ]
-real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      = -0.30
+    1.799937E-01, 1.863753E-01, 3.312400E-03, 5.197362E-02, &
+    1.575297E-01, 1.574509E-01, 1.108975E-02, 3.312400E-03, &
+    1.494878E-01, 9.616212E-02, 3.312400E-03 ]
+real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      = -0.25
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.05
-real, parameter :: CHUNK_V2_HIST_DMAT_WEIGHT     =  0.25
+real, parameter :: CHUNK_V2_HIST_DMAT_WEIGHT     =  0.00
+real, parameter :: CHUNK_V2_SPEC_DMAT_WEIGHT     =  0.00
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
@@ -69,6 +76,7 @@ type :: cavg_quality_model
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
     real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
     real              :: hist_dmat_weight        = CHUNK_V2_HIST_DMAT_WEIGHT
+    real              :: spec_dmat_weight        = CHUNK_V2_SPEC_DMAT_WEIGHT
     real              :: otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
     real              :: otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
     real              :: cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
@@ -155,6 +163,7 @@ contains
         self%boundary_margin         = spec%boundary_margin
         self%min_score_separation    = spec%min_score_separation
         self%hist_dmat_weight        = spec%hist_dmat_weight
+        self%spec_dmat_weight        = spec%spec_dmat_weight
         self%otsu_min_offset         = spec%otsu_min_offset
         self%otsu_max_offset         = spec%otsu_max_offset
         self%cluster_rescue_margin   = spec%cluster_rescue_margin
@@ -177,6 +186,7 @@ contains
         spec%boundary_margin         = self%boundary_margin
         spec%min_score_separation    = self%min_score_separation
         spec%hist_dmat_weight        = self%hist_dmat_weight
+        spec%spec_dmat_weight        = self%spec_dmat_weight
         spec%otsu_min_offset         = self%otsu_min_offset
         spec%otsu_max_offset         = self%otsu_max_offset
         spec%cluster_rescue_margin   = self%cluster_rescue_margin
@@ -197,6 +207,7 @@ contains
         spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
         spec%min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
         spec%hist_dmat_weight        = CHUNK_V2_HIST_DMAT_WEIGHT
+        spec%spec_dmat_weight        = CHUNK_V2_SPEC_DMAT_WEIGHT
         spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
         spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
@@ -217,6 +228,7 @@ contains
         spec%boundary_margin         = -CHUNK_BOUNDARY_OFFSET
         spec%min_score_separation    = MIN_SCORE_SEPARATION
         spec%hist_dmat_weight        = CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT
+        spec%spec_dmat_weight        = CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT
         spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
         spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
@@ -237,6 +249,7 @@ contains
         spec%boundary_margin         = BOUNDARY_MARGIN_DEFAULT
         spec%min_score_separation    = MIN_SCORE_SEPARATION
         spec%hist_dmat_weight        = CAVG_QUALITY_DEFAULT_HIST_DMAT_WEIGHT
+        spec%spec_dmat_weight        = CAVG_QUALITY_DEFAULT_SPEC_DMAT_WEIGHT
         spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
         spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
@@ -256,6 +269,7 @@ contains
             self%weights = CAVG_QUALITY_DEFAULT_WEIGHTS
         endif
         self%hist_dmat_weight = max(0.0, min(1.0, self%hist_dmat_weight))
+        self%spec_dmat_weight = max(0.0, min(1.0, self%spec_dmat_weight))
     end subroutine normalize
 
     subroutine classify( self, quality )
@@ -264,6 +278,7 @@ contains
         if( .not. allocated(quality%features)    ) THROW_HARD('classify: missing features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('classify: missing hard-reject mask')
         if( .not. allocated(quality%hist_dmat)   ) THROW_HARD('classify: missing histogram distance matrix')
+        if( .not. allocated(quality%spec_dmat)   ) THROW_HARD('classify: missing spectrum distance matrix')
         quality%rejection_type = self%rejection_type
         quality%model_name     = self%name
         quality%model_context  = self%context
@@ -290,6 +305,7 @@ contains
         write(funit,'(A,ES14.6)') 'boundary_margin=', self%boundary_margin
         write(funit,'(A,ES14.6)') 'min_score_separation=', self%min_score_separation
         write(funit,'(A,ES14.6)') 'hist_dmat_weight=', self%hist_dmat_weight
+        write(funit,'(A,ES14.6)') 'spec_dmat_weight=', self%spec_dmat_weight
         write(funit,'(A,ES14.6)') 'otsu_min_offset=', self%otsu_min_offset
         write(funit,'(A,ES14.6)') 'otsu_max_offset=', self%otsu_max_offset
         write(funit,'(A,ES14.6)') 'cluster_rescue_margin=', self%cluster_rescue_margin
@@ -350,6 +366,7 @@ contains
         write(funit,'(A,ES14.6)') '        spec%boundary_margin         = ', model%boundary_margin
         write(funit,'(A,ES14.6)') '        spec%min_score_separation    = ', model%min_score_separation
         write(funit,'(A,ES14.6)') '        spec%hist_dmat_weight        = ', model%hist_dmat_weight
+        write(funit,'(A,ES14.6)') '        spec%spec_dmat_weight        = ', model%spec_dmat_weight
         write(funit,'(A,ES14.6)') '        spec%otsu_min_offset         = ', model%otsu_min_offset
         write(funit,'(A,ES14.6)') '        spec%otsu_max_offset         = ', model%otsu_max_offset
         write(funit,'(A,ES14.6)') '        spec%cluster_rescue_margin   = ', model%cluster_rescue_margin
@@ -524,6 +541,9 @@ contains
                 case('hist_dmat_weight')
                     read(val,*,iostat=parse_ios) self%hist_dmat_weight
                     if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse hist_dmat_weight')
+                case('spec_dmat_weight')
+                    read(val,*,iostat=parse_ios) self%spec_dmat_weight
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse spec_dmat_weight')
                 case('otsu_min_offset')
                     read(val,*,iostat=parse_ios) self%otsu_min_offset
                     if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse otsu_min_offset')
@@ -605,21 +625,24 @@ contains
     subroutine apply_linear_boundary( quality, model )
         type(cavg_quality_result), intent(inout) :: quality
         class(cavg_quality_model), intent(in) :: model
-        real,    allocatable :: dmat(:,:), dmat_hist_fit(:,:), feats_fit(:,:), score_fit(:)
+        real,    allocatable :: dmat(:,:), dmat_mix(:,:), feats_fit(:,:), score_fit(:)
         integer, allocatable :: inds(:), labels_fit(:), medoids_fit(:)
         integer              :: ncls, nfit, i, j, k, good_fit_label, bad_fit_label
         real                 :: d, score1, score2, rescue_threshold, otsu_threshold, otsu_separation
-        real                 :: candidate_threshold
-        logical              :: dmat_ok, hist_ok, otsu_ok
+        real                 :: candidate_threshold, mix_weight, feature_dmat_weight
+        logical              :: dmat_ok, otsu_ok
         if( .not. allocated(quality%features)    ) THROW_HARD('apply_linear_boundary: missing features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('apply_linear_boundary: missing hard-reject mask')
         if( .not. allocated(quality%hist_dmat)   ) THROW_HARD('apply_linear_boundary: missing histogram distance matrix')
+        if( .not. allocated(quality%spec_dmat)   ) THROW_HARD('apply_linear_boundary: missing spectrum distance matrix')
         ncls = size(quality%features, dim=1)
         if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('apply_linear_boundary: invalid feature count')
         if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_linear_boundary: invalid mask size')
         call assert_valid_rejection_type(model%rejection_type)
         if( size(quality%hist_dmat, dim=1) /= ncls .or. size(quality%hist_dmat, dim=2) /= ncls ) &
             THROW_HARD('apply_linear_boundary: invalid histogram distance matrix size')
+        if( size(quality%spec_dmat, dim=1) /= ncls .or. size(quality%spec_dmat, dim=2) /= ncls ) &
+            THROW_HARD('apply_linear_boundary: invalid spectrum distance matrix size')
         if( allocated(quality%states)  ) deallocate(quality%states)
         if( allocated(quality%labels)  ) deallocate(quality%labels)
         if( allocated(quality%medoids) ) deallocate(quality%medoids)
@@ -667,21 +690,21 @@ contains
             deallocate(dmat, feats_fit, score_fit, inds)
             return
         end if
-        if( model%hist_dmat_weight > EPS )then
-            allocate(dmat_hist_fit(nfit, nfit), source=0.0)
-            !$omp parallel do default(shared) private(i,j) schedule(static) proc_bind(close)
-            do i = 1, nfit
-                do j = 1, nfit
-                    dmat_hist_fit(i,j) = quality%hist_dmat(inds(i), inds(j))
-                end do
-            end do
-            !$omp end parallel do
-            call normalize_quality_dmat(dmat_hist_fit, hist_ok)
-            if( hist_ok )then
-                dmat = (1.0 - model%hist_dmat_weight) * dmat + model%hist_dmat_weight * dmat_hist_fit
+        if( model%hist_dmat_weight > EPS .or. model%spec_dmat_weight > EPS )then
+            allocate(dmat_mix(nfit, nfit), source=0.0)
+            mix_weight = 0.0
+            call add_pairwise_dmat_component(quality%hist_dmat, inds, model%hist_dmat_weight, dmat_mix, mix_weight)
+            call add_pairwise_dmat_component(quality%spec_dmat, inds, model%spec_dmat_weight, dmat_mix, mix_weight)
+            feature_dmat_weight = max(0.0, 1.0 - mix_weight)
+            if( feature_dmat_weight > EPS )then
+                dmat_mix   = dmat_mix + feature_dmat_weight * dmat
+                mix_weight = mix_weight + feature_dmat_weight
+            endif
+            if( mix_weight > EPS )then
+                dmat = dmat_mix / mix_weight
                 call normalize_quality_dmat(dmat, dmat_ok)
             endif
-            deallocate(dmat_hist_fit)
+            deallocate(dmat_mix)
         endif
         quality%nclust = 2
         call cluster_dmat(dmat, 'kmed', quality%nclust, medoids_fit, labels_fit)
@@ -752,6 +775,35 @@ contains
         end if
         deallocate(dmat, feats_fit, score_fit, inds, labels_fit, medoids_fit)
     end subroutine apply_linear_boundary
+
+    subroutine add_pairwise_dmat_component( source_dmat, inds, weight, dmat_mix, mix_weight )
+        real,    intent(in)    :: source_dmat(:,:)
+        integer, intent(in)    :: inds(:)
+        real,    intent(in)    :: weight
+        real,    intent(inout) :: dmat_mix(:,:)
+        real,    intent(inout) :: mix_weight
+        real, allocatable :: dmat_component(:,:)
+        integer :: nfit, i, j
+        logical :: ok
+        if( weight <= EPS ) return
+        nfit = size(inds)
+        if( size(dmat_mix, dim=1) /= nfit .or. size(dmat_mix, dim=2) /= nfit ) &
+            THROW_HARD('add_pairwise_dmat_component: invalid mixed distance matrix size')
+        allocate(dmat_component(nfit, nfit), source=0.0)
+        !$omp parallel do default(shared) private(i,j) schedule(static) proc_bind(close)
+        do i = 1, nfit
+            do j = 1, nfit
+                dmat_component(i,j) = source_dmat(inds(i), inds(j))
+            end do
+        end do
+        !$omp end parallel do
+        call normalize_quality_dmat(dmat_component, ok)
+        if( ok )then
+            dmat_mix   = dmat_mix + weight * dmat_component
+            mix_weight = mix_weight + weight
+        endif
+        deallocate(dmat_component)
+    end subroutine add_pairwise_dmat_component
 
     subroutine accept_fit_as_single_cluster( quality, inds )
         type(cavg_quality_result), intent(inout) :: quality

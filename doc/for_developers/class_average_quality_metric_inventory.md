@@ -54,9 +54,10 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 9 | `corr_frc_proxy` | optional `cls2D` `corr` | higher is better | Uses stored correlation/FRC-like metadata when present. |
 | 10 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
 | 11 | `neg_ice_score` | class-average power spectrum near `ICE_BAND1` | higher is better | Negative 3.7 A ice-band excess score. |
-| 12 | `hist_knn` | masked intensity histograms | higher is better | Negative mean nearest-neighbor histogram distance. |
 
-Histogram distances are also retained as a pairwise matrix, not only as the scalar `hist_knn` feature. The model can blend the normalized feature-space distance matrix with the normalized histogram distance matrix using `hist_dmat_weight`.
+Histogram distances are retained as a pairwise matrix rather than as a scalar feature. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. The model can still blend the normalized feature-space distance matrix with the normalized histogram distance matrix using `hist_dmat_weight`.
+
+Rotationally averaged power-spectrum distances are also retained as a pairwise matrix. They follow the older `cluster_cavgs` signal-statistics idea: normalize and mask each class average, extract the square-root rotational spectrum over the `HP_SPEC` to `LP_SPEC` band, compute pairwise Euclidean distances between spectra, and min/max-normalize the resulting distance matrix. The model uses this only through `spec_dmat_weight`; it is not exposed as a scalar quality feature.
 
 ## Current Model Controls
 
@@ -69,14 +70,15 @@ The built-in models are complete `linear_boundary` presets:
 The important model controls are:
 
 - `feature_weights`: nonnegative linear score coefficients, normalized to sum to one.
-- `hist_dmat_weight`: blend between feature-vector distances and histogram distances for clustering.
+- `hist_dmat_weight`: blend between feature-vector distances and histogram distances for clustering. The current chunk default sets this to zero after relearning without the removed scalar histogram feature.
+- `spec_dmat_weight`: blend between feature-vector distances and rotational power-spectrum distances for clustering. The current built-in defaults set this to zero until retraining demonstrates that the spectral geometry helps.
 - `boundary_margin`: shifts the decision threshold; more negative rejects more aggressively, more positive preserves more borderline classes.
 - `min_score_separation`: below this separation the model treats the partition as unreliable unless low-separation Otsu is enabled and acceptable.
 - `otsu_min_offset` and `otsu_max_offset`: constrain when an Otsu score threshold may replace the cluster-derived threshold.
 - `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
 - `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
 
-The current learner searches feature-weight interpolation, histogram-distance weight, minimum score separation, boundary margin, and pool minimum accepted fraction. It deliberately inherits the higher-level policy flags from the base model.
+The current learner searches feature-weight interpolation, histogram-distance weight, rotational power-spectrum distance weight, minimum score separation, boundary margin, and pool minimum accepted fraction. It deliberately inherits the higher-level policy flags from the base model.
 
 ## Reusable Existing Routines
 
@@ -218,13 +220,15 @@ These are plausible and cheap enough, but our experience with `spectrum_dynrange
 | `below_noise_fraction` | `image%fcomps_below_noise_power_stats` | Identifies weak averages with little usable Fourier signal. | Needs a stable noise definition for class averages. |
 | `frc_pspec_summary` | `image%frc_pspec` | May approximate consistency without full even/odd class FRC infrastructure. | Must verify the input assumptions for class-average images. |
 
+The pairwise rotational spectrum distance matrix is now active model infrastructure rather than a future scalar feature. If future validation shows it is useful, prefer promoting a learned nonzero `spec_dmat_weight` over converting spectrum-neighborhood density into a scalar score.
+
 ### Medium- to High-Cost Pairwise Features
 
 These are attractive for difficult cases, especially when junk is statistically similar to good classes, but they add quadratic cost and sometimes alignment cost.
 
 | Candidate | Existing source | Why it may help | Caution |
 | --- | --- | --- | --- |
-| `sig_knn` | `calc_sigstats_dmats` | Extends current histogram KNN with power-spectrum distance. | Already partly represented by histogram matrix; measure incremental value. |
+| `sig_knn` | `calc_sigstats_dmats` | Could summarize the existing pairwise histogram/spectrum matrices as scalar neighborhood support. | Use only if the matrix formulation fails; scalar neighborhood density can invert across datasets. |
 | `cc_knn` | `calc_cc_and_res_dmats` | Good classes should correlate with nearby good classes after in-plane search. | Expensive for stream chunks; consider optional analyze/learn experiments. |
 | `res_knn` | `calc_cc_and_res_dmats` | Pairwise FRC/resolution consistency may catch overfit junk. | Depends on robust pairwise matching. |
 | `mixed_dmat_knn` | `calc_cluster_cavgs_dmat` | Reuses Joe's signal/correlation/resolution blend as scalar support. | Duplicates current model's distance matrix idea; should be integrated cleanly. |
@@ -291,5 +295,5 @@ Some possible descriptors are available but should not be first-line additions:
 - Use per-dataset robust normalization over non-hard-rejected classes.
 - Treat hard rejection as exceptional and conservative. Most discrimination should happen through the model.
 - Preserve feature ordering compatibility carefully: model files contain one weight per `CAVG_QUALITY_NFEATS` entry.
-- When increasing `CAVG_QUALITY_NFEATS`, update promotion snippets, docs, and any tests or analysis parsers that assume the feature count.
+- When changing `CAVG_QUALITY_NFEATS`, update promotion snippets, docs, and any tests or analysis parsers that assume the feature count.
 - Benchmark any pairwise or alignment-derived feature on stream chunks before considering it for default use.

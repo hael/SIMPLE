@@ -29,7 +29,6 @@ public :: I_CC_SINGLE
 public :: I_CORR_FRC
 public :: I_CENTER_EDGE_SNR
 public :: I_NEG_ICE_SCORE
-public :: I_HIST_KNN
 public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
@@ -38,6 +37,7 @@ public :: write_cavg_quality_feature_inventory
 public :: extract_cavg_quality_features
 public :: normalize_cavg_quality_features
 public :: calc_histogram_quality_signal
+public :: calc_power_spectrum_quality_signal
 
 #include "simple_local_flags.inc"
 
@@ -50,9 +50,6 @@ real,    parameter :: FOREGROUND_SEG_LP   = 30.0
 real,    parameter :: SIGNAL_METRIC_LP    = 10.0
 integer, parameter :: LOCVAR_WINDOW       = 10
 integer, parameter :: NHISTBINS           = 128
-integer, parameter :: HIST_KNN_MIN        = 5
-integer, parameter :: HIST_KNN_MAX        = 20
-real,    parameter :: HIST_KNN_FRAC       = 0.05
 
 integer, parameter :: I_LOG_POP           = 1
 integer, parameter :: I_NEG_LOG_RES       = 2
@@ -65,7 +62,6 @@ integer, parameter :: I_CC_SINGLE         = 8
 integer, parameter :: I_CORR_FRC          = 9
 integer, parameter :: I_CENTER_EDGE_SNR   = 10
 integer, parameter :: I_NEG_ICE_SCORE     = 11
-integer, parameter :: I_HIST_KNN          = 12
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -89,9 +85,7 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
     cavg_quality_feature_def('log_center_edge_snr', 'higher_is_better', &
         'log central signal variance relative to edge variance in the class average'), &
     cavg_quality_feature_def('neg_ice_score', 'higher_is_better', &
-        'negative class-average ice-ring excess score around the 3.7 Angstrom band'), &
-    cavg_quality_feature_def('hist_knn', 'higher_is_better', &
-        'negative mean nearest-neighbor histogram distance among non-hard-rejected classes') ]
+        'negative class-average ice-ring excess score around the 3.7 Angstrom band') ]
 
 contains
 
@@ -240,23 +234,20 @@ contains
         end do
     end subroutine normalize_cavg_quality_features
 
-    subroutine calc_histogram_quality_signal( imgs, mskdiam, hard_reject, hist_knn, hist_dmat )
+    subroutine calc_histogram_quality_signal( imgs, mskdiam, hard_reject, hist_dmat )
         class(image),         intent(inout) :: imgs(:)
         real,                 intent(in)    :: mskdiam
         logical,              intent(in)    :: hard_reject(:)
-        real,                 intent(inout) :: hist_knn(:)
         real,    allocatable, intent(inout) :: hist_dmat(:,:)
         type(histogram), allocatable :: hists(:)
         real, allocatable :: dmat_tvd(:,:), dmat_jsd(:,:), dmat_hd(:,:)
         real :: smpd, rad_px, mm(2), mm_i(2)
-        integer :: ncls, nfit, i, j, k, ncontrib
+        integer :: ncls, nfit, i, j, ncontrib
         logical :: ok
         ncls = size(imgs)
         if( size(hard_reject) /= ncls ) THROW_HARD('calc_histogram_quality_signal: invalid mask size')
-        if( size(hist_knn) /= ncls ) THROW_HARD('calc_histogram_quality_signal: invalid feature size')
         if( allocated(hist_dmat) ) deallocate(hist_dmat)
         allocate(hist_dmat(ncls, ncls), source=0.0)
-        hist_knn = 0.0
         nfit = count(.not. hard_reject)
         if( nfit < 4 ) return
         smpd = imgs(1)%get_smpd()
@@ -306,41 +297,77 @@ contains
             ncontrib  = ncontrib + 1
         endif
         if( ncontrib > 0 ) hist_dmat = hist_dmat / real(ncontrib)
-        k = min(nfit - 1, max(HIST_KNN_MIN, ceiling(HIST_KNN_FRAC * real(nfit))))
-        k = min(k, HIST_KNN_MAX)
-        do i = 1, ncls
-            if( hard_reject(i) ) cycle
-            hist_knn(i) = -avg_nearest_hist_distance(hist_dmat(i,:), hard_reject, i, k)
-        end do
         call hists(:)%kill
         deallocate(hists, dmat_tvd, dmat_jsd, dmat_hd)
     end subroutine calc_histogram_quality_signal
 
-    real function avg_nearest_hist_distance( dists, hard_reject, self_ind, k )
-        real,    intent(in) :: dists(:)
-        logical, intent(in) :: hard_reject(:)
-        integer, intent(in) :: self_ind, k
-        real, allocatable :: vals(:)
-        integer :: i, n, cnt, kk, loc
-        avg_nearest_hist_distance = 0.0
-        n = count(.not. hard_reject) - 1
-        if( n <= 0 .or. k <= 0 ) return
-        allocate(vals(n), source=0.0)
-        cnt = 0
-        do i = 1, size(dists)
-            if( i == self_ind .or. hard_reject(i) ) cycle
-            cnt = cnt + 1
-            vals(cnt) = dists(i)
+    subroutine calc_power_spectrum_quality_signal( imgs, mskdiam, hard_reject, spec_dmat )
+        class(image),         intent(inout) :: imgs(:)
+        real,                 intent(in)    :: mskdiam
+        logical,              intent(in)    :: hard_reject(:)
+        real,    allocatable, intent(inout) :: spec_dmat(:,:)
+        type(image), allocatable :: cavg_threads(:)
+        real, allocatable :: profiles(:,:), pspec(:)
+        integer, allocatable :: inds(:)
+        integer :: ncls, nfit, ldim(3), lfny, kfrom, kto, nspec, i, j, ithr, tmpi
+        real    :: smpd, rad_px, dist
+        logical :: ok
+        ncls = size(imgs)
+        if( size(hard_reject) /= ncls ) THROW_HARD('calc_power_spectrum_quality_signal: invalid mask size')
+        if( allocated(spec_dmat) ) deallocate(spec_dmat)
+        allocate(spec_dmat(ncls, ncls), source=0.0)
+        nfit = count(.not. hard_reject)
+        if( nfit < 4 ) return
+        ldim = imgs(1)%get_ldim()
+        smpd = imgs(1)%get_smpd()
+        if( smpd <= 0.0 ) THROW_HARD('calc_power_spectrum_quality_signal: non-positive smpd')
+        lfny = imgs(1)%get_lfny(1)
+        kfrom = max(1, min(lfny, calc_fourier_index(HP_SPEC, ldim(1), smpd)))
+        kto   = max(1, min(lfny, calc_fourier_index(LP_SPEC, ldim(1), smpd)))
+        if( kto < kfrom )then
+            tmpi  = kfrom
+            kfrom = kto
+            kto   = tmpi
+        endif
+        nspec = kto - kfrom + 1
+        if( nspec < 2 ) return
+        rad_px = (mskdiam / smpd) / 2.0
+        allocate(inds(nfit))
+        allocate(profiles(nfit, nspec), source=0.0)
+        inds = pack([(i, i=1,ncls)], .not. hard_reject)
+        allocate(cavg_threads(nthr_glob))
+        do ithr = 1, nthr_glob
+            call cavg_threads(ithr)%new(ldim, smpd)
         end do
-        kk = min(k, cnt)
-        do i = 1, kk
-            loc = minloc(vals(1:cnt), dim=1)
-            avg_nearest_hist_distance = avg_nearest_hist_distance + vals(loc)
-            vals(loc) = huge(1.0)
+        call cavg_threads(1)%memoize_mask_coords
+        !$omp parallel do default(shared) private(i,ithr,pspec) schedule(static) proc_bind(close)
+        do i = 1, nfit
+            ithr = omp_get_thread_num() + 1
+            call cavg_threads(ithr)%copy(imgs(inds(i)))
+            call cavg_threads(ithr)%norm
+            call cavg_threads(ithr)%mask2D_soft(rad_px)
+            call cavg_threads(ithr)%spectrum('sqrt', pspec)
+            profiles(i,:) = pspec(kfrom:kto)
+            deallocate(pspec)
         end do
-        avg_nearest_hist_distance = avg_nearest_hist_distance / real(kk)
-        deallocate(vals)
-    end function avg_nearest_hist_distance
+        !$omp end parallel do
+        do ithr = 1, nthr_glob
+            call cavg_threads(ithr)%kill
+        end do
+        deallocate(cavg_threads)
+        !$omp parallel do default(shared) private(i,j,dist) schedule(dynamic) proc_bind(close)
+        do i = 1, nfit - 1
+            do j = i + 1, nfit
+                dist = sqrt(sum((profiles(i,:) - profiles(j,:))**2))
+                spec_dmat(inds(i), inds(j)) = dist
+                spec_dmat(inds(j), inds(i)) = dist
+            end do
+        end do
+        !$omp end parallel do
+        call normalize_quality_dmat(spec_dmat, ok)
+        if( .not. ok ) spec_dmat = 0.0
+        deallocate(inds, profiles)
+    end subroutine calc_power_spectrum_quality_signal
 
     subroutine measure_cavg_foreground_geometry( img, bin_img, cc_img, rmat_cc, rmat_disc, rad_px, outside_frac, &
                                                  centroid_norm, nccs_valid, no_component )
