@@ -44,7 +44,8 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
-! Current chunk default. Resolution has two roles: catastrophic failures
+! Current chunk default, promoted from the batch_train1 chunk learning run.
+! Resolution has two roles: catastrophic failures
 ! (res > CAVG_RES_HARD_REJECT_A) are hard rejects, while the continuous
 ! neg_log_res scalar remains active model evidence for all trainable rows.
 ! The selected policy keeps scalar features with stable quality direction
@@ -53,14 +54,26 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
 ! feature bank; diagnostic-only features should explain hard rejects or test
 ! an active quality hypothesis.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.156534E-01, 1.465524E-01, 0.000000E+00, 4.670155E-02, &
-    1.161348E-01, 1.215248E-01, 0.000000E+00, 1.562873E-01, &
-    8.305385E-02, 0.000000E+00, 8.129309E-02, 1.327988E-01, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
-real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.10
+    1.025131E-01, 1.299015E-01, 0.000000E+00, 4.139543E-02, &
+    1.029398E-01, 1.077174E-01, 0.000000E+00, 1.385303E-01, &
+    7.361746E-02, 0.000000E+00, 7.205675E-02, 1.177105E-01, &
+    5.819838E-02, 0.000000E+00, 2.467390E-02, 3.074553E-02 ]
+real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
 real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
+
+! Previous chunk_default_v2 backup before batch_train1 promotion:
+! real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
+!     1.156534E-01, 1.465524E-01, 0.000000E+00, 4.670155E-02, &
+!     1.161348E-01, 1.215248E-01, 0.000000E+00, 1.562873E-01, &
+!     8.305385E-02, 0.000000E+00, 8.129309E-02, 1.327988E-01, &
+!     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+! real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.10
+! real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
+! real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
+! real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
+! spec%use_otsu_window = .true.
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
@@ -75,7 +88,7 @@ type :: cavg_quality_model
     real              :: cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
     real              :: min_accept_frac         = 0.0
     logical           :: use_lowsep_otsu         = .true.
-    logical           :: use_otsu_window         = .true.
+    logical           :: use_otsu_window         = .false.
     logical           :: use_cluster_rescue      = .false.
     logical           :: enforce_min_accept_frac = .false.
 contains
@@ -180,7 +193,7 @@ contains
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
         spec%min_accept_frac         = 0.0
         spec%use_lowsep_otsu         = .true.
-        spec%use_otsu_window         = .true.
+        spec%use_otsu_window         = .false.
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
     end function chunk_default_v2_model_spec
