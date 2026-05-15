@@ -3,7 +3,6 @@ module simple_cavg_quality_feats
 !$ use omp_lib
 use simple_defs,         only: nthr_glob
 use simple_error,        only: simple_exception
-use simple_histogram,    only: histogram
 use simple_image,        only: image
 use simple_image_bin,    only: image_bin
 use simple_oris,         only: oris
@@ -24,12 +23,9 @@ public :: I_LOCVAR_BG
 public :: I_CC_SINGLE
 public :: I_CORR_FRC
 public :: I_CENTER_EDGE_SNR
-public :: I_HIST_ENTROPY
 public :: I_CC_AREA_FRAC
 public :: I_CC_DIAMETER_NORM
 public :: I_PRESENCE
-public :: I_LOG_CONTRAST
-public :: I_LOG_HIST_VARIANCE
 public :: I_LOG_DETAIL_BG_SNR
 public :: I_LOG_DETAIL_SIGNAL_RATIO
 public :: I_DETAIL_COVERAGE
@@ -38,10 +34,13 @@ public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
 public :: cavg_quality_feature_direction
+public :: cavg_quality_feature_family
+public :: cavg_quality_feature_model_eligible
 public :: write_cavg_quality_feature_inventory
 public :: extract_cavg_quality_features
 public :: normalize_cavg_quality_features
-public :: calc_histogram_quality_scalars
+public :: apply_cavg_quality_model_feature_exclusions
+public :: apply_cavg_quality_model_mask_exclusions
 public :: CAVG_RES_HARD_REJECT_A
 
 #include "simple_local_flags.inc"
@@ -53,7 +52,6 @@ real,    parameter :: DETAIL_BAND_HP_A    = 20.0
 real,    parameter :: DETAIL_BAND_LP_A    =  6.0
 real,    parameter :: CAVG_RES_HARD_REJECT_A = 40.0
 integer, parameter :: LOCVAR_WINDOW       = 10
-integer, parameter :: NHISTBINS           = 128
 integer, parameter :: MASK_HARD_OUTSIDE_PIXELS = 10
 
 integer, parameter :: I_LOG_POP           = 1
@@ -65,58 +63,71 @@ integer, parameter :: I_LOCVAR_BG         = 6
 integer, parameter :: I_CC_SINGLE         = 7
 integer, parameter :: I_CORR_FRC          = 8
 integer, parameter :: I_CENTER_EDGE_SNR   = 9
-integer, parameter :: I_HIST_ENTROPY      = 10
-integer, parameter :: I_CC_AREA_FRAC      = 11
-integer, parameter :: I_CC_DIAMETER_NORM  = 12
-integer, parameter :: I_PRESENCE          = 13
-integer, parameter :: I_LOG_CONTRAST      = 14
-integer, parameter :: I_LOG_HIST_VARIANCE = 15
-integer, parameter :: I_LOG_DETAIL_BG_SNR = 16
-integer, parameter :: I_LOG_DETAIL_SIGNAL_RATIO = 17
-integer, parameter :: I_DETAIL_COVERAGE   = 18
-integer, parameter :: I_DETAIL_EDGE_DENSITY = 19
+integer, parameter :: I_CC_AREA_FRAC      = 10
+integer, parameter :: I_CC_DIAMETER_NORM  = 11
+integer, parameter :: I_PRESENCE          = 12
+integer, parameter :: I_LOG_DETAIL_BG_SNR = 13
+integer, parameter :: I_LOG_DETAIL_SIGNAL_RATIO = 14
+integer, parameter :: I_DETAIL_COVERAGE   = 15
+integer, parameter :: I_DETAIL_EDGE_DENSITY = 16
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
-        'log class population; larger classes have more particle support'), &
+        'log class population; larger classes have more particle support', 'population_support'), &
     cavg_quality_feature_def('neg_log_res', 'higher_is_better', &
-        'negative log class resolution estimate; higher values indicate better nominal resolution'), &
+        'negative log class resolution estimate; higher values indicate better nominal resolution', 'resolution'), &
     cavg_quality_feature_def('mask_inside', 'higher_is_better', &
-        'negative outside-mask fraction for the main segmented component'), &
+        'negative outside-mask fraction for the main segmented component', 'foreground_geometry'), &
     cavg_quality_feature_def('centered', 'higher_is_better', &
-        'negative normalized centroid displacement of segmented class-average signal'), &
+        'negative normalized centroid displacement of segmented class-average signal', 'foreground_geometry'), &
     cavg_quality_feature_def('log_locvar_fg', 'higher_is_better', &
-        'log local variance measured in the foreground Otsu mask'), &
+        'log local variance measured in the foreground Otsu mask', 'local_variance'), &
     cavg_quality_feature_def('log_locvar_bg', 'higher_is_better', &
-        'log local variance measured in the complementary background mask'), &
+        'log local variance measured in the complementary background mask', 'local_variance'), &
     cavg_quality_feature_def('single_component', 'higher_is_better', &
-        'negative distance from exactly one valid connected component'), &
+        'negative distance from exactly one valid connected component', 'foreground_geometry'), &
     cavg_quality_feature_def('corr_frc_proxy', 'higher_is_better', &
-        'stored class correlation or FRC-like score when available in cls2D metadata'), &
+        'stored class correlation or FRC-like score when available in cls2D metadata', 'quality_proxy'), &
     cavg_quality_feature_def('log_center_edge_snr', 'higher_is_better', &
-        'log central signal variance relative to edge variance in the class average'), &
-    cavg_quality_feature_def('hist_entropy', 'diagnostic', &
-        'bounded masked intensity-histogram entropy'), &
+        'log central signal variance relative to edge variance in the class average', 'center_edge_signal'), &
     cavg_quality_feature_def('cc_area_frac', 'diagnostic', &
-        'main connected-component area divided by the expected circular mask area'), &
+        'main connected-component area divided by the expected circular mask area', 'foreground_geometry'), &
     cavg_quality_feature_def('cc_diameter_norm', 'diagnostic', &
-        'main connected-component diameter divided by the expected mask diameter'), &
+        'main connected-component diameter divided by the expected mask diameter', 'foreground_geometry'), &
     cavg_quality_feature_def('presence', 'higher_is_better', &
-        'central signal excess relative to border background noise'), &
-    cavg_quality_feature_def('log_contrast', 'diagnostic', &
-        'log full-image intensity standard deviation after edge background subtraction'), &
-    cavg_quality_feature_def('log_hist_variance', 'diagnostic', &
-        'log masked intensity-histogram variance'), &
+        'central signal excess relative to border background noise', 'presence'), &
     cavg_quality_feature_def('log_detail_bg_snr', 'diagnostic', &
-        'log in-mask band-passed detail RMS relative to outside-mask detail RMS'), &
+        'log in-mask band-passed detail RMS relative to outside-mask detail RMS', 'internal_detail'), &
     cavg_quality_feature_def('log_detail_signal_ratio', 'diagnostic', &
-        'log in-mask band-passed detail RMS relative to in-mask total signal RMS'), &
+        'log in-mask band-passed detail RMS relative to in-mask total signal RMS', 'internal_detail'), &
     cavg_quality_feature_def('detail_coverage', 'diagnostic', &
-        'fraction of in-mask pixels with band-passed detail above local background and image-scale thresholds'), &
+        'fraction of in-mask pixels with band-passed detail above local background and image-scale thresholds', &
+        'internal_detail'), &
     cavg_quality_feature_def('detail_edge_density', 'diagnostic', &
-        'fraction of in-mask pixels with band-passed gradient magnitude above background and image-scale thresholds') ]
+        'fraction of in-mask pixels with band-passed gradient magnitude above background and image-scale thresholds', &
+        'internal_detail') ]
 
 contains
+
+    subroutine apply_cavg_quality_model_feature_exclusions( weights )
+        real, intent(inout) :: weights(:)
+        integer :: ifeat
+        if( size(weights) /= CAVG_QUALITY_NFEATS ) &
+            THROW_HARD('apply_cavg_quality_model_feature_exclusions: invalid weight vector size')
+        do ifeat = 1, CAVG_QUALITY_NFEATS
+            if( .not. cavg_quality_feature_model_eligible(ifeat) ) weights(ifeat) = 0.0
+        end do
+    end subroutine apply_cavg_quality_model_feature_exclusions
+
+    subroutine apply_cavg_quality_model_mask_exclusions( mask )
+        logical, intent(inout) :: mask(:)
+        integer :: ifeat
+        if( size(mask) /= CAVG_QUALITY_NFEATS ) &
+            THROW_HARD('apply_cavg_quality_model_mask_exclusions: invalid feature mask size')
+        do ifeat = 1, CAVG_QUALITY_NFEATS
+            if( .not. cavg_quality_feature_model_eligible(ifeat) ) mask(ifeat) = .false.
+        end do
+    end subroutine apply_cavg_quality_model_mask_exclusions
 
     function cavg_quality_feature_name( i ) result( name )
         integer, intent(in) :: i
@@ -139,13 +150,29 @@ contains
         direction = FEATURE_DEFS(i)%direction
     end function cavg_quality_feature_direction
 
+    function cavg_quality_feature_family( i ) result( family )
+        integer, intent(in) :: i
+        character(len=32)   :: family
+        if( i < 1 .or. i > CAVG_QUALITY_NFEATS ) THROW_HARD('invalid cavg quality feature index')
+        family = FEATURE_DEFS(i)%family
+    end function cavg_quality_feature_family
+
+    logical function cavg_quality_feature_model_eligible( i )
+        integer, intent(in) :: i
+        if( i < 1 .or. i > CAVG_QUALITY_NFEATS ) THROW_HARD('invalid cavg quality feature index')
+        ! Model eligibility is family-based so genuinely misleading feature
+        ! families can be excluded in one place. The current inventory contains
+        ! only hard-reject diagnostics and active scalar model candidates.
+        cavg_quality_feature_model_eligible = .true.
+    end function cavg_quality_feature_model_eligible
+
     subroutine write_cavg_quality_feature_inventory( funit )
         integer, intent(in) :: funit
         integer :: i
-        write(funit,'(A)') '# feature_inventory_header=index,name,direction,description'
+        write(funit,'(A)') '# feature_inventory_header=index,name,direction,family,description'
         do i = 1, CAVG_QUALITY_NFEATS
-            write(funit,'(A,I0,A,A,A,A,A,A)') '# feature_inventory,', i, ',', trim(FEATURE_DEFS(i)%name), ',', &
-                trim(FEATURE_DEFS(i)%direction), ',', trim(FEATURE_DEFS(i)%description)
+            write(funit,'(A,I0,A,A,A,A,A,A,A,A)') '# feature_inventory,', i, ',', trim(FEATURE_DEFS(i)%name), ',', &
+                trim(FEATURE_DEFS(i)%direction), ',', trim(FEATURE_DEFS(i)%family), ',', trim(FEATURE_DEFS(i)%description)
         end do
     end subroutine write_cavg_quality_feature_inventory
 
@@ -163,7 +190,7 @@ contains
         real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
         real                 :: outside_frac, centroid_norm, locvar_fg, locvar_bg
         real                 :: cc_area_frac, cc_diameter_norm
-        real                 :: center_edge_snr, presence_score, contrast
+        real                 :: center_edge_snr, presence_score
         real                 :: detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density
         integer              :: nccs_valid, ithr
         logical              :: no_component, mask_hard_reject, bad_pixels
@@ -204,7 +231,7 @@ contains
         end do
         !$omp parallel do default(shared) private(i,ithr,outside_frac,centroid_norm,nccs_valid,no_component,&
         !$omp& mask_hard_reject,bad_pixels,locvar_fg,locvar_bg,center_edge_snr,presence_score,&
-        !$omp& contrast,cc_area_frac,cc_diameter_norm,detail_bg_snr,detail_signal_ratio,&
+        !$omp& cc_area_frac,cc_diameter_norm,detail_bg_snr,detail_signal_ratio,&
         !$omp& detail_coverage,detail_edge_density)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
@@ -222,7 +249,6 @@ contains
                 locvar_bg        = 0.0
                 center_edge_snr  = 0.0
                 presence_score   = 0.0
-                contrast         = 0.0
                 detail_bg_snr    = 0.0
                 detail_signal_ratio = 0.0
                 detail_coverage  = 0.0
@@ -233,7 +259,7 @@ contains
                                                       centroid_norm, cc_area_frac, cc_diameter_norm, nccs_valid, &
                                                       no_component, mask_hard_reject)
                 call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
-                                                presence_score, contrast, detail_bg_snr, detail_signal_ratio, &
+                                                presence_score, detail_bg_snr, detail_signal_ratio, &
                                                 detail_coverage, detail_edge_density)
             endif
             raw(i, I_LOG_POP)       = log(real(max(pop(i), 0)) + 1.0)
@@ -248,14 +274,13 @@ contains
             raw(i, I_CC_AREA_FRAC)  = cc_area_frac
             raw(i, I_CC_DIAMETER_NORM) = cc_diameter_norm
             raw(i, I_PRESENCE)      = presence_score
-            raw(i, I_LOG_CONTRAST)  = log(max(contrast, LOG_EPS))
             raw(i, I_LOG_DETAIL_BG_SNR) = detail_bg_snr
             raw(i, I_LOG_DETAIL_SIGNAL_RATIO) = detail_signal_ratio
             raw(i, I_DETAIL_COVERAGE) = detail_coverage
             raw(i, I_DETAIL_EDGE_DENSITY) = detail_edge_density
-            ! Resolution and geometry failures are hard validity rejects; the
-            ! model should not rescue classes with a very poor stored class
-            ! resolution estimate or foreground outside the mask.
+            ! Catastrophic resolution and geometry failures are hard validity
+            ! rejects; ordinary resolution variation remains an active scalar
+            ! model feature through neg_log_res.
             hard_reject(i) = pop(i) <= 0 .or. res(i) > CAVG_RES_HARD_REJECT_A .or. bad_pixels .or. &
                                               no_component .or. mask_hard_reject .or. &
                                               (locvar_fg <= EPS .and. locvar_bg <= EPS)
@@ -299,45 +324,6 @@ contains
             where( hard_reject ) features(:,j) = -CLIP_Z
         end do
     end subroutine normalize_cavg_quality_features
-
-    subroutine calc_histogram_quality_scalars( imgs, mskdiam, hard_reject, hist_entropy, hist_variance )
-        class(image),         intent(inout) :: imgs(:)
-        real,                 intent(in)    :: mskdiam
-        logical,              intent(in)    :: hard_reject(:)
-        real,    allocatable, intent(inout) :: hist_entropy(:)
-        real,    allocatable, intent(inout) :: hist_variance(:)
-        type(histogram), allocatable :: hists(:)
-        real :: smpd, rad_px, mm(2), mm_i(2)
-        integer :: ncls, nfit, i
-        ncls = size(imgs)
-        if( size(hard_reject) /= ncls ) THROW_HARD('calc_histogram_quality_scalars: invalid mask size')
-        if( allocated(hist_entropy) ) deallocate(hist_entropy)
-        if( allocated(hist_variance) ) deallocate(hist_variance)
-        allocate(hist_entropy(ncls), source=0.0)
-        allocate(hist_variance(ncls), source=0.0)
-        nfit = count(.not. hard_reject)
-        if( nfit < 4 ) return
-        smpd = imgs(1)%get_smpd()
-        if( smpd <= 0.0 ) THROW_HARD('calc_histogram_quality_scalars: non-positive smpd')
-        rad_px = (mskdiam / smpd) / 2.0
-        mm = [huge(1.0), -huge(1.0)]
-        do i = 1, ncls
-            if( hard_reject(i) ) cycle
-            mm_i  = imgs(i)%minmax(radius=rad_px)
-            mm(1) = min(mm(1), mm_i(1))
-            mm(2) = max(mm(2), mm_i(2))
-        end do
-        if( mm(2) - mm(1) <= EPS ) return
-        allocate(hists(ncls))
-        do i = 1, ncls
-            if( hard_reject(i) ) cycle
-            call hists(i)%new(imgs(i), NHISTBINS, minmax=mm, radius=rad_px)
-            hist_entropy(i) = hists(i)%entropy(bounded=.true.)
-            hist_variance(i) = log(max(hists(i)%variance(), LOG_EPS))
-        end do
-        call hists(:)%kill
-        deallocate(hists)
-    end subroutine calc_histogram_quality_scalars
 
     subroutine measure_cavg_foreground_geometry( img, bin_img, cc_img, rmat_cc, rmat_disc, disc_area, rad_px, outside_frac, &
                                                  centroid_norm, cc_area_frac, cc_diameter_norm, nccs_valid, no_component, &
@@ -407,12 +393,12 @@ contains
     end subroutine measure_cavg_foreground_geometry
 
     subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, center_edge_snr, presence_score, &
-                                           contrast, detail_bg_snr, detail_signal_ratio, detail_coverage, &
+                                           detail_bg_snr, detail_signal_ratio, detail_coverage, &
                                            detail_edge_density )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
         real,         intent(out)   :: locvar_fg, locvar_bg, center_edge_snr
-        real,         intent(out)   :: presence_score, contrast
+        real,         intent(out)   :: presence_score
         real,         intent(out)   :: detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density
         type(image)       :: img, img_bin
         real, allocatable :: bin_mask(:,:,:)
@@ -420,7 +406,6 @@ contains
         img  = img_src
         call img%zero_edgeavg()
         presence_score = img%presence()
-        contrast       = img%contrast()
         center_edge_snr = img%center_edge_snr(rad_px)
         call measure_cavg_detail_metrics(img, rad_px, detail_bg_snr, detail_signal_ratio, &
                                          detail_coverage, detail_edge_density)
@@ -463,8 +448,8 @@ contains
         ! The detail diagnostics are deliberately cheap scalar probes: one
         ! broad 20-6 A band-pass, then real-space in-mask/background ratios
         ! and coverage estimates. They stay zero-weighted in the built-ins
-        ! until validation shows whether they capture the missing
-        ! "molecular texture versus smooth ice blob" axis.
+        ! until validation shows whether they capture the molecular-texture
+        ! versus smooth-blob axis.
         call detail_img%bp(DETAIL_BAND_HP_A, DETAIL_BAND_LP_A)
         orig   = img_src%get_rmat()
         detail = detail_img%get_rmat()

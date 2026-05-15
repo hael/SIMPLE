@@ -2,9 +2,11 @@
 
 ## Overview
 
-`model_cavgs_rejection` is the SIMPLE class-average quality selection program and the validation harness for the class-average quality library. It replaces a field of scalar rejection thresholds with an explicit, interpretable multivariate model. The program evaluates every 2D class average, applies hard validity rejects for non-negotiable failures, measures a fixed inventory of quality features, normalizes those features within the dataset, and applies an instantiable quality model that partitions the remaining class averages into accepted and rejected sets.
+`model_cavgs_rejection` is the SIMPLE class-average quality selection program and the validation harness for the class-average quality library. The program evaluates every 2D class average, applies hard validity rejects for non-negotiable failures, measures a fixed inventory of scalar quality features, normalizes those features within the dataset, and applies an instantiable quality model that partitions the remaining class averages into accepted and rejected sets.
 
 The current implementation is intentionally not a black-box classifier. A model is a named `linear_boundary` specification with feature weights, threshold controls, policy flags, and a context label such as `chunk` or `pool`. Learned models can be used directly from a model file, and a separate promotion mode can emit the Fortran code needed to add a validated learned model as a built-in library option.
+
+The current policy is scalar-feature vector learning. Pairwise histogram/spectrum matrices and relational clustering-style quality evidence are not part of the default model path. Clustering is used only as a thresholding helper in normalized scalar-feature space; the quality evidence itself comes from interpretable per-class scalar metrics and their learned weights.
 
 There is one user-facing selector: `quality_model`. If no `quality_model` is provided, SIMPLE initializes `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, currently `chunk_default_v2`. There is no separate `rejection_type` parameter and no user-visible `default` model name; chunk/pool behavior is encoded by the selected model itself.
 
@@ -21,7 +23,7 @@ The current implementation lives under `src/main/cavg_quality`:
 
 The command entry point is `exec_model_cavgs_rejection` in `src/main/commanders/simple/simple_commanders_cavgs.f90`.
 
-Other SIMPLE workflows should treat `simple_cavg_quality` as a library backend. The intended streaming integration is for `simple_microchunked2D` to use an internal logical flag, for example `USE_CAVG_QUALITY_BACKEND`, to choose between the new quality backend and the legacy scalar cascade during transition. When enabled, that backend should instantiate `cavg_quality_model`, initialize `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, call `evaluate_cavg_quality`, and map the resulting states and scores through the same project fields currently updated by the scalar rejector.
+Other SIMPLE workflows should treat `simple_cavg_quality` as a library backend. The intended streaming integration is for `simple_microchunked2D` to use an internal logical flag, for example `USE_CAVG_QUALITY_BACKEND`, to route class-average rejection through the quality backend. When enabled, that backend should instantiate `cavg_quality_model`, initialize `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, call `evaluate_cavg_quality`, and map the resulting states and scores through the standard project fields for class-average selection.
 
 ## Quality Modes
 
@@ -97,15 +99,15 @@ The current built-in presets are:
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk_default_v2` is the default chunk/stream operating point promoted from the representative batch10chunk learning cycle after resolution and foreground-geometry failures were moved into hard rejection. Its current feature bank excludes the former scalar histogram-neighborhood feature, pairwise histogram/spectrum matrices, and unstable spectrum/ice/foreground-background ratio diagnostics. The promoted feature policy is `all15_no_geom_softs`, which leaves `mask_inside` and `single_component` at zero weight because those soft geometry diagnostics duplicate the hard connected-component rejection, and also leaves `cc_area_frac` at zero weight because it was inconsistent across the representative chunk set. `presence`, `log_contrast`, and masked histogram variance remain available to the scalar score and clustering distance. The internal-detail diagnostics are currently zero-weighted in this built-in model, so they appear in `analyze` output without changing the promoted decision boundary.
+`chunk_default_v2` is the default chunk/stream operating point. The current promoted feature policy is `full_geom_pruned`, which leaves `mask_inside`, `single_component`, and `cc_area_frac` at zero weight because foreground geometry is handled by the hard validity gate or is not stable enough as soft model evidence. Resolution remains active model evidence through the nonzero-weight `neg_log_res` feature.
 
-The current chunk model uses `boundary_margin=0.10`, `min_score_separation=0.15`, low-separation Otsu enabled, Otsu-window threshold replacement enabled, cluster rescue disabled, and minimum accepted fraction disabled. `chunk_default_v1` is retained as the legacy chunk preset. `pool_default_v1` is the more recall-preserving operating point for larger pooled or batch sets and enables minimum-accepted-fraction behavior.
+The current chunk model uses `boundary_margin=0.10`, `min_score_separation=0.15`, low-separation Otsu enabled, Otsu-window threshold replacement enabled, cluster rescue disabled, and minimum accepted fraction disabled. `chunk_default_v1` is an alternate chunk preset. `pool_default_v1` is the more recall-preserving operating point for larger pooled or batch sets and enables minimum-accepted-fraction behavior.
 
 ## Feature Space
 
 The feature inventory is maintained in `simple_cavg_quality_feats.f90`. Feature extraction produces raw per-class values and a normalized feature matrix. The model uses the normalized `z_*` features, not the raw feature values.
 
-The current feature set has 19 scalar features:
+The current feature set has 16 scalar features:
 
 - `log_pop`
 - `neg_log_res`
@@ -116,24 +118,21 @@ The current feature set has 19 scalar features:
 - `single_component`
 - `corr_frc_proxy`
 - `log_center_edge_snr`
-- `hist_entropy`
 - `cc_area_frac`
 - `cc_diameter_norm`
 - `presence`
-- `log_contrast`
-- `log_hist_variance`
 - `log_detail_bg_snr`
 - `log_detail_signal_ratio`
 - `detail_coverage`
 - `detail_edge_density`
 
-A former scalar histogram-neighborhood feature, pairwise histogram/spectrum distance matrices, `spectrum_dynrange`, `neg_ice_score`, and `log_fg_bg_locvar_ratio` were removed because representative chunk training showed they were weak, unstable, or redundant for the default scalar model.
+The current model path is scalar-only. Pairwise histogram/spectrum distance matrices, relational quality matrices, histogram-neighborhood density, and global intensity-softness descriptors are not part of the active feature bank.
 
-The four internal-detail diagnostics are intended to test whether the model is missing a direct measure of organized in-mask molecular texture. They use one broad 20-6 A band-pass per class average and summarize detail relative to outside-mask background, detail relative to total in-mask signal, in-mask detail coverage, and band-passed edge density. They are scalar diagnostics rather than pairwise distances.
+The four internal-detail diagnostics measure organized in-mask molecular texture. They use one broad 20-6 A band-pass per class average and summarize detail relative to outside-mask background, detail relative to total in-mask signal, in-mask detail coverage, and band-passed edge density. They are scalar diagnostics rather than pairwise distances.
 
-Resolution and foreground geometry also contribute hard validity rejects before the learned model is fit. Following the microchunk rejection principle, a class with stored `cls2D` resolution worse than `40 A` is hard rejected. After Otsu segmentation and connected-component cleanup, a class is also hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar resolution and geometry features remain in the analysis table as diagnostics, but catastrophic low-resolution or outside-mask failures are not left for the model to rescue.
+Resolution has a dual role. The continuous `neg_log_res` feature is part of the learned model and contributes to both the linear score and the feature-space distance whenever its learned weight is nonzero. Only catastrophic resolution failure is outside the learned boundary: a class with stored `cls2D` resolution worse than `40 A` is hard rejected before fitting. Foreground geometry is handled more conservatively; after Otsu segmentation and connected-component cleanup, a class is hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar geometry features remain in the analysis table as diagnostics, but catastrophic low-resolution or outside-mask failures are not left for the model to rescue.
 
-The feature policy is encoded by zeroing excluded weights. Nonzero-weight features contribute to both the linear score and the k-medoids feature-space distance; hard rejections remain outside the learned policy and are applied before clustering. The current default intentionally keeps the backend scalar-only: pairwise histogram and spectrum matrices are not part of the model search or classification path.
+The feature policy is encoded by zeroing excluded weights. Nonzero-weight features contribute to both the linear score and the k-medoids feature-space distance; hard rejections remain outside the learned policy and are applied before clustering. The current default keeps the backend scalar-only: pairwise histogram and spectrum matrices are not part of the model search or classification path.
 
 Feature definitions should remain centralized in `simple_cavg_quality_feats.f90`, so future feature additions are visible in one inventory rather than being scattered through model code.
 
@@ -190,7 +189,7 @@ Input is a file table of `cavgs_quality_analysis.txt` files. For each analysis f
 
 - the normalized `z_*` feature columns by name;
 - `manual_state`, where `manual_state > 0` is the reference accepted class;
-- `hard_reject`. For legacy analysis files, learn-mode also infers the current hard resolution and geometry vetoes from raw diagnostic columns when they are present.
+- `hard_reject`. When raw diagnostic columns are present, learn mode can also infer the current hard resolution and geometry vetoes directly from those columns.
 
 Hard-rejected rows are not part of model fitting. They are excluded from suggested feature-weight AUCs, candidate-model scoring, feature-drop diagnostics, and leave-one-dataset-out feature-group screens. They remain in the report as hard-rejection diagnostics, especially `hard_rejected_manual_good`, because those cases indicate that the upstream validity gate may need attention rather than that the learned model should move its boundary.
 
@@ -208,7 +207,7 @@ The learner then searches a fixed grid. Candidate weights are not blended with t
 candidate_weights = normalize(policy_mask * suggested_weights)
 ```
 
-If every active feature has chance-level AUC and the masked weight sum is zero, the candidate receives uniform weights over the active policy features. This is a neutral fallback, not a return to the historical base weights.
+If every active feature has chance-level AUC and the masked weight sum is zero, the candidate receives uniform weights over the active policy features. This is a neutral fallback, not base-model weight reuse.
 
 The current grid searches:
 
@@ -220,7 +219,7 @@ The current grid searches:
 - Otsu-window minimum and maximum offsets when Otsu-window thresholding is enabled;
 - pool minimum accepted fraction, only when the base model context is `pool`.
 
-The feature-policy candidates are hand-curated masks over the scalar feature bank. They include the original base scalar subsets, histogram-variance variants, full-feature variants, and geometry-pruned full-feature variants such as `all15_no_geom_softs`, which keeps the newer scalar diagnostics while excluding the soft geometry flags most duplicated by hard geometry rejection and the unstable connected-component area fraction.
+The feature-policy candidates are hand-curated masks over the scalar feature bank. They include base scalar subsets, full-feature variants, and geometry-pruned variants such as `full_geom_pruned`.
 
 Each candidate is evaluated by running the full model classifier on every training dataset, then scoring only the non-hard-rejected rows. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets with trainable rows, so each informative dataset contributes equally.
 
@@ -320,7 +319,7 @@ simple_exec prg=model_cavgs_rejection quality_mode=analyze \
   infile=cavgs_quality_model_chunk_learned.txt
 ```
 
-Compare the new analysis file and accepted/rejected stacks against the original manual selection and against the previous promoted model.
+Compare the new analysis file and accepted/rejected stacks against the manual selection and the selected built-in model.
 
 ### 5. Apply the Learned Model
 

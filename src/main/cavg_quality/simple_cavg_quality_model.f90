@@ -5,6 +5,7 @@ use simple_error,              only: simple_exception
 use simple_string_utils,       only: str_is_true, csv_field, lowercase, uppercase
 use simple_clustering_utils,   only: cluster_dmat
 use simple_srch_sort_loc,      only: hpsort
+use simple_cavg_quality_feats, only: apply_cavg_quality_model_feature_exclusions
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, cavg_quality_result
 use simple_cavg_quality_stats, only: normalize_quality_dmat
 implicit none
@@ -41,26 +42,21 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     3.953488E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     1.860465E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
-! Batch-trained chunk default promoted from the representative batch10chunk
-! learning round after hard rejection was separated from model fitting and Otsu
-! threshold policy was added to the internal learn grid. The selected policy
-! keeps the cheap scalar diagnostics that generalized best on stream chunks,
-! while zeroing mask_inside, single_component, and cc_area_frac because those
-! soft geometry flags duplicate hard geometry rejection or were inconsistent
-! across the representative chunk set. Pairwise distance matrices and unstable
-! spectrum, ice, and foreground/background ratio diagnostics have been removed
-! from the default scalar model space. The appended internal-detail diagnostics
-! are currently zero-weighted so they can be validated in analyze mode before
-! changing the promoted decision boundary.
+! Current chunk default. Resolution has two roles: catastrophic failures
+! (res > CAVG_RES_HARD_REJECT_A) are hard rejects, while the continuous
+! neg_log_res scalar remains active model evidence for all trainable rows.
+! The selected policy keeps scalar features with stable quality direction
+! and zeroes soft geometry fields that duplicate hard foreground rejection.
+! Misleading global intensity-softness descriptors are not part of the
+! feature bank; diagnostic-only features should explain hard rejects or test
+! an active quality hypothesis.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    8.404870E-02, 1.065039E-01, 0.000000E+00, 3.393937E-02, &
-    8.439852E-02, 8.831557E-02, 0.000000E+00, 1.135785E-01, &
-    6.035764E-02, 7.611332E-02, 0.000000E+00, 5.907804E-02, &
-    9.650873E-02, 1.008953E-01, 9.626245E-02, 0.000000E+00, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+    1.156534E-01, 1.465524E-01, 0.000000E+00, 4.670155E-02, &
+    1.161348E-01, 1.215248E-01, 0.000000E+00, 1.562873E-01, &
+    8.305385E-02, 0.000000E+00, 8.129309E-02, 1.327988E-01, &
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.10
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
@@ -70,7 +66,7 @@ type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: family                  = 'linear_boundary'
     character(len=32) :: context                 = 'chunk'
-    character(len=32) :: feature_policy          = 'all15_no_geom_softs'
+    character(len=32) :: feature_policy          = 'full_geom_pruned'
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
     real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
@@ -175,7 +171,7 @@ contains
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
         spec%family                  = 'linear_boundary'
         spec%context                 = 'chunk'
-        spec%feature_policy          = 'all15_no_geom_softs'
+        spec%feature_policy          = 'full_geom_pruned'
         spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
         spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
         spec%min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
@@ -230,10 +226,17 @@ contains
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
         self%weights = max(0.0, self%weights)
+        call apply_cavg_quality_model_feature_exclusions(self%weights)
+        if( sum(self%weights) <= EPS )then
+            self%weights = CAVG_QUALITY_DEFAULT_WEIGHTS
+            call apply_cavg_quality_model_feature_exclusions(self%weights)
+        endif
         if( sum(self%weights) > EPS )then
             self%weights = self%weights / sum(self%weights)
         else
-            self%weights = CAVG_QUALITY_DEFAULT_WEIGHTS
+            self%weights = 1.0 / real(CAVG_QUALITY_NFEATS)
+            call apply_cavg_quality_model_feature_exclusions(self%weights)
+            self%weights = self%weights / sum(self%weights)
         endif
     end subroutine normalize
 

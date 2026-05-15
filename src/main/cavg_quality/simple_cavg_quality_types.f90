@@ -14,7 +14,7 @@ public :: cavg_quality_training_dataset
 public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
-integer, parameter :: CAVG_QUALITY_NFEATS  = 19
+integer, parameter :: CAVG_QUALITY_NFEATS  = 16
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
 
@@ -22,6 +22,7 @@ type :: cavg_quality_feature_def
     character(len=32)  :: name        = ''
     character(len=32)  :: direction   = 'higher_is_better'
     character(len=160) :: description = ''
+    character(len=32)  :: family      = 'general'
 end type cavg_quality_feature_def
 
 type :: cavg_quality_model_spec

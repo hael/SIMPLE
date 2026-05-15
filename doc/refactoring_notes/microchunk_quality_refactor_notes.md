@@ -1,54 +1,49 @@
 # Microchunk Quality Refactor Notes
 
 **Date:** May 15, 2026
-**Context:** Follow-up to the `model_cavgs_rejection` experiments on difficult real-world stream partitions, now focused on integrating the current `chunk_default_v2` model into `cluster2D_microchunked` without disturbing Joe's streaming/microchunk orchestration.
+**Context:** Integration note for using the current `chunk_default_v2` class-average quality model inside `cluster2D_microchunked` while preserving the streaming/microchunk orchestration.
 
 ## Short Summary
 
-Joe's `cluster2D_microchunked` code already solves the hard orchestration problem: it partitions the stream into bounded projects, runs pass-1 and pass-2 ab initio 2D tiers, builds a reference chunk, matches later chunks against that reference, tracks completion with sentinel files, and combines match chunks into the final project. The weaker piece is not the chunk scheduler. It is the class-average quality gate inside `microchunked2D%reject_cavgs`, which still uses a cascade of scalar threshold tests.
+`cluster2D_microchunked` owns the streaming orchestration: it partitions the stream into bounded projects, runs pass-1 and pass-2 ab initio 2D tiers, builds a reference chunk, matches later chunks against that reference, tracks completion with sentinel files, and combines match chunks into the final project. The class-average quality decision should come from the shared `simple_cavg_quality` backend.
 
-The new `simple_cavg_quality` implementation gives us a better quality decision layer:
+`simple_cavg_quality` provides the quality decision layer:
 
 - extract a compact feature vector for every class average
 - robustly normalize features within each run
 - keep only conservative hard rejections as pre-clustering vetoes
-- use k-medoids in feature space to identify good and bad class-average groups
+- use k-medoids only inside normalized scalar-feature space to identify good and bad class-average groups
 - derive an automatic score threshold from the cluster means
 - preserve raw and normalized feature tables for validation
 
-The main refactor opportunity is therefore to keep the microchunk lifecycle as-is and replace or wrap only the class-average rejection policy. This should be controlled by a single internal logical flag in the microchunk implementation, not by a new command-line option and not by a second rejection-type abstraction.
+The main refactor opportunity is to keep the microchunk lifecycle as-is and route only the class-average rejection policy through the quality backend. This should be controlled by a single internal logical flag in the microchunk implementation, not by a new command-line option and not by a second rejection-type abstraction.
 
-The intended new backend is the current chunk model:
+The quality backend is the current chunk model:
 
 - instantiate `cavg_quality_model`
 - initialize it with `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, currently `chunk_default_v2`
 - call `evaluate_cavg_quality`
-- propagate `quality%states`, `quality%scores`, and cluster annotations into the same project fields the scalar rejector updates today
+- propagate `quality%states`, `quality%scores`, and cluster annotations into the standard project fields for class-average selection
 
-The selected model owns the decision boundary, feature policy, hard-reject behavior, and any later retrained chunk default. The microchunk code should only decide whether to use the quality backend or the legacy scalar backend during the transition.
+The selected model owns the decision boundary, feature policy, hard-reject behavior, and any later retrained chunk default. The microchunk code should only decide whether to use the quality backend.
 
-## What We Learned From The Experiments
+## Current Quality Policy
 
-### 1. Scalar Gates Are Useful But Too Brittle Alone
+### 1. Quality Evidence Is Scalar And Vectorized
 
-The original microchunk rejector applies independent decisions:
+The supported direction is scalar quality metrics as features in a normalized vectorized learning analysis. Pairwise histogram/spectrum matrices and relational clustering-style quality evidence are not part of the active policy. Clustering is used as an automatic thresholding helper within scalar feature space, not as a pairwise image-similarity model.
 
-- population floor
-- FSC resolution ceiling
-- mask/connected-component rejection
-- local-variance rejection
+Each feature is allowed to be weak alone. The model learns how stable scalar evidence combines across population support, resolution, mask geometry, local variance, correlation/FRC proxy, center-edge signal, particle presence, and internal detail.
 
-This is simple and fast, but each test is forced to be either a hard veto or irrelevant. That made tuning awkward because several metrics are weak alone but useful in combination. Population and resolution were especially tempting to over-weight because they often separate easy cases, but they do not generalize cleanly across difficult real-world stream partitions.
-
-### 2. Robust Feature Normalization Was Crucial
+### 2. Robust Feature Normalization Is Required
 
 The useful unit of comparison is not the raw scalar metric. It is the metric relative to the distribution of class averages in the current project or chunk. The successful implementation uses median/MAD normalization over non-hard-rejected classes, then clips normalized values to limit outlier leverage.
 
-This made feature values comparable across datasets with different particle counts, different absolute class-average contrast, and different failure modes.
+This makes feature values comparable across datasets with different particle counts, different absolute class-average contrast, and different failure modes.
 
-### 3. Conservative Hard Rejection Should Stay Conservative
+### 3. Conservative Hard Rejection Stays Conservative
 
-The new quality module only hard-rejects pathological cases:
+The quality module only hard-rejects pathological cases:
 
 - zero population
 - stored class resolution worse than 40 A
@@ -57,17 +52,19 @@ The new quality module only hard-rejects pathological cases:
 - more than 10 pixels of the largest foreground component outside the mask disc
 - essentially zero local variance in both foreground and background
 
-This was important. Aggressive hard rejections are difficult to recover from because they bypass the multivariate decision. Most real examples should enter feature-space scoring, even if they look weak by one scalar metric.
+Aggressive hard rejections are difficult to recover from because they bypass the multivariate decision. Most real examples should enter feature-space scoring, even if they look weak by one scalar metric.
 
-### 4. Some Candidate Features Did Not Survive Representative Chunk Training
+Resolution is not otherwise removed from the model. The hard gate only handles catastrophic `res > 40 A` failures; ordinary resolution differences remain active scalar evidence through `neg_log_res`.
 
-The current feature bank no longer includes `spectrum_dynrange`, `neg_ice_score`, or `log_fg_bg_locvar_ratio`, and the histogram/spectrum pairwise matrices have been removed from the model infrastructure. Those signals either failed to separate manual good/bad classes consistently, were redundant with retained scalar features, or inverted on difficult stream partitions.
+### 4. Feature Families Define Model Eligibility
 
-The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. It also now emits zero-weighted internal-detail diagnostics from a broad 20-6 A band-pass so ApoF-like smooth-blob failures can be evaluated without changing the promoted decision boundary. The current chunk default was promoted from the representative batch10chunk learning cycle with the `all15_no_geom_softs` policy, which zeros `mask_inside` and `single_component` because those soft geometry flags duplicate the hard connected-component rejection, and also zeros `cc_area_frac` because it was inconsistent across the representative chunk set.
+The model infrastructure excludes histogram/spectrum pairwise matrices. The feature inventory has explicit families, and diagnostic-only entries are reserved for hard-reject explanation or active feature hypotheses. Local variance, internal detail, resolution, population support, and presence remain eligible model evidence.
 
-### 5. The Current Best General Profile Is Still Local-Signal Heavy
+The feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, connected-component shape, central presence, and internal-detail diagnostics from a broad 20-6 A band-pass.
 
-The chunk default has evolved into a scalar feature-space model with learned emphasis on population/resolution support, local foreground/background variance, correlation/FRC proxy, center-edge signal, histogram entropy, and connected-component diameter. The obsolete spectrum dynamic-range and ice-ring diagnostics are no longer part of the feature vector.
+### 5. The Chunk Profile Is Local-Signal Heavy
+
+The chunk default is a scalar feature-space model with learned emphasis on population/resolution support, local foreground/background variance, correlation/FRC proxy, center-edge signal, particle presence, and connected-component diameter.
 
 The practical interpretation is:
 
@@ -77,13 +74,11 @@ The practical interpretation is:
 - centering helps catch pathological classes without becoming a hard rule
 - background/local context is useful when combined with foreground signal
 
-On the representative stream-chunk learning set in batch10chunk, this became the promoted `chunk_default_v2` profile.
+### 6. The Boundary Margin Remains Internal
 
-### 6. The Boundary Margin Should Remain Internal
+The signed boundary margin is useful for calibration, but it is an internal model parameter in `simple_cavg_quality`, not a command-line knob. Tuning should happen through the learn/promote workflow, with validation summaries checked against trusted manual selections.
 
-The signed boundary margin is useful for calibration, but exposing it as `quality_recall_margin` on the command line was confusing. It is now an internal constant in `simple_cavg_quality`. Future tuning should happen in code, with validation summaries checked against trusted manual selections, not through casual runtime tweaking.
-
-## What Joe's Microchunk Code Already Does Well
+## Microchunk Orchestration Responsibilities
 
 `simple_stream_cluster2D_microchunked` and `simple_microchunked2D` have several strong design choices that we should preserve:
 
@@ -107,7 +102,7 @@ The backend choice should be a module-local logical constant or private logical 
 USE_CAVG_QUALITY_BACKEND = .true.
 ```
 
-When this flag is `.true.`, `microchunked2D%reject_cavgs` should use the current chunk model. When it is `.false.`, the existing scalar cascade remains available as a short-term fallback for debugging and side-by-side validation. This switch should not be exposed in the UI.
+When this flag is `.true.`, `microchunked2D%reject_cavgs` should use the current chunk model. This switch should not be exposed in the UI.
 
 Concretely:
 
@@ -129,7 +124,7 @@ Concretely:
    - refchunk still captures `self%refs` and `self%box`
    - match chunks still update accepted/rejected particle counters
 
-4. Keep `cluster2D_rejector` only behind the `.false.` branch of the logical backend flag until stream validation confirms that the quality model is stable enough to remove the old path.
+4. Keep any non-quality-backend branch private and temporary, for debugging and side-by-side validation only.
 
 This should make the change low-risk: the scheduler sees the same class states and particle-state side effects as before, but those states come from the validated feature-space selector.
 
@@ -137,7 +132,7 @@ This should make the change low-risk: the scheduler sees the same class states a
 
 ### Stage 1: Share Project Update Code
 
-Right now `exec_model_cavgs_rejection` and `microchunked2D%reject_cavgs` each know how to propagate class-average decisions into project state. Extract the common state-mapping work into a small helper module or module procedure.
+`exec_model_cavgs_rejection` and `microchunked2D%reject_cavgs` both need to propagate class-average decisions into project state. Extract the common state-mapping work into a small helper module or module procedure.
 
 Candidate responsibilities:
 
@@ -156,11 +151,11 @@ Introduce a local logical choice inside `simple_microchunked2D`, not a user-faci
 USE_CAVG_QUALITY_BACKEND = .true.
 ```
 
-This keeps the transition explicit and cheap to reverse during validation without adding another operational knob. The true branch should use `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`; it should not reintroduce `rejection_type`, and it should not carry a separate set of scalar thresholds in the microchunk layer.
+This keeps the backend choice explicit during validation without adding another operational knob. The true branch should use `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`; it should not add `rejection_type`, and it should not carry a separate set of scalar thresholds in the microchunk layer.
 
-### Stage 3: Let The Current Chunk Model Be The First Integrated Profile
+### Stage 3: Use The Current Chunk Model As The Integrated Profile
 
-The current `chunk_default_v2` profile was tuned on difficult stream partitions and should be the default first integration candidate. However, microchunk tiers differ:
+The current `chunk_default_v2` profile is the default first integration candidate. Microchunk tiers differ:
 
 - pass-1 chunks are smaller and noisier
 - pass-2 chunks have already passed one quality gate
@@ -193,13 +188,13 @@ Each model should specify weights, boundary margin, minimum score separation, fe
 Once the quality-vector backend is validated, `simple_cluster2D_rejector` can be reduced to either:
 
 - a compatibility wrapper around `simple_cavg_quality`, or
-- a legacy scalar backend retained only for old workflows/tests
+- a private scalar backend available only for targeted debugging/tests
 
 This would avoid two diverging definitions of "bad class average."
 
 ### Stage 5: Standardize Diagnostics
 
-The most useful diagnostic outputs from `model_cavgs_rejection` were:
+The useful diagnostic outputs from `model_cavgs_rejection` are:
 
 - `cavgs_quality_features.txt`
 - `cavgs_quality_reference_summary.txt`
@@ -245,7 +240,7 @@ write selected/rejected stacks
 touch REJECTION_FINISHED
 ```
 
-With the flag disabled, the current scalar rejector path remains available temporarily. The outer microchunk flow does not need to change in either branch.
+The outer microchunk flow does not need to change: only the decision source for class-average rejection changes.
 
 ## Open Validation Questions
 
@@ -257,6 +252,6 @@ With the flag disabled, the current scalar rejector path remains available tempo
 
 ## Recommended Next Step
 
-Integrate `simple_cavg_quality` into `microchunked2D%reject_cavgs` behind the internal `USE_CAVG_QUALITY_BACKEND` logical flag and run the same difficult stream partitions again. The enabled path should initialize `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, so future retraining and promotion of `chunk_default_v2` automatically changes the stream behavior without touching microchunk code. If the state propagation and sentinel behavior remain unchanged, this should be a local refactor rather than a scheduler rewrite.
+Integrate `simple_cavg_quality` into `microchunked2D%reject_cavgs` behind the internal `USE_CAVG_QUALITY_BACKEND` logical flag and validate on difficult stream partitions. The enabled path should initialize `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, so future retraining and promotion of `chunk_default_v2` automatically changes the stream behavior without touching microchunk code. If the state propagation and sentinel behavior remain unchanged, this should be a local refactor rather than a scheduler rewrite.
 
 The safest initial target is refchunk and match rejection, because those tiers most closely resemble the real-world validation sets. Pass-1/pass-2 can follow once we know the quality-vector behavior is stable on smaller chunks.

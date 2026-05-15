@@ -1,12 +1,12 @@
 # Class-Average Quality Metric Inventory
 
 **Date:** May 14, 2026
-**Status:** Developer inventory / future feature planning
+**Status:** Developer policy / future feature planning
 **Scope:** Existing SIMPLE routines that can support scalar features for `model_cavgs_rejection`.
 
 ## Purpose
 
-This note inventories image-processing, class-average, and clustering routines already present in SIMPLE that can be reused when extending the `model_cavgs_rejection` feature bank. The goal is to keep quality selection interpretable and reproducible: every feature should have a clear source, a documented direction, and a diagnostic raw value in the analysis table.
+This note inventories image-processing and class-average routines already present in SIMPLE that can support the `model_cavgs_rejection` scalar feature bank. The goal is to keep quality selection interpretable and reproducible: every feature should have a clear source, a documented direction, a feature family, and a diagnostic raw value in the analysis table.
 
 The current implementation treats class-average quality as a feature-vector and model-selection problem:
 
@@ -17,14 +17,16 @@ The current implementation treats class-average quality as a feature-vector and 
 5. Preserve the raw features, normalized features, model parameters, and manual reference labels in `cavgs_quality_analysis.txt`.
 6. Use `quality_mode=learn` to tune interpretable model parameters against trusted manual selections.
 
+The current feature policy is deliberately scalar. Pairwise histogram/spectrum matrices and relational clustering-style quality metrics are not part of the default path. The supported direction is vectorized learning over normalized scalar quality metrics, with clustering used only to help choose an automatic decision threshold inside that scalar feature space.
+
 ## Current Implementation
 
-The refactored code lives under `src/main/cavg_quality`:
+The code lives under `src/main/cavg_quality`:
 
 - `simple_cavg_quality_types.f90`: shared constants and derived types.
-- `simple_cavg_quality_feats.f90`: feature definitions, feature extraction, robust normalization, and histogram distance extraction.
+- `simple_cavg_quality_feats.f90`: feature definitions, feature-family metadata, feature extraction, and robust normalization.
 - `simple_cavg_quality_stats.f90`: binary metrics, AUC, robust summaries, and distance-matrix normalization helpers.
-- `simple_cavg_quality_model.f90`: built-in model presets, model file I/O, linear scoring, mixed-distance clustering, threshold policy, and promotion-code generation.
+- `simple_cavg_quality_model.f90`: built-in model presets, model file I/O, linear scoring, scalar feature-space clustering, threshold policy, and promotion-code generation.
 - `simple_cavg_quality_analysis.f90`: `apply`/`analyze` evaluation and reporting.
 - `simple_cavg_quality_learn.f90`: analysis-table reader and grid search over interpretable model parameters.
 
@@ -52,36 +54,33 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 7 | `single_component` | `image_bin%find_ccs` | higher is better | Negative distance from exactly one valid component. |
 | 8 | `corr_frc_proxy` | optional `cls2D` `corr` | higher is better | Uses stored correlation/FRC-like metadata when present. |
 | 9 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
-| 10 | `hist_entropy` | `histogram%entropy` | diagnostic | Bounded entropy from masked intensity histograms. |
-| 11 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
-| 12 | `cc_diameter_norm` | `image_bin%diameter_cc` | diagnostic | Main connected-component diameter divided by the expected mask diameter. |
-| 13 | `presence` | `image%presence` | higher is better | Central signal excess relative to border background noise. |
-| 14 | `log_contrast` | `image%contrast` | diagnostic | Log full-image intensity standard deviation after edge background subtraction. |
-| 15 | `log_hist_variance` | `histogram%variance` | diagnostic | Log masked intensity-histogram variance. |
-| 16 | `log_detail_bg_snr` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to outside-mask detail RMS. |
-| 17 | `log_detail_signal_ratio` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to in-mask total signal RMS. |
-| 18 | `detail_coverage` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with detail above background and image-scale thresholds. |
-| 19 | `detail_edge_density` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with band-passed gradient above background and image-scale thresholds. |
+| 10 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
+| 11 | `cc_diameter_norm` | `image_bin%diameter_cc` | diagnostic | Main connected-component diameter divided by the expected mask diameter. |
+| 12 | `presence` | `image%presence` | higher is better | Central signal excess relative to border background noise. |
+| 13 | `log_detail_bg_snr` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to outside-mask detail RMS. |
+| 14 | `log_detail_signal_ratio` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to in-mask total signal RMS. |
+| 15 | `detail_coverage` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with detail above background and image-scale thresholds. |
+| 16 | `detail_edge_density` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with band-passed gradient above background and image-scale thresholds. |
 
-Pairwise histogram and rotational-spectrum matrices are no longer part of the default model infrastructure. The active histogram features are scalar entropy and variance only. The earlier `hist_knn` scalar was removed because nearest-neighbor histogram density did not have a stable quality direction across datasets.
+Pairwise histogram and rotational-spectrum matrices are outside the model infrastructure. Global intensity-softness descriptors are not part of the feature bank.
 
-The representative chunk runs also removed `spectrum_dynrange`, `neg_ice_score`, and `log_fg_bg_locvar_ratio` from the feature bank. Those signals were either weak, redundant with retained scalar features, or inverted on some datasets.
+The model policy favors scalar features with stable quality direction under robust per-dataset normalization.
 
-The internal-detail features are zero-weighted in the current built-in defaults. They are meant to answer a specific validation question: whether smooth ice/blob-like class averages that pass the scalar geometry and contrast checks are separable by direct measurements of organized in-mask molecular texture.
+The internal-detail features are zero-weighted in the current built-in defaults. They are meant to answer a specific validation question: whether smooth blob-like class averages that pass the scalar geometry checks are separable by direct measurements of organized in-mask molecular texture.
 
-Resolution and mask-geometry validity are deliberately outside the learned model. The feature extractor hard rejects class averages when `cls2D res > 40 A`, when the Otsu/connected-component pass finds no valid foreground component, when any foreground-component centroid lies outside the mask radius, or when more than 10 pixels of the largest component lie outside the mask disc. This mirrors the proven microchunk rejection concept without depending on the stream/microchunk modules.
+Resolution is both a hard validity check and an active model feature. The feature extractor hard rejects class averages when `cls2D res > 40 A`, but non-catastrophic resolution variation remains in the learned model through `neg_log_res`. Mask-geometry validity is handled as a hard gate when the Otsu/connected-component pass finds no valid foreground component, when any foreground-component centroid lies outside the mask radius, or when more than 10 pixels of the largest component lie outside the mask disc. These hard rejections are implemented in the quality library and do not depend on stream/microchunk modules.
 
 ## Current Model Controls
 
 The built-in models are complete `linear_boundary` presets:
 
-- `chunk_default_v2`: current default chunk/stream behavior, promoted from the representative batch10chunk learning cycle with the `all15_no_geom_softs` feature policy.
-- `chunk_default_v1`: legacy chunk/stream behavior retained for comparison.
+- `chunk_default_v2`: current default chunk/stream behavior, guarded by the `full_geom_pruned` feature policy.
+- `chunk_default_v1`: alternate chunk/stream preset.
 - `pool_default_v1`: recall-preserving behavior for larger pooled/batch datasets.
 
 The important model controls are:
 
-- `feature_policy`: learn-mode candidate name describing which scalar features are allowed into the score and clustering distance; the model file encodes this by zeroing excluded weights. The current chunk default zeros `mask_inside` and `single_component` because those soft geometry flags duplicate the hard connected-component rejection, and zeros `cc_area_frac` because it was inconsistent across the representative chunk set.
+- `feature_policy`: learn-mode candidate name describing which scalar features are allowed into the score and clustering distance; the model file encodes this by zeroing excluded weights. The current chunk default zeros `mask_inside` and `single_component` because those soft geometry flags duplicate the hard connected-component rejection, and zeros `cc_area_frac` because its direction is not stable enough for the chunk default.
 - `feature_weights`: nonnegative linear score coefficients, normalized to sum to one.
 - `boundary_margin`: shifts the decision threshold; more negative rejects more aggressively, more positive preserves more borderline classes.
 - `min_score_separation`: below this separation the model treats the partition as unreliable unless low-separation Otsu is enabled and acceptable.
@@ -89,7 +88,7 @@ The important model controls are:
 - `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
 - `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
 
-The current learner searches feature-policy candidates, feature weights derived from the training data, minimum score separation, boundary margin, Otsu threshold controls, and pool minimum accepted fraction. The candidate policies include geometry-pruned full-feature options such as `all15_no_geom_softs`, which keeps the newer scalar diagnostics while excluding the soft geometry flags most duplicated by hard geometry rejection and the unstable connected-component area fraction.
+The current learner searches feature-policy candidates, feature weights derived from the training data, minimum score separation, boundary margin, Otsu threshold controls, and pool minimum accepted fraction. The policy grid includes base, full, and geometry-pruned variants, including `full_geom_pruned`.
 
 ## Reusable Existing Routines
 
@@ -106,9 +105,9 @@ Relevant routines:
 - `reject_mask`
 - `reject_local_variance`
 
-These routines remain useful as historical, operationally tested rejection criteria. They are now better viewed as feature sources or sanity checks than as the final quality selector. The refactored quality app already mirrors the strongest pieces: population, resolution, mask geometry, connected components, and local variance.
+These routines define operationally useful rejection criteria and candidate feature sources. The quality app uses the strongest scalar pieces directly: population, resolution, mask geometry, connected components, and local variance.
 
-### Older Non-Junk Gate
+### Non-Junk Gate Utilities
 
 Source:
 
@@ -118,9 +117,9 @@ Relevant routine:
 
 - `flag_non_junk_cavgs`
 
-This path combines spectral dynamic range, density inside/outside a mask, center offset, and minimum population. It is useful as a source of candidate features and for understanding prior behavior, but its hard gate should not be copied wholesale into the new model.
+This path combines density inside/outside a mask, center offset, and minimum population. Treat it as a source of possible scalar diagnostics, not as a quality-selection policy.
 
-### Cluster-Average Similarity Matrices
+### Relational Similarity Routines
 
 Source:
 
@@ -136,9 +135,8 @@ Relevant routines and fields:
 - `clust_info%resscore`
 - `clust_info%clustscore`
 - `clust_info%jointscore`
-- `clust_info%icescore`
 
-These routines are most valuable when quality is better judged by consistency with other class averages than by single-image statistics. They are also more expensive because some paths perform class matching or cluster alignment. They are deferred experiments, not part of the scalar default model.
+These routines produce relational or pairwise class-average evidence. They are not part of the current quality policy. Any future use should reduce their output to cheap scalar diagnostics and must outperform the current scalar feature-vector learner on held-out datasets before becoming model-eligible.
 
 ### FRC and Resolution Infrastructure
 
@@ -185,7 +183,6 @@ Sources:
 - `src/main/image/simple_image_msk.f90`
 - `src/main/image/simple_image_bin.f90`
 - `src/main/simple_pspecs.f90`
-- `src/utils/math/simple_histogram.f90`
 - `src/utils/math/simple_stat.f90`
 
 Useful primitives include:
@@ -193,12 +190,10 @@ Useful primitives include:
 - `image%loc_var_masked`, `image%variance`, `image%skew`, `image%kurt`, `image%GLCM`
 - `image%spectrum`, `image%power_spectrum`, `image%guinier`, `image%guinier_bfac`, `image%frc_pspec`
 - `image%fcomps_below_noise_power_stats`
-- `image%center_edge_snr`, `image%presence`, `image%contrast`, `image%contains_nans`
+- `image%center_edge_snr`, `image%presence`, `image%contains_nans`
 - `image%corr`, `image%corr_shifted`, `image%real_corr`, `image%phase_corr`, `image%radial_cc`, `image%sqeuclid`
-- `image%calc_ice_score`
 - `image_bin%find_ccs`, `image_bin%size_ccs`, `image_bin%diameter_cc`, `image_bin%masscen_cc`
 - `automask2D`, `density_inoutside_mask`, `image%density_inoutside`
-- `histogram%variance`, `histogram%skew`, `histogram%entropy`, `histogram%TVD`, `histogram%JSD`, `histogram%HD`
 
 ## Feasible Future Feature Extensions
 
@@ -210,36 +205,33 @@ These are feasible first additions because they reuse existing per-image routine
 
 | Candidate | Existing source | Why it may help | Caution |
 | --- | --- | --- | --- |
-| `contrast` variants | `image%contrast` | Detects extremely weak or washed-out averages. | `log_contrast` is now active as a diagnostic; consider variants only if validation shows a more stable transform is needed. |
-| `presence` variants | `image%presence` | Direct particle-presence proxy. | `presence` is now active; inspect scale and sign across stream and pool datasets before assigning much model weight. |
-| `hist_variance` variants | `histogram%variance` | Complements local variance with global intensity spread. | `log_hist_variance` is now active and correlated with contrast and local variance. |
-| `fg_bg_locvar_ratio` variants | `image%loc_var_masked` | Tests whether foreground texture exceeds background texture. | Removed from the default bank after inverted chunk behavior; only revisit with new evidence. |
+| `presence` variants | `image%presence` | Direct particle-presence proxy. | Inspect scale and sign across stream and pool datasets before assigning much model weight. |
 | `nan_or_bad_pixel_flag` | `image%contains_nans`, min/max checks | Hard diagnostic for corrupt inputs. | Should probably remain a hard reject or warning, not a learned soft feature. |
 
 ### Medium-Risk Spectral Features
 
-These are plausible and cheap enough, but our experience with `spectrum_dynrange` says they should start as diagnostics.
+These are plausible and cheap enough, but they should start as diagnostics.
 
 | Candidate | Existing source | Why it may help | Caution |
 | --- | --- | --- | --- |
 | `bandpower_mid_low_ratio` | `image%spectrum` or `image%power_spectrum` | Separates real mid-frequency structure from low-frequency blobs. | Ring artifacts can mimic high quality. |
-| `bandpower_high_mid_ratio` | `image%spectrum` | Catches over-sharpened/overfitted averages. | Needs ice/ring-aware calibration. |
+| `bandpower_high_mid_ratio` | `image%spectrum` | Catches over-sharpened/overfitted averages. | Needs artifact-aware calibration. |
 | `guinier_slope` or `bfac_proxy` | `image%guinier`, `image%guinier_bfac` | Captures spectral falloff shape. | Sensitive to preprocessing and box/mask choices. |
 | `below_noise_fraction` | `image%fcomps_below_noise_power_stats` | Identifies weak averages with little usable Fourier signal. | Needs a stable noise definition for class averages. |
 | `frc_pspec_summary` | `image%frc_pspec` | May approximate consistency without full even/odd class FRC infrastructure. | Must verify the input assumptions for class-average images. |
 
-Do not reintroduce spectrum-derived defaults casually. Representative chunk runs did not justify `spectrum_dynrange`, `neg_ice_score`, or rotational-spectrum pairwise distances.
+Do not add spectrum-derived defaults casually. The current policy does not include rotational-spectrum pairwise distances.
 
-### Deferred High-Cost Relational Features
+### Relational Features Outside Current Policy
 
-These are attractive for difficult cases, especially when junk is statistically similar to good classes, but they add quadratic cost and sometimes alignment cost. They should not be reintroduced as pairwise matrices in the default model.
+These routines are available in the code base, but pairwise or alignment-derived quality evidence is outside the current model policy. The default path should remain scalar, dataset-normalized, and learnable. If any relational idea is reconsidered, it should be converted to one cheap scalar diagnostic and validated as a normal feature-family candidate.
 
 | Candidate | Existing source | Why it may help | Caution |
 | --- | --- | --- | --- |
 | `sig_knn` | `calc_sigstats_dmats` | Could summarize signal-statistics neighborhoods as scalar support. | Scalar neighborhood density can invert across datasets. |
-| `cc_knn` | `calc_cc_and_res_dmats` | Good classes should correlate with nearby good classes after in-plane search. | Expensive for stream chunks; consider optional analyze/learn experiments. |
+| `cc_knn` | `calc_cc_and_res_dmats` | Good classes should correlate with nearby good classes after in-plane search. | Expensive for stream chunks; consider optional analyze/learn diagnostics only. |
 | `res_knn` | `calc_cc_and_res_dmats` | Pairwise FRC/resolution consistency may catch overfit junk. | Depends on robust pairwise matching. |
-| `mixed_support_knn` | `calc_cluster_cavgs_dmat` | Reuses Joe's signal/correlation/resolution blend as scalar support. | Do not wire the matrix itself into the default model. |
+| `mixed_support_knn` | `calc_cluster_cavgs_dmat` | Summarizes signal/correlation/resolution neighborhood support. | Do not wire the matrix itself into the default model. |
 | `cluster_jointscore` | `align_and_score_cavg_clusters` | Converts cluster homogeneity/resolution into interpretable scores. | More invasive and too heavy for a default streaming path until timed. |
 
 ### FRC-Derived Features
@@ -270,12 +262,12 @@ Do not add a large feature batch in one pass. The current learner can evaluate a
 
 A practical sequence is:
 
-1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `hist_entropy`, `cc_area_frac`, `cc_diameter_norm`, `presence`, `log_contrast`, and `log_hist_variance`.
+1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `cc_area_frac`, `cc_diameter_norm`, `presence`, and the internal-detail features.
 2. Inspect the learn report `feature_signal`, `feature_drop`, and `feature_group_lodo` rows. A feature should have stable per-dataset AUC, improve the one-feature-drop test, or improve leave-one-dataset-out group behavior before it is trusted as default-model signal.
 3. Promote only features that improve holdout behavior, especially on difficult chunk datasets, without damaging easy/manual-trusted cases.
-4. Revisit spectral additions only if the scalar feature bank cannot solve a representative failure mode; keep them diagnostic until they prove they do not simply rediscover ice/ring artifacts.
+4. Revisit spectral additions only if the scalar feature bank cannot solve a well-defined failure mode; keep them diagnostic until they prove they do not simply rediscover periodic artifacts.
 5. Consider automask or shape-ranking features only if the cheap scalar diagnostics are still insufficient.
-6. Treat alignment-derived relational features as optional scalar experiments only; do not reintroduce pairwise matrices into the default model.
+6. Treat alignment-derived relational features as optional scalar diagnostics only; do not introduce pairwise matrices into the default model.
 
 For any new feature:
 
@@ -292,8 +284,8 @@ Some possible descriptors are available but should not be first-line additions:
 
 - Raw unmasked image mean or total intensity: too dependent on normalization and background convention.
 - Many texture features from `GLCM`: potentially useful, but easy to overfit and harder to interpret.
-- Absolute thresholds on spectrum or ice scores: dataset and sampling dependent; prefer normalized features and learned weights.
-- Full pairwise image alignment in the default stream path: potentially informative but likely too expensive unless timing proves otherwise.
+- Absolute thresholds on spectral scores: dataset and sampling dependent; prefer normalized features and learned weights.
+- Full pairwise image alignment in the default stream path: outside the current scalar feature-vector policy and too expensive for routine stream use.
 - A black-box classifier that bypasses the current model file and analysis/reporting flow: this would make failures harder to debug.
 
 ## Implementation Notes

@@ -5,9 +5,10 @@ use simple_error,              only: simple_exception
 use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, CAVG_RES_HARD_REJECT_A, I_LOG_POP, I_NEG_LOG_RES, I_MASK_INSIDE, &
-    I_LOCVAR_FG, I_LOCVAR_BG, I_CC_SINGLE, I_CORR_FRC, I_HIST_ENTROPY, I_CC_AREA_FRAC, I_PRESENCE, &
-    I_LOG_CONTRAST, I_LOG_HIST_VARIANCE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
-    I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY
+    I_LOCVAR_FG, I_LOCVAR_BG, I_CC_SINGLE, I_CORR_FRC, I_CENTER_EDGE_SNR, I_CC_AREA_FRAC, I_PRESENCE, &
+    I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
+    I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY, apply_cavg_quality_model_feature_exclusions, &
+    apply_cavg_quality_model_mask_exclusions
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, &
@@ -19,7 +20,7 @@ private
 public :: learn_cavg_quality_model
 
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K = 10
-integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 9
+integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 7
 real, parameter :: LEARN_MINSEPS(5)       = [0.05, 0.10, 0.15, 0.20, 0.30]
 real, parameter :: LEARN_MARGINS(11)      = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
                                               -0.05, 0.0, 0.05, 0.10, 0.20]
@@ -168,23 +169,19 @@ contains
         character(len=32) :: name
         select case(ipolicy)
             case(1)
-                name = 'base12'
+                name = 'base_scalar'
             case(2)
-                name = 'base12_no_geom_softs'
+                name = 'base_no_soft_geom'
             case(3)
-                name = 'base12_pruned_plus_histvar'
+                name = 'base_no_cc_area'
             case(4)
-                name = 'base12_no_cc_area_plus_histvar'
+                name = 'base_geom_pruned'
             case(5)
-                name = 'base12_no_cc_area'
+                name = 'full_scalar'
             case(6)
-                name = 'base12_plus_histvar'
+                name = 'full_no_soft_geom'
             case(7)
-                name = 'all15_no_geom_softs'
-            case(8)
-                name = 'all_features_no_mask_single'
-            case(9)
-                name = 'all_features'
+                name = 'full_geom_pruned'
             case default
                 THROW_HARD('feature_policy_name: invalid feature policy')
         end select
@@ -203,34 +200,27 @@ contains
                 mask(I_CC_SINGLE)   = .false.
             case(3)
                 mask(1:12) = .true.
+                mask(I_CC_AREA_FRAC) = .false.
+            case(4)
+                mask(1:12) = .true.
                 mask(I_MASK_INSIDE) = .false.
                 mask(I_CC_SINGLE)   = .false.
                 mask(I_CC_AREA_FRAC) = .false.
-                mask(I_LOG_HIST_VARIANCE) = .true.
-            case(4)
-                mask(1:12) = .true.
-                mask(I_CC_AREA_FRAC) = .false.
-                mask(I_LOG_HIST_VARIANCE) = .true.
             case(5)
-                mask(1:12) = .true.
-                mask(I_CC_AREA_FRAC) = .false.
+                mask = .true.
             case(6)
-                mask(1:12) = .true.
-                mask(I_LOG_HIST_VARIANCE) = .true.
+                mask = .true.
+                mask(I_MASK_INSIDE) = .false.
+                mask(I_CC_SINGLE)   = .false.
             case(7)
                 mask = .true.
                 mask(I_MASK_INSIDE) = .false.
                 mask(I_CC_SINGLE)   = .false.
                 mask(I_CC_AREA_FRAC) = .false.
-            case(8)
-                mask = .true.
-                mask(I_MASK_INSIDE) = .false.
-                mask(I_CC_SINGLE)   = .false.
-            case(9)
-                mask = .true.
             case default
                 THROW_HARD('feature_policy_mask: invalid feature policy')
         end select
+        call apply_cavg_quality_model_mask_exclusions(mask)
     end subroutine feature_policy_mask
 
     subroutine apply_feature_policy( ipolicy, weights )
@@ -466,6 +456,7 @@ contains
             end do
             weights(j) = max(0.0, auc_for_values(vals, refs) - 0.5)
         end do
+        call apply_cavg_quality_model_feature_exclusions(weights)
         if( sum(weights) > EPS ) weights = weights / sum(weights)
         deallocate(vals, refs)
     end subroutine calc_suggested_training_weights
@@ -880,11 +871,10 @@ contains
             group_inds(ninds) = i
         end do
         call write_lodo_group_row(funit, 'general_image_no_pop_res_corr', dsets, group_inds(1:ninds))
-        group_inds(1:3) = [I_PRESENCE, I_LOG_CONTRAST, I_LOG_HIST_VARIANCE]
-        call write_lodo_group_row(funit, 'new_stable3', dsets, group_inds(1:3))
-        group_inds(1:6) = [I_LOCVAR_FG, I_LOCVAR_BG, I_HIST_ENTROPY, I_PRESENCE, &
-                           I_LOG_CONTRAST, I_LOG_HIST_VARIANCE]
-        call write_lodo_group_row(funit, 'cheap_scalar6', dsets, group_inds(1:6))
+        group_inds(1:3) = [I_LOG_POP, I_NEG_LOG_RES, I_CORR_FRC]
+        call write_lodo_group_row(funit, 'support_res_corr', dsets, group_inds(1:3))
+        group_inds(1:4) = [I_LOCVAR_FG, I_LOCVAR_BG, I_CENTER_EDGE_SNR, I_PRESENCE]
+        call write_lodo_group_row(funit, 'local_signal4', dsets, group_inds(1:4))
         group_inds(1:4) = [I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
                            I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY]
         call write_lodo_group_row(funit, 'internal_detail4', dsets, group_inds(1:4))
