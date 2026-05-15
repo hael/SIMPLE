@@ -134,13 +134,14 @@ contains
     subroutine set_offload_device_2( id )
         integer, intent(in) :: id
         integer :: ndevices, host_device
+        integer(c_int) :: ierr
 #ifdef USE_OPENMP_OFFLOAD
         ndevices = omp_get_num_devices()
         if( ndevices < 1 ) then
             THROW_WARN('Device could not be set: No device identified')
             return
         endif
-        if( (id > ndevices) .or. (id < 0) ) then
+        if( (id >= ndevices) .or. (id < 0) ) then
             THROW_WARN('Device could not be set: Invalid device ID provided')
             return
         endif
@@ -149,6 +150,11 @@ contains
             THROW_WARN('Device could not be set: device ID provided is the host')
         endif
         call omp_set_default_device( id )
+        ierr = cudaSetDevice(int(id, c_int))
+        if( ierr /= 0_c_int ) then
+            write(logfhandle, '(A,I0,A,I0)') &
+                '>>> WARNING: cudaSetDevice failed for OpenMP device ID ', id, ', CUDA status = ', ierr
+        endif
         write(logfhandle, '(A,I0)') '>>> OpenMP offload device ID: ', id
 #endif
     end subroutine set_offload_device_2
