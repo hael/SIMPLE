@@ -69,13 +69,13 @@ Resolution and mask-geometry validity are deliberately outside the learned model
 
 The built-in models are complete `linear_boundary` presets:
 
-- `chunk_default_v2`: current default chunk/stream behavior, promoted from the representative batch7chunk learning cycle with the `base12_pruned_plus_histvar` feature policy.
+- `chunk_default_v2`: current default chunk/stream behavior, promoted from the representative batch8chunk learning cycle with the `all_features_no_mask_single` feature policy.
 - `chunk_default_v1`: legacy chunk/stream behavior retained for comparison.
 - `pool_default_v1`: recall-preserving behavior for larger pooled/batch datasets.
 
 The important model controls are:
 
-- `feature_policy`: learn-mode candidate name describing which scalar features are allowed into the score and clustering distance; the model file encodes this by zeroing excluded weights. The current chunk default zeros `mask_inside`, `single_component`, `cc_area_frac`, `presence`, and `log_contrast`.
+- `feature_policy`: learn-mode candidate name describing which scalar features are allowed into the score and clustering distance; the model file encodes this by zeroing excluded weights. The current chunk default zeros `mask_inside` and `single_component` because those soft geometry flags duplicate the hard connected-component rejection.
 - `feature_weights`: nonnegative linear score coefficients, normalized to sum to one.
 - `boundary_margin`: shifts the decision threshold; more negative rejects more aggressively, more positive preserves more borderline classes.
 - `min_score_separation`: below this separation the model treats the partition as unreliable unless low-separation Otsu is enabled and acceptable.
@@ -83,7 +83,7 @@ The important model controls are:
 - `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
 - `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
 
-The current learner searches feature-policy candidates, feature-weight interpolation, minimum score separation, boundary margin, and pool minimum accepted fraction. It deliberately inherits the higher-level policy flags from the base model.
+The current learner searches feature-policy candidates, feature-weight interpolation, minimum score separation, boundary margin, and pool minimum accepted fraction. The candidate policies include an `all_features_no_mask_single` option that keeps the newer scalar diagnostics while excluding the two soft geometry flags most duplicated by hard geometry rejection. It deliberately inherits the higher-level policy flags from the base model.
 
 ## Reusable Existing Routines
 

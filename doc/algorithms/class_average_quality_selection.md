@@ -94,7 +94,7 @@ The current built-in presets are:
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk_default_v2` is the default chunk/stream operating point promoted from the representative batch7chunk learning cycle. Its current feature bank excludes the former scalar histogram-neighborhood feature, pairwise histogram/spectrum matrices, and unstable spectrum/ice/foreground-background ratio diagnostics. The promoted feature policy is `base12_pruned_plus_histvar`, which leaves `mask_inside`, `single_component`, `cc_area_frac`, `presence`, and `log_contrast` at zero weight while keeping masked histogram variance available to the scalar score and clustering distance. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
+`chunk_default_v2` is the default chunk/stream operating point promoted from the representative batch8chunk learning cycle after resolution and foreground-geometry failures were moved into hard rejection. Its current feature bank excludes the former scalar histogram-neighborhood feature, pairwise histogram/spectrum matrices, and unstable spectrum/ice/foreground-background ratio diagnostics. The promoted feature policy is `all_features_no_mask_single`, which leaves `mask_inside` and `single_component` at zero weight because those soft geometry diagnostics duplicate the hard connected-component rejection, while keeping `cc_area_frac`, `presence`, `log_contrast`, and masked histogram variance available to the scalar score and clustering distance. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
 
 ## Feature Space
 
@@ -184,6 +184,8 @@ The current grid searches:
 - minimum score separation;
 - boundary margin;
 - pool minimum accepted fraction, only for pool models.
+
+The feature-policy candidates are hand-curated masks over the scalar feature bank. They include the original base scalar subsets, histogram-variance variants, full-feature variants, and an `all_features_no_mask_single` middle ground that keeps the newer scalar diagnostics while excluding the two soft geometry flags most duplicated by hard geometry rejection.
 
 Each candidate is evaluated by running the full model classifier on every training dataset. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets, so each dataset contributes equally.
 

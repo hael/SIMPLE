@@ -54,7 +54,7 @@ This was important. Aggressive hard rejections are difficult to recover from bec
 
 The current feature bank no longer includes `spectrum_dynrange`, `neg_ice_score`, or `log_fg_bg_locvar_ratio`, and the histogram/spectrum pairwise matrices have been removed from the model infrastructure. Those signals either failed to separate manual good/bad classes consistently, were redundant with retained scalar features, or inverted on difficult stream partitions.
 
-The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. The current chunk default was promoted from the representative batch7chunk learning cycle with the `base12_pruned_plus_histvar` policy, which keeps masked histogram variance but zeros `mask_inside`, `single_component`, `cc_area_frac`, `presence`, and `log_contrast` in the model.
+The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. The current chunk default was promoted from the representative batch8chunk learning cycle with the `all_features_no_mask_single` policy, which zeros only `mask_inside` and `single_component` because those soft geometry flags duplicate the hard connected-component rejection.
 
 ### 5. The Current Best General Profile Is Still Local-Signal Heavy
 
@@ -68,7 +68,7 @@ The practical interpretation is:
 - centering helps catch pathological classes without becoming a hard rule
 - background/local context is useful when combined with foreground signal
 
-On the representative stream-chunk learning set in batch7chunk, this became the promoted `chunk_default_v2` profile.
+On the representative stream-chunk learning set in batch8chunk, this became the promoted `chunk_default_v2` profile.
 
 ### 6. The Boundary Margin Should Remain Internal
 

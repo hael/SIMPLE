@@ -18,7 +18,7 @@ private
 public :: learn_cavg_quality_model
 
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K = 10
-integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 8
+integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 9
 real, parameter :: LEARN_WEIGHT_ALPHAS(5) = [0.0, 0.25, 0.50, 0.75, 1.0]
 real, parameter :: LEARN_MINSEPS(5)       = [0.05, 0.10, 0.15, 0.20, 0.30]
 real, parameter :: LEARN_MARGINS(11)      = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
@@ -118,6 +118,8 @@ contains
             case(7)
                 name = 'all15_no_geom_softs'
             case(8)
+                name = 'all_features_no_mask_single'
+            case(9)
                 name = 'all_features'
             case default
                 THROW_HARD('feature_policy_name: invalid feature policy')
@@ -157,6 +159,10 @@ contains
                 mask(I_CC_SINGLE)   = .false.
                 mask(I_CC_AREA_FRAC) = .false.
             case(8)
+                mask = .true.
+                mask(I_MASK_INSIDE) = .false.
+                mask(I_CC_SINGLE)   = .false.
+            case(9)
                 mask = .true.
             case default
                 THROW_HARD('feature_policy_mask: invalid feature policy')

@@ -50,25 +50,27 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
-! Batch-trained chunk default promoted from the representative batch7chunk
-! learning round. The selected feature policy keeps the cheap scalar features
-! that generalized best on stream chunks, while zeroing mask_inside,
-! single_component, cc_area_frac, presence, and log_contrast. Pairwise distance
-! matrices and unstable spectrum, ice, and foreground/background ratio
-! diagnostics have been removed from the default scalar model space.
+! Batch-trained chunk default promoted from the representative batch8chunk
+! learning round after resolution and foreground-geometry hard rejects were
+! moved out of the learned model. The selected policy keeps the cheap scalar
+! diagnostics that generalized best on stream chunks, while zeroing only
+! mask_inside and single_component because those soft geometry flags duplicate
+! the hard connected-component rejection. Pairwise distance matrices and
+! unstable spectrum, ice, and foreground/background ratio diagnostics have been
+! removed from the default scalar model space.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.035896E-01, 1.416859E-01, 0.000000E+00, 4.956200E-02, &
-    1.225261E-01, 1.207926E-01, 0.000000E+00, 1.464389E-01, &
-    9.115814E-02, 1.009753E-01, 0.000000E+00, 7.032130E-02, &
-    0.000000E+00, 0.000000E+00, 5.295004E-02 ]
-real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      = -0.05
+    8.561891E-02, 1.044087E-01, 0.000000E+00, 5.221575E-02, &
+    9.054721E-02, 9.160046E-02, 0.000000E+00, 1.081142E-01, &
+    7.333785E-02, 8.167230E-02, 4.118001E-02, 6.675764E-02, &
+    6.300857E-02, 6.470357E-02, 7.683478E-02 ]
+real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.05
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: family                  = 'linear_boundary'
     character(len=32) :: context                 = 'chunk'
-    character(len=32) :: feature_policy          = 'base12_pruned_plus_histvar'
+    character(len=32) :: feature_policy          = 'all_features_no_mask_single'
     integer           :: rejection_type          = CAVG_REJECTION_CHUNK
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
@@ -196,7 +198,7 @@ contains
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
         spec%family                  = 'linear_boundary'
         spec%context                 = 'chunk'
-        spec%feature_policy          = 'base12_pruned_plus_histvar'
+        spec%feature_policy          = 'all_features_no_mask_single'
         spec%rejection_type          = CAVG_REJECTION_CHUNK
         spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
         spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
