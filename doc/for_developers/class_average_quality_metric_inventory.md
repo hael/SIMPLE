@@ -72,15 +72,15 @@ The default model is `chunk_default_v2`.
 The chunk model uses the 9-feature bank with these weights:
 
 ```text
-log_pop             1.172054E-01
-neg_log_res         1.487871E-01
-centered            4.126378E-02
-log_locvar_fg       1.207641E-01
-log_locvar_bg       1.257626E-01
-corr_frc_proxy      1.626182E-01
-log_center_edge_snr 8.155017E-02
-cc_area_frac        6.463601E-02
-presence            1.374126E-01
+log_pop             1.178989E-01
+neg_log_res         1.493300E-01
+centered            4.191915E-02
+log_locvar_fg       1.202525E-01
+log_locvar_bg       1.252421E-01
+corr_frc_proxy      1.621421E-01
+log_center_edge_snr 8.224624E-02
+cc_area_frac        6.406378E-02
+presence            1.369053E-01
 ```
 
 The pool model uses `CAVG_QUALITY_POOL_V1_WEIGHTS`.

@@ -41,9 +41,9 @@ real, parameter :: CAVG_QUALITY_POOL_V1_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
 ! failures reject before fitting; the weights below describe the trainable
 ! quality boundary for classes that pass those validity checks.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.172054E-01, 1.487871E-01, 4.126378E-02, 1.207641E-01, &
-    1.257626E-01, 1.626182E-01, 8.155017E-02, 6.463601E-02, &
-    1.374126E-01 ]
+    1.178989E-01, 1.493300E-01, 4.191915E-02, 1.202525E-01, &
+    1.252421E-01, 1.621421E-01, 8.224624E-02, 6.406378E-02, &
+    1.369053E-01 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.15
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.35
