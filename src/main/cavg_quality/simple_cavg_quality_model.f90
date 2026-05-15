@@ -44,44 +44,44 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
-! Current chunk default, promoted from the batch_train1 chunk learning run.
+! Current chunk default, promoted from the batch_train4 chunk learning run.
 ! Resolution has two roles: catastrophic failures
 ! (res > CAVG_RES_HARD_REJECT_A) are hard rejects, while the continuous
 ! neg_log_res scalar remains active model evidence for all trainable rows.
-! The selected policy keeps scalar features with stable quality direction
-! and zeroes soft geometry fields that duplicate hard foreground rejection.
+! The selected policy keeps scalar features with stable quality direction,
+! includes edge-suppressed interior curvature as explicit internal-detail
+! evidence, and zeroes soft geometry fields that duplicate hard foreground
+! rejection.
 ! Misleading global intensity-softness descriptors are not part of the
 ! feature bank; diagnostic-only features should explain hard rejects or test
 ! an active quality hypothesis.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.104735E-01, 1.399886E-01, 0.000000E+00, 4.460987E-02, &
-    1.109333E-01, 1.160819E-01, 0.000000E+00, 1.492875E-01, &
-    7.933401E-02, 0.000000E+00, 0.000000E+00, 1.268510E-01, &
-    6.271760E-02, 0.000000E+00, 2.658988E-02, 3.313298E-02 ]
-real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
+    1.080296E-01, 1.371388E-01, 0.000000E+00, 3.803330E-02, &
+    1.113096E-01, 1.159168E-01, 0.000000E+00, 1.498871E-01, &
+    7.516573E-02, 5.957574E-02, 7.828858E-02, 1.266548E-01, &
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.20
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
 real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
 
-! Previous chunk_default_v2 backup before batch_train1 promotion. This is
-! retained only as historical reference; slot 11 is now an edge-suppressed
-! 20-6 A interior-curvature diagnostic rather than the old geometry scalar.
+! Previous chunk_default_v2 backup before batch_train4 promotion.
+! spec%feature_policy = 'full_geom_pruned'
 ! real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-!     1.156534E-01, 1.465524E-01, 0.000000E+00, 4.670155E-02, &
-!     1.161348E-01, 1.215248E-01, 0.000000E+00, 1.562873E-01, &
-!     8.305385E-02, 0.000000E+00, 8.129309E-02, 1.327988E-01, &
-!     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
-! real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.10
+!     1.104735E-01, 1.399886E-01, 0.000000E+00, 4.460987E-02, &
+!     1.109333E-01, 1.160819E-01, 0.000000E+00, 1.492875E-01, &
+!     7.933401E-02, 0.000000E+00, 0.000000E+00, 1.268510E-01, &
+!     6.271760E-02, 0.000000E+00, 2.658988E-02, 3.313298E-02 ]
+! real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
 ! real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 ! real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
 ! real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
-! spec%use_otsu_window = .true.
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: family                  = 'linear_boundary'
     character(len=32) :: context                 = 'chunk'
-    character(len=32) :: feature_policy          = 'full_geom_pruned'
+    character(len=32) :: feature_policy          = 'base_scalar_plus_curvature'
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
     real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
@@ -186,7 +186,7 @@ contains
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
         spec%family                  = 'linear_boundary'
         spec%context                 = 'chunk'
-        spec%feature_policy          = 'full_geom_pruned'
+        spec%feature_policy          = 'base_scalar_plus_curvature'
         spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
         spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
         spec%min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION

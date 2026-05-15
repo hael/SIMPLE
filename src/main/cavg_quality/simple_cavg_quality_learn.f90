@@ -23,8 +23,13 @@ logical, parameter :: LEARN_OTSU_FLAGS(2)           = [.false., .true.]
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K      = 10
 integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 5
 real,    parameter :: LEARN_MINSEPS(5)              = [0.05, 0.10, 0.15, 0.20, 0.30]
-real,    parameter :: LEARN_MARGINS(11)             = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
-                                                       -0.05, 0.0, 0.05, 0.10, 0.20]
+! Positive margins deliberately over-select relative to the learned boundary.
+! Keeping a resolved positive tail lets learn mode discover recall-favoring
+! chunk models instead of pinning at the search edge when good classes are
+! being lost.
+real,    parameter :: LEARN_MARGINS(16)             = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
+                                                       -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, &
+                                                        0.25, 0.30, 0.40, 0.50]
 real,    parameter :: LEARN_OTSU_MIN_OFFSETS(5)     = [0.05, 0.10, 0.15, 0.25, 0.35]
 real,    parameter :: LEARN_OTSU_MAX_OFFSETS(3)     = [0.40, 0.50, 0.65]
 real,    parameter :: LEARN_POOL_FRACS(5)           = [0.50, 0.60, 0.65, 0.70, 0.80]
