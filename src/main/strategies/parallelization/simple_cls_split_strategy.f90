@@ -399,10 +399,6 @@ contains
         l_pre_norm = (trim(params%pre_norm) .eq. 'yes')
         l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
         l_write_ptcls = CLS_SPLIT_DEBUG_WRITE_PARTICLES
-        if( l_write_ptcls )then
-            write(logfhandle,'(A)') 'Cls split debug: writing per-particle stacks'
-            call flush(logfhandle)
-        endif
         call determine_phase_flip(spproj, params, l_phflip)
         if( l_write_project )then
             map_fname = string('cls_split_class_map.txt')
@@ -768,8 +764,9 @@ contains
                 best_k     = ntrial
                 if( allocated(best_medoids) ) deallocate(best_medoids)
                 if( allocated(best_labels)  ) deallocate(best_labels)
-                call move_alloc(trial_medoids, best_medoids)
-                call move_alloc(trial_labels,  best_labels)
+                allocate(best_medoids(size(trial_medoids)), source=trial_medoids)
+                allocate(best_labels(size(trial_labels)), source=trial_labels)
+                deallocate(trial_medoids, trial_labels)
             else
                 if( allocated(trial_medoids) ) deallocate(trial_medoids)
                 if( allocated(trial_labels)  ) deallocate(trial_labels)
@@ -782,8 +779,9 @@ contains
         endif
         if( allocated(i_medoids) ) deallocate(i_medoids)
         if( allocated(labels)    ) deallocate(labels)
-        call move_alloc(best_medoids, i_medoids)
-        call move_alloc(best_labels,  labels)
+        allocate(i_medoids(size(best_medoids)), source=best_medoids)
+        allocate(labels(size(best_labels)), source=best_labels)
+        deallocate(best_medoids, best_labels)
         nsplit = best_k
         write(logfhandle,'(A,I8,A,I8,A,F10.5)') 'Cls split silhouette k selected: class=', cls_id, &
             ' k=', nsplit, ' score=', best_score
@@ -1114,13 +1112,17 @@ contains
         ndims = max(1, min(nkeep, size(coords,1)))
         if( ndims < size(coords,1) )then
             allocate(coords_tmp(ndims,size(coords,2)), source=coords(1:ndims,:))
-            call move_alloc(coords_tmp, coords)
+            deallocate(coords)
+            allocate(coords(ndims,size(coords_tmp,2)), source=coords_tmp)
+            deallocate(coords_tmp)
         endif
         if( allocated(eigvals) )then
             nvals = max(1, min(ndims, size(eigvals)))
             if( nvals < size(eigvals) )then
                 allocate(eigvals_tmp(nvals), source=eigvals(1:nvals))
-                call move_alloc(eigvals_tmp, eigvals)
+                deallocate(eigvals)
+                allocate(eigvals(nvals), source=eigvals_tmp)
+                deallocate(eigvals_tmp)
             endif
         endif
     end subroutine trim_split_embedding

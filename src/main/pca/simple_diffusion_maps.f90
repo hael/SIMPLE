@@ -1,6 +1,7 @@
 !@descr: diffusion maps embedding for nonlinear class splitting
 module simple_diffusion_maps
 use simple_core_module_api
+!$ use omp_lib
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_image,                  only: image
 use simple_imgarr_utils,           only: copy_imgarr, dealloc_imgarr
@@ -73,11 +74,15 @@ contains
         call flush(logfhandle)
         allocate(d2(nptcls,nptcls), aff(nptcls,nptcls), kth_d2(nptcls), deg(nptcls), source=0.)
         call system_clock(t0)
-        !$omp parallel default(shared) private(i,j)
+        !$omp parallel default(shared) private(i,j,k,scale)
         !$omp do schedule(dynamic)
         do i = 1, nptcls - 1
             do j = i + 1, nptcls
-                d2(i,j) = sum(pcavecs(:,i)-pcavecs(:,j))**2
+                scale = 0.
+                do k = 1, npix
+                    scale = scale + (pcavecs(k,i) - pcavecs(k,j))**2
+                end do
+                d2(i,j) = scale
                 d2(j,i) = d2(i,j)
             end do
         end do
@@ -130,7 +135,7 @@ contains
         write(logfhandle,'(A,F8.3,A)') 'Diffusion maps graph/normalization: ', real(t1-t0)/real(trate), ' s'
         call flush(logfhandle)
         nev = ndiff_scan + 1
-        allocate(evals(nev), evecs(nptcls,nev))
+        allocate(evals(nptcls), evecs(nptcls,nptcls))
         call system_clock(t0)
         call eigh(nptcls, norm_aff, nev, evals, evecs)
         call system_clock(t1)
@@ -144,10 +149,12 @@ contains
         if( self%ndiff <= 0 ) ndiff_used = auto_ndiff_from_eigengap(diff_evals)
         allocate(coords(ndiff_used, nptcls), source=0.)
         if( present(eigvals) ) allocate(eigvals(ndiff_scan), source=diff_evals)
-        !$omp parallel do default(shared) private(k,j) schedule(static)
+        !$omp parallel do default(shared) private(i,k,j) schedule(static)
         do k = 1, ndiff_used
             j = nev - k
-            coords(k,:) = evals(j) * evecs(:,j)
+            do i = 1, nptcls
+                coords(k,i) = evals(j) * evecs(i,j)
+            end do
         end do
         !$omp end parallel do
         call normalize_coords(coords)
@@ -214,7 +221,7 @@ contains
         real,    intent(in)  :: d2row(:)
         integer, intent(in)  :: self_idx, k_used
         real,    intent(out) :: kth
-        real    :: work(size(d2row)-1)
+        real :: work(max(1,size(d2row)-1))
         integer :: j, k
         k = 0
         do j = 1, size(d2row)
@@ -222,8 +229,8 @@ contains
             k = k + 1
             work(k) = d2row(j)
         end do
-        call hpsort(work)
-        kth = work(k_used)
+        call hpsort(work(1:k))
+        kth = work(min(max(1, k_used), k))
     end subroutine kth_distance_for_point
 
     subroutine kth_distance_with_self(d2row, k_used, kth)
@@ -343,12 +350,12 @@ contains
         real, allocatable, optional,             intent(out)   :: graph_aff(:,:), graph_theta(:,:)
         type(image), allocatable :: imgs_work(:)
         real, allocatable        :: d2(:,:), aff(:,:), kth_d2(:), deg(:), norm_aff(:,:), theta(:,:)
-        real, allocatable        :: inpl_corrs(:), cand_coords(:,:), cand_eigvals(:), out_eigvals(:)
+        real, allocatable        :: inpl_corrs(:,:), cand_coords(:,:), cand_eigvals(:), out_eigvals(:)
         type(parameters)    :: params_pft
         type(polarft_calc)  :: pftc
         real                :: corr, eps, smpd
         integer             :: nptcls, ndiff_scan, k_used, ldim(3), kfromto(2), pdim_srch(3), nrots, nthr_use
-        integer             :: i, j, loc, ncand
+        integer             :: i, j, loc, ncand, ithr
         integer(int64)      :: t0, t1, trate, t_total0
         nptcls = size(imgs)
         if( nptcls < 3 )then
@@ -399,14 +406,16 @@ contains
         call pftc%memoize_refs
         call pftc%memoize_ptcls
         nrots = pftc%get_nrots()
-        !$omp parallel private(i,j,loc,corr,inpl_corrs) default(shared) num_threads(nthr_use) proc_bind(close)
-        allocate(inpl_corrs(nrots))
+        allocate(inpl_corrs(nrots,nthr_use))
+        ithr = 1
+        !$omp parallel private(i,j,loc,corr,ithr) default(shared) num_threads(nthr_use) proc_bind(close)
+        !$ ithr = omp_get_thread_num() + 1
         !$omp do schedule(dynamic)
         do i = 1, nptcls - 1
             do j = i + 1, nptcls
-                call pftc%gen_objfun_vals(j, i, [0.,0.], inpl_corrs)
-                loc  = maxloc(inpl_corrs, dim=1)
-                corr = inpl_corrs(loc)
+                call pftc%gen_objfun_vals(j, i, [0.,0.], inpl_corrs(:,ithr))
+                loc  = maxloc(inpl_corrs(:,ithr), dim=1)
+                corr = inpl_corrs(loc,ithr)
                 if( .not. ieee_is_finite(corr) ) corr = 0.
                 corr = min(1., max(-1., corr))
                 d2(i,j) = max(0., 1. - corr)
@@ -416,8 +425,8 @@ contains
             end do
         end do
         !$omp end do
-        deallocate(inpl_corrs)
         !$omp end parallel
+        deallocate(inpl_corrs)
         call pftc%kill
         call dealloc_imgarr(imgs_work)
         call system_clock(t1)
@@ -506,7 +515,7 @@ contains
         ncand = 0
         allocate(feat(n))
         nev = min(ndiff_scan + 1, n)
-        allocate(mat(n,n), evals(nev), evecs(n,nev))
+        allocate(mat(n,n), evals(n), evecs(n,n))
         mat = norm_aff
         call eigh(n, mat, nev, evals, evecs)
         do k = 1, min(ndiff_scan, nev - 1)
@@ -518,7 +527,7 @@ contains
         do mode = 1, nmodes
             if( ncand >= size(cand_eigvals) ) exit
             nev = min(2 * ndiff_scan + 2, n2)
-            allocate(mat(n2,n2), evals(nev), evecs(n2,nev))
+            allocate(mat(n2,n2), evals(n2), evecs(n2,n2))
             call build_connection_block(norm_aff, theta, mode, mat)
             call eigh(n2, mat, nev, evals, evecs)
             do idx = nev, 1, -1
@@ -854,7 +863,7 @@ contains
         if( n < 1 .or. nk < 1 ) return
         if( mode == 0 )then
             nkeep = min(max(1, rank_keep), n)
-            allocate(mat(n,n), evals(nkeep), evecs(n,nkeep), coeff_c(nk))
+            allocate(mat(n,n), evals(n), evecs(n,n), coeff_c(nk))
             mat = norm_aff
             call eigh(n, mat, nkeep, evals, evecs)
             do a = 1, nkeep
@@ -870,7 +879,7 @@ contains
         else
             n2    = 2 * n
             nkeep = min(max(2, 2 * rank_keep), n2)
-            allocate(mat(n2,n2), evals(nkeep), evecs(n2,nkeep), y(n2,nk), yhat(n2,nk), coeff_r(nk))
+            allocate(mat(n2,n2), evals(n2), evecs(n2,n2), y(n2,nk), yhat(n2,nk), coeff_r(nk))
             call build_connection_block(norm_aff, theta, mode, mat)
             call eigh(n2, mat, nkeep, evals, evecs)
             do i = 1, n
