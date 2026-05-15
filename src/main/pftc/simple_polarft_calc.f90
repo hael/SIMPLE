@@ -4,7 +4,7 @@ use simple_pftc_api
 implicit none
 
 public :: polarft_calc
-public :: vol_pad2ref_pfts
+public :: vol_pad2ref_pfts, vol_pad2ref_pfts_opt
 private
 #include "simple_local_flags.inc"
 
@@ -128,6 +128,7 @@ type :: polarft_calc
     procedure          :: get_roind_fast
     procedure          :: get_dang
     procedure          :: get_coord
+    procedure          :: get_polar_coords
     procedure          :: get_ref_pft
     procedure          :: get_ptcl_pft
     procedure          :: get_ptcl_line
@@ -302,6 +303,15 @@ interface
         logical,             intent(in)    :: iseven
     end subroutine vol_pad2ref_pfts
 
+    module subroutine vol_pad2ref_pfts_opt(self, vol_pad, eulspace, state, iseven)
+        use simple_projector, only: projector
+        class(polarft_calc), intent(inout) :: self
+        class(projector),    intent(in)    :: vol_pad
+        class(oris),         intent(in)    :: eulspace
+        integer,             intent(in)    :: state
+        logical,             intent(in)    :: iseven
+    end subroutine vol_pad2ref_pfts_opt
+
     ! ===== GETTERS + POINTER ACCESSORS =====
 
     module pure function get_nrots(self) result(nrots)
@@ -354,6 +364,12 @@ interface
         integer,             intent(in) :: rot, k
         real(sp) :: xy(2)
     end function get_coord
+
+    module subroutine get_polar_coords(self, dim, coords)
+        class(polarft_calc), intent(in)  :: self
+        integer,             intent(in)  :: dim
+        real(sp),            intent(out) :: coords(self%kfromto(1):self%interpklim,self%pftsz)
+    end subroutine get_polar_coords
 
     module subroutine get_ref_pft(self, iref, iseven, pft)
         class(polarft_calc), intent(in)    :: self

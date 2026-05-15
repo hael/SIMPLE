@@ -47,7 +47,7 @@ if(USE_OPENMP)
                 "Falling back to standard OpenMP."
             )
         else()
-            find_package(CUDAToolkit)
+            find_package(CUDAToolkit REQUIRED)
             if(NOT CUDAToolkit_Fortran_FOUND)
                 list(APPEND SIMPLE_LIBRARIES
                     CUDA::cudart

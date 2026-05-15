@@ -1399,7 +1399,6 @@ contains
 #endif
     end subroutine gen_many_euclids_gpu
 
-
     ! Benchmark for comparison of euclid calculation between
     ! openmp offload gpu and cpu host
     module subroutine gen_many_euclids_cufft( self, iptcl )
@@ -1465,7 +1464,6 @@ contains
         p_c  = omp_get_mapped_ptr(c_loc(buffer_c(1,1)), 0)
         ierr = cufftExecC2R(plan_cufft, p_c, p_c)
         !$omp end target data
-
         ! apply normalization & exponentiation on CPU (buffer_c is now back on host)
         do iref = 1,self%nrefs
             do p = 1, self%nrots
@@ -1537,13 +1535,12 @@ contains
         idist      = int(self%pftsz+1, c_int)
         odist      = int(self%nrots+2, c_int)
         allocate(buffer_c(idist, howmany), source=cmplx(0.,0.,sp))
-        p_c = c_loc(buffer_c(1,1))
+        p_c        = c_loc(buffer_c(1,1))
         call c_f_pointer(p_c, buffer, [odist, int(howmany)])
         n(1)       = int(self%nrots, c_int)
         inembed(1) = idist
         onembed(1) = odist
-        ierr = cufftPlanMany(plan_cufft, 1_c_int, n, inembed, 1_c_int, idist, onembed,&
-                            &1_c_int, odist, CUFFT_C2R, howmany)
+        ierr       = cufftPlan1D(plan_cufft, n(1), CUFFT_C2R, howmany)
         if (ierr /= 0) stop 6
         allocate(wks(self%kfromto(1):self%kfromto(2),pfromto(1):pfromto(2)), source=0.)
         do iptcl = pfromto(1),pfromto(2)
@@ -1558,7 +1555,7 @@ contains
         !$omp target teams distribute parallel do collapse(2)&
         !$omp& map(to:self%kfromto, self%pftsz, self%nrefs, wks)&
         !$omp& map(to:self%ft_ref2_even, self%ft_ref_even)&
-        !$omp& map(to:self%wsqsums_ptcls(is:ie), self%pinds(is:ie))&
+        !$omp& map(to:self%pinds(is:ie))&
         !$omp& map(to:self%ft_ctf2(:,:,is:ie),pfromto)&
         !$omp& map(to:self%ft_ptcl_ctf(:,:,is:ie))&
         !$omp& private(i,k,c,d,iref,iptcl,p,j)
@@ -1566,7 +1563,7 @@ contains
             do iref = 1, self%nrefs
                 i = self%pinds(iptcl)
                 j = (iptcl - pfromto(1))*self%nrefs + iref
-                do p = 1, self%pftsz
+                do p = 1, self%pftsz+1
                     d = cmplx(0.,0.,sp)
                     do k = self%kfromto(1), self%kfromto(2)
                         c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
@@ -1577,6 +1574,7 @@ contains
                 enddo
             enddo
         enddo
+        !$omp end target teams distribute parallel do
         p_c  = omp_get_mapped_ptr(c_loc(buffer_c(1,1)), 0)
         ierr = cufftExecC2R(plan_cufft, p_c, p_c)
         if (ierr /= 0) stop 7

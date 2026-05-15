@@ -10,12 +10,12 @@ private
 
 type, extends(image) :: projector
     private
-    type(kbinterpol)      :: kbwin                   !< window function object
-    integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
-    complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
-    integer               :: wdim      = 0           !< dimension of K-B window
-    integer               :: iwinsz    = 0           !< integer half-window size
-    logical               :: expanded_exists=.false. !< indicates FT matrix existence
+    type(kbinterpol)             :: kbwin                   !< window function object
+    integer                      :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
+    complex, public, allocatable :: cmat_exp(:,:,:)         !< expanded FT matrix, made public for the sole purpose of GPU optimization
+    integer                      :: wdim      = 0           !< dimension of K-B window
+    integer                      :: iwinsz    = 0           !< integer half-window size
+    logical                      :: expanded_exists=.false. !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
     procedure :: expand_cmat
@@ -23,6 +23,7 @@ type, extends(image) :: projector
     procedure :: reset_expanded
     ! GETTERS
     procedure :: is_expanded
+    procedure :: get_kbwin
     ! FOURIER PROJECTORS
     procedure :: fproject
     procedure :: fproject_serial
@@ -107,6 +108,14 @@ contains
         class(projector), intent(in) :: self
         is_expanded = self%expanded_exists
     end function is_expanded
+
+    function get_kbwin( self ) result( kb )
+        class(projector), intent(in) :: self
+        type(kbinterpol) :: kb
+        if( .not.self%expanded_exists )&
+            &THROW_HARD('expanded Fourier matrix does not exist; get_kbwin')
+        kb = self%kbwin
+    end function get_kbwin
 
     ! FOURIER PROJECTORS
 

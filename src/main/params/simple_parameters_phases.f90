@@ -504,6 +504,7 @@ contains
     end subroutine derive_sampling_settings
 
     module subroutine derive_parallel_settings(self, cline)
+        use simple_gpu_utils, only: set_offload_device
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical :: nparts_set
@@ -528,6 +529,7 @@ contains
             !$ call omp_set_num_threads(self%nthr)
         endif
         nthr_glob = self%nthr
+        call set_offload_device(cline, self%device)
     end subroutine derive_parallel_settings
 
     module subroutine derive_image_settings(self, cline)

@@ -366,4 +366,31 @@ contains
         endif
     end subroutine vol_pad2ref_pfts
 
+    module subroutine vol_pad2ref_pfts_opt(self, vol_pad, eulspace, state, iseven)
+        use simple_projector,           only: projector
+        use simple_projector_pft_batch, only: fproject_polar_batch_opt
+        class(polarft_calc), intent(inout) :: self
+        class(projector),    intent(in)    :: vol_pad
+        class(oris),         intent(in)    :: eulspace
+        integer,             intent(in)    :: state
+        logical,             intent(in)    :: iseven
+        integer  :: iref_from, iref_to, kproj(2)
+        iref_from = (state - 1) * self%p_ptr%nspace + 1
+        iref_to   = iref_from + self%p_ptr%nspace - 1
+        kproj     = self%kfromto
+        if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
+        if( trim(self%p_ptr%mirr_proj).ne.'yes' )then
+            ! extract all the slices
+            if( iseven )then
+                call fproject_polar_batch_opt(vol_pad, eulspace, self%p_ptr%nspace, self, &
+                &self%pfts_refs_even(:, kproj(1):kproj(2), iref_from:iref_to))
+            else
+                call fproject_polar_batch_opt(vol_pad, eulspace, self%p_ptr%nspace, self, &
+                &self%pfts_refs_odd(:, kproj(1):kproj(2), iref_from:iref_to))
+            endif
+        else
+            THROW_HARD('not supported yet for optimized polarft extraction; vol_pad2ref_pfts_opt')
+        endif
+    end subroutine vol_pad2ref_pfts_opt
+
 end submodule simple_polarft_core

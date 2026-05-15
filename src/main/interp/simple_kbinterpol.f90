@@ -21,24 +21,28 @@ use simple_edges_sqwins, only: sqwin_1d
 implicit none
 
 public :: kbinterpol, kb_windim
-public :: apod_device
+public :: apod_device, apod_fast_device
 private
 
 type :: kbinterpol
     private
     real :: alpha, beta, betasq, oneoW, piW, twooW, W, Whalf, threshInstr
   contains
-    procedure :: new
-    procedure :: get_winsz
-    procedure :: get_alpha
-    procedure :: get_wdim
-    procedure :: apod
-    procedure :: apod_fast
-    procedure :: apod_mat_2d
-    procedure :: apod_mat_2d_fast
-    procedure :: apod_mat_3d
-    procedure :: apod_mat_3d_fast
-    procedure :: instr
+    procedure          :: new
+    procedure, private :: copy
+    generic            :: assignment(=) => copy
+    ! Getters
+    procedure          :: get_winsz
+    procedure          :: get_alpha
+    procedure          :: get_wdim
+    ! Calculators
+    procedure          :: apod
+    procedure          :: apod_fast
+    procedure          :: apod_mat_2d
+    procedure          :: apod_mat_2d_fast
+    procedure          :: apod_mat_3d
+    procedure          :: apod_mat_3d_fast
+    procedure          :: instr
 end type kbinterpol
 
 interface kbinterpol
@@ -46,7 +50,7 @@ interface kbinterpol
 end interface kbinterpol
 
 #ifdef USE_OPENMP_OFFLOAD
-!$omp declare target(apod_device, bessi0)
+!$omp declare target(apod_device, apod_fast_device, bessi0)
 #endif
 
 contains
@@ -76,6 +80,22 @@ contains
         self%threshInstr = self%beta/(self%piW) - TINY**2
     end subroutine new
 
+    subroutine copy( self, self2copy )
+        class(kbinterpol), intent(inout) :: self
+        class(kbinterpol), intent(in)    :: self2copy
+        self%alpha       = self2copy%alpha
+        self%beta        = self2copy%beta
+        self%betasq      = self2copy%betasq
+        self%oneoW       = self2copy%oneoW
+        self%piW         = self2copy%piW
+        self%twooW       = self2copy%twooW
+        self%W           = self2copy%W
+        self%Whalf       = self2copy%Whalf
+        self%threshInstr = self2copy%threshInstr
+    end subroutine copy
+
+    ! Getters
+
     pure real function get_winsz( self )
         class(kbinterpol), intent(in) :: self
         get_winsz = self%Whalf
@@ -92,6 +112,8 @@ contains
         call sqwin_1d(0., self%Whalf, win(1), win(2))
         get_wdim = win(2) - win(1) + 1
     end function get_wdim
+
+    ! Calculators
 
     !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
     pure elemental function apod( self, x ) result( r )
@@ -403,6 +425,37 @@ contains
         arg = 1. - arg * arg
         apod_device = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod_device
+
+    !>  \brief  is the Kaiser-Bessel apodization function
+    !>  It must be kept identical to apod_device! Because it uses a non polymorphic
+    !>  input it is compatible with OpenMP offload.
+    !>  It is assumed the kbinterpol object has been constructed prior to call.
+    pure elemental function apod_fast_device( self, x ) result( r )
+        type(kbinterpol), intent(in) :: self
+        real,             intent(in) :: x
+        real :: r
+        real(sp), parameter :: coeffs(0:14) = [&
+            1.0000000_sp, 1.3690000e1_sp, 4.6854025e1_sp, 7.1270178e1_sp, 6.0980546e1_sp,&
+            3.3392947e1_sp, 1.2698596e1_sp, 3.5478321_sp, 7.5890347e-1_sp, 1.2826406e-1_sp,&
+            1.7559349e-2_sp, 1.9866735e-3_sp, 1.8887194e-4_sp, 1.5299745e-5_sp, 1.0686404e-6_sp]
+        real(sp) :: p, q, u
+        integer  :: i
+        if( abs(x) > self%Whalf )then
+            r = 0.
+            return
+        endif
+        if( abs(self%Whalf - 1.5) > 1.e-6 .or. abs(self%alpha - 2.0) > 1.e-6 )then
+            r = apod_device(self, x)
+            return
+        endif
+        q = self%twooW * x
+        u = max(0._sp, 1._sp - q*q)
+        p = coeffs(14)
+        do i = 13,0,-1
+            p = p * u + coeffs(i)
+        enddo
+        r = self%oneoW * p
+    end function apod_fast_device
 
     ! Public utility to get the windows pixel size without instantiating the object
     pure integer function kb_windim( winsz )

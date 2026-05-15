@@ -104,22 +104,31 @@ contains
         integer,        intent(out) :: id
         integer :: ndevices
         id = -1
+#ifdef USE_OPENMP_OFFLOAD
+        ! Project built with GPU offloading
         if( cline%defined('device') )then
             ! device id provided
             id = cline%get_iarg('device')
             call set_offload_device_2( id )
         else
             ! use default device
-#ifdef USE_OPENMP_OFFLOAD
             ndevices = omp_get_num_devices()
             if( ndevices < 1 ) then
-                THROW_WARN('A device could not be set: No device identified')
+                THROW_HARD('A device could not be set: No device identified')
                 return
             endif
             id = omp_get_default_device()
             call set_offload_device_2( id )
-#endif            
         endif
+        if( id < 0 ) then
+            THROW_HARD('A device could not be set')
+        endif
+#else
+        ! CPU only branch
+        if( cline%defined('device') )then
+            THROW_WARN('Ignoring DEVICE input. Build with USE_OPENMP_OFFLOAD=ON for device offloading')
+        endif
+#endif
     end subroutine set_offload_device_1
 
     subroutine set_offload_device_2( id )
@@ -140,6 +149,7 @@ contains
             THROW_WARN('Device could not be set: device ID provided is the host')
         endif
         call omp_set_default_device( id )
+        write(logfhandle, '(A,I0)') '>>> OpenMP offload device ID: ', id
 #endif
     end subroutine set_offload_device_2
 

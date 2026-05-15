@@ -896,7 +896,7 @@ contains
         ! ierr = cufftPlan2d(plan_cu_c2r, nysc, nxsc, CUFFT_C2R)
         ! if (ierr /= CUFFT_SUCCESS) stop 73
         ierr = fftwf_init_threads()
-        call fftwf_plan_with_nthreads(p%nthr)
+        call fftwf_plan_with_nthreads(1)
         plan_fftw_r2c = fftwf_plan_dft_r2c_2d(int(ny,c_int), int(nx,c_int), buf2_fftw(:,:,1), buf2_fftw_c(:,:,1), FFTW_ESTIMATE)
         if (.not. c_associated(plan_fftw_r2c)) stop 74
 
@@ -905,7 +905,7 @@ contains
         do i = 1,nframes
             call fftwf_execute_dft_r2c(plan_fftw_r2c, buf2_fftw(:,:,i), buf2_fftw_c(:,:,i))
         end do
-        !omp end parallel do
+        !$omp end parallel do
         rt_cpu = toc(t)
         t = tic()
         !$omp target data map(to:buf2_cufft)
@@ -915,8 +915,6 @@ contains
             ierr = cufftExecR2C(plan_cu_r2c, p_r, p_c)
             if (ierr /= CUFFT_SUCCESS) stop 75
         enddo
-        ierr = cudaDeviceSynchronize()
-        if (ierr /= CUDA_SUCCESS) stop 76
         !$omp end target data
         rt_gpu = toc(t)
         print *, '  FFTW 2D many R2C total time     = ', rt_cpu, ' seconds'
@@ -925,7 +923,6 @@ contains
         if (ierr /= CUFFT_SUCCESS) stop 77
         call fftwf_destroy_plan(plan_fftw_r2c)
         deallocate(buf2_cufft, buf2_fftw)
-        call fftwf_plan_with_nthreads(1)
     end subroutine test_fftw_vs_cufft_movie
 
     subroutine test_kb
@@ -941,7 +938,7 @@ contains
       do i = 1,n
           x(i) = real(i-1)/real(n-1)
       end do
-      !$omp target teams map(to:x) map(tofrom:y,kb)
+      !$omp target teams map(to:x) map(to:kb) map(from:y)
       !$omp loop
       do i = 1, n
           y(i) = apod_device(kb, x(i))

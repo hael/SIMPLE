@@ -390,7 +390,7 @@ contains
     end subroutine estimate_lp_from_refs
 
     subroutine read_mask_filter_reproject_refvols( params, build, cline, map_shift )
-        use simple_polarft_calc, only: vol_pad2ref_pfts
+        use simple_polarft_calc, only: vol_pad2ref_pfts_opt
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(in)    :: cline
@@ -433,7 +433,7 @@ contains
             call build%vol%ifft()
             call build%vol%pad_fft(build%vol_pad)
             call build%vol_pad%expand_cmat(params%box)
-            call vol_pad2ref_pfts(build%pftc, build%vol_pad, build%eulspace, s, .true.)
+            call vol_pad2ref_pfts_opt(build%pftc, build%vol_pad, build%eulspace, s, .true.)
             call build%vol_pad%kill
             call build%vol_pad%kill_expanded
             call build%vol_odd_pad%new([params%box_croppd, params%box_croppd, params%box_croppd], &
@@ -445,7 +445,7 @@ contains
             call build%vol_odd%ifft()
             call build%vol_odd%pad_fft(build%vol_odd_pad)
             call build%vol_odd_pad%expand_cmat(params%box)
-            call vol_pad2ref_pfts(build%pftc, build%vol_odd_pad, build%eulspace, s, .false.)
+            call vol_pad2ref_pfts_opt(build%pftc, build%vol_odd_pad, build%eulspace, s, .false.)
             call build%vol_odd_pad%kill
             call build%vol_odd_pad%kill_expanded
         end do

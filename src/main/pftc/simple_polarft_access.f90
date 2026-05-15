@@ -77,6 +77,19 @@ contains
         xy(2) = self%polar(2,k,rot)
     end function get_coord
 
+    module subroutine get_polar_coords(self, dim, coords)
+        class(polarft_calc), intent(in)  :: self
+        integer,             intent(in)  :: dim
+        real(sp),            intent(out) :: coords(self%kfromto(1):self%kfromto(2),self%pftsz)
+        if( dim == 1 )then
+            coords = self%polar(1,self%kfromto(1):self%kfromto(2),:self%pftsz)
+        else if( dim == 2 )then
+            coords = self%polar(2,self%kfromto(1):self%kfromto(2),:self%pftsz)
+        else
+            THROW_HARD('invalid coordinate dimension in get_polar_coords')
+        endif
+    end subroutine get_polar_coords
+
     module subroutine get_ref_pft(self, iref, iseven, pft)
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iref
