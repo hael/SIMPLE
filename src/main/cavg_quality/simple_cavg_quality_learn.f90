@@ -23,6 +23,9 @@ real, parameter :: LEARN_MINSEPS(5)       = [0.05, 0.10, 0.15, 0.20, 0.30]
 real, parameter :: LEARN_MARGINS(11)      = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
                                               -0.05, 0.0, 0.05, 0.10, 0.20]
 real, parameter :: LEARN_POOL_FRACS(5)    = [0.50, 0.60, 0.65, 0.70, 0.80]
+logical, parameter :: LEARN_OTSU_FLAGS(2) = [.false., .true.]
+real, parameter :: LEARN_OTSU_MIN_OFFSETS(5) = [0.05, 0.10, 0.15, 0.25, 0.35]
+real, parameter :: LEARN_OTSU_MAX_OFFSETS(3) = [0.40, 0.50, 0.65]
 
 contains
 
@@ -31,14 +34,14 @@ contains
         type(cavg_quality_model),  intent(inout) :: learned_model
         character(len=*),          intent(in)    :: model_fname, report_fname
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
-        type(cavg_quality_model)      :: base_model, candidate
+        type(cavg_quality_model)      :: base_model
         type(cavg_quality_model_spec) :: base_spec, candidate_spec, best_spec
         type(cavg_quality_model_spec) :: top_specs(CAVG_QUALITY_LEARN_TOP_K)
         type(cavg_quality_model_spec), allocatable :: best_tie_specs(:)
         real :: suggested_weights(CAVG_QUALITY_NFEATS)
         real :: top_scores(CAVG_QUALITY_LEARN_TOP_K)
-        real :: score, best_score
-        integer :: i, ipol, im, isep, ifrac, max_grid, n_grid, n_top, n_best_ties
+        real :: best_score
+        integer :: i, ipol, im, isep, ilow, iwin, iomin, iomax, max_grid, n_grid, n_top, n_best_ties
         if( size(analysis_files) == 0 ) THROW_HARD('learn_cavg_quality_model: empty analysis file table')
         allocate(dsets(size(analysis_files)))
         do i = 1, size(analysis_files)
@@ -53,7 +56,8 @@ contains
         n_top       = 0
         n_grid      = 0
         n_best_ties = 0
-        max_grid = CAVG_QUALITY_LEARN_N_POLICIES * size(LEARN_MINSEPS) * size(LEARN_MARGINS)
+        max_grid = CAVG_QUALITY_LEARN_N_POLICIES * size(LEARN_MINSEPS) * size(LEARN_MARGINS) * &
+            n_otsu_grid_combinations()
         if( model_is_pool_context(learned_model) ) max_grid = max_grid * size(LEARN_POOL_FRACS)
         allocate(best_tie_specs(max_grid))
         do ipol = 1, CAVG_QUALITY_LEARN_N_POLICIES
@@ -65,25 +69,34 @@ contains
                 candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
                 do im = 1, size(LEARN_MARGINS)
                     candidate_spec%boundary_margin = LEARN_MARGINS(im)
-                    if( model_is_pool_context(learned_model) )then
-                        do ifrac = 1, size(LEARN_POOL_FRACS)
-                            candidate_spec%min_accept_frac = LEARN_POOL_FRACS(ifrac)
-                            call candidate%init_spec(candidate_spec)
-                            score = macro_balacc_for_model(dsets, candidate)
-                            n_grid = n_grid + 1
-                            call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
-                                best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
+                    do ilow = 1, size(LEARN_OTSU_FLAGS)
+                        candidate_spec%use_lowsep_otsu = LEARN_OTSU_FLAGS(ilow)
+                        do iwin = 1, size(LEARN_OTSU_FLAGS)
+                            candidate_spec%use_otsu_window = LEARN_OTSU_FLAGS(iwin)
+                            if( candidate_spec%use_otsu_window )then
+                                do iomin = 1, size(LEARN_OTSU_MIN_OFFSETS)
+                                    candidate_spec%otsu_min_offset = LEARN_OTSU_MIN_OFFSETS(iomin)
+                                    do iomax = 1, size(LEARN_OTSU_MAX_OFFSETS)
+                                        candidate_spec%otsu_max_offset = LEARN_OTSU_MAX_OFFSETS(iomax)
+                                        if( candidate_spec%otsu_max_offset <= candidate_spec%otsu_min_offset + EPS ) cycle
+                                        call evaluate_candidate_spec(dsets, candidate_spec, model_is_pool_context(learned_model), &
+                                            n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
+                                            top_specs, top_scores, n_top)
+                                    end do
+                                end do
+                            else
+                                candidate_spec%otsu_min_offset = base_spec%otsu_min_offset
+                                candidate_spec%otsu_max_offset = base_spec%otsu_max_offset
+                                call evaluate_candidate_spec(dsets, candidate_spec, model_is_pool_context(learned_model), &
+                                    n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
+                                    top_specs, top_scores, n_top)
+                            endif
                         end do
-                    else
-                        call candidate%init_spec(candidate_spec)
-                        score = macro_balacc_for_model(dsets, candidate)
-                        n_grid = n_grid + 1
-                        call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
-                            best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
-                    endif
+                    end do
                 end do
             end do
         end do
+        call select_preferred_best_tie(base_spec, best_tie_specs, n_best_ties, best_spec)
         best_spec%name = trim(best_spec%context)//'_learned_v1'
         call learned_model%init_spec(best_spec)
         call learned_model%write(model_fname)
@@ -98,6 +111,56 @@ contains
         type(cavg_quality_model), intent(in) :: model
         model_is_pool_context = trim(model%context) == 'pool'
     end function model_is_pool_context
+
+    integer function n_otsu_grid_combinations()
+        integer :: ilow, iwin, iomin, iomax
+        n_otsu_grid_combinations = 0
+        do ilow = 1, size(LEARN_OTSU_FLAGS)
+            do iwin = 1, size(LEARN_OTSU_FLAGS)
+                if( LEARN_OTSU_FLAGS(iwin) )then
+                    do iomin = 1, size(LEARN_OTSU_MIN_OFFSETS)
+                        do iomax = 1, size(LEARN_OTSU_MAX_OFFSETS)
+                            if( LEARN_OTSU_MAX_OFFSETS(iomax) <= LEARN_OTSU_MIN_OFFSETS(iomin) + EPS ) cycle
+                            n_otsu_grid_combinations = n_otsu_grid_combinations + 1
+                        end do
+                    end do
+                else
+                    n_otsu_grid_combinations = n_otsu_grid_combinations + 1
+                endif
+            end do
+        end do
+    end function n_otsu_grid_combinations
+
+    subroutine evaluate_candidate_spec( dsets, candidate_spec, is_pool_context, n_grid, best_spec, best_score, &
+                                        best_tie_specs, n_best_ties, top_specs, top_scores, n_top )
+        type(cavg_quality_training_dataset), intent(in)    :: dsets(:)
+        type(cavg_quality_model_spec),       intent(in)    :: candidate_spec
+        logical,                             intent(in)    :: is_pool_context
+        integer,                             intent(inout) :: n_grid, n_best_ties, n_top
+        type(cavg_quality_model_spec),       intent(inout) :: best_spec, best_tie_specs(:), top_specs(:)
+        real,                                intent(inout) :: best_score, top_scores(:)
+        type(cavg_quality_model)      :: candidate
+        type(cavg_quality_model_spec) :: scan_spec
+        integer :: ifrac
+        real    :: score
+        if( is_pool_context )then
+            do ifrac = 1, size(LEARN_POOL_FRACS)
+                scan_spec = candidate_spec
+                scan_spec%min_accept_frac = LEARN_POOL_FRACS(ifrac)
+                call candidate%init_spec(scan_spec)
+                score = macro_balacc_for_model(dsets, candidate)
+                n_grid = n_grid + 1
+                call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
+                    best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
+            end do
+        else
+            call candidate%init_spec(candidate_spec)
+            score = macro_balacc_for_model(dsets, candidate)
+            n_grid = n_grid + 1
+            call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
+                best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
+        endif
+    end subroutine evaluate_candidate_spec
 
     function feature_policy_name( ipolicy ) result( name )
         integer, intent(in) :: ipolicy
@@ -454,6 +517,45 @@ contains
         call record_top_model_candidate(spec, score, top_specs, top_scores, n_top)
     end subroutine consider_model_candidate
 
+    subroutine select_preferred_best_tie( base_spec, best_tie_specs, n_best_ties, best_spec )
+        type(cavg_quality_model_spec), intent(in)    :: base_spec, best_tie_specs(:)
+        integer,                       intent(in)    :: n_best_ties
+        type(cavg_quality_model_spec), intent(inout) :: best_spec
+        integer :: i, nstored
+        real    :: dist, best_dist
+        nstored = min(n_best_ties, size(best_tie_specs))
+        if( nstored <= 1 ) return
+        best_dist = huge(1.0)
+        do i = 1, nstored
+            dist = threshold_tie_distance(best_tie_specs(i), base_spec)
+            if( dist < best_dist - EPS )then
+                best_dist = dist
+                best_spec = best_tie_specs(i)
+            endif
+        end do
+    end subroutine select_preferred_best_tie
+
+    real function threshold_tie_distance( spec, base_spec )
+        type(cavg_quality_model_spec), intent(in) :: spec, base_spec
+        threshold_tie_distance = scaled_absdiff(spec%min_score_separation, base_spec%min_score_separation, &
+            minval(LEARN_MINSEPS), maxval(LEARN_MINSEPS))
+        threshold_tie_distance = threshold_tie_distance + scaled_absdiff(spec%boundary_margin, &
+            base_spec%boundary_margin, minval(LEARN_MARGINS), maxval(LEARN_MARGINS))
+        if( spec%use_lowsep_otsu .neqv. base_spec%use_lowsep_otsu ) threshold_tie_distance = threshold_tie_distance + 0.25
+        if( spec%use_otsu_window .neqv. base_spec%use_otsu_window ) threshold_tie_distance = threshold_tie_distance + 0.25
+        if( spec%use_otsu_window )then
+            threshold_tie_distance = threshold_tie_distance + scaled_absdiff(spec%otsu_min_offset, &
+                base_spec%otsu_min_offset, minval(LEARN_OTSU_MIN_OFFSETS), maxval(LEARN_OTSU_MIN_OFFSETS))
+            threshold_tie_distance = threshold_tie_distance + scaled_absdiff(spec%otsu_max_offset, &
+                base_spec%otsu_max_offset, minval(LEARN_OTSU_MAX_OFFSETS), maxval(LEARN_OTSU_MAX_OFFSETS))
+        endif
+    end function threshold_tie_distance
+
+    real function scaled_absdiff( val, ref, grid_min, grid_max )
+        real, intent(in) :: val, ref, grid_min, grid_max
+        scaled_absdiff = abs(val - ref) / max(EPS, grid_max - grid_min)
+    end function scaled_absdiff
+
     subroutine record_top_model_candidate( spec, score, top_specs, top_scores, n_top )
         type(cavg_quality_model_spec), intent(in)    :: spec
         real,                          intent(in)    :: score
@@ -549,6 +651,10 @@ contains
         call write_feature_policy_grid(funit)
         call write_real_list(funit, 'grid_min_score_separations=', LEARN_MINSEPS)
         call write_real_list(funit, 'grid_boundary_margins=', LEARN_MARGINS)
+        call write_logical_list(funit, 'grid_use_lowsep_otsu=', LEARN_OTSU_FLAGS)
+        call write_logical_list(funit, 'grid_use_otsu_window=', LEARN_OTSU_FLAGS)
+        call write_real_list(funit, 'grid_otsu_min_offsets=', LEARN_OTSU_MIN_OFFSETS)
+        call write_real_list(funit, 'grid_otsu_max_offsets=', LEARN_OTSU_MAX_OFFSETS)
         if( model_is_pool_context(learned_model) ) &
             call write_real_list(funit, 'grid_pool_min_accept_fracs=', LEARN_POOL_FRACS)
         write(funit,'(A)', advance='no') 'suggested_weights='
@@ -558,7 +664,8 @@ contains
         end do
         write(funit,*)
         write(funit,'(A)') ''
-        call write_learn_search_diagnostics(funit, learned_model, diag)
+        call write_learn_search_diagnostics(funit, learned_model, diag, best_tie_specs, n_best_ties)
+        call write_otsu_ablation_diagnostics(funit, dsets, learned_model)
         call write_feature_screen_diagnostics(funit, dsets, base_model, suggested_weights, learned_model, best_score)
         write(funit,'(A)') ''
         call write_candidate_table_header(funit, 'top_candidate_header=')
@@ -584,6 +691,33 @@ contains
         close(funit)
         write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
     end subroutine write_cavg_quality_learn_report
+
+    subroutine write_otsu_ablation_diagnostics( funit, dsets, learned_model )
+        integer,                             intent(in) :: funit
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        type(cavg_quality_model),            intent(in) :: learned_model
+        type(cavg_quality_model)      :: no_otsu_model
+        type(cavg_quality_model_spec) :: no_otsu_spec
+        integer :: ids, tp1, fp1, tn1, fn1, tp0, fp0, tn0, fn0
+        real :: precision, recall, specificity, f1, balacc1, balacc0, accuracy
+        no_otsu_spec = learned_model%get_spec()
+        no_otsu_spec%use_lowsep_otsu = .false.
+        no_otsu_spec%use_otsu_window = .false.
+        call no_otsu_model%init_spec(no_otsu_spec)
+        write(funit,'(A)') ''
+        write(funit,'(A)') '# otsu-ablation diagnostics'
+        write(funit,'(A)') 'otsu_ablation_header=dataset,with_otsu_balacc,no_otsu_balacc,delta_vs_no_otsu,'//&
+            'with_otsu_fp,with_otsu_fn,no_otsu_fp,no_otsu_fn'
+        do ids = 1, size(dsets)
+            call classify_training_dataset(dsets(ids), learned_model, tp1, fp1, tn1, fn1)
+            call calc_binary_metrics(tp1, fp1, tn1, fn1, precision, recall, specificity, f1, balacc1, accuracy)
+            call classify_training_dataset(dsets(ids), no_otsu_model, tp0, fp0, tn0, fn0)
+            call calc_binary_metrics(tp0, fp0, tn0, fn0, precision, recall, specificity, f1, balacc0, accuracy)
+            write(funit,'(A,A,A,F10.5,A,F10.5,A,F10.5,A,I0,A,I0,A,I0,A,I0)') 'otsu_ablation,', &
+                trim(dataset_short_name(dsets(ids))), ',', balacc1, ',', balacc0, ',', balacc1 - balacc0, ',', &
+                fp1, ',', fn1, ',', fp0, ',', fn0
+        end do
+    end subroutine write_otsu_ablation_diagnostics
 
     subroutine write_feature_screen_diagnostics( funit, dsets, base_model, suggested_weights, learned_model, best_score )
         integer,                             intent(in) :: funit
@@ -1009,21 +1143,38 @@ contains
         min_accept_fraction_looks_active = quality%threshold_margin > model%boundary_margin + 1.0e-4
     end function min_accept_fraction_looks_active
 
-    subroutine write_learn_search_diagnostics( funit, learned_model, diag )
+    subroutine write_learn_search_diagnostics( funit, learned_model, diag, best_tie_specs, n_best_ties )
         integer,                             intent(in) :: funit
         type(cavg_quality_model),            intent(in) :: learned_model
         type(cavg_quality_learn_diagnostics),intent(in) :: diag
+        type(cavg_quality_model_spec),       intent(in) :: best_tie_specs(:)
+        integer,                             intent(in) :: n_best_ties
         write(funit,'(A)') 'search_diagnostic_header=level,parameter,status,detail'
         call write_search_diagnostic(funit, 'note', 'feature_policy', trim(learned_model%feature_policy), &
             'selected_policy_encoded_by_zeroed_model_weights')
         call write_search_diagnostic(funit, 'note', 'feature_weights', 'data_auc_no_base_blending', &
             'learned_weights_are_derived_abinitio_from_non_hard_rejected_training_rows')
-        call write_grid_position_diagnostic(funit, 'min_score_separation', learned_model%min_score_separation, &
-            LEARN_MINSEPS, 'best_at_lowest_value_consider_lower_if_accept_all_remains_too_common', &
-            'best_at_highest_value_consider_higher_if_unstable_splits_remain')
+        call write_minsep_diagnostic(funit, learned_model%min_score_separation, best_tie_specs, n_best_ties)
         call write_grid_position_diagnostic(funit, 'boundary_margin', learned_model%boundary_margin, &
             LEARN_MARGINS, 'best_at_lowest_value_consider_more_negative_if_junk_leaks_after_validation', &
             'best_at_highest_value_consider_more_positive_if_good_classes_are_rejected')
+        call write_bool_grid_diagnostic(funit, 'use_lowsep_otsu', learned_model%use_lowsep_otsu, &
+            'searched', 'learned_from_training_grid')
+        call write_bool_grid_diagnostic(funit, 'use_otsu_window', learned_model%use_otsu_window, &
+            'searched', 'learned_from_training_grid')
+        if( learned_model%use_otsu_window )then
+            call write_grid_position_diagnostic(funit, 'otsu_min_offset', learned_model%otsu_min_offset, &
+                LEARN_OTSU_MIN_OFFSETS, 'best_at_lowest_value_consider_smaller_otsu_window_minimum', &
+                'best_at_highest_value_consider_larger_otsu_window_minimum')
+            call write_grid_position_diagnostic(funit, 'otsu_max_offset', learned_model%otsu_max_offset, &
+                LEARN_OTSU_MAX_OFFSETS, 'best_at_lowest_value_consider_smaller_otsu_window_maximum', &
+                'best_at_highest_value_consider_larger_otsu_window_maximum')
+        else
+            call write_search_diagnostic(funit, 'note', 'otsu_min_offset', 'inactive', &
+                'use_otsu_window is false in the learned model')
+            call write_search_diagnostic(funit, 'note', 'otsu_max_offset', 'inactive', &
+                'use_otsu_window is false in the learned model')
+        endif
         if( model_is_pool_context(learned_model) )then
             call write_grid_position_diagnostic(funit, 'min_accept_frac', learned_model%min_accept_frac, &
                 LEARN_POOL_FRACS, 'best_at_lowest_value_consider_lower_if_pool_model_keeps_too_much_junk', &
@@ -1034,6 +1185,54 @@ contains
         endif
         call write_policy_parameter_diagnostics(funit, learned_model, diag)
     end subroutine write_learn_search_diagnostics
+
+    subroutine write_minsep_diagnostic( funit, val, best_tie_specs, n_best_ties )
+        integer,                       intent(in) :: funit, n_best_ties
+        real,                          intent(in) :: val
+        type(cavg_quality_model_spec), intent(in) :: best_tie_specs(:)
+        character(len=LONGSTRLEN) :: detail
+        real :: tie_min, tie_max
+        call best_tie_minsep_span(best_tie_specs, n_best_ties, tie_min, tie_max)
+        if( n_best_ties > 1 .and. real_close(tie_min, minval(LEARN_MINSEPS)) .and. &
+            real_close(tie_max, maxval(LEARN_MINSEPS)) )then
+            write(detail,'(A,ES14.6,A,ES14.6,A,ES14.6)') 'best_tie_min=', tie_min, ';best_tie_max=', &
+                tie_max, ';selected_by_tie_breaker=', val
+            call write_search_diagnostic(funit, 'note', 'min_score_separation', 'flat_across_grid', trim(detail))
+        else
+            call write_grid_position_diagnostic(funit, 'min_score_separation', val, LEARN_MINSEPS, &
+                'best_at_lowest_value_consider_lower_if_accept_all_remains_too_common', &
+                'best_at_highest_value_consider_higher_if_unstable_splits_remain')
+        endif
+    end subroutine write_minsep_diagnostic
+
+    subroutine best_tie_minsep_span( best_tie_specs, n_best_ties, tie_min, tie_max )
+        type(cavg_quality_model_spec), intent(in)  :: best_tie_specs(:)
+        integer,                       intent(in)  :: n_best_ties
+        real,                          intent(out) :: tie_min, tie_max
+        integer :: i, nstored
+        nstored = min(n_best_ties, size(best_tie_specs))
+        tie_min = huge(1.0)
+        tie_max = -huge(1.0)
+        do i = 1, nstored
+            tie_min = min(tie_min, best_tie_specs(i)%min_score_separation)
+            tie_max = max(tie_max, best_tie_specs(i)%min_score_separation)
+        end do
+        if( nstored == 0 )then
+            tie_min = 0.0
+            tie_max = 0.0
+        endif
+    end subroutine best_tie_minsep_span
+
+    subroutine write_bool_grid_diagnostic( funit, param, val, status, detail )
+        integer,          intent(in) :: funit
+        character(len=*), intent(in) :: param, status, detail
+        logical,          intent(in) :: val
+        if( val )then
+            call write_search_diagnostic(funit, 'note', param, status//'_selected_true', detail)
+        else
+            call write_search_diagnostic(funit, 'note', param, status//'_selected_false', detail)
+        endif
+    end subroutine write_bool_grid_diagnostic
 
     subroutine write_grid_position_diagnostic( funit, param, val, grid, low_status, high_status )
         integer,          intent(in) :: funit
@@ -1061,22 +1260,22 @@ contains
         type(cavg_quality_model),             intent(in) :: model
         type(cavg_quality_learn_diagnostics), intent(in) :: diag
         character(len=LONGSTRLEN) :: detail
-        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'inherited=', model%use_lowsep_otsu, ';active_datasets=', &
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%use_lowsep_otsu, ';active_datasets=', &
             diag%n_lowsep, ';fp=', diag%lowsep_fp, ';fn=', diag%lowsep_fn
         call write_search_diagnostic(funit, policy_level(diag%n_lowsep, diag%lowsep_fp, diag%lowsep_fn), &
-            'use_lowsep_otsu', 'not_searched', trim(detail))
-        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'inherited=', model%use_otsu_window, ';otsu_like_datasets=', &
+            'use_lowsep_otsu_effect', 'searched', trim(detail))
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%use_otsu_window, ';otsu_like_datasets=', &
             diag%n_otsu_like, ';fp=', diag%otsu_like_fp, ';fn=', diag%otsu_like_fn
         call write_search_diagnostic(funit, policy_level(diag%n_otsu_like, diag%otsu_like_fp, diag%otsu_like_fn), &
-            'use_otsu_window', 'not_searched', trim(detail))
-        write(detail,'(A,F8.4,A,I0,A,I0,A,I0)') 'inherited=', model%otsu_min_offset, ';otsu_like_datasets=', &
+            'use_otsu_window_effect', 'searched', trim(detail))
+        write(detail,'(A,F8.4,A,I0,A,I0,A,I0)') 'selected=', model%otsu_min_offset, ';otsu_like_datasets=', &
             diag%n_otsu_like, ';fp=', diag%otsu_like_fp, ';fn=', diag%otsu_like_fn
         call write_search_diagnostic(funit, policy_level(diag%n_otsu_like, diag%otsu_like_fp, diag%otsu_like_fn), &
-            'otsu_min_offset', 'not_searched', trim(detail))
-        write(detail,'(A,F8.4,A,I0,A,I0,A,I0)') 'inherited=', model%otsu_max_offset, ';otsu_like_datasets=', &
+            'otsu_min_offset_effect', 'searched', trim(detail))
+        write(detail,'(A,F8.4,A,I0,A,I0,A,I0)') 'selected=', model%otsu_max_offset, ';otsu_like_datasets=', &
             diag%n_otsu_like, ';fp=', diag%otsu_like_fp, ';fn=', diag%otsu_like_fn
         call write_search_diagnostic(funit, policy_level(diag%n_otsu_like, diag%otsu_like_fp, diag%otsu_like_fn), &
-            'otsu_max_offset', 'not_searched', trim(detail))
+            'otsu_max_offset_effect', 'searched', trim(detail))
         write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'inherited=', model%use_cluster_rescue, ';rescue_like_datasets=', &
             diag%n_rescue_like, ';fp=', diag%rescue_like_fp, ';fn=', diag%rescue_like_fn
         call write_search_diagnostic(funit, rescue_policy_level(model, diag), 'use_cluster_rescue', 'not_searched', &
@@ -1151,6 +1350,19 @@ contains
         write(funit,*)
     end subroutine write_real_list
 
+    subroutine write_logical_list( funit, key, vals )
+        integer,          intent(in) :: funit
+        character(len=*), intent(in) :: key
+        logical,          intent(in) :: vals(:)
+        integer :: i
+        write(funit,'(A)', advance='no') trim(key)
+        do i = 1, size(vals)
+            if( i > 1 ) write(funit,'(A)', advance='no') ','
+            write(funit,'(L1)', advance='no') vals(i)
+        end do
+        write(funit,*)
+    end subroutine write_logical_list
+
     subroutine write_feature_policy_grid( funit )
         integer, intent(in) :: funit
         integer :: ipol
@@ -1167,7 +1379,8 @@ contains
         character(len=*), intent(in) :: key
         write(funit,'(A)') trim(key)//&
             'rank,balanced_accuracy,feature_policy,boundary_margin,min_score_separation,min_accept_frac,'//&
-            'use_lowsep_otsu,use_otsu_window,use_cluster_rescue,enforce_min_accept_frac,feature_weights_semicolon'
+            'use_lowsep_otsu,use_otsu_window,otsu_min_offset,otsu_max_offset,use_cluster_rescue,'//&
+            'enforce_min_accept_frac,feature_weights_semicolon'
     end subroutine write_candidate_table_header
 
     subroutine write_candidate_row( funit, tag, irank, score, spec )
@@ -1176,10 +1389,12 @@ contains
         real,                          intent(in) :: score
         type(cavg_quality_model_spec), intent(in) :: spec
         integer :: i
-        write(funit,'(A,A,I0,A,F10.5,A,A,A,ES14.6,A,ES14.6,A,ES14.6,A,L1,A,L1,A,L1,A,L1,A)', advance='no') &
+        write(funit,'(A,A,I0,A,F10.5,A,A,A,ES14.6,A,ES14.6,A,ES14.6,A,L1,A,L1,A,ES14.6,A,ES14.6,A,L1,A,L1,A)', &
+            advance='no') &
             trim(tag), ',', irank, ',', score, ',', trim(spec%feature_policy), ',', spec%boundary_margin, ',', &
             spec%min_score_separation, ',', spec%min_accept_frac, ',', spec%use_lowsep_otsu, ',', &
-            spec%use_otsu_window, ',', spec%use_cluster_rescue, ',', spec%enforce_min_accept_frac, ','
+            spec%use_otsu_window, ',', spec%otsu_min_offset, ',', spec%otsu_max_offset, ',', &
+            spec%use_cluster_rescue, ',', spec%enforce_min_accept_frac, ','
         do i = 1, CAVG_QUALITY_NFEATS
             if( i > 1 ) write(funit,'(A)', advance='no') ';'
             write(funit,'(ES14.6)', advance='no') spec%weights(i)

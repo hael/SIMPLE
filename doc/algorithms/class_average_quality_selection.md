@@ -209,23 +209,27 @@ The current grid searches:
 - feature-policy candidate;
 - minimum score separation;
 - boundary margin;
+- low-separation Otsu thresholding on/off;
+- Otsu-window thresholding on/off;
+- Otsu-window minimum and maximum offsets when Otsu-window thresholding is enabled;
 - pool minimum accepted fraction, only when the base model context is `pool`.
 
 The feature-policy candidates are hand-curated masks over the scalar feature bank. They include the original base scalar subsets, histogram-variance variants, full-feature variants, and geometry-pruned full-feature variants such as `all15_no_geom_softs`, which keeps the newer scalar diagnostics while excluding the soft geometry flags most duplicated by hard geometry rejection and the unstable connected-component area fraction.
 
 Each candidate is evaluated by running the full model classifier on every training dataset, then scoring only the non-hard-rejected rows. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets with trainable rows, so each informative dataset contributes equally.
 
-The best candidate becomes the learned model and is written to the requested model file. The learn report also records the full search grid, the selected feature policy, the top candidates, all best-score ties, suggested weights, and per-dataset confusion metrics. The per-dataset rows include both `n_classes` and `n_trainable`; the reported confusion metrics are computed over `n_trainable`, while hard-rejected classes are summarized separately.
+The best candidate becomes the learned model and is written to the requested model file. If multiple candidates tie exactly, the learner chooses the tied threshold-policy variant closest to the base model's stable interior settings; this prevents grid-order artifacts such as always selecting the lowest `min_score_separation` when the whole searched range performs identically. The learn report also records the full search grid, the selected feature policy, the top candidates, all best-score ties, suggested weights, and per-dataset confusion metrics. The per-dataset rows include both `n_classes` and `n_trainable`; the reported confusion metrics are computed over `n_trainable`, while hard-rejected classes are summarized separately.
 
 The learn report includes a `search_diagnostic` section. These records flag two classes of follow-up:
 
 - searched parameters whose winning value is on the edge of the current grid, such as `boundary_margin`, `min_score_separation`, or pool `min_accept_frac`;
-- model policy controls that are currently inherited from the base preset rather than searched, such as Otsu-window settings, low-separation Otsu, cluster rescue, and minimum-accept enforcement.
+- model policy controls that are still inherited from the base preset rather than searched, such as cluster rescue and chunk/pool minimum-accept enforcement.
 
 Warnings in this section do not mean the learned model is invalid. They mean the training set is touching one of the current search boundaries or inherited policy assumptions, so the next validation round should decide whether to broaden the grid or promote that policy control into the searched model space.
 
 The report also includes feature-screen diagnostics for deciding what to try next:
 
+- `otsu_ablation` compares the learned model against the same learned model with both Otsu threshold routes disabled, dataset by dataset.
 - `feature_signal` gives pooled AUC, mean/min/max per-dataset AUC, inversion count, base weight, suggested weight, and learned weight for every scalar feature, using only non-hard-rejected rows.
 - `feature_drop` reruns the learned model with one scalar feature weight set to zero; negative `delta_vs_learned` means the feature helped the learned model on the non-hard-rejected training set.
 - `feature_group_lodo` performs leave-one-dataset-out scalar scoring for fixed feature groups. These rows are a separability screen, not a promoted model: weights are learned from non-hard-rejected rows in all other datasets, then the non-hard-rejected rows of the held-out dataset are scored by AUC and by an optimistic best-threshold balanced accuracy.

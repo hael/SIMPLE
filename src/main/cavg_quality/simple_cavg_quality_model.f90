@@ -22,11 +22,9 @@ public :: write_cavg_quality_model_builtin_code
 ! model into the code, add a named preset and include it in builtin_names.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1 = 'chunk_default_v1'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_EXP = 'chunk_exp'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v1'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
-    CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1//'|'//CAVG_QUALITY_MODEL_CHUNK_EXP//'|'//&
-    CAVG_QUALITY_MODEL_POOL_DEFAULT
+    CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1//'|'//CAVG_QUALITY_MODEL_POOL_DEFAULT
 
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
 real, parameter :: BOUNDARY_MARGIN_DEFAULT = 0.05
@@ -45,23 +43,24 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
-! Batch-trained chunk default promoted from the representative batch9chunk
-! learning round after resolution and foreground-geometry hard rejects were
-! moved out of the learned model. The selected policy keeps the cheap scalar
-! diagnostics that generalized best on stream chunks, while zeroing mask_inside
-! and single_component because those soft geometry flags duplicate the hard
-! connected-component rejection. The cc_area_frac diagnostic is also left out of
-! the promoted boundary because it was inconsistent across the representative
-! chunk set. Pairwise distance matrices and unstable spectrum, ice, and
-! foreground/background ratio diagnostics have been removed from the default
-! scalar model space.
+! Batch-trained chunk default promoted from the representative batch10chunk
+! learning round after hard rejection was separated from model fitting and Otsu
+! threshold policy was added to the internal learn grid. The selected policy
+! keeps the cheap scalar diagnostics that generalized best on stream chunks,
+! while zeroing mask_inside, single_component, and cc_area_frac because those
+! soft geometry flags duplicate hard geometry rejection or were inconsistent
+! across the representative chunk set. Pairwise distance matrices and unstable
+! spectrum, ice, and foreground/background ratio diagnostics have been removed
+! from the default scalar model space.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    8.802998E-02, 1.059870E-01, 0.000000E+00, 5.479104E-02, &
-    9.194691E-02, 9.329647E-02, 0.000000E+00, 1.097729E-01, &
-    7.518790E-02, 8.378069E-02, 0.000000E+00, 6.965444E-02, &
-    7.154126E-02, 7.346579E-02, 8.254565E-02 ]
-real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
+    8.404870E-02, 1.065039E-01, 0.000000E+00, 3.393937E-02, &
+    8.439852E-02, 8.831557E-02, 0.000000E+00, 1.135785E-01, &
+    6.035764E-02, 7.611332E-02, 0.000000E+00, 5.907804E-02, &
+    9.650873E-02, 1.008953E-01, 9.626245E-02 ]
+real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.10
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
+real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
+real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
@@ -71,8 +70,8 @@ type :: cavg_quality_model
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
     real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
-    real              :: otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
-    real              :: otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
+    real              :: otsu_min_offset         = CHUNK_V2_OTSU_MIN_OFFSET
+    real              :: otsu_max_offset         = CHUNK_V2_OTSU_MAX_OFFSET
     real              :: cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
     real              :: min_accept_frac         = 0.0
     logical           :: use_lowsep_otsu         = .true.
@@ -109,8 +108,6 @@ contains
                 spec = chunk_default_v2_model_spec()
             case(CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1)
                 spec = chunk_default_v1_model_spec()
-            case(CAVG_QUALITY_MODEL_CHUNK_EXP)
-                spec = chunk_exp_model_spec()
             case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
                 spec = pool_default_model_spec()
             case default
@@ -178,8 +175,8 @@ contains
         spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
         spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
         spec%min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
-        spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
-        spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
+        spec%otsu_min_offset         = CHUNK_V2_OTSU_MIN_OFFSET
+        spec%otsu_max_offset         = CHUNK_V2_OTSU_MAX_OFFSET
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
         spec%min_accept_frac         = 0.0
         spec%use_lowsep_otsu         = .true.
@@ -206,29 +203,6 @@ contains
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
     end function chunk_default_v1_model_spec
-
-    function chunk_exp_model_spec() result( spec )
-        type(cavg_quality_model_spec) :: spec
-        spec%name                    = CAVG_QUALITY_MODEL_CHUNK_EXP
-        spec%family                  = 'linear_boundary'
-        spec%context                 = 'chunk'
-        spec%feature_policy          = 'all_features_no_mask_single'
-        spec%weights                 = [ &
-            8.064926E-02, 1.021962E-01, 0.000000E+00, 3.256666E-02, &
-            8.098494E-02, 8.474355E-02, 0.000000E+00, 1.089847E-01, &
-            5.791641E-02, 7.303484E-02, 4.044609E-02, 5.668857E-02, &
-            9.260533E-02, 9.681446E-02, 9.236902E-02 ]
-        spec%boundary_margin         =  5.000000E-02
-        spec%min_score_separation    =  5.000000E-02
-        spec%otsu_min_offset         =  2.500000E-01
-        spec%otsu_max_offset         =  5.000000E-01
-        spec%cluster_rescue_margin   =  2.000000E-01
-        spec%min_accept_frac         =  0.000000E+00
-        spec%use_lowsep_otsu         = .true.
-        spec%use_otsu_window         = .true.
-        spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
-    end function chunk_exp_model_spec
 
     function pool_default_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec
