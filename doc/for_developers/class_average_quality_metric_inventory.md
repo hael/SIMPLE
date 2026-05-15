@@ -55,7 +55,7 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 8 | `corr_frc_proxy` | optional `cls2D` `corr` | higher is better | Uses stored correlation/FRC-like metadata when present. |
 | 9 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
 | 10 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
-| 11 | `nonblob_detail` | 20-6 A band-pass plus `image%presence` | higher is better | Structured detail/edge support relative to central blob-like presence. |
+| 11 | `detail_texture` | 20-6 A band-pass texture | higher is better | Central-mask local residual-energy heterogeneity plus radial-residual detail after subtracting the radial mean. |
 | 12 | `presence` | `image%presence` | higher is better | Central signal excess relative to border background noise. |
 | 13 | `log_detail_bg_snr` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to outside-mask detail RMS. |
 | 14 | `log_detail_signal_ratio` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to in-mask total signal RMS. |
@@ -261,7 +261,7 @@ Do not add a large feature batch in one pass. The current learner can evaluate a
 
 A practical sequence is:
 
-1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `cc_area_frac`, `nonblob_detail`, `presence`, and the internal-detail features.
+1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `cc_area_frac`, `detail_texture`, `presence`, and the internal-detail features.
 2. Inspect the learn report `feature_signal`, `feature_drop`, and `feature_group_lodo` rows. A feature should have stable per-dataset AUC, improve the one-feature-drop test, or improve leave-one-dataset-out group behavior before it is trusted as default-model signal.
 3. Promote only features that improve holdout behavior, especially on difficult chunk datasets, without damaging easy/manual-trusted cases.
 4. Revisit spectral additions only if the scalar feature bank cannot solve a well-defined failure mode; keep them diagnostic until they prove they do not simply rediscover periodic artifacts.
