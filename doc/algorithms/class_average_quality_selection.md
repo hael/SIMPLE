@@ -99,15 +99,15 @@ The current built-in presets are:
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk_default_v2` is the default chunk/stream operating point. The current promoted feature policy is `full_geom_pruned`, which leaves `mask_inside`, `single_component`, and `cc_area_frac` at zero weight because foreground geometry is handled by the hard validity gate or is not stable enough as soft model evidence. Resolution remains active model evidence through the nonzero-weight `neg_log_res` feature.
+`chunk_default_v2` is the default chunk/stream operating point. The current promoted feature policy is `base_scalar_plus_curvature`, which leaves `mask_inside` and `single_component` at zero weight because foreground geometry is handled by the hard validity gate. Resolution remains active model evidence through the nonzero-weight `neg_log_res` feature.
 
-The current chunk model uses `boundary_margin=0.05`, `min_score_separation=0.15`, low-separation Otsu enabled, Otsu-window threshold replacement disabled, cluster rescue disabled, and minimum accepted fraction disabled. `chunk_default_v1` is an alternate chunk preset. `pool_default_v1` is the more recall-preserving operating point for larger pooled or batch sets and enables minimum-accepted-fraction behavior.
+The current chunk model uses `boundary_margin=0.20`, `min_score_separation=0.15`, low-separation Otsu enabled, Otsu-window threshold replacement disabled, cluster rescue disabled, and minimum accepted fraction disabled. `chunk_default_v1` is an alternate chunk preset. `pool_default_v1` is the more recall-preserving operating point for larger pooled or batch sets and enables minimum-accepted-fraction behavior.
 
 ## Feature Space
 
 The feature inventory is maintained in `simple_cavg_quality_feats.f90`. Feature extraction produces raw per-class values and a normalized feature matrix. The model uses the normalized `z_*` features, not the raw feature values.
 
-The current feature set has 16 scalar features:
+The current feature set has 17 scalar features:
 
 - `log_pop`
 - `neg_log_res`
@@ -125,10 +125,11 @@ The current feature set has 16 scalar features:
 - `log_detail_signal_ratio`
 - `detail_coverage`
 - `detail_edge_density`
+- `norm_interior_curvature`
 
 The current model path is scalar-only. Pairwise histogram/spectrum distance matrices, relational quality matrices, histogram-neighborhood density, and global intensity-softness descriptors are not part of the active feature bank.
 
-The internal-detail diagnostics measure organized in-mask molecular texture. They use one broad 20-6 A band-pass per class average and summarize detail relative to outside-mask background, detail relative to total in-mask signal, in-mask detail coverage, band-passed edge density, and an `interior_curvature` score. `interior_curvature` measures 4-neighbor Laplacian RMS in a shrunken central mask after softly downweighting pixels dominated by first-derivative edge response. This is meant to penalize smooth ice blobs whose signal is mostly a sharp contour, while preserving signal from true internal extrema/detail. These are scalar diagnostics rather than pairwise distances.
+The internal-detail diagnostics measure organized in-mask molecular texture. They use one broad 20-6 A band-pass per class average and summarize detail relative to outside-mask background, detail relative to total in-mask signal, in-mask detail coverage, band-passed edge density, and curvature scores. `interior_curvature` measures 4-neighbor Laplacian RMS in a shrunken central mask after softly downweighting pixels dominated by first-derivative edge response, normalized by outside-mask curvature. `norm_interior_curvature` uses the same central curvature numerator but normalizes by outside-mask real-space noise instead. This pair is meant to test whether smooth ice blobs whose signal is mostly a sharp contour can be separated from true internal extrema/detail without using raw brightness. These are scalar diagnostics rather than pairwise distances.
 
 Resolution has a dual role. The continuous `neg_log_res` feature is part of the learned model and contributes to both the linear score and the feature-space distance whenever its learned weight is nonzero. Only catastrophic resolution failure is outside the learned boundary: a class with stored `cls2D` resolution worse than `40 A` is hard rejected before fitting. Foreground geometry is handled more conservatively; after Otsu segmentation and connected-component cleanup, a class is hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar geometry features remain in the analysis table as diagnostics, but catastrophic low-resolution or outside-mask failures are not left for the model to rescue.
 
@@ -219,7 +220,7 @@ The current grid searches:
 - Otsu-window minimum and maximum offsets when Otsu-window thresholding is enabled;
 - pool minimum accepted fraction, only when the base model context is `pool`.
 
-The feature-policy candidates are hand-curated masks over the scalar feature bank. The active grid is deliberately small: `base_scalar`, `base_no_cc_area`, `base_geom_pruned`, `base_scalar_plus_curvature`, and `full_geom_pruned`. The first four test compact scalar policies and the new interior-curvature probe; `full_geom_pruned` is the only full internal-detail policy retained because hard-reject-adjacent geometry is already handled by the validity gate.
+The feature-policy candidates are hand-curated masks over the scalar feature bank. The active grid is deliberately small: `base_scalar`, `base_no_cc_area`, `base_geom_pruned`, `base_scalar_plus_curvature`, `base_scalar_plus_norm_curvature`, `base_scalar_plus_curvatures`, and `full_geom_pruned`. These policies test the compact scalar backbone, the two curvature probes separately, the pair together, and one broader internal-detail policy with hard-reject-adjacent geometry removed.
 
 Each candidate is evaluated by running the full model classifier on every training dataset, then scoring only the non-hard-rejected rows. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets with trainable rows, so each informative dataset contributes equally.
 

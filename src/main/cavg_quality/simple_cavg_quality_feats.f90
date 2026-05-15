@@ -30,6 +30,7 @@ public :: I_LOG_DETAIL_BG_SNR
 public :: I_LOG_DETAIL_SIGNAL_RATIO
 public :: I_DETAIL_COVERAGE
 public :: I_DETAIL_EDGE_DENSITY
+public :: I_NORM_INTERIOR_CURVATURE
 public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
@@ -70,6 +71,7 @@ integer, parameter :: I_LOG_DETAIL_BG_SNR       = 13
 integer, parameter :: I_LOG_DETAIL_SIGNAL_RATIO = 14
 integer, parameter :: I_DETAIL_COVERAGE         = 15
 integer, parameter :: I_DETAIL_EDGE_DENSITY     = 16
+integer, parameter :: I_NORM_INTERIOR_CURVATURE = 17
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -105,7 +107,9 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
         'internal_detail'), &
     cavg_quality_feature_def('detail_edge_density', 'diagnostic', &
         'fraction of in-mask pixels with band-passed gradient magnitude above background and image-scale thresholds', &
-        'internal_detail') ]
+        'internal_detail'), &
+    cavg_quality_feature_def('norm_interior_curvature', 'higher_is_better', &
+        'edge-suppressed central curvature after outside-mask noise normalization', 'internal_detail') ]
 
 contains
 
@@ -191,7 +195,8 @@ contains
         real                 :: outside_frac, centroid_norm, locvar_fg, locvar_bg
         real                 :: cc_area_frac
         real                 :: center_edge_snr, presence_score
-        real                 :: interior_curvature, detail_bg_snr, detail_signal_ratio, detail_coverage
+        real                 :: interior_curvature, norm_interior_curvature
+        real                 :: detail_bg_snr, detail_signal_ratio, detail_coverage
         real                 :: detail_edge_density
         integer              :: nccs_valid, ithr
         logical              :: no_component, mask_hard_reject, bad_pixels
@@ -232,7 +237,7 @@ contains
         end do
         !$omp parallel do default(shared) private(i,ithr,outside_frac,centroid_norm,nccs_valid,no_component,&
         !$omp& mask_hard_reject,bad_pixels,locvar_fg,locvar_bg,center_edge_snr,presence_score,&
-        !$omp& cc_area_frac,interior_curvature,detail_bg_snr,detail_signal_ratio,&
+        !$omp& cc_area_frac,interior_curvature,norm_interior_curvature,detail_bg_snr,detail_signal_ratio,&
         !$omp& detail_coverage,detail_edge_density)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
@@ -250,6 +255,7 @@ contains
                 center_edge_snr     = 0.0
                 presence_score      = 0.0
                 interior_curvature  = 0.0
+                norm_interior_curvature = 0.0
                 detail_bg_snr       = 0.0
                 detail_signal_ratio = 0.0
                 detail_coverage     = 0.0
@@ -260,8 +266,8 @@ contains
                                                       centroid_norm, cc_area_frac, nccs_valid, &
                                                       no_component, mask_hard_reject)
                 call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
-                                                presence_score, interior_curvature, detail_bg_snr, detail_signal_ratio, &
-                                                detail_coverage, detail_edge_density)
+                                                presence_score, interior_curvature, norm_interior_curvature, &
+                                                detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density)
             endif
             raw(i, I_LOG_POP)                 = log(real(max(pop(i), 0)) + 1.0)
             raw(i, I_NEG_LOG_RES)             = resolution_feature(res(i))
@@ -279,6 +285,7 @@ contains
             raw(i, I_LOG_DETAIL_SIGNAL_RATIO) = detail_signal_ratio
             raw(i, I_DETAIL_COVERAGE)         = detail_coverage
             raw(i, I_DETAIL_EDGE_DENSITY)     = detail_edge_density
+            raw(i, I_NORM_INTERIOR_CURVATURE) = norm_interior_curvature
             ! Catastrophic resolution and geometry failures are hard validity
             ! rejects; ordinary resolution variation remains an active scalar
             ! model feature through neg_log_res.
@@ -382,13 +389,14 @@ contains
     end subroutine measure_cavg_foreground_geometry
 
     subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, center_edge_snr, presence_score, &
-                                           interior_curvature, detail_bg_snr, detail_signal_ratio, detail_coverage, &
-                                           detail_edge_density )
+                                           interior_curvature, norm_interior_curvature, detail_bg_snr, &
+                                           detail_signal_ratio, detail_coverage, detail_edge_density )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
         real,         intent(out)   :: locvar_fg, locvar_bg, center_edge_snr
         real,         intent(out)   :: presence_score
         real,         intent(out)   :: interior_curvature
+        real,         intent(out)   :: norm_interior_curvature
         real,         intent(out)   :: detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density
         type(image)       :: img, img_bin
         real, allocatable :: bin_mask(:,:,:)
@@ -397,8 +405,8 @@ contains
         call img%zero_edgeavg()
         presence_score = img%presence()
         center_edge_snr = img%center_edge_snr(rad_px)
-        call measure_cavg_detail_metrics(img, rad_px, interior_curvature, detail_bg_snr, detail_signal_ratio, &
-                                         detail_coverage, detail_edge_density)
+        call measure_cavg_detail_metrics(img, rad_px, interior_curvature, norm_interior_curvature, &
+                                         detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density)
         call img%bp(0.0, SIGNAL_METRIC_LP)
         img_bin = img
         call otsu_img(img_bin)
@@ -411,11 +419,12 @@ contains
         call img_bin%kill()
     end subroutine measure_cavg_image_metrics
 
-    subroutine measure_cavg_detail_metrics( img_src, rad_px, interior_curvature, detail_bg_snr, detail_signal_ratio, &
-                                            detail_coverage, detail_edge_density )
+    subroutine measure_cavg_detail_metrics( img_src, rad_px, interior_curvature, norm_interior_curvature, &
+                                            detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
-        real,         intent(out)   :: interior_curvature, detail_bg_snr, detail_signal_ratio
+        real,         intent(out)   :: interior_curvature, norm_interior_curvature
+        real,         intent(out)   :: detail_bg_snr, detail_signal_ratio
         real,         intent(out)   :: detail_coverage, detail_edge_density
         type(image) :: detail_img
         real, allocatable :: orig(:,:,:), detail(:,:,:)
@@ -424,10 +433,12 @@ contains
         real :: dx, dy, r2, rad2, core_rad2, val, grad, lap, edge_weight
         real :: detail_rms_in, detail_rms_bg, curv_rms_core, curv_rms_bg
         real :: signal_rms_in, grad_rms_in, grad_rms_bg, detail_thr, grad_thr
+        real :: bg_std
         real :: grad_ref
         real(8) :: detail_s2_in, detail_s2_bg, signal_s2_in, grad_s2_in, grad_s2_bg
-        real(8) :: curv_s2_core, curv_s2_bg
-        interior_curvature = 0.0
+        real(8) :: curv_s2_core, curv_s2_bg, bg_s1, bg_s2, bg_mean, bg_var
+        interior_curvature      = 0.0
+        norm_interior_curvature = 0.0
         detail_bg_snr       = 0.0
         detail_signal_ratio = 0.0
         detail_coverage     = 0.0
@@ -457,6 +468,8 @@ contains
         grad_s2_bg   = 0.0d0
         curv_s2_core = 0.0d0
         curv_s2_bg   = 0.0d0
+        bg_s1        = 0.0d0
+        bg_s2        = 0.0d0
         n_in         = 0
         n_bg         = 0
         n_grad_in    = 0
@@ -475,6 +488,8 @@ contains
                     n_in = n_in + 1
                 else
                     detail_s2_bg = detail_s2_bg + real(val,kind=8)**2
+                    bg_s1        = bg_s1 + real(orig(ix,iy,1),kind=8)
+                    bg_s2        = bg_s2 + real(orig(ix,iy,1),kind=8)**2
                     n_bg = n_bg + 1
                 endif
                 if( ix <= 1 .or. ix >= ldim(1) .or. iy <= 1 .or. iy >= ldim(2) ) cycle
@@ -511,6 +526,14 @@ contains
         else
             grad_rms_bg = grad_rms_in
         endif
+        if( n_bg > 1 )then
+            bg_mean = bg_s1 / real(n_bg,kind=8)
+            bg_var  = max(0.0d0, bg_s2 / real(n_bg,kind=8) - bg_mean**2)
+            bg_std  = sqrt(real(bg_var))
+        else
+            bg_std = detail_rms_bg
+        endif
+        bg_std = max(bg_std, detail_rms_bg, LOG_EPS)
         detail_bg_snr       = log(max(detail_rms_in / max(detail_rms_bg, LOG_EPS), LOG_EPS))
         detail_signal_ratio = log(max(detail_rms_in / max(signal_rms_in, LOG_EPS), LOG_EPS))
         detail_thr = max(2.0 * detail_rms_bg, 0.5 * detail_rms_in)
@@ -548,6 +571,11 @@ contains
             curv_rms_bg = curv_rms_core
         endif
         interior_curvature = log(max(curv_rms_core / max(curv_rms_bg, LOG_EPS), LOG_EPS))
+        ! Companion to the ratio-style curvature above: absolute central
+        ! 20-6 A curvature after normalizing by outside-mask noise. This keeps
+        ! raw brightness out of the model while asking whether the class has
+        ! real internal structure above its own background scale.
+        norm_interior_curvature = log(max(curv_rms_core / bg_std, LOG_EPS))
         detail_coverage     = real(n_cov)  / real(max(n_grad_in, 1))
         detail_edge_density = real(n_edge) / real(max(n_grad_in, 1))
         call detail_img%kill()

@@ -7,8 +7,8 @@ use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, CAVG_RES_HARD_REJECT_A, I_LOG_POP, I_NEG_LOG_RES, &
     I_MASK_INSIDE, I_LOCVAR_FG, I_LOCVAR_BG, I_CC_SINGLE, I_CORR_FRC, I_CENTER_EDGE_SNR, I_CC_AREA_FRAC, &
     I_INTERIOR_CURVATURE, I_PRESENCE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
-    I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY, apply_cavg_quality_model_feature_exclusions, &
-    apply_cavg_quality_model_mask_exclusions
+    I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY, I_NORM_INTERIOR_CURVATURE, &
+    apply_cavg_quality_model_feature_exclusions, apply_cavg_quality_model_mask_exclusions
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, &
@@ -21,7 +21,7 @@ public :: learn_cavg_quality_model
 
 logical, parameter :: LEARN_OTSU_FLAGS(2)           = [.false., .true.]
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K      = 10
-integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 5
+integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 7
 real,    parameter :: LEARN_MINSEPS(5)              = [0.05, 0.10, 0.15, 0.20, 0.30]
 ! Positive margins deliberately over-select relative to the learned boundary.
 ! Keeping a resolved positive tail lets learn mode discover recall-favoring
@@ -182,6 +182,10 @@ contains
             case(4)
                 name = 'base_scalar_plus_curvature'
             case(5)
+                name = 'base_scalar_plus_norm_curvature'
+            case(6)
+                name = 'base_scalar_plus_curvatures'
+            case(7)
                 name = 'full_geom_pruned'
             case default
                 THROW_HARD('feature_policy_name: invalid feature policy')
@@ -214,6 +218,18 @@ contains
                 ! ice-blob-oriented interior-curvature probe for validation.
                 mask(1:12) = .true.
             case(5)
+                ! Same compact scalar bank, but tests the outside-mask-noise
+                ! normalized curvature companion instead of the ratio-style
+                ! curvature feature.
+                mask(1:12) = .true.
+                mask(I_INTERIOR_CURVATURE) = .false.
+                mask(I_NORM_INTERIOR_CURVATURE) = .true.
+            case(6)
+                ! Let the learner decide whether the two curvature summaries
+                ! are complementary when both are available.
+                mask(1:12) = .true.
+                mask(I_NORM_INTERIOR_CURVATURE) = .true.
+            case(7)
                 mask = .true.
                 mask(I_MASK_INSIDE)  = .false.
                 mask(I_CC_SINGLE)    = .false.
@@ -876,9 +892,9 @@ contains
         call write_lodo_group_row(funit, 'support_res_corr', dsets, group_inds(1:3))
         group_inds(1:4) = [I_LOCVAR_FG, I_LOCVAR_BG, I_CENTER_EDGE_SNR, I_PRESENCE]
         call write_lodo_group_row(funit, 'local_signal4', dsets, group_inds(1:4))
-        group_inds(1:5) = [I_INTERIOR_CURVATURE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
-                           I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY]
-        call write_lodo_group_row(funit, 'internal_detail5', dsets, group_inds(1:5))
+        group_inds(1:6) = [I_INTERIOR_CURVATURE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
+                           I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY, I_NORM_INTERIOR_CURVATURE]
+        call write_lodo_group_row(funit, 'internal_detail6', dsets, group_inds(1:6))
     end subroutine write_lodo_group_screen
 
     subroutine append_feature_except( inds, ninds, excluded_feature )

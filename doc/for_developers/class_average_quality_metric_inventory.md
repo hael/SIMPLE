@@ -61,12 +61,13 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 14 | `log_detail_signal_ratio` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to in-mask total signal RMS. |
 | 15 | `detail_coverage` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with detail above background and image-scale thresholds. |
 | 16 | `detail_edge_density` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with band-passed gradient above background and image-scale thresholds. |
+| 17 | `norm_interior_curvature` | 20-6 A band-pass Laplacian plus outside-mask noise | higher is better | Same edge-suppressed central curvature numerator as `interior_curvature`, normalized by outside-mask real-space noise rather than outside-mask curvature. |
 
 Pairwise histogram and rotational-spectrum matrices are outside the model infrastructure. Global intensity-softness descriptors are not part of the feature bank.
 
 The model policy favors scalar features with stable quality direction under robust per-dataset normalization.
 
-The internal-detail features are zero-weighted in the current built-in defaults. They are meant to answer a specific validation question: whether smooth blob-like class averages that pass the scalar geometry checks are separable by direct measurements of organized in-mask molecular texture.
+The current chunk default uses `interior_curvature`; the other internal-detail features remain zero-weighted until validation shows that they generalize. They answer a specific validation question: whether smooth blob-like class averages that pass the scalar geometry checks are separable by direct measurements of organized in-mask molecular texture.
 
 Resolution is both a hard validity check and an active model feature. The feature extractor hard rejects class averages when `cls2D res > 40 A`, but non-catastrophic resolution variation remains in the learned model through `neg_log_res`. Mask-geometry validity is handled as a hard gate when the Otsu/connected-component pass finds no valid foreground component, when any foreground-component centroid lies outside the mask radius, or when more than 10 pixels of the largest component lie outside the mask disc. These hard rejections are implemented in the quality library and do not depend on stream/microchunk modules.
 
@@ -74,7 +75,7 @@ Resolution is both a hard validity check and an active model feature. The featur
 
 The built-in models are complete `linear_boundary` presets:
 
-- `chunk_default_v2`: current default chunk/stream behavior, guarded by the `full_geom_pruned` feature policy.
+- `chunk_default_v2`: current default chunk/stream behavior, guarded by the `base_scalar_plus_curvature` feature policy.
 - `chunk_default_v1`: alternate chunk/stream preset.
 - `pool_default_v1`: recall-preserving behavior for larger pooled/batch datasets.
 
@@ -88,7 +89,7 @@ The important model controls are:
 - `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
 - `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
 
-The current learner searches feature-policy candidates, feature weights derived from the training data, minimum score separation, boundary margin, Otsu threshold controls, and pool minimum accepted fraction. The policy grid is intentionally compact: `base_scalar`, `base_no_cc_area`, `base_geom_pruned`, `base_scalar_plus_curvature`, and `full_geom_pruned`.
+The current learner searches feature-policy candidates, feature weights derived from the training data, minimum score separation, boundary margin, Otsu threshold controls, and pool minimum accepted fraction. The policy grid is intentionally compact: `base_scalar`, `base_no_cc_area`, `base_geom_pruned`, `base_scalar_plus_curvature`, `base_scalar_plus_norm_curvature`, `base_scalar_plus_curvatures`, and `full_geom_pruned`.
 
 ## Reusable Existing Routines
 

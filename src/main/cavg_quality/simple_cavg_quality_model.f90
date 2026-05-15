@@ -12,7 +12,7 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: CAVG_QUALITY_DEFAULT_WEIGHTS
+public :: CAVG_QUALITY_FALLBACK_WEIGHTS
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
 public :: cavg_quality_model
@@ -21,9 +21,9 @@ public :: write_cavg_quality_model_builtin_code
 
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in builtin_names.
-character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT    = 'chunk_default_v2'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1 = 'chunk_default_v1'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v1'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT     = 'pool_default_v1'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
     CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1//'|'//CAVG_QUALITY_MODEL_POOL_DEFAULT
 
@@ -35,14 +35,16 @@ real, parameter :: CHUNK_OTSU_MAX_OFFSET   = 0.50
 real, parameter :: POOL_MIN_ACCEPT_FRAC    = 0.65
 real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
 
-! Reference v1/base linear score coefficients. These are retained for the
-! legacy preset and as the learner fallback; feature definitions and extraction
-! live in simple_cavg_quality_feats.
-real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
+! Fallback linear score coefficients used by legacy presets and as a guard
+! against empty model files. The active chunk default has its own learned
+! weights below; feature definitions and extraction live in
+! simple_cavg_quality_feats.
+real, parameter :: CAVG_QUALITY_FALLBACK_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     3.953488E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     1.860465E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
+    0.000000E+00 ]
 
 ! Current chunk default, promoted from the batch_train4 chunk learning run.
 ! Resolution has two roles: catastrophic failures
@@ -59,7 +61,8 @@ real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.080296E-01, 1.371388E-01, 0.000000E+00, 3.803330E-02, &
     1.113096E-01, 1.159168E-01, 0.000000E+00, 1.498871E-01, &
     7.516573E-02, 5.957574E-02, 7.828858E-02, 1.266548E-01, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
+    0.000000E+00 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.20
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
@@ -71,7 +74,8 @@ real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
 !     1.104735E-01, 1.399886E-01, 0.000000E+00, 4.460987E-02, &
 !     1.109333E-01, 1.160819E-01, 0.000000E+00, 1.492875E-01, &
 !     7.933401E-02, 0.000000E+00, 0.000000E+00, 1.268510E-01, &
-!     6.271760E-02, 0.000000E+00, 2.658988E-02, 3.313298E-02 ]
+!     6.271760E-02, 0.000000E+00, 2.658988E-02, 3.313298E-02, &
+!     0.000000E+00 ]
 ! real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
 ! real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 ! real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
@@ -206,7 +210,7 @@ contains
         spec%family                  = 'linear_boundary'
         spec%context                 = 'chunk'
         spec%feature_policy          = 'legacy_core'
-        spec%weights                 = CAVG_QUALITY_DEFAULT_WEIGHTS
+        spec%weights                 = CAVG_QUALITY_FALLBACK_WEIGHTS
         spec%boundary_margin         = -CHUNK_BOUNDARY_OFFSET
         spec%min_score_separation    = MIN_SCORE_SEPARATION
         spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
@@ -225,7 +229,7 @@ contains
         spec%family                  = 'linear_boundary'
         spec%context                 = 'pool'
         spec%feature_policy          = 'legacy_core'
-        spec%weights                 = CAVG_QUALITY_DEFAULT_WEIGHTS
+        spec%weights                 = CAVG_QUALITY_FALLBACK_WEIGHTS
         spec%boundary_margin         = BOUNDARY_MARGIN_DEFAULT
         spec%min_score_separation    = MIN_SCORE_SEPARATION
         spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
@@ -243,7 +247,7 @@ contains
         self%weights = max(0.0, self%weights)
         call apply_cavg_quality_model_feature_exclusions(self%weights)
         if( sum(self%weights) <= EPS )then
-            self%weights = CAVG_QUALITY_DEFAULT_WEIGHTS
+            self%weights = CAVG_QUALITY_FALLBACK_WEIGHTS
             call apply_cavg_quality_model_feature_exclusions(self%weights)
         endif
         if( sum(self%weights) > EPS )then
