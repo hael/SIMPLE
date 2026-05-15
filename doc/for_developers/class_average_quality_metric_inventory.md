@@ -69,13 +69,13 @@ Mask-geometry validity is deliberately outside the learned model. The feature ex
 
 The built-in models are complete `linear_boundary` presets:
 
-- `chunk_default_v2`: current default chunk/stream behavior, promoted from trusted batch-style learning cycles and updated from the constrained batch4chunk run.
+- `chunk_default_v2`: current default chunk/stream behavior, promoted from the representative batch7chunk learning cycle with the `base12_pruned_plus_histvar` feature policy.
 - `chunk_default_v1`: legacy chunk/stream behavior retained for comparison.
 - `pool_default_v1`: recall-preserving behavior for larger pooled/batch datasets.
 
 The important model controls are:
 
-- `feature_policy`: learn-mode candidate name describing which scalar features are allowed into the score and clustering distance; the model file encodes this by zeroing excluded weights.
+- `feature_policy`: learn-mode candidate name describing which scalar features are allowed into the score and clustering distance; the model file encodes this by zeroing excluded weights. The current chunk default zeros `mask_inside`, `single_component`, `cc_area_frac`, `presence`, and `log_contrast`.
 - `feature_weights`: nonnegative linear score coefficients, normalized to sum to one.
 - `boundary_margin`: shifts the decision threshold; more negative rejects more aggressively, more positive preserves more borderline classes.
 - `min_score_separation`: below this separation the model treats the partition as unreliable unless low-separation Otsu is enabled and acceptable.

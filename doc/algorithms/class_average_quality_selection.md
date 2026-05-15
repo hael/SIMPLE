@@ -4,7 +4,7 @@
 
 `cluster_cavgs_quality` is the SIMPLE class-average quality selection program. It replaces a field of scalar rejection thresholds with an explicit, interpretable multivariate model. The program evaluates every 2D class average, applies hard validity rejects for non-negotiable failures, measures a fixed inventory of quality features, normalizes those features within the dataset, and applies an instantiable quality model that partitions the remaining class averages into accepted and rejected sets.
 
-The current implementation is intentionally not a black-box classifier. A model is a named `linear_boundary` specification with feature weights, a histogram-distance weight, threshold controls, and policy flags for chunk-like or pool-like behavior. Learned models can be used directly from a model file, and a separate promotion mode can emit the Fortran code needed to add a validated learned model as a built-in library option.
+The current implementation is intentionally not a black-box classifier. A model is a named `linear_boundary` specification with feature weights, threshold controls, and policy flags for chunk-like or pool-like behavior. Learned models can be used directly from a model file, and a separate promotion mode can emit the Fortran code needed to add a validated learned model as a built-in library option.
 
 ## Main Files
 
@@ -94,7 +94,7 @@ The current built-in presets are:
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk_default_v2` is the default chunk/stream operating point promoted from the trusted batch-style learning cycles. Its current feature bank excludes the former scalar histogram-neighborhood feature, pairwise histogram/spectrum matrices, and unstable spectrum/ice/foreground-background ratio diagnostics. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
+`chunk_default_v2` is the default chunk/stream operating point promoted from the representative batch7chunk learning cycle. Its current feature bank excludes the former scalar histogram-neighborhood feature, pairwise histogram/spectrum matrices, and unstable spectrum/ice/foreground-background ratio diagnostics. The promoted feature policy is `base12_pruned_plus_histvar`, which leaves `mask_inside`, `single_component`, `cc_area_frac`, `presence`, and `log_contrast` at zero weight while keeping masked histogram variance available to the scalar score and clustering distance. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
 
 ## Feature Space
 
@@ -332,7 +332,7 @@ For every candidate learned model, check:
 
 - whether hard rejects remove any manual-good classes;
 - whether chunk and pool data need different parameters;
-- whether the histogram distance weight is stable across training sets;
+- whether any newly added scalar feature is stable across training sets;
 - whether the best model is unique or one of many ties;
 - whether balanced accuracy hides unacceptable false negatives;
 - whether the model behaves sensibly on a dataset not used for learning.

@@ -43,6 +43,8 @@ The new quality module only hard-rejects pathological cases:
 
 - zero population
 - no valid connected component after foreground segmentation
+- foreground-component centroids outside the mask radius
+- more than 10 pixels of the largest foreground component outside the mask disc
 - essentially zero local variance in both foreground and background
 
 This was important. Aggressive hard rejections are difficult to recover from because they bypass the multivariate decision. Most real examples should enter feature-space scoring, even if they look weak by one scalar metric.
@@ -51,7 +53,7 @@ This was important. Aggressive hard rejections are difficult to recover from bec
 
 The current feature bank no longer includes `spectrum_dynrange`, `neg_ice_score`, or `log_fg_bg_locvar_ratio`, and the histogram/spectrum pairwise matrices have been removed from the model infrastructure. Those signals either failed to separate manual good/bad classes consistently, were redundant with retained scalar features, or inverted on difficult stream partitions.
 
-The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. Some may receive little or no weight in a promoted model, but they are still cheap to report and useful for controlled feature-policy tests.
+The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. The current chunk default was promoted from the representative batch7chunk learning cycle with the `base12_pruned_plus_histvar` policy, which keeps masked histogram variance but zeros `mask_inside`, `single_component`, `cc_area_frac`, `presence`, and `log_contrast` in the model.
 
 ### 5. The Current Best General Profile Is Still Local-Signal Heavy
 
@@ -65,7 +67,7 @@ The practical interpretation is:
 - centering helps catch pathological classes without becoming a hard rule
 - background/local context is useful when combined with foreground signal
 
-On the difficult real-world stream partitions in batch4, this recovered three additional manual-good classes relative to the previous internal profile while keeping total false positives unchanged.
+On the representative stream-chunk learning set in batch7chunk, this became the promoted `chunk_default_v2` profile.
 
 ### 6. The Boundary Margin Should Remain Internal
 
